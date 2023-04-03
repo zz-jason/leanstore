@@ -6,8 +6,7 @@
 #include <utility>
 
 #define JUMPMU_STACK_SIZE 100
-namespace jumpmu
-{
+namespace jumpmu {
 extern __thread int checkpoint_counter;
 extern __thread jmp_buf env[JUMPMU_STACK_SIZE];
 extern __thread int val[JUMPMU_STACK_SIZE];
@@ -17,17 +16,16 @@ extern __thread void* de_stack_obj[JUMPMU_STACK_SIZE];
 extern __thread int de_stack_counter;
 extern __thread bool in_jump;
 void jump();
-inline void clearLastDestructor()
-{
-   de_stack_obj[de_stack_counter - 1] = nullptr;
-   de_stack_arr[de_stack_counter - 1] = nullptr;
-   de_stack_counter--;
-   assert(de_stack_counter >= 0);
+inline void clearLastDestructor() {
+  de_stack_obj[de_stack_counter - 1] = nullptr;
+  de_stack_arr[de_stack_counter - 1] = nullptr;
+  de_stack_counter--;
+  assert(de_stack_counter >= 0);
 }
 
-}  // namespace jumpmu
-   // -------------------------------------------------------------------------------------
-   // clang-format off
+} // namespace jumpmu
+  // -------------------------------------------------------------------------------------
+  // clang-format off
 #define jumpmu_registerDestructor()                       \
   assert(jumpmu::de_stack_counter < JUMPMU_STACK_SIZE);assert(jumpmu::checkpoint_counter < JUMPMU_STACK_SIZE);jumpmu::de_stack_arr[jumpmu::de_stack_counter] = &des;assert(jumpmu::de_stack_arr[jumpmu::de_stack_counter]!=nullptr);jumpmu::de_stack_obj[jumpmu::de_stack_counter] = this;jumpmu::de_stack_counter++;
 
@@ -49,19 +47,13 @@ inline void clearLastDestructor()
 
 #define jumpmuCatch()           \
   jumpmu::checkpoint_counter--; } else
-   // clang-format on
+  // clang-format on
 
-template <typename T>
-class JMUW
-{
-  public:
-   T obj;
-   template <typename... Args>
-   JMUW(Args&&... args) : obj(std::forward<Args>(args)...)
-   {
-      jumpmu_registerDestructor();
-   }
-   static void des(void* t) { reinterpret_cast<JMUW<T>*>(t)->~JMUW<T>(); }
-   ~JMUW() { jumpmu::clearLastDestructor(); }
-   T* operator->() { return reinterpret_cast<T*>(&obj); }
+template <typename T> class JMUW {
+public:
+  T obj;
+  template <typename... Args> JMUW(Args&&... args) : obj(std::forward<Args>(args)...) { jumpmu_registerDestructor(); }
+  static void des(void* t) { reinterpret_cast<JMUW<T>*>(t)->~JMUW<T>(); }
+  ~JMUW() { jumpmu::clearLastDestructor(); }
+  T* operator->() { return reinterpret_cast<T*>(&obj); }
 };

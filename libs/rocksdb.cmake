@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
 # leanstore
 # ---------------------------------------------------------------------------
-# Note: RocksDB has CMake build only for windows 64-bit, therefore we use make after cloning their repo
+# Note: RocksDB has CMake build only for windows 64-bit, therefore we use make # after cloning their repo
 # Not used atm, use sudo apt install -y librocksdb-dev instead
 
 include(ExternalProject)
