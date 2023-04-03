@@ -8,7 +8,7 @@ find_package(Git REQUIRED)
 # Get rapidjson
 ExternalProject_Add(
         rapidjson_src
-        PREFIX "vendor/rapidjson"
+        PREFIX "${CMAKE_SOURCE_DIR}/external/rapidjson"
         GIT_REPOSITORY "https://github.com/tencent/rapidjson"
         GIT_TAG 1c2c8e085a8b2561dff17bedb689d2eb0609b689
         TIMEOUT 10
