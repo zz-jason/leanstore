@@ -50,6 +50,8 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 include("${CMAKE_SOURCE_DIR}/libs/gflags.cmake")
 include("${CMAKE_SOURCE_DIR}/libs/rapidjson.cmake")
 include("${CMAKE_SOURCE_DIR}/libs/tabluate.cmake")
+add_subdirectory("libs/libpg_query")
+
 
 # ---------------------------------------------------------------------------
 # Includes
