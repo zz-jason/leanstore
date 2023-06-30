@@ -55,3 +55,12 @@ target_include_directories(leanstore PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 # ---------------------------------------------------------------------------
 set(LEANSTORE_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR})
 set_property(TARGET leanstore APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${LEANSTORE_INCLUDE_DIR})
+
+# clang-tidy
+# add_custom_target(run-clang-tidy
+#     COMMAND clang-tidy -p=${CMAKE_BINARY_DIR} --config-file=${CMAKE_SOURCE_DIR}/.clang-tidy ${LEANSTORE_CC}
+#     COMMENT "Running Clang-Tidy"
+#     VERBATIM
+# )
+#
+# add_dependencies(leanstore run-clang-tidy)
