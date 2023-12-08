@@ -1,8 +1,18 @@
-﻿---
+---
 BasedOnStyle: LLVM
 # BreakBeforeBraces: Linux
 # SpaceInEmptyParentheses: 'false'
-ColumnLimit: 120
+ColumnLimit: 80
 IndentWidth: 2
 PointerAlignment: Left
+
+AllowShortFunctionsOnASingleLine: None
+
+PenaltyReturnTypeOnItsOwnLine: 1000
+
+AllowShortBlocksOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
 ...
