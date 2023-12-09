@@ -29,6 +29,8 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include <sys/stat.h>
+
 #include <locale>
 #include <sstream>
 
@@ -44,8 +46,8 @@ FlagListS64 LeanStore::sPersistedS64Flags = {};
 LeanStore::LeanStore() {
   // init logging
   if (!google::IsGoogleLoggingInitialized()) {
-    FLAGS_logtostderr = 0;
-    FLAGS_log_dir = GetLogDir();
+    FLAGS_logtostderr = 1;
+    // FLAGS_log_dir = GetLogDir();
     google::InitGoogleLogging("leanstore");
     LOG(INFO) << "LeanStore starting ...";
   }
@@ -64,20 +66,19 @@ LeanStore::LeanStore() {
   }
 
   // open file
-  s32 walFd;
   if (FLAGS_recover) {
     // recover pages and WAL from disk
     int flags = O_RDWR | O_DIRECT;
-    mSsdFd = open(GetDBFilePath().c_str(), flags, 0666);
-    if (mSsdFd == -1) {
+    mPageFd = open(GetDBFilePath().c_str(), flags, 0666);
+    if (mPageFd == -1) {
       LOG(FATAL) << "Recover failed, could not open file at: "
                  << GetDBFilePath()
                  << ". The data is lost, please create a new DB file and start "
                     "a new instance from it";
     }
 
-    walFd = open(GetWALFilePath().c_str(), flags, 0666);
-    if (mSsdFd == -1) {
+    mWalFd = open(GetWALFilePath().c_str(), flags, 0666);
+    if (mPageFd == -1) {
       LOG(FATAL)
           << "Recover failed, could not open file at: " << GetWALFilePath()
           << ". The data is lost, please create a new WAL File and start "
@@ -86,13 +87,13 @@ LeanStore::LeanStore() {
   } else {
     // Create a new instance on the specified DB file
     int flags = O_TRUNC | O_CREAT | O_RDWR | O_DIRECT;
-    mSsdFd = open(GetDBFilePath().c_str(), flags, 0666);
-    if (mSsdFd == -1) {
+    mPageFd = open(GetDBFilePath().c_str(), flags, 0666);
+    if (mPageFd == -1) {
       LOG(FATAL) << "Could not open file at: " << GetDBFilePath();
     }
 
-    walFd = open(GetWALFilePath().c_str(), flags, 0666);
-    if (mSsdFd == -1) {
+    mWalFd = open(GetWALFilePath().c_str(), flags, 0666);
+    if (mPageFd == -1) {
       LOG(FATAL) << "Could not open file at: " << GetWALFilePath();
     }
 
@@ -102,29 +103,32 @@ LeanStore::LeanStore() {
       auto dummyData = (u8*)aligned_alloc(512, gib);
       SCOPED_DEFER({
         free(dummyData);
-        fsync(mSsdFd);
+        fsync(mPageFd);
       });
 
       for (u64 i = 0; i < FLAGS_db_file_prealloc_gib; i++) {
-        auto ret = pwrite(mSsdFd, dummyData, gib, gib * i);
+        auto ret = pwrite(mPageFd, dummyData, gib, gib * i);
         LOG_IF(FATAL, ret != (ssize_t)gib)
             << "Failed to pre-allocated disk file"
             << ", FLAGS_db_file_prealloc_gib=" << FLAGS_db_file_prealloc_gib;
       }
     }
   }
+  DCHECK(fcntl(mPageFd, F_GETFL) != -1);
+  DCHECK(fcntl(mWalFd, F_GETFL) != -1);
 
   // create global btree catalog
   storage::TreeRegistry::sInstance = std::make_unique<storage::TreeRegistry>();
 
   // create global buffer manager and buffer frame providers
   {
-    BufferManager::sInstance = std::make_unique<storage::BufferManager>(mSsdFd);
+    BufferManager::sInstance =
+        std::make_unique<storage::BufferManager>(mPageFd);
     BufferManager::sInstance->StartBufferFrameProviders();
   }
 
   // create global concurrenct resource manager
-  cr::CRManager::sInstance = std::make_unique<cr::CRManager>(walFd);
+  cr::CRManager::sInstance = std::make_unique<cr::CRManager>(mWalFd);
 
   if (FLAGS_recover) {
     // deserialize meta from disk
@@ -176,6 +180,26 @@ LeanStore::~LeanStore() {
 
   // destroy global btree catalog
   storage::TreeRegistry::sInstance = nullptr;
+
+  // close open fds
+  if (close(mPageFd) == -1) {
+    perror("Failed to close page file: ");
+  } else {
+    LOG(INFO) << "page file closed";
+  }
+
+  {
+    struct stat st;
+    if (stat(GetWALFilePath().c_str(), &st) == 0) {
+      DLOG(INFO) << "The size of " << GetWALFilePath() << " is " << st.st_size
+                 << " bytes";
+    }
+  }
+  if (close(mWalFd) == -1) {
+    perror("Failed to close WAL file: ");
+  } else {
+    LOG(INFO) << "WAL file closed";
+  }
 
   // // destroy and  profiling threads
   // mProfilingThreadKeepRunning = false;

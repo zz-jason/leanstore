@@ -2,8 +2,8 @@
 
 #include "AsyncWriteBuffer.hpp"
 #include "BufferFrame.hpp"
-#include "Exceptions.hpp"
 #include "Config.hpp"
+#include "Exceptions.hpp"
 #include "concurrency-recovery/Recovery.hpp"
 #include "profiling/counters/CPUCounters.hpp"
 #include "profiling/counters/PPCounters.hpp"
@@ -33,7 +33,7 @@ namespace storage {
 thread_local BufferFrame* BufferManager::sTlsLastReadBf = nullptr;
 std::unique_ptr<BufferManager> BufferManager::sInstance = nullptr;
 
-BufferManager::BufferManager(s32 fd) : ssd_fd(fd) {
+BufferManager::BufferManager(s32 fd) : mPageFd(fd) {
   mNumBfs = FLAGS_buffer_pool_size / sizeof(BufferFrame);
   const u64 totalMemSize = sizeof(BufferFrame) * (mNumBfs + mNumSaftyBfs);
 
@@ -96,7 +96,7 @@ void BufferManager::StartBufferFrameProviders() {
   for (auto i = 0u; i < FLAGS_pp_threads; ++i) {
     mBfProviders.push_back(std::move(std::make_unique<BufferFrameProvider>(
         i, "leanstore_bf_provider_" + std::to_string(i), mNumBfs, mBfs,
-        mNumPartitions, mPartitionsMask, mPartitions, ssd_fd)));
+        mNumPartitions, mPartitionsMask, mPartitions, mPageFd)));
   }
 
   for (auto i = 0u; i < mBfProviders.size(); ++i) {
@@ -140,7 +140,7 @@ void BufferManager::writeAllBufferFrames() {
         page.mMagicDebuging = bf.header.pid;
         TreeRegistry::sInstance->checkpoint(bf.page.mBTreeId, bf,
                                             page.mPayload);
-        s64 ret = pwrite(ssd_fd, &page, PAGE_SIZE, bf.header.pid * PAGE_SIZE);
+        s64 ret = pwrite(mPageFd, &page, PAGE_SIZE, bf.header.pid * PAGE_SIZE);
         ENSURE(ret == PAGE_SIZE);
       }
       bf.header.mLatch.mutex.unlock();
@@ -155,7 +155,7 @@ void BufferManager::WriteBufferFrame(BufferFrame& bf) {
     page.mBTreeId = bf.page.mBTreeId;
     page.mMagicDebuging = bf.header.pid;
     TreeRegistry::sInstance->checkpoint(bf.page.mBTreeId, bf, page.mPayload);
-    s64 ret = pwrite(ssd_fd, &page, PAGE_SIZE, bf.header.pid * PAGE_SIZE);
+    s64 ret = pwrite(mPageFd, &page, PAGE_SIZE, bf.header.pid * PAGE_SIZE);
     ENSURE(ret == PAGE_SIZE);
   }
   bf.header.mLatch.mutex.unlock();
@@ -411,7 +411,7 @@ void BufferManager::readPageSync(PID pid, void* destination) {
   DCHECK(u64(destination) % 512 == 0);
   s64 bytesLeft = PAGE_SIZE;
   do {
-    auto bytesRead = pread(ssd_fd, destination, bytesLeft,
+    auto bytesRead = pread(mPageFd, destination, bytesLeft,
                            pid * PAGE_SIZE + (PAGE_SIZE - bytesLeft));
     if (bytesRead < 0) {
       LOG(ERROR) << "pread failed"
@@ -427,7 +427,7 @@ void BufferManager::readPageSync(PID pid, void* destination) {
 }
 
 void BufferManager::fDataSync() {
-  fdatasync(ssd_fd);
+  fdatasync(mPageFd);
 }
 
 u64 BufferManager::getPartitionID(PID pid) {

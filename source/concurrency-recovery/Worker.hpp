@@ -31,30 +31,29 @@ static constexpr u16 STATIC_MAX_WORKERS = std::numeric_limits<WORKERID>::max();
 /// @brief WalFlushReq is used to sync wal flush request to group commit thread
 /// for each worker thread.
 struct WalFlushReq {
-  /// @brief mVersion is used for optimistic locking.
+  /// Used for optimistic locking.
   u64 mVersion = 0;
 
-  /// @brief mCurrGSN regarding the changes made by the current worker.
+  /// Regarding the changes made by the current worker.
   LID mCurrGSN = 0;
 
-  /// @brief mWalBuffered is the offset in the wal ring buffer.
+  /// The offset in the wal ring buffer.
   u64 mWalBuffered = 0;
 
-  /// @brief mPrevTxCommitTs is the commit TS of the previous transaction.
+  /// The commit TS of the previous transaction.
   TXID mPrevTxCommitTs = 0;
 };
 
 class Logging {
 public:
-  /// @brief sMinFlushedGsn is the minimum flushed GSN among all worker threads.
-  /// Transactions whose max observed GSN not larger than sMinFlushedGsn can be
-  /// committed safely.
+  /// The minimum flushed GSN among all worker threads. Transactions whose max
+  /// observed GSN not larger than sMinFlushedGsn can be committed safely.
   static atomic<u64> sMinFlushedGsn;
 
-  /// @brief sMaxFlushedGsn is the maximum flushed GSN among all worker threads
-  /// in each group commit round. It is updated by the group commit thread and
-  /// used to update the GCN counter of the current worker thread to prevent GSN
-  /// from skewing and undermining RFA.
+  /// The maximum flushed GSN among all worker threads in each group commit
+  /// round. It is updated by the group commit thread and used to update the GCN
+  /// counter of the current worker thread to prevent GSN from skewing and
+  /// undermining RFA.
   static atomic<u64> sMaxFlushedGsn;
 
   static atomic<u64> sMinFlushedCommitTs;
@@ -87,21 +86,30 @@ public:
 
   // Shared between Group Committer and Worker
   std::mutex mPreCommittedQueueMutex;
+
   std::vector<Transaction> mPreCommittedQueue;
+
   std::vector<Transaction> mPreCommittedQueueRfa;
 
-  /// @brief mFlushedCommitTs represents the commit TS of the last transaction
-  /// in the current worker, whose wal records are all flushed by the group
-  /// commit thread. Advanced by the group commit thread.
+  /// Represents the commit TS of the last transaction in the current worker,
+  /// whose wal records are all flushed by the group commit thread. Advanced by
+  /// the group commit thread.
+  ///
+  /// Updated by group committer
   std::atomic<TXID> mFlushedCommitTs = 0;
 
-  /// @brief mFlushedGsn represents the GSN of the transaction whose wal records
-  /// are all flushed by the group commit thread. It is advanced by the group
-  /// commit thread after a group commit round.
-  std::atomic<TXID> mFlushedGsn = 0; // W: LW, R: LC
+  /// Tepresents the GSN of the transaction whose wal records are all flushed by
+  /// the group commit thread. It is advanced by the group commit thread after a
+  /// group commit round.
+  ///
+  /// Updated by group committer
+  std::atomic<TXID> mFlushedGsn = 0;
 
-  /// @brief mSignaledCommitTs represents the
-  std::atomic<TXID> mSignaledCommitTs = 0; // W: LW, R: WT
+  /// Represents the maximum commit timestamp in the worker. Transactions in the
+  /// worker are committed if their commit timestamps are smaller than it.
+  ///
+  /// Updated by group committer
+  std::atomic<TXID> mSignaledCommitTs = 0;
 
   utils::OptimisticSpinStruct<WalFlushReq> mWalFlushReq;
 
@@ -109,28 +117,30 @@ public:
   // Deletes are treated as system transaction
   std::vector<std::tuple<WORKERID, TXID>> mRfaChecksAtPreCommit;
 
-  /// @brief mWalBuffer is the ring buffer of the current worker thread. All
-  /// the wal entries of the current worker are writtern to this ring buffer
-  /// firstly, then flushed to disk by the group commit thread.
+  /// The ring buffer of the current worker thread. All the wal entries of the
+  /// current worker are writtern to this ring buffer firstly, then flushed to
+  /// disk by the group commit thread.
   alignas(512) u8* mWalBuffer;
 
-  /// @brief mLsnClock is used to track the write order of wal entries.
+  /// Used to track the write order of wal entries.
   LID mLsnClock = 0;
 
-  /// @brief mGsnClock is used to track transaction dependencies.
+  /// Used to track transaction dependencies.
   LID mGsnClock;
 
-  /// @brief mWalBuffered is the written offset of the wal ring buffer.
+  /// The written offset of the wal ring buffer.
   u64 mWalBuffered = 0;
 
-  /// @brief mWalFlushed represents the flushed offset in the wal ring buffer.
-  /// The wal ring buffer is firstly written by the worker thread then flushed
-  /// to disk file by the group commit thread.
+  /// Represents the flushed offset in the wal ring buffer.  The wal ring buffer
+  /// is firstly written by the worker thread then flushed to disk file by the
+  /// group commit thread.
   atomic<u64> mWalFlushed = 0;
 
   // for current transaction, reset on every transaction start
   LID mMinFlushedGsn;
+
   bool mHasRemoteDependency = false;
+
   u64 mTxWalBegin;
 
 public:
@@ -353,7 +363,7 @@ public:
   static std::atomic<TXID> sOldestAllStartTs;
   static std::atomic<TXID> sAllLwm;
   static std::atomic<TXID> sNewestOlapStartTx;
-  static std::shared_mutex global_mutex;
+  static std::shared_mutex sGlobalMutex;
 
   static constexpr u64 WORKERS_BITS = 8;
   static constexpr u64 WORKERS_INCREMENT = 1ull << WORKERS_BITS;

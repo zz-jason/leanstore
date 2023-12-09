@@ -54,7 +54,7 @@ protected:
 };
 
 TEST_F(BufferManagerTest, Basic) {
-  EXPECT_EQ(mBufferMgr->ssd_fd, mFd);
+  EXPECT_EQ(mBufferMgr->mPageFd, mFd);
 }
 
 TEST(BufferFrameTest, EmptyBufferFrame) {

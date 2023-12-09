@@ -105,7 +105,7 @@ DEFINE_bool(reclaim_page_ids, true, "Whether to reclaim unused free page ids");
 DEFINE_bool(wal, true, "Whether wal is enabled");
 DEFINE_bool(wal_rfa, true, "Whether remote flush avoidance (RFA) is enabled");
 DEFINE_bool(wal_tuple_rfa, true, "tuple-wise tracking");
-DEFINE_bool(wal_fsync, false, "Whether to explicitly flush wal to disk");
+DEFINE_bool(wal_fsync, true, "Whether to explicitly flush wal to disk");
 
 // WAL variant 0:
 //   All workers submit their WAL entries to the the local ring buffer, the

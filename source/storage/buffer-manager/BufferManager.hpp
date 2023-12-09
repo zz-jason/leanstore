@@ -48,7 +48,7 @@ private:
 public:
   BufferFrame* mBfs;
 
-  const int ssd_fd;
+  const int mPageFd;
 
   // Free Pages. We reserve these extra pages to prevent segfaults
   const u8 mNumSaftyBfs = 10;
@@ -66,7 +66,7 @@ public:
   //---------------------------------------------------------------------------
   // Constructor and Destructors
   //---------------------------------------------------------------------------
-  BufferManager(s32 ssd_fd);
+  BufferManager(s32 pageFd);
   ~BufferManager();
 
 public:
@@ -124,8 +124,8 @@ public:
   void reclaimPage(BufferFrame& bf);
 
   /// readPageSync reads the page pid to the destination buffer.
-  /// All the pages are stored in one file (ssd_fd), page id (pid) determines
-  /// the offset of the pid-th page in the underlying file:
+  /// All the pages are stored in one file (mPageFd), page id (pid)
+  /// determines the offset of the pid-th page in the underlying file:
   ///
   /// offset of pid-th page: pid * PAGE_SIZE
   /// size of each page: PAGE_SIZE
