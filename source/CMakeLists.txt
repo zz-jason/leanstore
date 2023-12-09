@@ -10,14 +10,8 @@ file(GLOB_RECURSE LEANSTORE_SRC **.cpp **/**.cpp **.cc **/**.cc **.hpp **/**.hpp
 
 add_library(leanstore STATIC ${LEANSTORE_SRC})
 
-# include(${CMAKE_SOURCE_DIR}/third-party/rapidjson.cmake)
-# add_dependencies(leanstore rapidjson)
-
-# include(${CMAKE_SOURCE_DIR}/third-party/tabluate.cmake)
-# add_dependencies(leanstore tabluate)
-
 # dependencies
-target_link_libraries(leanstore gflags glog::glog profiler Threads::Threads aio tbb atomic tabluate rapidjson ${Boost_LIBRARIES} ) #tbb
+target_link_libraries(leanstore gflags glog profiler Threads::Threads aio tbb atomic tabluate rapidjson ${Boost_LIBRARIES} ) #tbb
 
 # include dirs
 target_include_directories(leanstore PUBLIC ${CMAKE_SOURCE_DIR}/include/shared-headers)
@@ -30,10 +24,8 @@ set_property(TARGET leanstore APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${LE
 
 # Get the include directories for the target.
 get_target_property(LIBA_INCLUDES leanstore INCLUDE_DIRECTORIES)
-
-# Construct the compiler string for the include directories.
 foreach(dir ${LIBA_INCLUDES})
-    message(status "include dir: ${dir}")
+    message(STATUS "include dir: ${dir}")
 endforeach()
 
 

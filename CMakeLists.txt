@@ -42,12 +42,12 @@ endif (CYGWIN)
 # Dependencies
 # ------------------------------------------------------------------------------
 
-find_package(gflags REQUIRED)
-find_package(glog 0.6.0 REQUIRED)
-find_package(absl 20220623 REQUIRED)
+# find_package(absl 20220623 REQUIRED)
 
 include(${CMAKE_SOURCE_DIR}/third-party/tabluate.cmake)
 include(${CMAKE_SOURCE_DIR}/third-party/rapidjson.cmake)
+include(${CMAKE_SOURCE_DIR}/third-party/gflags.cmake)
+include(${CMAKE_SOURCE_DIR}/third-party/glog.cmake)
 
 find_package(Threads REQUIRED)
 set(THREADS_PREFER_PTHREAD_FLAG ON)

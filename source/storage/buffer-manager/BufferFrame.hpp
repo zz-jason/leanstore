@@ -223,31 +223,51 @@ static_assert(sizeof(Page) == PAGE_SIZE, "The total sizeof page");
 inline rapidjson::Document BufferFrame::ToJSON() {
   rapidjson::Document doc;
   doc.SetObject();
-  auto& allocator = doc.GetAllocator();
-
+  // auto& allocator = doc.GetAllocator();
+  // header.mState
   {
     auto stateStr = header.StateString();
     rapidjson::Value member;
     member.SetString(stateStr.data(), stateStr.size(), doc.GetAllocator());
     doc.AddMember("header.mState", member, doc.GetAllocator());
   }
-  leanstore::utils::AddMemberToJson(&doc, allocator, "header.mKeepInMemory",
-                                    header.mKeepInMemory);
-  leanstore::utils::AddMemberToJson(&doc, allocator, "header.mPageId",
-                                    header.mPageId);
-  leanstore::utils::AddMemberToJson(&doc, allocator, "header.mLastWriterWorker",
-                                    header.mLastWriterWorker);
-  leanstore::utils::AddMemberToJson(&doc, allocator, "header.mFlushedPSN",
-                                    header.mFlushedPSN);
-  leanstore::utils::AddMemberToJson(&doc, allocator,
-                                    "header.mIsBeingWrittenBack",
-                                    header.mIsBeingWrittenBack);
-  leanstore::utils::AddMemberToJson(&doc, allocator, "page.mPSN", page.mPSN);
-  leanstore::utils::AddMemberToJson(&doc, allocator, "page.mGSN", page.mGSN);
-  leanstore::utils::AddMemberToJson(&doc, allocator, "page.mBTreeId",
-                                    page.mBTreeId);
-  leanstore::utils::AddMemberToJson(&doc, allocator, "page.mMagicDebuging",
-                                    page.mMagicDebuging);
+
+  {
+    rapidjson::Value member;
+    member.SetBool(header.mKeepInMemory);
+    doc.AddMember("header.mKeepInMemory", member, doc.GetAllocator());
+  }
+
+  {
+    rapidjson::Value member;
+    member.SetUint64(header.mPageId);
+    doc.AddMember("header.mPageId", member, doc.GetAllocator());
+  }
+
+  {
+    rapidjson::Value member;
+    member.SetUint64(header.mLastWriterWorker);
+    doc.AddMember("header.mLastWriterWorker", member, doc.GetAllocator());
+  }
+
+  {
+    rapidjson::Value member;
+    member.SetUint64(header.mFlushedPSN);
+    doc.AddMember("header.mFlushedPSN", member, doc.GetAllocator());
+  }
+
+  {
+    rapidjson::Value member;
+    member.SetBool(header.mIsBeingWrittenBack);
+    doc.AddMember("header.mIsBeingWrittenBack", member, doc.GetAllocator());
+  }
+
+  // leanstore::utils::AddMemberToJson(&doc, allocator, "page.mPSN", page.mPSN);
+  // leanstore::utils::AddMemberToJson(&doc, allocator, "page.mGSN", page.mGSN);
+  // leanstore::utils::AddMemberToJson(&doc, allocator, "page.mBTreeId",
+  //                                   page.mBTreeId);
+  // leanstore::utils::AddMemberToJson(&doc, allocator, "page.mMagicDebuging",
+  //                                   page.mMagicDebuging);
 
   return doc;
 }
