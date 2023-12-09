@@ -148,16 +148,18 @@ inline void Recovery::Analysis() {
       mActiveTxTable[walEntry->mTxId] = offset;
 
       // TODO(jian.z): how to read the same page from disk only once?
-      auto& bf = BufferManager::sInstance->ReadPageToRecover(complexEntry->pid);
-      DCHECK(bf.header.pid == complexEntry->pid);
+      auto& bf =
+          BufferManager::sInstance->ReadPageToRecover(complexEntry->mPageId);
+      DCHECK(bf.header.mPageId == complexEntry->mPageId);
       DCHECK(bf.page.mBTreeId == complexEntry->mTreeId);
 
       SCOPED_DEFER(bf.header.mKeepInMemory = false);
 
       if (complexEntry->gsn > bf.page.mGSN &&
-          mDirtyPageTable.find(complexEntry->pid) == mDirtyPageTable.end()) {
+          mDirtyPageTable.find(complexEntry->mPageId) ==
+              mDirtyPageTable.end()) {
         // record the first WALEntry that makes the page dirty
-        mDirtyPageTable.emplace(std::make_pair(complexEntry->pid, offset));
+        mDirtyPageTable.emplace(std::make_pair(complexEntry->mPageId, offset));
       }
 
       offset += bytesRead;
@@ -190,8 +192,8 @@ inline void Recovery::Redo() {
 
     auto complexEntry = reinterpret_cast<WALEntryComplex*>(walEntryPtr);
     DCHECK(bytesRead == complexEntry->size);
-    if (mDirtyPageTable.find(complexEntry->pid) == mDirtyPageTable.end() ||
-        complexEntry->gsn < mDirtyPageTable[complexEntry->pid]) {
+    if (mDirtyPageTable.find(complexEntry->mPageId) == mDirtyPageTable.end() ||
+        complexEntry->gsn < mDirtyPageTable[complexEntry->mPageId]) {
       offset += bytesRead;
       continue;
     }
@@ -201,8 +203,9 @@ inline void Recovery::Redo() {
     //
     // TODO(jian.z): redo the changes on the page
     //
-    auto& bf = BufferManager::sInstance->ReadPageToRecover(complexEntry->pid);
-    DCHECK(bf.header.pid == complexEntry->pid);
+    auto& bf =
+        BufferManager::sInstance->ReadPageToRecover(complexEntry->mPageId);
+    DCHECK(bf.header.mPageId == complexEntry->mPageId);
     DCHECK(bf.page.mBTreeId == complexEntry->mTreeId);
     SCOPED_DEFER(bf.header.mKeepInMemory = false);
 

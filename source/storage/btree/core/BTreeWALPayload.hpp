@@ -6,8 +6,6 @@
 #include <memory>
 #include <string>
 
-using Slice = std::basic_string_view<u8>;
-
 namespace leanstore {
 namespace storage {
 namespace btree {

@@ -1,9 +1,9 @@
 #pragma once
 
 #include "BufferFrame.hpp"
+#include "Config.hpp"
 #include "FreeList.hpp"
 #include "Units.hpp"
-#include "Config.hpp"
 
 #include <list>
 #include <mutex>
@@ -17,13 +17,13 @@ class Tracing {
 public:
   static std::mutex mutex;
   static std::unordered_map<PID, std::tuple<TREEID, u64>> ht;
-  static void printStatus(PID pid) {
+  static void printStatus(PID pageId) {
     mutex.lock();
-    if (ht.contains(pid)) {
-      cout << pid << " was written out: " << std::get<1>(ht[pid])
-           << " times form DT: " << std::get<0>(ht[pid]) << endl;
+    if (ht.contains(pageId)) {
+      cout << pageId << " was written out: " << std::get<1>(ht[pageId])
+           << " times form DT: " << std::get<0>(ht[pageId]) << endl;
     } else {
-      cout << pid << " was never written out" << endl;
+      cout << pageId << " was never written out" << endl;
     }
     mutex.unlock();
   }

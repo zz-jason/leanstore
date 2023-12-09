@@ -36,7 +36,7 @@ bool AsyncWriteBuffer::full() {
   }
 }
 
-void AsyncWriteBuffer::AddToIOBatch(BufferFrame& bf, PID pid) {
+void AsyncWriteBuffer::AddToIOBatch(BufferFrame& bf, PID pageId) {
   DCHECK(!full());
   DCHECK(u64(&bf.page) % 512 == 0);
   DCHECK(pending_requests <= batch_max_size);
@@ -47,8 +47,8 @@ void AsyncWriteBuffer::AddToIOBatch(BufferFrame& bf, PID pid) {
   PARANOID_BLOCK() {
     if (FLAGS_pid_tracing && !FLAGS_reclaim_page_ids) {
       Tracing::mutex.lock();
-      if (Tracing::ht.contains(pid)) {
-        auto& entry = Tracing::ht[pid];
+      if (Tracing::ht.contains(pageId)) {
+        auto& entry = Tracing::ht[pageId];
         DCHECK(std::get<0>(entry) == bf.page.mBTreeId);
       }
       Tracing::mutex.unlock();
@@ -57,13 +57,13 @@ void AsyncWriteBuffer::AddToIOBatch(BufferFrame& bf, PID pid) {
 
   auto slot = pending_requests++;
   write_buffer_commands[slot].bf = &bf;
-  write_buffer_commands[slot].pid = pid;
-  bf.page.mMagicDebuging = pid;
+  write_buffer_commands[slot].mPageId = pageId;
+  bf.page.mMagicDebuging = pageId;
   std::memcpy(&write_buffer[slot], &bf.page, page_size);
   void* write_buffer_slot_ptr = &write_buffer[slot];
   io_prep_pwrite(/* iocb */ &iocbs[slot], /* fd */ fd,
                  /* buf */ write_buffer_slot_ptr, /* count */ page_size,
-                 /* offset */ page_size * pid);
+                 /* offset */ page_size * pageId);
   iocbs[slot].data = write_buffer_slot_ptr;
   iocbs_ptr[slot] = &iocbs[slot];
 }

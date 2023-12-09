@@ -79,12 +79,12 @@ public:
     PARANOID_BLOCK() {
       TREEID parentTreeId = parentGuard.mBf->page.mBTreeId;
       TREEID treeId = mBf->page.mBTreeId;
-      PID pid = mBf->header.pid;
+      PID pageId = mBf->header.mPageId;
       parentGuard.JumpIfModifiedByOthers();
       JumpIfModifiedByOthers();
       if (parentTreeId != treeId) {
         cout << "parentTreeId != treeId" << endl;
-        leanstore::storage::Tracing::printStatus(pid);
+        leanstore::storage::Tracing::printStatus(pageId);
       }
     }
 
@@ -180,12 +180,12 @@ public:
       incrementGSN();
     }
 
-    const auto pid = mBf->header.pid;
+    const auto pageId = mBf->header.mPageId;
     const auto treeId = mBf->page.mBTreeId;
     // TODO: verify
     auto handler =
         cr::Worker::my().mLogging.ReserveWALEntryComplex<WT, Args...>(
-            sizeof(WT) + payloadSize, pid,
+            sizeof(WT) + payloadSize, pageId,
             cr::Worker::my().mLogging.GetCurrentGsn(), treeId,
             std::forward<Args>(args)...);
     return handler;

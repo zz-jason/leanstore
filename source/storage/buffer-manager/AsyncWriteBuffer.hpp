@@ -15,7 +15,7 @@ class AsyncWriteBuffer {
 private:
   struct WriteCommand {
     BufferFrame* bf;
-    PID pid;
+    PID mPageId;
   };
 
 public:
@@ -35,7 +35,7 @@ public:
 
   bool full();
 
-  void AddToIOBatch(BufferFrame& bf, PID pid);
+  void AddToIOBatch(BufferFrame& bf, PID pageId);
 
   u64 SubmitIORequest();
 

@@ -5,8 +5,11 @@
 #include "utils/JumpMU.hpp"
 #include "utils/RandomGenerator.hpp"
 
+#include <glog/logging.h>
+
 #include <atomic>
 #include <shared_mutex>
+
 #include <unistd.h>
 
 namespace leanstore {
@@ -37,14 +40,6 @@ public:
 
   atomic<u64>& ref() {
     return version;
-  }
-
-  void assertExclusivelyLatched() {
-    assert(isExclusivelyLatched());
-  }
-
-  void assertNotExclusivelyLatched() {
-    assert(!isExclusivelyLatched());
   }
 
   bool isExclusivelyLatched() {

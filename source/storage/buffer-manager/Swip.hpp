@@ -22,7 +22,7 @@ template <typename T> class Swip {
 
 public:
   union {
-    u64 pid;
+    u64 mPageId;
     BufferFrame* bf;
   };
 
@@ -31,7 +31,7 @@ public:
   Swip(BufferFrame* bf) : bf(bf) {
   }
 
-  template <typename T2> Swip(Swip<T2>& other) : pid(other.pid) {
+  template <typename T2> Swip(Swip<T2>& other) : mPageId(other.mPageId) {
   }
 
   bool operator==(const Swip& other) const {
@@ -39,20 +39,20 @@ public:
   }
 
   bool isHOT() {
-    return (pid & (evicted_bit | cool_bit)) == 0;
+    return (mPageId & (evicted_bit | cool_bit)) == 0;
   }
 
   bool isCOOL() {
-    return pid & cool_bit;
+    return mPageId & cool_bit;
   }
 
   bool isEVICTED() {
-    return pid & evicted_bit;
+    return mPageId & evicted_bit;
   }
 
   u64 asPageID() {
     assert(isEVICTED());
-    return pid & evicted_mask;
+    return mPageId & evicted_mask;
   }
 
   /// Return the underlying buffer frame from a HOT buffer frame.
@@ -63,11 +63,11 @@ public:
 
   /// Return the underlying buffer frame from a COOL buffer frame.
   BufferFrame& asBufferFrameMasked() {
-    return *reinterpret_cast<BufferFrame*>(pid & hot_mask);
+    return *reinterpret_cast<BufferFrame*>(mPageId & hot_mask);
   }
 
   u64 raw() const {
-    return pid;
+    return mPageId;
   }
 
   template <typename T2> void MarkHOT(T2* bf) {
@@ -76,15 +76,15 @@ public:
 
   void MarkHOT() {
     assert(isCOOL());
-    this->pid = pid & ~cool_bit;
+    this->mPageId = mPageId & ~cool_bit;
   }
 
   void cool() {
-    this->pid = pid | cool_bit;
+    this->mPageId = mPageId | cool_bit;
   }
 
-  void evict(PID pid) {
-    this->pid = pid | evicted_bit;
+  void evict(PID pageId) {
+    this->mPageId = pageId | evicted_bit;
   }
 
   template <typename T2> Swip<T2>& CastTo() {

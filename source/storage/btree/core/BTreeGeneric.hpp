@@ -254,12 +254,17 @@ public:
 private:
   static rapidjson::Document ToJSONRecursive(
       HybridPageGuard<BTreeNode>& guardedNode) {
-    auto doc = guardedNode->ToJSON();
+    auto bfDoc = guardedNode.mBf->ToJSON();
+    auto& allocator = bfDoc.GetAllocator();
+
+    auto nodeDoc = guardedNode->ToJSON();
+    bfDoc.AddMember("page.BTreeNode", nodeDoc, allocator);
+    // auto& allocator = nodeDoc.GetAllocator();
+
     if (guardedNode->mIsLeaf) {
-      return doc;
+      return bfDoc;
     }
 
-    auto& allocator = doc.GetAllocator();
     for (auto i = 0u; i <= guardedNode->mNumSeps; ++i) {
       auto childSwip = guardedNode->GetChildIncludingRightMost(i);
       HybridPageGuard<BTreeNode> guardedChild(guardedNode, childSwip);
@@ -268,10 +273,12 @@ private:
       guardedChild.unlock();
 
       leanstore::utils::JsonValue memberName(childName.c_str(), allocator);
-      doc.AddMember(memberName, childDoc, allocator);
+      bfDoc.AddMember(memberName, childDoc, allocator);
     }
 
-    return doc;
+    // bfDoc.AddMember("page.BTreeNode", doc, allocator);
+    // return bfDoc;
+    return bfDoc;
   }
 
 public:
@@ -326,13 +333,13 @@ inline void BTreeGeneric::checkpoint(BufferFrame& bf, u8* dest) {
     for (u64 i = 0; i < destNode.mNumSeps; i++) {
       if (!destNode.getChild(i).isEVICTED()) {
         auto& childBf = destNode.getChild(i).asBufferFrameMasked();
-        destNode.getChild(i).evict(childBf.header.pid);
+        destNode.getChild(i).evict(childBf.header.mPageId);
       }
     }
     // Replace right most child swip to page id
     if (!destNode.mRightMostChildSwip.isEVICTED()) {
       auto& childBf = destNode.mRightMostChildSwip.asBufferFrameMasked();
-      destNode.mRightMostChildSwip.evict(childBf.header.pid);
+      destNode.mRightMostChildSwip.evict(childBf.header.mPageId);
     }
   }
 }
@@ -340,10 +347,10 @@ inline void BTreeGeneric::checkpoint(BufferFrame& bf, u8* dest) {
 inline StringMap BTreeGeneric::serialize() {
   DCHECK(mMetaNodeSwip.AsBufferFrame().page.mBTreeId == mTreeId);
   BufferManager::sInstance->WriteBufferFrame(mMetaNodeSwip.AsBufferFrame());
-  return {
-      {TREE_ID, std::to_string(mTreeId)},
-      {HEIGHT, std::to_string(mHeight.load())},
-      {META_PAGE_ID, std::to_string(mMetaNodeSwip.AsBufferFrame().header.pid)}};
+  return {{TREE_ID, std::to_string(mTreeId)},
+          {HEIGHT, std::to_string(mHeight.load())},
+          {META_PAGE_ID,
+           std::to_string(mMetaNodeSwip.AsBufferFrame().header.mPageId)}};
 }
 
 inline void BTreeGeneric::deserialize(StringMap map) {
