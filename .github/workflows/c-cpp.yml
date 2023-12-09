@@ -1,0 +1,28 @@
+name: C/C++ CI
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Set up GCC
+      uses: egor-tensin/setup-gcc@v1
+      with:
+        version: 12
+        platform: x64
+    - uses: actions/checkout@v3
+    - name: Install dependencies
+      run: sudo apt install -y libaio-dev libtbb2-dev
+    - name: Config
+      run: cmake -B build -S .
+    - name: Build
+      run: cmake --build build -j `nproc`
+    - name: Test
+      run: ctest --test-dir build -j `nproc`
