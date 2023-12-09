@@ -255,29 +255,24 @@ private:
   static rapidjson::Document ToJSONRecursive(
       HybridPageGuard<BTreeNode>& guardedNode) {
     auto bfDoc = guardedNode.mBf->ToJSON();
-    auto& allocator = bfDoc.GetAllocator();
+    // auto& allocator = bfDoc.GetAllocator();
 
-    auto nodeDoc = guardedNode->ToJSON();
-    bfDoc.AddMember("page.BTreeNode", nodeDoc, allocator);
-    // auto& allocator = nodeDoc.GetAllocator();
+    // auto nodeDoc = guardedNode->ToJSON();
+    // bfDoc.AddMember("BTreeNode", nodeDoc, allocator);
 
-    if (guardedNode->mIsLeaf) {
-      return bfDoc;
-    }
+    // if (guardedNode->mIsLeaf) {
+    //   return bfDoc;
+    // }
+    // for (auto i = 0u; i <= guardedNode->mNumSeps; ++i) {
+    //   auto childSwip = guardedNode->GetChildIncludingRightMost(i);
+    //   HybridPageGuard<BTreeNode> guardedChild(guardedNode, childSwip);
+    //   auto childDoc = ToJSONRecursive(guardedChild);
+    //   auto childName = "mChild_" + std::to_string(i);
+    //   guardedChild.unlock();
+    //   leanstore::utils::JsonValue memberName(childName.c_str(), allocator);
+    //   bfDoc.AddMember(memberName, childDoc, allocator);
+    // }
 
-    for (auto i = 0u; i <= guardedNode->mNumSeps; ++i) {
-      auto childSwip = guardedNode->GetChildIncludingRightMost(i);
-      HybridPageGuard<BTreeNode> guardedChild(guardedNode, childSwip);
-      auto childDoc = ToJSONRecursive(guardedChild);
-      auto childName = "mChild_" + std::to_string(i);
-      guardedChild.unlock();
-
-      leanstore::utils::JsonValue memberName(childName.c_str(), allocator);
-      bfDoc.AddMember(memberName, childDoc, allocator);
-    }
-
-    // bfDoc.AddMember("page.BTreeNode", doc, allocator);
-    // return bfDoc;
     return bfDoc;
   }
 
