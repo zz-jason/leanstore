@@ -106,7 +106,7 @@ public:
 
   /// The page ID of the WALEntry, used to identify the btree node together with
   /// btree ID
-  PID pid;
+  PID mPageId;
 
   /// Payload of the operation on the btree node, for example, WALInsert,
   /// WALRemove, etc.
@@ -115,9 +115,9 @@ public:
 public:
   WALEntryComplex() = default;
 
-  WALEntryComplex(LID lsn, u64 size, LID gsn, TREEID treeId, PID pid)
+  WALEntryComplex(LID lsn, u64 size, LID gsn, TREEID treeId, PID pageId)
       : WALEntry(lsn, size, TYPE::COMPLEX), gsn(gsn), mTreeId(treeId),
-        pid(pid) {
+        mPageId(pageId) {
   }
 
   virtual std::unique_ptr<rapidjson::Document> ToJSON() override;
@@ -238,10 +238,10 @@ inline std::unique_ptr<rapidjson::Document> WALEntryComplex::ToJSON() {
     doc->AddMember("treeId", member, doc->GetAllocator());
   }
 
-  // pid
+  // pageId
   {
     rapidjson::Value member;
-    member.SetUint64(pid);
+    member.SetUint64(mPageId);
     doc->AddMember("pageId", member, doc->GetAllocator());
   }
 

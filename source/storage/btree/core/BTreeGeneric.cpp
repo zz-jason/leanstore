@@ -114,9 +114,9 @@ void BTreeGeneric::trySplit(BufferFrame& to_split, s16 favored_split_pos) {
           new_left_node.ReserveWALPayload<WALInitPage>(0, mTreeId);
       newLeftWalHandler.SubmitWal();
 
-      auto parentPageId(new_root.bf()->header.pid);
-      auto lhsPageId(new_left_node.bf()->header.pid);
-      auto rhsPageId(c_x_guard.bf()->header.pid);
+      auto parentPageId(new_root.bf()->header.mPageId);
+      auto lhsPageId(new_left_node.bf()->header.mPageId);
+      auto rhsPageId(c_x_guard.bf()->header.mPageId);
 
       auto curRightWalHandler = c_x_guard.ReserveWALPayload<WALLogicalSplit>(
           0, parentPageId, lhsPageId, rhsPageId);
@@ -182,9 +182,9 @@ void BTreeGeneric::trySplit(BufferFrame& to_split, s16 favored_split_pos) {
             new_left_node.ReserveWALPayload<WALInitPage>(0, mTreeId);
         newLeftWalHandler.SubmitWal();
 
-        auto parentPageId = p_x_guard.bf()->header.pid;
-        auto lhsPageId = new_left_node.bf()->header.pid;
-        auto rhsPageId = c_x_guard.bf()->header.pid;
+        auto parentPageId = p_x_guard.bf()->header.mPageId;
+        auto lhsPageId = new_left_node.bf()->header.mPageId;
+        auto rhsPageId = c_x_guard.bf()->header.mPageId;
 
         auto curRightWalHandler = c_x_guard.ReserveWALPayload<WALLogicalSplit>(
             0, parentPageId, lhsPageId, rhsPageId);

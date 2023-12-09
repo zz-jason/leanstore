@@ -242,7 +242,7 @@ void BTreeNode::copyKeyValueRange(BTreeNode* dst, u16 dstSlot, u16 srcSlot,
   assert((dst->RawPtr() + dst->mDataOffset) >=
          reinterpret_cast<u8*>(dst->slot + dst->mNumSeps));
 }
-// -------------------------------------------------------------------------------------
+
 void BTreeNode::copyKeyValue(u16 srcSlot, BTreeNode* dst, u16 dstSlot) {
   u16 fullLength = getFullKeyLen(srcSlot);
   auto key = (u8*)alloca(fullLength * sizeof(u8));

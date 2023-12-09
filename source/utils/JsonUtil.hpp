@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Units.hpp"
+
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"

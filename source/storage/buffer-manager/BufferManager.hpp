@@ -123,13 +123,13 @@ public:
 
   void reclaimPage(BufferFrame& bf);
 
-  /// readPageSync reads the page pid to the destination buffer.
-  /// All the pages are stored in one file (mPageFd), page id (pid)
-  /// determines the offset of the pid-th page in the underlying file:
+  /// Reads the page at pageId to the destination buffer. All the pages are
+  /// stored in one file (mPageFd), page id (pageId) determines the offset of
+  /// the pageId-th page in the underlying file:
   ///
-  /// offset of pid-th page: pid * PAGE_SIZE
+  /// offset of pageId-th page: pageId * PAGE_SIZE
   /// size of each page: PAGE_SIZE
-  void readPageSync(PID pid, void* destination);
+  void readPageSync(PID pageId, void* destination);
 
   void fDataSync();
 
@@ -143,7 +143,7 @@ public:
 
   void RecoveryFromDisk();
 
-  BufferFrame& ReadPageToRecover(PID pid);
+  BufferFrame& ReadPageToRecover(PID pageId);
 
   StringMap serialize();
 

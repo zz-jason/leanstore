@@ -53,6 +53,7 @@ using BITMAP = u8;
 using StringMap = std::unordered_map<std::string, std::string>;
 using str = std::string_view;
 using BytesArray = std::unique_ptr<u8[]>;
+using Slice = std::basic_string_view<u8>;
 
 template <int s> struct getTheSizeOf;
 

@@ -179,7 +179,7 @@ public:
     auto lastUpdatedSlot = contentionStats.mLastUpdatedSlot;
     contentionStats.Update(mGuardedLeaf.EncounteredContention(), mSlotId);
     DLOG(INFO) << "[Contention Split] ContentionStats updated"
-               << ", pid=" << mGuardedLeaf.mBf->header.pid
+               << ", pageId=" << mGuardedLeaf.mBf->header.mPageId
                << ", slot=" << mSlotId << ", encountered contention="
                << mGuardedLeaf.EncounteredContention();
 
@@ -201,7 +201,7 @@ public:
         WorkerCounters::myCounters()
             .contention_split_succ_counter[mBTree.mTreeId]++;
         DLOG(INFO) << "[Contention Split] contention split succeed"
-                   << ", pid=" << mGuardedLeaf.mBf->header.pid
+                   << ", pageId=" << mGuardedLeaf.mBf->header.mPageId
                    << ", contention pct=" << contentionPct
                    << ", split slot=" << splitSlot;
       }
@@ -209,7 +209,7 @@ public:
         WorkerCounters::myCounters()
             .contention_split_fail_counter[mBTree.mTreeId]++;
         LOG(INFO) << "[Contention Split] contention split failed"
-                  << ", pid=" << mGuardedLeaf.mBf->header.pid
+                  << ", pageId=" << mGuardedLeaf.mBf->header.mPageId
                   << ", contention pct=" << contentionPct
                   << ", split slot=" << splitSlot;
       }

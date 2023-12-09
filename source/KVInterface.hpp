@@ -62,7 +62,6 @@ public:
   }
 };
 
-using Slice = std::basic_string_view<u8>;
 using StringU = std::basic_string<u8>;
 using ValCallback = std::function<void(Slice val)>;
 using ScanCallback = std::function<bool(Slice key, Slice val)>;

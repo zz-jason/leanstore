@@ -438,7 +438,7 @@ public:
   }
 
   PID CurrentPageID() {
-    return mGuardedLeaf.mBf->header.pid;
+    return mGuardedLeaf.mBf->header.mPageId;
   }
 };
 

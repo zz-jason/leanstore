@@ -195,8 +195,9 @@ public:
   void SubmitWALEntrySimple();
 
   template <typename T, typename... Args>
-  WALPayloadHandler<T> ReserveWALEntryComplex(u64 payloadSize, PID pid, LID gsn,
-                                              TREEID treeId, Args&&... args);
+  WALPayloadHandler<T> ReserveWALEntryComplex(u64 payloadSize, PID pageId,
+                                              LID gsn, TREEID treeId,
+                                              Args&&... args);
 
   void SubmitWALEntryComplex(u64 totalSize);
 
@@ -438,7 +439,7 @@ inline Logging& Logging::other(WORKERID otherWorkerId) {
 
 template <typename T, typename... Args>
 inline WALPayloadHandler<T> Logging::ReserveWALEntryComplex(u64 payloadSize,
-                                                            PID pid, LID gsn,
+                                                            PID pageId, LID gsn,
                                                             TREEID treeId,
                                                             Args&&... args) {
   SCOPED_DEFER(mPrevLSN = mActiveWALEntryComplex->lsn);
@@ -449,7 +450,7 @@ inline WALPayloadHandler<T> Logging::ReserveWALEntryComplex(u64 payloadSize,
   DCHECK(walContiguousFreeSpace() >= entrySize);
 
   mActiveWALEntryComplex =
-      new (entryPtr) WALEntryComplex(entryLSN, entrySize, gsn, treeId, pid);
+      new (entryPtr) WALEntryComplex(entryLSN, entrySize, gsn, treeId, pageId);
   mActiveWALEntryComplex->mPrevLSN = mPrevLSN;
   mActiveWALEntryComplex->mTxId =
       leanstore::cr::Worker::my().mActiveTx.mStartTs;

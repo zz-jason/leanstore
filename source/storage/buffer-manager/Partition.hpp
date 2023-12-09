@@ -1,8 +1,8 @@
 #pragma once
 #include "BufferFrame.hpp"
+#include "Config.hpp"
 #include "FreeList.hpp"
 #include "Units.hpp"
-#include "Config.hpp"
 #include "utils/Misc.hpp"
 
 #include <list>
@@ -105,20 +105,20 @@ public:
   inline PID NextPageId() {
     std::unique_lock<std::mutex> guard(mReclaimedPageIdsMutex);
     if (mReclaimedPageIds.size()) {
-      const u64 pid = mReclaimedPageIds.back();
+      const u64 pageId = mReclaimedPageIds.back();
       mReclaimedPageIds.pop_back();
-      return pid;
+      return pageId;
     } else {
-      const u64 pid = mNextPageId;
+      const u64 pageId = mNextPageId;
       mNextPageId += mPageIdDistance;
-      ENSURE(pid * PAGE_SIZE <= FLAGS_db_file_capacity);
-      return pid;
+      ENSURE(pageId * PAGE_SIZE <= FLAGS_db_file_capacity);
+      return pageId;
     }
   }
 
-  inline void ReclaimPageId(PID pid) {
+  inline void ReclaimPageId(PID pageId) {
     std::unique_lock<std::mutex> guard(mReclaimedPageIdsMutex);
-    mReclaimedPageIds.push_back(pid);
+    mReclaimedPageIds.push_back(pageId);
   }
 
   inline u64 NumAllocatedPages() {
