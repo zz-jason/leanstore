@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Units.hpp"
 #include "Config.hpp"
+#include "Units.hpp"
 #include "utils/JumpMU.hpp"
 #include "utils/RandomGenerator.hpp"
 
@@ -18,6 +18,7 @@ constexpr static u64 LATCH_VERSION_MASK = ~(0ull);
 class alignas(64) HybridLatch {
 public:
   atomic<u64> version;
+
   std::shared_mutex mutex;
 
 public:
@@ -66,8 +67,11 @@ enum class LATCH_FALLBACK_MODE : u8 {
 class Guard {
 public:
   HybridLatch* latch = nullptr;
+
   GUARD_STATE state = GUARD_STATE::UNINITIALIZED;
+
   u64 version;
+
   bool mEncounteredContention = false;
 
 public:

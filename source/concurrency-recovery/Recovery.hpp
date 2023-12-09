@@ -23,7 +23,7 @@ private:
   /// The offset of WAL in the underlying data file.
   u64 mWalStartOffset;
 
-  /// the total size of the WAL file.
+  /// Size of the written WAL file.
   u64 mWalSize;
 
   /// Stores the dirty page ID and the offset to the first WALEntry that caused
@@ -83,7 +83,7 @@ private:
   /// numbers, undoing all actions taken within the specific transaction.
   bool Undo();
 
-  ssize_t ReadWalEntry(s64 entryOffset, s64 entrySize, u8* destination);
+  ssize_t ReadWalEntry(s64 entryOffset, s64 entrySize, void* destination);
 };
 
 inline bool Recovery::Run() {
@@ -91,11 +91,11 @@ inline bool Recovery::Run() {
 
   Analysis();
 
-  Redo();
+  // Redo();
 
-  if (Undo()) {
-    return true;
-  }
+  // if (Undo()) {
+  //   return true;
+  // }
 
   return error;
 }
@@ -105,8 +105,8 @@ inline void Recovery::Analysis() {
   u8* walEntryPtr = (u8*)&page;
   u64 walEntrySize = sizeof(WALEntry);
   for (auto offset = mWalStartOffset; offset < mWalSize;) {
-    auto bytesRead = ReadWalEntry(offset, walEntrySize, walEntryPtr);
-    auto walEntry = reinterpret_cast<WALEntry*>(walEntryPtr);
+    auto bytesRead = ReadWalEntry(offset, walEntrySize, &page);
+    auto walEntry = reinterpret_cast<WALEntry*>(&page);
     switch (walEntry->type) {
     case WALEntry::TYPE::TX_START: {
       DCHECK(bytesRead == walEntry->size);
@@ -164,7 +164,7 @@ inline void Recovery::Analysis() {
       continue;
     }
     default: {
-      LOG(FATAL) << "recognized WALEntry type: " << walEntry->TypeName();
+      LOG(FATAL) << "Unrecognized WALEntry type: " << walEntry->TypeName();
     }
     }
   }
@@ -190,7 +190,6 @@ inline void Recovery::Redo() {
 
     auto complexEntry = reinterpret_cast<WALEntryComplex*>(walEntryPtr);
     DCHECK(bytesRead == complexEntry->size);
-    DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
     if (mDirtyPageTable.find(complexEntry->pid) == mDirtyPageTable.end() ||
         complexEntry->gsn < mDirtyPageTable[complexEntry->pid]) {
       offset += bytesRead;
@@ -216,17 +215,70 @@ inline bool Recovery::Undo() {
   return false;
 }
 
+inline ssize_t Recovery::ReadWalEntry(s64 offset, s64 nbytes,
+                                      void* destination) {
+
+  FILE* fp = fopen(GetWALFilePath().c_str(), "rb");
+  if (fp == nullptr) {
+    perror("Error opening file");
+    return -1;
+  }
+  SCOPED_DEFER(fclose(fp));
+
+  if (fseek(fp, offset, SEEK_SET) != 0) {
+    perror("Error seeking file");
+    return -1;
+  }
+
+  if (fread(destination, 1, nbytes, fp) != nbytes) {
+    perror("Error reading file");
+    DLOG(FATAL) << "WAL file name=" << GetWALFilePath() << ", offset=" << offset
+                << ", nbytes=" << nbytes;
+    return -1;
+  }
+
+  return nbytes;
+}
+
+/*
 inline ssize_t Recovery::ReadWalEntry(s64 entryOffset, s64 entrySize,
-                                      u8* destination) {
+                                      void* destination) {
   auto bytesLeft = entrySize;
   do {
     auto bytesRead = pread(mWalFd, destination, bytesLeft,
                            entryOffset + (entrySize - bytesLeft));
+    // pread (int __fd, void *__buf, size_t __nbytes, __off64_t __offset)
     if (bytesRead < 0) {
-      LOG(ERROR) << "pread failed"
-                 << ", error= " << bytesRead << ", file descriptor=" << mWalFd
-                 << ", offset=" << entryOffset + (entrySize - bytesLeft)
-                 << ", bytes to read=" << bytesLeft;
+      perror("ReadWalEntry read failed");
+
+      // whether the fd is valid
+      {
+        int flags = fcntl(mWalFd, F_GETFD);
+        if (flags == -1) {
+          perror("fcntl");
+          exit(EXIT_FAILURE);
+        }
+        if (flags & FD_CLOEXEC) {
+          LOG(INFO) << "mWalFd(" << mWalFd << ") is valid";
+        } else {
+          LOG(INFO) << "mWalFd(" << mWalFd << ") is invalid";
+        }
+      }
+
+      // whether the file offset+nbytes is valid
+      {
+        off_t size = lseek(mWalFd, 0, SEEK_END);
+        if (size == -1) {
+          perror("lseek");
+          exit(EXIT_FAILURE);
+        }
+        LOG(INFO) << "mWalFd(" << mWalFd << ") file size: " << size;
+      }
+
+      LOG(FATAL) << "pread failed"
+                 << ", error=" << errno << ", fd=" << mWalFd
+                 << ", buf=" << destination << ", nbytes=" << bytesLeft
+                 << ", offset=" << entryOffset + (entrySize - bytesLeft);
       return bytesRead;
     }
     bytesLeft -= bytesRead;
@@ -234,6 +286,7 @@ inline ssize_t Recovery::ReadWalEntry(s64 entryOffset, s64 entrySize,
 
   return entrySize;
 }
+*/
 
 } // namespace cr
 } // namespace leanstore

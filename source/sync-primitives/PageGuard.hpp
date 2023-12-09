@@ -12,41 +12,18 @@
 namespace leanstore {
 namespace storage {
 
-// Objects of this class must be thread local !
-// OptimisticPageGuard can hold the mutex. There are 3 locations where it can
-// release it: 1- Destructor if not moved 2- Assign operator 3- kill()
 template <typename T> class ExclusivePageGuard;
 template <typename T> class SharedPageGuard;
 
 template <typename T> class HybridPageGuard {
-protected:
-  void latchAccordingToFallbackMode(Guard& guard,
-                                    const LATCH_FALLBACK_MODE if_contended) {
-    if (if_contended == LATCH_FALLBACK_MODE::SPIN) {
-      guard.toOptimisticSpin();
-    } else if (if_contended == LATCH_FALLBACK_MODE::EXCLUSIVE) {
-      guard.toOptimisticOrExclusive();
-    } else if (if_contended == LATCH_FALLBACK_MODE::SHARED) {
-      guard.toOptimisticOrShared();
-    } else if (if_contended == LATCH_FALLBACK_MODE::JUMP) {
-      guard.toOptimisticOrJump();
-    } else {
-      UNREACHABLE();
-    }
-  }
-
 public:
-  //---------------------------------------------------------------------------
-  // Member fields
-  //---------------------------------------------------------------------------
   BufferFrame* mBf = nullptr;
+
   Guard guard;
+
   bool keep_alive = true;
 
 public:
-  //---------------------------------------------------------------------------
-  // Constructors and Destructors
-  //---------------------------------------------------------------------------
   HybridPageGuard() : mBf(nullptr), guard(nullptr) {
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
@@ -59,7 +36,10 @@ public:
   HybridPageGuard(HybridPageGuard& other) = delete;  // Copy constructor
   HybridPageGuard(HybridPageGuard&& other) = delete; // Move constructor
 
-  // I: Allocate a new page
+  /// Used to allocate a new page and create a latch guard on it.
+  ///
+  /// @param treeId The tree which this page belongs to.
+  /// @param keep_alive
   HybridPageGuard(TREEID treeId, bool keep_alive = true)
       : mBf(&BufferManager::sInstance->AllocNewPage()),
         guard(mBf->header.mLatch, GUARD_STATE::EXCLUSIVE),
@@ -69,17 +49,22 @@ public:
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
-  // I: Root case
+  /// Used to for root node.
   HybridPageGuard(
-      Swip<BufferFrame> sentinal_swip,
+      Swip<BufferFrame> swip,
       const LATCH_FALLBACK_MODE if_contended = LATCH_FALLBACK_MODE::SPIN)
-      : mBf(&sentinal_swip.AsBufferFrame()), guard(mBf->header.mLatch) {
+      : mBf(&swip.AsBufferFrame()), guard(mBf->header.mLatch) {
     latchAccordingToFallbackMode(guard, if_contended);
     syncGSN();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
-  // I: Lock coupling
+  /// Used for lock coupling.
+  ////
+  /// @param parentGuard The guarded parent node, which protects everyting in
+  /// the parent node, including childSwip.
+  /// @param childSwip The swip to the child node.
+  /// @param if_contended Lock fall back mode if contention happens.
   template <typename T2>
   HybridPageGuard(
       HybridPageGuard<T2>& parentGuard, Swip<T>& childSwip,
@@ -174,7 +159,7 @@ public:
     // TODO: don't sync on temporary table pages like HistoryTree
     if (FLAGS_wal_rfa) {
       if (mBf->page.mGSN > cr::Worker::my().mLogging.mMinFlushedGsn &&
-          mBf->header.mLastWriterWorker != cr::Worker::my().mWorkerId) { //
+          mBf->header.mLastWriterWorker != cr::Worker::my().mWorkerId) {
         cr::Worker::my().mLogging.mHasRemoteDependency = true;
       }
     }
@@ -187,7 +172,6 @@ public:
   }
 
   template <typename WT, typename... Args>
-  // template <> void init() {
   cr::WALPayloadHandler<WT> ReserveWALPayload(u64 payloadSize, Args&&... args) {
     DCHECK(FLAGS_wal);
     DCHECK(guard.state == GUARD_STATE::EXCLUSIVE);
@@ -256,6 +240,22 @@ public:
   void reclaim() {
     BufferManager::sInstance->reclaimPage(*(mBf));
     guard.state = GUARD_STATE::MOVED;
+  }
+
+protected:
+  void latchAccordingToFallbackMode(Guard& guard,
+                                    const LATCH_FALLBACK_MODE if_contended) {
+    if (if_contended == LATCH_FALLBACK_MODE::SPIN) {
+      guard.toOptimisticSpin();
+    } else if (if_contended == LATCH_FALLBACK_MODE::EXCLUSIVE) {
+      guard.toOptimisticOrExclusive();
+    } else if (if_contended == LATCH_FALLBACK_MODE::SHARED) {
+      guard.toOptimisticOrShared();
+    } else if (if_contended == LATCH_FALLBACK_MODE::JUMP) {
+      guard.toOptimisticOrJump();
+    } else {
+      UNREACHABLE();
+    }
   }
 };
 

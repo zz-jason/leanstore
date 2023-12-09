@@ -23,12 +23,20 @@ struct GlobalStats {
 
 class LeanStore {
 public:
-  s32 mSsdFd;
+  /// The file descriptor for pages
+  s32 mPageFd;
+
+  /// The file descriptor for write-ahead log
+  s32 mWalFd;
 
   atomic<u64> mNumProfilingThreads = 0;
+
   atomic<bool> mProfilingThreadKeepRunning = true;
+
   profiling::ConfigsTable configs_table;
+
   u64 config_hash = 0;
+
   GlobalStats global_stats;
 
 public:

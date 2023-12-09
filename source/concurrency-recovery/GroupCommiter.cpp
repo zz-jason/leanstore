@@ -13,6 +13,7 @@
 #include <thread>
 
 #include <libaio.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 using namespace std::chrono_literals;
@@ -44,25 +45,33 @@ void CRManager::runGroupCommiter() {
     LOG_IF(FATAL, ret != 0) << "io_setup failed, ret code = " << ret;
   }
 
-  auto addWalBufToPWrite = [&](u8* buf, u64 lower, u64 upper) {
+  auto setUpIOControlBlock = [&](u8* buf, u64 lower, u64 upper) {
     auto lowerAligned = utils::downAlign(lower);
     auto upperAligned = utils::upAlign(upper);
-    auto data = buf + lowerAligned;
-    auto size = upperAligned - lowerAligned;
 
-    // TODO: add the concept of chunks
-    DCHECK(u64(data) % 512 == 0);
-    DCHECK(size % 512 == 0);
-    DCHECK(mWalSize % 512 == 0);
-    io_prep_pwrite(&iocbs[numIoSlots], mWalFd, data, size, mWalSize);
-    mWalSize += size;
+    auto bufAligned = buf + lowerAligned;
+    auto countAligned = upperAligned - lowerAligned;
+    auto offsetAligned = utils::downAlign(mWalSize);
 
-    iocbs[numIoSlots].data = data;
+    DCHECK(u64(bufAligned) % 512 == 0);
+    DCHECK(countAligned % 512 == 0);
+    DCHECK(offsetAligned % 512 == 0);
+
+    io_prep_pwrite(/* iocb */ &iocbs[numIoSlots], /* fd */ mWalFd,
+                   /* buf */ bufAligned, /* count */ countAligned,
+                   /* offset */ offsetAligned);
+    mWalSize += upper - lower;
+
+    iocbs[numIoSlots].data = bufAligned;
     iocbs_ptr[numIoSlots] = &iocbs[numIoSlots];
     numIoSlots++;
 
+    DLOG(INFO) << "setUpIOControlBlock"
+               << ", numIoSlots=" << numIoSlots << ", lower=" << lower
+               << ", upper=" << upper << ", countAligned=" << countAligned
+               << ", mWalSize=" << mWalSize;
     COUNTERS_BLOCK() {
-      CRCounters::myCounters().gct_write_bytes += size;
+      CRCounters::myCounters().gct_write_bytes += countAligned;
     }
   };
 
@@ -74,8 +83,9 @@ void CRManager::runGroupCommiter() {
   readyToCommitRfaCut.resize(mNumWorkerThreads, 0);
   walFlushReqs.resize(mNumWorkerThreads);
 
+  /// write WAL records from every worker thread to SSD.
   while (mKeepRunning) {
-    /// Phase 1: write WAL records from every worker thread on SSD.
+    /// Phase 1: Prepare pwrite requests
     ///
     /// We use the asynchronous IO interface from libaio to batch all log writes
     /// and submit them using a single system call. Once the writes are done, we
@@ -107,10 +117,10 @@ void CRManager::runGroupCommiter() {
       const u64 bufferEnd = FLAGS_wal_buffer_size;
 
       if (buffered > flushed) {
-        addWalBufToPWrite(logging.mWalBuffer, flushed, buffered);
+        setUpIOControlBlock(logging.mWalBuffer, flushed, buffered);
       } else if (buffered < flushed) {
-        addWalBufToPWrite(logging.mWalBuffer, flushed, bufferEnd);
-        addWalBufToPWrite(logging.mWalBuffer, 0, buffered);
+        setUpIOControlBlock(logging.mWalBuffer, flushed, bufferEnd);
+        setUpIOControlBlock(logging.mWalBuffer, 0, buffered);
       }
     }
 
@@ -120,13 +130,15 @@ void CRManager::runGroupCommiter() {
     }
 
     // submit all log writes using a single system call.
-    DCHECK(mWalSize % 512 == 0);
     for (auto left = numIoSlots; left > 0;) {
       auto iocbToSubmit = iocbs_ptr.get() + numIoSlots - left;
       s32 submitted = io_submit(ioCtx, left, iocbToSubmit);
       LOG_IF(FATAL, submitted < 0)
           << "io_submit failed, return value=" << submitted
-          << ", mWalFd=" << mWalFd << "left=" << left;
+          << ", mWalFd=" << mWalFd;
+      DLOG_IF(INFO, submitted >= 0)
+          << "io_submit succeed, submitted=" << submitted
+          << ", mWalFd=" << mWalFd;
       left -= submitted;
     }
     if (numIoSlots > 0) {
@@ -134,6 +146,8 @@ void CRManager::runGroupCommiter() {
           io_getevents(ioCtx, numIoSlots, numIoSlots, ioEvents.get(), nullptr);
       LOG_IF(FATAL, done_requests < 0)
           << "io_getevents failed, return value=" << done_requests;
+      DLOG_IF(INFO, done_requests >= 0)
+          << "io_getevents succeed, done_requests=" << done_requests;
     }
     if (FLAGS_wal_fsync) {
       fdatasync(mWalFd);
@@ -150,61 +164,76 @@ void CRManager::runGroupCommiter() {
       phase2Timer.Start();
     }
 
-    u64 committed_tx = 0;
+    u64 numCommitted = 0;
     for (WORKERID workerId = 0; workerId < mNumWorkerThreads; workerId++) {
       auto& logging = mWorkers[workerId]->mLogging;
       const auto& walFlushReq = walFlushReqs[workerId];
       logging.UpdateFlushedCommitTs(walFlushReq.mPrevTxCommitTs);
-      TXID signaled_up_to = std::numeric_limits<TXID>::max();
+      TXID signaledUpTo = std::numeric_limits<TXID>::max();
       // commit the pre-committed transactions in each worker, update
-      // signaled_up_to
+      // signaledUpTo
       {
         logging.mWalFlushed.store(walFlushReq.mWalBuffered,
                                   std::memory_order_release);
         std::unique_lock<std::mutex> g(logging.mPreCommittedQueueMutex);
 
-        // commit thansactions in mPreCommittedQueue as many as possible
-        u64 tx_i = 0;
-        for (tx_i = 0; tx_i < logging.mPreCommittedQueue.size() &&
-                       logging.mPreCommittedQueue[tx_i].CanCommit(
-                           minFlushedGsn, minFlushedCommitTs);
-             tx_i++) {
-          logging.mPreCommittedQueue[tx_i].state = TX_STATE::COMMITTED;
-        }
-
+        // commit thansactions in mPreCommittedQueue as many as possible, and
         // erase the committed transactions
+        u64 tx_i = 0;
+        while (tx_i < logging.mPreCommittedQueue.size() &&
+               logging.mPreCommittedQueue[tx_i].CanCommit(minFlushedGsn,
+                                                          minFlushedCommitTs)) {
+          DLOG(INFO) << "Transaction (startTs="
+                     << logging.mPreCommittedQueue[tx_i].mStartTs
+                     << ", commitTs="
+                     << logging.mPreCommittedQueue[tx_i].mCommitTs
+                     << ") in pre-committed queue is committed and erased from "
+                        "the queue";
+          logging.mPreCommittedQueue[tx_i].state = TX_STATE::COMMITTED;
+          tx_i++;
+        }
         if (tx_i > 0) {
           auto maxCommitTs = logging.mPreCommittedQueue[tx_i - 1].commitTS();
-          signaled_up_to = std::min<TXID>(signaled_up_to, maxCommitTs);
+          signaledUpTo = std::min<TXID>(signaledUpTo, maxCommitTs);
           logging.mPreCommittedQueue.erase(logging.mPreCommittedQueue.begin(),
                                            logging.mPreCommittedQueue.begin() +
                                                tx_i);
-          committed_tx += tx_i;
+          numCommitted += tx_i;
         }
 
-        // commit transactions in mPreCommittedQueueRfa as many as possible
+        // commit transactions in mPreCommittedQueueRfa as many as possible, and
+        // erase the committed transactions
         for (tx_i = 0; tx_i < readyToCommitRfaCut[workerId]; tx_i++) {
+          DLOG(INFO)
+              << "Transaction (startTs="
+              << logging.mPreCommittedQueueRfa[tx_i].mStartTs
+              << ", commitTs=" << logging.mPreCommittedQueueRfa[tx_i].mCommitTs
+              << ") in pre-committed RFA queue is committed and erased from "
+                 "the queue";
           logging.mPreCommittedQueueRfa[tx_i].state = TX_STATE::COMMITTED;
         }
 
-        // erase the committed transactions
         if (tx_i > 0) {
           auto maxCommitTs = logging.mPreCommittedQueueRfa[tx_i - 1].commitTS();
-          signaled_up_to = std::min<TXID>(signaled_up_to, maxCommitTs);
+          signaledUpTo = std::min<TXID>(signaledUpTo, maxCommitTs);
           logging.mPreCommittedQueueRfa.erase(
               logging.mPreCommittedQueueRfa.begin(),
               logging.mPreCommittedQueueRfa.begin() + tx_i);
-          committed_tx += tx_i;
+          numCommitted += tx_i;
         }
       }
 
-      if (signaled_up_to < std::numeric_limits<TXID>::max() &&
-          signaled_up_to > 0) {
-        logging.UpdateSignaledCommitTs(signaled_up_to);
+      if (signaledUpTo < std::numeric_limits<TXID>::max() && signaledUpTo > 0) {
+        logging.UpdateSignaledCommitTs(signaledUpTo);
+        DLOG_IF(INFO, numCommitted > 0 ||
+                          signaledUpTo < std::numeric_limits<TXID>::max())
+            << "Updated transaction commit info for worker(" << workerId
+            << "), signaledUpTo=" << signaledUpTo
+            << ", numCommitted=" << numCommitted;
       }
     }
 
-    CRCounters::myCounters().gct_committed_tx += committed_tx;
+    CRCounters::myCounters().gct_committed_tx += numCommitted;
     COUNTERS_BLOCK() {
       phase2Timer.Stop();
       CRCounters::myCounters().gct_phase_1_ms += phase1Timer.ElaspedUS();

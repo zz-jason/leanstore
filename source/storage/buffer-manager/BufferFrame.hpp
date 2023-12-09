@@ -4,6 +4,8 @@
 #include "Units.hpp"
 #include "sync-primitives/Latch.hpp"
 
+#include <rapidjson/document.h>
+
 #include <atomic>
 #include <cstring>
 #include <limits>
@@ -54,22 +56,39 @@ enum class STATE : u8 { FREE = 0, HOT = 1, COOL = 2, LOADED = 3 };
 
 class Header {
 public:
-  // For remote flush avoidance (RFA), see "Rethinking Logging, Checkpoints,
-  // and Recovery for High-Performance Storage Engines, SIGMOD 2020" for
-  // details.
-  WORKERID mLastWriterWorker = std::numeric_limits<u8>::max();
-
-  LID mFlushedPSN = 0;
+  /// The state of the buffer frame.
   STATE state = STATE::FREE;
-  std::atomic<bool> mIsBeingWritternBack = false;
+
+  /// Latch of the buffer frame. The optismitic version in the latch is nerer
+  /// decreased.
+  HybridLatch mLatch = 0;
+
+  /// Used to make the buffer frame remain in memory.
   bool mKeepInMemory = false;
-  PID pid = std::numeric_limits<PID>::max();
-  HybridLatch mLatch = 0; // ATTENTION: NEVER DECREMENT
+
+  /// The free buffer frame in the free list of each buffer partition.
   BufferFrame* mNextFreeBf = nullptr;
 
-  /// @brief mContentionStats is used for contention split.
+  /// ID of page resides in this buffer frame.
+  PID pid = std::numeric_limits<PID>::max();
+
+  /// ID of the last worker who has modified the containing page.  For remote
+  /// flush avoidance (RFA), see "Rethinking Logging, Checkpoints, and Recovery
+  /// for High-Performance Storage Engines, SIGMOD 2020" for details.
+  WORKERID mLastWriterWorker = std::numeric_limits<u8>::max();
+
+  /// The flushed page sequence number of the containing page.
+  LID mFlushedPSN = 0;
+
+  /// Whether the containing page is being written back to disk.
+  std::atomic<bool> mIsBeingWritternBack = false;
+
+  /// Contention statistics about the BTreeNode in the containing page. Used for
+  /// contention-based node split for BTrees.
   ContentionStats mContentionStats;
 
+  /// CRC checksum of the containing page.
+  /// TODO(jian.z): should it be put to page?
   u64 crc = 0;
 
 public:
@@ -95,19 +114,19 @@ public:
 /// explicitly.
 class alignas(512) Page {
 public:
-  /// mPSN is short for "page sequence number", increased when a page is
-  /// modified. A page is "dirty" when mPSN > mFlushedPSN in the header.
+  /// Short for "page sequence number", increased when a page is modified. A
+  /// page is "dirty" when mPSN > mFlushedPSN in the header.
   LID mPSN = 0;
 
-  /// mGSN is short for "global sequence number", increased when a page is
-  /// accessed. It's used to check whether the page has been read or written by
+  /// Short for "global sequence number", increased when a page is accessed.
+  /// It's used to check whether the page has been read or written by
   /// transactions in other workers.
   LID mGSN = 0;
 
-  /// mBTreeId is the btree ID it belongs to.
+  /// The btree ID it belongs to.
   TREEID mBTreeId = std::numeric_limits<TREEID>::max();
 
-  /// used for debug.
+  /// Used for debug, page id is stored in it when evicted to disk.
   u64 mMagicDebuging;
 
   /// The data stored in this page. The btree node content is stored here.
@@ -163,12 +182,21 @@ public:
   void reset() {
     header.Reset();
   }
+
+  rapidjson::Document ToJSON();
 };
 
 static constexpr u64 EFFECTIVE_PAGE_SIZE = sizeof(Page::mPayload);
 
 static_assert(sizeof(Page) == PAGE_SIZE, "The total sizeof page");
-// static_assert((sizeof(BufferFrame) - sizeof(Page)) == 512, "");
+static_assert((sizeof(BufferFrame) - sizeof(Page)) == 512, "");
+
+inline rapidjson::Document BufferFrame::ToJSON() {
+  rapidjson::Document doc;
+  // auto& allocator = doc.GetAllocator();
+  doc.SetObject();
+  return doc;
+}
 
 } // namespace storage
 } // namespace leanstore

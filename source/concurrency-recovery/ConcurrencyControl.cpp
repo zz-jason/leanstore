@@ -20,7 +20,7 @@ void ConcurrencyControl::refreshGlobalState() {
   utils::Timer timer(CRCounters::myCounters().cc_ms_refresh_global_state);
 
   if (utils::RandomGenerator::getRandU64(0, Worker::my().mNumAllWorkers) == 0 &&
-      Worker::global_mutex.try_lock()) {
+      Worker::sGlobalMutex.try_lock()) {
     TXID localNewestOlap = std::numeric_limits<TXID>::min();
     TXID localOldestOltp = std::numeric_limits<TXID>::max();
     TXID localOldestTx = std::numeric_limits<TXID>::max();
@@ -97,14 +97,14 @@ void ConcurrencyControl::refreshGlobalState() {
       Worker::sOltpLwm.store(global_oltp_lwm_buffer, std::memory_order_release);
     }
     // -------------------------------------------------------------------------------------
-    Worker::global_mutex.unlock();
+    Worker::sGlobalMutex.unlock();
   }
 }
 
 void ConcurrencyControl::switchToSnapshotIsolationMode() {
   u64 workerId = Worker::my().mWorkerId;
   {
-    std::unique_lock guard(Worker::global_mutex);
+    std::unique_lock guard(Worker::sGlobalMutex);
     atomic<u64>& workerSnapshot = Worker::sWorkersCurrentSnapshot[workerId];
     workerSnapshot.store(sGlobalClock.load(), std::memory_order_release);
   }
@@ -116,7 +116,7 @@ void ConcurrencyControl::switchToReadCommittedMode() {
   {
     // Latch-free work only when all counters increase monotone, we can not
     // simply go back
-    std::unique_lock guard(Worker::global_mutex);
+    std::unique_lock guard(Worker::sGlobalMutex);
     atomic<u64>& workerSnapshot = Worker::sWorkersCurrentSnapshot[workerId];
     u64 newSnapshot = workerSnapshot.load() | Worker::RC_BIT;
     workerSnapshot.store(newSnapshot, std::memory_order_release);
@@ -189,20 +189,20 @@ synclwm : {
 }
 
 ConcurrencyControl::VISIBILITY ConcurrencyControl::isVisibleForIt(
-    WORKERID whom_worker_id, TXID commit_ts) {
-  return local_workers_start_ts[whom_worker_id] > commit_ts
+    WORKERID whom_worker_id, TXID commitTs) {
+  return local_workers_start_ts[whom_worker_id] > commitTs
              ? VISIBILITY::VISIBLE_ALREADY
              : VISIBILITY::VISIBLE_NEXT_ROUND;
 }
 // -------------------------------------------------------------------------------------
-// UNDETERMINED is not possible atm because we spin on start_ts
+// UNDETERMINED is not possible atm because we spin on startTs
 ConcurrencyControl::VISIBILITY ConcurrencyControl::isVisibleForIt(
     WORKERID whom_worker_id, WORKERID what_worker_id, TXID tx_ts) {
   const bool is_commit_ts = tx_ts & MSB;
-  const TXID commit_ts = is_commit_ts
-                             ? (tx_ts & MSB_MASK)
-                             : getCommitTimestamp(what_worker_id, tx_ts);
-  return isVisibleForIt(whom_worker_id, commit_ts);
+  const TXID commitTs = is_commit_ts
+                            ? (tx_ts & MSB_MASK)
+                            : getCommitTimestamp(what_worker_id, tx_ts);
+  return isVisibleForIt(whom_worker_id, commitTs);
 }
 
 TXID ConcurrencyControl::getCommitTimestamp(WORKERID workerId, TXID tx_ts) {
@@ -211,12 +211,12 @@ TXID ConcurrencyControl::getCommitTimestamp(WORKERID workerId, TXID tx_ts) {
   }
   assert((tx_ts & MSB) || isVisibleForMe(workerId, tx_ts));
   // -------------------------------------------------------------------------------------
-  const TXID& start_ts = tx_ts;
-  TXID lcb = other(workerId).commit_tree.LCB(start_ts);
-  TXID commit_ts =
+  const TXID& startTs = tx_ts;
+  TXID lcb = other(workerId).commit_tree.LCB(startTs);
+  TXID commitTs =
       lcb ? lcb : std::numeric_limits<TXID>::max(); // TODO: align with GC
-  ENSURE(commit_ts > start_ts);
-  return commit_ts;
+  ENSURE(commitTs > startTs);
+  return commitTs;
 }
 
 // It is also used to check whether the tuple is write-locked, hence we need the
@@ -305,23 +305,23 @@ bool ConcurrencyControl::isVisibleForAll(WORKERID, TXID ts) {
     return ts < Worker::sAllLwm.load();
   }
 }
-// -------------------------------------------------------------------------------------
-TXID ConcurrencyControl::CommitTree::commit(TXID start_ts) {
+
+TXID ConcurrencyControl::CommitTree::commit(TXID startTs) {
   utils::Timer timer(CRCounters::myCounters().cc_ms_committing);
   mutex.lock();
   assert(cursor < capacity);
-  const TXID commit_ts = sGlobalClock.fetch_add(1);
-  array[cursor++] = {commit_ts, start_ts};
+  const TXID commitTs = sGlobalClock.fetch_add(1);
+  array[cursor++] = {commitTs, startTs};
   mutex.unlock();
-  return commit_ts;
+  return commitTs;
 }
-// -------------------------------------------------------------------------------------
+
 std::optional<std::pair<TXID, TXID>> ConcurrencyControl::CommitTree::LCBUnsafe(
-    TXID start_ts) {
+    TXID startTs) {
   const auto begin = array;
   const auto end = array + cursor;
   auto it =
-      std::lower_bound(begin, end, start_ts, [&](const auto& pair, TXID ts) {
+      std::lower_bound(begin, end, startTs, [&](const auto& pair, TXID ts) {
         return pair.first < ts;
       });
   if (it == begin) {
@@ -329,22 +329,22 @@ std::optional<std::pair<TXID, TXID>> ConcurrencyControl::CommitTree::LCBUnsafe(
     return {};
   } else {
     it--;
-    assert(it->second < start_ts);
+    assert(it->second < startTs);
     return *it;
   }
 }
-// -------------------------------------------------------------------------------------
-TXID ConcurrencyControl::CommitTree::LCB(TXID start_ts) {
+
+TXID ConcurrencyControl::CommitTree::LCB(TXID startTs) {
   TXID lcb = 0;
   mutex.lock_shared();
-  auto v = LCBUnsafe(start_ts);
+  auto v = LCBUnsafe(startTs);
   if (v) {
     lcb = v->second;
   }
   mutex.unlock_shared();
   return lcb;
 }
-// -------------------------------------------------------------------------------------
+
 void ConcurrencyControl::CommitTree::cleanIfNecessary() {
   if (cursor < capacity) {
     return;
@@ -364,8 +364,8 @@ void ConcurrencyControl::CommitTree::cleanIfNecessary() {
     }
     its_start_ts &= Worker::CLEAN_BITS_MASK;
     set.insert(array[cursor - 1]); // for  the new TX
-    if (its_start_ts ==
-        0) { // to avoid race conditions when switching from RC to SI
+    if (its_start_ts == 0) {
+      // to avoid race conditions when switching from RC to SI
       set.insert(array[0]);
     } else {
       auto v = LCBUnsafe(its_start_ts);

@@ -164,6 +164,7 @@ public:
   // Member fields
   //---------------------------------------------------------------------------
   Slot slot[sSlotCapacity];
+
   u8 padding[sLeftSpaceToWaste];
 
 public:

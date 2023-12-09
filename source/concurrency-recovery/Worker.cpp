@@ -19,7 +19,7 @@ namespace leanstore {
 namespace cr {
 
 thread_local std::unique_ptr<Worker> Worker::sTlsWorker = nullptr;
-std::shared_mutex Worker::global_mutex;
+std::shared_mutex Worker::sGlobalMutex;
 
 // All transactions < are committed
 std::unique_ptr<atomic<u64>[]> Worker::sWorkersCurrentSnapshot =
@@ -62,10 +62,10 @@ void Worker::startTX(TX_MODE mode, TX_ISOLATION_LEVEL level, bool isReadOnly) {
 
   // Init wal and group commit related transaction information
   mLogging.mTxWalBegin = mLogging.mWalBuffered;
-  if (!isReadOnly) {
+  SCOPED_DEFER(if (!isReadOnly) {
     mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_START);
     mLogging.SubmitWALEntrySimple();
-  }
+  });
 
   // Advance local GSN on demand to maintain transaction dependency
   const LID maxFlushedGsn = Logging::sMaxFlushedGsn.load();
@@ -134,15 +134,15 @@ void Worker::commitTX() {
       }
 
       if (activeTX().hasWrote()) {
-        TXID commit_ts = cc.commit_tree.commit(mActiveTx.startTS());
-        cc.mLatestWriteTx.store(commit_ts, std::memory_order_release);
-        mActiveTx.mCommitTs = commit_ts;
+        TXID commitTs = cc.commit_tree.commit(mActiveTx.startTS());
+        cc.mLatestWriteTx.store(commitTs, std::memory_order_release);
+        mActiveTx.mCommitTs = commitTs;
       }
 
       mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
       mActiveTx.state = TX_STATE::READY_TO_COMMIT;
 
-      // TODO: commit_ts in log
+      // TODO: commitTs in log
       mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_COMMIT);
       mLogging.SubmitWALEntrySimple();
 
@@ -154,6 +154,7 @@ void Worker::commitTX() {
       }
 
       mActiveTx.stats.precommit = std::chrono::high_resolution_clock::now();
+
       std::unique_lock<std::mutex> g(mLogging.mPreCommittedQueueMutex);
       if (mLogging.mHasRemoteDependency) {
         mLogging.mPreCommittedQueue.push_back(mActiveTx);
@@ -170,6 +171,11 @@ void Worker::commitTX() {
 
     // All isolation level generate garbage
     cc.garbageCollection();
+
+    // wait transaction to be committed
+    while (mLogging.TxUnCommitted(mActiveTx.mCommitTs)) {
+    }
+    mActiveTx.state = TX_STATE::COMMITTED;
   }
 }
 
