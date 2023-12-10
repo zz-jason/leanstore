@@ -3,8 +3,8 @@ include(ExternalProject)
 
 # Define a cmake function to add an external lib
 function(leanstore_add_ext_lib TARGET_NAME LIB_NAME GIT_REPO GIT_TAG)
-    set(TARGET_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/third-party/${TARGET_NAME}-prefix)
-    set(TARGET_INSTALL ${CMAKE_CURRENT_BINARY_DIR}/third-party/${TARGET_NAME}-install)
+    set(TARGET_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/third-party/${TARGET_NAME}-src)
+    set(TARGET_INSTALL ${CMAKE_CURRENT_BINARY_DIR}/third-party/${TARGET_NAME})
     ExternalProject_Add(${TARGET_NAME}_internal
         PREFIX ${TARGET_PREFIX}
         GIT_REPOSITORY ${GIT_REPO}
@@ -15,13 +15,13 @@ function(leanstore_add_ext_lib TARGET_NAME LIB_NAME GIT_REPO GIT_TAG)
         UPDATE_COMMAND ""
     )
 
+    message(STATUS "Adding external target: ${TARGET_NAME} ...")
     add_library(${TARGET_NAME} INTERFACE)
     add_dependencies(${TARGET_NAME} ${TARGET_NAME}_internal)
-    target_include_directories(${TARGET_NAME} INTERFACE ${TARGET_INSTALL}/include)
-    target_link_libraries(${TARGET_NAME} INTERFACE ${TARGET_INSTALL}/lib/${LIB_NAME})
-    list(APPEND CMAKE_PREFIX_PATH ${TARGET_INSTALL}/lib/cmake/${TARGET_NAME})
 
-    message(STATUS "External lib added: ${TARGET_NAME}")
-    message(STATUS "  - Include dir: ${TARGET_INSTALL}/include")
-    message(STATUS "  - Lib path: ${TARGET_INSTALL}/lib/${LIB_NAME}")
+    target_include_directories(${TARGET_NAME} INTERFACE ${TARGET_INSTALL}/include)
+    message(STATUS "  - Target include dir: ${TARGET_INSTALL}/include")
+    target_link_libraries(${TARGET_NAME} INTERFACE ${TARGET_INSTALL}/lib/${LIB_NAME})
+    message(STATUS "  - Target link lib: ${TARGET_INSTALL}/lib/${LIB_NAME}")
+    list(APPEND CMAKE_PREFIX_PATH ${TARGET_INSTALL}/lib/cmake/${TARGET_NAME})
 endfunction(leanstore_add_ext_lib)

@@ -12,6 +12,7 @@
 // Sadly, we can not use TBB enumerable thread specific here because it does not
 // automatically remove its entry upon thread destroy
 namespace leanstore {
+
 struct CPUCounters {
   std::unique_ptr<PerfEvent> e;
   string name;

@@ -1,8 +1,7 @@
 #include "CRCounters.hpp"
-// -------------------------------------------------------------------------------------
-// -------------------------------------------------------------------------------------
-// -------------------------------------------------------------------------------------
-namespace leanstore
-{
+
+namespace leanstore {
+
 tbb::enumerable_thread_specific<CRCounters> CRCounters::cr_counters;
-}  // namespace leanstore
+
+} // namespace leanstore

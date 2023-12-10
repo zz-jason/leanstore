@@ -39,7 +39,7 @@ protected:
   ~BufferManagerTest() = default;
 
   void SetUp() override {
-    ASSERT_GT(mFilePath.size(), 0);
+    ASSERT_GT(mFilePath.size(), 0u);
 
     int flags = O_RDWR | O_DIRECT | O_TRUNC | O_CREAT;
     mFd = open(mFilePath.c_str(), flags, 0666);

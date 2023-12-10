@@ -1,4 +1,5 @@
-find_package(GTest REQUIRED)
+include(${CMAKE_SOURCE_DIR}/third-party/gtest.cmake)
+
 include(GoogleTest)
 enable_testing()
 
@@ -10,7 +11,7 @@ function(leanstore_add_test TARGET_NAME)
   )
   target_link_libraries(
     ${TARGET_NAME}
-    GTest::gtest_main
+    gtest
     leanstore
   )
   gtest_discover_tests(${TARGET_NAME})
@@ -19,6 +20,3 @@ endfunction(leanstore_add_test)
 # Add tests
 leanstore_add_test(LeanStoreTest)
 leanstore_add_test(BufferFrameTest)
-
-# add_test(NAME AllTestsInLeanStoreTest COMMAND LeanStoreTest)
-
