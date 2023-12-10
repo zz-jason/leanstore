@@ -11,7 +11,7 @@ file(GLOB_RECURSE LEANSTORE_SRC **.cpp **/**.cpp **.cc **/**.cc **.hpp **/**.hpp
 add_library(leanstore STATIC ${LEANSTORE_SRC})
 
 # dependencies
-target_link_libraries(leanstore profiler aio tbb tabulate rapidjson gflags glog)
+target_link_libraries(leanstore aio tbb tabulate rapidjson gflags glog)
 
 # include dirs
 target_include_directories(leanstore PUBLIC ${CMAKE_SOURCE_DIR}/include/shared-headers)
