@@ -20,10 +20,10 @@ namespace utils {
 
 // WARNING: this only works with 4 byte types
 template <class T>
-bool createTestFileImpl(const string& file_name, uint64_t count,
+bool CreateTestFileImpl(const string& fileName, uint64_t count,
                         function<T(int)> factory) {
   // Open file
-  ofstream of(file_name, ios::binary);
+  ofstream of(fileName, ios::binary);
   if (!of.is_open() || !of.good())
     return false;
 
@@ -46,9 +46,9 @@ bool createTestFileImpl(const string& file_name, uint64_t count,
 }
 
 template <class T>
-bool foreachInFileImpl(const string& file_name, function<void(T)> callback) {
+bool ForeachInFileImpl(const string& fileName, function<void(T)> callback) {
   // Open file
-  ifstream in(file_name, ios::binary);
+  ifstream in(fileName, ios::binary);
   if (!in.is_open() || !in.good())
     return false;
 
@@ -63,52 +63,52 @@ bool foreachInFileImpl(const string& file_name, function<void(T)> callback) {
   return true;
 }
 
-bool CreateTestFile(const string& file_name, uint64_t count,
+bool CreateTestFile(const string& fileName, uint64_t count,
                     function<int32_t(int32_t)> factory) {
-  return createTestFileImpl<int32_t>(file_name, count, factory);
+  return CreateTestFileImpl<int32_t>(fileName, count, factory);
 }
 
-bool ForeachInFile(const string& file_name, function<void(uint32_t)> callback) {
-  return foreachInFileImpl<uint32_t>(file_name, callback);
+bool ForeachInFile(const string& fileName, function<void(uint32_t)> callback) {
+  return ForeachInFileImpl<uint32_t>(fileName, callback);
 }
 
-bool CreateDirectory(const string& directory_name) {
-  return mkdir(directory_name.c_str(), 0666) == 0;
+bool CreateDirectory(const string& dirName) {
+  return mkdir(dirName.c_str(), 0666) == 0;
 }
 
-bool CreateFile(const string& file_name, const uint64_t bytes) {
-  int file_fd = open(file_name.c_str(), O_CREAT | O_WRONLY, 0666);
-  if (file_fd < 0) {
+bool CreateFile(const string& fileName, const uint64_t bytes) {
+  int fileFd = open(fileName.c_str(), O_CREAT | O_WRONLY, 0666);
+  if (fileFd < 0) {
     return false; // Use strerror(errno) to find error
   }
 
-  if (ftruncate(file_fd, bytes) != 0) {
+  if (ftruncate(fileFd, bytes) != 0) {
     return false; // Use strerror(errno) to find error
   }
 
-  if (close(file_fd) != 0) {
+  if (close(fileFd) != 0) {
     return false; // Use strerror(errno) to find error
   }
 
   return true;
 }
 
-bool CreateFile(const string& file_name, const string& content) {
-  int file_fd = open(file_name.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0666);
-  if (file_fd < 0) {
+bool CreateFile(const string& fileName, const string& content) {
+  int fileFd = open(fileName.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0666);
+  if (fileFd < 0) {
     return false; // Use strerror(errno) to find error
   }
 
-  size_t written_bytes = write(file_fd, content.data(), content.size());
-  return written_bytes == content.size();
+  size_t writtenBytes = write(fileFd, content.data(), content.size());
+  return writtenBytes == content.size();
 }
 
-void DeleteFile(const std::string& file_name) {
-  remove(file_name.c_str());
+void DeleteFile(const std::string& fileName) {
+  remove(fileName.c_str());
 }
 
-uint64_t GetFileLength(const string& file_name) {
-  int fileFD = open(file_name.c_str(), O_RDWR);
+uint64_t GetFileLength(const string& fileName) {
+  int fileFD = open(fileName.c_str(), O_RDWR);
   if (fileFD < 0) {
     cout << "Unable to open file"
          << endl; // You can POSIX_CHECK errno to see what happend
@@ -125,35 +125,35 @@ uint64_t GetFileLength(const string& file_name) {
   return st.st_size;
 }
 
-bool fileExists(const string& file_name) {
+bool FileExists(const string& fileName) {
   struct stat buffer;
-  bool exists = (stat(file_name.c_str(), &buffer) == 0);
+  bool exists = (stat(fileName.c_str(), &buffer) == 0);
   return exists && (buffer.st_mode & S_IFREG);
 }
 
-bool directoryExists(const string& file_name) {
+bool DirectoryExists(const string& fileName) {
   struct stat buffer;
-  bool exists = (stat(file_name.c_str(), &buffer) == 0);
+  bool exists = (stat(fileName.c_str(), &buffer) == 0);
   return exists && (buffer.st_mode & S_IFDIR);
 }
 
-bool pathExists(const string& file_name) {
+bool PathExists(const string& fileName) {
   struct stat buffer;
-  bool exists = (stat(file_name.c_str(), &buffer) == 0);
+  bool exists = (stat(fileName.c_str(), &buffer) == 0);
   return exists;
 }
 
-string LoadFileToMemory(const string& file_name) {
-  uint64_t length = GetFileLength(file_name);
+string LoadFileToMemory(const string& fileName) {
+  uint64_t length = GetFileLength(fileName);
   string data(length, 'a');
-  ifstream in(file_name);
+  ifstream in(fileName);
   in.read(&data[0], length);
   return data;
 }
 
 namespace {
 
-uint64_t applyPrecision(uint64_t input, uint32_t precision) {
+uint64_t ApplyPrecision(uint64_t input, uint32_t precision) {
   uint32_t digits = log10(input) + 1;
   if (digits <= precision)
     return input;
@@ -166,7 +166,7 @@ uint64_t applyPrecision(uint64_t input, uint32_t precision) {
 string FormatTime(chrono::nanoseconds ns, uint32_t precision) {
   ostringstream os;
 
-  uint64_t timeSpan = applyPrecision(ns.count(), precision);
+  uint64_t timeSpan = ApplyPrecision(ns.count(), precision);
 
   // Convert to right unit
   if (timeSpan < 1000ll)
@@ -203,10 +203,10 @@ void PinThread(int socket) {
   (void)socket;
 }
 
-void RunMultithreaded(uint32_t thread_count, function<void(uint32_t)> foo) {
+void RunMultithreaded(uint32_t threadCount, function<void(uint32_t)> foo) {
   atomic<bool> start(false);
-  vector<unique_ptr<thread>> threads(thread_count);
-  for (uint32_t i = 0; i < thread_count; i++) {
+  vector<unique_ptr<thread>> threads(threadCount);
+  for (uint32_t i = 0; i < threadCount; i++) {
     threads[i] = make_unique<thread>([i, &foo, &start]() {
       while (!start)
         ;
@@ -230,8 +230,8 @@ uint8_t* AlignedAlloc(uint64_t alignment, uint64_t size) {
 
 namespace {
 
-array<char, 16> NUM_TO_HEX{{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-                            'a', 'b', 'c', 'd', 'e', 'f'}};
+array<char, 16> numToHex{{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a',
+                          'b', 'c', 'd', 'e', 'f'}};
 uint8_t HexToNum(char c) {
   if ('a' <= c && c <= 'f') {
     return 10 + (c - 'a');
@@ -247,8 +247,8 @@ uint8_t HexToNum(char c) {
 const string DataToHex(const uint8_t* data, uint32_t len, bool spaces) {
   string result;
   for (uint32_t i = 0; i < len; i++) {
-    result += NUM_TO_HEX[*(data + i) >> 4];
-    result += NUM_TO_HEX[*(data + i) & 0x0f];
+    result += numToHex[*(data + i) >> 4];
+    result += numToHex[*(data + i) & 0x0f];
     if (spaces && i != len - 1)
       result += ' ';
   }
@@ -262,8 +262,8 @@ const string StringToHex(const string& str, bool spaces) {
 const vector<uint8_t> HexToData(const string& str, bool spaces) {
   assert(spaces || str.size() % 2 == 0);
 
-  uint32_t result_size = spaces ? ((str.size() + 1) / 3) : (str.size() / 2);
-  vector<uint8_t> result(result_size);
+  uint32_t resultSize = spaces ? ((str.size() + 1) / 3) : (str.size() / 2);
+  vector<uint8_t> result(resultSize);
   for (uint32_t i = 0, out = 0; i < str.size(); i += 2, out++) {
     result[out] = (HexToNum(str[i]) << 4) | HexToNum(str[i + 1]);
     i += spaces ? 1 : 0;
@@ -275,8 +275,8 @@ const vector<uint8_t> HexToData(const string& str, bool spaces) {
 const string HexToString(const string& str, bool spaces) {
   assert(spaces || str.size() % 2 == 0);
 
-  uint32_t result_size = spaces ? ((str.size() + 1) / 3) : (str.size() / 2);
-  string result(result_size, 'x');
+  uint32_t resultSize = spaces ? ((str.size() + 1) / 3) : (str.size() / 2);
+  string result(resultSize, 'x');
   for (uint32_t i = 0, out = 0; i < str.size(); i += 2, out++) {
     result[out] = (char)((HexToNum(str[i]) << 4) | HexToNum(str[i + 1]));
     i += spaces ? 1 : 0;
