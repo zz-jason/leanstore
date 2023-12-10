@@ -83,7 +83,7 @@ private:
   /// numbers, undoing all actions taken within the specific transaction.
   bool Undo();
 
-  ssize_t ReadWalEntry(s64 entryOffset, s64 entrySize, void* destination);
+  ssize_t ReadWalEntry(s64 entryOffset, size_t entrySize, void* destination);
 };
 
 inline bool Recovery::Run() {
@@ -218,7 +218,7 @@ inline bool Recovery::Undo() {
   return false;
 }
 
-inline ssize_t Recovery::ReadWalEntry(s64 offset, s64 nbytes,
+inline ssize_t Recovery::ReadWalEntry(s64 offset, size_t nbytes,
                                       void* destination) {
 
   FILE* fp = fopen(GetWALFilePath().c_str(), "rb");
