@@ -28,8 +28,8 @@ namespace cr {
 
 static constexpr u16 STATIC_MAX_WORKERS = std::numeric_limits<WORKERID>::max();
 
-/// @brief WalFlushReq is used to sync wal flush request to group commit thread
-/// for each worker thread.
+/// Used to sync wal flush request to group commit thread for each worker
+/// thread.
 struct WalFlushReq {
   /// Used for optimistic locking.
   u64 mVersion = 0;
@@ -44,6 +44,7 @@ struct WalFlushReq {
   TXID mPrevTxCommitTs = 0;
 };
 
+/// Helps to transaction concurrenct control and write-ahead logging.
 class Logging {
 public:
   /// The minimum flushed GSN among all worker threads. Transactions whose max
@@ -60,7 +61,7 @@ public:
 
 public:
   static void UpdateMinFlushedGsn(LID minGsn) {
-    assert(sMinFlushedGsn.load() <= minGsn);
+    DCHECK(sMinFlushedGsn.load() <= minGsn);
     sMinFlushedGsn.store(minGsn, std::memory_order_release);
   }
 
@@ -84,11 +85,15 @@ public:
 
   WALEntryComplex* mActiveWALEntryComplex;
 
-  // Shared between Group Committer and Worker
+  /// Shared between Group Committer and Worker
   std::mutex mPreCommittedQueueMutex;
 
+  /// The queue for each worker thread to store pending-to-commit transactions
+  /// which have remote dependencies.
   std::vector<Transaction> mPreCommittedQueue;
 
+  /// The queue for each worker thread to store pending-to-commit transactions
+  /// which doesn't have any remote dependencies.
   std::vector<Transaction> mPreCommittedQueueRfa;
 
   /// Represents the commit TS of the last transaction in the current worker,
@@ -256,15 +261,25 @@ public:
   // Object members
   //-------------------------------------------------------------------------
   atomic<TXID> local_lwm_latch = 0;
+
   atomic<TXID> oltp_lwm_receiver;
+
   atomic<TXID> all_lwm_receiver;
+
   atomic<TXID> mLatestWriteTx = 0;
+
   atomic<TXID> mLatestLwm4Tx = 0;
+
   TXID local_all_lwm;
+
   TXID local_oltp_lwm;
+
   TXID local_global_all_lwm_cache = 0;
+
   unique_ptr<TXID[]> mLocalSnapshotCache; // = Readview
+
   unique_ptr<TXID[]> local_snapshot_cache_ts;
+
   unique_ptr<TXID[]> local_workers_start_ts;
 
   // LeanStore NoSteal, Nothing for now
