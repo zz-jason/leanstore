@@ -68,7 +68,7 @@ endif()
 # clang-tidy
 # ---------------------------------------------------------------------------
 
-# clang-tidy
+# # clang-tidy
 # add_custom_target(run-clang-tidy
 #     COMMAND clang-tidy -p=${CMAKE_BINARY_DIR} --config-file=${CMAKE_SOURCE_DIR}/.clang-tidy ${LEANSTORE_SRC}
 #     COMMENT "Running Clang-Tidy"

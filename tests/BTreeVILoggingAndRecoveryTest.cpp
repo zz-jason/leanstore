@@ -11,18 +11,18 @@
 
 namespace leanstore {
 
-class LeanStoreTest : public ::testing::Test {
+class BTreeVILoggingAndRecoveryTest : public ::testing::Test {
 protected:
   std::unique_ptr<LeanStore> mLeanStore;
 
-  LeanStoreTest() {
+  BTreeVILoggingAndRecoveryTest() {
     FLAGS_vi = true;
     FLAGS_enable_print_btree_stats_on_exit = true;
     FLAGS_wal = true;
     FLAGS_bulk_insert = false;
   }
 
-  ~LeanStoreTest() = default;
+  ~BTreeVILoggingAndRecoveryTest() = default;
 
   static u64 RandomWorkerId() {
     auto numWorkers = cr::CRManager::sInstance->NumWorkerThreads();
@@ -30,8 +30,8 @@ protected:
   }
 };
 
-TEST_F(LeanStoreTest, Serde) {
-  FLAGS_data_dir = "/tmp/LeanStoreTest/Serde";
+TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
+  FLAGS_data_dir = "/tmp/BTreeVILoggingAndRecoveryTest/SerializeAndDeserialize";
   std::filesystem::path dir_path = FLAGS_data_dir;
   std::filesystem::remove_all(dir_path);
   std::filesystem::create_directories(dir_path);
@@ -104,8 +104,8 @@ TEST_F(LeanStoreTest, Serde) {
 }
 
 /*
-TEST_F(LeanStoreTest, RecoverAfterInsert) {
-  FLAGS_data_dir = "/tmp/LeanStoreTest/RecoverAfterInsert";
+TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
+  FLAGS_data_dir = "/tmp/BTreeVILoggingAndRecoveryTest/RecoverAfterInsert";
   std::filesystem::path dir_path = FLAGS_data_dir;
   std::filesystem::remove_all(dir_path);
   std::filesystem::create_directories(dir_path);

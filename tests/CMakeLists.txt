@@ -18,5 +18,6 @@ function(leanstore_add_test TARGET_NAME)
 endfunction(leanstore_add_test)
 
 # Add tests
-leanstore_add_test(LeanStoreTest)
-leanstore_add_test(BufferFrameTest)
+leanstore_add_test(BTreeLLTest)
+leanstore_add_test(BTreeVITest)
+leanstore_add_test(BTreeVILoggingAndRecoveryTest)

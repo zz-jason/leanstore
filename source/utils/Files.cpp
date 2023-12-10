@@ -2,8 +2,7 @@
 
 #include "Exceptions.hpp"
 #include "Units.hpp"
-// -------------------------------------------------------------------------------------
-// -------------------------------------------------------------------------------------
+
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -13,17 +12,16 @@
 #include <cmath>
 #include <sstream>
 #include <thread>
-// -------------------------------------------------------------------------------------
+
 using namespace std;
-// -------------------------------------------------------------------------------------
+
 namespace leanstore {
 namespace utils {
-// -------------------------------------------------------------------------------------
+
+// WARNING: this only works with 4 byte types
 template <class T>
-bool createTestFileImpl(
-    const string& file_name, uint64_t count,
-    function<T(int)> factory) // WARNING: this only works with 4 byte types
-{
+bool createTestFileImpl(const string& file_name, uint64_t count,
+                        function<T(int)> factory) {
   // Open file
   ofstream of(file_name, ios::binary);
   if (!of.is_open() || !of.good())
@@ -46,7 +44,7 @@ bool createTestFileImpl(
   of.close();
   return of.good();
 }
-// -------------------------------------------------------------------------------------
+
 template <class T>
 bool foreachInFileImpl(const string& file_name, function<void(T)> callback) {
   // Open file
@@ -64,20 +62,20 @@ bool foreachInFileImpl(const string& file_name, function<void(T)> callback) {
   }
   return true;
 }
-// -------------------------------------------------------------------------------------
+
 bool CreateTestFile(const string& file_name, uint64_t count,
                     function<int32_t(int32_t)> factory) {
   return createTestFileImpl<int32_t>(file_name, count, factory);
 }
-// -------------------------------------------------------------------------------------
+
 bool ForeachInFile(const string& file_name, function<void(uint32_t)> callback) {
   return foreachInFileImpl<uint32_t>(file_name, callback);
 }
-// -------------------------------------------------------------------------------------
+
 bool CreateDirectory(const string& directory_name) {
   return mkdir(directory_name.c_str(), 0666) == 0;
 }
-// -------------------------------------------------------------------------------------
+
 bool CreateFile(const string& file_name, const uint64_t bytes) {
   int file_fd = open(file_name.c_str(), O_CREAT | O_WRONLY, 0666);
   if (file_fd < 0) {
@@ -94,7 +92,7 @@ bool CreateFile(const string& file_name, const uint64_t bytes) {
 
   return true;
 }
-// -------------------------------------------------------------------------------------
+
 bool CreateFile(const string& file_name, const string& content) {
   int file_fd = open(file_name.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0666);
   if (file_fd < 0) {
@@ -104,9 +102,11 @@ bool CreateFile(const string& file_name, const string& content) {
   size_t written_bytes = write(file_fd, content.data(), content.size());
   return written_bytes == content.size();
 }
-// -------------------------------------------------------------------------------------
-void DeleteFile(const std::string& file_name) { remove(file_name.c_str()); }
-// -------------------------------------------------------------------------------------
+
+void DeleteFile(const std::string& file_name) {
+  remove(file_name.c_str());
+}
+
 uint64_t GetFileLength(const string& file_name) {
   int fileFD = open(file_name.c_str(), O_RDWR);
   if (fileFD < 0) {
@@ -124,25 +124,25 @@ uint64_t GetFileLength(const string& file_name) {
   close(fileFD);
   return st.st_size;
 }
-// -------------------------------------------------------------------------------------
+
 bool fileExists(const string& file_name) {
   struct stat buffer;
   bool exists = (stat(file_name.c_str(), &buffer) == 0);
   return exists && (buffer.st_mode & S_IFREG);
 }
-// -------------------------------------------------------------------------------------
+
 bool directoryExists(const string& file_name) {
   struct stat buffer;
   bool exists = (stat(file_name.c_str(), &buffer) == 0);
   return exists && (buffer.st_mode & S_IFDIR);
 }
-// -------------------------------------------------------------------------------------
+
 bool pathExists(const string& file_name) {
   struct stat buffer;
   bool exists = (stat(file_name.c_str(), &buffer) == 0);
   return exists;
 }
-// -------------------------------------------------------------------------------------
+
 string LoadFileToMemory(const string& file_name) {
   uint64_t length = GetFileLength(file_name);
   string data(length, 'a');
@@ -150,9 +150,9 @@ string LoadFileToMemory(const string& file_name) {
   in.read(&data[0], length);
   return data;
 }
-// -------------------------------------------------------------------------------------
+
 namespace {
-// -------------------------------------------------------------------------------------
+
 uint64_t applyPrecision(uint64_t input, uint32_t precision) {
   uint32_t digits = log10(input) + 1;
   if (digits <= precision)
@@ -160,9 +160,9 @@ uint64_t applyPrecision(uint64_t input, uint32_t precision) {
   uint32_t invalidDigits = pow(10, digits - precision);
   return (uint64_t)((double)input / invalidDigits + .5f) * invalidDigits;
 }
-// -------------------------------------------------------------------------------------
+
 } // namespace
-// -------------------------------------------------------------------------------------
+
 string FormatTime(chrono::nanoseconds ns, uint32_t precision) {
   ostringstream os;
 
@@ -184,7 +184,7 @@ string FormatTime(chrono::nanoseconds ns, uint32_t precision) {
 
   return os.str();
 }
-// -------------------------------------------------------------------------------------
+
 void PinThread(int socket) {
 #ifdef __linux__
   // Doesn't work on OS X right now
@@ -202,7 +202,7 @@ void PinThread(int socket) {
 #endif
   (void)socket;
 }
-// -------------------------------------------------------------------------------------
+
 void RunMultithreaded(uint32_t thread_count, function<void(uint32_t)> foo) {
   atomic<bool> start(false);
   vector<unique_ptr<thread>> threads(thread_count);
@@ -218,7 +218,7 @@ void RunMultithreaded(uint32_t thread_count, function<void(uint32_t)> foo) {
     iter->join();
   }
 }
-// -------------------------------------------------------------------------------------
+
 uint8_t* AlignedAlloc(uint64_t alignment, uint64_t size) {
   void* result = nullptr;
   int error = posix_memalign(&result, alignment, size);
@@ -227,8 +227,9 @@ uint8_t* AlignedAlloc(uint64_t alignment, uint64_t size) {
   }
   return reinterpret_cast<uint8_t*>(result);
 }
-// -------------------------------------------------------------------------------------
+
 namespace {
+
 array<char, 16> NUM_TO_HEX{{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
                             'a', 'b', 'c', 'd', 'e', 'f'}};
 uint8_t HexToNum(char c) {
@@ -240,8 +241,9 @@ uint8_t HexToNum(char c) {
   }
   UNREACHABLE();
 }
+
 } // namespace
-// -------------------------------------------------------------------------------------
+
 const string DataToHex(const uint8_t* data, uint32_t len, bool spaces) {
   string result;
   for (uint32_t i = 0; i < len; i++) {
@@ -252,11 +254,11 @@ const string DataToHex(const uint8_t* data, uint32_t len, bool spaces) {
   }
   return result;
 }
-// -------------------------------------------------------------------------------------
+
 const string StringToHex(const string& str, bool spaces) {
   return DataToHex((const uint8_t*)str.data(), str.size(), spaces);
 }
-// -------------------------------------------------------------------------------------
+
 const vector<uint8_t> HexToData(const string& str, bool spaces) {
   assert(spaces || str.size() % 2 == 0);
 
@@ -269,7 +271,7 @@ const vector<uint8_t> HexToData(const string& str, bool spaces) {
 
   return result;
 }
-// -------------------------------------------------------------------------------------
+
 const string HexToString(const string& str, bool spaces) {
   assert(spaces || str.size() % 2 == 0);
 
@@ -282,7 +284,6 @@ const string HexToString(const string& str, bool spaces) {
 
   return result;
 }
-// -------------------------------------------------------------------------------------
+
 } // namespace utils
 } // namespace leanstore
-  // -------------------------------------------------------------------------------------
