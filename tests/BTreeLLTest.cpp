@@ -27,9 +27,9 @@ protected:
 
 TEST_F(BTreeLLTest, BTreeLLCreate) {
   FLAGS_data_dir = "/tmp/BTreeLLTest/BTreeLLCreate";
-  std::filesystem::path dir_path = FLAGS_data_dir;
-  std::filesystem::remove_all(dir_path);
-  std::filesystem::create_directories(dir_path);
+  std::filesystem::path dirPath = FLAGS_data_dir;
+  std::filesystem::remove_all(dirPath);
+  std::filesystem::create_directories(dirPath);
 
   FLAGS_worker_threads = 2;
   FLAGS_recover = false;
@@ -38,7 +38,7 @@ TEST_F(BTreeLLTest, BTreeLLCreate) {
   storage::btree::BTreeLL* another;
 
   // create leanstore btree for table records
-  auto btreeName = "testTree1";
+  const auto* btreeName = "testTree1";
   auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
@@ -71,9 +71,9 @@ TEST_F(BTreeLLTest, BTreeLLCreate) {
 
 TEST_F(BTreeLLTest, BTreeLLInsertAndLookup) {
   FLAGS_data_dir = "/tmp/BTreeLLTest/BTreeLLInsertAndLookup";
-  std::filesystem::path dir_path = FLAGS_data_dir;
-  std::filesystem::remove_all(dir_path);
-  std::filesystem::create_directories(dir_path);
+  std::filesystem::path dirPath = FLAGS_data_dir;
+  std::filesystem::remove_all(dirPath);
+  std::filesystem::create_directories(dirPath);
   FLAGS_worker_threads = 2;
   FLAGS_recover = false;
   mLeanStore = std::make_unique<leanstore::LeanStore>();
@@ -89,7 +89,7 @@ TEST_F(BTreeLLTest, BTreeLLInsertAndLookup) {
   }
 
   // create leanstore btree for table records
-  auto btreeName = "testTree1";
+  const auto* btreeName = "testTree1";
   auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,

@@ -32,13 +32,13 @@ protected:
 
 TEST_F(LeanStoreTest, Serde) {
   FLAGS_data_dir = "/tmp/LeanStoreTest/Serde";
-  std::filesystem::path dir_path = FLAGS_data_dir;
-  std::filesystem::remove_all(dir_path);
-  std::filesystem::create_directories(dir_path);
+  std::filesystem::path dirPath = FLAGS_data_dir;
+  std::filesystem::remove_all(dirPath);
+  std::filesystem::create_directories(dirPath);
 
-  dir_path = leanstore::GetLogDir();
-  std::filesystem::remove_all(dir_path);
-  std::filesystem::create_directories(dir_path);
+  dirPath = leanstore::GetLogDir();
+  std::filesystem::remove_all(dirPath);
+  std::filesystem::create_directories(dirPath);
 
   FLAGS_worker_threads = 2;
   FLAGS_recover = false;
@@ -55,7 +55,7 @@ TEST_F(LeanStoreTest, Serde) {
   }
 
   // create btree for table records
-  auto btreeName = "testTree1";
+  const auto* btreeName = "testTree1";
   auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
@@ -106,9 +106,9 @@ TEST_F(LeanStoreTest, Serde) {
 /*
 TEST_F(LeanStoreTest, RecoverAfterInsert) {
   FLAGS_data_dir = "/tmp/LeanStoreTest/RecoverAfterInsert";
-  std::filesystem::path dir_path = FLAGS_data_dir;
-  std::filesystem::remove_all(dir_path);
-  std::filesystem::create_directories(dir_path);
+  std::filesystem::path dirPath = FLAGS_data_dir;
+  std::filesystem::remove_all(dirPath);
+  std::filesystem::create_directories(dirPath);
   FLAGS_worker_threads = 2;
   FLAGS_recover = false;
   mLeanStore = std::make_unique<leanstore::LeanStore>();
@@ -124,7 +124,7 @@ TEST_F(LeanStoreTest, RecoverAfterInsert) {
   }
 
   // create leanstore btree for table records
-  auto btreeName = "testTree1";
+  const auto* btreeName = "testTree1";
   auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
