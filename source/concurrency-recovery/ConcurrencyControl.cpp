@@ -96,7 +96,7 @@ void ConcurrencyControl::refreshGlobalState() {
       Worker::sAllLwm.store(global_all_lwm_buffer, std::memory_order_release);
       Worker::sOltpLwm.store(global_oltp_lwm_buffer, std::memory_order_release);
     }
-    // -------------------------------------------------------------------------------------
+
     Worker::sGlobalMutex.unlock();
   }
 }
@@ -110,7 +110,7 @@ void ConcurrencyControl::switchToSnapshotIsolationMode() {
   }
   refreshGlobalState();
 }
-// -------------------------------------------------------------------------------------
+
 void ConcurrencyControl::switchToReadCommittedMode() {
   u64 workerId = Worker::my().mWorkerId;
   {
@@ -194,7 +194,7 @@ ConcurrencyControl::VISIBILITY ConcurrencyControl::isVisibleForIt(
              ? VISIBILITY::VISIBLE_ALREADY
              : VISIBILITY::VISIBLE_NEXT_ROUND;
 }
-// -------------------------------------------------------------------------------------
+
 // UNDETERMINED is not possible atm because we spin on startTs
 ConcurrencyControl::VISIBILITY ConcurrencyControl::isVisibleForIt(
     WORKERID whom_worker_id, WORKERID what_worker_id, TXID tx_ts) {
@@ -209,8 +209,7 @@ TXID ConcurrencyControl::getCommitTimestamp(WORKERID workerId, TXID tx_ts) {
   if (tx_ts & MSB) {
     return tx_ts & MSB_MASK;
   }
-  assert((tx_ts & MSB) || isVisibleForMe(workerId, tx_ts));
-  // -------------------------------------------------------------------------------------
+  DCHECK((tx_ts & MSB) || isVisibleForMe(workerId, tx_ts));
   const TXID& startTs = tx_ts;
   TXID lcb = other(workerId).commit_tree.LCB(startTs);
   TXID commitTs =

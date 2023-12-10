@@ -43,9 +43,9 @@ CheckOptions:
   - key:             readability-identifier-naming.StaticConstantPrefix
     value:           S_
   - key:             readability-identifier-naming.StaticVariableCase
-    value:           UPPER_CASE
+    value:           camelBack
   - key:             readability-identifier-naming.StaticVariablePrefix
-    value:           S_
+    value:           s
   - key:             readability-redundant-member-init.IgnoreBaseInCopyConstructors
     value:           1
   - key:             modernize-use-default-member-init.UseAssignment
