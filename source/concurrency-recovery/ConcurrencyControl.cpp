@@ -54,47 +54,44 @@ void ConcurrencyControl::refreshGlobalState() {
     Worker::sNewestOlapStartTx.store(localNewestOlap,
                                      std::memory_order_release);
 
-    TXID global_all_lwm_buffer = std::numeric_limits<TXID>::max();
-    TXID global_oltp_lwm_buffer = std::numeric_limits<TXID>::max();
-    bool skipped_a_worker = false;
+    TXID globalAllLwmBuffer = std::numeric_limits<TXID>::max();
+    TXID globalOltpLwmBuffer = std::numeric_limits<TXID>::max();
+    bool skippedAWorker = false;
     for (WORKERID i = 0; i < Worker::my().mNumAllWorkers; i++) {
       ConcurrencyControl& workerState = other(i);
       if (workerState.mLatestLwm4Tx == workerState.mLatestWriteTx) {
-        skipped_a_worker = true;
+        skippedAWorker = true;
         continue;
-      } else {
-        workerState.mLatestLwm4Tx.store(workerState.mLatestWriteTx,
-                                        std::memory_order_release);
       }
-
-      TXID its_all_lwm_buffer =
+      workerState.mLatestLwm4Tx.store(workerState.mLatestWriteTx,
+                                      std::memory_order_release);
+      TXID itsAllLwmBuffer =
           workerState.commit_tree.LCB(Worker::sOldestAllStartTs);
-      TXID its_oltp_lwm_buffer =
+      TXID itsOltpLwmBuffer =
           workerState.commit_tree.LCB(Worker::sOldestOltpStartTx);
 
       if (FLAGS_olap_mode &&
           Worker::sOldestAllStartTs != Worker::sOldestOltpStartTx) {
-        global_oltp_lwm_buffer =
-            std::min<TXID>(its_oltp_lwm_buffer, global_oltp_lwm_buffer);
+        globalOltpLwmBuffer =
+            std::min<TXID>(itsOltpLwmBuffer, globalOltpLwmBuffer);
       } else {
-        its_oltp_lwm_buffer = its_all_lwm_buffer;
+        itsOltpLwmBuffer = itsAllLwmBuffer;
       }
 
-      global_all_lwm_buffer =
-          std::min<TXID>(its_all_lwm_buffer, global_all_lwm_buffer);
+      globalAllLwmBuffer = std::min<TXID>(itsAllLwmBuffer, globalAllLwmBuffer);
 
       workerState.local_lwm_latch.store(workerState.local_lwm_latch.load() + 1,
                                         std::memory_order_release); // Latch
-      workerState.all_lwm_receiver.store(its_all_lwm_buffer,
+      workerState.all_lwm_receiver.store(itsAllLwmBuffer,
                                          std::memory_order_release);
-      workerState.oltp_lwm_receiver.store(its_oltp_lwm_buffer,
+      workerState.oltp_lwm_receiver.store(itsOltpLwmBuffer,
                                           std::memory_order_release);
       workerState.local_lwm_latch.store(workerState.local_lwm_latch.load() + 1,
                                         std::memory_order_release); // Release
     }
-    if (!skipped_a_worker) {
-      Worker::sAllLwm.store(global_all_lwm_buffer, std::memory_order_release);
-      Worker::sOltpLwm.store(global_oltp_lwm_buffer, std::memory_order_release);
+    if (!skippedAWorker) {
+      Worker::sAllLwm.store(globalAllLwmBuffer, std::memory_order_release);
+      Worker::sOltpLwm.store(globalOltpLwmBuffer, std::memory_order_release);
     }
 
     Worker::sGlobalMutex.unlock();
@@ -133,12 +130,12 @@ void ConcurrencyControl::garbageCollection() {
   // fix, it should be enough if we purge in small batches
   utils::Timer timer(CRCounters::myCounters().cc_ms_gc);
 synclwm : {
-  u64 lwm_version = local_lwm_latch.load();
-  while ((lwm_version = local_lwm_latch.load()) & 1) {
+  u64 lwmVersion = local_lwm_latch.load();
+  while ((lwmVersion = local_lwm_latch.load()) & 1) {
   };
   local_all_lwm = all_lwm_receiver.load();
   local_oltp_lwm = oltp_lwm_receiver.load();
-  if (lwm_version != local_lwm_latch.load()) {
+  if (lwmVersion != local_lwm_latch.load()) {
     goto synclwm;
   }
   ENSURE(!FLAGS_olap_mode || local_all_lwm <= local_oltp_lwm);
@@ -168,10 +165,10 @@ synclwm : {
         local_oltp_lwm > cleaned_untill_oltp_lwm) {
       utils::Timer timer(CRCounters::myCounters().cc_ms_gc_graveyard);
       // MOVE deletes to the graveyard
-      const u64 from_tx_id =
+      const u64 fromTxId =
           cleaned_untill_oltp_lwm > 0 ? cleaned_untill_oltp_lwm : 0;
       mHistoryTree.visitRemoveVersions(
-          Worker::my().mWorkerId, from_tx_id, local_oltp_lwm - 1,
+          Worker::my().mWorkerId, fromTxId, local_oltp_lwm - 1,
           [&](const TXID tx_id, const TREEID treeId, const u8* version_payload,
               [[maybe_unused]] u64 version_payload_length,
               const bool called_before) {
@@ -189,28 +186,27 @@ synclwm : {
 }
 
 ConcurrencyControl::VISIBILITY ConcurrencyControl::isVisibleForIt(
-    WORKERID whom_worker_id, TXID commitTs) {
-  return local_workers_start_ts[whom_worker_id] > commitTs
+    WORKERID whomWorkerId, TXID commitTs) {
+  return local_workers_start_ts[whomWorkerId] > commitTs
              ? VISIBILITY::VISIBLE_ALREADY
              : VISIBILITY::VISIBLE_NEXT_ROUND;
 }
 
 // UNDETERMINED is not possible atm because we spin on startTs
 ConcurrencyControl::VISIBILITY ConcurrencyControl::isVisibleForIt(
-    WORKERID whom_worker_id, WORKERID what_worker_id, TXID tx_ts) {
-  const bool is_commit_ts = tx_ts & MSB;
-  const TXID commitTs = is_commit_ts
-                            ? (tx_ts & MSB_MASK)
-                            : getCommitTimestamp(what_worker_id, tx_ts);
-  return isVisibleForIt(whom_worker_id, commitTs);
+    WORKERID whomWorkerId, WORKERID whatWorkerId, TXID txTs) {
+  const bool is_commit_ts = txTs & MSB;
+  const TXID commitTs =
+      is_commit_ts ? (txTs & MSB_MASK) : getCommitTimestamp(whatWorkerId, txTs);
+  return isVisibleForIt(whomWorkerId, commitTs);
 }
 
-TXID ConcurrencyControl::getCommitTimestamp(WORKERID workerId, TXID tx_ts) {
-  if (tx_ts & MSB) {
-    return tx_ts & MSB_MASK;
+TXID ConcurrencyControl::getCommitTimestamp(WORKERID workerId, TXID txTs) {
+  if (txTs & MSB) {
+    return txTs & MSB_MASK;
   }
-  DCHECK((tx_ts & MSB) || isVisibleForMe(workerId, tx_ts));
-  const TXID& startTs = tx_ts;
+  DCHECK((txTs & MSB) || isVisibleForMe(workerId, txTs));
+  const TXID& startTs = txTs;
   TXID lcb = other(workerId).commit_tree.LCB(startTs);
   TXID commitTs =
       lcb ? lcb : std::numeric_limits<TXID>::max(); // TODO: align with GC
@@ -280,12 +276,12 @@ bool ConcurrencyControl::isVisibleForMe(WORKERID workerId, u64 txId,
       return true;
     }
     utils::Timer timer(CRCounters::myCounters().cc_ms_snapshotting);
-    TXID largest_visible_tx_id =
+    TXID largestVisibleTxId =
         other(workerId).commit_tree.LCB(Worker::my().mActiveTx.startTS());
-    if (largest_visible_tx_id) {
-      mLocalSnapshotCache[workerId] = largest_visible_tx_id;
+    if (largestVisibleTxId) {
+      mLocalSnapshotCache[workerId] = largestVisibleTxId;
       local_snapshot_cache_ts[workerId] = Worker::my().mActiveTx.startTS();
-      return largest_visible_tx_id >= startTs;
+      return largestVisibleTxId >= startTs;
     }
     return false;
   }
@@ -323,14 +319,15 @@ std::optional<std::pair<TXID, TXID>> ConcurrencyControl::CommitTree::LCBUnsafe(
       std::lower_bound(begin, end, startTs, [&](const auto& pair, TXID ts) {
         return pair.first < ts;
       });
+
   if (it == begin) {
     // raise(SIGTRAP);
     return {};
-  } else {
-    it--;
-    assert(it->second < startTs);
-    return *it;
   }
+
+  it--;
+  assert(it->second < startTs);
+  return *it;
 }
 
 TXID ConcurrencyControl::CommitTree::LCB(TXID startTs) {
@@ -352,22 +349,22 @@ void ConcurrencyControl::CommitTree::cleanIfNecessary() {
   utils::Timer timer(CRCounters::myCounters().cc_ms_gc_cm);
   std::set<std::pair<TXID, TXID>> set; // TODO: unordered_set
 
-  const WORKERID my_worker_id = cr::Worker::Worker::my().mWorkerId;
+  const WORKERID myWorkerId = cr::Worker::Worker::my().mWorkerId;
   for (WORKERID i = 0; i < cr::Worker::Worker::my().mNumAllWorkers; i++) {
-    if (i == my_worker_id) {
+    if (i == myWorkerId) {
       continue;
     }
-    u64 its_start_ts = Worker::sWorkersCurrentSnapshot[i].load();
-    while (its_start_ts & Worker::LATCH_BIT) {
-      its_start_ts = Worker::sWorkersCurrentSnapshot[i].load();
+    u64 itsStartTs = Worker::sWorkersCurrentSnapshot[i].load();
+    while (itsStartTs & Worker::LATCH_BIT) {
+      itsStartTs = Worker::sWorkersCurrentSnapshot[i].load();
     }
-    its_start_ts &= Worker::CLEAN_BITS_MASK;
+    itsStartTs &= Worker::CLEAN_BITS_MASK;
     set.insert(array[cursor - 1]); // for  the new TX
-    if (its_start_ts == 0) {
+    if (itsStartTs == 0) {
       // to avoid race conditions when switching from RC to SI
       set.insert(array[0]);
     } else {
-      auto v = LCBUnsafe(its_start_ts);
+      auto v = LCBUnsafe(itsStartTs);
       if (v) {
         set.insert(*v);
       }
