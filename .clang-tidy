@@ -28,8 +28,10 @@ CheckOptions:
     value:           camelBack
   - key:             readability-identifier-naming.PrivateMemberCase
     value:           camelBack
+  - key:             readability-identifier-naming.ClassMemberCase
+    value:           CamelBack
   - key:             readability-identifier-naming.ClassMemberPrefix
-    value:           m
+    value:           s
   - key:             readability-identifier-naming.ParameterCase
     value:           camelBack
   - key:             readability-identifier-naming.UnionCase
