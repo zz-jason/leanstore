@@ -17,12 +17,21 @@ jobs:
       with:
         version: 12
         platform: x64
-    - uses: actions/checkout@v3
+        
+    - name: Check out repository
+      uses: actions/checkout@v3
+    
     - name: Install dependencies
       run: sudo apt install -y libaio-dev libtbb2-dev
-    - name: Config
+      
+    - name: Config project
       run: cmake -B build -S .
-    - name: Build
+      
+    - name: Build project
       run: cmake --build build -j `nproc`
-    - name: Test
+      
+    - name: Test test
       run: ctest --test-dir build -j `nproc`
+
+    - name: Generate code coverage report
+      uses: threeal/gcovr-action@v1.0.0
