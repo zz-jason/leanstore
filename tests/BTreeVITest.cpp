@@ -9,32 +9,51 @@
 
 #include <filesystem>
 #include <iostream>
+#include <mutex>
+#include <shared_mutex>
 
 namespace leanstore {
 
+static std::shared_mutex sMutex;
+static std::unique_ptr<LeanStore> sLeanStore = nullptr;
+
+leanstore::LeanStore* GetLeanStore() {
+  std::shared_lock sharedLock(sMutex);
+  if (sLeanStore != nullptr) {
+    return sLeanStore.get();
+  }
+
+  sharedLock.unlock();
+  std::unique_lock uniqueLock(sMutex);
+
+  if (sLeanStore != nullptr) {
+    return sLeanStore.get();
+  }
+
+  FLAGS_vi = true;
+  FLAGS_enable_print_btree_stats_on_exit = true;
+  FLAGS_wal = true;
+  FLAGS_bulk_insert = false;
+  FLAGS_worker_threads = 2;
+  FLAGS_recover = false;
+  FLAGS_data_dir = "/tmp/BTreeVITest";
+
+  std::filesystem::path dirPath = FLAGS_data_dir;
+  std::filesystem::remove_all(dirPath);
+  std::filesystem::create_directories(dirPath);
+  sLeanStore = std::make_unique<leanstore::LeanStore>();
+  return sLeanStore.get();
+}
+
 class BTreeVITest : public ::testing::Test {
 protected:
-  std::unique_ptr<LeanStore> mLeanStore;
-
-  BTreeVITest() {
-    FLAGS_vi = true;
-    FLAGS_enable_print_btree_stats_on_exit = true;
-    FLAGS_wal = true;
-    FLAGS_bulk_insert = false;
-  }
+  BTreeVITest() = default;
 
   ~BTreeVITest() = default;
 };
 
 TEST_F(BTreeVITest, BTreeVICreate) {
-  FLAGS_data_dir = "/tmp/BTreeVITest/BTreeVICreate";
-  std::filesystem::path dirPath = FLAGS_data_dir;
-  std::filesystem::remove_all(dirPath);
-  std::filesystem::create_directories(dirPath);
-
-  FLAGS_worker_threads = 2;
-  FLAGS_recover = false;
-  mLeanStore = std::make_unique<leanstore::LeanStore>();
+  GetLeanStore();
   storage::btree::BTreeVI* btree;
   storage::btree::BTreeVI* another;
 
@@ -46,38 +65,41 @@ TEST_F(BTreeVITest, BTreeVICreate) {
   };
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    EXPECT_TRUE(mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree));
+    EXPECT_TRUE(
+        GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree));
     EXPECT_NE(btree, nullptr);
   });
 
   // create btree with same should fail in the same worker
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    EXPECT_FALSE(mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &another));
+    EXPECT_FALSE(
+        GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &another));
     EXPECT_EQ(another, nullptr);
   });
 
   // create btree with same should also fail in other workers
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
-    EXPECT_FALSE(mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &another));
+    EXPECT_FALSE(
+        GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &another));
     EXPECT_EQ(another, nullptr);
   });
 
   // create btree with another different name should success
-  btreeName = "testTree2";
+  const auto* btreeName2 = "testTree2";
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    EXPECT_TRUE(mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &another));
+    EXPECT_TRUE(
+        GetLeanStore()->RegisterBTreeVI(btreeName2, btreeConfig, &another));
     EXPECT_NE(btree, nullptr);
+  });
+
+  cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+    GetLeanStore()->UnRegisterBTreeVI(btreeName);
+    GetLeanStore()->UnRegisterBTreeVI(btreeName2);
   });
 }
 
 TEST_F(BTreeVITest, BTreeVIInsertAndLookup) {
-  FLAGS_data_dir = "/tmp/BTreeVITest/BTreeVIInsertAndLookup";
-  std::filesystem::path dirPath = FLAGS_data_dir;
-  std::filesystem::remove_all(dirPath);
-  std::filesystem::create_directories(dirPath);
-  FLAGS_worker_threads = 2;
-  FLAGS_recover = false;
-  mLeanStore = std::make_unique<leanstore::LeanStore>();
+  GetLeanStore();
   storage::btree::BTreeVI* btree;
 
   // prepare key-value pairs to insert
@@ -96,7 +118,8 @@ TEST_F(BTreeVITest, BTreeVIInsertAndLookup) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    EXPECT_TRUE(mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree));
+    EXPECT_TRUE(
+        GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree));
     EXPECT_NE(btree, nullptr);
 
     // insert some values
@@ -137,38 +160,32 @@ TEST_F(BTreeVITest, BTreeVIInsertAndLookup) {
       EXPECT_EQ(copiedValue, expectedVal);
     }
   });
+
+  cr::CRManager::sInstance->scheduleJobSync(
+      1, [&]() { GetLeanStore()->UnRegisterBTreeVI(btreeName); });
 }
 
-/*
-// TODO(jian.z): this test is fail when executed after other tests because the
-// global static variables are changed after each test.
 TEST_F(BTreeVITest, BTreeVIToJSON) {
-  FLAGS_data_dir = "/tmp/BTreeVITest/BTreeVIToJSON";
-  std::filesystem::path dirPath = FLAGS_data_dir;
-  std::filesystem::remove_all(dirPath);
-  std::filesystem::create_directories(dirPath);
-  FLAGS_worker_threads = 2;
-  FLAGS_recover = false;
-  mLeanStore = std::make_unique<leanstore::LeanStore>();
-  storage::btree::BTreeVI* btree;
-
-  // prepare key-value pairs to insert
-  size_t numKVs(10);
-  std::vector<std::tuple<std::string, std::string>> kvToTest;
-  for (size_t i = 0; i < numKVs; ++i) {
-    std::string key("key_btree_VI_xxxxxxxxxxxx_" + std::to_string(i));
-    std::string val("VAL_BTREE_VI_YYYYYYYYYYYY_" + std::to_string(i));
-    kvToTest.push_back(std::make_tuple(key, val));
-  }
-
-  // create leanstore btree for table records
-  const auto* btreeName = "testTree1";
-  auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
-      .mEnableWal = FLAGS_wal,
-      .mUseBulkInsert = FLAGS_bulk_insert,
-  };
+  GetLeanStore();
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    EXPECT_TRUE(mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree));
+    storage::btree::BTreeVI* btree;
+
+    // prepare key-value pairs to insert
+    size_t numKVs(10);
+    std::vector<std::tuple<std::string, std::string>> kvToTest;
+    for (size_t i = 0; i < numKVs; ++i) {
+      std::string key("key_btree_VI_xxxxxxxxxxxx_" + std::to_string(i));
+      std::string val("VAL_BTREE_VI_YYYYYYYYYYYY_" + std::to_string(i));
+      kvToTest.push_back(std::make_tuple(key, val));
+    }
+    // create leanstore btree for table records
+    const auto* btreeName = "testTree1";
+    auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+        .mEnableWal = FLAGS_wal,
+        .mUseBulkInsert = FLAGS_bulk_insert,
+    };
+    EXPECT_TRUE(
+        GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree));
     EXPECT_NE(btree, nullptr);
 
     // insert some values
@@ -179,10 +196,11 @@ TEST_F(BTreeVITest, BTreeVIToJSON) {
                 OP_RESULT::OK);
     }
 
-    auto doc = leanstore::storage::btree::BTreeGeneric::ToJSON(*btree);
-    std::cout << leanstore::utils::JsonToStr(&doc);
+    // auto doc = leanstore::storage::btree::BTreeGeneric::ToJSON(*btree);
+    // std::cout << leanstore::utils::JsonToStr(&doc);
+
+    GetLeanStore()->UnRegisterBTreeVI(btreeName);
   });
 }
-*/
 
 } // namespace leanstore

@@ -139,7 +139,9 @@ public:
    * @param name The unique name of the btree
    */
   void UnRegisterBTreeVI(const std::string& name) {
+    auto graveyardName = "_" + name + "_graveyard";
     storage::TreeRegistry::sInstance->UnregisterTree(name);
+    storage::TreeRegistry::sInstance->UnregisterTree(graveyardName);
   }
 
 private:
