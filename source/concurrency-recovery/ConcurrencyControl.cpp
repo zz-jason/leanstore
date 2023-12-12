@@ -1,3 +1,4 @@
+#include "CRMG.hpp"
 #include "Worker.hpp"
 #include "storage/buffer-manager/TreeRegistry.hpp"
 
@@ -145,7 +146,7 @@ synclwm : {
   if (local_all_lwm > cleaned_untill_oltp_lwm) {
     utils::Timer timer(CRCounters::myCounters().cc_ms_gc_history_tree);
     // PURGE!
-    mHistoryTree.purgeVersions(
+    CRManager::sInstance->mHistoryTreePtr->purgeVersions(
         Worker::my().mWorkerId, 0, local_all_lwm - 1,
         [&](const TXID tx_id, const TREEID treeId, const u8* version_payload,
             [[maybe_unused]] u64 version_payload_length,
@@ -167,7 +168,7 @@ synclwm : {
       // MOVE deletes to the graveyard
       const u64 fromTxId =
           cleaned_untill_oltp_lwm > 0 ? cleaned_untill_oltp_lwm : 0;
-      mHistoryTree.visitRemoveVersions(
+      CRManager::sInstance->mHistoryTreePtr->visitRemoveVersions(
           Worker::my().mWorkerId, fromTxId, local_oltp_lwm - 1,
           [&](const TXID tx_id, const TREEID treeId, const u8* version_payload,
               [[maybe_unused]] u64 version_payload_length,

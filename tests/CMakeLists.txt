@@ -1,5 +1,3 @@
-include(${CMAKE_SOURCE_DIR}/third-party/gtest.cmake)
-
 include(GoogleTest)
 enable_testing()
 
@@ -14,6 +12,7 @@ function(leanstore_add_test TARGET_NAME)
     gtest
     leanstore
   )
+  target_compile_options(${TARGET_NAME} PRIVATE -fprofile-arcs -ftest-coverage)
   gtest_discover_tests(${TARGET_NAME})
 endfunction(leanstore_add_test)
 
