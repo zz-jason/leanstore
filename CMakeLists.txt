@@ -53,6 +53,7 @@ include(${CMAKE_SOURCE_DIR}/third-party/glog.cmake)
 # ------------------------------------------------------------------------------
 
 add_subdirectory(source)
+add_subdirectory(benchmarks)
 
 # tests
 include(CTest)
