@@ -309,13 +309,14 @@ inline void BTreeGeneric::ToJSONRecursive(
     rapidjson::Value::AllocatorType& allocator) {
 
   DCHECK(resultObj->IsObject());
+  // buffer frame header
   guardedNode.mBf->ToJSON(resultObj, allocator);
 
   // btree node
   {
     rapidjson::Value nodeObj(rapidjson::kObjectType);
     guardedNode->ToJSON(&nodeObj, allocator);
-    resultObj->AddMember("btreeNode", nodeObj, allocator);
+    resultObj->AddMember("pagePayload(btreeNode)", nodeObj, allocator);
   }
 
   if (guardedNode->mIsLeaf) {

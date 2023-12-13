@@ -224,42 +224,71 @@ static_assert(sizeof(Page) == PAGE_SIZE, "The total sizeof page");
 inline void BufferFrame::ToJSON(rapidjson::Value* resultObj,
                                 rapidjson::Value::AllocatorType& allocator) {
   DCHECK(resultObj->IsObject());
+
+  // header
+  rapidjson::Value headerObj(rapidjson::kObjectType);
   {
     auto stateStr = header.StateString();
     rapidjson::Value member;
     member.SetString(stateStr.data(), stateStr.size(), allocator);
-    resultObj->AddMember("header.mState", member, allocator);
+    headerObj.AddMember("mState", member, allocator);
   }
 
   {
     rapidjson::Value member;
     member.SetBool(header.mKeepInMemory);
-    resultObj->AddMember("header.mKeepInMemory", member, allocator);
+    headerObj.AddMember("mKeepInMemory", member, allocator);
   }
 
   {
     rapidjson::Value member;
     member.SetUint64(header.mPageId);
-    resultObj->AddMember("header.mPageId", member, allocator);
+    headerObj.AddMember("mPageId", member, allocator);
   }
 
   {
     rapidjson::Value member;
     member.SetUint64(header.mLastWriterWorker);
-    resultObj->AddMember("header.mLastWriterWorker", member, allocator);
+    headerObj.AddMember("mLastWriterWorker", member, allocator);
   }
 
   {
     rapidjson::Value member;
     member.SetUint64(header.mFlushedPSN);
-    resultObj->AddMember("header.mFlushedPSN", member, allocator);
+    headerObj.AddMember("mFlushedPSN", member, allocator);
   }
 
   {
     rapidjson::Value member;
     member.SetBool(header.mIsBeingWrittenBack);
-    resultObj->AddMember("header.mIsBeingWrittenBack", member, allocator);
+    headerObj.AddMember("mIsBeingWrittenBack", member, allocator);
   }
+
+  resultObj->AddMember("header", headerObj, allocator);
+
+  // page without payload
+  rapidjson::Value pageMetaObj(rapidjson::kObjectType);
+  {
+    rapidjson::Value member;
+    member.SetUint64(page.mPSN);
+    pageMetaObj.AddMember("mPSN", member, allocator);
+  }
+  {
+    rapidjson::Value member;
+    member.SetUint64(page.mGSN);
+    pageMetaObj.AddMember("mGSN", member, allocator);
+  }
+  {
+    rapidjson::Value member;
+    member.SetUint64(page.mBTreeId);
+    pageMetaObj.AddMember("mBTreeId", member, allocator);
+  }
+  {
+    rapidjson::Value member;
+    member.SetUint64(page.mMagicDebuging);
+    pageMetaObj.AddMember("mMagicDebuging", member, allocator);
+  }
+  resultObj->AddMember("pageWithoutPayload", pageMetaObj, allocator);
 }
 
 } // namespace storage
