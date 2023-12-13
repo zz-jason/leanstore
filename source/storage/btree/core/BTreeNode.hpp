@@ -59,24 +59,24 @@ public:
   };
 
 public:
-  /// @brief mRightMostChildSwip is the swip of the right-most child.
+  /// The swip of the right-most child.
   Swip<BTreeNode> mRightMostChildSwip = nullptr;
 
-  /// @brief mLowerFence is the lower fence of the node.
+  /// The lower fence of the node.
   FenceKey mLowerFence = {0, 0};
 
-  /// @brief mUpperFence is the upper fence of the node.
+  /// The upper fence of the node.
   FenceKey mUpperFence = {0, 0};
 
-  /// @brief mNumSeps is the number of seperators. #slots = #seps + 1.
+  /// The number of seperators. #slots = #seps + 1.
   /// The first mNumSeps children are stored in the payload, while the last
   /// child are stored in upper.
   u16 mNumSeps = 0;
 
-  /// @brief mIsLeaf indicates whether this node is leaf node without any child.
+  /// Indicates whether this node is leaf node without any child.
   bool mIsLeaf;
 
-  /// @brief mSpaceUsed indicates the space used for the node.
+  /// Indicates the space used for the node.
   /// @note !!! does not include the header, but includes fences !!!
   u16 mSpaceUsed = 0;
 
@@ -86,13 +86,10 @@ public:
 
   u32 hint[sHintCount];
 
-  // Needed for GC
+  /// Needed for GC
   bool mHasGarbage = false;
 
 public:
-  //---------------------------------------------------------------------------
-  // Constructors and Destructors
-  //---------------------------------------------------------------------------
   BTreeNodeHeader(bool isLeaf) : mIsLeaf(isLeaf) {
   }
 
@@ -100,9 +97,6 @@ public:
   }
 
 public:
-  //---------------------------------------------------------------------------
-  // Object Utils
-  //---------------------------------------------------------------------------
   inline u8* RawPtr() {
     return reinterpret_cast<u8*>(this);
   }
@@ -160,24 +154,15 @@ public:
       (EFFECTIVE_PAGE_SIZE - sizeof(BTreeNodeHeader)) % (sizeof(Slot));
 
 public:
-  //---------------------------------------------------------------------------
-  // Member fields
-  //---------------------------------------------------------------------------
   Slot slot[sSlotCapacity];
 
   u8 padding[sLeftSpaceToWaste];
 
 public:
-  //---------------------------------------------------------------------------
-  // Constructors and Destructors
-  //---------------------------------------------------------------------------
   BTreeNode(bool isLeaf) : BTreeNodeHeader(isLeaf) {
   }
 
 public:
-  //---------------------------------------------------------------------------
-  // Object Utils
-  //---------------------------------------------------------------------------
   u16 freeSpace() {
     return mDataOffset - (reinterpret_cast<u8*>(slot + mNumSeps) - RawPtr());
   }
@@ -576,7 +561,7 @@ public:
 
   void Accept(BTreeVisitor* visitor);
 
-  rapidjson::Document ToJSON();
+  void ToJSON(rapidjson::Value* resultObj, rapidjson::Value::AllocatorType& allocator);
 
 private:
   inline bool shrinkSearchRange(u16& lower, u16& upper, Slice key) {

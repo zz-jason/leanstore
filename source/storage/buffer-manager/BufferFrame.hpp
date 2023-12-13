@@ -211,7 +211,8 @@ public:
     header.Reset();
   }
 
-  rapidjson::Document ToJSON();
+  void ToJSON(rapidjson::Value* resultObj,
+              rapidjson::Value::AllocatorType& allocator);
 };
 
 static_assert(sizeof(Page) == PAGE_SIZE, "The total sizeof page");
@@ -220,56 +221,45 @@ static_assert(sizeof(Page) == PAGE_SIZE, "The total sizeof page");
 // -----------------------------------------------------------------------------
 // BufferFrame
 // -----------------------------------------------------------------------------
-inline rapidjson::Document BufferFrame::ToJSON() {
-  rapidjson::Document doc;
-  doc.SetObject();
-  // auto& allocator = doc.GetAllocator();
-  // header.mState
+inline void BufferFrame::ToJSON(rapidjson::Value* resultObj,
+                                rapidjson::Value::AllocatorType& allocator) {
+  DCHECK(resultObj->IsObject());
   {
     auto stateStr = header.StateString();
     rapidjson::Value member;
-    member.SetString(stateStr.data(), stateStr.size(), doc.GetAllocator());
-    doc.AddMember("header.mState", member, doc.GetAllocator());
+    member.SetString(stateStr.data(), stateStr.size(), allocator);
+    resultObj->AddMember("header.mState", member, allocator);
   }
 
   {
     rapidjson::Value member;
     member.SetBool(header.mKeepInMemory);
-    doc.AddMember("header.mKeepInMemory", member, doc.GetAllocator());
+    resultObj->AddMember("header.mKeepInMemory", member, allocator);
   }
 
   {
     rapidjson::Value member;
     member.SetUint64(header.mPageId);
-    doc.AddMember("header.mPageId", member, doc.GetAllocator());
+    resultObj->AddMember("header.mPageId", member, allocator);
   }
 
   {
     rapidjson::Value member;
     member.SetUint64(header.mLastWriterWorker);
-    doc.AddMember("header.mLastWriterWorker", member, doc.GetAllocator());
+    resultObj->AddMember("header.mLastWriterWorker", member, allocator);
   }
 
   {
     rapidjson::Value member;
     member.SetUint64(header.mFlushedPSN);
-    doc.AddMember("header.mFlushedPSN", member, doc.GetAllocator());
+    resultObj->AddMember("header.mFlushedPSN", member, allocator);
   }
 
   {
     rapidjson::Value member;
     member.SetBool(header.mIsBeingWrittenBack);
-    doc.AddMember("header.mIsBeingWrittenBack", member, doc.GetAllocator());
+    resultObj->AddMember("header.mIsBeingWrittenBack", member, allocator);
   }
-
-  // leanstore::utils::AddMemberToJson(&doc, allocator, "page.mPSN", page.mPSN);
-  // leanstore::utils::AddMemberToJson(&doc, allocator, "page.mGSN", page.mGSN);
-  // leanstore::utils::AddMemberToJson(&doc, allocator, "page.mBTreeId",
-  //                                   page.mBTreeId);
-  // leanstore::utils::AddMemberToJson(&doc, allocator, "page.mMagicDebuging",
-  //                                   page.mMagicDebuging);
-
-  return doc;
 }
 
 } // namespace storage
