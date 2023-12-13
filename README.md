@@ -13,7 +13,7 @@ Ubuntu 12.04 or newer is required. Install the following packages:
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y libaio-dev libtbb-dev
+sudo apt-get install -y libaio-dev
 ```
 
 Build the project with CMake:
