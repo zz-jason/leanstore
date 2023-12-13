@@ -439,41 +439,42 @@ void BTreeNode::Accept(BTreeVisitor* visitor) {
 
 using leanstore::utils::AddMemberToJson;
 
-rapidjson::Document BTreeNode::ToJSON() {
-  rapidjson::Document doc;
-  auto& allocator = doc.GetAllocator();
-  doc.SetObject();
+void BTreeNode::ToJSON(rapidjson::Value* resultObj,
+                       rapidjson::Value::AllocatorType& allocator) {
+  DCHECK(resultObj->IsObject());
 
   auto lowerFence = GetLowerFence();
   if (lowerFence.size() == 0) {
-    AddMemberToJson(&doc, allocator, "mLowerFence", "-inf");
+    AddMemberToJson(resultObj, allocator, "mLowerFence", "-inf");
   } else {
-    AddMemberToJson(&doc, allocator, "mLowerFence", lowerFence);
+    AddMemberToJson(resultObj, allocator, "mLowerFence", lowerFence);
   }
 
   auto upperFence = GetUpperFence();
   if (upperFence.size() == 0) {
-    AddMemberToJson(&doc, allocator, "mUpperFence", "+inf");
+    AddMemberToJson(resultObj, allocator, "mUpperFence", "+inf");
   } else {
-    AddMemberToJson(&doc, allocator, "mUpperFence", upperFence);
+    AddMemberToJson(resultObj, allocator, "mUpperFence", upperFence);
   }
 
-  AddMemberToJson(&doc, allocator, "mNumSeps", mNumSeps);
-  AddMemberToJson(&doc, allocator, "mIsLeaf", mIsLeaf);
-  AddMemberToJson(&doc, allocator, "mSpaceUsed", mSpaceUsed);
-  AddMemberToJson(&doc, allocator, "mDataOffset", mDataOffset);
-  AddMemberToJson(&doc, allocator, "mPrefixSize", mPrefixSize);
+  AddMemberToJson(resultObj, allocator, "mNumSeps", mNumSeps);
+  AddMemberToJson(resultObj, allocator, "mIsLeaf", mIsLeaf);
+  AddMemberToJson(resultObj, allocator, "mSpaceUsed", mSpaceUsed);
+  AddMemberToJson(resultObj, allocator, "mDataOffset", mDataOffset);
+  AddMemberToJson(resultObj, allocator, "mPrefixSize", mPrefixSize);
 
   // hints
   {
     rapidjson::Value memberArray(rapidjson::kArrayType);
     for (auto i = 0; i < sHintCount; ++i) {
-      memberArray.PushBack(hint[i], allocator);
+      rapidjson::Value hintJson;
+      hintJson.SetUint64(hint[i]);
+      memberArray.PushBack(hintJson, allocator);
     }
-    doc.AddMember("mHints", memberArray, allocator);
+    resultObj->AddMember("mHints", memberArray, allocator);
   }
 
-  AddMemberToJson(&doc, allocator, "mHasGarbage", mHasGarbage);
+  AddMemberToJson(resultObj, allocator, "mHasGarbage", mHasGarbage);
 
   // slots
   {
@@ -490,9 +491,8 @@ rapidjson::Document BTreeNode::ToJSON() {
                       static_cast<u64>(slot[i].head));
       memberArray.PushBack(arrayElement, allocator);
     }
-    doc.AddMember("mSlots", memberArray, allocator);
+    resultObj->AddMember("mSlots", memberArray, allocator);
   }
-  return doc;
 }
 
 } // namespace btree

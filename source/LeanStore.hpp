@@ -44,14 +44,12 @@ public:
   ~LeanStore();
 
 public:
-  /**
-   * @brief Register a BTreeLL
-   *
-   * @param name The unique name of the btree
-   * @param config The config of the btree
-   * @param btree The pointer to store the registered btree
-   * @return Whether the btree is successfully registered
-   */
+  /// Register a BTreeLL
+  ///
+  /// @param name The unique name of the btree
+  /// @param config The config of the btree
+  /// @param btree The pointer to store the registered btree
+  /// @return Whether the btree is successfully registered
   [[nodiscard]] bool RegisterBTreeLL(
       const std::string& name, storage::btree::BTreeGeneric::Config& config,
       storage::btree::BTreeLL** btree) {
@@ -60,13 +58,11 @@ public:
     return (*btree) != nullptr;
   }
 
-  /**
-   * @brief Get a registered BTreeLL
-   *
-   * @param name The unique name of the btree
-   * @param btree The pointer to store the found btree
-   * @return Whether the btree is found
-   */
+  /// Get a registered BTreeLL
+  ///
+  /// @param name The unique name of the btree
+  /// @param btree The pointer to store the found btree
+  /// @return Whether the btree is found
   [[nodiscard]] bool GetBTreeLL(const std::string& name,
                                 storage::btree::BTreeLL** btree) {
     *btree = dynamic_cast<storage::btree::BTreeLL*>(
@@ -74,26 +70,21 @@ public:
     return *btree != nullptr;
   }
 
-  /**
-   * @brief Unregister a BTreeLL
-   *
-   * TODO(jian.z): reclaim all the buffer frames in memory and pages in disk
-   * occupied by the tree.
-   *
-   * @param name The unique name of the btree
-   */
+  /// Unregister a BTreeLL
+  /// @param name The unique name of the btree
   void UnRegisterBTreeLL(const std::string& name) {
+    auto btree = dynamic_cast<storage::btree::BTreeGeneric*>(
+        storage::TreeRegistry::sInstance->GetTree(name));
+    leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
     storage::TreeRegistry::sInstance->UnregisterTree(name);
   }
 
-  /**
-   * @brief Register a BTreeVI
-   *
-   * @param name The unique name of the btree
-   * @param config The config of the btree
-   * @param btree The pointer to store the registered btree
-   * @return Whether the btree is successfully registered
-   */
+  /// Register a BTreeVI
+  ///
+  /// @param name The unique name of the btree
+  /// @param config The config of the btree
+  /// @param btree The pointer to store the registered btree
+  /// @return Whether the btree is successfully registered
   [[nodiscard]] bool RegisterBTreeVI(
       const std::string& name, storage::btree::BTreeGeneric::Config& config,
       storage::btree::BTreeVI** btree) {
@@ -113,6 +104,8 @@ public:
 
     // clean resource on failure
     SCOPED_DEFER(if (!success && graveyard != nullptr) {
+      leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(
+          *static_cast<leanstore::storage::btree::BTreeGeneric*>(graveyard));
       TreeRegistry::sInstance->UnRegisterTree(graveyard->mTreeId);
     });
 
@@ -122,13 +115,11 @@ public:
     return success;
   }
 
-  /**
-   * @brief Get a registered BTreeVI
-   *
-   * @param name The unique name of the btree
-   * @param btree The pointer to store the found btree
-   * @return Whether the btree is found
-   */
+  /// Get a registered BTreeVI
+  ///
+  /// @param name The unique name of the btree
+  /// @param btree The pointer to store the found btree
+  /// @return Whether the btree is found
   [[nodiscard]] bool GetBTreeVI(const std::string& name,
                                 storage::btree::BTreeVI** btree) {
     *btree = dynamic_cast<storage::btree::BTreeVI*>(
@@ -136,14 +127,8 @@ public:
     return *btree != nullptr;
   }
 
-  /**
-   * @brief Unregister a BTreeVI
-   *
-   * TODO(jian.z): reclaim all the buffer frames in memory and pages in disk
-   * occupied by the tree.
-   *
-   * @param name The unique name of the btree
-   */
+  /// Unregister a BTreeVI
+  /// @param name The unique name of the btree
   void UnRegisterBTreeVI(const std::string& name) {
     auto btree = dynamic_cast<storage::btree::BTreeGeneric*>(
         storage::TreeRegistry::sInstance->GetTree(name));

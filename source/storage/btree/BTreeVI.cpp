@@ -378,7 +378,8 @@ OP_RESULT BTreeVI::insert(Slice key, Slice val) {
     if (autoCommit) {
       cr::Worker::my().commitTX();
     }
-    auto doc = BTreeGeneric::ToJSON(*this);
+    rapidjson::Document doc(rapidjson::kObjectType);
+    BTreeGeneric::ToJSON(*this, &doc);
     DLOG(INFO) << "BTreeVI after insert: " << leanstore::utils::JsonToStr(&doc);
   });
 

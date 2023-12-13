@@ -259,39 +259,30 @@ public:
     exclusiveGuardedMetaNode.reclaim();
   }
 
-  static rapidjson::Document ToJSON(BTreeGeneric& btree) {
+  static void ToJSON(BTreeGeneric& btree, rapidjson::Document* resultDoc) {
+    DCHECK(resultDoc->IsObject());
+    auto& allocator = resultDoc->GetAllocator();
+
+    // meta node
     HybridPageGuard<BTreeNode> guardedMetaNode(btree.mMetaNodeSwip);
+    rapidjson::Value metaJson(rapidjson::kObjectType);
+    guardedMetaNode.mBf->ToJSON(&metaJson, allocator);
+    resultDoc->AddMember("metaNode", metaJson, allocator);
+
+    // root node
     HybridPageGuard<BTreeNode> guardedRootNode(
         guardedMetaNode, guardedMetaNode->mRightMostChildSwip);
-    return ToJSONRecursive(guardedRootNode);
+    rapidjson::Value rootJson(rapidjson::kObjectType);
+    ToJSONRecursive(guardedRootNode, &rootJson, allocator);
+    resultDoc->AddMember("rootNode", rootJson, allocator);
   }
 
 private:
   static void freeBTreeNodesRecursive(HybridPageGuard<BTreeNode>& guardedNode);
 
-  static rapidjson::Document ToJSONRecursive(
-      HybridPageGuard<BTreeNode>& guardedNode) {
-    auto bfDoc = guardedNode.mBf->ToJSON();
-    // auto& allocator = bfDoc.GetAllocator();
-
-    // auto nodeDoc = guardedNode->ToJSON();
-    // bfDoc.AddMember("BTreeNode", nodeDoc, allocator);
-
-    // if (guardedNode->mIsLeaf) {
-    //   return bfDoc;
-    // }
-    // for (auto i = 0u; i <= guardedNode->mNumSeps; ++i) {
-    //   auto childSwip = guardedNode->GetChildIncludingRightMost(i);
-    //   HybridPageGuard<BTreeNode> guardedChild(guardedNode, childSwip);
-    //   auto childDoc = ToJSONRecursive(guardedChild);
-    //   auto childName = "mChild_" + std::to_string(i);
-    //   guardedChild.unlock();
-    //   leanstore::utils::JsonValue memberName(childName.c_str(), allocator);
-    //   bfDoc.AddMember(memberName, childDoc, allocator);
-    // }
-
-    return bfDoc;
-  }
+  static void ToJSONRecursive(HybridPageGuard<BTreeNode>& guardedNode,
+                              rapidjson::Value* resultObj,
+                              rapidjson::Value::AllocatorType& allocator);
 
 public:
   static constexpr std::string TREE_ID = "treeId";
@@ -311,6 +302,50 @@ inline void BTreeGeneric::freeBTreeNodesRecursive(
 
   auto exclusiveGuardedNode = ExclusivePageGuard(std::move(guardedNode));
   exclusiveGuardedNode.reclaim();
+}
+
+inline void BTreeGeneric::ToJSONRecursive(
+    HybridPageGuard<BTreeNode>& guardedNode, rapidjson::Value* resultObj,
+    rapidjson::Value::AllocatorType& allocator) {
+
+  DCHECK(resultObj->IsObject());
+  guardedNode.mBf->ToJSON(resultObj, allocator);
+
+  // btree node
+  {
+    rapidjson::Value nodeObj(rapidjson::kObjectType);
+    guardedNode->ToJSON(&nodeObj, allocator);
+    resultObj->AddMember("btreeNode", nodeObj, allocator);
+  }
+
+  if (guardedNode->mIsLeaf) {
+    return;
+  }
+
+  rapidjson::Value childrenJson(rapidjson::kArrayType);
+  for (auto i = 0u; i < guardedNode->mNumSeps; ++i) {
+    auto childSwip = guardedNode->getChild(i);
+    HybridPageGuard<BTreeNode> guardedChild(guardedNode, childSwip);
+
+    rapidjson::Value childObj(rapidjson::kObjectType);
+    ToJSONRecursive(guardedChild, &childObj, allocator);
+    guardedChild.unlock();
+
+    childrenJson.PushBack(childObj, allocator);
+  }
+
+  if (guardedNode->mRightMostChildSwip != nullptr) {
+    HybridPageGuard<BTreeNode> guardedChild(guardedNode,
+                                            guardedNode->mRightMostChildSwip);
+    rapidjson::Value childObj(rapidjson::kObjectType);
+    ToJSONRecursive(guardedChild, &childObj, allocator);
+    guardedChild.unlock();
+
+    childrenJson.PushBack(childObj, allocator);
+  }
+
+  // children
+  resultObj->AddMember("mChildren", childrenJson, allocator);
 }
 
 inline void BTreeGeneric::IterateChildSwips(

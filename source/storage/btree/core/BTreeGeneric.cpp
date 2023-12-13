@@ -435,7 +435,7 @@ s16 BTreeGeneric::mergeLeftIntoRight(ExclusivePageGuard<BTreeNode>& parent,
   }
   return 2;
 }
-// -------------------------------------------------------------------------------------
+
 // returns true if it has exclusively locked anything
 
 BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
@@ -445,18 +445,18 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
   if (c_guard->fillFactorAfterCompaction() >= 0.9) {
     return XMergeReturnCode::NOTHING;
   }
-  // -------------------------------------------------------------------------------------
+
   const u8 MAX_MERGE_PAGES = FLAGS_xmerge_k;
   s16 pos = parent_handler.mPosInParent;
   u8 pages_count = 1;
   s16 max_right;
   ARRAY_ON_STACK(guards, HybridPageGuard<BTreeNode>, MAX_MERGE_PAGES);
   ARRAY_ON_STACK(fully_merged, bool, MAX_MERGE_PAGES);
-  // -------------------------------------------------------------------------------------
+
   guards[0] = std::move(c_guard);
   fully_merged[0] = false;
   double total_fill_factor = guards[0]->fillFactorAfterCompaction();
-  // -------------------------------------------------------------------------------------
+
   // Handle upper swip instead of avoiding p_guard->mNumSeps -1 swip
   if (isMetaNode(p_guard) || !guards[0]->mIsLeaf) {
     c_guard = std::move(guards[0]);
@@ -469,7 +469,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
       c_guard = std::move(guards[0]);
       return XMergeReturnCode::NOTHING;
     }
-    // -------------------------------------------------------------------------------------
+
     guards[max_right - pos] =
         HybridPageGuard<BTreeNode>(p_guard, p_guard->getChild(max_right));
     fully_merged[max_right - pos] = false;
@@ -485,10 +485,10 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
     c_guard = std::move(guards[0]);
     return XMergeReturnCode::NOTHING;
   }
-  // -------------------------------------------------------------------------------------
+
   ExclusivePageGuard<BTreeNode> p_x_guard = std::move(p_guard);
   p_x_guard.incrementGSN();
-  // -------------------------------------------------------------------------------------
+
   XMergeReturnCode ret_code = XMergeReturnCode::PARTIAL_MERGE;
   s16 left_hand, right_hand, ret;
   while (true) {
@@ -501,9 +501,9 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
     }
     if (right_hand == pos)
       break;
-    // -------------------------------------------------------------------------------------
+
     left_hand = right_hand - 1;
-    // -------------------------------------------------------------------------------------
+
     {
       ExclusivePageGuard<BTreeNode> right_x_guard(
           std::move(guards[right_hand - pos]));
@@ -528,7 +528,6 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
         ENSURE(false);
       }
     }
-    // -------------------------------------------------------------------------------------
   }
   if (c_guard.guard.state == GUARD_STATE::MOVED)
     c_guard = std::move(guards[0]);
@@ -552,15 +551,15 @@ s64 BTreeGeneric::iterateAllPagesRec(HybridPageGuard<BTreeNode>& node_guard,
     c_guard.JumpIfModifiedByOthers();
     res += iterateAllPagesRec(c_guard, inner, leaf);
   }
-  // -------------------------------------------------------------------------------------
+
   Swip<BTreeNode>& c_swip = node_guard->mRightMostChildSwip;
   auto c_guard = HybridPageGuard(node_guard, c_swip);
   c_guard.JumpIfModifiedByOthers();
   res += iterateAllPagesRec(c_guard, inner, leaf);
-  // -------------------------------------------------------------------------------------
+
   return res;
 }
-// -------------------------------------------------------------------------------------
+
 s64 BTreeGeneric::iterateAllPages(BTreeNodeCallback inner,
                                   BTreeNodeCallback leaf) {
   while (true) {
@@ -574,36 +573,36 @@ s64 BTreeGeneric::iterateAllPages(BTreeNodeCallback inner,
     }
   }
 }
-// -------------------------------------------------------------------------------------
+
 u64 BTreeGeneric::getHeight() {
   return mHeight.load();
 }
-// -------------------------------------------------------------------------------------
+
 u64 BTreeGeneric::countEntries() {
   return iterateAllPages([](BTreeNode&) { return 0; },
                          [](BTreeNode& node) { return node.mNumSeps; });
 }
-// -------------------------------------------------------------------------------------
+
 u64 BTreeGeneric::countPages() {
   return iterateAllPages([](BTreeNode&) { return 1; },
                          [](BTreeNode&) { return 1; });
 }
-// -------------------------------------------------------------------------------------
+
 u64 BTreeGeneric::countInner() {
   return iterateAllPages([](BTreeNode&) { return 1; },
                          [](BTreeNode&) { return 0; });
 }
-// -------------------------------------------------------------------------------------
+
 double BTreeGeneric::averageSpaceUsage() {
   ENSURE(false); // TODO
 }
-// -------------------------------------------------------------------------------------
+
 u32 BTreeGeneric::bytesFree() {
   return iterateAllPages(
       [](BTreeNode& inner) { return inner.freeSpaceAfterCompaction(); },
       [](BTreeNode& leaf) { return leaf.freeSpaceAfterCompaction(); });
 }
-// -------------------------------------------------------------------------------------
+
 void BTreeGeneric::printInfos(uint64_t totalSize) {
   HybridPageGuard<BTreeNode> p_guard(mMetaNodeSwip);
   HybridPageGuard r_guard(p_guard, p_guard->mRightMostChildSwip);
@@ -613,5 +612,5 @@ void BTreeGeneric::printInfos(uint64_t totalSize) {
        << " height:" << mHeight << " rootCnt:" << r_guard->mNumSeps
        << " bytesFree:" << bytesFree() << endl;
 }
-// -------------------------------------------------------------------------------------
+
 } // namespace leanstore::storage::btree
