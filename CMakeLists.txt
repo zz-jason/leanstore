@@ -51,6 +51,7 @@ include(${CMAKE_SOURCE_DIR}/third-party/glog.cmake)
 include(${CMAKE_SOURCE_DIR}/third-party/gtest.cmake)
 include(${CMAKE_SOURCE_DIR}/third-party/gbench.cmake)
 include(${CMAKE_SOURCE_DIR}/third-party/prometheus-cpp.cmake)
+include(${CMAKE_SOURCE_DIR}/third-party/onetbb.cmake)
 
 
 # ------------------------------------------------------------------------------
