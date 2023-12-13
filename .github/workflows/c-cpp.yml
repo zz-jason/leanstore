@@ -22,7 +22,7 @@ jobs:
       uses: actions/checkout@v3
     
     - name: Install dependencies
-      run: sudo apt install -y libaio-dev libtbb2-dev
+      run: sudo apt install -y libaio-dev
       
     - name: Config project
       run: cmake -B build -S .
