@@ -270,7 +270,6 @@ public:
   }
 
   template <typename WT, typename... Args>
-  // template <> void init() {
   cr::WALPayloadHandler<WT> ReserveWALPayload(u64 payloadSize, Args&&... args) {
     return mRefGuard.template ReserveWALPayload<WT>(
         payloadSize, std::forward<Args>(args)...);
