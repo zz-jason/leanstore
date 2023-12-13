@@ -63,41 +63,41 @@ public:
 protected:
   // We need a custom findLeafAndLatch to track the position in parent node
   template <LATCH_FALLBACK_MODE mode = LATCH_FALLBACK_MODE::SHARED>
-  void findLeafAndLatch(HybridPageGuard<BTreeNode>& childGuard, Slice key) {
+  void findLeafAndLatch(HybridPageGuard<BTreeNode>& guardedChild, Slice key) {
     while (true) {
       mLeafPosInParent = -1;
       JUMPMU_TRY() {
         mGuardedParent = HybridPageGuard<BTreeNode>(mBTree.mMetaNodeSwip);
-        childGuard.unlock();
+        guardedChild.unlock();
 
         // it's the root node right now.
-        childGuard = HybridPageGuard<BTreeNode>(
+        guardedChild = HybridPageGuard<BTreeNode>(
             mGuardedParent, mGuardedParent->mRightMostChildSwip);
 
-        for (u16 level = 0; !childGuard->mIsLeaf; level++) {
+        for (u16 level = 0; !guardedChild->mIsLeaf; level++) {
           COUNTERS_BLOCK() {
             WorkerCounters::myCounters().dt_inner_page[mBTree.mTreeId]++;
           }
-          mLeafPosInParent = mGuardedLeaf->lowerBound<false>(key);
+          mLeafPosInParent = guardedChild->lowerBound<false>(key);
           auto childSwip =
-              &childGuard->GetChildIncludingRightMost(mLeafPosInParent);
-          mGuardedParent = std::move(childGuard);
+              &guardedChild->GetChildIncludingRightMost(mLeafPosInParent);
+          mGuardedParent = std::move(guardedChild);
           if (level == mBTree.mHeight - 1) {
-            childGuard = HybridPageGuard(mGuardedParent, *childSwip, mode);
+            guardedChild = HybridPageGuard(mGuardedParent, *childSwip, mode);
           } else {
-            childGuard = HybridPageGuard(mGuardedParent, *childSwip);
+            guardedChild = HybridPageGuard(mGuardedParent, *childSwip);
           }
         }
 
         mGuardedParent.unlock();
         if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
-          childGuard.toExclusive();
+          guardedChild.toExclusive();
         } else {
-          childGuard.toShared();
+          guardedChild.toShared();
         }
         mIsPrefixCopied = false;
         if (mFuncEnterLeaf != nullptr) {
-          mFuncEnterLeaf(childGuard);
+          mFuncEnterLeaf(guardedChild);
         }
         JUMPMU_RETURN;
       }

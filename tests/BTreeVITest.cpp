@@ -14,22 +14,9 @@
 
 namespace leanstore {
 
-static std::shared_mutex sMutex;
 static std::unique_ptr<LeanStore> sLeanStore = nullptr;
 
-leanstore::LeanStore* GetLeanStore() {
-  std::shared_lock sharedLock(sMutex);
-  if (sLeanStore != nullptr) {
-    return sLeanStore.get();
-  }
-
-  sharedLock.unlock();
-  std::unique_lock uniqueLock(sMutex);
-
-  if (sLeanStore != nullptr) {
-    return sLeanStore.get();
-  }
-
+static void InitLeanStore() {
   FLAGS_vi = true;
   FLAGS_enable_print_btree_stats_on_exit = true;
   FLAGS_wal = true;
@@ -42,7 +29,14 @@ leanstore::LeanStore* GetLeanStore() {
   std::filesystem::remove_all(dirPath);
   std::filesystem::create_directories(dirPath);
   sLeanStore = std::make_unique<leanstore::LeanStore>();
+}
+
+static leanstore::LeanStore* GetLeanStore() {
   return sLeanStore.get();
+}
+
+static void DeInitLeanStore() {
+  sLeanStore = nullptr;
 }
 
 class BTreeVITest : public ::testing::Test {
@@ -204,3 +198,11 @@ TEST_F(BTreeVITest, BTreeVIToJSON) {
 }
 
 } // namespace leanstore
+
+int main(int argc, char** argv) {
+  leanstore::InitLeanStore();
+  SCOPED_DEFER(leanstore::DeInitLeanStore());
+
+  testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}

@@ -77,6 +77,9 @@ public:
   /**
    * @brief Unregister a BTreeLL
    *
+   * TODO(jian.z): reclaim all the buffer frames in memory and pages in disk
+   * occupied by the tree.
+   *
    * @param name The unique name of the btree
    */
   void UnRegisterBTreeLL(const std::string& name) {
@@ -136,11 +139,21 @@ public:
   /**
    * @brief Unregister a BTreeVI
    *
+   * TODO(jian.z): reclaim all the buffer frames in memory and pages in disk
+   * occupied by the tree.
+   *
    * @param name The unique name of the btree
    */
   void UnRegisterBTreeVI(const std::string& name) {
-    auto graveyardName = "_" + name + "_graveyard";
+    auto btree = dynamic_cast<storage::btree::BTreeGeneric*>(
+        storage::TreeRegistry::sInstance->GetTree(name));
+    leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
     storage::TreeRegistry::sInstance->UnregisterTree(name);
+
+    auto graveyardName = "_" + name + "_graveyard";
+    btree = dynamic_cast<storage::btree::BTreeGeneric*>(
+        storage::TreeRegistry::sInstance->GetTree(graveyardName));
+    leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
     storage::TreeRegistry::sInstance->UnregisterTree(graveyardName);
   }
 

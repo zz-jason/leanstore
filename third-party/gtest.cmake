@@ -14,17 +14,34 @@ ExternalProject_Add(${TARGET_NAME}_internal
     UPDATE_COMMAND ""
 )
 
+# for gtest
+set(TARGET_NAME gtest)
+set(TARGET_INCLUDE_DIR ${TARGET_INSTALL}/include)
+set(TARGET_LIB_PATH ${TARGET_INSTALL}/lib/libgtest.a)
+
 message(STATUS "Adding external target: ${TARGET_NAME} ...")
+message(STATUS "  - Target include dir: ${TARGET_INCLUDE_DIR}")
+message(STATUS "  - Target link lib: ${TARGET_LIB_PATH}")
+
 add_library(${TARGET_NAME} INTERFACE)
-add_dependencies(${TARGET_NAME} ${TARGET_NAME}_internal)
+add_dependencies(${TARGET_NAME} gtest_internal)
+target_include_directories(${TARGET_NAME} INTERFACE ${TARGET_INCLUDE_DIR})
+target_link_libraries(${TARGET_NAME} INTERFACE ${TARGET_LIB_PATH})
 
-target_include_directories(${TARGET_NAME} INTERFACE ${TARGET_INSTALL}/include)
-message(STATUS "  - Target include dir: ${TARGET_INSTALL}/include")
 
-target_link_libraries(${TARGET_NAME} INTERFACE ${TARGET_INSTALL}/lib/libgtest.a)
-message(STATUS "  - Target link lib: ${TARGET_INSTALL}/lib/libgtest.a")
+# for gtest_main
+set(TARGET_NAME gtest_main)
+set(TARGET_INCLUDE_DIR ${TARGET_INSTALL}/include)
+set(TARGET_LIB_PATH ${TARGET_INSTALL}/lib/libgtest_main.a)
 
-target_link_libraries(${TARGET_NAME} INTERFACE ${TARGET_INSTALL}/lib/libgtest_main.a)
-message(STATUS "  - Target link lib: ${TARGET_INSTALL}/lib/libgtest_main.a")
+message(STATUS "Adding external target: ${TARGET_NAME} ...")
+message(STATUS "  - Target include dir: ${TARGET_INCLUDE_DIR}")
+message(STATUS "  - Target link lib: ${TARGET_LIB_PATH}")
+
+add_library(${TARGET_NAME} INTERFACE)
+add_dependencies(${TARGET_NAME} gtest_internal)
+target_include_directories(${TARGET_NAME} INTERFACE ${TARGET_INCLUDE_DIR})
+target_link_libraries(${TARGET_NAME} INTERFACE ${TARGET_LIB_PATH})
+
 
 list(APPEND CMAKE_PREFIX_PATH ${TARGET_INSTALL}/lib/cmake/${TARGET_NAME})

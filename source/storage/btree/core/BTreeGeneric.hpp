@@ -244,6 +244,21 @@ public:
     return findParent<false>(btree, bfToFind);
   }
 
+  /// Removes a btree from disk, reclaim all the buffer frames in memory and
+  /// pages in disk used by it.
+  ///
+  /// @param btree The tree to free.
+  static void FreeAndReclaim(BTreeGeneric& btree) {
+    HybridPageGuard<BTreeNode> guardedMetaNode(btree.mMetaNodeSwip);
+    HybridPageGuard<BTreeNode> guardedRootNode(
+        guardedMetaNode, guardedMetaNode->mRightMostChildSwip);
+    BTreeGeneric::freeBTreeNodesRecursive(guardedRootNode);
+
+    auto exclusiveGuardedMetaNode =
+        ExclusivePageGuard(std::move(guardedMetaNode));
+    exclusiveGuardedMetaNode.reclaim();
+  }
+
   static rapidjson::Document ToJSON(BTreeGeneric& btree) {
     HybridPageGuard<BTreeNode> guardedMetaNode(btree.mMetaNodeSwip);
     HybridPageGuard<BTreeNode> guardedRootNode(
@@ -252,6 +267,8 @@ public:
   }
 
 private:
+  static void freeBTreeNodesRecursive(HybridPageGuard<BTreeNode>& guardedNode);
+
   static rapidjson::Document ToJSONRecursive(
       HybridPageGuard<BTreeNode>& guardedNode) {
     auto bfDoc = guardedNode.mBf->ToJSON();
@@ -281,6 +298,20 @@ public:
   static constexpr std::string HEIGHT = "height";
   static constexpr std::string META_PAGE_ID = "metaPageId";
 };
+
+inline void BTreeGeneric::freeBTreeNodesRecursive(
+    HybridPageGuard<BTreeNode>& guardedNode) {
+  if (!guardedNode->mIsLeaf) {
+    for (auto i = 0u; i <= guardedNode->mNumSeps; ++i) {
+      auto childSwip = guardedNode->GetChildIncludingRightMost(i);
+      HybridPageGuard<BTreeNode> guardedChild(guardedNode, childSwip);
+      freeBTreeNodesRecursive(guardedChild);
+    }
+  }
+
+  auto exclusiveGuardedNode = ExclusivePageGuard(std::move(guardedNode));
+  exclusiveGuardedNode.reclaim();
+}
 
 inline void BTreeGeneric::IterateChildSwips(
     BufferFrame& bf, std::function<bool(Swip<BufferFrame>&)> callback) {
