@@ -91,7 +91,7 @@ inline bool Recovery::Run() {
 
   Analysis();
 
-  // Redo();
+  Redo();
 
   // if (Undo()) {
   //   return true;

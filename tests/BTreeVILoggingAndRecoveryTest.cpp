@@ -46,7 +46,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
   storage::btree::BTreeVI* btree;
 
   // prepare key-value pairs to insert
-  size_t numKVs(1);
+  size_t numKVs(10);
   std::vector<std::tuple<std::string, std::string>> kvToTest;
   for (size_t i = 0; i < numKVs; ++i) {
     std::string key("key_xxxxxxxxxxxx_" + std::to_string(i));
@@ -78,6 +78,12 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
     }
   });
 
+  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    rapidjson::Document doc(rapidjson::kObjectType);
+    leanstore::storage::btree::BTreeGeneric::ToJSON(*btree, &doc);
+    LOG(INFO) << "btree before destroy: " << leanstore::utils::JsonToStr(&doc);
+  });
+
   // meta file should be serialized during destructor.
   mLeanStore.reset(nullptr);
   FLAGS_recover = true;
@@ -86,6 +92,12 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
   mLeanStore = std::make_unique<leanstore::LeanStore>();
   EXPECT_TRUE(mLeanStore->GetBTreeVI(btreeName, &btree));
   EXPECT_NE(btree, nullptr);
+
+  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    rapidjson::Document doc(rapidjson::kObjectType);
+    leanstore::storage::btree::BTreeGeneric::ToJSON(*btree, &doc);
+    LOG(INFO) << "btree after recovery: " << leanstore::utils::JsonToStr(&doc);
+  });
 
   // lookup the restored btree
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {

@@ -136,12 +136,10 @@ void BufferManager::writeAllBufferFrames() {
       auto& bf = mBfs[i];
       bf.header.mLatch.mutex.lock();
       if (!bf.isFree()) {
-        page.mBTreeId = bf.page.mBTreeId;
-        page.mMagicDebuging = bf.header.mPageId;
-        TreeRegistry::sInstance->checkpoint(bf.page.mBTreeId, bf,
-                                            page.mPayload);
-        s64 ret = pwrite(mPageFd, &page, PAGE_SIZE, bf.header.mPageId * PAGE_SIZE);
-        ENSURE(ret == PAGE_SIZE);
+        TreeRegistry::sInstance->Checkpoint(bf.page.mBTreeId, bf, &page);
+        s64 ret =
+            pwrite(mPageFd, &page, PAGE_SIZE, bf.header.mPageId * PAGE_SIZE);
+        DCHECK(ret == PAGE_SIZE);
       }
       bf.header.mLatch.mutex.unlock();
     }
@@ -152,9 +150,7 @@ void BufferManager::WriteBufferFrame(BufferFrame& bf) {
   Page page;
   bf.header.mLatch.mutex.lock();
   if (!bf.isFree()) {
-    page.mBTreeId = bf.page.mBTreeId;
-    page.mMagicDebuging = bf.header.mPageId;
-    TreeRegistry::sInstance->checkpoint(bf.page.mBTreeId, bf, page.mPayload);
+    TreeRegistry::sInstance->Checkpoint(bf.page.mBTreeId, bf, &page);
     s64 ret = pwrite(mPageFd, &page, PAGE_SIZE, bf.header.mPageId * PAGE_SIZE);
     ENSURE(ret == PAGE_SIZE);
   }
