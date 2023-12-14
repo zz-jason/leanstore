@@ -59,8 +59,8 @@ public:
     LOG(FATAL) << "BufferManagedTree::checkSpaceUtilization is unimplemented ";
   }
 
-  virtual void checkpoint(BufferFrame&, u8*) {
-    LOG(FATAL) << "BufferManagedTree::checkpoint is unimplemented";
+  virtual void Checkpoint(BufferFrame&, void*) {
+    LOG(FATAL) << "BufferManagedTree::Checkpoint is unimplemented";
   }
 
   virtual void undo(const u8*, const u64) {
@@ -228,13 +228,13 @@ public:
   }
 
   // Pre: bf is shared/exclusive latched
-  inline void checkpoint(TREEID treeId, BufferFrame& bf, u8* dest) {
+  inline void Checkpoint(TREEID treeId, BufferFrame& bf, void* dest) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
     DLOG_IF(FATAL, it == mTrees.end())
         << "BufferManagedTree not find, treeId=" << treeId;
     auto& [tree, treeName] = it->second;
-    return tree->checkpoint(bf, dest);
+    return tree->Checkpoint(bf, dest);
   }
 
   // Recovery / SI

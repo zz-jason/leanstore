@@ -107,8 +107,10 @@ public:
   /// Called by buffer manager before eviction
   virtual SpaceCheckResult checkSpaceUtilization(BufferFrame& bf) override;
 
-  // pre: source buffer frame is shared latched
-  virtual void checkpoint(BufferFrame& bf, u8* dest) override;
+  /// Flush the page content in the buffer frame to disk
+  ///
+  /// NOTE: The source buffer frame should be shared latched
+  virtual void Checkpoint(BufferFrame& bf, void* dest) override;
 
   virtual void undo(const u8*, const u64) override {
     LOG(FATAL) << "undo is unsupported";
@@ -386,22 +388,23 @@ inline SpaceCheckResult BTreeGeneric::checkSpaceUtilization(BufferFrame& bf) {
   }
 }
 
-inline void BTreeGeneric::checkpoint(BufferFrame& bf, u8* dest) {
-  std::memcpy(dest, bf.page.mPayload, EFFECTIVE_PAGE_SIZE);
-  auto& destNode = *reinterpret_cast<BTreeNode*>(dest);
+inline void BTreeGeneric::Checkpoint(BufferFrame& bf, void* dest) {
+  std::memcpy(dest, &bf.page, PAGE_SIZE);
+  auto destPage = reinterpret_cast<Page*>(dest);
+  auto destNode = reinterpret_cast<BTreeNode*>(destPage->mPayload);
 
-  if (!destNode.mIsLeaf) {
+  if (!destNode->mIsLeaf) {
     // Replace all child swip to their page ID
-    for (u64 i = 0; i < destNode.mNumSeps; i++) {
-      if (!destNode.getChild(i).isEVICTED()) {
-        auto& childBf = destNode.getChild(i).asBufferFrameMasked();
-        destNode.getChild(i).evict(childBf.header.mPageId);
+    for (u64 i = 0; i < destNode->mNumSeps; i++) {
+      if (!destNode->getChild(i).isEVICTED()) {
+        auto& childBf = destNode->getChild(i).asBufferFrameMasked();
+        destNode->getChild(i).evict(childBf.header.mPageId);
       }
     }
     // Replace right most child swip to page id
-    if (!destNode.mRightMostChildSwip.isEVICTED()) {
-      auto& childBf = destNode.mRightMostChildSwip.asBufferFrameMasked();
-      destNode.mRightMostChildSwip.evict(childBf.header.mPageId);
+    if (!destNode->mRightMostChildSwip.isEVICTED()) {
+      auto& childBf = destNode->mRightMostChildSwip.asBufferFrameMasked();
+      destNode->mRightMostChildSwip.evict(childBf.header.mPageId);
     }
   }
 }
