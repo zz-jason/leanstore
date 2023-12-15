@@ -95,7 +95,7 @@ void HistoryTree::insertVersion(WORKERID session_id, TXID tx_id,
       // -------------------------------------------------------------------------------------
       if (session != nullptr) {
         session->rightmost_bf = iterator.mGuardedLeaf.mBf;
-        session->rightmost_version = iterator.mGuardedLeaf.guard.version + 1;
+        session->rightmost_version = iterator.mGuardedLeaf.mGuard.mVersion + 1;
         session->rightmost_pos = iterator.mSlotId + 1;
         session->last_tx_id = tx_id;
         session->rightmost_init = true;
@@ -290,7 +290,7 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
         JUMPMU_CONTINUE;
       } else {
         session->leftmost_bf = iterator.mGuardedLeaf.mBf;
-        session->leftmost_version = iterator.mGuardedLeaf.guard.version + 1;
+        session->leftmost_version = iterator.mGuardedLeaf.mGuard.mVersion + 1;
         session->leftmost_init = true;
         JUMPMU_BREAK;
       }

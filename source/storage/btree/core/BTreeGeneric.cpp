@@ -529,8 +529,9 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
       }
     }
   }
-  if (c_guard.guard.state == GUARD_STATE::MOVED)
+  if (c_guard.mGuard.mState == GUARD_STATE::MOVED) {
     c_guard = std::move(guards[0]);
+  }
   p_guard = std::move(p_x_guard);
   return ret_code;
 }

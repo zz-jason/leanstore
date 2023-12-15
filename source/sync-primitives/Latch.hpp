@@ -86,9 +86,9 @@ class Guard {
 public:
   HybridLatch* mLatch = nullptr;
 
-  GUARD_STATE state = GUARD_STATE::UNINITIALIZED;
+  GUARD_STATE mState = GUARD_STATE::UNINITIALIZED;
 
-  u64 version;
+  u64 mVersion;
 
   bool mEncounteredContention = false;
 
@@ -98,19 +98,19 @@ public:
 
   // Manually construct a guard from a snapshot. Use with caution!
   Guard(HybridLatch& latch, const u64 last_seen_version)
-      : mLatch(&latch), state(GUARD_STATE::OPTIMISTIC),
-        version(last_seen_version), mEncounteredContention(false) {
+      : mLatch(&latch), mState(GUARD_STATE::OPTIMISTIC),
+        mVersion(last_seen_version), mEncounteredContention(false) {
   }
 
   Guard(HybridLatch& latch, GUARD_STATE state)
-      : mLatch(&latch), state(state), version(latch.mVersion.load()) {
+      : mLatch(&latch), mState(state), mVersion(latch.mVersion.load()) {
   }
 
   // Move constructor
   Guard(Guard&& other)
-      : mLatch(other.mLatch), state(other.state), version(other.version),
+      : mLatch(other.mLatch), mState(other.mState), mVersion(other.mVersion),
         mEncounteredContention(other.mEncounteredContention) {
-    other.state = GUARD_STATE::MOVED;
+    other.mState = GUARD_STATE::MOVED;
   }
 
   // Move assignment
@@ -118,117 +118,118 @@ public:
     unlock();
 
     mLatch = other.mLatch;
-    state = other.state;
-    version = other.version;
+    mState = other.mState;
+    mVersion = other.mVersion;
     mEncounteredContention = other.mEncounteredContention;
-    other.state = GUARD_STATE::MOVED;
+    other.mState = GUARD_STATE::MOVED;
     return *this;
   }
 
 public:
   void JumpIfModifiedByOthers() {
-    DCHECK(state == GUARD_STATE::OPTIMISTIC ||
-           version == mLatch->mVersion.load());
-    if (state == GUARD_STATE::OPTIMISTIC && version != mLatch->mVersion.load()) {
+    DCHECK(mState == GUARD_STATE::OPTIMISTIC ||
+           mVersion == mLatch->mVersion.load());
+    if (mState == GUARD_STATE::OPTIMISTIC &&
+        mVersion != mLatch->mVersion.load()) {
       jumpmu::jump();
     }
   }
 
   inline void unlock() {
-    if (state == GUARD_STATE::EXCLUSIVE) {
-      version += LATCH_EXCLUSIVE_BIT;
-      mLatch->mVersion.store(version, std::memory_order_release);
+    if (mState == GUARD_STATE::EXCLUSIVE) {
+      mVersion += LATCH_EXCLUSIVE_BIT;
+      mLatch->mVersion.store(mVersion, std::memory_order_release);
       mLatch->mMutex.unlock();
-      state = GUARD_STATE::OPTIMISTIC;
-    } else if (state == GUARD_STATE::SHARED) {
+      mState = GUARD_STATE::OPTIMISTIC;
+    } else if (mState == GUARD_STATE::SHARED) {
       mLatch->mMutex.unlock_shared();
-      state = GUARD_STATE::OPTIMISTIC;
+      mState = GUARD_STATE::OPTIMISTIC;
     }
   }
 
   inline void toOptimisticSpin() {
-    DCHECK(state == GUARD_STATE::UNINITIALIZED && mLatch != nullptr);
-    version = mLatch->mVersion.load();
-    while (HasExclusiveMark(version)) {
+    DCHECK(mState == GUARD_STATE::UNINITIALIZED && mLatch != nullptr);
+    mVersion = mLatch->mVersion.load();
+    while (HasExclusiveMark(mVersion)) {
       mEncounteredContention = true;
-      version = mLatch->mVersion.load();
+      mVersion = mLatch->mVersion.load();
     }
-    state = GUARD_STATE::OPTIMISTIC;
+    mState = GUARD_STATE::OPTIMISTIC;
   }
 
   inline void toOptimisticOrJump() {
-    DCHECK(state == GUARD_STATE::UNINITIALIZED && mLatch != nullptr);
-    version = mLatch->mVersion.load();
-    if (HasExclusiveMark(version)) {
+    DCHECK(mState == GUARD_STATE::UNINITIALIZED && mLatch != nullptr);
+    mVersion = mLatch->mVersion.load();
+    if (HasExclusiveMark(mVersion)) {
       mEncounteredContention = true;
       jumpmu::jump();
     }
-    state = GUARD_STATE::OPTIMISTIC;
+    mState = GUARD_STATE::OPTIMISTIC;
   }
 
   inline void toOptimisticOrShared() {
-    DCHECK(state == GUARD_STATE::UNINITIALIZED && mLatch != nullptr);
-    version = mLatch->mVersion.load();
-    if (HasExclusiveMark(version)) {
+    DCHECK(mState == GUARD_STATE::UNINITIALIZED && mLatch != nullptr);
+    mVersion = mLatch->mVersion.load();
+    if (HasExclusiveMark(mVersion)) {
       mLatch->mMutex.lock_shared();
-      version = mLatch->mVersion.load();
-      state = GUARD_STATE::SHARED;
+      mVersion = mLatch->mVersion.load();
+      mState = GUARD_STATE::SHARED;
       mEncounteredContention = true;
     } else {
-      state = GUARD_STATE::OPTIMISTIC;
+      mState = GUARD_STATE::OPTIMISTIC;
     }
   }
 
   inline void toOptimisticOrExclusive() {
-    DCHECK(state == GUARD_STATE::UNINITIALIZED && mLatch != nullptr);
-    version = mLatch->mVersion.load();
-    if (HasExclusiveMark(version)) {
+    DCHECK(mState == GUARD_STATE::UNINITIALIZED && mLatch != nullptr);
+    mVersion = mLatch->mVersion.load();
+    if (HasExclusiveMark(mVersion)) {
       mLatch->mMutex.lock();
-      version = mLatch->mVersion.load() + LATCH_EXCLUSIVE_BIT;
-      mLatch->mVersion.store(version, std::memory_order_release);
-      state = GUARD_STATE::EXCLUSIVE;
+      mVersion = mLatch->mVersion.load() + LATCH_EXCLUSIVE_BIT;
+      mLatch->mVersion.store(mVersion, std::memory_order_release);
+      mState = GUARD_STATE::EXCLUSIVE;
       mEncounteredContention = true;
     } else {
-      state = GUARD_STATE::OPTIMISTIC;
+      mState = GUARD_STATE::OPTIMISTIC;
     }
   }
 
   inline void ToExclusiveMayJump() {
-    DCHECK(state != GUARD_STATE::SHARED);
-    if (state == GUARD_STATE::EXCLUSIVE) {
+    DCHECK(mState != GUARD_STATE::SHARED);
+    if (mState == GUARD_STATE::EXCLUSIVE) {
       return;
     }
-    if (state == GUARD_STATE::OPTIMISTIC) {
-      const u64 newVersion = version + LATCH_EXCLUSIVE_BIT;
-      u64 expected = version;
+    if (mState == GUARD_STATE::OPTIMISTIC) {
+      const u64 newVersion = mVersion + LATCH_EXCLUSIVE_BIT;
+      u64 expected = mVersion;
       // changed from try_lock because of possible retries b/c lots of readers
       mLatch->mMutex.lock();
       if (!mLatch->mVersion.compare_exchange_strong(expected, newVersion)) {
         mLatch->mMutex.unlock();
         jumpmu::jump();
       }
-      version = newVersion;
-      state = GUARD_STATE::EXCLUSIVE;
+      mVersion = newVersion;
+      mState = GUARD_STATE::EXCLUSIVE;
     } else {
       mLatch->mMutex.lock();
-      version = mLatch->mVersion.load() + LATCH_EXCLUSIVE_BIT;
-      mLatch->mVersion.store(version, std::memory_order_release);
-      state = GUARD_STATE::EXCLUSIVE;
+      mVersion = mLatch->mVersion.load() + LATCH_EXCLUSIVE_BIT;
+      mLatch->mVersion.store(mVersion, std::memory_order_release);
+      mState = GUARD_STATE::EXCLUSIVE;
     }
   }
 
   inline void ToSharedMayJump() {
-    DCHECK(state == GUARD_STATE::OPTIMISTIC || state == GUARD_STATE::SHARED);
-    if (state == GUARD_STATE::SHARED) {
+    DCHECK(mState == GUARD_STATE::OPTIMISTIC || mState == GUARD_STATE::SHARED);
+    if (mState == GUARD_STATE::SHARED) {
       return;
     }
-    if (state == GUARD_STATE::OPTIMISTIC) {
+    if (mState == GUARD_STATE::OPTIMISTIC) {
       mLatch->mMutex.lock_shared();
-      if (mLatch->mVersion.load() != version) {
+      if (mLatch->mVersion.load() != mVersion) {
         mLatch->mMutex.unlock_shared();
         jumpmu::jump();
       }
-      state = GUARD_STATE::SHARED;
+      mState = GUARD_STATE::SHARED;
     } else {
       UNREACHABLE();
     }
@@ -236,9 +237,9 @@ public:
 
   // For buffer management
   inline void TryToExclusiveMayJump() {
-    DCHECK(state == GUARD_STATE::OPTIMISTIC);
-    const u64 newVersion = version + LATCH_EXCLUSIVE_BIT;
-    u64 expected = version;
+    DCHECK(mState == GUARD_STATE::OPTIMISTIC);
+    const u64 newVersion = mVersion + LATCH_EXCLUSIVE_BIT;
+    u64 expected = mVersion;
 
     if (!mLatch->mMutex.try_lock()) {
       jumpmu::jump();
@@ -249,20 +250,20 @@ public:
       jumpmu::jump();
     }
 
-    version = newVersion;
-    state = GUARD_STATE::EXCLUSIVE;
+    mVersion = newVersion;
+    mState = GUARD_STATE::EXCLUSIVE;
   }
 
   inline void TryToSharedMayJump() {
-    DCHECK(state == GUARD_STATE::OPTIMISTIC);
+    DCHECK(mState == GUARD_STATE::OPTIMISTIC);
     if (!mLatch->mMutex.try_lock_shared()) {
       jumpmu::jump();
     }
-    if (mLatch->mVersion.load() != version) {
+    if (mLatch->mVersion.load() != mVersion) {
       mLatch->mMutex.unlock_shared();
       jumpmu::jump();
     }
-    state = GUARD_STATE::SHARED;
+    mState = GUARD_STATE::SHARED;
   }
 };
 

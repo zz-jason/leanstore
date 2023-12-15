@@ -205,7 +205,7 @@ public:
       WorkerCounters::myCounters().dt_next_tuple[mBTree.mTreeId]++;
     }
     while (true) {
-      ENSURE(mGuardedLeaf.guard.state != GUARD_STATE::OPTIMISTIC);
+      ENSURE(mGuardedLeaf.mGuard.mState != GUARD_STATE::OPTIMISTIC);
       if ((mSlotId + 1) < mGuardedLeaf->mNumSeps) {
         mSlotId += 1;
         return OP_RESULT::OK;
@@ -299,7 +299,7 @@ public:
     }
 
     while (true) {
-      ENSURE(mGuardedLeaf.guard.state != GUARD_STATE::OPTIMISTIC);
+      ENSURE(mGuardedLeaf.mGuard.mState != GUARD_STATE::OPTIMISTIC);
       if ((mSlotId - 1) >= 0) {
         mSlotId -= 1;
         return OP_RESULT::OK;

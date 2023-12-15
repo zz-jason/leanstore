@@ -21,25 +21,26 @@ class BMOptimisticGuard {
   template <typename T> friend class ExclusivePageGuard;
 
 public:
-  Guard guard;
+  Guard mGuard;
 
-  BMOptimisticGuard(HybridLatch& lock) : guard(&lock) {
-    guard.toOptimisticOrJump();
+  BMOptimisticGuard(HybridLatch& lock) : mGuard(&lock) {
+    mGuard.toOptimisticOrJump();
   }
 
   BMOptimisticGuard() = delete;
   BMOptimisticGuard(BMOptimisticGuard& other) = delete; // copy constructor
   // move constructor
-  BMOptimisticGuard(BMOptimisticGuard&& other) : guard(std::move(other.guard)) {
+  BMOptimisticGuard(BMOptimisticGuard&& other)
+      : mGuard(std::move(other.mGuard)) {
   }
   BMOptimisticGuard& operator=(BMOptimisticGuard& other) = delete;
   BMOptimisticGuard& operator=(BMOptimisticGuard&& other) {
-    guard = std::move(other.guard);
+    mGuard = std::move(other.mGuard);
     return *this;
   }
 
   inline void JumpIfModifiedByOthers() {
-    guard.JumpIfModifiedByOthers();
+    mGuard.JumpIfModifiedByOthers();
   }
 };
 
@@ -50,27 +51,27 @@ private:
 public:
   BMExclusiveGuard(BMOptimisticGuard& optimisiticGuard)
       : mOptimisticGuard(optimisiticGuard) {
-    mOptimisticGuard.guard.TryToExclusiveMayJump();
+    mOptimisticGuard.mGuard.TryToExclusiveMayJump();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
   JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP(BMExclusiveGuard)
 
   ~BMExclusiveGuard() {
-    mOptimisticGuard.guard.unlock();
+    mOptimisticGuard.mGuard.unlock();
     JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 };
 
 class BMExclusiveUpgradeIfNeeded {
 private:
-  Guard& guard;
+  Guard& mGuard;
   const bool was_exclusive;
 
 public:
   BMExclusiveUpgradeIfNeeded(Guard& guard)
-      : guard(guard), was_exclusive(guard.state == GUARD_STATE::EXCLUSIVE) {
-    guard.TryToExclusiveMayJump();
+      : mGuard(guard), was_exclusive(guard.mState == GUARD_STATE::EXCLUSIVE) {
+    mGuard.TryToExclusiveMayJump();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
@@ -78,7 +79,7 @@ public:
 
   ~BMExclusiveUpgradeIfNeeded() {
     if (!was_exclusive) {
-      guard.unlock();
+      mGuard.unlock();
     }
     JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP()
   }
@@ -91,14 +92,14 @@ private:
 public:
   BMSharedGuard(BMOptimisticGuard& optimisiticGuard)
       : mOptimisticGuard(optimisiticGuard) {
-    mOptimisticGuard.guard.TryToSharedMayJump();
+    mOptimisticGuard.mGuard.TryToSharedMayJump();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
   JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP(BMSharedGuard)
 
   ~BMSharedGuard() {
-    mOptimisticGuard.guard.unlock();
+    mOptimisticGuard.mGuard.unlock();
     JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP()
   }
 };
