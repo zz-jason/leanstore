@@ -1,6 +1,8 @@
 # LeanStore
 
-![Architecture](./docs/images/Architecture.jpg)
+<div align='center'>
+<img align="center" height='500' src="./docs/images/Architecture.jpg" />
+</div>
 
 [LeanStore](https://db.in.tum.de/~leis/papers/leanstore.pdf) is a
 high-performance OLTP storage engine optimized for many-core CPUs and NVMe SSDs.
