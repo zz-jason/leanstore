@@ -19,31 +19,31 @@ template <typename T> class HybridPageGuard {
 public:
   BufferFrame* mBf = nullptr;
 
-  Guard guard;
+  Guard mGuard;
 
-  bool keep_alive = true;
+  bool mKeepAlive = true;
 
 public:
-  HybridPageGuard() : mBf(nullptr), guard(nullptr) {
+  HybridPageGuard() : mBf(nullptr), mGuard(nullptr) {
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
-  HybridPageGuard(Guard&& guard, BufferFrame* bf)
-      : mBf(bf), guard(std::move(guard)) {
+  HybridPageGuard(Guard&& hybridGuard, BufferFrame* bf)
+      : mBf(bf), mGuard(std::move(hybridGuard)) {
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
   HybridPageGuard(HybridPageGuard& other) = delete;  // Copy constructor
   HybridPageGuard(HybridPageGuard&& other) = delete; // Move constructor
 
-  /// Used to allocate a new page and create a latch guard on it.
+  /// Used to allocate a new page and create a HybridGuard on it.
   ///
   /// @param treeId The tree which this page belongs to.
-  /// @param keep_alive
-  HybridPageGuard(TREEID treeId, bool keep_alive = true)
+  /// @param keepAlive
+  HybridPageGuard(TREEID treeId, bool keepAlive = true)
       : mBf(&BufferManager::sInstance->AllocNewPage()),
-        guard(mBf->header.mLatch, GUARD_STATE::EXCLUSIVE),
-        keep_alive(keep_alive) {
+        mGuard(mBf->header.mLatch, GUARD_STATE::EXCLUSIVE),
+        mKeepAlive(keepAlive) {
     mBf->page.mBTreeId = treeId;
     markAsDirty();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
@@ -53,8 +53,8 @@ public:
   HybridPageGuard(
       Swip<BufferFrame> swip,
       const LATCH_FALLBACK_MODE if_contended = LATCH_FALLBACK_MODE::SPIN)
-      : mBf(&swip.AsBufferFrame()), guard(&mBf->header.mLatch) {
-    latchAccordingToFallbackMode(guard, if_contended);
+      : mBf(&swip.AsBufferFrame()), mGuard(&mBf->header.mLatch) {
+    latchAccordingToFallbackMode(mGuard, if_contended);
     syncGSN();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
@@ -70,9 +70,9 @@ public:
       HybridPageGuard<T2>& parentGuard, Swip<T>& childSwip,
       const LATCH_FALLBACK_MODE if_contended = LATCH_FALLBACK_MODE::SPIN)
       : mBf(BufferManager::sInstance->tryFastResolveSwip(
-            parentGuard.guard, childSwip.template CastTo<BufferFrame>())),
-        guard(&mBf->header.mLatch) {
-    latchAccordingToFallbackMode(guard, if_contended);
+            parentGuard.mGuard, childSwip.template CastTo<BufferFrame>())),
+        mGuard(&mBf->header.mLatch) {
+    latchAccordingToFallbackMode(mGuard, if_contended);
     syncGSN();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
 
@@ -94,26 +94,26 @@ public:
   // I: Downgrade exclusive
   HybridPageGuard(ExclusivePageGuard<T>&&) = delete;
   HybridPageGuard& operator=(ExclusivePageGuard<T>&&) {
-    guard.unlock();
+    mGuard.unlock();
     return *this;
   }
 
   // I: Downgrade shared
   HybridPageGuard(SharedPageGuard<T>&&) = delete;
   HybridPageGuard& operator=(SharedPageGuard<T>&&) {
-    guard.unlock();
+    mGuard.unlock();
     return *this;
   }
 
   JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP(HybridPageGuard)
 
   ~HybridPageGuard() {
-    if (guard.state == GUARD_STATE::EXCLUSIVE) {
-      if (!keep_alive) {
+    if (mGuard.mState == GUARD_STATE::EXCLUSIVE) {
+      if (!mKeepAlive) {
         reclaim();
       }
     }
-    guard.unlock();
+    mGuard.unlock();
     JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP()
   }
 
@@ -122,8 +122,8 @@ public:
   template <typename T2>
   constexpr HybridPageGuard& operator=(HybridPageGuard<T2>&& other) {
     mBf = other.mBf;
-    guard = std::move(other.guard);
-    keep_alive = other.keep_alive;
+    mGuard = std::move(other.mGuard);
+    mKeepAlive = other.mKeepAlive;
     return *this;
   }
 
@@ -174,7 +174,7 @@ public:
   template <typename WT, typename... Args>
   cr::WALPayloadHandler<WT> ReserveWALPayload(u64 payloadSize, Args&&... args) {
     DCHECK(FLAGS_wal);
-    DCHECK(guard.state == GUARD_STATE::EXCLUSIVE);
+    DCHECK(mGuard.mState == GUARD_STATE::EXCLUSIVE);
 
     if (!FLAGS_wal_tuple_rfa) {
       incrementGSN();
@@ -196,14 +196,14 @@ public:
   }
 
   inline bool EncounteredContention() {
-    return guard.mEncounteredContention;
+    return mGuard.mEncounteredContention;
   }
   inline void unlock() {
-    guard.unlock();
+    mGuard.unlock();
   }
 
   inline void JumpIfModifiedByOthers() {
-    guard.JumpIfModifiedByOthers();
+    mGuard.JumpIfModifiedByOthers();
   }
 
   inline T& ref() {
@@ -221,23 +221,23 @@ public:
 
   // Use with caution!
   void ToSharedMayJump() {
-    guard.ToSharedMayJump();
+    mGuard.ToSharedMayJump();
   }
   void ToExclusiveMayJump() {
-    guard.ToExclusiveMayJump();
+    mGuard.ToExclusiveMayJump();
   }
 
   void TryToSharedMayJump() {
-    guard.TryToSharedMayJump();
+    mGuard.TryToSharedMayJump();
   }
 
   void TryToExclusiveMayJump() {
-    guard.TryToExclusiveMayJump();
+    mGuard.TryToExclusiveMayJump();
   }
 
   void reclaim() {
     BufferManager::sInstance->reclaimPage(*(mBf));
-    guard.state = GUARD_STATE::MOVED;
+    mGuard.mState = GUARD_STATE::MOVED;
   }
 
 protected:
@@ -264,7 +264,7 @@ private:
 public:
   // I: Upgrade
   ExclusivePageGuard(HybridPageGuard<T>&& o_guard) : mRefGuard(o_guard) {
-    mRefGuard.guard.ToExclusiveMayJump();
+    mRefGuard.mGuard.ToExclusiveMayJump();
   }
 
   template <typename WT, typename... Args>
@@ -282,7 +282,7 @@ public:
   }
 
   void keepAlive() {
-    mRefGuard.keep_alive = true;
+    mRefGuard.mKeepAlive = true;
   }
 
   void incrementGSN() {
@@ -294,8 +294,8 @@ public:
   }
 
   ~ExclusivePageGuard() {
-    if (!mRefGuard.keep_alive &&
-        mRefGuard.guard.state == GUARD_STATE::EXCLUSIVE) {
+    if (!mRefGuard.mKeepAlive &&
+        mRefGuard.mGuard.mState == GUARD_STATE::EXCLUSIVE) {
       mRefGuard.reclaim();
     } else {
       mRefGuard.unlock();

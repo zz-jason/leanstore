@@ -267,7 +267,7 @@ OP_RESULT BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
         }
       }
       BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this),
-                                      session->bf, opt_guard.version);
+                                      session->bf, opt_guard.mVersion);
       // -------------------------------------------------------------------------------------
       OP_RESULT ret =
           iterator.enoughSpaceInCurrentNode(o_key_length, o_value_length);

@@ -252,9 +252,9 @@ inline void BufferFrameProvider::EvictFlushedBf(
   ParentSwipHandler parentHandler =
       TreeRegistry::sInstance->findParent(btreeId, cooledBf);
 
-  DCHECK(parentHandler.mParentGuard.state == GUARD_STATE::OPTIMISTIC);
+  DCHECK(parentHandler.mParentGuard.mState == GUARD_STATE::OPTIMISTIC);
   BMExclusiveUpgradeIfNeeded parentWriteGuard(parentHandler.mParentGuard);
-  optimisticGuard.guard.ToExclusiveMayJump();
+  optimisticGuard.mGuard.ToExclusiveMayJump();
 
   if (FLAGS_crc_check && cooledBf.header.crc) {
     DCHECK(utils::CRC(cooledBf.page.mPayload, EFFECTIVE_PAGE_SIZE) ==
@@ -420,7 +420,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         auto parentHandler =
             TreeRegistry::sInstance->findParent(btreeId, *coolCandidate);
 
-        DCHECK(parentHandler.mParentGuard.state == GUARD_STATE::OPTIMISTIC);
+        DCHECK(parentHandler.mParentGuard.mState == GUARD_STATE::OPTIMISTIC);
         DCHECK(parentHandler.mParentGuard.mLatch !=
                reinterpret_cast<HybridLatch*>(0x99));
         COUNTERS_BLOCK() {
@@ -456,7 +456,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
           DCHECK(coolCandidate->header.mPageId == pageId);
           DCHECK(coolCandidate->header.state == STATE::HOT);
           DCHECK(coolCandidate->header.mIsBeingWrittenBack == false);
-          DCHECK(parentHandler.mParentGuard.version ==
+          DCHECK(parentHandler.mParentGuard.mVersion ==
                  parentHandler.mParentGuard.mLatch->GetOptimisticVersion());
           DCHECK(parentHandler.mChildSwip.bf == coolCandidate);
 

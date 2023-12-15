@@ -235,7 +235,6 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(
           !(tupleHead.mWorkerId == cr::Worker::my().mWorkerId &&
             tupleHead.tx_ts == cr::activeTX().startTS());
 
-      // -------------------------------------------------------------------------------------
       if (FLAGS_vi_fat_tuple_trigger == 0) {
         if (cr::Worker::my().cc.isVisibleForAll(tupleHead.mWorkerId,
                                                 tupleHead.tx_ts)) {
@@ -260,7 +259,7 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(
       } else {
         UNREACHABLE();
       }
-      // -------------------------------------------------------------------------------------
+
       if (convert_to_fat_tuple) {
         COUNTERS_BLOCK() {
           WorkerCounters::myCounters().cc_fat_tuple_triggered[mTreeId]++;
@@ -300,7 +299,7 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(
     const u16 version_payload_length =
         delta_and_descriptor_size + sizeof(UpdateVersion);
     COMMANDID command_id;
-    // -------------------------------------------------------------------------------------
+
     // Write the ChainedTupleDelta
     if (!FLAGS_vi_fupdate_chained) {
       command_id = cr::Worker::my().cc.insertVersion(
@@ -319,7 +318,7 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(
         WorkerCounters::myCounters().cc_update_versions_created[mTreeId]++;
       }
     }
-    // -------------------------------------------------------------------------------------
+
     // WAL
     auto walHandler = iterator.mGuardedLeaf.ReserveWALPayload<WALUpdateSSIP>(
         key.size() + delta_and_descriptor_size);
@@ -344,18 +343,18 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(
                                  update_descriptor.size(),
                              tupleHead.payload);
     walHandler.SubmitWal();
-    // -------------------------------------------------------------------------------------
+
     cr::Worker::my().mLogging.checkLogDepdency(tupleHead.mWorkerId,
                                                tupleHead.tx_ts);
-    // -------------------------------------------------------------------------------------
+
     tupleHead.mWorkerId = cr::Worker::my().mWorkerId;
     tupleHead.tx_ts = cr::activeTX().startTS();
     tupleHead.command_id = command_id;
-    // -------------------------------------------------------------------------------------
+
     tupleHead.WriteUnlock();
     iterator.markAsDirty();
     iterator.UpdateContentionStats();
-    // -------------------------------------------------------------------------------------
+
     JUMPMU_RETURN OP_RESULT::OK;
   }
   JUMPMU_CATCH() {
@@ -503,7 +502,7 @@ OP_RESULT BTreeVI::remove(Slice key) {
     DanglingPointer dangling_pointer;
     dangling_pointer.bf = iterator.mGuardedLeaf.mBf;
     dangling_pointer.latch_version_should_be =
-        iterator.mGuardedLeaf.guard.version;
+        iterator.mGuardedLeaf.mGuard.mVersion;
     dangling_pointer.head_slot = iterator.mSlotId;
     u16 value_length = iterator.value().length() - sizeof(ChainedTuple);
     u16 version_payload_length =

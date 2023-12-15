@@ -168,7 +168,7 @@ public:
       COUNTERS_BLOCK() {
         WorkerCounters::myCounters().dt_find_parent_root[btree.mTreeId]++;
       }
-      return {.mParentGuard = std::move(parentGuard.guard),
+      return {.mParentGuard = std::move(parentGuard.mGuard),
               .mParentBf = &btree.mMetaNodeSwip.AsBufferFrame(),
               .mChildSwip = childSwip->CastTo<BufferFrame>()};
     }
@@ -226,7 +226,7 @@ public:
     }
 
     ParentSwipHandler parentHandler = {
-        .mParentGuard = std::move(childGuard.guard),
+        .mParentGuard = std::move(childGuard.mGuard),
         .mParentBf = childGuard.mBf,
         .mChildSwip = childSwip->CastTo<BufferFrame>(),
         .mPosInParent = posInParent};
