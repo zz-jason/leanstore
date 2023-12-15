@@ -32,6 +32,3 @@ jobs:
       
     - name: Test test
       run: ctest --test-dir build -j `nproc`
-
-    - name: Generate code coverage report
-      uses: threeal/gcovr-action@v1.0.0
