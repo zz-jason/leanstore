@@ -96,7 +96,7 @@ public:
   // Prerequisite: the buffer frame is exclusively locked
   void Reset() {
     DCHECK(!mIsBeingWrittenBack);
-    DCHECK(mLatch.isExclusivelyLatched());
+    DCHECK(mLatch.IsLockedExclusively());
 
     state = STATE::FREE;
     mKeepInMemory = false;
@@ -170,7 +170,6 @@ public:
 
 public:
   BufferFrame() {
-    header.mLatch->store(0ul);
   }
 
   bool operator==(const BufferFrame& other) {
@@ -187,17 +186,16 @@ public:
 
   inline bool ShouldRemainInMem() {
     return header.mKeepInMemory || header.mIsBeingWrittenBack ||
-           header.mLatch.isExclusivelyLatched();
+           header.mLatch.IsLockedExclusively();
   }
 
   void Init(PID pageId) {
     DCHECK(header.state == STATE::FREE);
-    DCHECK(!header.mLatch.isExclusivelyLatched());
+    DCHECK(!header.mLatch.IsLockedExclusively());
 
     // Exclusive lock before changing to HOT
-    header.mLatch.mutex.lock();
-    header.mLatch->fetch_add(LATCH_EXCLUSIVE_BIT);
-    DCHECK(header.mLatch.isExclusivelyLatched());
+    header.mLatch.LockExclusively();
+    DCHECK(header.mLatch.IsLockedExclusively());
     header.mPageId = pageId;
     header.state = STATE::HOT;
     header.mFlushedPSN = 0;

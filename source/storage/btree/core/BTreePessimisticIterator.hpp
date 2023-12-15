@@ -91,9 +91,9 @@ protected:
 
         mGuardedParent.unlock();
         if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
-          guardedChild.toExclusive();
+          guardedChild.ToExclusiveMayJump();
         } else {
-          guardedChild.toShared();
+          guardedChild.ToSharedMayJump();
         }
         mIsPrefixCopied = false;
         if (mFuncEnterLeaf != nullptr) {
@@ -240,9 +240,9 @@ public:
               HybridPageGuard next_leaf(mGuardedParent, c_swip,
                                         LATCH_FALLBACK_MODE::JUMP);
               if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
-                next_leaf.tryToExclusive();
+                next_leaf.TryToExclusiveMayJump();
               } else {
-                next_leaf.tryToShared();
+                next_leaf.TryToSharedMayJump();
               }
               mGuardedLeaf.JumpIfModifiedByOthers();
               mGuardedLeaf = std::move(next_leaf);
@@ -331,9 +331,9 @@ public:
               HybridPageGuard next_leaf(mGuardedParent, c_swip,
                                         LATCH_FALLBACK_MODE::JUMP);
               if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
-                next_leaf.tryToExclusive();
+                next_leaf.TryToExclusiveMayJump();
               } else {
-                next_leaf.tryToShared();
+                next_leaf.TryToSharedMayJump();
               }
               mGuardedLeaf.JumpIfModifiedByOthers();
               mGuardedLeaf = std::move(next_leaf);

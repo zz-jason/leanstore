@@ -53,7 +53,7 @@ public:
   HybridPageGuard(
       Swip<BufferFrame> swip,
       const LATCH_FALLBACK_MODE if_contended = LATCH_FALLBACK_MODE::SPIN)
-      : mBf(&swip.AsBufferFrame()), guard(mBf->header.mLatch) {
+      : mBf(&swip.AsBufferFrame()), guard(&mBf->header.mLatch) {
     latchAccordingToFallbackMode(guard, if_contended);
     syncGSN();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
@@ -71,7 +71,7 @@ public:
       const LATCH_FALLBACK_MODE if_contended = LATCH_FALLBACK_MODE::SPIN)
       : mBf(BufferManager::sInstance->tryFastResolveSwip(
             parentGuard.guard, childSwip.template CastTo<BufferFrame>())),
-        guard(mBf->header.mLatch) {
+        guard(&mBf->header.mLatch) {
     latchAccordingToFallbackMode(guard, if_contended);
     syncGSN();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
@@ -220,21 +220,19 @@ public:
   }
 
   // Use with caution!
-  void toShared() {
-    guard.toShared();
+  void ToSharedMayJump() {
+    guard.ToSharedMayJump();
   }
-  void toExclusive() {
-    guard.toExclusive();
-  }
-
-  void tryToShared() {
-    // Can jump
-    guard.tryToShared();
+  void ToExclusiveMayJump() {
+    guard.ToExclusiveMayJump();
   }
 
-  void tryToExclusive() {
-    // Can jump
-    guard.tryToExclusive();
+  void TryToSharedMayJump() {
+    guard.TryToSharedMayJump();
+  }
+
+  void TryToExclusiveMayJump() {
+    guard.TryToExclusiveMayJump();
   }
 
   void reclaim() {
@@ -266,7 +264,7 @@ private:
 public:
   // I: Upgrade
   ExclusivePageGuard(HybridPageGuard<T>&& o_guard) : mRefGuard(o_guard) {
-    mRefGuard.guard.toExclusive();
+    mRefGuard.guard.ToExclusiveMayJump();
   }
 
   template <typename WT, typename... Args>
@@ -335,7 +333,7 @@ public:
 
   // I: Upgrade
   SharedPageGuard(HybridPageGuard<T>&& h_guard) : mRefGuard(h_guard) {
-    mRefGuard.toShared();
+    mRefGuard.ToSharedMayJump();
   }
 
   ~SharedPageGuard() {

@@ -71,8 +71,8 @@ TEST_F(LeanStoreTest, RecoverAfterInsert) {
   });
 
   // skip dumpping buffer frames on exit
-  LS_DEBUG_ENABLE("skip_writeAllBufferFrames");
-  SCOPED_DEFER(LS_DEBUG_DISABLE("skip_writeAllBufferFrames"));
+  LS_DEBUG_ENABLE("skip_CheckpointAllBufferFrames");
+  SCOPED_DEFER(LS_DEBUG_DISABLE("skip_CheckpointAllBufferFrames"));
 
   mLeanStore.reset(nullptr);
 

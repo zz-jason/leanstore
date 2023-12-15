@@ -18,33 +18,52 @@ namespace storage {
 constexpr static u64 LATCH_EXCLUSIVE_BIT = 1ull;
 constexpr static u64 LATCH_VERSION_MASK = ~(0ull);
 
-class alignas(64) HybridLatch {
-public:
-  atomic<u64> version;
+inline bool HasExclusiveMark(u64 version) {
+  return (version & LATCH_EXCLUSIVE_BIT) == LATCH_EXCLUSIVE_BIT;
+}
 
-  std::shared_mutex mutex;
+class Guard;
+
+/// An alternative to std::mutex and std::shared_mutex. A hybrid latch can be
+/// latched optimistically, pessimistically in shared or exclusive mode:
+///   - latch optimistically: for low-contention scenarios. At this mode, the
+///     version number is used to detech latch contention.
+///   - latch pessimistically in shared mode: for high-contention scenarios.
+///   - latch pessimistically in exclusive mode: for high-contention scenarios.
+class alignas(64) HybridLatch {
+private:
+  atomic<u64> mVersion = 0;
+
+  std::shared_mutex mMutex;
 
 public:
   template <typename... Args>
-  HybridLatch(Args&&... args) : version(std::forward<Args>(args)...) {
+  HybridLatch(Args&&... args) : mVersion(std::forward<Args>(args)...) {
   }
 
 public:
-  atomic<u64>* operator->() {
-    return &version;
+  void LockExclusively() {
+    DCHECK(!IsLockedExclusively());
+    mMutex.lock();
+    mVersion.fetch_add(LATCH_EXCLUSIVE_BIT);
   }
 
-  atomic<u64>* ptr() {
-    return &version;
+  void UnlockExclusively() {
+    DCHECK(IsLockedExclusively());
+    mVersion.fetch_add(LATCH_EXCLUSIVE_BIT, std::memory_order_release);
+    mMutex.unlock();
   }
 
-  atomic<u64>& ref() {
-    return version;
+  u64 GetOptimisticVersion() {
+    return mVersion.load();
   }
 
-  bool isExclusivelyLatched() {
-    return (version & LATCH_EXCLUSIVE_BIT) == LATCH_EXCLUSIVE_BIT;
+  bool IsLockedExclusively() {
+    return HasExclusiveMark(mVersion.load());
   }
+
+private:
+  friend class Guard;
 };
 
 static_assert(sizeof(HybridLatch) == 64, "");
@@ -59,9 +78,13 @@ enum class LATCH_FALLBACK_MODE : u8 {
   SHOULD_NOT_HAPPEN = 4
 };
 
+/// Like std::unique_lock, std::shared_lock, std::lock_guard, this Guard is used
+/// together with HybridLatch to provide various lock mode.
+///
+/// TODO(jian.z): should we unlock the guard when it's destroied?
 class Guard {
 public:
-  HybridLatch* latch = nullptr;
+  HybridLatch* mLatch = nullptr;
 
   GUARD_STATE state = GUARD_STATE::UNINITIALIZED;
 
@@ -70,25 +93,22 @@ public:
   bool mEncounteredContention = false;
 
 public:
-  Guard(HybridLatch& latch) : latch(&latch) {
-  }
-
-  Guard(HybridLatch* latch) : latch(latch) {
+  Guard(HybridLatch* latch) : mLatch(latch) {
   }
 
   // Manually construct a guard from a snapshot. Use with caution!
   Guard(HybridLatch& latch, const u64 last_seen_version)
-      : latch(&latch), state(GUARD_STATE::OPTIMISTIC),
+      : mLatch(&latch), state(GUARD_STATE::OPTIMISTIC),
         version(last_seen_version), mEncounteredContention(false) {
   }
 
   Guard(HybridLatch& latch, GUARD_STATE state)
-      : latch(&latch), state(state), version(latch.ref().load()) {
+      : mLatch(&latch), state(state), version(latch.mVersion.load()) {
   }
 
   // Move constructor
   Guard(Guard&& other)
-      : latch(other.latch), state(other.state), version(other.version),
+      : mLatch(other.mLatch), state(other.state), version(other.version),
         mEncounteredContention(other.mEncounteredContention) {
     other.state = GUARD_STATE::MOVED;
   }
@@ -97,7 +117,7 @@ public:
   Guard& operator=(Guard&& other) {
     unlock();
 
-    latch = other.latch;
+    mLatch = other.mLatch;
     state = other.state;
     version = other.version;
     mEncounteredContention = other.mEncounteredContention;
@@ -107,8 +127,9 @@ public:
 
 public:
   void JumpIfModifiedByOthers() {
-    assert(state == GUARD_STATE::OPTIMISTIC || version == latch->ref().load());
-    if (state == GUARD_STATE::OPTIMISTIC && version != latch->ref().load()) {
+    DCHECK(state == GUARD_STATE::OPTIMISTIC ||
+           version == mLatch->mVersion.load());
+    if (state == GUARD_STATE::OPTIMISTIC && version != mLatch->mVersion.load()) {
       jumpmu::jump();
     }
   }
@@ -116,45 +137,41 @@ public:
   inline void unlock() {
     if (state == GUARD_STATE::EXCLUSIVE) {
       version += LATCH_EXCLUSIVE_BIT;
-      latch->ref().store(version, std::memory_order_release);
-      latch->mutex.unlock();
+      mLatch->mVersion.store(version, std::memory_order_release);
+      mLatch->mMutex.unlock();
       state = GUARD_STATE::OPTIMISTIC;
     } else if (state == GUARD_STATE::SHARED) {
-      latch->mutex.unlock_shared();
+      mLatch->mMutex.unlock_shared();
       state = GUARD_STATE::OPTIMISTIC;
     }
   }
 
   inline void toOptimisticSpin() {
-    assert(state == GUARD_STATE::UNINITIALIZED && latch != nullptr &&
-           state != GUARD_STATE::MOVED);
-    version = latch->ref().load();
-    if ((version & LATCH_EXCLUSIVE_BIT) == LATCH_EXCLUSIVE_BIT) {
+    DCHECK(state == GUARD_STATE::UNINITIALIZED && mLatch != nullptr);
+    version = mLatch->mVersion.load();
+    while (HasExclusiveMark(version)) {
       mEncounteredContention = true;
-      do {
-        version = latch->ref().load();
-      } while ((version & LATCH_EXCLUSIVE_BIT) == LATCH_EXCLUSIVE_BIT);
+      version = mLatch->mVersion.load();
     }
     state = GUARD_STATE::OPTIMISTIC;
   }
 
   inline void toOptimisticOrJump() {
-    assert(state == GUARD_STATE::UNINITIALIZED && latch != nullptr);
-    version = latch->ref().load();
-    if ((version & LATCH_EXCLUSIVE_BIT) == LATCH_EXCLUSIVE_BIT) {
+    DCHECK(state == GUARD_STATE::UNINITIALIZED && mLatch != nullptr);
+    version = mLatch->mVersion.load();
+    if (HasExclusiveMark(version)) {
+      mEncounteredContention = true;
       jumpmu::jump();
-    } else {
-      state = GUARD_STATE::OPTIMISTIC;
     }
+    state = GUARD_STATE::OPTIMISTIC;
   }
 
   inline void toOptimisticOrShared() {
-    assert(state == GUARD_STATE::UNINITIALIZED && latch != nullptr &&
-           state != GUARD_STATE::MOVED);
-    version = latch->ref().load();
-    if ((version & LATCH_EXCLUSIVE_BIT) == LATCH_EXCLUSIVE_BIT) {
-      latch->mutex.lock_shared();
-      version = latch->ref().load();
+    DCHECK(state == GUARD_STATE::UNINITIALIZED && mLatch != nullptr);
+    version = mLatch->mVersion.load();
+    if (HasExclusiveMark(version)) {
+      mLatch->mMutex.lock_shared();
+      version = mLatch->mVersion.load();
       state = GUARD_STATE::SHARED;
       mEncounteredContention = true;
     } else {
@@ -163,13 +180,12 @@ public:
   }
 
   inline void toOptimisticOrExclusive() {
-    assert(state == GUARD_STATE::UNINITIALIZED && latch != nullptr &&
-           state != GUARD_STATE::MOVED);
-    version = latch->ref().load();
-    if ((version & LATCH_EXCLUSIVE_BIT) == LATCH_EXCLUSIVE_BIT) {
-      latch->mutex.lock();
-      version = latch->ref().load() + LATCH_EXCLUSIVE_BIT;
-      latch->ref().store(version, std::memory_order_release);
+    DCHECK(state == GUARD_STATE::UNINITIALIZED && mLatch != nullptr);
+    version = mLatch->mVersion.load();
+    if (HasExclusiveMark(version)) {
+      mLatch->mMutex.lock();
+      version = mLatch->mVersion.load() + LATCH_EXCLUSIVE_BIT;
+      mLatch->mVersion.store(version, std::memory_order_release);
       state = GUARD_STATE::EXCLUSIVE;
       mEncounteredContention = true;
     } else {
@@ -177,37 +193,39 @@ public:
     }
   }
 
-  inline void toExclusive() {
-    assert(state != GUARD_STATE::SHARED);
-    if (state == GUARD_STATE::EXCLUSIVE)
+  inline void ToExclusiveMayJump() {
+    DCHECK(state != GUARD_STATE::SHARED);
+    if (state == GUARD_STATE::EXCLUSIVE) {
       return;
+    }
     if (state == GUARD_STATE::OPTIMISTIC) {
-      const u64 new_version = version + LATCH_EXCLUSIVE_BIT;
+      const u64 newVersion = version + LATCH_EXCLUSIVE_BIT;
       u64 expected = version;
-      latch->mutex.lock(); // changed from try_lock because of possible retries
-                           // b/c lots of readers
-      if (!latch->ref().compare_exchange_strong(expected, new_version)) {
-        latch->mutex.unlock();
+      // changed from try_lock because of possible retries b/c lots of readers
+      mLatch->mMutex.lock();
+      if (!mLatch->mVersion.compare_exchange_strong(expected, newVersion)) {
+        mLatch->mMutex.unlock();
         jumpmu::jump();
       }
-      version = new_version;
+      version = newVersion;
       state = GUARD_STATE::EXCLUSIVE;
     } else {
-      latch->mutex.lock();
-      version = latch->ref().load() + LATCH_EXCLUSIVE_BIT;
-      latch->ref().store(version, std::memory_order_release);
+      mLatch->mMutex.lock();
+      version = mLatch->mVersion.load() + LATCH_EXCLUSIVE_BIT;
+      mLatch->mVersion.store(version, std::memory_order_release);
       state = GUARD_STATE::EXCLUSIVE;
     }
   }
 
-  inline void toShared() {
-    assert(state == GUARD_STATE::OPTIMISTIC || state == GUARD_STATE::SHARED);
-    if (state == GUARD_STATE::SHARED)
+  inline void ToSharedMayJump() {
+    DCHECK(state == GUARD_STATE::OPTIMISTIC || state == GUARD_STATE::SHARED);
+    if (state == GUARD_STATE::SHARED) {
       return;
+    }
     if (state == GUARD_STATE::OPTIMISTIC) {
-      latch->mutex.lock_shared();
-      if (latch->ref().load() != version) {
-        latch->mutex.unlock_shared();
+      mLatch->mMutex.lock_shared();
+      if (mLatch->mVersion.load() != version) {
+        mLatch->mMutex.unlock_shared();
         jumpmu::jump();
       }
       state = GUARD_STATE::SHARED;
@@ -217,31 +235,31 @@ public:
   }
 
   // For buffer management
-  inline void tryToExclusive() {
-    assert(state == GUARD_STATE::OPTIMISTIC);
-    const u64 new_version = version + LATCH_EXCLUSIVE_BIT;
+  inline void TryToExclusiveMayJump() {
+    DCHECK(state == GUARD_STATE::OPTIMISTIC);
+    const u64 newVersion = version + LATCH_EXCLUSIVE_BIT;
     u64 expected = version;
 
-    if (!latch->mutex.try_lock()) {
+    if (!mLatch->mMutex.try_lock()) {
       jumpmu::jump();
     }
 
-    if (!latch->ref().compare_exchange_strong(expected, new_version)) {
-      latch->mutex.unlock();
+    if (!mLatch->mVersion.compare_exchange_strong(expected, newVersion)) {
+      mLatch->mMutex.unlock();
       jumpmu::jump();
     }
 
-    version = new_version;
+    version = newVersion;
     state = GUARD_STATE::EXCLUSIVE;
   }
 
-  inline void tryToShared() {
-    assert(state == GUARD_STATE::OPTIMISTIC);
-    if (!latch->mutex.try_lock_shared()) {
+  inline void TryToSharedMayJump() {
+    DCHECK(state == GUARD_STATE::OPTIMISTIC);
+    if (!mLatch->mMutex.try_lock_shared()) {
       jumpmu::jump();
     }
-    if (latch->ref().load() != version) {
-      latch->mutex.unlock_shared();
+    if (mLatch->mVersion.load() != version) {
+      mLatch->mMutex.unlock_shared();
       jumpmu::jump();
     }
     state = GUARD_STATE::SHARED;

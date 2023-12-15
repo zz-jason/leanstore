@@ -32,14 +32,23 @@ class BMTable;
 
 namespace storage {
 
-// TODO: revisit the comments after switching to clock replacement strategy
-// Notes on Synchronization in Buffer Manager
-// Terminology: PPT: Page Provider Thread, WT: Worker Thread. P: Parent, C:
-// Child, M: Cooling stage mutex Latching order for all PPT operations
-// (unswizzle, evict): M -> P -> C Latching order for all WT operations:
-// swizzle: [unlock P ->] M -> P ->C, coolPage: P -> C -> M coolPage conflict
-// with this order which could lead to a deadlock which we can mitigate by
-// jumping instead of blocking in BMPlainGuard [WIP]
+/// Notes on Synchronization in Buffer Manager.
+/// Terminology:
+///   PPT: Page Provider Thread
+///   WT: Worker Thread
+///   P: Parent
+///   C: Child
+///   M: Cooling stage mutex
+///
+/// Latching order for all PPT operations (unswizzle, evict):
+///   M -> P -> C
+/// Latching order for all WT operations:
+///   swizzle: [unlock P ->] M -> P ->C
+///   coolPage: P -> C -> M, coolPage conflict with this order which could lead
+///   to a deadlock which we can mitigate by jumping instead of blocking in
+///   BMPlainGuard [WIP]
+///
+/// TODO: revisit the comments after switching to clock replacement strategy
 class BufferManager {
 private:
   friend class leanstore::LeanStore;
@@ -72,12 +81,16 @@ public:
   ~BufferManager();
 
 public:
+  /// Get the partition ID of the page.
   u64 getPartitionID(PID);
 
-  Partition& randomPartition();
-
+  /// Get the partition of the page.
   Partition& getPartition(PID);
 
+  /// Randomly pick a partition.
+  Partition& randomPartition();
+
+  /// Randomly pick a buffer frame.
   BufferFrame& randomBufferFrame();
 
   /// Get a buffer frame from a random partition for new page.
@@ -117,21 +130,32 @@ public:
   /// the pageId-th page in the underlying file:
   ///   1. offset of pageId-th page: pageId * PAGE_SIZE
   ///   2. size of each page: PAGE_SIZE
-  void readPageSync(PID pageId, void* destination);
+  void ReadPageSync(PID pageId, void* destination);
 
-  void fDataSync();
+  /// Reads the page at pageId, returns the buffer frame containing that page.
+  /// Usually called by recovery.
+  BufferFrame& ReadPageSync(PID pageId);
+
+  /// Write page to disk.
+  /// usually called by recovery.
+  void WritePageSync(BufferFrame&);
+
+  /// Sync all the data written to disk, harden all the writes on mPageFd
+  void SyncAllPageWrites();
 
   void StartBufferFrameProviders();
 
   void StopBufferFrameProviders();
 
-  void writeAllBufferFrames();
+  /// Checkpoints a buffer frame to disk. The buffer frame content is copied to
+  /// a tmp memory buffer, swips in the tmp memory buffer are changed to page
+  /// IDs, then the tmp memory buffer is written to the disk.
+  void CheckpointBufferFrame(BufferFrame& bf);
 
-  void WriteBufferFrame(BufferFrame& bf);
+  /// Checkpoints all the buffer frames.
+  void CheckpointAllBufferFrames();
 
   void RecoveryFromDisk();
-
-  BufferFrame& ReadPageToRecover(PID pageId);
 
   StringMap serialize();
 

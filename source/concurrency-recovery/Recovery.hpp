@@ -33,6 +33,9 @@ private:
   /// Stores the active transaction and the offset to the last created WALEntry.
   std::map<TXID, u64> mActiveTxTable;
 
+  /// Stores all the pages read from disk during the recovery process.
+  std::map<PID, BufferFrame*> mResolvedPages;
+
 public:
   Recovery(s32 fd, u64 offset, u64 size)
       : mWalFd(fd), mWalStartOffset(offset), mWalSize(size) {
@@ -82,6 +85,9 @@ private:
   /// to traverse the log file in reverse order using the previous sequence
   /// numbers, undoing all actions taken within the specific transaction.
   bool Undo();
+
+  /// Return the buffer frame containing the required dirty page
+  BufferFrame& ResolvePage(PID pageId);
 
   ssize_t ReadWalEntry(s64 entryOffset, size_t entrySize, void* destination);
 };
@@ -147,13 +153,9 @@ inline void Recovery::Analysis() {
       DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
       mActiveTxTable[walEntry->mTxId] = offset;
 
-      // TODO(jian.z): how to read the same page from disk only once?
-      auto& bf =
-          BufferManager::sInstance->ReadPageToRecover(complexEntry->mPageId);
+      auto& bf = ResolvePage(complexEntry->mPageId);
       DCHECK(bf.header.mPageId == complexEntry->mPageId);
       DCHECK(bf.page.mBTreeId == complexEntry->mTreeId);
-
-      SCOPED_DEFER(bf.header.mKeepInMemory = false);
 
       if (complexEntry->gsn > bf.page.mGSN &&
           mDirtyPageTable.find(complexEntry->mPageId) ==
@@ -198,13 +200,8 @@ inline void Recovery::Redo() {
       continue;
     }
 
-    // TODO(jian.z): The page should keep in memory during the redo phase,
-    // otherwise the previous redo operation on that page in memory is lost
-    //
-    // TODO(jian.z): redo the changes on the page
-    //
-    auto& bf =
-        BufferManager::sInstance->ReadPageToRecover(complexEntry->mPageId);
+    // TODO(jian.z): redo previous operations on the page
+    auto& bf = ResolvePage(complexEntry->mPageId);
     DCHECK(bf.header.mPageId == complexEntry->mPageId);
     DCHECK(bf.page.mBTreeId == complexEntry->mTreeId);
     SCOPED_DEFER(bf.header.mKeepInMemory = false);
@@ -212,10 +209,28 @@ inline void Recovery::Redo() {
     offset += bytesRead;
     continue;
   }
+
+  // Write all the resolved pages to disk
+  for (auto it = mResolvedPages.begin(); it != mResolvedPages.end(); it++) {
+    BufferManager::sInstance->WritePageSync(*it->second);
+  }
 }
 
 inline bool Recovery::Undo() {
   return false;
+}
+
+inline BufferFrame& Recovery::ResolvePage(PID pageId) {
+  auto it = mResolvedPages.find(pageId);
+  if (it != mResolvedPages.end()) {
+    return *it->second;
+  }
+
+  auto& bf = BufferManager::sInstance->ReadPageSync(pageId);
+  // prevent the buffer frame from being evicted by buffer frame providers
+  bf.header.mKeepInMemory = true;
+  mResolvedPages.emplace(pageId, &bf);
+  return bf;
 }
 
 inline ssize_t Recovery::ReadWalEntry(s64 offset, size_t nbytes,
