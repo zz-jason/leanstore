@@ -23,7 +23,7 @@ public:
     as_it_was_witnessed.JumpIfModifiedByOthers();
     mGuardedLeaf =
         HybridPageGuard<BTreeNode>(std::move(as_it_was_witnessed), bf);
-    mGuardedLeaf.toExclusive();
+    mGuardedLeaf.ToExclusiveMayJump();
   }
 
   void markAsDirty() {

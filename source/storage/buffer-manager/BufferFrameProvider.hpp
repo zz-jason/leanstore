@@ -254,7 +254,7 @@ inline void BufferFrameProvider::EvictFlushedBf(
 
   DCHECK(parentHandler.mParentGuard.state == GUARD_STATE::OPTIMISTIC);
   BMExclusiveUpgradeIfNeeded parentWriteGuard(parentHandler.mParentGuard);
-  optimisticGuard.guard.toExclusive();
+  optimisticGuard.guard.ToExclusiveMayJump();
 
   if (FLAGS_crc_check && cooledBf.header.crc) {
     DCHECK(utils::CRC(cooledBf.page.mPayload, EFFECTIVE_PAGE_SIZE) ==
@@ -270,9 +270,7 @@ inline void BufferFrameProvider::EvictFlushedBf(
 
   // Reclaim buffer frame
   cooledBf.reset();
-  cooledBf.header.mLatch->fetch_add(LATCH_EXCLUSIVE_BIT,
-                                    std::memory_order_release);
-  cooledBf.header.mLatch.mutex.unlock();
+  cooledBf.header.mLatch.UnlockExclusively();
 
   mFreedBfsBatch.add(cooledBf);
   if (mFreedBfsBatch.size() <= std::min<u64>(FLAGS_worker_threads, 128)) {
@@ -423,7 +421,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
             TreeRegistry::sInstance->findParent(btreeId, *coolCandidate);
 
         DCHECK(parentHandler.mParentGuard.state == GUARD_STATE::OPTIMISTIC);
-        DCHECK(parentHandler.mParentGuard.latch !=
+        DCHECK(parentHandler.mParentGuard.mLatch !=
                reinterpret_cast<HybridLatch*>(0x99));
         COUNTERS_BLOCK() {
           findParentEnd = std::chrono::high_resolution_clock::now();
@@ -459,7 +457,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
           DCHECK(coolCandidate->header.state == STATE::HOT);
           DCHECK(coolCandidate->header.mIsBeingWrittenBack == false);
           DCHECK(parentHandler.mParentGuard.version ==
-                 parentHandler.mParentGuard.latch->ref().load());
+                 parentHandler.mParentGuard.mLatch->GetOptimisticVersion());
           DCHECK(parentHandler.mChildSwip.bf == coolCandidate);
 
           // mark the buffer frame in cool state
@@ -543,7 +541,7 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
       BMExclusiveGuard exclusiveGuard(optimisticGuard);
       DCHECK(!cooledBf->header.mIsBeingWrittenBack);
       cooledBf->header.mIsBeingWrittenBack.store(true,
-                                                  std::memory_order_release);
+                                                 std::memory_order_release);
 
       // performs crc check if necessary
       if (FLAGS_crc_check) {
@@ -602,8 +600,7 @@ inline void BufferFrameProvider::FlushAndRecycleBufferFrames(
           JUMPMU_TRY() {
             BMOptimisticGuard optimisticGuard(writtenBf.header.mLatch);
             if (writtenBf.header.state == STATE::COOL &&
-                !writtenBf.header.mIsBeingWrittenBack &&
-                !writtenBf.isDirty()) {
+                !writtenBf.header.mIsBeingWrittenBack && !writtenBf.isDirty()) {
               EvictFlushedBf(writtenBf, optimisticGuard, targetPartition);
             }
           }

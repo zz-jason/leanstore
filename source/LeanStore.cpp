@@ -170,7 +170,8 @@ LeanStore::~LeanStore() {
 
   // persist all the metadata and pages on exit
   SerializeMeta();
-  BufferManager::sInstance->writeAllBufferFrames();
+  BufferManager::sInstance->CheckpointAllBufferFrames();
+  BufferManager::sInstance->SyncAllPageWrites();
 
   // destroy and stop all foreground workers
   cr::CRManager::sInstance = nullptr;

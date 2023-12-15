@@ -411,11 +411,12 @@ inline void BTreeGeneric::Checkpoint(BufferFrame& bf, void* dest) {
 
 inline StringMap BTreeGeneric::serialize() {
   DCHECK(mMetaNodeSwip.AsBufferFrame().page.mBTreeId == mTreeId);
-  BufferManager::sInstance->WriteBufferFrame(mMetaNodeSwip.AsBufferFrame());
+  auto& metaBf = mMetaNodeSwip.AsBufferFrame();
+  auto metaPageId = metaBf.header.mPageId;
+  BufferManager::sInstance->CheckpointBufferFrame(metaBf);
   return {{TREE_ID, std::to_string(mTreeId)},
           {HEIGHT, std::to_string(mHeight.load())},
-          {META_PAGE_ID,
-           std::to_string(mMetaNodeSwip.AsBufferFrame().header.mPageId)}};
+          {META_PAGE_ID, std::to_string(metaPageId)}};
 }
 
 inline void BTreeGeneric::deserialize(StringMap map) {
@@ -479,9 +480,9 @@ inline void BTreeGeneric::findLeafAndLatch(
     JUMPMU_TRY() {
       FindLeafCanJump<mode>(key, targetGuard);
       if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
-        targetGuard.toExclusive();
+        targetGuard.ToExclusiveMayJump();
       } else {
-        targetGuard.toShared();
+        targetGuard.ToSharedMayJump();
       }
       JUMPMU_RETURN;
     }

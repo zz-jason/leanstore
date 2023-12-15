@@ -1,6 +1,6 @@
 #pragma once
-#include "Units.hpp"
 #include "Config.hpp"
+#include "Units.hpp"
 #include "sync-primitives/Latch.hpp"
 #include "utils/JumpMU.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -23,7 +23,7 @@ class BMOptimisticGuard {
 public:
   Guard guard;
 
-  BMOptimisticGuard(HybridLatch& lock) : guard(lock) {
+  BMOptimisticGuard(HybridLatch& lock) : guard(&lock) {
     guard.toOptimisticOrJump();
   }
 
@@ -50,7 +50,7 @@ private:
 public:
   BMExclusiveGuard(BMOptimisticGuard& optimisiticGuard)
       : mOptimisticGuard(optimisiticGuard) {
-    mOptimisticGuard.guard.tryToExclusive();
+    mOptimisticGuard.guard.TryToExclusiveMayJump();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
@@ -70,7 +70,7 @@ private:
 public:
   BMExclusiveUpgradeIfNeeded(Guard& guard)
       : guard(guard), was_exclusive(guard.state == GUARD_STATE::EXCLUSIVE) {
-    guard.tryToExclusive();
+    guard.TryToExclusiveMayJump();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
@@ -91,7 +91,7 @@ private:
 public:
   BMSharedGuard(BMOptimisticGuard& optimisiticGuard)
       : mOptimisticGuard(optimisiticGuard) {
-    mOptimisticGuard.guard.tryToShared();
+    mOptimisticGuard.guard.TryToSharedMayJump();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 

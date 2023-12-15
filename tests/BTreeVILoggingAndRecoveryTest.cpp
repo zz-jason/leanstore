@@ -31,6 +31,15 @@ protected:
 };
 
 TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
+  auto bfCondition = [&](BufferFrame& bf) { return !bf.isFree(); };
+  auto bfAction = [&](BufferFrame& bf) {
+    rapidjson::Document doc(rapidjson::kObjectType);
+    // doc.SetObject;
+    bf.ToJSON(&doc, doc.GetAllocator());
+    auto jsonStr = leanstore::utils::JsonToStr(&doc);
+    LOG(INFO) << "Not-free BufferFrame(" << reinterpret_cast<void*>(&bf)
+              << "): " << jsonStr;
+  };
   FLAGS_data_dir = "/tmp/BTreeVILoggingAndRecoveryTest/SerializeAndDeserialize";
   std::filesystem::path dirPath = FLAGS_data_dir;
   std::filesystem::remove_all(dirPath);
@@ -68,6 +77,9 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
     EXPECT_NE(btree, nullptr);
   });
 
+  LOG(INFO) << "Buffer pool after registering tree";
+  BufferManager::sInstance->DoWithBufferFrameIf(bfCondition, bfAction);
+
   // insert some values
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     for (size_t i = 0; i < numKVs; ++i) {
@@ -77,6 +89,9 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
                 OP_RESULT::OK);
     }
   });
+
+  LOG(INFO) << "Buffer pool after inserting values on the tree";
+  BufferManager::sInstance->DoWithBufferFrameIf(bfCondition, bfAction);
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     rapidjson::Document doc(rapidjson::kObjectType);
@@ -92,6 +107,9 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
   mLeanStore = std::make_unique<leanstore::LeanStore>();
   EXPECT_TRUE(mLeanStore->GetBTreeVI(btreeName, &btree));
   EXPECT_NE(btree, nullptr);
+
+  LOG(INFO) << "Buffer pool after recovering";
+  BufferManager::sInstance->DoWithBufferFrameIf(bfCondition, bfAction);
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     rapidjson::Document doc(rapidjson::kObjectType);
@@ -113,6 +131,15 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
       EXPECT_EQ(copiedValue, expectedVal);
     }
   });
+
+  LOG(INFO) << "Buffer pool before unregistering";
+  BufferManager::sInstance->DoWithBufferFrameIf(bfCondition, bfAction);
+
+  cr::CRManager::sInstance->scheduleJobSync(
+      1, [&]() { mLeanStore->UnRegisterBTreeVI(btreeName); });
+
+  LOG(INFO) << "Buffer pool after unregistering";
+  BufferManager::sInstance->DoWithBufferFrameIf(bfCondition, bfAction);
 }
 
 /*
@@ -121,6 +148,11 @@ TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
   std::filesystem::path dirPath = FLAGS_data_dir;
   std::filesystem::remove_all(dirPath);
   std::filesystem::create_directories(dirPath);
+
+  dirPath = leanstore::GetLogDir();
+  std::filesystem::remove_all(dirPath);
+  std::filesystem::create_directories(dirPath);
+
   FLAGS_worker_threads = 2;
   FLAGS_recover = false;
   mLeanStore = std::make_unique<leanstore::LeanStore>();
@@ -156,8 +188,8 @@ TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
   });
 
   // skip dumpping buffer frames on exit
-  LS_DEBUG_ENABLE("skip_writeAllBufferFrames");
-  SCOPED_DEFER(LS_DEBUG_DISABLE("skip_writeAllBufferFrames"));
+  LS_DEBUG_ENABLE("skip_CheckpointAllBufferFrames");
+  SCOPED_DEFER(LS_DEBUG_DISABLE("skip_CheckpointAllBufferFrames"));
 
   mLeanStore.reset(nullptr);
 

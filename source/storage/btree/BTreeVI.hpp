@@ -295,7 +295,7 @@ public:
       return BTreeGeneric::checkSpaceUtilization(bf);
     }
 
-    Guard bfGuard(bf.header.mLatch);
+    Guard bfGuard(&bf.header.mLatch);
     bfGuard.toOptimisticOrJump();
     if (bf.page.mBTreeId != mTreeId) {
       jumpmu::jump();
@@ -307,7 +307,7 @@ public:
       return BTreeGeneric::checkSpaceUtilization(bf);
     }
 
-    guardedNode.toExclusive();
+    guardedNode.ToExclusiveMayJump();
     guardedNode.incrementGSN();
 
     for (u16 i = 0; i < guardedNode->mNumSeps; i++) {

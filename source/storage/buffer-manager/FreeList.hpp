@@ -24,7 +24,7 @@ public:
 
 inline void FreeList::PushFront(BufferFrame& bf) {
   PARANOID(bf.header.state == STATE::FREE);
-  assert(!bf.header.mLatch.isExclusivelyLatched());
+  assert(!bf.header.mLatch.IsLockedExclusively());
 
   JumpScoped<std::unique_lock<std::mutex>> guard(mutex);
   bf.header.mNextFreeBf = mHead;

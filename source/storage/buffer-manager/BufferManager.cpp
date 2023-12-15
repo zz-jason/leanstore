@@ -123,9 +123,9 @@ void BufferManager::deserialize(StringMap map) {
   }
 }
 
-void BufferManager::writeAllBufferFrames() {
-  LS_DEBUG_EXECUTE("skip_writeAllBufferFrames", {
-    LOG(ERROR) << "writeAllBufferFrames skipped due to debug flag";
+void BufferManager::CheckpointAllBufferFrames() {
+  LS_DEBUG_EXECUTE("skip_CheckpointAllBufferFrames", {
+    LOG(ERROR) << "CheckpointAllBufferFrames skipped due to debug flag";
     return;
   });
 
@@ -134,27 +134,27 @@ void BufferManager::writeAllBufferFrames() {
     Page page;
     for (u64 i = begin; i < end; i++) {
       auto& bf = mBfs[i];
-      bf.header.mLatch.mutex.lock();
+      bf.header.mLatch.LockExclusively();
       if (!bf.isFree()) {
         TreeRegistry::sInstance->Checkpoint(bf.page.mBTreeId, bf, &page);
         s64 ret =
             pwrite(mPageFd, &page, PAGE_SIZE, bf.header.mPageId * PAGE_SIZE);
         DCHECK(ret == PAGE_SIZE);
       }
-      bf.header.mLatch.mutex.unlock();
+      bf.header.mLatch.UnlockExclusively();
     }
   });
 }
 
-void BufferManager::WriteBufferFrame(BufferFrame& bf) {
+void BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
   Page page;
-  bf.header.mLatch.mutex.lock();
+  bf.header.mLatch.LockExclusively();
   if (!bf.isFree()) {
     TreeRegistry::sInstance->Checkpoint(bf.page.mBTreeId, bf, &page);
     s64 ret = pwrite(mPageFd, &page, PAGE_SIZE, bf.header.mPageId * PAGE_SIZE);
     ENSURE(ret == PAGE_SIZE);
   }
-  bf.header.mLatch.mutex.unlock();
+  bf.header.mLatch.UnlockExclusively();
 }
 
 void BufferManager::RecoveryFromDisk() {
@@ -162,27 +162,6 @@ void BufferManager::RecoveryFromDisk() {
       leanstore::cr::CRManager::sInstance->mWalFd, 0,
       leanstore::cr::CRManager::sInstance->mWalSize);
   recovery->Run();
-}
-
-BufferFrame& BufferManager::ReadPageToRecover(PID pageId) {
-  HybridLatch dummyLatch;
-  Guard dummyGuard(&dummyLatch);
-  dummyGuard.toOptimisticSpin();
-
-  Swip<BufferFrame> swip;
-  swip.evict(pageId);
-
-  for (auto failCounter = 100; failCounter > 0; failCounter--) {
-    JUMPMU_TRY() {
-      swip = ResolveSwipMayJump(dummyGuard, swip);
-      swip.AsBufferFrame().header.mKeepInMemory = true;
-      JUMPMU_RETURN swip.AsBufferFrame();
-    }
-    JUMPMU_CATCH() {
-    }
-  }
-
-  LOG(FATAL) << "Failed to read page, pageId=" << pageId;
 }
 
 u64 BufferManager::consumedPages() {
@@ -229,12 +208,10 @@ void BufferManager::reclaimPage(BufferFrame& bf) {
 
   if (bf.header.mIsBeingWrittenBack) {
     // DO NOTHING ! we have a garbage collector ;-)
-    bf.header.mLatch->fetch_add(LATCH_EXCLUSIVE_BIT, std::memory_order_release);
-    bf.header.mLatch.mutex.unlock();
+    bf.header.mLatch.UnlockExclusively();
   } else {
     bf.reset();
-    bf.header.mLatch->fetch_add(LATCH_EXCLUSIVE_BIT, std::memory_order_release);
-    bf.header.mLatch.mutex.unlock();
+    bf.header.mLatch.UnlockExclusively();
     partition.mFreeBfList.PushFront(bf);
   }
 }
@@ -280,7 +257,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(Guard& swipGuard,
   if (!frameHandler) {
     // 1. Randomly get a buffer frame from partitions
     BufferFrame& bf = randomPartition().mFreeBfList.PopFrontMayJump();
-    DCHECK(!bf.header.mLatch.isExclusivelyLatched());
+    DCHECK(!bf.header.mLatch.IsLockedExclusively());
     DCHECK(bf.header.state == STATE::FREE);
 
     // 2. Create an IO frame in the current partition
@@ -291,7 +268,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(Guard& swipGuard,
     inflightIOGuard->unlock();
 
     // 3. Read page at pageId to the target buffer frame
-    readPageSync(pageId, &bf.page);
+    ReadPageSync(pageId, &bf.page);
     // DLOG_IF(FATAL, bf.page.mMagicDebuging != pageId)
     //     << "Failed to read page, page corrupted";
     COUNTERS_BLOCK() {
@@ -366,7 +343,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(Guard& swipGuard,
     {
       // We have to exclusively lock the bf because the page provider thread
       // will try to evict them when its IO is done
-      DCHECK(!bf->header.mLatch.isExclusivelyLatched());
+      DCHECK(!bf->header.mLatch.IsLockedExclusively());
       DCHECK(bf->header.state == STATE::LOADED);
       BMOptimisticGuard bf_guard(bf->header.mLatch);
       BMExclusiveUpgradeIfNeeded swip_x_guard(swipGuard);
@@ -403,7 +380,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(Guard& swipGuard,
   assert(false);
 }
 
-void BufferManager::readPageSync(PID pageId, void* destination) {
+void BufferManager::ReadPageSync(PID pageId, void* destination) {
   DCHECK(u64(destination) % 512 == 0);
   s64 bytesLeft = PAGE_SIZE;
   do {
@@ -422,7 +399,38 @@ void BufferManager::readPageSync(PID pageId, void* destination) {
   }
 }
 
-void BufferManager::fDataSync() {
+BufferFrame& BufferManager::ReadPageSync(PID pageId) {
+  HybridLatch dummyLatch;
+  Guard dummyGuard(&dummyLatch);
+  dummyGuard.toOptimisticSpin();
+
+  Swip<BufferFrame> swip;
+  swip.evict(pageId);
+
+  for (auto failCounter = 100; failCounter > 0; failCounter--) {
+    JUMPMU_TRY() {
+      swip = ResolveSwipMayJump(dummyGuard, swip);
+      JUMPMU_RETURN swip.AsBufferFrame();
+    }
+    JUMPMU_CATCH() {
+    }
+  }
+
+  LOG(FATAL) << "Failed to read page, pageId=" << pageId;
+}
+
+void BufferManager::WritePageSync(BufferFrame& bf) {
+  Guard guardedBf(&bf.header.mLatch);
+  guardedBf.ToExclusiveMayJump();
+  auto pageId = bf.header.mPageId;
+  auto& partition = getPartition(pageId);
+  pwrite(mPageFd, &bf.page, PAGE_SIZE, bf.header.mPageId * PAGE_SIZE);
+  bf.reset();
+  guardedBf.unlock();
+  partition.mFreeBfList.PushFront(bf);
+}
+
+void BufferManager::SyncAllPageWrites() {
   fdatasync(mPageFd);
 }
 
@@ -456,11 +464,11 @@ void BufferManager::DoWithBufferFrameIf(
     DCHECK(action != nullptr);
     for (u64 i = begin; i < end; i++) {
       auto& bf = mBfs[i];
-      bf.header.mLatch.mutex.lock();
+      bf.header.mLatch.LockExclusively();
       if (condition(bf)) {
         action(bf);
       }
-      bf.header.mLatch.mutex.unlock();
+      bf.header.mLatch.UnlockExclusively();
     }
   });
 }
