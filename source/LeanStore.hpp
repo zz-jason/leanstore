@@ -138,8 +138,10 @@ public:
     auto graveyardName = "_" + name + "_graveyard";
     btree = dynamic_cast<storage::btree::BTreeGeneric*>(
         storage::TreeRegistry::sInstance->GetTree(graveyardName));
-    leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
-    storage::TreeRegistry::sInstance->UnregisterTree(graveyardName);
+    if (btree != nullptr) {
+      leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
+      storage::TreeRegistry::sInstance->UnregisterTree(graveyardName);
+    }
   }
 
 private:

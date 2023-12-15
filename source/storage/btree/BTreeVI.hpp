@@ -1,4 +1,3 @@
-// BTreeVI and BTreeVW are work in progress!
 #pragma once
 
 #include "BTreeLL.hpp"
@@ -11,8 +10,6 @@
 #include "utils/RandomGenerator.hpp"
 
 #include <set>
-
-using namespace leanstore::storage;
 
 namespace leanstore {
 namespace storage {

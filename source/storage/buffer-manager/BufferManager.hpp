@@ -46,44 +46,32 @@ private:
   friend class leanstore::profiling::BMTable;
 
 public:
+  /// All the managed buffer frames in the memory.
   BufferFrame* mBfs;
 
+  /// FD for disk files storing pages.
   const int mPageFd;
 
-  // Free Pages. We reserve these extra pages to prevent segfaults
+  /// Free Pages, reserved to to prevent segmentfaults.
   const u8 mNumSaftyBfs = 10;
 
   // total number of dram buffer frames
   u64 mNumBfs;
 
-  // For cooling and inflight io
+  /// For cooling and inflight io
   u64 mNumPartitions;
   u64 mPartitionsMask;
   std::vector<std::unique_ptr<Partition>> mPartitions;
+
+  /// All the buffer frame provider threads.
   std::vector<std::unique_ptr<BufferFrameProvider>> mBfProviders;
 
 public:
-  //---------------------------------------------------------------------------
-  // Constructor and Destructors
-  //---------------------------------------------------------------------------
   BufferManager(s32 pageFd);
+
   ~BufferManager();
 
 public:
-  //---------------------------------------------------------------------------
-  // Static fields
-  //---------------------------------------------------------------------------
-
-  // Global buffer manager singleton instance, to be initialized.
-  static std::unique_ptr<BufferManager> sInstance;
-
-  // Temporary hack: let workers evict the last page they used
-  static thread_local BufferFrame* sTlsLastReadBf;
-
-public:
-  //---------------------------------------------------------------------------
-  // Object utils
-  //---------------------------------------------------------------------------
   u64 getPartitionID(PID);
 
   Partition& randomPartition();
@@ -92,20 +80,21 @@ public:
 
   BufferFrame& randomBufferFrame();
 
-  /**
-   * Get a buffer frame from a random partition for a new page.
-   *
-   * NOTE: The buffer frame is initialized with an unused page ID, and is
-   * exclusively locked.
-   */
+  /// Get a buffer frame from a random partition for new page.
+  ///
+  /// NOTE: The buffer frame is initialized with an unused page ID, and is
+  /// exclusively locked.
   BufferFrame& AllocNewPage();
 
-  /// @brief Resolves the buffer frame pointed by the swipValue.
+  /// Resolves the buffer frame pointed by the swipValue.
+  ///
   /// @param swipGuard The latch guard on the owner of the swip. Usually a swip
   /// is owned by a btree node, and the node should be latched before resolve
   /// the swips of child nodes.
+  ///
   /// @param swipValue The swip value from which to resolve the buffer frame.
   /// Usually a swip represents a btree node.
+  ///
   /// @return The buffer frame regarding to the swip.
   inline BufferFrame* tryFastResolveSwip(Guard& swipGuard,
                                          Swip<BufferFrame>& swipValue) {
@@ -126,9 +115,8 @@ public:
   /// Reads the page at pageId to the destination buffer. All the pages are
   /// stored in one file (mPageFd), page id (pageId) determines the offset of
   /// the pageId-th page in the underlying file:
-  ///
-  /// offset of pageId-th page: pageId * PAGE_SIZE
-  /// size of each page: PAGE_SIZE
+  ///   1. offset of pageId-th page: pageId * PAGE_SIZE
+  ///   2. size of each page: PAGE_SIZE
   void readPageSync(PID pageId, void* destination);
 
   void fDataSync();
@@ -150,6 +138,17 @@ public:
   void deserialize(StringMap map);
 
   u64 consumedPages();
+
+  /// Do something on all the buffer frames which satisify the condition
+  void DoWithBufferFrameIf(std::function<bool(BufferFrame& bf)> condition,
+                           std::function<void(BufferFrame& bf)> action);
+
+public:
+  /// Global buffer manager singleton instance, lazily initialized.
+  static std::unique_ptr<BufferManager> sInstance;
+
+  /// Temporary hack: let workers evict the last page they used
+  static thread_local BufferFrame* sTlsLastReadBf;
 };
 
 } // namespace storage

@@ -448,5 +448,22 @@ BufferManager::~BufferManager() {
   munmap(mBfs, totalMemSize);
 }
 
+void BufferManager::DoWithBufferFrameIf(
+    std::function<bool(BufferFrame& bf)> condition,
+    std::function<void(BufferFrame& bf)> action) {
+  utils::Parallelize::parallelRange(mNumBfs, [&](u64 begin, u64 end) {
+    DCHECK(condition != nullptr);
+    DCHECK(action != nullptr);
+    for (u64 i = begin; i < end; i++) {
+      auto& bf = mBfs[i];
+      bf.header.mLatch.mutex.lock();
+      if (condition(bf)) {
+        action(bf);
+      }
+      bf.header.mLatch.mutex.unlock();
+    }
+  });
+}
+
 } // namespace storage
 } // namespace leanstore
