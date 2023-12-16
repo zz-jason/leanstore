@@ -1,7 +1,7 @@
 #pragma once
 #include "Config.hpp"
 #include "Units.hpp"
-#include "sync-primitives/Latch.hpp"
+#include "sync-primitives/HybridGuard.hpp"
 #include "utils/JumpMU.hpp"
 #include "utils/RandomGenerator.hpp"
 
