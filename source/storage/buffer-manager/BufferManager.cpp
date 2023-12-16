@@ -217,7 +217,7 @@ void BufferManager::reclaimPage(BufferFrame& bf) {
 }
 
 // Returns a non-latched BufguardedSwipferFrame, called by worker threads
-BufferFrame* BufferManager::ResolveSwipMayJump(Guard& swipGuard,
+BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
                                                Swip<BufferFrame>& swipValue) {
   if (swipValue.isHOT()) {
     // Resolve swip from hot state
@@ -401,7 +401,7 @@ void BufferManager::ReadPageSync(PID pageId, void* destination) {
 
 BufferFrame& BufferManager::ReadPageSync(PID pageId) {
   HybridLatch dummyLatch;
-  Guard dummyGuard(&dummyLatch);
+  HybridGuard dummyGuard(&dummyLatch);
   dummyGuard.toOptimisticSpin();
 
   Swip<BufferFrame> swip;
@@ -420,7 +420,7 @@ BufferFrame& BufferManager::ReadPageSync(PID pageId) {
 }
 
 void BufferManager::WritePageSync(BufferFrame& bf) {
-  Guard guardedBf(&bf.header.mLatch);
+  HybridGuard guardedBf(&bf.header.mLatch);
   guardedBf.ToExclusiveMayJump();
   auto pageId = bf.header.mPageId;
   auto& partition = getPartition(pageId);

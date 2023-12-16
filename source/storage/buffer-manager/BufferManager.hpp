@@ -109,7 +109,7 @@ public:
   /// Usually a swip represents a btree node.
   ///
   /// @return The buffer frame regarding to the swip.
-  inline BufferFrame* tryFastResolveSwip(Guard& swipGuard,
+  inline BufferFrame* tryFastResolveSwip(HybridGuard& swipGuard,
                                          Swip<BufferFrame>& swipValue) {
     if (swipValue.isHOT()) {
       BufferFrame& bf = swipValue.AsBufferFrame();
@@ -120,7 +120,7 @@ public:
     }
   }
 
-  BufferFrame* ResolveSwipMayJump(Guard& swipGuard,
+  BufferFrame* ResolveSwipMayJump(HybridGuard& swipGuard,
                                   Swip<BufferFrame>& swipValue);
 
   void reclaimPage(BufferFrame& bf);

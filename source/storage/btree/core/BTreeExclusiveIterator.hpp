@@ -19,7 +19,7 @@ public:
   BTreeExclusiveIterator(BTreeGeneric& tree, BufferFrame* bf,
                          const u64 bf_version)
       : BTreePessimisticIterator(tree, LATCH_FALLBACK_MODE::EXCLUSIVE) {
-    Guard as_it_was_witnessed(bf->header.mLatch, bf_version);
+    HybridGuard as_it_was_witnessed(bf->header.mLatch, bf_version);
     as_it_was_witnessed.JumpIfModifiedByOthers();
     mGuardedLeaf =
         HybridPageGuard<BTreeNode>(std::move(as_it_was_witnessed), bf);

@@ -256,7 +256,7 @@ OP_RESULT BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
   if (session_ptr.get()) {
     auto session = reinterpret_cast<Session*>(session_ptr.get());
     JUMPMU_TRY() {
-      Guard opt_guard(&session->bf->header.mLatch);
+      HybridGuard opt_guard(&session->bf->header.mLatch);
       opt_guard.toOptimisticOrJump();
       {
         BTreeNode& node =

@@ -21,7 +21,7 @@ void BTreeGeneric::create(TREEID btreeId, Config config) {
   this->config = config;
   mMetaNodeSwip = &BufferManager::sInstance->AllocNewPage();
 
-  Guard guard(mMetaNodeSwip.AsBufferFrame().header.mLatch,
+  HybridGuard guard(mMetaNodeSwip.AsBufferFrame().header.mLatch,
               GUARD_STATE::EXCLUSIVE);
   mMetaNodeSwip.AsBufferFrame().header.mKeepInMemory = true;
   mMetaNodeSwip.AsBufferFrame().page.mBTreeId = btreeId;

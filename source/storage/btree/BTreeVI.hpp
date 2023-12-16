@@ -295,7 +295,7 @@ public:
       return BTreeGeneric::checkSpaceUtilization(bf);
     }
 
-    Guard bfGuard(&bf.header.mLatch);
+    HybridGuard bfGuard(&bf.header.mLatch);
     bfGuard.toOptimisticOrJump();
     if (bf.page.mBTreeId != mTreeId) {
       jumpmu::jump();

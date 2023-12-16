@@ -19,7 +19,7 @@ class ParentSwipHandler {
 public:
   /// @brief mParentGuard is the latch guard to the parent buffer frame. It
   /// should already optimistically latched.
-  Guard mParentGuard;
+  HybridGuard mParentGuard;
 
   /// @brief mParentBf is the parent buffer frame.
   BufferFrame* mParentBf;
