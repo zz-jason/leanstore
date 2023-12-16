@@ -426,7 +426,7 @@ inline void BTreeGeneric::deserialize(StringMap map) {
 
   // load meta node to memory
   HybridLatch dummyLatch;
-  Guard dummyGuard(&dummyLatch);
+  HybridGuard dummyGuard(&dummyLatch);
   dummyGuard.toOptimisticSpin();
 
   u16 failcounter = 0;

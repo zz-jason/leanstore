@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Config.hpp"
+#include "HybridLatch.hpp"
 #include "Units.hpp"
 #include "utils/JumpMU.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -15,59 +16,6 @@
 namespace leanstore {
 namespace storage {
 
-constexpr static u64 LATCH_EXCLUSIVE_BIT = 1ull;
-constexpr static u64 LATCH_VERSION_MASK = ~(0ull);
-
-inline bool HasExclusiveMark(u64 version) {
-  return (version & LATCH_EXCLUSIVE_BIT) == LATCH_EXCLUSIVE_BIT;
-}
-
-class Guard;
-
-/// An alternative to std::mutex and std::shared_mutex. A hybrid latch can be
-/// latched optimistically, pessimistically in shared or exclusive mode:
-///   - latch optimistically: for low-contention scenarios. At this mode, the
-///     version number is used to detech latch contention.
-///   - latch pessimistically in shared mode: for high-contention scenarios.
-///   - latch pessimistically in exclusive mode: for high-contention scenarios.
-class alignas(64) HybridLatch {
-private:
-  atomic<u64> mVersion = 0;
-
-  std::shared_mutex mMutex;
-
-public:
-  template <typename... Args>
-  HybridLatch(Args&&... args) : mVersion(std::forward<Args>(args)...) {
-  }
-
-public:
-  void LockExclusively() {
-    DCHECK(!IsLockedExclusively());
-    mMutex.lock();
-    mVersion.fetch_add(LATCH_EXCLUSIVE_BIT);
-  }
-
-  void UnlockExclusively() {
-    DCHECK(IsLockedExclusively());
-    mVersion.fetch_add(LATCH_EXCLUSIVE_BIT, std::memory_order_release);
-    mMutex.unlock();
-  }
-
-  u64 GetOptimisticVersion() {
-    return mVersion.load();
-  }
-
-  bool IsLockedExclusively() {
-    return HasExclusiveMark(mVersion.load());
-  }
-
-private:
-  friend class Guard;
-};
-
-static_assert(sizeof(HybridLatch) == 64, "");
-
 enum class GUARD_STATE { UNINITIALIZED, OPTIMISTIC, SHARED, EXCLUSIVE, MOVED };
 
 enum class LATCH_FALLBACK_MODE : u8 {
@@ -78,11 +26,11 @@ enum class LATCH_FALLBACK_MODE : u8 {
   SHOULD_NOT_HAPPEN = 4
 };
 
-/// Like std::unique_lock, std::shared_lock, std::lock_guard, this Guard is used
+/// Like std::unique_lock, std::shared_lock, std::lock_guard, this HybridGuard is used
 /// together with HybridLatch to provide various lock mode.
 ///
 /// TODO(jian.z): should we unlock the guard when it's destroied?
-class Guard {
+class HybridGuard {
 public:
   HybridLatch* mLatch = nullptr;
 
@@ -93,28 +41,28 @@ public:
   bool mEncounteredContention = false;
 
 public:
-  Guard(HybridLatch* latch) : mLatch(latch) {
+  HybridGuard(HybridLatch* latch) : mLatch(latch) {
   }
 
   // Manually construct a guard from a snapshot. Use with caution!
-  Guard(HybridLatch& latch, const u64 last_seen_version)
+  HybridGuard(HybridLatch& latch, const u64 last_seen_version)
       : mLatch(&latch), mState(GUARD_STATE::OPTIMISTIC),
         mVersion(last_seen_version), mEncounteredContention(false) {
   }
 
-  Guard(HybridLatch& latch, GUARD_STATE state)
+  HybridGuard(HybridLatch& latch, GUARD_STATE state)
       : mLatch(&latch), mState(state), mVersion(latch.mVersion.load()) {
   }
 
   // Move constructor
-  Guard(Guard&& other)
+  HybridGuard(HybridGuard&& other)
       : mLatch(other.mLatch), mState(other.mState), mVersion(other.mVersion),
         mEncounteredContention(other.mEncounteredContention) {
     other.mState = GUARD_STATE::MOVED;
   }
 
   // Move assignment
-  Guard& operator=(Guard&& other) {
+  HybridGuard& operator=(HybridGuard&& other) {
     unlock();
 
     mLatch = other.mLatch;

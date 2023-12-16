@@ -19,7 +19,7 @@ template <typename T> class HybridPageGuard {
 public:
   BufferFrame* mBf = nullptr;
 
-  Guard mGuard;
+  HybridGuard mGuard;
 
   bool mKeepAlive = true;
 
@@ -28,7 +28,7 @@ public:
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
-  HybridPageGuard(Guard&& hybridGuard, BufferFrame* bf)
+  HybridPageGuard(HybridGuard&& hybridGuard, BufferFrame* bf)
       : mBf(bf), mGuard(std::move(hybridGuard)) {
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
@@ -241,7 +241,7 @@ public:
   }
 
 protected:
-  void latchAccordingToFallbackMode(Guard& guard,
+  void latchAccordingToFallbackMode(HybridGuard& guard,
                                     const LATCH_FALLBACK_MODE if_contended) {
     if (if_contended == LATCH_FALLBACK_MODE::SPIN) {
       guard.toOptimisticSpin();

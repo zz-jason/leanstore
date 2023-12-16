@@ -21,7 +21,7 @@ class BMOptimisticGuard {
   template <typename T> friend class ExclusivePageGuard;
 
 public:
-  Guard mGuard;
+  HybridGuard mGuard;
 
   BMOptimisticGuard(HybridLatch& lock) : mGuard(&lock) {
     mGuard.toOptimisticOrJump();
@@ -65,11 +65,11 @@ public:
 
 class BMExclusiveUpgradeIfNeeded {
 private:
-  Guard& mGuard;
+  HybridGuard& mGuard;
   const bool was_exclusive;
 
 public:
-  BMExclusiveUpgradeIfNeeded(Guard& guard)
+  BMExclusiveUpgradeIfNeeded(HybridGuard& guard)
       : mGuard(guard), was_exclusive(guard.mState == GUARD_STATE::EXCLUSIVE) {
     mGuard.TryToExclusiveMayJump();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();

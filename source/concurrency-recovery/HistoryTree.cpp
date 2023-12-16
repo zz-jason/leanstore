@@ -220,7 +220,7 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
     JUMPMU_TRY() {
       if (session->leftmost_init) {
         BufferFrame* bf = session->leftmost_bf;
-        Guard bf_guard(bf->header.mLatch, session->leftmost_version);
+        HybridGuard bf_guard(bf->header.mLatch, session->leftmost_version);
         bf_guard.JumpIfModifiedByOthers();
         HybridPageGuard<BTreeNode> leaf(std::move(bf_guard), bf);
 
