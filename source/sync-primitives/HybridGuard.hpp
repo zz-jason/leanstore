@@ -26,8 +26,8 @@ enum class LATCH_FALLBACK_MODE : u8 {
   SHOULD_NOT_HAPPEN = 4
 };
 
-/// Like std::unique_lock, std::shared_lock, std::lock_guard, this HybridGuard is used
-/// together with HybridLatch to provide various lock mode.
+/// Like std::unique_lock, std::shared_lock, std::lock_guard, this HybridGuard
+/// is used together with HybridLatch to provide various lock mode.
 ///
 /// TODO(jian.z): should we unlock the guard when it's destroied?
 class HybridGuard {

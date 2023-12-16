@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Exceptions.hpp"
-#include "Latch.hpp"
+#include "HybridGuard.hpp"
 #include "concurrency-recovery/CRMG.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"

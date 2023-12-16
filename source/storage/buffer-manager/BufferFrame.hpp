@@ -2,7 +2,7 @@
 
 #include "Swip.hpp"
 #include "Units.hpp"
-#include "sync-primitives/Latch.hpp"
+#include "sync-primitives/HybridGuard.hpp"
 #include "utils/JsonUtil.hpp"
 
 #include <glog/logging.h>
