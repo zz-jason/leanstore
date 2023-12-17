@@ -164,7 +164,7 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
     restartrem : {
       leanstore::storage::btree::BTreeExclusiveIterator iterator(
           *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)));
-      iterator.exitLeafCallback([&](HybridPageGuard<BTreeNode>& leaf) {
+      iterator.exitLeafCallback([&](GuardedBufferFrame<BTreeNode>& leaf) {
         if (leaf->freeSpaceAfterCompaction() >=
             BTreeNodeHeader::sUnderFullSize) {
           iterator.cleanUpCallback([&, to_find = leaf.mBf] {
@@ -222,7 +222,7 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
         BufferFrame* bf = session->leftmost_bf;
         HybridGuard bf_guard(bf->header.mLatch, session->leftmost_version);
         bf_guard.JumpIfModifiedByOthers();
-        HybridPageGuard<BTreeNode> leaf(std::move(bf_guard), bf);
+        GuardedBufferFrame<BTreeNode> leaf(std::move(bf_guard), bf);
 
         if (leaf->mLowerFence.length == 0) {
           // Allocate in the stack, freed when the calling function exits.
@@ -244,7 +244,7 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
     JUMPMU_TRY() {
       leanstore::storage::btree::BTreeExclusiveIterator iterator(
           *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)));
-      iterator.exitLeafCallback([&](HybridPageGuard<BTreeNode>& leaf) {
+      iterator.exitLeafCallback([&](GuardedBufferFrame<BTreeNode>& leaf) {
         if (leaf->freeSpaceAfterCompaction() >=
             BTreeNodeHeader::sUnderFullSize) {
           iterator.cleanUpCallback([&, to_find = leaf.mBf] {
@@ -260,7 +260,7 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
       // ATTENTION: we use this also for purging the current aborted tx so we
       // can not simply assume from_tx_id = 0
       bool did_purge_full_page = false;
-      iterator.enterLeafCallback([&](HybridPageGuard<BTreeNode>& leaf) {
+      iterator.enterLeafCallback([&](GuardedBufferFrame<BTreeNode>& leaf) {
         if (leaf->mNumSeps == 0) {
           return;
         }

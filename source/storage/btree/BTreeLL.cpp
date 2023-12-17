@@ -22,7 +22,7 @@ namespace btree {
 OP_RESULT BTreeLL::Lookup(Slice key, ValCallback valCallback) {
   while (true) {
     JUMPMU_TRY() {
-      HybridPageGuard<BTreeNode> leaf;
+      GuardedBufferFrame<BTreeNode> leaf;
       FindLeafCanJump(key, leaf);
 
       DEBUG_BLOCK() {
@@ -56,7 +56,7 @@ OP_RESULT BTreeLL::Lookup(Slice key, ValCallback valCallback) {
 bool BTreeLL::isRangeSurelyEmpty(Slice startKey, Slice endKey) {
   while (true) {
     JUMPMU_TRY() {
-      HybridPageGuard<BTreeNode> leaf;
+      GuardedBufferFrame<BTreeNode> leaf;
       FindLeafCanJump(startKey, leaf);
 
       Slice upperFence = leaf->GetUpperFence();
@@ -168,7 +168,7 @@ OP_RESULT BTreeLL::insert(Slice key, Slice val) {
 OP_RESULT BTreeLL::prefixLookup(Slice key, PrefixLookupCallback callback) {
   while (true) {
     JUMPMU_TRY() {
-      HybridPageGuard<BTreeNode> leaf;
+      GuardedBufferFrame<BTreeNode> leaf;
       FindLeafCanJump(key, leaf);
 
       bool isEqual = false;
@@ -208,7 +208,7 @@ OP_RESULT BTreeLL::prefixLookupForPrev(Slice key,
                                        PrefixLookupCallback callback) {
   while (true) {
     JUMPMU_TRY() {
-      HybridPageGuard<BTreeNode> leaf;
+      GuardedBufferFrame<BTreeNode> leaf;
       FindLeafCanJump(key, leaf);
 
       bool isEqual = false;
@@ -413,7 +413,7 @@ OP_RESULT BTreeLL::remove(Slice key) {
 OP_RESULT BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
   JUMPMU_TRY() {
     BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
-    iterator.exitLeafCallback([&](HybridPageGuard<BTreeNode>& leaf) {
+    iterator.exitLeafCallback([&](GuardedBufferFrame<BTreeNode>& leaf) {
       if (leaf->freeSpaceAfterCompaction() >= BTreeNodeHeader::sUnderFullSize) {
         iterator.cleanUpCallback([&, to_find = leaf.mBf] {
           JUMPMU_TRY() {
@@ -451,7 +451,7 @@ OP_RESULT BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
       JUMPMU_RETURN OP_RESULT::OK;
     } else {
       bool did_purge_full_page = false;
-      iterator.enterLeafCallback([&](HybridPageGuard<BTreeNode>& leaf) {
+      iterator.enterLeafCallback([&](GuardedBufferFrame<BTreeNode>& leaf) {
         if (leaf->mNumSeps == 0) {
           return;
         }

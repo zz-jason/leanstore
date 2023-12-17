@@ -22,7 +22,7 @@ public:
     HybridGuard as_it_was_witnessed(bf->header.mLatch, bf_version);
     as_it_was_witnessed.JumpIfModifiedByOthers();
     mGuardedLeaf =
-        HybridPageGuard<BTreeNode>(std::move(as_it_was_witnessed), bf);
+        GuardedBufferFrame<BTreeNode>(std::move(as_it_was_witnessed), bf);
     mGuardedLeaf.ToExclusiveMayJump();
   }
 

@@ -11,7 +11,7 @@ namespace leanstore {
 namespace storage {
 namespace btree {
 
-using LeafCallback = std::function<void(HybridPageGuard<BTreeNode>& leaf)>;
+using LeafCallback = std::function<void(GuardedBufferFrame<BTreeNode>& leaf)>;
 
 // Iterator
 class BTreePessimisticIterator : public BTreePessimisticIteratorInterface {
@@ -42,10 +42,10 @@ public:
   bool mIsPrefixCopied = false;
 
   /// mGuardedLeaf is the latched leaf node of the current key.
-  HybridPageGuard<BTreeNode> mGuardedLeaf;
+  GuardedBufferFrame<BTreeNode> mGuardedLeaf;
 
   /// mGuardedParent is the latched parent node of mGuardedLeaf.
-  HybridPageGuard<BTreeNode> mGuardedParent;
+  GuardedBufferFrame<BTreeNode> mGuardedParent;
 
   /// mLeafPosInParent is the slot id in mGuardedParent of mGuardedLeaf.
   s32 mLeafPosInParent = -1;
@@ -63,15 +63,16 @@ public:
 protected:
   // We need a custom findLeafAndLatch to track the position in parent node
   template <LATCH_FALLBACK_MODE mode = LATCH_FALLBACK_MODE::SHARED>
-  void findLeafAndLatch(HybridPageGuard<BTreeNode>& guardedChild, Slice key) {
+  void findLeafAndLatch(GuardedBufferFrame<BTreeNode>& guardedChild,
+                        Slice key) {
     while (true) {
       mLeafPosInParent = -1;
       JUMPMU_TRY() {
-        mGuardedParent = HybridPageGuard<BTreeNode>(mBTree.mMetaNodeSwip);
+        mGuardedParent = GuardedBufferFrame<BTreeNode>(mBTree.mMetaNodeSwip);
         guardedChild.unlock();
 
         // it's the root node right now.
-        guardedChild = HybridPageGuard<BTreeNode>(
+        guardedChild = GuardedBufferFrame<BTreeNode>(
             mGuardedParent, mGuardedParent->mRightMostChildSwip);
 
         for (u16 level = 0; !guardedChild->mIsLeaf; level++) {
@@ -83,9 +84,9 @@ protected:
               &guardedChild->GetChildIncludingRightMost(mLeafPosInParent);
           mGuardedParent = std::move(guardedChild);
           if (level == mBTree.mHeight - 1) {
-            guardedChild = HybridPageGuard(mGuardedParent, *childSwip, mode);
+            guardedChild = GuardedBufferFrame(mGuardedParent, *childSwip, mode);
           } else {
-            guardedChild = HybridPageGuard(mGuardedParent, *childSwip);
+            guardedChild = GuardedBufferFrame(mGuardedParent, *childSwip);
           }
         }
 
@@ -237,8 +238,8 @@ public:
               s32 next_leaf_pos = mLeafPosInParent + 1;
               auto& c_swip =
                   mGuardedParent->GetChildIncludingRightMost(next_leaf_pos);
-              HybridPageGuard next_leaf(mGuardedParent, c_swip,
-                                        LATCH_FALLBACK_MODE::JUMP);
+              GuardedBufferFrame next_leaf(mGuardedParent, c_swip,
+                                           LATCH_FALLBACK_MODE::JUMP);
               if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
                 next_leaf.TryToExclusiveMayJump();
               } else {
@@ -328,8 +329,8 @@ public:
             if ((mLeafPosInParent - 1) >= 0) {
               s32 next_leaf_pos = mLeafPosInParent - 1;
               Swip<BTreeNode>& c_swip = mGuardedParent->getChild(next_leaf_pos);
-              HybridPageGuard next_leaf(mGuardedParent, c_swip,
-                                        LATCH_FALLBACK_MODE::JUMP);
+              GuardedBufferFrame next_leaf(mGuardedParent, c_swip,
+                                           LATCH_FALLBACK_MODE::JUMP);
               if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
                 next_leaf.TryToExclusiveMayJump();
               } else {

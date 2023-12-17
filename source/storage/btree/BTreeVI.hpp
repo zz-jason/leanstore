@@ -6,7 +6,7 @@
 #include "storage/btree/core/BTreeExclusiveIterator.hpp"
 #include "storage/btree/core/BTreeSharedIterator.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
-#include "sync-primitives/PageGuard.hpp"
+#include "sync-primitives/GuardedBufferFrame.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <set>
@@ -301,7 +301,7 @@ public:
       jumpmu::jump();
     }
 
-    HybridPageGuard<BTreeNode> guardedNode(std::move(bfGuard), &bf);
+    GuardedBufferFrame<BTreeNode> guardedNode(std::move(bfGuard), &bf);
     if (!guardedNode->mIsLeaf ||
         !triggerPageWiseGarbageCollection(guardedNode)) {
       return BTreeGeneric::checkSpaceUtilization(bf);
@@ -781,7 +781,7 @@ private:
   }
 
   static inline bool triggerPageWiseGarbageCollection(
-      HybridPageGuard<BTreeNode>& guard) {
+      GuardedBufferFrame<BTreeNode>& guard) {
     return guard->mHasGarbage;
   }
 

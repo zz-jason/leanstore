@@ -13,11 +13,11 @@ namespace storage {
 // instead.
 class BMOptimisticGuard;
 class BMExclusiveGuard;
-template <typename T> class HybridPageGuard;
+template <typename T> class GuardedBufferFrame;
 
 class BMOptimisticGuard {
   friend class BMExclusiveGuard;
-  template <typename T> friend class HybridPageGuard;
+  template <typename T> friend class GuardedBufferFrame;
   template <typename T> friend class ExclusivePageGuard;
 
 public:

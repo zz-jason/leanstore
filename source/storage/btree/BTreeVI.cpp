@@ -97,7 +97,7 @@ OP_RESULT BTreeVI::lookupPessimistic(Slice key, ValCallback valCallback) {
 OP_RESULT BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
   while (true) {
     JUMPMU_TRY() {
-      HybridPageGuard<BTreeNode> leaf;
+      GuardedBufferFrame<BTreeNode> leaf;
 
       // Find the correct page containing the key
       FindLeafCanJump(key, leaf);

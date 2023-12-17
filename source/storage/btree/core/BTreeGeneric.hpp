@@ -7,7 +7,7 @@
 #include "KVInterface.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
-#include "sync-primitives/PageGuard.hpp"
+#include "sync-primitives/GuardedBufferFrame.hpp"
 #include "utils/Defer.hpp"
 #include "utils/JsonUtil.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -69,18 +69,18 @@ public:
                          ExclusivePageGuard<BTreeNode>& to_right,
                          bool full_merge_or_nothing);
 
-  XMergeReturnCode XMerge(HybridPageGuard<BTreeNode>& guardedParent,
-                          HybridPageGuard<BTreeNode>& guardedChild,
+  XMergeReturnCode XMerge(GuardedBufferFrame<BTreeNode>& guardedParent,
+                          GuardedBufferFrame<BTreeNode>& guardedChild,
                           ParentSwipHandler&);
 
-  inline bool isMetaNode(HybridPageGuard<BTreeNode>& guard) {
+  inline bool isMetaNode(GuardedBufferFrame<BTreeNode>& guard) {
     return mMetaNodeSwip == guard.mBf;
   }
   inline bool isMetaNode(ExclusivePageGuard<BTreeNode>& guard) {
     return mMetaNodeSwip == guard.bf();
   }
   s64 iterateAllPages(BTreeNodeCallback inner, BTreeNodeCallback leaf);
-  s64 iterateAllPagesRec(HybridPageGuard<BTreeNode>& node_guard,
+  s64 iterateAllPagesRec(GuardedBufferFrame<BTreeNode>& node_guard,
                          BTreeNodeCallback inner, BTreeNodeCallback leaf);
   u64 countInner();
   u64 countPages();
@@ -132,10 +132,10 @@ public:
   // Helpers
   template <LATCH_FALLBACK_MODE mode = LATCH_FALLBACK_MODE::SHARED>
   inline void FindLeafCanJump(Slice key,
-                              HybridPageGuard<BTreeNode>& targetGuard);
+                              GuardedBufferFrame<BTreeNode>& targetGuard);
 
   template <LATCH_FALLBACK_MODE mode = LATCH_FALLBACK_MODE::SHARED>
-  void findLeafAndLatch(HybridPageGuard<BTreeNode>& targetGuard, Slice key);
+  void findLeafAndLatch(GuardedBufferFrame<BTreeNode>& targetGuard, Slice key);
 
 public:
   /// @brief
@@ -155,7 +155,7 @@ public:
     }
 
     // Check whether search on the wrong tree or the root node is evicted
-    HybridPageGuard<BTreeNode> parentGuard(btree.mMetaNodeSwip);
+    GuardedBufferFrame<BTreeNode> parentGuard(btree.mMetaNodeSwip);
     if (btree.mTreeId != bfToFind.page.mBTreeId ||
         parentGuard->mRightMostChildSwip.isEVICTED()) {
       jumpmu::jump();
@@ -184,7 +184,7 @@ public:
     const auto keyToFind = nodeToFind.GetUpperFence();
 
     s16 posInParent = -1;
-    auto search_condition = [&](HybridPageGuard<BTreeNode>& guardedNode) {
+    auto search_condition = [&](GuardedBufferFrame<BTreeNode>& guardedNode) {
       if (isInfinity) {
         childSwip = &(guardedNode->mRightMostChildSwip);
         posInParent = guardedNode->mNumSeps;
@@ -203,8 +203,8 @@ public:
     // LATCH_FALLBACK_MODE::JUMP : LATCH_FALLBACK_MODE::EXCLUSIVE;
     LATCH_FALLBACK_MODE latch_mode = LATCH_FALLBACK_MODE::JUMP;
     // The parent of the bf we are looking for (bfToFind)
-    HybridPageGuard childGuard(parentGuard, parentGuard->mRightMostChildSwip,
-                               latch_mode);
+    GuardedBufferFrame childGuard(parentGuard, parentGuard->mRightMostChildSwip,
+                                  latch_mode);
     u16 level = 0;
     while (!childGuard->mIsLeaf && search_condition(childGuard)) {
       parentGuard = std::move(childGuard);
@@ -213,8 +213,8 @@ public:
           jumpmu::jump();
         }
       }
-      childGuard = HybridPageGuard(parentGuard, childSwip->CastTo<BTreeNode>(),
-                                   latch_mode);
+      childGuard = GuardedBufferFrame(
+          parentGuard, childSwip->CastTo<BTreeNode>(), latch_mode);
       level = level + 1;
     }
     parentGuard.unlock();
@@ -251,8 +251,8 @@ public:
   ///
   /// @param btree The tree to free.
   static void FreeAndReclaim(BTreeGeneric& btree) {
-    HybridPageGuard<BTreeNode> guardedMetaNode(btree.mMetaNodeSwip);
-    HybridPageGuard<BTreeNode> guardedRootNode(
+    GuardedBufferFrame<BTreeNode> guardedMetaNode(btree.mMetaNodeSwip);
+    GuardedBufferFrame<BTreeNode> guardedRootNode(
         guardedMetaNode, guardedMetaNode->mRightMostChildSwip);
     BTreeGeneric::freeBTreeNodesRecursive(guardedRootNode);
 
@@ -266,13 +266,13 @@ public:
     auto& allocator = resultDoc->GetAllocator();
 
     // meta node
-    HybridPageGuard<BTreeNode> guardedMetaNode(btree.mMetaNodeSwip);
+    GuardedBufferFrame<BTreeNode> guardedMetaNode(btree.mMetaNodeSwip);
     rapidjson::Value metaJson(rapidjson::kObjectType);
     guardedMetaNode.mBf->ToJSON(&metaJson, allocator);
     resultDoc->AddMember("metaNode", metaJson, allocator);
 
     // root node
-    HybridPageGuard<BTreeNode> guardedRootNode(
+    GuardedBufferFrame<BTreeNode> guardedRootNode(
         guardedMetaNode, guardedMetaNode->mRightMostChildSwip);
     rapidjson::Value rootJson(rapidjson::kObjectType);
     ToJSONRecursive(guardedRootNode, &rootJson, allocator);
@@ -280,9 +280,10 @@ public:
   }
 
 private:
-  static void freeBTreeNodesRecursive(HybridPageGuard<BTreeNode>& guardedNode);
+  static void freeBTreeNodesRecursive(
+      GuardedBufferFrame<BTreeNode>& guardedNode);
 
-  static void ToJSONRecursive(HybridPageGuard<BTreeNode>& guardedNode,
+  static void ToJSONRecursive(GuardedBufferFrame<BTreeNode>& guardedNode,
                               rapidjson::Value* resultObj,
                               rapidjson::Value::AllocatorType& allocator);
 
@@ -293,11 +294,11 @@ public:
 };
 
 inline void BTreeGeneric::freeBTreeNodesRecursive(
-    HybridPageGuard<BTreeNode>& guardedNode) {
+    GuardedBufferFrame<BTreeNode>& guardedNode) {
   if (!guardedNode->mIsLeaf) {
     for (auto i = 0u; i <= guardedNode->mNumSeps; ++i) {
       auto childSwip = guardedNode->GetChildIncludingRightMost(i);
-      HybridPageGuard<BTreeNode> guardedChild(guardedNode, childSwip);
+      GuardedBufferFrame<BTreeNode> guardedChild(guardedNode, childSwip);
       freeBTreeNodesRecursive(guardedChild);
     }
   }
@@ -307,7 +308,7 @@ inline void BTreeGeneric::freeBTreeNodesRecursive(
 }
 
 inline void BTreeGeneric::ToJSONRecursive(
-    HybridPageGuard<BTreeNode>& guardedNode, rapidjson::Value* resultObj,
+    GuardedBufferFrame<BTreeNode>& guardedNode, rapidjson::Value* resultObj,
     rapidjson::Value::AllocatorType& allocator) {
 
   DCHECK(resultObj->IsObject());
@@ -328,7 +329,7 @@ inline void BTreeGeneric::ToJSONRecursive(
   rapidjson::Value childrenJson(rapidjson::kArrayType);
   for (auto i = 0u; i < guardedNode->mNumSeps; ++i) {
     auto childSwip = guardedNode->getChild(i);
-    HybridPageGuard<BTreeNode> guardedChild(guardedNode, childSwip);
+    GuardedBufferFrame<BTreeNode> guardedChild(guardedNode, childSwip);
 
     rapidjson::Value childObj(rapidjson::kObjectType);
     ToJSONRecursive(guardedChild, &childObj, allocator);
@@ -338,8 +339,8 @@ inline void BTreeGeneric::ToJSONRecursive(
   }
 
   if (guardedNode->mRightMostChildSwip != nullptr) {
-    HybridPageGuard<BTreeNode> guardedChild(guardedNode,
-                                            guardedNode->mRightMostChildSwip);
+    GuardedBufferFrame<BTreeNode> guardedChild(
+        guardedNode, guardedNode->mRightMostChildSwip);
     rapidjson::Value childObj(rapidjson::kObjectType);
     ToJSONRecursive(guardedChild, &childObj, allocator);
     guardedChild.unlock();
@@ -372,9 +373,9 @@ inline SpaceCheckResult BTreeGeneric::checkSpaceUtilization(BufferFrame& bf) {
   }
 
   ParentSwipHandler parentHandler = BTreeGeneric::findParentJump(*this, bf);
-  HybridPageGuard<BTreeNode> guardedParent =
+  GuardedBufferFrame<BTreeNode> guardedParent =
       parentHandler.getParentReadPageGuard<BTreeNode>();
-  HybridPageGuard<BTreeNode> guardedChild(
+  GuardedBufferFrame<BTreeNode> guardedChild(
       guardedParent, parentHandler.mChildSwip.CastTo<BTreeNode>(),
       LATCH_FALLBACK_MODE::JUMP);
   auto mergeResult = XMerge(guardedParent, guardedChild, parentHandler);
@@ -447,11 +448,11 @@ inline void BTreeGeneric::deserialize(StringMap map) {
 
 template <LATCH_FALLBACK_MODE mode>
 inline void BTreeGeneric::FindLeafCanJump(
-    Slice key, HybridPageGuard<BTreeNode>& targetGuard) {
+    Slice key, GuardedBufferFrame<BTreeNode>& targetGuard) {
   targetGuard.unlock();
-  HybridPageGuard<BTreeNode> guardedParent(mMetaNodeSwip);
-  targetGuard = HybridPageGuard<BTreeNode>(guardedParent,
-                                           guardedParent->mRightMostChildSwip);
+  GuardedBufferFrame<BTreeNode> guardedParent(mMetaNodeSwip);
+  targetGuard = GuardedBufferFrame<BTreeNode>(
+      guardedParent, guardedParent->mRightMostChildSwip);
 
   u16 volatile level = 0;
 
@@ -463,9 +464,9 @@ inline void BTreeGeneric::FindLeafCanJump(
     Swip<BTreeNode>& c_swip = targetGuard->lookupInner(key);
     guardedParent = std::move(targetGuard);
     if (level == mHeight - 1) {
-      targetGuard = HybridPageGuard(guardedParent, c_swip, mode);
+      targetGuard = GuardedBufferFrame(guardedParent, c_swip, mode);
     } else {
-      targetGuard = HybridPageGuard(guardedParent, c_swip);
+      targetGuard = GuardedBufferFrame(guardedParent, c_swip);
     }
     level = level + 1;
   }
@@ -475,7 +476,7 @@ inline void BTreeGeneric::FindLeafCanJump(
 
 template <LATCH_FALLBACK_MODE mode>
 inline void BTreeGeneric::findLeafAndLatch(
-    HybridPageGuard<BTreeNode>& targetGuard, Slice key) {
+    GuardedBufferFrame<BTreeNode>& targetGuard, Slice key) {
   while (true) {
     JUMPMU_TRY() {
       FindLeafCanJump<mode>(key, targetGuard);
