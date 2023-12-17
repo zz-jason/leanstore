@@ -18,7 +18,7 @@ template <typename T> class GuardedBufferFrame;
 class BMOptimisticGuard {
   friend class BMExclusiveGuard;
   template <typename T> friend class GuardedBufferFrame;
-  template <typename T> friend class ExclusivePageGuard;
+  template <typename T> friend class ExclusiveGuardedBufferFrame;
 
 public:
   HybridGuard mGuard;

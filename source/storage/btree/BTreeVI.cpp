@@ -216,7 +216,7 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(
       reinterpret_cast<Tuple*>(iterator.mutableValue().data())->WriteUnlock();
       // Attention: tuple pointer is not valid here
 
-      iterator.markAsDirty();
+      iterator.MarkAsDirty();
       iterator.UpdateContentionStats();
 
       if (!res) {
@@ -352,7 +352,7 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(
     tupleHead.command_id = command_id;
 
     tupleHead.WriteUnlock();
-    iterator.markAsDirty();
+    iterator.MarkAsDirty();
     iterator.UpdateContentionStats();
 
     JUMPMU_RETURN OP_RESULT::OK;
@@ -430,7 +430,7 @@ OP_RESULT BTreeVI::insert(Slice key, Slice val) {
         primaryVersion.tx_ts = MSB | 0;
       }
 
-      iterator.markAsDirty();
+      iterator.MarkAsDirty();
       JUMPMU_RETURN OP_RESULT::OK;
     }
     JUMPMU_CATCH() {
@@ -528,7 +528,7 @@ OP_RESULT BTreeVI::remove(Slice key) {
     walHandler.SubmitWal();
 
     if (FLAGS_wal_tuple_rfa) {
-      iterator.mGuardedLeaf.incrementGSN();
+      iterator.mGuardedLeaf.IncPageGSN();
     }
 
     if (payload.length() - sizeof(ChainedTuple) > 1) {
@@ -540,7 +540,7 @@ OP_RESULT BTreeVI::remove(Slice key) {
     chain_head.command_id = command_id;
 
     chain_head.WriteUnlock();
-    iterator.markAsDirty();
+    iterator.MarkAsDirty();
 
     JUMPMU_RETURN OP_RESULT::OK;
   }

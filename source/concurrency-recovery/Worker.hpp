@@ -6,6 +6,7 @@
 #include "profiling/counters/CRCounters.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 
+#include "utils/Defer.hpp"
 #include "utils/OptimisticSpinStruct.hpp"
 
 #include <glog/logging.h>

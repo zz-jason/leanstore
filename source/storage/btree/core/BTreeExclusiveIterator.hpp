@@ -26,8 +26,8 @@ public:
     mGuardedLeaf.ToExclusiveMayJump();
   }
 
-  void markAsDirty() {
-    mGuardedLeaf.markAsDirty();
+  void MarkAsDirty() {
+    mGuardedLeaf.MarkAsDirty();
   }
 
   virtual OP_RESULT seekToInsertWithHint(Slice key, bool higher = true) {

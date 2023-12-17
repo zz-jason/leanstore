@@ -4,8 +4,8 @@
 #include "Units.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "storage/buffer-manager/BufferFrame.hpp"
+#include "storage/buffer-manager/GuardedBufferFrame.hpp"
 #include "storage/buffer-manager/TreeRegistry.hpp"
-#include "sync-primitives/GuardedBufferFrame.hpp"
 
 #include "rapidjson/document.h"
 
@@ -532,11 +532,11 @@ public:
   void compactify();
 
   // merge right node into this node
-  u32 mergeSpaceUpperBound(ExclusivePageGuard<BTreeNode>& right);
+  u32 mergeSpaceUpperBound(ExclusiveGuardedBufferFrame<BTreeNode>& right);
   u32 spaceUsedBySlot(u16 slot_id);
 
-  bool merge(u16 slotId, ExclusivePageGuard<BTreeNode>& parent,
-             ExclusivePageGuard<BTreeNode>& right);
+  bool merge(u16 slotId, ExclusiveGuardedBufferFrame<BTreeNode>& parent,
+             ExclusiveGuardedBufferFrame<BTreeNode>& right);
 
   // store key/value pair at slotId
   void storeKeyValue(u16 slotId, Slice key, Slice val);
@@ -546,9 +546,9 @@ public:
   void copyKeyValue(u16 srcSlot, BTreeNode* dst, u16 dstSlot);
   void insertFence(FenceKey& fk, Slice key);
   void setFences(Slice lowerKey, Slice upperKey);
-  void split(ExclusivePageGuard<BTreeNode>& parent,
-             ExclusivePageGuard<BTreeNode>& new_node, u16 sepSlot, u8* sepKey,
-             u16 sepLength);
+  void split(ExclusiveGuardedBufferFrame<BTreeNode>& parent,
+             ExclusiveGuardedBufferFrame<BTreeNode>& new_node, u16 sepSlot,
+             u8* sepKey, u16 sepLength);
   u16 commonPrefix(u16 aPos, u16 bPos);
   SeparatorInfo findSep();
   void getSep(u8* sepKeyOut, SeparatorInfo info);

@@ -59,7 +59,7 @@ void HistoryTree::insertVersion(WORKERID session_id, TXID tx_id,
             *new (iterator.mutableValue().data()) VersionMeta();
         version_meta.mTreeId = treeId;
         cb(version_meta.payload);
-        iterator.markAsDirty();
+        iterator.MarkAsDirty();
         COUNTERS_BLOCK() {
           WorkerCounters::myCounters().cc_versions_space_inserted_opt[treeId]++;
         }
@@ -91,7 +91,7 @@ void HistoryTree::insertVersion(WORKERID session_id, TXID tx_id,
       auto& version_meta = *new (iterator.mutableValue().data()) VersionMeta();
       version_meta.mTreeId = treeId;
       cb(version_meta.payload);
-      iterator.markAsDirty();
+      iterator.MarkAsDirty();
       // -------------------------------------------------------------------------------------
       if (session != nullptr) {
         session->rightmost_bf = iterator.mGuardedLeaf.mBf;
@@ -195,7 +195,7 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
           key = Slice(key_buffer, key_length + 1);
           iterator.removeCurrent();
           removed_versions = removed_versions + 1;
-          iterator.markAsDirty();
+          iterator.MarkAsDirty();
           iterator.reset();
           cb(current_tx_id, treeId, payload, payload_length, called_before);
           goto restartrem;
@@ -342,7 +342,7 @@ void HistoryTree::visitRemoveVersions(
         std::memcpy(payload, version_container.payload, payload_length);
         key = Slice(key_buffer, key_length + 1);
         if (!called_before) {
-          iterator.markAsDirty();
+          iterator.MarkAsDirty();
         }
         iterator.reset();
         cb(current_tx_id, treeId, payload, payload_length, called_before);

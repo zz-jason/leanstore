@@ -155,7 +155,7 @@ OP_RESULT BTreeLL::insert(Slice key, Slice val) {
           iterator.mGuardedLeaf.ReserveWALPayload<WALInsert>(walSize, key, val);
       walHandler.SubmitWal();
     } else {
-      iterator.markAsDirty();
+      iterator.MarkAsDirty();
     }
     JUMPMU_RETURN OP_RESULT::OK;
   }
@@ -279,7 +279,7 @@ OP_RESULT BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
             Slice(key_buffer, o_key_length), o_value_length, pos);
         iterator.mSlotId = pos;
         o_value(iterator.mutableValue().data());
-        iterator.markAsDirty();
+        iterator.MarkAsDirty();
         COUNTERS_BLOCK() {
           WorkerCounters::myCounters().dt_append_opt[mTreeId]++;
         }
@@ -308,7 +308,7 @@ OP_RESULT BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
       o_key(key_buffer);
       iterator.insertInCurrentNode(key, o_value_length);
       o_value(iterator.mutableValue().data());
-      iterator.markAsDirty();
+      iterator.MarkAsDirty();
       // -------------------------------------------------------------------------------------
       Session* session = nullptr;
       if (session_ptr) {
@@ -367,7 +367,7 @@ OP_RESULT BTreeLL::updateSameSizeInPlace(
       walHandler.SubmitWal();
     } else {
       callback(current_value.Immutable());
-      iterator.markAsDirty();
+      iterator.MarkAsDirty();
     }
     iterator.UpdateContentionStats();
     JUMPMU_RETURN OP_RESULT::OK;
@@ -395,9 +395,9 @@ OP_RESULT BTreeLL::remove(Slice key) {
       auto walHandler = iterator.mGuardedLeaf.ReserveWALPayload<WALRemove>(
           key.size() + value.size(), key, value);
       walHandler.SubmitWal();
-      iterator.markAsDirty();
+      iterator.MarkAsDirty();
     } else {
-      iterator.markAsDirty();
+      iterator.MarkAsDirty();
     }
     ret = iterator.removeCurrent();
     ENSURE(ret == OP_RESULT::OK);
@@ -440,7 +440,7 @@ OP_RESULT BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
           }
           ret = iterator.removeCurrent();
           ENSURE(ret == OP_RESULT::OK);
-          iterator.markAsDirty();
+          iterator.MarkAsDirty();
           if (iterator.mSlotId == iterator.mGuardedLeaf->mNumSeps) {
             ret = iterator.next();
           }
@@ -473,7 +473,7 @@ OP_RESULT BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
                 leaf->mNumSeps;
           }
           leaf->reset();
-          iterator.markAsDirty();
+          iterator.MarkAsDirty();
           did_purge_full_page = true;
         }
       });

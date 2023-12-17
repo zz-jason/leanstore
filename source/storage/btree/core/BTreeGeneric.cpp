@@ -3,7 +3,7 @@
 #include "Config.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
-#include "sync-primitives/GuardedBufferFrame.hpp"
+#include "storage/buffer-manager/GuardedBufferFrame.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <glog/logging.h>
@@ -29,18 +29,18 @@ void BTreeGeneric::create(TREEID btreeId, Config config) {
 
   auto root_write_guard_h = GuardedBufferFrame<BTreeNode>(btreeId);
   auto root_write_guard =
-      ExclusivePageGuard<BTreeNode>(std::move(root_write_guard_h));
-  root_write_guard.init(true);
+      ExclusiveGuardedBufferFrame<BTreeNode>(std::move(root_write_guard_h));
+  root_write_guard.InitPayload(true);
 
   GuardedBufferFrame<BTreeNode> meta_guard(mMetaNodeSwip);
-  ExclusivePageGuard meta_page(std::move(meta_guard));
+  ExclusiveGuardedBufferFrame meta_page(std::move(meta_guard));
   meta_page->mIsLeaf = false;
   // HACK: use upper of meta node as a swip to the storage root
   meta_page->mRightMostChildSwip = root_write_guard.bf();
 
   // TODO: write WALs
-  root_write_guard.incrementGSN();
-  meta_page.incrementGSN();
+  root_write_guard.IncPageGSN();
+  meta_page.IncPageGSN();
 }
 
 void BTreeGeneric::trySplit(BufferFrame& to_split, s16 favored_split_pos) {
@@ -72,35 +72,36 @@ void BTreeGeneric::trySplit(BufferFrame& to_split, s16 favored_split_pos) {
   // u8 sep_key[sep_info.length];
   ARRAY_ON_STACK(sep_key, u8, sep_info.length);
   if (isMetaNode(p_guard)) { // root split
-    auto p_x_guard = ExclusivePageGuard(std::move(p_guard));
-    auto c_x_guard = ExclusivePageGuard(std::move(c_guard));
+    auto p_x_guard = ExclusiveGuardedBufferFrame(std::move(p_guard));
+    auto c_x_guard = ExclusiveGuardedBufferFrame(std::move(c_guard));
     assert(mHeight == 1 || !c_x_guard->mIsLeaf);
     // -------------------------------------------------------------------------------------
     // create new root
     auto new_root_h = GuardedBufferFrame<BTreeNode>(mTreeId, false);
-    auto new_root = ExclusivePageGuard<BTreeNode>(std::move(new_root_h));
+    auto new_root =
+        ExclusiveGuardedBufferFrame<BTreeNode>(std::move(new_root_h));
     auto new_left_node_h = GuardedBufferFrame<BTreeNode>(mTreeId);
     auto new_left_node =
-        ExclusivePageGuard<BTreeNode>(std::move(new_left_node_h));
+        ExclusiveGuardedBufferFrame<BTreeNode>(std::move(new_left_node_h));
     // -------------------------------------------------------------------------------------
     if (config.mEnableWal) {
       // TODO: System transactions
-      new_root.incrementGSN();
-      new_left_node.incrementGSN();
-      c_x_guard.incrementGSN();
+      new_root.IncPageGSN();
+      new_left_node.IncPageGSN();
+      c_x_guard.IncPageGSN();
     } else {
-      new_root.markAsDirty();
-      new_left_node.markAsDirty();
-      c_x_guard.markAsDirty();
+      new_root.MarkAsDirty();
+      new_left_node.MarkAsDirty();
+      c_x_guard.MarkAsDirty();
     }
     // -------------------------------------------------------------------------------------
     auto exec = [&]() {
       new_root.keepAlive();
-      new_root.init(false);
+      new_root.InitPayload(false);
       new_root->mRightMostChildSwip = c_x_guard.bf();
       p_x_guard->mRightMostChildSwip = new_root.bf();
       // -------------------------------------------------------------------------------------
-      new_left_node.init(c_x_guard->mIsLeaf);
+      new_left_node.InitPayload(c_x_guard->mIsLeaf);
       c_x_guard->getSep(sep_key, sep_info);
       c_x_guard->split(new_root, new_left_node, sep_info.slot, sep_key,
                        sep_info.length);
@@ -147,8 +148,8 @@ void BTreeGeneric::trySplit(BufferFrame& to_split, s16 favored_split_pos) {
     if (p_guard->hasEnoughSpaceFor(
             space_needed_for_separator)) { // Is there enough space in the
                                            // parent for the separator?
-      auto p_x_guard = ExclusivePageGuard(std::move(p_guard));
-      auto c_x_guard = ExclusivePageGuard(std::move(c_guard));
+      auto p_x_guard = ExclusiveGuardedBufferFrame(std::move(p_guard));
+      auto c_x_guard = ExclusiveGuardedBufferFrame(std::move(c_guard));
       // -------------------------------------------------------------------------------------
       p_x_guard->requestSpaceFor(space_needed_for_separator);
       assert(&mMetaNodeSwip.AsBufferFrame() != p_x_guard.bf());
@@ -156,22 +157,22 @@ void BTreeGeneric::trySplit(BufferFrame& to_split, s16 favored_split_pos) {
       // -------------------------------------------------------------------------------------
       auto new_left_node_h = GuardedBufferFrame<BTreeNode>(mTreeId);
       auto new_left_node =
-          ExclusivePageGuard<BTreeNode>(std::move(new_left_node_h));
+          ExclusiveGuardedBufferFrame<BTreeNode>(std::move(new_left_node_h));
       // -------------------------------------------------------------------------------------
       // Increment GSNs before writing WAL to make sure that these pages marked
       // as dirty regardless of the FLAGS_wal
       if (config.mEnableWal) {
-        p_x_guard.incrementGSN();
-        new_left_node.incrementGSN();
-        c_x_guard.incrementGSN();
+        p_x_guard.IncPageGSN();
+        new_left_node.IncPageGSN();
+        c_x_guard.IncPageGSN();
       } else {
-        p_x_guard.markAsDirty();
-        new_left_node.markAsDirty();
-        c_x_guard.markAsDirty();
+        p_x_guard.MarkAsDirty();
+        new_left_node.MarkAsDirty();
+        c_x_guard.MarkAsDirty();
       }
       // -------------------------------------------------------------------------------------
       auto exec = [&]() {
-        new_left_node.init(c_x_guard->mIsLeaf);
+        new_left_node.InitPayload(c_x_guard->mIsLeaf);
         c_x_guard->getSep(sep_key, sep_info);
         c_x_guard->split(p_x_guard, new_left_node, sep_info.slot, sep_key,
                          sep_info.length);
@@ -248,9 +249,9 @@ bool BTreeGeneric::tryMerge(BufferFrame& to_merge, bool swizzle_sibling) {
         return false;
       }
       auto l_guard = GuardedBufferFrame(p_guard, l_swip);
-      auto p_x_guard = ExclusivePageGuard(std::move(p_guard));
-      auto c_x_guard = ExclusivePageGuard(std::move(c_guard));
-      auto l_x_guard = ExclusivePageGuard(std::move(l_guard));
+      auto p_x_guard = ExclusiveGuardedBufferFrame(std::move(p_guard));
+      auto c_x_guard = ExclusiveGuardedBufferFrame(std::move(c_guard));
+      auto l_x_guard = ExclusiveGuardedBufferFrame(std::move(l_guard));
       // -------------------------------------------------------------------------------------
       ENSURE(c_x_guard->mIsLeaf == l_x_guard->mIsLeaf);
       // -------------------------------------------------------------------------------------
@@ -262,13 +263,13 @@ bool BTreeGeneric::tryMerge(BufferFrame& to_merge, bool swizzle_sibling) {
       }
       // -------------------------------------------------------------------------------------
       if (config.mEnableWal) {
-        p_guard.incrementGSN();
-        c_guard.incrementGSN();
-        l_guard.incrementGSN();
+        p_guard.IncPageGSN();
+        c_guard.IncPageGSN();
+        l_guard.IncPageGSN();
       } else {
-        p_guard.markAsDirty();
-        c_guard.markAsDirty();
-        l_guard.markAsDirty();
+        p_guard.MarkAsDirty();
+        c_guard.MarkAsDirty();
+        l_guard.MarkAsDirty();
       }
       // -------------------------------------------------------------------------------------
       l_x_guard.reclaim();
@@ -285,9 +286,9 @@ bool BTreeGeneric::tryMerge(BufferFrame& to_merge, bool swizzle_sibling) {
         return false;
       }
       auto r_guard = GuardedBufferFrame(p_guard, r_swip);
-      auto p_x_guard = ExclusivePageGuard(std::move(p_guard));
-      auto c_x_guard = ExclusivePageGuard(std::move(c_guard));
-      auto r_x_guard = ExclusivePageGuard(std::move(r_guard));
+      auto p_x_guard = ExclusiveGuardedBufferFrame(std::move(p_guard));
+      auto c_x_guard = ExclusiveGuardedBufferFrame(std::move(c_guard));
+      auto r_x_guard = ExclusiveGuardedBufferFrame(std::move(r_guard));
       // -------------------------------------------------------------------------------------
       ENSURE(c_x_guard->mIsLeaf == r_x_guard->mIsLeaf);
       // -------------------------------------------------------------------------------------
@@ -299,13 +300,13 @@ bool BTreeGeneric::tryMerge(BufferFrame& to_merge, bool swizzle_sibling) {
       }
       // -------------------------------------------------------------------------------------
       if (config.mEnableWal) {
-        p_guard.incrementGSN();
-        c_guard.incrementGSN();
-        r_guard.incrementGSN();
+        p_guard.IncPageGSN();
+        c_guard.IncPageGSN();
+        r_guard.IncPageGSN();
       } else {
-        p_guard.markAsDirty();
-        c_guard.markAsDirty();
-        r_guard.markAsDirty();
+        p_guard.MarkAsDirty();
+        c_guard.MarkAsDirty();
+        r_guard.MarkAsDirty();
       }
       // -------------------------------------------------------------------------------------
       c_x_guard.reclaim();
@@ -350,11 +351,10 @@ bool BTreeGeneric::tryMerge(BufferFrame& to_merge, bool swizzle_sibling) {
 }
 
 // ret: 0 did nothing, 1 full, 2 partial
-s16 BTreeGeneric::mergeLeftIntoRight(ExclusivePageGuard<BTreeNode>& parent,
-                                     s16 lhsSlotId,
-                                     ExclusivePageGuard<BTreeNode>& lhs,
-                                     ExclusivePageGuard<BTreeNode>& rhs,
-                                     bool full_merge_or_nothing) {
+s16 BTreeGeneric::mergeLeftIntoRight(
+    ExclusiveGuardedBufferFrame<BTreeNode>& parent, s16 lhsSlotId,
+    ExclusiveGuardedBufferFrame<BTreeNode>& lhs,
+    ExclusiveGuardedBufferFrame<BTreeNode>& rhs, bool full_merge_or_nothing) {
   // TODO: corner cases: new upper fence is larger than the older one.
   u32 space_upper_bound = lhs->mergeSpaceUpperBound(rhs);
   if (space_upper_bound <= EFFECTIVE_PAGE_SIZE) {
@@ -407,7 +407,7 @@ s16 BTreeGeneric::mergeLeftIntoRight(ExclusivePageGuard<BTreeNode>& parent,
     // -------------------------------------------------------------------------------------
     lhs->copyKeyValueRange(&tmp, 0, till_slot_id, copy_from_count);
     rhs->copyKeyValueRange(&tmp, copy_from_count, 0, rhs->mNumSeps);
-    memcpy(reinterpret_cast<u8*>(rhs.PageData()), &tmp, sizeof(BTreeNode));
+    memcpy(rhs.GetPagePayloadPtr(), &tmp, sizeof(BTreeNode));
     rhs->makeHint();
     // -------------------------------------------------------------------------------------
     // Nothing to do for the right node's separator
@@ -420,7 +420,7 @@ s16 BTreeGeneric::mergeLeftIntoRight(ExclusivePageGuard<BTreeNode>& parent,
                   Slice(new_left_uf_key, new_left_uf_length));
     // -------------------------------------------------------------------------------------
     lhs->copyKeyValueRange(&tmp, 0, 0, lhs->mNumSeps - copy_from_count);
-    memcpy(reinterpret_cast<u8*>(lhs.PageData()), &tmp, sizeof(BTreeNode));
+    memcpy(lhs.GetPagePayloadPtr(), &tmp, sizeof(BTreeNode));
     lhs->makeHint();
     // -------------------------------------------------------------------------------------
     assert(lhs->compareKeyWithBoundaries(
@@ -486,8 +486,8 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
     return XMergeReturnCode::NOTHING;
   }
 
-  ExclusivePageGuard<BTreeNode> p_x_guard = std::move(p_guard);
-  p_x_guard.incrementGSN();
+  ExclusiveGuardedBufferFrame<BTreeNode> p_x_guard = std::move(p_guard);
+  p_x_guard.IncPageGSN();
 
   XMergeReturnCode ret_code = XMergeReturnCode::PARTIAL_MERGE;
   s16 left_hand, right_hand, ret;
@@ -505,12 +505,12 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
     left_hand = right_hand - 1;
 
     {
-      ExclusivePageGuard<BTreeNode> right_x_guard(
+      ExclusiveGuardedBufferFrame<BTreeNode> right_x_guard(
           std::move(guards[right_hand - pos]));
-      ExclusivePageGuard<BTreeNode> left_x_guard(
+      ExclusiveGuardedBufferFrame<BTreeNode> left_x_guard(
           std::move(guards[left_hand - pos]));
-      right_x_guard.incrementGSN();
-      left_x_guard.incrementGSN();
+      right_x_guard.IncPageGSN();
+      left_x_guard.IncPageGSN();
       max_right = left_hand;
       ret = mergeLeftIntoRight(p_x_guard, left_hand, left_x_guard,
                                right_x_guard, left_hand == pos);

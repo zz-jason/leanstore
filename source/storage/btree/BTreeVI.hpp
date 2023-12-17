@@ -6,7 +6,7 @@
 #include "storage/btree/core/BTreeExclusiveIterator.hpp"
 #include "storage/btree/core/BTreeSharedIterator.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
-#include "sync-primitives/GuardedBufferFrame.hpp"
+#include "storage/buffer-manager/GuardedBufferFrame.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <set>
@@ -308,7 +308,7 @@ public:
     }
 
     guardedNode.ToExclusiveMayJump();
-    guardedNode.incrementGSN();
+    guardedNode.IncPageGSN();
 
     for (u16 i = 0; i < guardedNode->mNumSeps; i++) {
       auto& tuple = *reinterpret_cast<Tuple*>(guardedNode->ValData(i));
@@ -348,7 +348,7 @@ public:
         ENSURE(ret == OP_RESULT::OK);
         ret = iterator.removeCurrent();
         ENSURE(ret == OP_RESULT::OK);
-        iterator.markAsDirty(); // TODO: write CLS
+        iterator.MarkAsDirty(); // TODO: write CLS
         iterator.mergeIfNeeded();
       }
       JUMPMU_CATCH() {
@@ -381,7 +381,7 @@ public:
                                 update_entry.payload + update_entry.key_length +
                                     update_descriptor.size());
         }
-        iterator.markAsDirty();
+        iterator.MarkAsDirty();
         JUMPMU_RETURN;
       }
       JUMPMU_CATCH() {
@@ -416,7 +416,7 @@ public:
         primaryVersion.command_id = remove_entry.before_command_id;
         ENSURE(primaryVersion.is_removed == false);
         primaryVersion.WriteUnlock();
-        iterator.markAsDirty();
+        iterator.MarkAsDirty();
       }
       JUMPMU_CATCH() {
         UNREACHABLE();
@@ -451,7 +451,7 @@ public:
                !head.IsWriteLocked() && head.mWorkerId == version_worker_id &&
                head.tx_ts == version_tx_id && head.is_removed);
         node->removeSlot(version.dangling_pointer.head_slot);
-        iterator.markAsDirty();
+        iterator.MarkAsDirty();
         iterator.mergeIfNeeded();
         JUMPMU_RETURN;
       }
@@ -470,7 +470,7 @@ public:
         if (ret == OP_RESULT::OK) {
           ret = g_iterator.removeCurrent();
           ENSURE(ret == OP_RESULT::OK);
-          g_iterator.markAsDirty();
+          g_iterator.MarkAsDirty();
         } else {
           UNREACHABLE();
         }
@@ -504,7 +504,7 @@ public:
             primaryVersion.is_removed) {
           if (primaryVersion.tx_ts < cr::Worker::my().cc.local_all_lwm) {
             ret = iterator.removeCurrent();
-            iterator.markAsDirty();
+            iterator.MarkAsDirty();
             ENSURE(ret == OP_RESULT::OK);
             iterator.mergeIfNeeded();
             COUNTERS_BLOCK() {
@@ -518,11 +518,11 @@ public:
                   *static_cast<BTreeGeneric*>(mGraveyard));
               OP_RESULT g_ret = g_iterator.insertKV(key, iterator.value());
               ENSURE(g_ret == OP_RESULT::OK);
-              g_iterator.markAsDirty();
+              g_iterator.MarkAsDirty();
             }
             ret = iterator.removeCurrent();
             ENSURE(ret == OP_RESULT::OK);
-            iterator.markAsDirty();
+            iterator.MarkAsDirty();
             iterator.mergeIfNeeded();
             COUNTERS_BLOCK() {
               WorkerCounters::myCounters().cc_todo_moved_gy[mTreeId]++;

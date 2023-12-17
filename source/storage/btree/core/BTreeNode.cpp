@@ -1,7 +1,7 @@
 #include "BTreeNode.hpp"
 
 #include "storage/btree/core/BTreeVisitor.hpp"
-#include "sync-primitives/GuardedBufferFrame.hpp"
+#include "storage/buffer-manager/GuardedBufferFrame.hpp"
 #include "utils/JsonUtil.hpp"
 
 #include <gflags/gflags.h>
@@ -114,8 +114,9 @@ void BTreeNode::compactify() {
   assert(freeSpace() == should);
 }
 
-u32 BTreeNode::mergeSpaceUpperBound(ExclusivePageGuard<BTreeNode>& right) {
-  assert(right->mIsLeaf);
+u32 BTreeNode::mergeSpaceUpperBound(
+    ExclusiveGuardedBufferFrame<BTreeNode>& right) {
+  DCHECK(right->mIsLeaf);
   BTreeNode tmp(true);
   tmp.setFences(GetLowerFence(), right->GetUpperFence());
   u32 leftGrow = (mPrefixSize - tmp.mPrefixSize) * mNumSeps;
@@ -133,8 +134,9 @@ u32 BTreeNode::spaceUsedBySlot(u16 s_i) {
 // -------------------------------------------------------------------------------------
 // right survives, this gets reclaimed
 // left(this) into right
-bool BTreeNode::merge(u16 slotId, ExclusivePageGuard<BTreeNode>& parent,
-                      ExclusivePageGuard<BTreeNode>& right) {
+bool BTreeNode::merge(u16 slotId,
+                      ExclusiveGuardedBufferFrame<BTreeNode>& parent,
+                      ExclusiveGuardedBufferFrame<BTreeNode>& right) {
   if (mIsLeaf) {
     assert(right->mIsLeaf);
     assert(parent->isInner());
@@ -155,7 +157,7 @@ bool BTreeNode::merge(u16 slotId, ExclusivePageGuard<BTreeNode>& parent,
     // -------------------------------------------------------------------------------------
     right->mHasGarbage |= mHasGarbage;
     // -------------------------------------------------------------------------------------
-    memcpy(reinterpret_cast<u8*>(right.PageData()), &tmp, sizeof(BTreeNode));
+    memcpy(right.GetPagePayloadPtr(), &tmp, sizeof(BTreeNode));
     right->makeHint();
     return true;
   } else { // Inner node
@@ -185,7 +187,7 @@ bool BTreeNode::merge(u16 slotId, ExclusivePageGuard<BTreeNode>& parent,
     parent->removeSlot(slotId);
     tmp.mRightMostChildSwip = right->mRightMostChildSwip;
     tmp.makeHint();
-    memcpy(reinterpret_cast<u8*>(right.PageData()), &tmp, sizeof(BTreeNode));
+    memcpy(right.GetPagePayloadPtr(), &tmp, sizeof(BTreeNode));
     return true;
   }
 }
@@ -376,9 +378,9 @@ Swip<BTreeNode>& BTreeNode::lookupInner(Slice key) {
 }
 
 // This = right
-void BTreeNode::split(ExclusivePageGuard<BTreeNode>& guardedParent,
-                      ExclusivePageGuard<BTreeNode>& guardedLeft, u16 sepSlot,
-                      u8* sepKey, u16 sepLength) {
+void BTreeNode::split(ExclusiveGuardedBufferFrame<BTreeNode>& guardedParent,
+                      ExclusiveGuardedBufferFrame<BTreeNode>& guardedLeft,
+                      u16 sepSlot, u8* sepKey, u16 sepLength) {
   // PRE: current, guardedParent and guardedLeft are x locked
   // assert(sepSlot > 0); TODO: really ?
   assert(sepSlot < (EFFECTIVE_PAGE_SIZE / sizeof(SwipType)));
@@ -392,13 +394,13 @@ void BTreeNode::split(ExclusivePageGuard<BTreeNode>& guardedParent,
   guardedParent->insert(Slice(sepKey, sepLength),
                         Slice(reinterpret_cast<u8*>(&swip), sizeof(SwipType)));
   if (mIsLeaf) {
-    copyKeyValueRange(guardedLeft.PageData(), 0, 0, sepSlot + 1);
+    copyKeyValueRange(guardedLeft.GetPagePayload(), 0, 0, sepSlot + 1);
     copyKeyValueRange(nodeRight, 0, guardedLeft->mNumSeps,
                       mNumSeps - guardedLeft->mNumSeps);
     nodeRight->mHasGarbage = mHasGarbage;
     guardedLeft->mHasGarbage = mHasGarbage;
   } else {
-    copyKeyValueRange(guardedLeft.PageData(), 0, 0, sepSlot);
+    copyKeyValueRange(guardedLeft.GetPagePayload(), 0, 0, sepSlot);
     copyKeyValueRange(nodeRight, 0, guardedLeft->mNumSeps + 1,
                       mNumSeps - guardedLeft->mNumSeps - 1);
     guardedLeft->mRightMostChildSwip = getChild(guardedLeft->mNumSeps);

@@ -509,7 +509,7 @@ bool BTreeVI::convertChainedToFatTupleDifferentAttributes(
     }
     std::memcpy(iterator.mutableValue().data(), dynamic_buffer.data(),
                 fat_tuple_length);
-    iterator.markAsDirty();
+    iterator.MarkAsDirty();
     return true;
   } else {
     chain_head.WriteUnlock();
