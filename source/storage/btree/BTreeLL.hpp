@@ -1,11 +1,11 @@
 #pragma once
 
-#include "core/BTreeGeneric.hpp"
 #include "Config.hpp"
 #include "KVInterface.hpp"
+#include "core/BTreeGeneric.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
-#include "sync-primitives/PageGuard.hpp"
+#include "sync-primitives/GuardedBufferFrame.hpp"
 #include "utils/RandomGenerator.hpp"
 
 using namespace leanstore::storage;

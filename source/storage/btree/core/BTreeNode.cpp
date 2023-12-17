@@ -1,7 +1,7 @@
 #include "BTreeNode.hpp"
 
 #include "storage/btree/core/BTreeVisitor.hpp"
-#include "sync-primitives/PageGuard.hpp"
+#include "sync-primitives/GuardedBufferFrame.hpp"
 #include "utils/JsonUtil.hpp"
 
 #include <gflags/gflags.h>

@@ -15,32 +15,39 @@ namespace storage {
 template <typename T> class ExclusivePageGuard;
 template <typename T> class SharedPageGuard;
 
-template <typename T> class HybridPageGuard {
+/// A lock guarded buffer frame
+template <typename T> class GuardedBufferFrame {
 public:
+  /// The guarded buffer frame. Latch mode is determined by mGuard.
   BufferFrame* mBf = nullptr;
 
+  /// The latch guard of this buffer frame
   HybridGuard mGuard;
 
   bool mKeepAlive = true;
 
 public:
-  HybridPageGuard() : mBf(nullptr), mGuard(nullptr) {
+  /// Construct an empty GuardedBufferFrame, nothing to guard.
+  GuardedBufferFrame() : mBf(nullptr), mGuard(nullptr) {
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
-  HybridPageGuard(HybridGuard&& hybridGuard, BufferFrame* bf)
+  /// Construct a GuardedBufferFrame from an existing latch guard.
+  /// @param hybridGuard the latch guard of the buffer frame
+  /// @param bf the latch guarded buffer frame
+  GuardedBufferFrame(HybridGuard&& hybridGuard, BufferFrame* bf)
       : mBf(bf), mGuard(std::move(hybridGuard)) {
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
-  HybridPageGuard(HybridPageGuard& other) = delete;  // Copy constructor
-  HybridPageGuard(HybridPageGuard&& other) = delete; // Move constructor
+  GuardedBufferFrame(GuardedBufferFrame& other) = delete;  // Copy constructor
+  GuardedBufferFrame(GuardedBufferFrame&& other) = delete; // Move constructor
 
-  /// Used to allocate a new page and create a HybridGuard on it.
+  /// Allocate a new page, latch the buffer frame exclusively. The newly created
   ///
-  /// @param treeId The tree which this page belongs to.
+  /// @param treeId The tree ID which this page belongs to.
   /// @param keepAlive
-  HybridPageGuard(TREEID treeId, bool keepAlive = true)
+  GuardedBufferFrame(TREEID treeId, bool keepAlive = true)
       : mBf(&BufferManager::sInstance->AllocNewPage()),
         mGuard(mBf->header.mLatch, GUARD_STATE::EXCLUSIVE),
         mKeepAlive(keepAlive) {
@@ -49,38 +56,42 @@ public:
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
-  /// Used to for root node.
-  HybridPageGuard(
-      Swip<BufferFrame> swip,
-      const LATCH_FALLBACK_MODE if_contended = LATCH_FALLBACK_MODE::SPIN)
-      : mBf(&swip.AsBufferFrame()), mGuard(&mBf->header.mLatch) {
-    latchAccordingToFallbackMode(mGuard, if_contended);
+  /// Construct a GuardedBufferFrame from a HOT swip, usually used for latching
+  /// the meta node of a BTree.
+  GuardedBufferFrame(
+      Swip<BufferFrame> hotSwip,
+      const LATCH_FALLBACK_MODE ifContended = LATCH_FALLBACK_MODE::SPIN)
+      : mBf(&hotSwip.AsBufferFrame()), mGuard(&mBf->header.mLatch) {
+    latchMayJump(mGuard, ifContended);
     syncGSN();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
-  /// Used for lock coupling.
-  ////
-  /// @param parentGuard The guarded parent node, which protects everyting in
+  /// Construct a GuardedBufferFrame from the guarded parent and the child swip,
+  /// usually used for lock coupling which locks the parent firstly then lock
+  /// the child.
+  ///
+  /// @param guardedParent The guarded parent node, which protects everyting in
   /// the parent node, including childSwip.
-  /// @param childSwip The swip to the child node.
-  /// @param if_contended Lock fall back mode if contention happens.
+  /// @param childSwip The swip to the child node. The child page is loaded to
+  /// memory if it is evicted.
+  /// @param ifContended Lock fall back mode if contention happens.
   template <typename T2>
-  HybridPageGuard(
-      HybridPageGuard<T2>& parentGuard, Swip<T>& childSwip,
-      const LATCH_FALLBACK_MODE if_contended = LATCH_FALLBACK_MODE::SPIN)
+  GuardedBufferFrame(
+      GuardedBufferFrame<T2>& guardedParent, Swip<T>& childSwip,
+      const LATCH_FALLBACK_MODE ifContended = LATCH_FALLBACK_MODE::SPIN)
       : mBf(BufferManager::sInstance->tryFastResolveSwip(
-            parentGuard.mGuard, childSwip.template CastTo<BufferFrame>())),
+            guardedParent.mGuard, childSwip.template CastTo<BufferFrame>())),
         mGuard(&mBf->header.mLatch) {
-    latchAccordingToFallbackMode(mGuard, if_contended);
+    latchMayJump(mGuard, ifContended);
     syncGSN();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
 
     PARANOID_BLOCK() {
-      TREEID parentTreeId = parentGuard.mBf->page.mBTreeId;
+      TREEID parentTreeId = guardedParent.mBf->page.mBTreeId;
       TREEID treeId = mBf->page.mBTreeId;
       PID pageId = mBf->header.mPageId;
-      parentGuard.JumpIfModifiedByOthers();
+      guardedParent.JumpIfModifiedByOthers();
       JumpIfModifiedByOthers();
       if (parentTreeId != treeId) {
         cout << "parentTreeId != treeId" << endl;
@@ -88,26 +99,26 @@ public:
       }
     }
 
-    parentGuard.JumpIfModifiedByOthers();
+    guardedParent.JumpIfModifiedByOthers();
   }
 
-  // I: Downgrade exclusive
-  HybridPageGuard(ExclusivePageGuard<T>&&) = delete;
-  HybridPageGuard& operator=(ExclusivePageGuard<T>&&) {
+  /// Downgrade an exclusive guard
+  GuardedBufferFrame(ExclusivePageGuard<T>&&) = delete;
+  GuardedBufferFrame& operator=(ExclusivePageGuard<T>&&) {
     mGuard.unlock();
     return *this;
   }
 
-  // I: Downgrade shared
-  HybridPageGuard(SharedPageGuard<T>&&) = delete;
-  HybridPageGuard& operator=(SharedPageGuard<T>&&) {
+  /// Downgrade a shared guard
+  GuardedBufferFrame(SharedPageGuard<T>&&) = delete;
+  GuardedBufferFrame& operator=(SharedPageGuard<T>&&) {
     mGuard.unlock();
     return *this;
   }
 
-  JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP(HybridPageGuard)
+  JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP(GuardedBufferFrame)
 
-  ~HybridPageGuard() {
+  ~GuardedBufferFrame() {
     if (mGuard.mState == GUARD_STATE::EXCLUSIVE) {
       if (!mKeepAlive) {
         reclaim();
@@ -117,10 +128,12 @@ public:
     JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP()
   }
 
-  // Assignment operator
-  constexpr HybridPageGuard& operator=(HybridPageGuard& other) = delete;
+  /// Assignment operator
+  constexpr GuardedBufferFrame& operator=(GuardedBufferFrame& other) = delete;
+
+  /// Move assignment
   template <typename T2>
-  constexpr HybridPageGuard& operator=(HybridPageGuard<T2>&& other) {
+  constexpr GuardedBufferFrame& operator=(GuardedBufferFrame<T2>&& other) {
     mBf = other.mBf;
     mGuard = std::move(other.mGuard);
     mKeepAlive = other.mKeepAlive;
@@ -136,8 +149,8 @@ public:
   }
 
   inline void incrementGSN() {
-    assert(mBf != nullptr);
-    assert(mBf->page.mGSN <= cr::Worker::my().mLogging.GetCurrentGsn());
+    DCHECK(mBf != nullptr);
+    DCHECK(mBf->page.mGSN <= cr::Worker::my().mLogging.GetCurrentGsn());
 
     mBf->page.mPSN++;
     mBf->page.mGSN = cr::Worker::my().mLogging.GetCurrentGsn() + 1;
@@ -241,29 +254,39 @@ public:
   }
 
 protected:
-  void latchAccordingToFallbackMode(HybridGuard& guard,
-                                    const LATCH_FALLBACK_MODE if_contended) {
-    if (if_contended == LATCH_FALLBACK_MODE::SPIN) {
+  void latchMayJump(HybridGuard& guard, const LATCH_FALLBACK_MODE ifContended) {
+    switch (ifContended) {
+    case LATCH_FALLBACK_MODE::SPIN: {
       guard.toOptimisticSpin();
-    } else if (if_contended == LATCH_FALLBACK_MODE::EXCLUSIVE) {
+      break;
+    }
+    case LATCH_FALLBACK_MODE::EXCLUSIVE: {
       guard.toOptimisticOrExclusive();
-    } else if (if_contended == LATCH_FALLBACK_MODE::SHARED) {
+      break;
+    }
+    case LATCH_FALLBACK_MODE::SHARED: {
       guard.toOptimisticOrShared();
-    } else if (if_contended == LATCH_FALLBACK_MODE::JUMP) {
+      break;
+    }
+    case LATCH_FALLBACK_MODE::JUMP: {
       guard.toOptimisticOrJump();
-    } else {
-      UNREACHABLE();
+      break;
+    }
+    default: {
+      DCHECK(false) << "Unhandled LATCH_FALLBACK_MODE: "
+                    << std::to_string(static_cast<u64>(ifContended));
+    }
     }
   }
 };
 
 template <typename T> class ExclusivePageGuard {
 private:
-  HybridPageGuard<T>& mRefGuard;
+  GuardedBufferFrame<T>& mRefGuard;
 
 public:
   // I: Upgrade
-  ExclusivePageGuard(HybridPageGuard<T>&& o_guard) : mRefGuard(o_guard) {
+  ExclusivePageGuard(GuardedBufferFrame<T>&& o_guard) : mRefGuard(o_guard) {
     mRefGuard.mGuard.ToExclusiveMayJump();
   }
 
@@ -329,10 +352,10 @@ public:
 
 template <typename T> class SharedPageGuard {
 public:
-  HybridPageGuard<T>& mRefGuard;
+  GuardedBufferFrame<T>& mRefGuard;
 
   // I: Upgrade
-  SharedPageGuard(HybridPageGuard<T>&& h_guard) : mRefGuard(h_guard) {
+  SharedPageGuard(GuardedBufferFrame<T>&& h_guard) : mRefGuard(h_guard) {
     mRefGuard.ToSharedMayJump();
   }
 

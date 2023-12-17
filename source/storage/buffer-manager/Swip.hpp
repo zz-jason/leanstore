@@ -3,6 +3,8 @@
 #include "BufferFrame.hpp"
 #include "Units.hpp"
 
+#include <glog/logging.h>
+
 #include <atomic>
 
 namespace leanstore {
@@ -57,7 +59,7 @@ public:
 
   /// Return the underlying buffer frame from a HOT buffer frame.
   BufferFrame& AsBufferFrame() {
-    assert(isHOT());
+    DCHECK(isHOT());
     return *bf;
   }
 

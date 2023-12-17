@@ -5,7 +5,7 @@
 #include "profiling/counters/WorkerCounters.hpp"
 #include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/TreeRegistry.hpp"
-#include "sync-primitives/PageGuard.hpp"
+#include "sync-primitives/GuardedBufferFrame.hpp"
 
 #include "rapidjson/document.h"
 
@@ -561,7 +561,8 @@ public:
 
   void Accept(BTreeVisitor* visitor);
 
-  void ToJSON(rapidjson::Value* resultObj, rapidjson::Value::AllocatorType& allocator);
+  void ToJSON(rapidjson::Value* resultObj,
+              rapidjson::Value::AllocatorType& allocator);
 
 private:
   inline bool shrinkSearchRange(u16& lower, u16& upper, Slice key) {
