@@ -156,6 +156,15 @@ public:
 
 static constexpr u64 EFFECTIVE_PAGE_SIZE = sizeof(Page::mPayload);
 
+/// The unit of buffer pool. Buffer pool is partitioned into several partitions,
+/// and each partition is composed of BufferFrames. A BufferFrame is used to
+/// store the content of a disk page. The BufferFrame contains all the needed
+/// data structures to control concurrent page access.
+///
+/// NOTE: BufferFrame usually used together with GuardedBufferFrame which shared
+/// or exclusively lock the latch on the BufferFrame for data access. For
+/// convenient, lots of BufferFrame related operations are implementated in
+/// GuardedBufferFrame.
 class BufferFrame {
 public:
   /// The control part. Information used by buffer manager, concurrent
@@ -189,7 +198,7 @@ public:
            header.mLatch.IsLockedExclusively();
   }
 
-  void Init(PID pageId) {
+  inline void Init(PID pageId) {
     DCHECK(header.state == STATE::FREE);
     DCHECK(!header.mLatch.IsLockedExclusively());
 

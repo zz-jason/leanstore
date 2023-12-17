@@ -1,19 +1,19 @@
 #pragma once
 
 #include "Exceptions.hpp"
-#include "HybridGuard.hpp"
 #include "concurrency-recovery/CRMG.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "storage/buffer-manager/Tracing.hpp"
+#include "sync-primitives/HybridGuard.hpp"
 
 #include <glog/logging.h>
 
 namespace leanstore {
 namespace storage {
 
-template <typename T> class ExclusivePageGuard;
-template <typename T> class SharedPageGuard;
+template <typename T> class ExclusiveGuardedBufferFrame;
+template <typename T> class SharedGuardedBufferFrame;
 
 /// A lock guarded buffer frame
 template <typename T> class GuardedBufferFrame {
@@ -52,7 +52,7 @@ public:
         mGuard(mBf->header.mLatch, GUARD_STATE::EXCLUSIVE),
         mKeepAlive(keepAlive) {
     mBf->page.mBTreeId = treeId;
-    markAsDirty();
+    MarkAsDirty();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
@@ -103,15 +103,15 @@ public:
   }
 
   /// Downgrade an exclusive guard
-  GuardedBufferFrame(ExclusivePageGuard<T>&&) = delete;
-  GuardedBufferFrame& operator=(ExclusivePageGuard<T>&&) {
+  GuardedBufferFrame(ExclusiveGuardedBufferFrame<T>&&) = delete;
+  GuardedBufferFrame& operator=(ExclusiveGuardedBufferFrame<T>&&) {
     mGuard.unlock();
     return *this;
   }
 
   /// Downgrade a shared guard
-  GuardedBufferFrame(SharedPageGuard<T>&&) = delete;
-  GuardedBufferFrame& operator=(SharedPageGuard<T>&&) {
+  GuardedBufferFrame(SharedGuardedBufferFrame<T>&&) = delete;
+  GuardedBufferFrame& operator=(SharedGuardedBufferFrame<T>&&) {
     mGuard.unlock();
     return *this;
   }
@@ -141,40 +141,33 @@ public:
   }
 
 public:
-  //---------------------------------------------------------------------------
-  // Object Utils
-  //---------------------------------------------------------------------------
-  inline void markAsDirty() {
+  inline void MarkAsDirty() {
     mBf->page.mPSN++;
   }
 
-  inline void incrementGSN() {
+  inline void IncPageGSN() {
     DCHECK(mBf != nullptr);
     DCHECK(mBf->page.mGSN <= cr::Worker::my().mLogging.GetCurrentGsn());
 
     mBf->page.mPSN++;
     mBf->page.mGSN = cr::Worker::my().mLogging.GetCurrentGsn() + 1;
     mBf->header.mLastWriterWorker = cr::Worker::my().mWorkerId; // RFA
-
-    const auto currentGsn = cr::Worker::my().mLogging.GetCurrentGsn();
-    const auto pageGsn = mBf->page.mGSN;
-    if (currentGsn < pageGsn) {
-      cr::Worker::my().mLogging.SetCurrentGsn(pageGsn);
-    }
+    cr::Worker::my().mLogging.SetCurrentGsn(mBf->page.mGSN);
   }
 
-  // WAL
+  inline bool HasRemoteDependency() {
+    return mBf->page.mGSN > cr::Worker::my().mLogging.mMinFlushedGsn &&
+           mBf->header.mLastWriterWorker != cr::Worker::my().mWorkerId;
+  }
+
   inline void syncGSN() {
     if (!FLAGS_wal) {
       return;
     }
 
     // TODO: don't sync on temporary table pages like HistoryTree
-    if (FLAGS_wal_rfa) {
-      if (mBf->page.mGSN > cr::Worker::my().mLogging.mMinFlushedGsn &&
-          mBf->header.mLastWriterWorker != cr::Worker::my().mWorkerId) {
-        cr::Worker::my().mLogging.mHasRemoteDependency = true;
-      }
+    if (FLAGS_wal_rfa && HasRemoteDependency()) {
+      cr::Worker::my().mLogging.mHasRemoteDependency = true;
     }
 
     const auto currentGsn = cr::Worker::my().mLogging.GetCurrentGsn();
@@ -190,7 +183,7 @@ public:
     DCHECK(mGuard.mState == GUARD_STATE::EXCLUSIVE);
 
     if (!FLAGS_wal_tuple_rfa) {
-      incrementGSN();
+      IncPageGSN();
     }
 
     const auto pageId = mBf->header.mPageId;
@@ -211,6 +204,7 @@ public:
   inline bool EncounteredContention() {
     return mGuard.mEncounteredContention;
   }
+
   inline void unlock() {
     mGuard.unlock();
   }
@@ -222,12 +216,15 @@ public:
   inline T& ref() {
     return *reinterpret_cast<T*>(mBf->page.mPayload);
   }
+
   inline T* ptr() {
     return reinterpret_cast<T*>(mBf->page.mPayload);
   }
+
   inline Swip<T> swip() {
     return Swip<T>(mBf);
   }
+
   inline T* operator->() {
     return reinterpret_cast<T*>(mBf->page.mPayload);
   }
@@ -280,13 +277,14 @@ protected:
   }
 };
 
-template <typename T> class ExclusivePageGuard {
+template <typename PayloadType> class ExclusiveGuardedBufferFrame {
 private:
-  GuardedBufferFrame<T>& mRefGuard;
+  GuardedBufferFrame<PayloadType>& mRefGuard;
 
 public:
   // I: Upgrade
-  ExclusivePageGuard(GuardedBufferFrame<T>&& o_guard) : mRefGuard(o_guard) {
+  ExclusiveGuardedBufferFrame(GuardedBufferFrame<PayloadType>&& guardedBf)
+      : mRefGuard(guardedBf) {
     mRefGuard.mGuard.ToExclusiveMayJump();
   }
 
@@ -300,23 +298,19 @@ public:
     mRefGuard.submitWALEntry(total_size);
   }
 
-  template <typename... Args> void init(Args&&... args) {
-    new (mRefGuard.mBf->page.mPayload) T(std::forward<Args>(args)...);
-  }
-
   void keepAlive() {
     mRefGuard.mKeepAlive = true;
   }
 
-  void incrementGSN() {
-    mRefGuard.incrementGSN();
+  void MarkAsDirty() {
+    mRefGuard.MarkAsDirty();
   }
 
-  void markAsDirty() {
-    mRefGuard.markAsDirty();
+  void IncPageGSN() {
+    mRefGuard.IncPageGSN();
   }
 
-  ~ExclusivePageGuard() {
+  ~ExclusiveGuardedBufferFrame() {
     if (!mRefGuard.mKeepAlive &&
         mRefGuard.mGuard.mState == GUARD_STATE::EXCLUSIVE) {
       mRefGuard.reclaim();
@@ -325,20 +319,26 @@ public:
     }
   }
 
-  inline T& ref() {
-    return *reinterpret_cast<T*>(mRefGuard.mBf->page.mPayload);
+  /// Initialize the payload data structure (i.e. BTreeNode), usually used when
+  /// the buffer frame is used to serve a new page.
+  template <typename... Args> void InitPayload(Args&&... args) {
+    new (mRefGuard.mBf->page.mPayload) PayloadType(std::forward<Args>(args)...);
   }
 
-  inline T* PageData() {
-    return reinterpret_cast<T*>(mRefGuard.mBf->page.mPayload);
+  inline u8* GetPagePayloadPtr() {
+    return reinterpret_cast<u8*>(mRefGuard.mBf->page.mPayload);
   }
 
-  inline Swip<T> swip() {
-    return Swip<T>(mRefGuard.mBf);
+  inline PayloadType* GetPagePayload() {
+    return reinterpret_cast<PayloadType*>(mRefGuard.mBf->page.mPayload);
   }
 
-  inline T* operator->() {
-    return reinterpret_cast<T*>(mRefGuard.mBf->page.mPayload);
+  inline PayloadType* operator->() {
+    return GetPagePayload();
+  }
+
+  inline Swip<PayloadType> swip() {
+    return Swip<PayloadType>(mRefGuard.mBf);
   }
 
   inline BufferFrame* bf() {
@@ -350,16 +350,19 @@ public:
   }
 };
 
-template <typename T> class SharedPageGuard {
+/// Shared lock guarded buffer frame.
+/// TODO(jian.z): Seems it hasen't been used in the codebase, can we remove it?
+template <typename T> class SharedGuardedBufferFrame {
 public:
   GuardedBufferFrame<T>& mRefGuard;
 
   // I: Upgrade
-  SharedPageGuard(GuardedBufferFrame<T>&& h_guard) : mRefGuard(h_guard) {
+  SharedGuardedBufferFrame(GuardedBufferFrame<T>&& h_guard)
+      : mRefGuard(h_guard) {
     mRefGuard.ToSharedMayJump();
   }
 
-  ~SharedPageGuard() {
+  ~SharedGuardedBufferFrame() {
     mRefGuard.unlock();
   }
 

@@ -7,7 +7,7 @@
 #include "KVInterface.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
-#include "sync-primitives/GuardedBufferFrame.hpp"
+#include "storage/buffer-manager/GuardedBufferFrame.hpp"
 #include "utils/Defer.hpp"
 #include "utils/JsonUtil.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -64,9 +64,10 @@ public:
 
   void trySplit(BufferFrame& to_split, s16 pos = -1);
 
-  s16 mergeLeftIntoRight(ExclusivePageGuard<BTreeNode>& parent, s16 left_pos,
-                         ExclusivePageGuard<BTreeNode>& from_left,
-                         ExclusivePageGuard<BTreeNode>& to_right,
+  s16 mergeLeftIntoRight(ExclusiveGuardedBufferFrame<BTreeNode>& parent,
+                         s16 left_pos,
+                         ExclusiveGuardedBufferFrame<BTreeNode>& from_left,
+                         ExclusiveGuardedBufferFrame<BTreeNode>& to_right,
                          bool full_merge_or_nothing);
 
   XMergeReturnCode XMerge(GuardedBufferFrame<BTreeNode>& guardedParent,
@@ -76,7 +77,7 @@ public:
   inline bool isMetaNode(GuardedBufferFrame<BTreeNode>& guard) {
     return mMetaNodeSwip == guard.mBf;
   }
-  inline bool isMetaNode(ExclusivePageGuard<BTreeNode>& guard) {
+  inline bool isMetaNode(ExclusiveGuardedBufferFrame<BTreeNode>& guard) {
     return mMetaNodeSwip == guard.bf();
   }
   s64 iterateAllPages(BTreeNodeCallback inner, BTreeNodeCallback leaf);
@@ -257,7 +258,7 @@ public:
     BTreeGeneric::freeBTreeNodesRecursive(guardedRootNode);
 
     auto exclusiveGuardedMetaNode =
-        ExclusivePageGuard(std::move(guardedMetaNode));
+        ExclusiveGuardedBufferFrame(std::move(guardedMetaNode));
     exclusiveGuardedMetaNode.reclaim();
   }
 
@@ -303,7 +304,8 @@ inline void BTreeGeneric::freeBTreeNodesRecursive(
     }
   }
 
-  auto exclusiveGuardedNode = ExclusivePageGuard(std::move(guardedNode));
+  auto exclusiveGuardedNode =
+      ExclusiveGuardedBufferFrame(std::move(guardedNode));
   exclusiveGuardedNode.reclaim();
 }
 
