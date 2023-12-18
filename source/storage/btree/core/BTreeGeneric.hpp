@@ -463,12 +463,13 @@ inline void BTreeGeneric::FindLeafCanJump(
       WorkerCounters::myCounters().dt_inner_page[mTreeId]++;
     }
 
-    Swip<BTreeNode>& c_swip = targetGuard->lookupInner(key);
+    auto& childSwip = targetGuard->lookupInner(key);
+    DCHECK(!childSwip.IsEmpty());
     guardedParent = std::move(targetGuard);
     if (level == mHeight - 1) {
-      targetGuard = GuardedBufferFrame(guardedParent, c_swip, mode);
+      targetGuard = GuardedBufferFrame(guardedParent, childSwip, mode);
     } else {
-      targetGuard = GuardedBufferFrame(guardedParent, c_swip);
+      targetGuard = GuardedBufferFrame(guardedParent, childSwip);
     }
     level = level + 1;
   }

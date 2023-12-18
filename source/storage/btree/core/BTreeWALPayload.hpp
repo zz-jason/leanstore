@@ -149,6 +149,14 @@ struct WALInsert : WALPayload {
     std::memcpy(payload + key_length, val.data(), value_length);
   }
 
+  Slice GetKey() {
+    return Slice(payload, key_length);
+  }
+
+  Slice GetVal() {
+    return Slice(payload + key_length, value_length);
+  }
+
   virtual std::unique_ptr<rapidjson::Document> ToJSON() override {
     auto doc = WALPayload::ToJSON();
 

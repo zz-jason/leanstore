@@ -3,6 +3,7 @@
 #include "Units.hpp"
 #include "storage/btree/BTreeLL.hpp"
 #include "storage/btree/BTreeVI.hpp"
+#include "storage/btree/core/BTreeExclusiveIterator.hpp"
 #include "utils/Defer.hpp"
 
 #include <glog/logging.h>
@@ -154,10 +155,10 @@ inline void Recovery::Analysis() {
       mActiveTxTable[walEntry->mTxId] = offset;
 
       auto& bf = ResolvePage(complexEntry->mPageId);
-      DCHECK(bf.header.mPageId == complexEntry->mPageId);
-      DCHECK(bf.page.mBTreeId == complexEntry->mTreeId);
+      // DCHECK(bf.header.mPageId == complexEntry->mPageId);
+      // DCHECK(bf.page.mBTreeId == complexEntry->mTreeId);
 
-      if (complexEntry->gsn > bf.page.mGSN &&
+      if (complexEntry->mPSN >= bf.page.mPSN &&
           mDirtyPageTable.find(complexEntry->mPageId) ==
               mDirtyPageTable.end()) {
         // record the first WALEntry that makes the page dirty
@@ -195,7 +196,7 @@ inline void Recovery::Redo() {
     auto complexEntry = reinterpret_cast<WALEntryComplex*>(walEntryPtr);
     DCHECK(bytesRead == complexEntry->size);
     if (mDirtyPageTable.find(complexEntry->mPageId) == mDirtyPageTable.end() ||
-        complexEntry->gsn < mDirtyPageTable[complexEntry->mPageId]) {
+        offset < mDirtyPageTable[complexEntry->mPageId]) {
       offset += bytesRead;
       continue;
     }
@@ -203,8 +204,40 @@ inline void Recovery::Redo() {
     // TODO(jian.z): redo previous operations on the page
     auto& bf = ResolvePage(complexEntry->mPageId);
     DCHECK(bf.header.mPageId == complexEntry->mPageId);
-    DCHECK(bf.page.mBTreeId == complexEntry->mTreeId);
+    // DCHECK(bf.page.mBTreeId == complexEntry->mTreeId);
     SCOPED_DEFER(bf.header.mKeepInMemory = false);
+
+    auto walPayload = reinterpret_cast<leanstore::storage::btree::WALPayload*>(
+        complexEntry->payload);
+    switch (walPayload->type) {
+    case leanstore::storage::btree::WALPayload::TYPE::WALInsert: {
+      auto node = reinterpret_cast<leanstore::storage::btree::BTreeNode*>(
+          bf.page.mPayload);
+      auto walInsert =
+          dynamic_cast<leanstore::storage::btree::WALInsert*>(walPayload);
+      auto key = walInsert->GetKey();
+      auto val = walInsert->GetVal();
+      auto payloadSize =
+          val.size() + sizeof(leanstore::storage::btree::BTreeVI::ChainedTuple);
+      auto slotId = node->insertDoNotCopyPayload(key, payloadSize, -1);
+      auto payload = MutableSlice(node->ValData(slotId), node->ValSize(slotId));
+      // TODO(jian.z): store worker id in wal
+      // TODO(jian.z): store transaction start ts in wal transaction begin
+      auto& primaryVersion =
+          *new (payload.data())
+              leanstore::storage::btree::BTreeVI::ChainedTuple(
+                  cr::Worker::my().mWorkerId, cr::activeTX().startTS());
+      std::memcpy(primaryVersion.payload, val.data(), val.size());
+
+      break;
+      // insert on the btree
+      // for convenience, use BTreeExclusiveIterator directly
+    }
+    default: {
+      DCHECK(false) << "Unhandled WALPayload::TYPE: "
+                    << std::to_string(static_cast<u64>(walPayload->type));
+    }
+    }
 
     offset += bytesRead;
     continue;

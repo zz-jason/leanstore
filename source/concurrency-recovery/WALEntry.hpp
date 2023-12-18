@@ -95,10 +95,9 @@ public:
 
 class WALEntryComplex : public WALEntry {
 public:
-  /// Global sequence number of the WALEntry, used for concurrency control and
-  /// transaction isolation. Also used to verify whether a page has been
-  /// modified since last checkpoint.
-  LID gsn;
+  /// Page sequence number of the WALEntry, indicate the page version this WAL
+  /// entry is based on.
+  LID mPSN;
 
   /// The btree ID of the WALEntry, used to identify the btree node together
   /// with page ID.
@@ -115,8 +114,8 @@ public:
 public:
   WALEntryComplex() = default;
 
-  WALEntryComplex(LID lsn, u64 size, LID gsn, TREEID treeId, PID pageId)
-      : WALEntry(lsn, size, TYPE::COMPLEX), gsn(gsn), mTreeId(treeId),
+  WALEntryComplex(LID lsn, u64 size, LID psn, TREEID treeId, PID pageId)
+      : WALEntry(lsn, size, TYPE::COMPLEX), mPSN(psn), mTreeId(treeId),
         mPageId(pageId) {
   }
 
@@ -224,25 +223,25 @@ inline std::unique_ptr<rapidjson::Document> WALEntry::ToJSON() {
 inline std::unique_ptr<rapidjson::Document> WALEntryComplex::ToJSON() {
   auto doc = WALEntry::ToJSON();
 
-  // gsn
+  // psn
   {
     rapidjson::Value member;
-    member.SetUint64(gsn);
-    doc->AddMember("GSN", member, doc->GetAllocator());
+    member.SetUint64(mPSN);
+    doc->AddMember("mPSN", member, doc->GetAllocator());
   }
 
   // treeId
   {
     rapidjson::Value member;
     member.SetInt64(mTreeId);
-    doc->AddMember("treeId", member, doc->GetAllocator());
+    doc->AddMember("mTreeId", member, doc->GetAllocator());
   }
 
   // pageId
   {
     rapidjson::Value member;
     member.SetUint64(mPageId);
-    doc->AddMember("pageId", member, doc->GetAllocator());
+    doc->AddMember("mPageId", member, doc->GetAllocator());
   }
 
   return doc;
