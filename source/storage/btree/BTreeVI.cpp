@@ -384,7 +384,7 @@ OP_RESULT BTreeVI::insert(Slice key, Slice val) {
 
   cr::activeTX().markAsWrite();
   cr::Worker::my().mLogging.walEnsureEnoughSpace(PAGE_SIZE * 1);
-  u16 payload_length = val.size() + sizeof(ChainedTuple);
+  u16 payloadSize = val.size() + sizeof(ChainedTuple);
 
   while (true) {
     JUMPMU_TRY() {
@@ -409,7 +409,7 @@ OP_RESULT BTreeVI::insert(Slice key, Slice val) {
         // Not implemented: maybe it has been removed but no GCed
       }
 
-      ret = iterator.enoughSpaceInCurrentNode(key, payload_length);
+      ret = iterator.enoughSpaceInCurrentNode(key, payloadSize);
       if (ret == OP_RESULT::NOT_ENOUGH_SPACE) {
         iterator.splitForKey(key);
         JUMPMU_CONTINUE;
@@ -420,7 +420,8 @@ OP_RESULT BTreeVI::insert(Slice key, Slice val) {
           key.size() + val.size(), key, val);
       walHandler.SubmitWal();
 
-      iterator.insertInCurrentNode(key, payload_length);
+      // insert
+      iterator.insertInCurrentNode(key, payloadSize);
       MutableSlice payload = iterator.mutableValue();
       auto& primaryVersion = *new (payload.data()) ChainedTuple(
           cr::Worker::my().mWorkerId, cr::activeTX().startTS());

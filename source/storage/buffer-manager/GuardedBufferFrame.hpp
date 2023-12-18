@@ -191,8 +191,7 @@ public:
     // TODO: verify
     auto handler =
         cr::Worker::my().mLogging.ReserveWALEntryComplex<WT, Args...>(
-            sizeof(WT) + payloadSize, pageId,
-            cr::Worker::my().mLogging.GetCurrentGsn(), treeId,
+            sizeof(WT) + payloadSize, pageId, mBf->page.mPSN, treeId,
             std::forward<Args>(args)...);
     return handler;
   }

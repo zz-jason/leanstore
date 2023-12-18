@@ -21,21 +21,26 @@ struct BufferFrame;
 /// 3. EVICTED. The swip represents a page id. The most most significant bit is
 ///    1 which marks the swip as "EVICTED".
 template <typename T> class Swip {
-
 public:
   union {
     u64 mPageId;
     BufferFrame* bf;
   };
 
-  Swip() = default;
+public:
+  /// Create an empty swip.
+  Swip() : mPageId(0){};
 
+  /// Create an swip pointing to the buffer frame.
   Swip(BufferFrame* bf) : bf(bf) {
   }
 
+  /// Copy construct from another swip.
   template <typename T2> Swip(Swip<T2>& other) : mPageId(other.mPageId) {
   }
 
+public:
+  /// Whether two swip is equal.
   bool operator==(const Swip& other) const {
     return (raw() == other.raw());
   }
@@ -50,6 +55,12 @@ public:
 
   bool isEVICTED() {
     return mPageId & evicted_bit;
+  }
+
+  /// Indicates whether this swip points to nothing: no evicted bit, no cool
+  /// bit, the memory pointer is nullptr
+  bool IsEmpty() {
+    return mPageId == 0;
   }
 
   u64 asPageID() {
