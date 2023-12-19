@@ -36,7 +36,7 @@ public:
   bool mIsChildBfUpdated = false;
 
 public:
-  template <typename T> GuardedBufferFrame<T> getParentReadPageGuard() {
+  template <typename T> GuardedBufferFrame<T> GetGuardedParent() {
     return GuardedBufferFrame<T>(std::move(mParentGuard), mParentBf);
   }
 };

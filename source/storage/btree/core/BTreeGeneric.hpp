@@ -64,24 +64,24 @@ public:
 
   void trySplit(BufferFrame& to_split, s16 pos = -1);
 
-  s16 mergeLeftIntoRight(ExclusiveGuardedBufferFrame<BTreeNode>& parent,
+  s16 mergeLeftIntoRight(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
                          s16 left_pos,
-                         ExclusiveGuardedBufferFrame<BTreeNode>& from_left,
-                         ExclusiveGuardedBufferFrame<BTreeNode>& to_right,
+                         ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedLeft,
+                         ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedRight,
                          bool full_merge_or_nothing);
 
   XMergeReturnCode XMerge(GuardedBufferFrame<BTreeNode>& guardedParent,
                           GuardedBufferFrame<BTreeNode>& guardedChild,
                           ParentSwipHandler&);
 
-  inline bool isMetaNode(GuardedBufferFrame<BTreeNode>& guard) {
-    return mMetaNodeSwip == guard.mBf;
+  inline bool isMetaNode(GuardedBufferFrame<BTreeNode>& guardedNode) {
+    return mMetaNodeSwip == guardedNode.mBf;
   }
-  inline bool isMetaNode(ExclusiveGuardedBufferFrame<BTreeNode>& guard) {
-    return mMetaNodeSwip == guard.bf();
+  inline bool isMetaNode(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedNode) {
+    return mMetaNodeSwip == xGuardedNode.bf();
   }
   s64 iterateAllPages(BTreeNodeCallback inner, BTreeNodeCallback leaf);
-  s64 iterateAllPagesRec(GuardedBufferFrame<BTreeNode>& node_guard,
+  s64 iterateAllPagesRec(GuardedBufferFrame<BTreeNode>& guardedNode,
                          BTreeNodeCallback inner, BTreeNodeCallback leaf);
   u64 countInner();
   u64 countPages();
@@ -157,27 +157,27 @@ public:
     }
 
     // Check whether search on the wrong tree or the root node is evicted
-    GuardedBufferFrame<BTreeNode> parentGuard(btree.mMetaNodeSwip);
+    GuardedBufferFrame<BTreeNode> guardedParent(btree.mMetaNodeSwip);
     if (btree.mTreeId != bfToFind.page.mBTreeId ||
-        parentGuard->mRightMostChildSwip.isEVICTED()) {
+        guardedParent->mRightMostChildSwip.isEVICTED()) {
       jumpmu::jump();
     }
 
     // Check whether the parent buffer frame to find is root
-    Swip<BTreeNode>* childSwip = &parentGuard->mRightMostChildSwip;
+    Swip<BTreeNode>* childSwip = &guardedParent->mRightMostChildSwip;
     if (&childSwip->asBufferFrameMasked() == &bfToFind) {
-      parentGuard.JumpIfModifiedByOthers();
+      guardedParent.JumpIfModifiedByOthers();
       COUNTERS_BLOCK() {
         WorkerCounters::myCounters().dt_find_parent_root[btree.mTreeId]++;
       }
-      return {.mParentGuard = std::move(parentGuard.mGuard),
+      return {.mParentGuard = std::move(guardedParent.mGuard),
               .mParentBf = &btree.mMetaNodeSwip.AsBufferFrame(),
               .mChildSwip = childSwip->CastTo<BufferFrame>()};
     }
 
     // Check whether the root node is cool, all nodes below including the parent
     // of the buffer frame to find are evicted.
-    if (parentGuard->mRightMostChildSwip.isCOOL()) {
+    if (guardedParent->mRightMostChildSwip.isCOOL()) {
       jumpmu::jump();
     }
 
@@ -205,31 +205,31 @@ public:
     // LATCH_FALLBACK_MODE::JUMP : LATCH_FALLBACK_MODE::EXCLUSIVE;
     LATCH_FALLBACK_MODE latch_mode = LATCH_FALLBACK_MODE::JUMP;
     // The parent of the bf we are looking for (bfToFind)
-    GuardedBufferFrame childGuard(parentGuard, parentGuard->mRightMostChildSwip,
-                                  latch_mode);
+    GuardedBufferFrame guardedChild(
+        guardedParent, guardedParent->mRightMostChildSwip, latch_mode);
     u16 level = 0;
-    while (!childGuard->mIsLeaf && search_condition(childGuard)) {
-      parentGuard = std::move(childGuard);
+    while (!guardedChild->mIsLeaf && search_condition(guardedChild)) {
+      guardedParent = std::move(guardedChild);
       if constexpr (jumpIfEvicted) {
         if (childSwip->isEVICTED()) {
           jumpmu::jump();
         }
       }
-      childGuard = GuardedBufferFrame(
-          parentGuard, childSwip->CastTo<BTreeNode>(), latch_mode);
+      guardedChild = GuardedBufferFrame(
+          guardedParent, childSwip->CastTo<BTreeNode>(), latch_mode);
       level = level + 1;
     }
-    parentGuard.unlock();
+    guardedParent.unlock();
 
     const bool found = &childSwip->asBufferFrameMasked() == &bfToFind;
-    childGuard.JumpIfModifiedByOthers();
+    guardedChild.JumpIfModifiedByOthers();
     if (!found) {
       jumpmu::jump();
     }
 
     ParentSwipHandler parentHandler = {
-        .mParentGuard = std::move(childGuard.mGuard),
-        .mParentBf = childGuard.mBf,
+        .mParentGuard = std::move(guardedChild.mGuard),
+        .mParentBf = guardedChild.mBf,
         .mChildSwip = childSwip->CastTo<BufferFrame>(),
         .mPosInParent = posInParent};
     COUNTERS_BLOCK() {
@@ -258,9 +258,8 @@ public:
         guardedMetaNode, guardedMetaNode->mRightMostChildSwip);
     BTreeGeneric::freeBTreeNodesRecursive(guardedRootNode);
 
-    auto exclusiveGuardedMetaNode =
-        ExclusiveGuardedBufferFrame(std::move(guardedMetaNode));
-    exclusiveGuardedMetaNode.reclaim();
+    auto xGuardedMeta = ExclusiveGuardedBufferFrame(std::move(guardedMetaNode));
+    xGuardedMeta.reclaim();
   }
 
   static void ToJSON(BTreeGeneric& btree, rapidjson::Document* resultDoc) {
@@ -305,9 +304,8 @@ inline void BTreeGeneric::freeBTreeNodesRecursive(
     }
   }
 
-  auto exclusiveGuardedNode =
-      ExclusiveGuardedBufferFrame(std::move(guardedNode));
-  exclusiveGuardedNode.reclaim();
+  auto xGuardedNode = ExclusiveGuardedBufferFrame(std::move(guardedNode));
+  xGuardedNode.reclaim();
 }
 
 inline void BTreeGeneric::ToJSONRecursive(
@@ -377,7 +375,7 @@ inline SpaceCheckResult BTreeGeneric::checkSpaceUtilization(BufferFrame& bf) {
 
   ParentSwipHandler parentHandler = BTreeGeneric::findParentJump(*this, bf);
   GuardedBufferFrame<BTreeNode> guardedParent =
-      parentHandler.getParentReadPageGuard<BTreeNode>();
+      parentHandler.GetGuardedParent<BTreeNode>();
   GuardedBufferFrame<BTreeNode> guardedChild(
       guardedParent, parentHandler.mChildSwip.CastTo<BTreeNode>(),
       LATCH_FALLBACK_MODE::JUMP);

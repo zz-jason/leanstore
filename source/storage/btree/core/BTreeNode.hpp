@@ -532,11 +532,12 @@ public:
   void compactify();
 
   // merge right node into this node
-  u32 mergeSpaceUpperBound(ExclusiveGuardedBufferFrame<BTreeNode>& right);
+  u32 mergeSpaceUpperBound(
+      ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedRight);
   u32 spaceUsedBySlot(u16 slot_id);
 
-  bool merge(u16 slotId, ExclusiveGuardedBufferFrame<BTreeNode>& parent,
-             ExclusiveGuardedBufferFrame<BTreeNode>& right);
+  bool merge(u16 slotId, ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
+             ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedRight);
 
   // store key/value pair at slotId
   void storeKeyValue(u16 slotId, Slice key, Slice val);
@@ -546,9 +547,9 @@ public:
   void copyKeyValue(u16 srcSlot, BTreeNode* dst, u16 dstSlot);
   void insertFence(FenceKey& fk, Slice key);
   void setFences(Slice lowerKey, Slice upperKey);
-  void split(ExclusiveGuardedBufferFrame<BTreeNode>& parent,
-             ExclusiveGuardedBufferFrame<BTreeNode>& new_node, u16 sepSlot,
-             u8* sepKey, u16 sepLength);
+  void split(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
+             ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedNewNode,
+             u16 sepSlot, u8* sepKey, u16 sepLength);
   u16 commonPrefix(u16 aPos, u16 bPos);
   SeparatorInfo findSep();
   void getSep(u8* sepKeyOut, SeparatorInfo info);
