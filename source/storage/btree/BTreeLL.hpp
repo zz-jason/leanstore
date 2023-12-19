@@ -82,17 +82,16 @@ public:
               static_cast<BufferManagedTree*>(new storage::btree::BTreeLL()));
         });
     if (treePtr == nullptr) {
-      LOG(ERROR) << "Failed to create BTreeLL"
-                 << ", treeName has been taken"
+      LOG(ERROR) << "Failed to create BTreeLL, treeName has been taken"
                  << ", treeName=" << treeName;
       return nullptr;
     }
     auto tree = dynamic_cast<storage::btree::BTreeLL*>(treePtr);
-    tree->create(treeId, config);
+    tree->Init(treeId, config);
     return tree;
   }
 
-protected:
+public:
   //---------------------------------------------------------------------------
   // WAL && GC Utils
   //---------------------------------------------------------------------------

@@ -97,22 +97,22 @@ OP_RESULT BTreeVI::lookupPessimistic(Slice key, ValCallback valCallback) {
 OP_RESULT BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
   while (true) {
     JUMPMU_TRY() {
-      GuardedBufferFrame<BTreeNode> leaf;
+      GuardedBufferFrame<BTreeNode> guardedLeaf;
 
       // Find the correct page containing the key
-      FindLeafCanJump(key, leaf);
+      FindLeafCanJump(key, guardedLeaf);
 
       // Find the correct slot of the key
-      s16 slotId = leaf->lowerBound<true>(key);
+      s16 slotId = guardedLeaf->lowerBound<true>(key);
 
       // Return NOT_FOUND if could find the slot
       if (slotId == -1) {
-        leaf.JumpIfModifiedByOthers();
+        guardedLeaf.JumpIfModifiedByOthers();
         JUMPMU_RETURN OP_RESULT::NOT_FOUND;
       }
 
-      auto tupleHead = *reinterpret_cast<Tuple*>(leaf->ValData(slotId));
-      leaf.JumpIfModifiedByOthers();
+      auto tupleHead = *reinterpret_cast<Tuple*>(guardedLeaf->ValData(slotId));
+      guardedLeaf.JumpIfModifiedByOthers();
 
       // Return NOT_FOUND if the tuple is not visible
       if (!isVisibleForMe(tupleHead.mWorkerId, tupleHead.tx_ts, false)) {
@@ -130,16 +130,16 @@ OP_RESULT BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
         break;
       }
       default: {
-        leaf.JumpIfModifiedByOthers();
+        guardedLeaf.JumpIfModifiedByOthers();
         UNREACHABLE();
       }
       }
 
       // Fiund target payload, apply the callback
-      Slice payload = leaf->Value(slotId);
+      Slice payload = guardedLeaf->Value(slotId);
       payload.remove_prefix(offset);
       valCallback(payload);
-      leaf.JumpIfModifiedByOthers();
+      guardedLeaf.JumpIfModifiedByOthers();
 
       COUNTERS_BLOCK() {
         WorkerCounters::myCounters().cc_read_chains[mTreeId]++;
@@ -365,6 +365,7 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(
 
 OP_RESULT BTreeVI::insert(Slice key, Slice val) {
   // check implicit transaction
+  // TODO(jian.z): should we force users to explicitly start a transaction?
   auto autoCommit(false);
   if (!cr::Worker::my().IsTxStarted()) {
     DLOG(INFO) << "Start implicit transaction";
@@ -421,17 +422,9 @@ OP_RESULT BTreeVI::insert(Slice key, Slice val) {
       walHandler.SubmitWal();
 
       // insert
-      iterator.insertInCurrentNode(key, payloadSize);
-      MutableSlice payload = iterator.mutableValue();
-      auto& primaryVersion = *new (payload.data()) ChainedTuple(
-          cr::Worker::my().mWorkerId, cr::activeTX().startTS());
-      std::memcpy(primaryVersion.payload, val.data(), val.size());
-
-      if (cr::activeTX().mTxMode == TX_MODE::INSTANTLY_VISIBLE_BULK_INSERT) {
-        primaryVersion.tx_ts = MSB | 0;
-      }
-
-      iterator.MarkAsDirty();
+      BTreeVI::InsertToNode(
+          iterator.mGuardedLeaf, key, val, cr::Worker::my().mWorkerId,
+          cr::activeTX().startTS(), cr::activeTX().mTxMode, iterator.mSlotId);
       JUMPMU_RETURN OP_RESULT::OK;
     }
     JUMPMU_CATCH() {

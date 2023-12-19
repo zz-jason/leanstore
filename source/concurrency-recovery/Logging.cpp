@@ -101,7 +101,8 @@ WALEntrySimple& Logging::ReserveWALEntrySimple(WALEntry::TYPE type) {
   if (type != WALEntry::TYPE::TX_START) {
     mActiveWALEntrySimple->mPrevLSN = mPrevLSN;
   }
-  mActiveWALEntrySimple->mTxId = leanstore::cr::Worker::my().mActiveTx.mStartTs;
+  auto& curWorker = leanstore::cr::Worker::my();
+  mActiveWALEntrySimple->InitTxInfo(&curWorker.mActiveTx, curWorker.mWorkerId);
   return *mActiveWALEntrySimple;
 }
 

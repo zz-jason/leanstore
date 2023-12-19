@@ -58,7 +58,7 @@ public:
   //---------------------------------------------------------------------------
   // Object Utils
   //---------------------------------------------------------------------------
-  void create(TREEID treeId, Config config);
+  void Init(TREEID treeId, Config config);
 
   bool tryMerge(BufferFrame& to_split, bool swizzle_sibling = true);
 
@@ -133,10 +133,11 @@ public:
   // Helpers
   template <LATCH_FALLBACK_MODE mode = LATCH_FALLBACK_MODE::SHARED>
   inline void FindLeafCanJump(Slice key,
-                              GuardedBufferFrame<BTreeNode>& targetGuard);
+                              GuardedBufferFrame<BTreeNode>& guardedTarget);
 
   template <LATCH_FALLBACK_MODE mode = LATCH_FALLBACK_MODE::SHARED>
-  void findLeafAndLatch(GuardedBufferFrame<BTreeNode>& targetGuard, Slice key);
+  void findLeafAndLatch(GuardedBufferFrame<BTreeNode>& guardedTarget,
+                        Slice key);
 
 public:
   /// @brief
@@ -450,26 +451,26 @@ inline void BTreeGeneric::deserialize(StringMap map) {
 
 template <LATCH_FALLBACK_MODE mode>
 inline void BTreeGeneric::FindLeafCanJump(
-    Slice key, GuardedBufferFrame<BTreeNode>& targetGuard) {
-  targetGuard.unlock();
+    Slice key, GuardedBufferFrame<BTreeNode>& guardedTarget) {
+  guardedTarget.unlock();
   GuardedBufferFrame<BTreeNode> guardedParent(mMetaNodeSwip);
-  targetGuard = GuardedBufferFrame<BTreeNode>(
+  guardedTarget = GuardedBufferFrame<BTreeNode>(
       guardedParent, guardedParent->mRightMostChildSwip);
 
   u16 volatile level = 0;
 
-  while (!targetGuard->mIsLeaf) {
+  while (!guardedTarget->mIsLeaf) {
     COUNTERS_BLOCK() {
       WorkerCounters::myCounters().dt_inner_page[mTreeId]++;
     }
 
-    auto& childSwip = targetGuard->lookupInner(key);
+    auto& childSwip = guardedTarget->lookupInner(key);
     DCHECK(!childSwip.IsEmpty());
-    guardedParent = std::move(targetGuard);
+    guardedParent = std::move(guardedTarget);
     if (level == mHeight - 1) {
-      targetGuard = GuardedBufferFrame(guardedParent, childSwip, mode);
+      guardedTarget = GuardedBufferFrame(guardedParent, childSwip, mode);
     } else {
-      targetGuard = GuardedBufferFrame(guardedParent, childSwip);
+      guardedTarget = GuardedBufferFrame(guardedParent, childSwip);
     }
     level = level + 1;
   }
@@ -479,14 +480,14 @@ inline void BTreeGeneric::FindLeafCanJump(
 
 template <LATCH_FALLBACK_MODE mode>
 inline void BTreeGeneric::findLeafAndLatch(
-    GuardedBufferFrame<BTreeNode>& targetGuard, Slice key) {
+    GuardedBufferFrame<BTreeNode>& guardedTarget, Slice key) {
   while (true) {
     JUMPMU_TRY() {
-      FindLeafCanJump<mode>(key, targetGuard);
+      FindLeafCanJump<mode>(key, guardedTarget);
       if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
-        targetGuard.ToExclusiveMayJump();
+        guardedTarget.ToExclusiveMayJump();
       } else {
-        targetGuard.ToSharedMayJump();
+        guardedTarget.ToSharedMayJump();
       }
       JUMPMU_RETURN;
     }

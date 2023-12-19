@@ -15,6 +15,244 @@ namespace leanstore {
 namespace storage {
 namespace btree {
 
+/// Plan: we should handle frequently and infrequently updated tuples
+/// differently when it comes to maintaining versions in the b-tree. For
+/// frequently updated tuples, we store them in a FatTuple
+///
+/// Prepartion phase: iterate over the chain and check whether all updated
+/// attributes are the same and whether they fit on a page If both conditions
+/// are fullfiled then we can store them in a fat tuple When FatTuple runs out
+/// of space, we simply crash for now (real solutions approx variable-size pages
+/// or fallback to chained keys)
+///
+/// How to convert CHAINED to FAT_TUPLE: Random number generation, similar to
+/// contention split, don't eagerly remove the deltas to allow concurrent
+/// readers to continue without complicating the logic if we fail
+///
+/// Glossary:
+/// - UpdateDescriptor: (offset, length)[]
+/// - Diff: raw bytes copied from src/dst next to each other according to the
+///   descriptor Delta: WWTS + diff + (descriptor)?
+enum class TupleFormat : u8 {
+  CHAINED = 0,
+  FAT_TUPLE_DIFFERENT_ATTRIBUTES = 1,
+  FAT_TUPLE_SAME_ATTRIBUTES = 2,
+  VISIBLE_FOR_ALL = 3
+};
+
+/// NEVER SHADOW A MEMBER!!!
+class __attribute__((packed)) Tuple {
+public:
+  static constexpr COMMANDID INVALID_COMMANDID =
+      std::numeric_limits<COMMANDID>::max();
+
+  TupleFormat tuple_format;
+  WORKERID mWorkerId;
+
+  union {
+    TXID tx_ts; // Could be start_ts or tx_id for WT scheme
+    TXID start_ts;
+  };
+
+  COMMANDID command_id;
+  bool mWriteLocked : true;
+
+  Tuple(TupleFormat tuple_format, WORKERID workerId, TXID tx_id)
+      : tuple_format(tuple_format), mWorkerId(workerId), tx_ts(tx_id),
+        command_id(INVALID_COMMANDID) {
+    mWriteLocked = false;
+  }
+
+  bool IsWriteLocked() const {
+    return mWriteLocked;
+  }
+
+  void WriteLock() {
+    mWriteLocked = true;
+  }
+
+  void WriteUnlock() {
+    mWriteLocked = false;
+  }
+};
+
+struct __attribute__((packed)) Delta {
+  WORKERID mWorkerId;
+  TXID tx_ts;
+
+  /// ATTENTION: TAKE CARE OF THIS, OTHERWISE WE WOULD
+  /// OVERWRITE ANOTHER UNDO VERSION
+  COMMANDID command_id = Tuple::INVALID_COMMANDID;
+
+  /// Descriptor + Diff
+  u8 payload[];
+
+  UpdateSameSizeInPlaceDescriptor& getDescriptor() {
+    return *reinterpret_cast<UpdateSameSizeInPlaceDescriptor*>(payload);
+  }
+
+  const UpdateSameSizeInPlaceDescriptor& getConstantDescriptor() const {
+    return *reinterpret_cast<const UpdateSameSizeInPlaceDescriptor*>(payload);
+  }
+
+  inline u32 totalLength() {
+    return sizeof(Delta) + getConstantDescriptor().size() +
+           getConstantDescriptor().diffLength();
+  }
+};
+
+/// We always append the descriptor, one format to keep simple
+struct __attribute__((packed)) FatTupleDifferentAttributes : Tuple {
+  u16 value_length = 0;
+  u32 total_space = 0; // From the payload bytes array
+  u32 used_space = 0;  // does not include the struct itself
+  u32 mDataOffset = 0;
+  u16 deltas_count = 0; // Attention: coupled with used_space
+
+  // value, Delta+Descriptor+Diff[] O2N
+  u8 payload[];
+
+public:
+  FatTupleDifferentAttributes(const u32 init_total_space)
+      : Tuple(TupleFormat::FAT_TUPLE_DIFFERENT_ATTRIBUTES, 0, 0),
+        total_space(init_total_space), mDataOffset(init_total_space) {
+  }
+
+  // returns false to fallback to chained mode
+  static bool update(BTreeExclusiveIterator& iterator, Slice key, ValCallback,
+                     UpdateSameSizeInPlaceDescriptor&);
+
+  bool hasSpaceFor(const UpdateSameSizeInPlaceDescriptor&);
+  void append(UpdateSameSizeInPlaceDescriptor&);
+  Delta& allocateDelta(u32 delta_total_length);
+  void garbageCollection();
+  void undoLastUpdate();
+
+  inline Slice GetValue() {
+    return Slice(getValue(), value_length);
+  }
+
+  inline constexpr u8* getValue() {
+    return payload;
+  }
+
+  inline const u8* getValueConstant() const {
+    return payload;
+  }
+
+  inline u16* getDeltaOffsets() {
+    return reinterpret_cast<u16*>(payload + value_length);
+  }
+
+  inline const u16* getDeltaOffsetsConstant() const {
+    return reinterpret_cast<const u16*>(payload + value_length);
+  }
+
+  inline Delta& getDelta(u16 d_i) {
+    assert(reinterpret_cast<u8*>(getDeltaOffsets() + d_i) <
+           reinterpret_cast<u8*>(payload + getDeltaOffsets()[d_i]));
+    return *reinterpret_cast<Delta*>(payload + getDeltaOffsets()[d_i]);
+  }
+
+  inline const Delta& getDeltaConstant(u16 d_i) const {
+    return *reinterpret_cast<const Delta*>(payload +
+                                           getDeltaOffsetsConstant()[d_i]);
+  }
+
+  std::tuple<OP_RESULT, u16> reconstructTuple(ValCallback valCallback) const;
+
+  void convertToChained(TREEID treeId);
+
+  void resize(u32 new_length);
+};
+
+// Chained: only scheduled gc todos. FatTuple: eager pgc, no scheduled gc
+// todos
+struct __attribute__((packed)) ChainedTuple : Tuple {
+  u16 updates_counter = 0;
+  u16 oldest_tx = 0;
+  u8 is_removed = 1;
+
+  u8 payload[]; // latest version in-place
+
+public:
+  /// Construct a ChainedTuple, copy the value to its payload
+  ///
+  /// NOTE: Payload space should be allocated in advance. This constructor is
+  /// usually called by a placmenet new operator.
+  ChainedTuple(WORKERID workerId, TXID txId, Slice val)
+      : Tuple(TupleFormat::CHAINED, workerId, txId), is_removed(false) {
+    std::memcpy(payload, val.data(), val.size());
+  }
+
+  /// Construct a ChainedTuple from an existing FatTupleDifferentAttributes,
+  /// the new ChainedTuple may share the same space with the input
+  /// FatTupleDifferentAttributes, so std::memmove is used to handle the
+  /// overlap bytes.
+  ///
+  /// NOTE: This constructor is usually called by a placmenet new operator on
+  /// the address of the FatTupleDifferentAttributes
+  ChainedTuple(FatTupleDifferentAttributes& oldFatTuple)
+      : Tuple(TupleFormat::CHAINED, oldFatTuple.mWorkerId, oldFatTuple.tx_ts),
+        is_removed(false) {
+    command_id = oldFatTuple.command_id;
+    std::memmove(payload, oldFatTuple.payload, oldFatTuple.value_length);
+  }
+
+  bool isFinal() const {
+    return command_id == INVALID_COMMANDID;
+  }
+
+  void reset() {
+  }
+};
+
+static_assert(sizeof(FatTupleDifferentAttributes) >= sizeof(ChainedTuple));
+
+struct __attribute__((packed)) DanglingPointer {
+  BufferFrame* bf = nullptr;
+  u64 latch_version_should_be = -1;
+  s32 head_slot = -1;
+};
+
+struct __attribute__((packed)) Version {
+  enum class TYPE : u8 { UPDATE, REMOVE };
+  TYPE type;
+  WORKERID mWorkerId;
+  TXID tx_id;
+  COMMANDID command_id;
+  Version(TYPE type, WORKERID workerId, TXID txId, COMMANDID commandId)
+      : type(type), mWorkerId(workerId), tx_id(txId), command_id(commandId) {
+  }
+};
+
+struct __attribute__((packed)) UpdateVersion : Version {
+  u8 is_delta : 1;
+  u8 payload[]; // UpdateDescriptor + Diff
+
+  UpdateVersion(WORKERID workerId, TXID txId, COMMANDID commandId, bool isDelta)
+      : Version(Version::TYPE::UPDATE, workerId, txId, commandId),
+        is_delta(isDelta) {
+  }
+
+  bool isFinal() const {
+    return command_id == 0;
+  }
+};
+
+struct __attribute__((packed)) RemoveVersion : Version {
+  u16 key_length;
+  u16 value_length;
+  DanglingPointer dangling_pointer;
+  bool moved_to_graveway = false;
+  u8 payload[]; // Key + Value
+  RemoveVersion(WORKERID workerId, TXID tx_id, COMMANDID command_id,
+                u16 key_length, u16 value_length)
+      : Version(Version::TYPE::REMOVE, workerId, tx_id, command_id),
+        key_length(key_length), value_length(value_length) {
+  }
+};
+
 class BTreeVI : public BTreeLL {
 public:
   struct WALRemove : WALPayload {
@@ -32,225 +270,6 @@ public:
           before_tx_id(beforeTxId), before_command_id(BeforeCommandId) {
       std::memcpy(payload, key.data(), key.size());
       std::memcpy(payload + key.size(), val.data(), val.size());
-    }
-  };
-
-  /**
-   * Plan: we should handle frequently and infrequently updated tuples
-   * differently when it comes to maintaining versions in the b-tree. For
-   * frequently updated tuples, we store them in a FatTuple
-   *
-   * Prepartion phase: iterate over the chain and check whether all updated
-   * attributes are the same and whether they fit on a page If both conditions
-   * are fullfiled then we can store them in a fat tuple When FatTuple runs out
-   * of space, we simply crash for now (real solutions approx variable-size
-   * pages or fallback to chained keys)
-
-   * How to convert CHAINED to FAT_TUPLE: Random number generation, similar to
-   * contention split, don't eagerly remove the deltas to allow concurrent
-   * readers to continue without complicating the logic if we fail
-
-   * Glossary:
-   * - UpdateDescriptor: (offset, length)[]
-   * - Diff: raw bytes copied from src/dst next to each other according to the
-   *   descriptor Delta: WWTS + diff + (descriptor)?
-   */
-  enum class TupleFormat : u8 {
-    CHAINED = 0,
-    FAT_TUPLE_DIFFERENT_ATTRIBUTES = 1,
-    FAT_TUPLE_SAME_ATTRIBUTES = 2,
-    VISIBLE_FOR_ALL = 3
-  };
-
-  // NEVER SHADOW A MEMBER!!!
-  class __attribute__((packed)) Tuple {
-  public:
-    static constexpr COMMANDID INVALID_COMMANDID =
-        std::numeric_limits<COMMANDID>::max();
-
-    TupleFormat tuple_format;
-    WORKERID mWorkerId;
-
-    union {
-      TXID tx_ts; // Could be start_ts or tx_id for WT scheme
-      TXID start_ts;
-    };
-
-    COMMANDID command_id;
-    bool mWriteLocked : true;
-
-    Tuple(TupleFormat tuple_format, WORKERID workerId, TXID tx_id)
-        : tuple_format(tuple_format), mWorkerId(workerId), tx_ts(tx_id),
-          command_id(INVALID_COMMANDID) {
-      mWriteLocked = false;
-    }
-
-    bool IsWriteLocked() const {
-      return mWriteLocked;
-    }
-
-    void WriteLock() {
-      mWriteLocked = true;
-    }
-
-    void WriteUnlock() {
-      mWriteLocked = false;
-    }
-  };
-
-  // Chained: only scheduled gc todos. FatTuple: eager pgc, no scheduled gc
-  // todos
-  struct __attribute__((packed)) ChainedTuple : Tuple {
-    u16 updates_counter = 0;
-    u16 oldest_tx = 0;
-    u8 is_removed : 1;
-
-    u8 payload[]; // latest version in-place
-
-    ChainedTuple(WORKERID workerId, TXID txId)
-        : Tuple(TupleFormat::CHAINED, workerId, txId), is_removed(false) {
-      reset();
-    }
-
-    bool isFinal() const {
-      return command_id == INVALID_COMMANDID;
-    }
-
-    void reset() {
-    }
-  };
-
-  // We always append the descriptor, one format to keep simple
-  struct __attribute__((packed)) FatTupleDifferentAttributes : Tuple {
-    struct __attribute__((packed)) Delta {
-      WORKERID mWorkerId;
-      TXID tx_ts;
-
-      // ATTENTION: TAKE CARE OF THIS, OTHERWISE WE WOULD
-      // OVERWRITE ANOTHER UNDO VERSION
-      COMMANDID command_id = INVALID_COMMANDID;
-
-      u8 payload[]; // Descriptor + Diff
-      UpdateSameSizeInPlaceDescriptor& getDescriptor() {
-        return *reinterpret_cast<UpdateSameSizeInPlaceDescriptor*>(payload);
-      }
-      const UpdateSameSizeInPlaceDescriptor& getConstantDescriptor() const {
-        return *reinterpret_cast<const UpdateSameSizeInPlaceDescriptor*>(
-            payload);
-      }
-      inline u32 totalLength() {
-        return sizeof(Delta) + getConstantDescriptor().size() +
-               getConstantDescriptor().diffLength();
-      }
-    };
-
-    u16 value_length = 0;
-    u32 total_space = 0; // From the payload bytes array
-    u32 used_space = 0;  // does not include the struct itself
-    u32 mDataOffset = 0;
-    u16 deltas_count = 0; // Attention: coupled with used_space
-
-    // value, Delta+Descriptor+Diff[] O2N
-    u8 payload[];
-
-    FatTupleDifferentAttributes(const u32 init_total_space)
-        : Tuple(TupleFormat::FAT_TUPLE_DIFFERENT_ATTRIBUTES, 0, 0),
-          total_space(init_total_space), mDataOffset(init_total_space) {
-    }
-
-    // returns false to fallback to chained mode
-    static bool update(BTreeExclusiveIterator& iterator, Slice key, ValCallback,
-                       UpdateSameSizeInPlaceDescriptor&);
-
-    bool hasSpaceFor(const UpdateSameSizeInPlaceDescriptor&);
-    void append(UpdateSameSizeInPlaceDescriptor&);
-    Delta& allocateDelta(u32 delta_total_length);
-    void garbageCollection();
-    void undoLastUpdate();
-
-    inline Slice GetValue() {
-      return Slice(getValue(), value_length);
-    }
-
-    inline constexpr u8* getValue() {
-      return payload;
-    }
-
-    inline const u8* getValueConstant() const {
-      return payload;
-    }
-
-    inline u16* getDeltaOffsets() {
-      return reinterpret_cast<u16*>(payload + value_length);
-    }
-
-    inline const u16* getDeltaOffsetsConstant() const {
-      return reinterpret_cast<const u16*>(payload + value_length);
-    }
-
-    inline Delta& getDelta(u16 d_i) {
-      assert(reinterpret_cast<u8*>(getDeltaOffsets() + d_i) <
-             reinterpret_cast<u8*>(payload + getDeltaOffsets()[d_i]));
-      return *reinterpret_cast<Delta*>(payload + getDeltaOffsets()[d_i]);
-    }
-
-    inline const Delta& getDeltaConstant(u16 d_i) const {
-      return *reinterpret_cast<const Delta*>(payload +
-                                             getDeltaOffsetsConstant()[d_i]);
-    }
-
-    std::tuple<OP_RESULT, u16> reconstructTuple(ValCallback valCallback) const;
-
-    void convertToChained(TREEID treeId);
-
-    void resize(u32 new_length);
-  };
-
-  static_assert(sizeof(ChainedTuple) <= sizeof(FatTupleDifferentAttributes),
-                "");
-
-  struct __attribute__((packed)) DanglingPointer {
-    BufferFrame* bf = nullptr;
-    u64 latch_version_should_be = -1;
-    s32 head_slot = -1;
-  };
-
-  struct __attribute__((packed)) Version {
-    enum class TYPE : u8 { UPDATE, REMOVE };
-    TYPE type;
-    WORKERID mWorkerId;
-    TXID tx_id;
-    COMMANDID command_id;
-    Version(TYPE type, WORKERID workerId, TXID txId, COMMANDID commandId)
-        : type(type), mWorkerId(workerId), tx_id(txId), command_id(commandId) {
-    }
-  };
-
-  struct __attribute__((packed)) UpdateVersion : Version {
-    u8 is_delta : 1;
-    u8 payload[]; // UpdateDescriptor + Diff
-
-    UpdateVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
-                  bool isDelta)
-        : Version(Version::TYPE::UPDATE, workerId, txId, commandId),
-          is_delta(isDelta) {
-    }
-
-    bool isFinal() const {
-      return command_id == 0;
-    }
-  };
-
-  struct __attribute__((packed)) RemoveVersion : Version {
-    u16 key_length;
-    u16 value_length;
-    DanglingPointer dangling_pointer;
-    bool moved_to_graveway = false;
-    u8 payload[]; // Key + Value
-    RemoveVersion(WORKERID workerId, TXID tx_id, COMMANDID command_id,
-                  u16 key_length, u16 value_length)
-        : Version(Version::TYPE::REMOVE, workerId, tx_id, command_id),
-          key_length(key_length), value_length(value_length) {
     }
   };
 
@@ -281,9 +300,9 @@ public:
   //---------------------------------------------------------------------------
   // Object Utils
   //---------------------------------------------------------------------------
-  void create(TREEID treeId, Config config, BTreeLL* graveyard) {
+  void Init(TREEID treeId, Config config, BTreeLL* graveyard) {
     this->mGraveyard = graveyard;
-    BTreeLL::create(treeId, config);
+    BTreeLL::Init(treeId, config);
   }
 
   virtual SpaceCheckResult checkSpaceUtilization(BufferFrame& bf) override {
@@ -409,10 +428,9 @@ public:
         }
         MutableSlice primaryPayload = iterator.mutableValue();
         auto& primaryVersion = *new (primaryPayload.data()) ChainedTuple(
-            remove_entry.before_worker_id, remove_entry.before_tx_id);
-        std::memcpy(primaryVersion.payload,
-                    remove_entry.payload + remove_entry.key_length,
-                    remove_entry.value_length);
+            remove_entry.before_worker_id, remove_entry.before_tx_id,
+            Slice(remove_entry.payload + remove_entry.key_length,
+                  remove_entry.value_length));
         primaryVersion.command_id = remove_entry.before_command_id;
         ENSURE(primaryVersion.is_removed == false);
         primaryVersion.WriteUnlock();
@@ -845,14 +863,28 @@ public:
               static_cast<BufferManagedTree*>(new storage::btree::BTreeVI()));
         });
     if (treePtr == nullptr) {
-      LOG(ERROR) << "Failed to create BTreeVI"
-                 << ", treeName has been taken"
+      LOG(ERROR) << "Failed to create BTreeVI, treeName has been taken"
                  << ", treeName=" << treeName;
       return nullptr;
     }
     auto tree = dynamic_cast<storage::btree::BTreeVI*>(treePtr);
-    tree->create(treeId, config, graveyard);
+    tree->Init(treeId, config, graveyard);
+
+    // TODO(jian.z): record WAL
     return tree;
+  }
+
+  static void InsertToNode(GuardedBufferFrame<BTreeNode>& guardedNode,
+                           Slice key, Slice val, WORKERID workerId,
+                           TXID txStartTs, TX_MODE txMode, s32& slotId) {
+    auto totalValSize = sizeof(ChainedTuple) + val.size();
+    slotId = guardedNode->insertDoNotCopyPayload(key, totalValSize, slotId);
+    auto tupleAddr = guardedNode->ValData(slotId);
+    auto tuple = new (tupleAddr) ChainedTuple(workerId, txStartTs, val);
+    if (txMode == TX_MODE::INSTANTLY_VISIBLE_BULK_INSERT) {
+      tuple->tx_ts = MSB | 0;
+    }
+    guardedNode.MarkAsDirty();
   }
 };
 

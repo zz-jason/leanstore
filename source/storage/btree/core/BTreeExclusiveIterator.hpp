@@ -129,13 +129,13 @@ public:
     ENSURE(false);
     return OP_RESULT::NOT_FOUND;
   }
-  // -------------------------------------------------------------------------------------
+
   // The caller must retain the payload when using any of the following payload
   // resize functions
   virtual void shorten(const u16 new_size) {
     mGuardedLeaf->shortenPayload(mSlotId, new_size);
   }
-  // -------------------------------------------------------------------------------------
+
   bool extendPayload(const u16 new_length) {
     if (new_length >= EFFECTIVE_PAGE_SIZE) {
       return false;

@@ -10,11 +10,29 @@
 namespace leanstore {
 
 enum class TX_MODE : u8 {
-  OLAP,
-  OLTP,
-  DETERMINISTIC,
-  INSTANTLY_VISIBLE_BULK_INSERT
+  OLAP = 0,
+  OLTP = 1,
+  DETERMINISTIC = 2,
+  INSTANTLY_VISIBLE_BULK_INSERT = 3,
 };
+
+inline std::string ToString(TX_MODE txMode) {
+  switch (txMode) {
+  case TX_MODE::OLAP: {
+    return "OLAP";
+  }
+  case TX_MODE::OLTP: {
+    return "OLTP";
+  }
+  case TX_MODE::DETERMINISTIC: {
+    return "DETERMINISTIC";
+  }
+  case TX_MODE::INSTANTLY_VISIBLE_BULK_INSERT: {
+    return "INSTANTLY_VISIBLE_BULK_INSERT";
+  }
+  }
+  return "Unknown TX_MODE";
+}
 
 enum class TX_ISOLATION_LEVEL : u8 {
   SERIALIZABLE = 3,
