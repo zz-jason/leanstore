@@ -16,7 +16,7 @@ namespace leanstore::storage::btree {
 
 #define ARRAY_ON_STACK(varName, T, N) T* varName = (T*)alloca((N) * sizeof(T));
 
-void BTreeGeneric::create(TREEID btreeId, Config config) {
+void BTreeGeneric::Init(TREEID btreeId, Config config) {
   this->mTreeId = btreeId;
   this->config = config;
   mMetaNodeSwip = &BufferManager::sInstance->AllocNewPage();

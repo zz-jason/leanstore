@@ -55,6 +55,12 @@ public:
   /// ID of the transaction who creates this WALEntry.
   TXID mTxId;
 
+  /// Transaction mode.
+  TX_MODE mTxMode;
+
+  /// ID of the worker who executes the transaction and records the WALEntry.
+  WORKERID mWorkerId;
+
   /// Log sequence number for the previous WALEntry of the same transaction. 0
   /// if it's the first WAL entry in the transaction.
   LID mPrevLSN = 0;
@@ -69,6 +75,12 @@ public:
 
 public:
   std::string TypeName();
+
+  void InitTxInfo(Transaction* tx, WORKERID workerId) {
+    mTxId = tx->mStartTs;
+    mTxMode = tx->mTxMode;
+    mWorkerId = workerId;
+  }
 
   virtual std::unique_ptr<rapidjson::Document> ToJSON();
 
@@ -200,14 +212,22 @@ inline std::unique_ptr<rapidjson::Document> WALEntry::ToJSON() {
   {
     rapidjson::Value member;
     member.SetUint64(mTxId);
-    doc->AddMember("txId", member, doc->GetAllocator());
+    doc->AddMember("mTxId", member, doc->GetAllocator());
+  }
+
+  // txMode
+  {
+    rapidjson::Value member;
+    auto txModeStr = ToString(mTxMode);
+    member.SetString(txModeStr.data(), txModeStr.size(), doc->GetAllocator());
+    doc->AddMember("mTxMode", member, doc->GetAllocator());
   }
 
   // prev_lsn_in_tx
   {
     rapidjson::Value member;
     member.SetUint64(mPrevLSN);
-    doc->AddMember("PrevLSN", member, doc->GetAllocator());
+    doc->AddMember("mPrevLSN", member, doc->GetAllocator());
   }
 
   return doc;

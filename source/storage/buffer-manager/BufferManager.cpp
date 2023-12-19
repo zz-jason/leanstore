@@ -424,7 +424,7 @@ void BufferManager::WritePageSync(BufferFrame& bf) {
   guardedBf.ToExclusiveMayJump();
   auto pageId = bf.header.mPageId;
   auto& partition = getPartition(pageId);
-  pwrite(mPageFd, &bf.page, PAGE_SIZE, bf.header.mPageId * PAGE_SIZE);
+  pwrite(mPageFd, &bf.page, PAGE_SIZE, pageId * PAGE_SIZE);
   bf.reset();
   guardedBf.unlock();
   partition.mFreeBfList.PushFront(bf);

@@ -30,7 +30,7 @@ namespace leanstore::storage::btree {
 
 #define ARRAY_ON_STACK(varName, T, N) T* varName = (T*)alloca((N) * sizeof(T));
 
-void BTreeVI::FatTupleDifferentAttributes::undoLastUpdate() {
+void FatTupleDifferentAttributes::undoLastUpdate() {
   ENSURE(deltas_count >= 1);
   auto& delta = getDelta(deltas_count - 1);
   mWorkerId = delta.mWorkerId;
@@ -43,16 +43,16 @@ void BTreeVI::FatTupleDifferentAttributes::undoLastUpdate() {
   BTreeLL::applyDiff(delta.getDescriptor(), getValue(),
                      delta.payload + delta.getDescriptor().size());
 }
-// -------------------------------------------------------------------------------------
+
 // Attention: we have to disable garbage collection if the latest delta was from
 // us and not committed yet! Otherwise we would crash during undo although the
 // end result is the same if the transaction would commit (overwrite)
-void BTreeVI::FatTupleDifferentAttributes::garbageCollection() {
+void FatTupleDifferentAttributes::garbageCollection() {
   if (deltas_count == 0) {
     return;
   }
   utils::Timer timer(CRCounters::myCounters().cc_ms_gc);
-  // -------------------------------------------------------------------------------------
+
   auto append_ll = [](FatTupleDifferentAttributes& fat_tuple, u8* delta,
                       u16 delta_length) {
     assert(fat_tuple.total_space >=
@@ -63,7 +63,7 @@ void BTreeVI::FatTupleDifferentAttributes::garbageCollection() {
     fat_tuple.getDeltaOffsets()[d_i] = fat_tuple.mDataOffset;
     std::memcpy(fat_tuple.payload + fat_tuple.mDataOffset, delta, delta_length);
   };
-  // -------------------------------------------------------------------------------------
+
   // Delete for all visible deltas, atm using cheap visibility check
   if (cr::Worker::my().cc.isVisibleForAll(mWorkerId, tx_ts)) {
     deltas_count = 0;
@@ -71,7 +71,7 @@ void BTreeVI::FatTupleDifferentAttributes::garbageCollection() {
     used_space = value_length;
     return; // Done
   }
-  // -------------------------------------------------------------------------------------
+
   u16 deltas_visible_by_all_counter = 0;
   for (s32 d_i = deltas_count - 1; d_i >= 1; d_i--) {
     auto& delta = getDelta(d_i);
@@ -80,14 +80,14 @@ void BTreeVI::FatTupleDifferentAttributes::garbageCollection() {
       break;
     }
   }
-  // -------------------------------------------------------------------------------------
+
   const TXID local_oldest_oltp = cr::Worker::my().sOldestOltpStartTx.load();
   const TXID local_newest_olap = cr::Worker::my().sNewestOlapStartTx.load();
   if (deltas_visible_by_all_counter == 0 &&
       local_newest_olap > local_oldest_oltp) {
     return; // Nothing to do here
   }
-  // -------------------------------------------------------------------------------------
+
   auto bin_search = [&](TXID upper_bound) {
     s64 l = deltas_visible_by_all_counter;
     s64 r = deltas_count - 1;
@@ -105,7 +105,7 @@ void BTreeVI::FatTupleDifferentAttributes::garbageCollection() {
     }
     return l;
   };
-  // -------------------------------------------------------------------------------------
+
   // Identify tuples we should merge --> [zone_begin, zone_end)
   s32 deltas_to_merge_counter = 0;
   s32 zone_begin = -1, zone_end = -1; // [zone_begin, zone_end)
@@ -145,7 +145,7 @@ void BTreeVI::FatTupleDifferentAttributes::garbageCollection() {
       append_ll(new_fat_tuple, reinterpret_cast<u8*>(&delta),
                 delta.totalLength());
     }
-    // -------------------------------------------------------------------------------------
+
     // TODO: Optimize
     // Merge from newest to oldest, i.e., from end of array into beginning
     if (FLAGS_tmp5 && 0) {
@@ -186,17 +186,17 @@ void BTreeVI::FatTupleDifferentAttributes::garbageCollection() {
         merge_diff_ptr += slot_itr.second.size();
       }
     }
-    // -------------------------------------------------------------------------------------
+
     for (u32 d_i = zone_end; d_i < deltas_count; d_i++) {
       auto& delta = getDelta(d_i);
       append_ll(new_fat_tuple, reinterpret_cast<u8*>(&delta),
                 delta.totalLength());
     }
   }
-  // -------------------------------------------------------------------------------------
+
   std::memcpy(this, buffer, buffer_size);
   assert(total_space >= used_space);
-  // -------------------------------------------------------------------------------------
+
   DEBUG_BLOCK() {
     u32 should_used_space = value_length;
     for (u32 d_i = 0; d_i < deltas_count; d_i++) {
@@ -205,8 +205,8 @@ void BTreeVI::FatTupleDifferentAttributes::garbageCollection() {
     assert(used_space == should_used_space);
   }
 }
-// -------------------------------------------------------------------------------------
-bool BTreeVI::FatTupleDifferentAttributes::hasSpaceFor(
+
+bool FatTupleDifferentAttributes::hasSpaceFor(
     const UpdateSameSizeInPlaceDescriptor& update_descriptor) {
   const u32 needed_space = update_descriptor.size() +
                            update_descriptor.diffLength() + sizeof(u16) +
@@ -214,9 +214,8 @@ bool BTreeVI::FatTupleDifferentAttributes::hasSpaceFor(
   return (mDataOffset - (value_length + (deltas_count * sizeof(u16)))) >=
          needed_space;
 }
-// -------------------------------------------------------------------------------------
-BTreeVI::FatTupleDifferentAttributes::Delta& BTreeVI::
-    FatTupleDifferentAttributes::allocateDelta(u32 delta_total_length) {
+
+Delta& FatTupleDifferentAttributes::allocateDelta(u32 delta_total_length) {
   assert((total_space - used_space) >= (delta_total_length + sizeof(u16)));
   used_space += delta_total_length + sizeof(u16);
   mDataOffset -= delta_total_length;
@@ -224,9 +223,9 @@ BTreeVI::FatTupleDifferentAttributes::Delta& BTreeVI::
   getDeltaOffsets()[delta_i] = mDataOffset;
   return *new (&getDelta(delta_i)) Delta();
 }
-// -------------------------------------------------------------------------------------
+
 // Caller should take care of WAL
-void BTreeVI::FatTupleDifferentAttributes::append(
+void FatTupleDifferentAttributes::append(
     UpdateSameSizeInPlaceDescriptor& update_descriptor) {
   const u32 delta_total_length =
       update_descriptor.size() + update_descriptor.diffLength() + sizeof(Delta);
@@ -241,7 +240,7 @@ void BTreeVI::FatTupleDifferentAttributes::append(
 }
 
 // Pre: tuple is write locked
-bool BTreeVI::FatTupleDifferentAttributes::update(
+bool FatTupleDifferentAttributes::update(
     BTreeExclusiveIterator& iterator, Slice key, ValCallback cb,
     UpdateSameSizeInPlaceDescriptor& update_descriptor) {
   utils::Timer timer(CRCounters::myCounters().cc_ms_fat_tuple);
@@ -266,13 +265,12 @@ cont : {
     walHandler->before_worker_id = fat_tuple->mWorkerId;
     walHandler->before_tx_id = fat_tuple->tx_ts;
     walHandler->before_command_id = fat_tuple->command_id;
-    // -------------------------------------------------------------------------------------
+
     fat_tuple->mWorkerId = cr::Worker::my().mWorkerId;
     fat_tuple->tx_ts = cr::activeTX().startTS();
-    fat_tuple->command_id =
-        cr::Worker::my().command_id++; // A version is not inserted in versions
-                                       // space however. Needed for decompose
-    // -------------------------------------------------------------------------------------
+    // A version is not inserted in versions space however. Needed for decompose
+    fat_tuple->command_id = cr::Worker::my().command_id++;
+
     std::memcpy(walHandler->payload, key.data(), key.size());
     std::memcpy(walHandler->payload + key.size(), &update_descriptor,
                 update_descriptor.size());
@@ -331,8 +329,8 @@ cont : {
 }
 }
 
-std::tuple<OP_RESULT, u16> BTreeVI::FatTupleDifferentAttributes::
-    reconstructTuple(ValCallback valCallback) const {
+std::tuple<OP_RESULT, u16> FatTupleDifferentAttributes::reconstructTuple(
+    ValCallback valCallback) const {
   if (cr::Worker::my().cc.isVisibleForMe(mWorkerId, tx_ts)) {
     // Latest version is visible
     valCallback(Slice(getValueConstant(), value_length));
@@ -354,7 +352,7 @@ std::tuple<OP_RESULT, u16> BTreeVI::FatTupleDifferentAttributes::
         chain_length++;
       }
     }
-    // -------------------------------------------------------------------------------------
+
     RAISE_WHEN(cr::activeTX().isOLTP());
     return {OP_RESULT::NOT_FOUND, chain_length};
   } else {
@@ -362,8 +360,8 @@ std::tuple<OP_RESULT, u16> BTreeVI::FatTupleDifferentAttributes::
     return {OP_RESULT::NOT_FOUND, 1};
   }
 }
-// -------------------------------------------------------------------------------------
-void BTreeVI::FatTupleDifferentAttributes::resize(const u32 new_length) {
+
+void FatTupleDifferentAttributes::resize(const u32 new_length) {
   ARRAY_ON_STACK(tmp_page, u8,
                  new_length + sizeof(FatTupleDifferentAttributes));
   auto& new_fat_tuple = *new (tmp_page) FatTupleDifferentAttributes(new_length);
@@ -399,17 +397,16 @@ bool BTreeVI::convertChainedToFatTupleDifferentAttributes(
   dynamic_buffer.resize(maxFatTupleLength());
   auto fat_tuple = new (dynamic_buffer.data()) FatTupleDifferentAttributes(
       dynamic_buffer.size() - sizeof(FatTupleDifferentAttributes));
-  // --------
-  // -----------------------------------------------------------------------------
+
   WORKERID next_worker_id;
   TXID next_tx_id;
   COMMANDID next_command_id;
-  // -------------------------------------------------------------------------------------
+
   // Process the chain head
   MutableSlice head = iterator.mutableValue();
   auto& chain_head = *reinterpret_cast<ChainedTuple*>(head.data());
   ENSURE(chain_head.IsWriteLocked());
-  // -------------------------------------------------------------------------------------
+
   fat_tuple->value_length = head.length() - sizeof(ChainedTuple);
   std::memcpy(fat_tuple->payload + fat_tuple->used_space, chain_head.payload,
               fat_tuple->value_length);
@@ -417,7 +414,7 @@ bool BTreeVI::convertChainedToFatTupleDifferentAttributes(
   fat_tuple->mWorkerId = chain_head.mWorkerId;
   fat_tuple->tx_ts = chain_head.tx_ts;
   fat_tuple->command_id = chain_head.command_id;
-  // -------------------------------------------------------------------------------------
+
   next_worker_id = chain_head.mWorkerId;
   next_tx_id = chain_head.tx_ts;
   next_command_id = chain_head.command_id;
@@ -429,7 +426,7 @@ bool BTreeVI::convertChainedToFatTupleDifferentAttributes(
             next_tx_id)) { // Pruning versions space might get delayed
       break;
     }
-    // -------------------------------------------------------------------------------------
+
     if (!cr::Worker::my().cc.retrieveVersion(
             next_worker_id, next_tx_id, next_command_id,
             [&](const u8* version, [[maybe_unused]] u64 payload_length) {
@@ -444,9 +441,8 @@ bool BTreeVI::convertChainedToFatTupleDifferentAttributes(
               const u32 descriptor_and_diff_length =
                   update_descriptor.size() + update_descriptor.diffLength();
               const u32 needed_space =
-                  sizeof(FatTupleDifferentAttributes::Delta) +
-                  descriptor_and_diff_length;
-              // -------------------------------------------------------------------------------------
+                  sizeof(Delta) + descriptor_and_diff_length;
+
               if (!fat_tuple->hasSpaceFor(update_descriptor)) {
                 fat_tuple->garbageCollection();
                 if (!fat_tuple->hasSpaceFor(update_descriptor)) {
@@ -454,17 +450,17 @@ bool BTreeVI::convertChainedToFatTupleDifferentAttributes(
                   return;
                 }
               }
-              // -------------------------------------------------------------------------------------
+
               // Add a FatTuple::Delta
               auto& new_delta = fat_tuple->allocateDelta(needed_space);
               new_delta.mWorkerId = chain_delta.mWorkerId;
               new_delta.tx_ts = chain_delta.tx_id;
               new_delta.command_id = chain_delta.command_id;
-              // -------------------------------------------------------------------------------------
+
               // Copy Descriptor + Diff
               std::memcpy(new_delta.payload, &update_descriptor,
                           descriptor_and_diff_length);
-              // -------------------------------------------------------------------------------------
+
               next_worker_id = chain_delta.mWorkerId;
               next_tx_id = chain_delta.tx_id;
               next_command_id = chain_delta.command_id;
@@ -517,14 +513,14 @@ bool BTreeVI::convertChainedToFatTupleDifferentAttributes(
   }
 }
 
-void BTreeVI::FatTupleDifferentAttributes::convertToChained(TREEID treeId) {
+void FatTupleDifferentAttributes::convertToChained(TREEID treeId) {
   WORKERID prev_worker_id = mWorkerId;
   TXID prev_tx_id = tx_ts;
   COMMANDID prev_command_id = command_id;
   for (s64 v_i = deltas_count - 1; v_i >= 0; v_i--) {
     auto& delta = getDelta(v_i);
     const u32 version_payload_length =
-        delta.getDescriptor().totalLength() + sizeof(BTreeVI::UpdateVersion);
+        delta.getDescriptor().totalLength() + sizeof(UpdateVersion);
     cr::Worker::my().cc.mHistoryTree.insertVersion(
         prev_worker_id, prev_tx_id, prev_command_id, treeId, false,
         version_payload_length,
@@ -532,7 +528,7 @@ void BTreeVI::FatTupleDifferentAttributes::convertToChained(TREEID treeId) {
           auto& secondary_version = *new (version_payload) UpdateVersion(
               delta.mWorkerId, delta.tx_ts, delta.command_id, true);
           std::memcpy(secondary_version.payload, delta.payload,
-                      version_payload_length - sizeof(BTreeVI::UpdateVersion));
+                      version_payload_length - sizeof(UpdateVersion));
         },
         false);
 
@@ -541,13 +537,8 @@ void BTreeVI::FatTupleDifferentAttributes::convertToChained(TREEID treeId) {
     prev_command_id = delta.command_id;
   }
 
-  const FatTupleDifferentAttributes old_fat_tuple = *this;
-  static_assert(sizeof(FatTupleDifferentAttributes) >= sizeof(ChainedTuple));
-  u8* value = payload;
-  auto& chained_tuple =
-      *new (this) ChainedTuple(old_fat_tuple.mWorkerId, old_fat_tuple.tx_ts);
-  chained_tuple.command_id = old_fat_tuple.command_id;
-  std::memmove(chained_tuple.payload, value, old_fat_tuple.value_length);
+  new (this) ChainedTuple(*this);
+
   COUNTERS_BLOCK() {
     WorkerCounters::myCounters().cc_fat_tuple_decompose[treeId]++;
   }
