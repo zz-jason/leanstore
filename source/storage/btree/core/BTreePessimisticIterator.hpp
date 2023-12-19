@@ -11,7 +11,8 @@ namespace leanstore {
 namespace storage {
 namespace btree {
 
-using LeafCallback = std::function<void(GuardedBufferFrame<BTreeNode>& leaf)>;
+using LeafCallback =
+    std::function<void(GuardedBufferFrame<BTreeNode>& guardedLeaf)>;
 
 // Iterator
 class BTreePessimisticIterator : public BTreePessimisticIteratorInterface {
@@ -238,15 +239,15 @@ public:
               s32 next_leaf_pos = mLeafPosInParent + 1;
               auto& c_swip =
                   mGuardedParent->GetChildIncludingRightMost(next_leaf_pos);
-              GuardedBufferFrame next_leaf(mGuardedParent, c_swip,
-                                           LATCH_FALLBACK_MODE::JUMP);
+              GuardedBufferFrame guardedNextLeaf(mGuardedParent, c_swip,
+                                                 LATCH_FALLBACK_MODE::JUMP);
               if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
-                next_leaf.TryToExclusiveMayJump();
+                guardedNextLeaf.TryToExclusiveMayJump();
               } else {
-                next_leaf.TryToSharedMayJump();
+                guardedNextLeaf.TryToSharedMayJump();
               }
               mGuardedLeaf.JumpIfModifiedByOthers();
-              mGuardedLeaf = std::move(next_leaf);
+              mGuardedLeaf = std::move(guardedNextLeaf);
               mLeafPosInParent = next_leaf_pos;
               mSlotId = 0;
               mIsPrefixCopied = false;
@@ -329,15 +330,15 @@ public:
             if ((mLeafPosInParent - 1) >= 0) {
               s32 next_leaf_pos = mLeafPosInParent - 1;
               Swip<BTreeNode>& c_swip = mGuardedParent->getChild(next_leaf_pos);
-              GuardedBufferFrame next_leaf(mGuardedParent, c_swip,
-                                           LATCH_FALLBACK_MODE::JUMP);
+              GuardedBufferFrame guardedNextLeaf(mGuardedParent, c_swip,
+                                                 LATCH_FALLBACK_MODE::JUMP);
               if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
-                next_leaf.TryToExclusiveMayJump();
+                guardedNextLeaf.TryToExclusiveMayJump();
               } else {
-                next_leaf.TryToSharedMayJump();
+                guardedNextLeaf.TryToSharedMayJump();
               }
               mGuardedLeaf.JumpIfModifiedByOthers();
-              mGuardedLeaf = std::move(next_leaf);
+              mGuardedLeaf = std::move(guardedNextLeaf);
               mLeafPosInParent = next_leaf_pos;
               mSlotId = mGuardedLeaf->mNumSeps - 1;
               mIsPrefixCopied = false;

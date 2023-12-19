@@ -23,25 +23,25 @@ OP_RESULT BTreeLL::Lookup(Slice key, ValCallback valCallback) {
   DCHECK(cr::Worker::my().IsTxStarted());
   while (true) {
     JUMPMU_TRY() {
-      GuardedBufferFrame<BTreeNode> leaf;
-      FindLeafCanJump(key, leaf);
+      GuardedBufferFrame<BTreeNode> guardedLeaf;
+      FindLeafCanJump(key, guardedLeaf);
 
       DEBUG_BLOCK() {
-        s16 sanity_check_result = leaf->compareKeyWithBoundaries(key);
-        leaf.JumpIfModifiedByOthers();
+        s16 sanity_check_result = guardedLeaf->compareKeyWithBoundaries(key);
+        guardedLeaf.JumpIfModifiedByOthers();
         if (sanity_check_result != 0) {
-          cout << leaf->mNumSeps << endl;
+          cout << guardedLeaf->mNumSeps << endl;
         }
         ENSURE(sanity_check_result == 0);
       }
 
-      s16 slotId = leaf->lowerBound<true>(key);
+      s16 slotId = guardedLeaf->lowerBound<true>(key);
       if (slotId != -1) {
-        valCallback(leaf->Value(slotId));
-        leaf.JumpIfModifiedByOthers();
+        valCallback(guardedLeaf->Value(slotId));
+        guardedLeaf.JumpIfModifiedByOthers();
         JUMPMU_RETURN OP_RESULT::OK;
       } else {
-        leaf.JumpIfModifiedByOthers();
+        guardedLeaf.JumpIfModifiedByOthers();
         JUMPMU_RETURN OP_RESULT::NOT_FOUND;
       }
     }
@@ -57,25 +57,25 @@ OP_RESULT BTreeLL::Lookup(Slice key, ValCallback valCallback) {
 bool BTreeLL::isRangeSurelyEmpty(Slice startKey, Slice endKey) {
   while (true) {
     JUMPMU_TRY() {
-      GuardedBufferFrame<BTreeNode> leaf;
-      FindLeafCanJump(startKey, leaf);
+      GuardedBufferFrame<BTreeNode> guardedLeaf;
+      FindLeafCanJump(startKey, guardedLeaf);
 
-      Slice upperFence = leaf->GetUpperFence();
-      Slice lowerFence = leaf->GetLowerFence();
+      Slice upperFence = guardedLeaf->GetUpperFence();
+      Slice lowerFence = guardedLeaf->GetLowerFence();
       assert(startKey >= lowerFence);
 
-      if ((leaf->mUpperFence.offset == 0 || endKey <= upperFence) &&
-          leaf->mNumSeps == 0) {
-        s32 pos = leaf->lowerBound<false>(startKey);
-        if (pos == leaf->mNumSeps) {
-          leaf.JumpIfModifiedByOthers();
+      if ((guardedLeaf->mUpperFence.offset == 0 || endKey <= upperFence) &&
+          guardedLeaf->mNumSeps == 0) {
+        s32 pos = guardedLeaf->lowerBound<false>(startKey);
+        if (pos == guardedLeaf->mNumSeps) {
+          guardedLeaf.JumpIfModifiedByOthers();
           JUMPMU_RETURN true;
         } else {
-          leaf.JumpIfModifiedByOthers();
+          guardedLeaf.JumpIfModifiedByOthers();
           JUMPMU_RETURN false;
         }
       } else {
-        leaf.JumpIfModifiedByOthers();
+        guardedLeaf.JumpIfModifiedByOthers();
         JUMPMU_RETURN false;
       }
     }
@@ -170,23 +170,23 @@ OP_RESULT BTreeLL::insert(Slice key, Slice val) {
 OP_RESULT BTreeLL::prefixLookup(Slice key, PrefixLookupCallback callback) {
   while (true) {
     JUMPMU_TRY() {
-      GuardedBufferFrame<BTreeNode> leaf;
-      FindLeafCanJump(key, leaf);
+      GuardedBufferFrame<BTreeNode> guardedLeaf;
+      FindLeafCanJump(key, guardedLeaf);
 
       bool isEqual = false;
-      s16 cur = leaf->lowerBound<false>(key, &isEqual);
+      s16 cur = guardedLeaf->lowerBound<false>(key, &isEqual);
       if (isEqual) {
-        callback(key, leaf->Value(cur));
-        leaf.JumpIfModifiedByOthers();
+        callback(key, guardedLeaf->Value(cur));
+        guardedLeaf.JumpIfModifiedByOthers();
         JUMPMU_RETURN OP_RESULT::OK;
-      } else if (cur < leaf->mNumSeps) {
-        u16 fullKeySize = leaf->getFullKeyLen(cur);
+      } else if (cur < guardedLeaf->mNumSeps) {
+        u16 fullKeySize = guardedLeaf->getFullKeyLen(cur);
         ARRAY_ON_STACK(fullKeyBuf, u8, fullKeySize);
-        leaf->copyFullKey(cur, fullKeyBuf);
-        leaf.JumpIfModifiedByOthers();
+        guardedLeaf->copyFullKey(cur, fullKeyBuf);
+        guardedLeaf.JumpIfModifiedByOthers();
 
-        callback(Slice(fullKeyBuf, fullKeySize), leaf->Value(cur));
-        leaf.JumpIfModifiedByOthers();
+        callback(Slice(fullKeyBuf, fullKeySize), guardedLeaf->Value(cur));
+        guardedLeaf.JumpIfModifiedByOthers();
 
         JUMPMU_RETURN OP_RESULT::OK;
       } else {
@@ -210,25 +210,25 @@ OP_RESULT BTreeLL::prefixLookupForPrev(Slice key,
                                        PrefixLookupCallback callback) {
   while (true) {
     JUMPMU_TRY() {
-      GuardedBufferFrame<BTreeNode> leaf;
-      FindLeafCanJump(key, leaf);
+      GuardedBufferFrame<BTreeNode> guardedLeaf;
+      FindLeafCanJump(key, guardedLeaf);
 
       bool isEqual = false;
-      s16 cur = leaf->lowerBound<false>(key, &isEqual);
+      s16 cur = guardedLeaf->lowerBound<false>(key, &isEqual);
       if (isEqual == true) {
-        callback(key, leaf->Value(cur));
-        leaf.JumpIfModifiedByOthers();
+        callback(key, guardedLeaf->Value(cur));
+        guardedLeaf.JumpIfModifiedByOthers();
         JUMPMU_RETURN OP_RESULT::OK;
       } else if (cur > 0) {
         cur -= 1;
 
-        u16 fullKeySize = leaf->getFullKeyLen(cur);
+        u16 fullKeySize = guardedLeaf->getFullKeyLen(cur);
         ARRAY_ON_STACK(fullKeyBuf, u8, fullKeySize);
-        leaf->copyFullKey(cur, fullKeyBuf);
-        leaf.JumpIfModifiedByOthers();
+        guardedLeaf->copyFullKey(cur, fullKeyBuf);
+        guardedLeaf.JumpIfModifiedByOthers();
 
-        callback(Slice(fullKeyBuf, fullKeySize), leaf->Value(cur));
-        leaf.JumpIfModifiedByOthers();
+        callback(Slice(fullKeyBuf, fullKeySize), guardedLeaf->Value(cur));
+        guardedLeaf.JumpIfModifiedByOthers();
 
         JUMPMU_RETURN OP_RESULT::OK;
       } else {
@@ -415,9 +415,10 @@ OP_RESULT BTreeLL::remove(Slice key) {
 OP_RESULT BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
   JUMPMU_TRY() {
     BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
-    iterator.exitLeafCallback([&](GuardedBufferFrame<BTreeNode>& leaf) {
-      if (leaf->freeSpaceAfterCompaction() >= BTreeNodeHeader::sUnderFullSize) {
-        iterator.cleanUpCallback([&, to_find = leaf.mBf] {
+    iterator.exitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
+      if (guardedLeaf->freeSpaceAfterCompaction() >=
+          BTreeNodeHeader::sUnderFullSize) {
+        iterator.cleanUpCallback([&, to_find = guardedLeaf.mBf] {
           JUMPMU_TRY() {
             this->tryMerge(*to_find);
           }
@@ -453,32 +454,36 @@ OP_RESULT BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
       JUMPMU_RETURN OP_RESULT::OK;
     } else {
       bool did_purge_full_page = false;
-      iterator.enterLeafCallback([&](GuardedBufferFrame<BTreeNode>& leaf) {
-        if (leaf->mNumSeps == 0) {
-          return;
-        }
+      iterator.enterLeafCallback(
+          [&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
+            if (guardedLeaf->mNumSeps == 0) {
+              return;
+            }
 
-        // page start key
-        ARRAY_ON_STACK(firstKey, u8, leaf->getFullKeyLen(0));
-        leaf->copyFullKey(0, firstKey);
-        Slice pageStartKey(firstKey, leaf->getFullKeyLen(0));
+            // page start key
+            ARRAY_ON_STACK(firstKey, u8, guardedLeaf->getFullKeyLen(0));
+            guardedLeaf->copyFullKey(0, firstKey);
+            Slice pageStartKey(firstKey, guardedLeaf->getFullKeyLen(0));
 
-        // page end key
-        ARRAY_ON_STACK(lastKey, u8, leaf->getFullKeyLen(leaf->mNumSeps - 1));
-        leaf->copyFullKey(leaf->mNumSeps - 1, lastKey);
-        Slice pageEndKey(lastKey, leaf->getFullKeyLen(leaf->mNumSeps - 1));
+            // page end key
+            ARRAY_ON_STACK(
+                lastKey, u8,
+                guardedLeaf->getFullKeyLen(guardedLeaf->mNumSeps - 1));
+            guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, lastKey);
+            Slice pageEndKey(
+                lastKey, guardedLeaf->getFullKeyLen(guardedLeaf->mNumSeps - 1));
 
-        if (pageStartKey >= startKey && pageEndKey <= endKey) {
-          // Purge the whole page
-          COUNTERS_BLOCK() {
-            WorkerCounters::myCounters().dt_range_removed[mTreeId] +=
-                leaf->mNumSeps;
-          }
-          leaf->reset();
-          iterator.MarkAsDirty();
-          did_purge_full_page = true;
-        }
-      });
+            if (pageStartKey >= startKey && pageEndKey <= endKey) {
+              // Purge the whole page
+              COUNTERS_BLOCK() {
+                WorkerCounters::myCounters().dt_range_removed[mTreeId] +=
+                    guardedLeaf->mNumSeps;
+              }
+              guardedLeaf->reset();
+              iterator.MarkAsDirty();
+              did_purge_full_page = true;
+            }
+          });
 
       while (true) {
         iterator.seek(startKey);

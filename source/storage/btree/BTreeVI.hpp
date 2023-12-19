@@ -799,8 +799,8 @@ private:
   }
 
   static inline bool triggerPageWiseGarbageCollection(
-      GuardedBufferFrame<BTreeNode>& guard) {
-    return guard->mHasGarbage;
+      GuardedBufferFrame<BTreeNode>& guardedNode) {
+    return guardedNode->mHasGarbage;
   }
 
   u64 convertToFatTupleThreshold() {

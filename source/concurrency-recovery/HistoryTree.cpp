@@ -164,18 +164,19 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
     restartrem : {
       leanstore::storage::btree::BTreeExclusiveIterator iterator(
           *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)));
-      iterator.exitLeafCallback([&](GuardedBufferFrame<BTreeNode>& leaf) {
-        if (leaf->freeSpaceAfterCompaction() >=
-            BTreeNodeHeader::sUnderFullSize) {
-          iterator.cleanUpCallback([&, to_find = leaf.mBf] {
-            JUMPMU_TRY() {
-              btree->tryMerge(*to_find);
-            }
-            JUMPMU_CATCH() {
+      iterator.exitLeafCallback(
+          [&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
+            if (guardedLeaf->freeSpaceAfterCompaction() >=
+                BTreeNodeHeader::sUnderFullSize) {
+              iterator.cleanUpCallback([&, to_find = guardedLeaf.mBf] {
+                JUMPMU_TRY() {
+                  btree->tryMerge(*to_find);
+                }
+                JUMPMU_CATCH() {
+                }
+              });
             }
           });
-        }
-      });
       // -------------------------------------------------------------------------------------
       OP_RESULT ret = iterator.seek(key);
       while (ret == OP_RESULT::OK) {
@@ -222,13 +223,14 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
         BufferFrame* bf = session->leftmost_bf;
         HybridGuard bf_guard(bf->header.mLatch, session->leftmost_version);
         bf_guard.JumpIfModifiedByOthers();
-        GuardedBufferFrame<BTreeNode> leaf(std::move(bf_guard), bf);
+        GuardedBufferFrame<BTreeNode> guardedLeaf(std::move(bf_guard), bf);
 
-        if (leaf->mLowerFence.length == 0) {
+        if (guardedLeaf->mLowerFence.length == 0) {
           // Allocate in the stack, freed when the calling function exits.
-          u8* last_key =
-              (u8*)alloca(leaf->getFullKeyLen(leaf->mNumSeps - 1) * sizeof(u8));
-          leaf->copyFullKey(leaf->mNumSeps - 1, last_key);
+          u8* last_key = (u8*)alloca(
+              guardedLeaf->getFullKeyLen(guardedLeaf->mNumSeps - 1) *
+              sizeof(u8));
+          guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, last_key);
           TXID last_key_tx_id;
           utils::unfold(last_key, last_key_tx_id);
           if (last_key_tx_id > to_tx_id) {
@@ -244,45 +246,49 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
     JUMPMU_TRY() {
       leanstore::storage::btree::BTreeExclusiveIterator iterator(
           *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)));
-      iterator.exitLeafCallback([&](GuardedBufferFrame<BTreeNode>& leaf) {
-        if (leaf->freeSpaceAfterCompaction() >=
-            BTreeNodeHeader::sUnderFullSize) {
-          iterator.cleanUpCallback([&, to_find = leaf.mBf] {
-            JUMPMU_TRY() {
-              btree->tryMerge(*to_find);
-            }
-            JUMPMU_CATCH() {
+      iterator.exitLeafCallback(
+          [&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
+            if (guardedLeaf->freeSpaceAfterCompaction() >=
+                BTreeNodeHeader::sUnderFullSize) {
+              iterator.cleanUpCallback([&, to_find = guardedLeaf.mBf] {
+                JUMPMU_TRY() {
+                  btree->tryMerge(*to_find);
+                }
+                JUMPMU_CATCH() {
+                }
+              });
             }
           });
-        }
-      });
 
       // ATTENTION: we use this also for purging the current aborted tx so we
       // can not simply assume from_tx_id = 0
       bool did_purge_full_page = false;
-      iterator.enterLeafCallback([&](GuardedBufferFrame<BTreeNode>& leaf) {
-        if (leaf->mNumSeps == 0) {
-          return;
-        }
-        // Allocate in the stack, freed when the calling function exits.
-        auto first_key = (u8*)alloca(leaf->getFullKeyLen(0) * sizeof(u8));
-        leaf->copyFullKey(0, first_key);
-        TXID first_key_tx_id;
-        utils::unfold(first_key, first_key_tx_id);
+      iterator.enterLeafCallback(
+          [&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
+            if (guardedLeaf->mNumSeps == 0) {
+              return;
+            }
+            // Allocate in the stack, freed when the calling function exits.
+            auto first_key =
+                (u8*)alloca(guardedLeaf->getFullKeyLen(0) * sizeof(u8));
+            guardedLeaf->copyFullKey(0, first_key);
+            TXID first_key_tx_id;
+            utils::unfold(first_key, first_key_tx_id);
 
-        // Allocate in the stack, freed when the calling function exits.
-        auto last_key =
-            (u8*)alloca(leaf->getFullKeyLen(leaf->mNumSeps - 1) * sizeof(u8));
-        leaf->copyFullKey(leaf->mNumSeps - 1, last_key);
-        TXID last_key_tx_id;
-        utils::unfold(last_key, last_key_tx_id);
-        if (first_key_tx_id >= from_tx_id && to_tx_id >= last_key_tx_id) {
-          // Purge the whole page
-          removed_versions = removed_versions + leaf->mNumSeps;
-          leaf->reset();
-          did_purge_full_page = true;
-        }
-      });
+            // Allocate in the stack, freed when the calling function exits.
+            auto last_key = (u8*)alloca(
+                guardedLeaf->getFullKeyLen(guardedLeaf->mNumSeps - 1) *
+                sizeof(u8));
+            guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, last_key);
+            TXID last_key_tx_id;
+            utils::unfold(last_key, last_key_tx_id);
+            if (first_key_tx_id >= from_tx_id && to_tx_id >= last_key_tx_id) {
+              // Purge the whole page
+              removed_versions = removed_versions + guardedLeaf->mNumSeps;
+              guardedLeaf->reset();
+              did_purge_full_page = true;
+            }
+          });
 
       iterator.seek(key);
       if (did_purge_full_page) {
