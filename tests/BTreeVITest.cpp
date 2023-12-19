@@ -59,6 +59,8 @@ TEST_F(BTreeVITest, BTreeVICreate) {
   };
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
     EXPECT_TRUE(
         GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree));
     EXPECT_NE(btree, nullptr);
@@ -66,6 +68,8 @@ TEST_F(BTreeVITest, BTreeVICreate) {
 
   // create btree with same should fail in the same worker
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
     EXPECT_FALSE(
         GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &another));
     EXPECT_EQ(another, nullptr);
@@ -73,6 +77,8 @@ TEST_F(BTreeVITest, BTreeVICreate) {
 
   // create btree with same should also fail in other workers
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
     EXPECT_FALSE(
         GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &another));
     EXPECT_EQ(another, nullptr);
@@ -81,12 +87,16 @@ TEST_F(BTreeVITest, BTreeVICreate) {
   // create btree with another different name should success
   const auto* btreeName2 = "testTree2";
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
     EXPECT_TRUE(
         GetLeanStore()->RegisterBTreeVI(btreeName2, btreeConfig, &another));
     EXPECT_NE(btree, nullptr);
   });
 
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
     GetLeanStore()->UnRegisterBTreeVI(btreeName);
     GetLeanStore()->UnRegisterBTreeVI(btreeName2);
   });
@@ -112,21 +122,27 @@ TEST_F(BTreeVITest, BTreeVIInsertAndLookup) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::Worker::my().startTX();
     EXPECT_TRUE(
         GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree));
     EXPECT_NE(btree, nullptr);
+    cr::Worker::my().commitTX();
 
     // insert some values
+    cr::Worker::my().startTX();
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OP_RESULT::OK);
     }
+    cr::Worker::my().commitTX();
   });
 
   // query on the created btree in the same worker
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
@@ -142,6 +158,8 @@ TEST_F(BTreeVITest, BTreeVIInsertAndLookup) {
 
   // query on the created btree in another worker
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
@@ -155,8 +173,11 @@ TEST_F(BTreeVITest, BTreeVIInsertAndLookup) {
     }
   });
 
-  cr::CRManager::sInstance->scheduleJobSync(
-      1, [&]() { GetLeanStore()->UnRegisterBTreeVI(btreeName); });
+  cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
+    GetLeanStore()->UnRegisterBTreeVI(btreeName);
+  });
 }
 
 TEST_F(BTreeVITest, BTreeVIToJSON) {
@@ -178,22 +199,29 @@ TEST_F(BTreeVITest, BTreeVIToJSON) {
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
+
+    cr::Worker::my().startTX();
     EXPECT_TRUE(
         GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree));
     EXPECT_NE(btree, nullptr);
+    cr::Worker::my().commitTX();
 
     // insert some values
+    cr::Worker::my().startTX();
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OP_RESULT::OK);
     }
+    cr::Worker::my().commitTX();
 
     // auto doc = leanstore::storage::btree::BTreeGeneric::ToJSON(*btree);
     // std::cout << leanstore::utils::JsonToStr(&doc);
 
+    cr::Worker::my().startTX();
     GetLeanStore()->UnRegisterBTreeVI(btreeName);
+    cr::Worker::my().commitTX();
   });
 }
 

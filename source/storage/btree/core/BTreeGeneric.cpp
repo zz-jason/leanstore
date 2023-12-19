@@ -28,19 +28,28 @@ void BTreeGeneric::Init(TREEID btreeId, Config config) {
   guard.unlock();
 
   auto guardedRoot = GuardedBufferFrame<BTreeNode>(btreeId);
-  auto exclusiveGuardedRoot =
+  auto xGuardedRoot =
       ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedRoot));
-  exclusiveGuardedRoot.InitPayload(true);
+  xGuardedRoot.InitPayload(true);
 
   GuardedBufferFrame<BTreeNode> guardedMeta(mMetaNodeSwip);
-  ExclusiveGuardedBufferFrame exclusiveGuardedMeta(std::move(guardedMeta));
-  exclusiveGuardedMeta->mIsLeaf = false;
-  // HACK: use upper of meta node as a swip to the storage root
-  exclusiveGuardedMeta->mRightMostChildSwip = exclusiveGuardedRoot.bf();
+  ExclusiveGuardedBufferFrame xGuardedMeta(std::move(guardedMeta));
+  xGuardedMeta->mIsLeaf = false;
+  xGuardedMeta->mRightMostChildSwip = xGuardedRoot.bf();
 
-  // TODO: write WALs
-  exclusiveGuardedRoot.IncPageGSN();
-  exclusiveGuardedMeta.IncPageGSN();
+  // Record WAL
+  if (config.mEnableWal) {
+    auto rootWalHandler = xGuardedRoot.ReserveWALPayload<WALInitPage>(
+        0, mTreeId, xGuardedRoot->mIsLeaf);
+    rootWalHandler.SubmitWal();
+
+    auto metaWalHandler = xGuardedMeta.ReserveWALPayload<WALInitPage>(
+        0, mTreeId, xGuardedMeta->mIsLeaf);
+    metaWalHandler.SubmitWal();
+  }
+
+  xGuardedRoot.IncPageGSN();
+  xGuardedMeta.IncPageGSN();
 }
 
 void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
@@ -113,11 +122,11 @@ void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
     };
     if (config.mEnableWal) {
       auto newRootWalHandler =
-          xGuardedNewRoot.ReserveWALPayload<WALInitPage>(0, mTreeId);
+          xGuardedNewRoot.ReserveWALPayload<WALInitPage>(0, mTreeId, false);
       newRootWalHandler.SubmitWal();
 
-      auto newLeftWalHandler =
-          xGuardedNewLeft.ReserveWALPayload<WALInitPage>(0, mTreeId);
+      auto newLeftWalHandler = xGuardedNewLeft.ReserveWALPayload<WALInitPage>(
+          0, mTreeId, xGuardedChild->mIsLeaf);
       newLeftWalHandler.SubmitWal();
 
       auto parentPageId(xGuardedNewRoot.bf()->header.mPageId);
@@ -185,8 +194,8 @@ void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
       };
 
       if (config.mEnableWal) {
-        auto newLeftWalHandler =
-            xGuardedNewLeft.ReserveWALPayload<WALInitPage>(0, mTreeId);
+        auto newLeftWalHandler = xGuardedNewLeft.ReserveWALPayload<WALInitPage>(
+            0, mTreeId, xGuardedNewLeft->mIsLeaf);
         newLeftWalHandler.SubmitWal();
 
         auto parentPageId = xGuardedParent.bf()->header.mPageId;
@@ -205,8 +214,8 @@ void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
                 0, parentPageId, lhsPageId, rhsPageId);
         parentWalHandler.SubmitWal();
 
-        newLeftWalHandler =
-            xGuardedNewLeft.ReserveWALPayload<WALInitPage>(0, mTreeId);
+        newLeftWalHandler = xGuardedNewLeft.ReserveWALPayload<WALInitPage>(
+            0, mTreeId, xGuardedNewLeft->mIsLeaf);
         newLeftWalHandler.SubmitWal();
 
         auto leftWalHandler =

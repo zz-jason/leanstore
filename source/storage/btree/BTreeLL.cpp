@@ -20,6 +20,7 @@ namespace btree {
 #define ARRAY_ON_STACK(varName, T, N) T* varName = (T*)alloca((N) * sizeof(T));
 
 OP_RESULT BTreeLL::Lookup(Slice key, ValCallback valCallback) {
+  DCHECK(cr::Worker::my().IsTxStarted());
   while (true) {
     JUMPMU_TRY() {
       GuardedBufferFrame<BTreeNode> leaf;
@@ -140,6 +141,7 @@ OP_RESULT BTreeLL::scanDesc(Slice scanKey, ScanCallback callback) {
 }
 
 OP_RESULT BTreeLL::insert(Slice key, Slice val) {
+  DCHECK(cr::Worker::my().IsTxStarted());
   cr::activeTX().markAsWrite();
   if (config.mEnableWal) {
     cr::Worker::my().mLogging.walEnsureEnoughSpace(PAGE_SIZE * 1);

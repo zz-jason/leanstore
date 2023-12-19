@@ -39,17 +39,17 @@ u16 BTreeNode::spaceNeeded(u16 keySize, u16 valSize) {
 }
 
 bool BTreeNode::canInsert(u16 keySize, u16 valSize) {
-  const u16 space_needed = spaceNeeded(keySize, valSize);
-  if (!hasEnoughSpaceFor(space_needed))
+  const u16 numSpaceNeeded = spaceNeeded(keySize, valSize);
+  if (!hasEnoughSpaceFor(numSpaceNeeded))
     return false; // no space, insert fails
   else
     return true;
 }
 
 bool BTreeNode::prepareInsert(u16 keySize, u16 valSize) {
-  const u16 space_needed = spaceNeeded(keySize, valSize);
-  if (!requestSpaceFor(space_needed))
-    return false; // no space, insert fails
+  const u16 numSpaceNeeded = spaceNeeded(keySize, valSize);
+  if (!requestSpaceFor(numSpaceNeeded))
+    return false;
   else
     return true;
 }

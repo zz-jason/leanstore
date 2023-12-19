@@ -11,6 +11,8 @@
 
 namespace leanstore {
 
+using namespace leanstore::storage::btree;
+
 class BTreeVILoggingAndRecoveryTest : public ::testing::Test {
 protected:
   std::unique_ptr<LeanStore> mLeanStore;
@@ -36,14 +38,14 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
   std::filesystem::remove_all(dirPath);
   std::filesystem::create_directories(dirPath);
 
-  dirPath = leanstore::GetLogDir();
+  dirPath = GetLogDir();
   std::filesystem::remove_all(dirPath);
   std::filesystem::create_directories(dirPath);
 
   FLAGS_worker_threads = 2;
   FLAGS_recover = false;
-  mLeanStore = std::make_unique<leanstore::LeanStore>();
-  storage::btree::BTreeVI* btree;
+  mLeanStore = std::make_unique<LeanStore>();
+  BTreeVI* btree;
 
   // prepare key-value pairs to insert
   size_t numKVs(10);
@@ -56,7 +58,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
 
   // create btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+  auto btreeConfig = BTreeGeneric::Config{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
@@ -64,12 +66,16 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
   // TODO(jian.z): need to create btree within a transaction, otherwise
   // transactions depend on the btree creator worker may hang on commit.
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
     EXPECT_TRUE(mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree));
     EXPECT_NE(btree, nullptr);
   });
 
   // insert some values
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
@@ -80,8 +86,8 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     rapidjson::Document doc(rapidjson::kObjectType);
-    leanstore::storage::btree::BTreeGeneric::ToJSON(*btree, &doc);
-    LOG(INFO) << "btree before destroy: " << leanstore::utils::JsonToStr(&doc);
+    BTreeGeneric::ToJSON(*btree, &doc);
+    LOG(INFO) << "btree before destroy: " << utils::JsonToStr(&doc);
   });
 
   // meta file should be serialized during destructor.
@@ -89,18 +95,20 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
   FLAGS_recover = true;
 
   // recreate the store, it's expected that all the meta and pages are rebult.
-  mLeanStore = std::make_unique<leanstore::LeanStore>();
+  mLeanStore = std::make_unique<LeanStore>();
   EXPECT_TRUE(mLeanStore->GetBTreeVI(btreeName, &btree));
   EXPECT_NE(btree, nullptr);
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     rapidjson::Document doc(rapidjson::kObjectType);
-    leanstore::storage::btree::BTreeGeneric::ToJSON(*btree, &doc);
-    LOG(INFO) << "btree after recovery: " << leanstore::utils::JsonToStr(&doc);
+    BTreeGeneric::ToJSON(*btree, &doc);
+    LOG(INFO) << "btree after recovery: " << utils::JsonToStr(&doc);
   });
 
   // lookup the restored btree
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
@@ -114,8 +122,11 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
     }
   });
 
-  cr::CRManager::sInstance->scheduleJobSync(
-      1, [&]() { mLeanStore->UnRegisterBTreeVI(btreeName); });
+  cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
+    mLeanStore->UnRegisterBTreeVI(btreeName);
+  });
 }
 
 TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
@@ -124,14 +135,14 @@ TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
   std::filesystem::remove_all(dirPath);
   std::filesystem::create_directories(dirPath);
 
-  dirPath = leanstore::GetLogDir();
+  dirPath = GetLogDir();
   std::filesystem::remove_all(dirPath);
   std::filesystem::create_directories(dirPath);
 
   FLAGS_worker_threads = 2;
   FLAGS_recover = false;
-  mLeanStore = std::make_unique<leanstore::LeanStore>();
-  storage::btree::BTreeVI* btree;
+  mLeanStore = std::make_unique<LeanStore>();
+  BTreeVI* btree;
 
   // prepare key-value pairs to insert
   size_t numKVs(10);
@@ -144,22 +155,26 @@ TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+  auto btreeConfig = BTreeGeneric::Config{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::Worker::my().startTX();
     EXPECT_TRUE(mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree));
     EXPECT_NE(btree, nullptr);
+    cr::Worker::my().commitTX();
 
     // insert some values
+    cr::Worker::my().startTX();
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OP_RESULT::OK);
     }
+    cr::Worker::my().commitTX();
   });
 
   // skip dumpping buffer frames on exit
@@ -170,12 +185,21 @@ TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
-  mLeanStore = std::make_unique<leanstore::LeanStore>();
+  mLeanStore = std::make_unique<LeanStore>();
   EXPECT_TRUE(mLeanStore->GetBTreeVI(btreeName, &btree));
   EXPECT_NE(btree, nullptr);
+  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
+    rapidjson::Document doc(rapidjson::kObjectType);
+    BTreeGeneric::ToJSON(*static_cast<BTreeGeneric*>(btree), &doc);
+    DLOG(INFO) << "BTreeVI after recovery: " << utils::JsonToStr(&doc);
+  });
 
   // lookup the restored btree
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());

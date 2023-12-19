@@ -104,9 +104,16 @@ void Recovery::Redo() {
 
     auto walPayload = reinterpret_cast<WALPayload*>(complexEntry->payload);
     switch (walPayload->type) {
+    case WALPayload::TYPE::WALInitPage: {
+      auto walInitPage = reinterpret_cast<WALInitPage*>(complexEntry->payload);
+      HybridGuard guard(&bf.header.mLatch);
+      GuardedBufferFrame<BTreeNode> guardedNode(std::move(guard), &bf);
+      guardedNode->mIsLeaf = walInitPage->mIsLeaf;
+      bf.page.mBTreeId = complexEntry->mTreeId;
+      break;
+    }
     case WALPayload::TYPE::WALInsert: {
-      auto walInsert = dynamic_cast<WALInsert*>(walPayload);
-
+      auto walInsert = reinterpret_cast<WALInsert*>(complexEntry->payload);
       HybridGuard guard(&bf.header.mLatch);
       GuardedBufferFrame<BTreeNode> guardedNode(std::move(guard), &bf);
 
