@@ -108,7 +108,9 @@ void Recovery::Redo() {
       auto walInitPage = reinterpret_cast<WALInitPage*>(complexEntry->payload);
       HybridGuard guard(&bf.header.mLatch);
       GuardedBufferFrame<BTreeNode> guardedNode(std::move(guard), &bf);
-      guardedNode->mIsLeaf = walInitPage->mIsLeaf;
+      auto xGuardedNode =
+          ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNode));
+      xGuardedNode.InitPayload(walInitPage->mIsLeaf);
       bf.page.mBTreeId = complexEntry->mTreeId;
       break;
     }
