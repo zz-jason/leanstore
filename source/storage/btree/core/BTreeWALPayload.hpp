@@ -66,12 +66,17 @@ public:
 #undef TYPE_NAME
 #undef DECR_TYPE
 
-struct WALInitPage : WALPayload {
+class WALInitPage : WALPayload {
+public:
   TREEID mTreeId;
+  bool mIsLeaf;
 
-  WALInitPage(TREEID treeId) : WALPayload(TYPE::WALInitPage), mTreeId(treeId) {
+public:
+  WALInitPage(TREEID treeId, bool isLeaf)
+      : WALPayload(TYPE::WALInitPage), mTreeId(treeId), mIsLeaf(isLeaf) {
   }
 
+public:
   virtual std::unique_ptr<rapidjson::Document> ToJSON() override {
     auto doc = WALPayload::ToJSON();
 

@@ -45,18 +45,24 @@ TEST_F(BTreeLLTest, BTreeLLCreate) {
   };
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
     EXPECT_TRUE(mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &btree));
     EXPECT_NE(btree, nullptr);
   });
 
   // create btree with same should fail in the same worker
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
     EXPECT_FALSE(mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &another));
     EXPECT_EQ(another, nullptr);
   });
 
   // create btree with same should also fail in other workers
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
     EXPECT_FALSE(mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &another));
     EXPECT_EQ(another, nullptr);
   });
@@ -64,6 +70,8 @@ TEST_F(BTreeLLTest, BTreeLLCreate) {
   // create btree with another different name should success
   btreeName = "testTree2";
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
     EXPECT_TRUE(mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &another));
     EXPECT_NE(btree, nullptr);
   });
@@ -95,20 +103,26 @@ TEST_F(BTreeLLTest, BTreeLLInsertAndLookup) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::Worker::my().startTX();
     EXPECT_TRUE(mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &btree));
     EXPECT_NE(btree, nullptr);
+    cr::Worker::my().commitTX();
 
     // insert some values
+    cr::Worker::my().startTX();
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OP_RESULT::OK);
     }
+    cr::Worker::my().commitTX();
   });
 
   // query on the created btree in the same worker
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
@@ -124,6 +138,8 @@ TEST_F(BTreeLLTest, BTreeLLInsertAndLookup) {
 
   // query on the created btree in another worker
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+    cr::Worker::my().startTX();
+    SCOPED_DEFER(cr::Worker::my().commitTX());
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());

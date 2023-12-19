@@ -25,18 +25,7 @@ namespace storage {
 namespace btree {
 
 OP_RESULT BTreeVI::Lookup(Slice key, ValCallback valCallback) {
-  auto autoCommit(false);
-  if (!cr::Worker::my().IsTxStarted()) {
-    DLOG(INFO) << "Start implicit transaction";
-    cr::Worker::my().startTX();
-    autoCommit = true;
-  }
-  SCOPED_DEFER({
-    // auto-commit the implicit transaction
-    if (autoCommit) {
-      cr::Worker::my().commitTX();
-    }
-  });
+  DCHECK(cr::Worker::my().IsTxStarted());
 
   OP_RESULT ret = lookupOptimistic(key, valCallback);
   if (ret == OP_RESULT::OTHER) {
@@ -364,20 +353,8 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(
 }
 
 OP_RESULT BTreeVI::insert(Slice key, Slice val) {
-  // check implicit transaction
-  // TODO(jian.z): should we force users to explicitly start a transaction?
-  auto autoCommit(false);
-  if (!cr::Worker::my().IsTxStarted()) {
-    DLOG(INFO) << "Start implicit transaction";
-    cr::Worker::my().startTX();
-    autoCommit = true;
-  }
-
+  DCHECK(cr::Worker::my().IsTxStarted());
   SCOPED_DEFER({
-    // auto-commit the implicit transaction
-    if (autoCommit) {
-      cr::Worker::my().commitTX();
-    }
     rapidjson::Document doc(rapidjson::kObjectType);
     BTreeGeneric::ToJSON(*this, &doc);
     DLOG(INFO) << "BTreeVI after insert: " << leanstore::utils::JsonToStr(&doc);
