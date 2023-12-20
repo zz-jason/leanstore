@@ -129,8 +129,8 @@ public:
   }
 };
 
-/// @brief Page is the content stored in the disk file. Page id is not here
-/// because it is determined by the offset in the disk file, no need to store it
+/// Page is the content stored in the disk file. Page id is not here because it
+/// is determined by the offset in the disk file, no need to store it
 /// explicitly.
 class alignas(512) Page {
 public:

@@ -4,6 +4,7 @@
 #include "profiling/counters/CRCounters.hpp"
 #include "storage/btree/core/BTreeExclusiveIterator.hpp"
 #include "storage/btree/core/BTreeSharedIterator.hpp"
+#include "utils/Misc.hpp"
 
 #include <alloca.h>
 #include <atomic>
@@ -150,11 +151,11 @@ bool HistoryTree::retrieveVersion(WORKERID workerId, TXID tx_id,
 void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
                                 TXID to_tx_id, RemoveVersionCallback cb,
                                 [[maybe_unused]] const u64 limit) {
-  u16 key_length = sizeof(to_tx_id);
-  u8 key_buffer[PAGE_SIZE];
-  utils::fold(key_buffer, from_tx_id);
-  Slice key(key_buffer, key_length);
-  u8 payload[PAGE_SIZE];
+  auto keySize = sizeof(to_tx_id);
+  auto keyBuffer = utils::ArrayOnStack<u8>(PAGE_SIZE);
+  utils::fold(keyBuffer, from_tx_id);
+  Slice key(keyBuffer, keySize);
+  auto payload = utils::ArrayOnStack<u8>(PAGE_SIZE);
   u16 payload_length;
   volatile u64 removed_versions = 0;
   BTreeLL* volatile btree = remove_btrees[workerId];
@@ -189,11 +190,11 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
           const TREEID treeId = version_container.mTreeId;
           const bool called_before = version_container.called_before;
           version_container.called_before = true;
-          key_length = iterator.key().length();
-          std::memcpy(key_buffer, iterator.key().data(), key_length);
+          keySize = iterator.key().length();
+          std::memcpy(keyBuffer, iterator.key().data(), keySize);
           payload_length = iterator.value().length() - sizeof(VersionMeta);
           std::memcpy(payload, version_container.payload, payload_length);
-          key = Slice(key_buffer, key_length + 1);
+          key = Slice(keyBuffer, keySize + 1);
           iterator.removeCurrent();
           removed_versions = removed_versions + 1;
           iterator.MarkAsDirty();
@@ -212,7 +213,7 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
   }
 
   btree = update_btrees[workerId];
-  utils::fold(key_buffer, from_tx_id);
+  utils::fold(keyBuffer, from_tx_id);
 
   // Attention: no cross worker gc in sync
   Session* volatile session = &update_sessions[workerId];
@@ -318,12 +319,12 @@ void HistoryTree::visitRemoveVersions(
         cb) {
   // [from, to]
   BTreeLL* btree = remove_btrees[workerId];
-  u16 key_length = sizeof(to_tx_id);
-  u8 key_buffer[PAGE_SIZE];
+  auto keySize = sizeof(to_tx_id);
+  auto keyBuffer = utils::ArrayOnStack<u8>(PAGE_SIZE);
   u64 offset = 0;
-  offset += utils::fold(key_buffer + offset, from_tx_id);
-  Slice key(key_buffer, key_length);
-  u8 payload[PAGE_SIZE];
+  offset += utils::fold(keyBuffer + offset, from_tx_id);
+  Slice key(keyBuffer, keySize);
+  auto payload = utils::ArrayOnStack<u8>(PAGE_SIZE);
   u16 payload_length;
 
   JUMPMU_TRY() {
@@ -342,11 +343,11 @@ void HistoryTree::visitRemoveVersions(
         const bool called_before = version_container.called_before;
         ENSURE(called_before == false);
         version_container.called_before = true;
-        key_length = iterator.key().length();
-        std::memcpy(key_buffer, iterator.key().data(), key_length);
+        keySize = iterator.key().length();
+        std::memcpy(keyBuffer, iterator.key().data(), keySize);
         payload_length = iterator.value().length() - sizeof(VersionMeta);
         std::memcpy(payload, version_container.payload, payload_length);
-        key = Slice(key_buffer, key_length + 1);
+        key = Slice(keyBuffer, keySize + 1);
         if (!called_before) {
           iterator.MarkAsDirty();
         }

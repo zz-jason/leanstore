@@ -301,26 +301,28 @@ cont : {
         iterator.shorten(new_length);
         return false;
       }
-      // if (fat_tuple->total_space < maxFatTupleLength()) {
-      //    const u32 new_fat_tuple_length = std::min<u32>(maxFatTupleLength(),
-      //    fat_tuple->total_space * 2); u8 buffer[PAGE_SIZE];
-      //    ENSURE(iterator.value().length() <= PAGE_SIZE);
-      //    std::memcpy(buffer, iterator.value().data(),
-      //    iterator.value().length());
-      //    //
-      //    -------------------------------------------------------------------------------------
-      //    const bool did_extend =
-      //    iterator.extendPayload(new_fat_tuple_length); ENSURE(did_extend);
-      //    //
-      //    -------------------------------------------------------------------------------------
-      //    std::memcpy(iterator.mutableValue().data(), buffer,
-      //    new_fat_tuple_length); fat_tuple =
-      //    reinterpret_cast<FatTupleDifferentAttributes*>(iterator.mutableValue().data());
-      //    // ATTENTION fat_tuple->total_space = new_fat_tuple_length -
-      //    sizeof(FatTupleDifferentAttributes); goto cont;
-      // } else {
-      //    TODOException();
-      // }
+      /*
+      if (fat_tuple->total_space < maxFatTupleLength()) {
+        auto new_fat_tuple_length =
+            std::min<u32>(maxFatTupleLength(), fat_tuple->total_space * 2);
+        auto buffer = utils::ArrayOnStack<u8>(PAGE_SIZE);
+        ENSURE(iterator.value().length() <= PAGE_SIZE);
+        std::memcpy(buffer, iterator.value().data(), iterator.value().length());
+        //
+        const bool did_extend = iterator.extendPayload(new_fat_tuple_length);
+        ENSURE(did_extend);
+        //
+        std::memcpy(iterator.mutableValue().data(), buffer,
+                    new_fat_tuple_length);
+        fat_tuple = reinterpret_cast<FatTupleDifferentAttributes*>(
+            iterator.mutableValue().data());
+        // ATTENTION fat_tuple->total_space = new_fat_tuple_length -
+        sizeof(FatTupleDifferentAttributes);
+        goto cont;
+      } else {
+        TODOException();
+      }
+      */
     }
   }
   assert(fat_tuple->total_space >= fat_tuple->used_space);

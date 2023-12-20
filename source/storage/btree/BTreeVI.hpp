@@ -732,7 +732,7 @@ private:
         }
         o_ret = iterator.next();
         if (is_last_one) {
-          g_lower_bound = Slice(iterator.mBuffer, iterator.mFenceSize + 1);
+          g_lower_bound = Slice(&iterator.mBuffer[0], iterator.mFenceSize + 1);
           g_upper_bound = Slice(iterator.mGuardedLeaf->getUpperFenceKey(),
                                 iterator.mGuardedLeaf->mUpperFence.length);
           g_range();

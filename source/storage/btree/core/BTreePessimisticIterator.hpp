@@ -19,8 +19,7 @@ class BTreePessimisticIterator : public BTreePessimisticIteratorInterface {
   friend class BTreeGeneric;
 
 public:
-  /// mBTree is the working btree, all the seek operations are based on this
-  /// tree.
+  /// The working btree, all the seek operations are based on this tree.
   BTreeGeneric& mBTree;
 
   const LATCH_FALLBACK_MODE mode;
@@ -35,30 +34,29 @@ public:
   /// seeking for another key.
   std::function<void()> mFuncCleanUp = nullptr;
 
-  /// mSlotId is the slot id of the current key in the leaf.
+  /// The slot id of the current key in the leaf.
   /// Reset after every leaf change.
   s32 mSlotId = -1;
 
-  /// mIsPrefixCopied indicates whether the prefix is copied in mBuffer
+  /// Indicates whether the prefix is copied in mBuffer
   bool mIsPrefixCopied = false;
 
-  /// mGuardedLeaf is the latched leaf node of the current key.
+  /// The latched leaf node of the current key.
   GuardedBufferFrame<BTreeNode> mGuardedLeaf;
 
-  /// mGuardedParent is the latched parent node of mGuardedLeaf.
+  /// The latched parent node of mGuardedLeaf.
   GuardedBufferFrame<BTreeNode> mGuardedParent;
 
-  /// mLeafPosInParent is the slot id in mGuardedParent of mGuardedLeaf.
+  /// The slot id in mGuardedParent of mGuardedLeaf.
   s32 mLeafPosInParent = -1;
 
-  /// mBuffer is used to buffer the key at mSlotId or lower/upper fence keys.
-  u8 mBuffer[PAGE_SIZE];
+  /// Used to buffer the key at mSlotId or lower/upper fence keys.
+  std::basic_string<u8> mBuffer;
 
-  /// mFenceSize is the length of the lower or upper fence key.
+  /// The length of the lower or upper fence key.
   u16 mFenceSize = 0;
 
-  /// mIsUsingUpperFence indicates whether the mFenceSize is for lower or upper
-  /// fence key.
+  /// Tndicates whether the mFenceSize is for lower or upper fence key.
   bool mIsUsingUpperFence;
 
 protected:
@@ -130,7 +128,7 @@ protected:
 public:
   BTreePessimisticIterator(BTreeGeneric& tree, const LATCH_FALLBACK_MODE mode =
                                                    LATCH_FALLBACK_MODE::SHARED)
-      : mBTree(tree), mode(mode) {
+      : mBTree(tree), mode(mode), mBuffer(PAGE_SIZE, 0) {
   }
 
   void enterLeafCallback(LeafCallback cb) {
@@ -145,8 +143,13 @@ public:
     mFuncCleanUp = cb;
   }
 
+  inline Slice BufferedFence() {
+    return Slice(&mBuffer[0], mFenceSize);
+  }
+
   // EXP
-  OP_RESULT seekExactWithHint(Slice key, bool higher = true) {
+  OP_RESULT
+  seekExactWithHint(Slice key, bool higher = true) {
     if (mSlotId == -1) {
       return seekExact(key);
     }
@@ -216,23 +219,24 @@ public:
       } else {
         mFenceSize = mGuardedLeaf->mUpperFence.length + 1;
         mIsUsingUpperFence = true;
-        std::memcpy(mBuffer, mGuardedLeaf->getUpperFenceKey(),
+        DCHECK(mBuffer.size() >= mFenceSize);
+        std::memcpy(mBuffer.data(), mGuardedLeaf->getUpperFenceKey(),
                     mGuardedLeaf->mUpperFence.length);
         mBuffer[mFenceSize - 1] = 0;
-        // -------------------------------------------------------------------------------------
+
         if (mFuncExitLeaf != nullptr) {
           mFuncExitLeaf(mGuardedLeaf);
           mFuncExitLeaf = nullptr;
         }
-        // -------------------------------------------------------------------------------------
+
         mGuardedParent.unlock();
         mGuardedLeaf.unlock();
-        // -------------------------------------------------------------------------------------
+
         if (mFuncCleanUp != nullptr) {
           mFuncCleanUp();
           mFuncCleanUp = nullptr;
         }
-        // -------------------------------------------------------------------------------------
+
         if (FLAGS_optimistic_scan && mLeafPosInParent != -1) {
           JUMPMU_TRY() {
             if ((mLeafPosInParent + 1) <= mGuardedParent->mNumSeps) {
@@ -251,11 +255,11 @@ public:
               mLeafPosInParent = next_leaf_pos;
               mSlotId = 0;
               mIsPrefixCopied = false;
-              // -------------------------------------------------------------------------------------
+
               if (mFuncEnterLeaf != nullptr) {
                 mFuncEnterLeaf(mGuardedLeaf);
               }
-              // -------------------------------------------------------------------------------------
+
               if (mGuardedLeaf->mNumSeps == 0) {
                 JUMPMU_CONTINUE;
               }
@@ -271,8 +275,8 @@ public:
           }
         }
         // Construct the next key (lower bound)
-        gotoPage(Slice(mBuffer, mFenceSize));
-        // -------------------------------------------------------------------------------------
+        gotoPage(BufferedFence());
+
         if (mGuardedLeaf->mNumSeps == 0) {
           cleanUpCallback([&, to_find = mGuardedLeaf.mBf]() {
             JUMPMU_TRY() {
@@ -286,7 +290,7 @@ public:
           }
           continue;
         }
-        mSlotId = mGuardedLeaf->lowerBound<false>(Slice(mBuffer, mFenceSize));
+        mSlotId = mGuardedLeaf->lowerBound<false>(BufferedFence());
         if (mSlotId == mGuardedLeaf->mNumSeps) {
           continue;
         }
@@ -310,7 +314,8 @@ public:
       } else {
         mFenceSize = mGuardedLeaf->mLowerFence.length;
         mIsUsingUpperFence = false;
-        std::memcpy(mBuffer, mGuardedLeaf->getLowerFenceKey(), mFenceSize);
+        DCHECK(mBuffer.size() >= mFenceSize);
+        std::memcpy(&mBuffer[0], mGuardedLeaf->getLowerFenceKey(), mFenceSize);
 
         if (mFuncExitLeaf != nullptr) {
           mFuncExitLeaf(mGuardedLeaf);
@@ -342,11 +347,11 @@ public:
               mLeafPosInParent = next_leaf_pos;
               mSlotId = mGuardedLeaf->mNumSeps - 1;
               mIsPrefixCopied = false;
-              // -------------------------------------------------------------------------------------
+
               if (mFuncEnterLeaf != nullptr) {
                 mFuncEnterLeaf(mGuardedLeaf);
               }
-              // -------------------------------------------------------------------------------------
+
               if (mGuardedLeaf->mNumSeps == 0) {
                 JUMPMU_CONTINUE;
               }
@@ -361,7 +366,7 @@ public:
           }
         }
         // Construct the next key (lower bound)
-        gotoPage(Slice(mBuffer, mFenceSize));
+        gotoPage(BufferedFence());
 
         if (mGuardedLeaf->mNumSeps == 0) {
           COUNTERS_BLOCK() {
@@ -370,8 +375,7 @@ public:
           continue;
         }
         bool is_equal = false;
-        mSlotId = mGuardedLeaf->lowerBound<false>(Slice(mBuffer, mFenceSize),
-                                                  &is_equal);
+        mSlotId = mGuardedLeaf->lowerBound<false>(BufferedFence(), &is_equal);
         if (is_equal) {
           return OP_RESULT::OK;
         } else if (mSlotId > 0) {
@@ -385,24 +389,26 @@ public:
 
   virtual void assembleKey() {
     if (!mIsPrefixCopied) {
-      mGuardedLeaf->copyPrefix(mBuffer);
+      mGuardedLeaf->copyPrefix(&mBuffer[0]);
       mIsPrefixCopied = true;
     }
     mGuardedLeaf->copyKeyWithoutPrefix(mSlotId,
-                                       mBuffer + mGuardedLeaf->mPrefixSize);
+                                       &mBuffer[mGuardedLeaf->mPrefixSize]);
   }
 
   virtual Slice key() override {
-    return Slice(mBuffer, mGuardedLeaf->getFullKeyLen(mSlotId));
+    DCHECK(mBuffer.size() >= mGuardedLeaf->getFullKeyLen(mSlotId));
+    return Slice(&mBuffer[0], mGuardedLeaf->getFullKeyLen(mSlotId));
   }
 
   virtual MutableSlice mutableKeyInBuffer() {
-    return MutableSlice(mBuffer, mGuardedLeaf->getFullKeyLen(mSlotId));
+    DCHECK(mBuffer.size() >= mGuardedLeaf->getFullKeyLen(mSlotId));
+    return MutableSlice(&mBuffer[0], mGuardedLeaf->getFullKeyLen(mSlotId));
   }
 
   virtual MutableSlice mutableKeyInBuffer(u16 size) {
-    assert(size < PAGE_SIZE);
-    return MutableSlice(mBuffer, size);
+    DCHECK(mBuffer.size() >= size);
+    return MutableSlice(&mBuffer[0], size);
   }
 
   virtual bool isKeyEqualTo(Slice other) override {
@@ -427,8 +433,8 @@ public:
   }
 
   bool isLastOne() {
-    assert(isValid());
-    assert(mSlotId != mGuardedLeaf->mNumSeps);
+    DCHECK(isValid());
+    DCHECK(mSlotId != mGuardedLeaf->mNumSeps);
     return (mSlotId + 1) == mGuardedLeaf->mNumSeps;
   }
 
