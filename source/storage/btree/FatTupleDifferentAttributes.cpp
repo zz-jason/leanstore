@@ -1,5 +1,6 @@
 #include "BTreeVI.hpp"
 #include "concurrency-recovery/CRMG.hpp"
+#include "utils/Misc.hpp"
 
 #include "gflags/gflags.h"
 
@@ -27,8 +28,6 @@ public:
 } // namespace std
 
 namespace leanstore::storage::btree {
-
-#define ARRAY_ON_STACK(varName, T, N) T* varName = (T*)alloca((N) * sizeof(T));
 
 void FatTupleDifferentAttributes::undoLastUpdate() {
   ENSURE(deltas_count >= 1);
@@ -123,8 +122,8 @@ void FatTupleDifferentAttributes::garbageCollection() {
     return;
   }
 
-  u32 buffer_size = total_space + sizeof(FatTupleDifferentAttributes);
-  ARRAY_ON_STACK(buffer, u8, buffer_size);
+  auto bufferSize = total_space + sizeof(FatTupleDifferentAttributes);
+  auto buffer = utils::ArrayOnStack<u8>(bufferSize);
   auto& new_fat_tuple = *new (buffer) FatTupleDifferentAttributes(total_space);
   new_fat_tuple.mWorkerId = mWorkerId;
   new_fat_tuple.tx_ts = tx_ts;
@@ -194,7 +193,7 @@ void FatTupleDifferentAttributes::garbageCollection() {
     }
   }
 
-  std::memcpy(this, buffer, buffer_size);
+  std::memcpy(this, buffer, bufferSize);
   assert(total_space >= used_space);
 
   DEBUG_BLOCK() {
@@ -336,17 +335,17 @@ std::tuple<OP_RESULT, u16> FatTupleDifferentAttributes::reconstructTuple(
     valCallback(Slice(getValueConstant(), value_length));
     return {OP_RESULT::OK, 1};
   } else if (deltas_count > 0) {
-    ARRAY_ON_STACK(materialized_value, u8, value_length);
-    std::memcpy(materialized_value, getValueConstant(), value_length);
+    auto materializedValue = utils::ArrayOnStack<u8>(value_length);
+    std::memcpy(materializedValue, getValueConstant(), value_length);
     // we have to apply the diffs
     u16 chain_length = 2;
     for (s16 d_i = deltas_count - 1; d_i >= 0; d_i--) {
       auto& delta = getDeltaConstant(d_i);
       BTreeLL::applyDiff(
-          delta.getConstantDescriptor(), materialized_value,
+          delta.getConstantDescriptor(), materializedValue,
           delta.payload + delta.getConstantDescriptor().size()); // Apply diff
       if (cr::Worker::my().cc.isVisibleForMe(delta.mWorkerId, delta.tx_ts)) {
-        valCallback(Slice(materialized_value, value_length));
+        valCallback(Slice(materializedValue, value_length));
         return {OP_RESULT::OK, chain_length};
       } else {
         chain_length++;
@@ -361,16 +360,16 @@ std::tuple<OP_RESULT, u16> FatTupleDifferentAttributes::reconstructTuple(
   }
 }
 
-void FatTupleDifferentAttributes::resize(const u32 new_length) {
-  ARRAY_ON_STACK(tmp_page, u8,
-                 new_length + sizeof(FatTupleDifferentAttributes));
-  auto& new_fat_tuple = *new (tmp_page) FatTupleDifferentAttributes(new_length);
-  new_fat_tuple.mWorkerId = mWorkerId;
-  new_fat_tuple.tx_ts = tx_ts;
-  new_fat_tuple.command_id = command_id;
-  new_fat_tuple.used_space += value_length;
-  new_fat_tuple.value_length = value_length;
-  std::memcpy(new_fat_tuple.payload, payload, value_length); // Copy value
+void FatTupleDifferentAttributes::resize(const u32 newLength) {
+  auto tmpPageSize = newLength + sizeof(FatTupleDifferentAttributes);
+  auto tmpPage = utils::ArrayOnStack<u8>(tmpPageSize);
+  auto& newFatTuple = *new (tmpPage) FatTupleDifferentAttributes(newLength);
+  newFatTuple.mWorkerId = mWorkerId;
+  newFatTuple.tx_ts = tx_ts;
+  newFatTuple.command_id = command_id;
+  newFatTuple.used_space += value_length;
+  newFatTuple.value_length = value_length;
+  std::memcpy(newFatTuple.payload, payload, value_length); // Copy value
   auto append_ll = [](FatTupleDifferentAttributes& fat_tuple, u8* delta,
                       u16 delta_length) {
     assert(fat_tuple.total_space >=
@@ -382,10 +381,10 @@ void FatTupleDifferentAttributes::resize(const u32 new_length) {
     std::memcpy(fat_tuple.payload + fat_tuple.mDataOffset, delta, delta_length);
   };
   for (u64 d_i = 0; d_i < deltas_count; d_i++) {
-    append_ll(new_fat_tuple, reinterpret_cast<u8*>(&getDelta(d_i)),
+    append_ll(newFatTuple, reinterpret_cast<u8*>(&getDelta(d_i)),
               getDelta(d_i).totalLength());
   }
-  std::memcpy(this, tmp_page, new_length + sizeof(FatTupleDifferentAttributes));
+  std::memcpy(this, tmpPage, tmpPageSize);
   assert(total_space >= used_space);
 }
 

@@ -4,17 +4,14 @@
 #include "profiling/counters/WorkerCounters.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "storage/buffer-manager/GuardedBufferFrame.hpp"
+#include "utils/Misc.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <glog/logging.h>
 
-#include <alloca.h>
-
 using namespace leanstore::storage;
 
 namespace leanstore::storage::btree {
-
-#define ARRAY_ON_STACK(varName, T, N) T* varName = (T*)alloca((N) * sizeof(T));
 
 void BTreeGeneric::Init(TREEID btreeId, Config config) {
   this->mTreeId = btreeId;
@@ -82,8 +79,7 @@ void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
         BTreeNode::SeparatorInfo{guardedChild->getFullKeyLen(favoredSplitPos),
                                  static_cast<u16>(favoredSplitPos), false};
   }
-  // u8 sepKey[sepInfo.length];
-  ARRAY_ON_STACK(sepKey, u8, sepInfo.length);
+  auto sepKey = utils::ArrayOnStack<u8>(sepInfo.length);
   if (isMetaNode(guardedParent)) {
     // split the root node
     auto xGuardedParent = ExclusiveGuardedBufferFrame(std::move(guardedParent));
@@ -415,36 +411,37 @@ s16 BTreeGeneric::mergeLeftIntoRight(
                                xGuardedRight->mLowerFence.length)) <
          EFFECTIVE_PAGE_SIZE * 1.0);
   assert(till_slot_id > 0);
-  // -------------------------------------------------------------------------------------
+
   u16 copy_from_count = xGuardedLeft->mNumSeps - till_slot_id;
-  // -------------------------------------------------------------------------------------
-  u16 new_left_uf_length = xGuardedLeft->getFullKeyLen(till_slot_id - 1);
-  ENSURE(new_left_uf_length > 0);
-  ARRAY_ON_STACK(new_left_uf_key, u8, new_left_uf_length);
-  xGuardedLeft->copyFullKey(till_slot_id - 1, new_left_uf_key);
-  // -------------------------------------------------------------------------------------
-  if (!xGuardedParent->prepareInsert(new_left_uf_length, 0))
+
+  u16 newLeftUpperFenceSize = xGuardedLeft->getFullKeyLen(till_slot_id - 1);
+  ENSURE(newLeftUpperFenceSize > 0);
+  auto newLeftUpperFence = utils::ArrayOnStack<u8>(newLeftUpperFenceSize);
+  xGuardedLeft->copyFullKey(till_slot_id - 1, newLeftUpperFence);
+
+  if (!xGuardedParent->prepareInsert(newLeftUpperFenceSize, 0)) {
     return 0; // false
-  // -------------------------------------------------------------------------------------
+  }
+
   {
     BTreeNode tmp(true);
-    tmp.setFences(Slice(new_left_uf_key, new_left_uf_length),
+    tmp.setFences(Slice(newLeftUpperFence, newLeftUpperFenceSize),
                   xGuardedRight->GetUpperFence());
-    // -------------------------------------------------------------------------------------
+
     xGuardedLeft->copyKeyValueRange(&tmp, 0, till_slot_id, copy_from_count);
     xGuardedRight->copyKeyValueRange(&tmp, copy_from_count, 0,
                                      xGuardedRight->mNumSeps);
     memcpy(xGuardedRight.GetPagePayloadPtr(), &tmp, sizeof(BTreeNode));
     xGuardedRight->makeHint();
-    // -------------------------------------------------------------------------------------
+
     // Nothing to do for the right node's separator
     assert(xGuardedRight->compareKeyWithBoundaries(
-               Slice(new_left_uf_key, new_left_uf_length)) == 1);
+               Slice(newLeftUpperFence, newLeftUpperFenceSize)) == 1);
   }
   {
     BTreeNode tmp(true);
     tmp.setFences(xGuardedLeft->GetLowerFence(),
-                  Slice(new_left_uf_key, new_left_uf_length));
+                  Slice(newLeftUpperFence, newLeftUpperFenceSize));
     // -------------------------------------------------------------------------------------
     xGuardedLeft->copyKeyValueRange(&tmp, 0, 0,
                                     xGuardedLeft->mNumSeps - copy_from_count);
@@ -452,7 +449,7 @@ s16 BTreeGeneric::mergeLeftIntoRight(
     xGuardedLeft->makeHint();
     // -------------------------------------------------------------------------------------
     assert(xGuardedLeft->compareKeyWithBoundaries(
-               Slice(new_left_uf_key, new_left_uf_length)) == 0);
+               Slice(newLeftUpperFence, newLeftUpperFenceSize)) == 0);
     // -------------------------------------------------------------------------------------
     xGuardedParent->removeSlot(lhsSlotId);
     ENSURE(xGuardedParent->prepareInsert(xGuardedLeft->mUpperFence.length,
@@ -481,11 +478,12 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
   s16 pos = parentHandler.mPosInParent;
   u8 pages_count = 1;
   s16 max_right;
-  ARRAY_ON_STACK(guardedNodes, GuardedBufferFrame<BTreeNode>, MAX_MERGE_PAGES);
-  ARRAY_ON_STACK(fully_merged, bool, MAX_MERGE_PAGES);
+  auto guardedNodes =
+      utils::ArrayOnStack<GuardedBufferFrame<BTreeNode>>(MAX_MERGE_PAGES);
+  auto fullyMerged = utils::ArrayOnStack<bool>(MAX_MERGE_PAGES);
 
   guardedNodes[0] = std::move(guardedChild);
-  fully_merged[0] = false;
+  fullyMerged[0] = false;
   double total_fill_factor = guardedNodes[0]->fillFactorAfterCompaction();
 
   // Handle upper swip instead of avoiding guardedParent->mNumSeps -1 swip
@@ -503,7 +501,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
 
     guardedNodes[max_right - pos] = GuardedBufferFrame<BTreeNode>(
         guardedParent, guardedParent->getChild(max_right));
-    fully_merged[max_right - pos] = false;
+    fullyMerged[max_right - pos] = false;
     total_fill_factor +=
         guardedNodes[max_right - pos]->fillFactorAfterCompaction();
     pages_count++;
@@ -526,7 +524,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
   s16 left_hand, right_hand, ret;
   while (true) {
     for (right_hand = max_right; right_hand > pos; right_hand--) {
-      if (fully_merged[right_hand - pos]) {
+      if (fullyMerged[right_hand - pos]) {
         continue;
       } else {
         break;
@@ -549,7 +547,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
                                xGuardedRight, left_hand == pos);
       // we unlock only the left page, the right one should not be touched again
       if (ret == 1) {
-        fully_merged[left_hand - pos] = true;
+        fullyMerged[left_hand - pos] = true;
         WorkerCounters::myCounters().xmerge_full_counter[mTreeId]++;
         ret_code = XMergeReturnCode::FULL_MERGE;
       } else if (ret == 2) {
