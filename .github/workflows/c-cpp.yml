@@ -31,4 +31,4 @@ jobs:
       run: cmake --build build -j `nproc`
       
     - name: Test test
-      run: ctest --test-dir build/debug --output-on-failure
+      run: ctest --test-dir build --output-on-failure
