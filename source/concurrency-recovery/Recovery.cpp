@@ -104,16 +104,6 @@ void Recovery::Redo() {
 
     auto walPayload = reinterpret_cast<WALPayload*>(complexEntry->payload);
     switch (walPayload->type) {
-    case WALPayload::TYPE::WALInitPage: {
-      auto walInitPage = reinterpret_cast<WALInitPage*>(complexEntry->payload);
-      HybridGuard guard(&bf.header.mLatch);
-      GuardedBufferFrame<BTreeNode> guardedNode(std::move(guard), &bf);
-      auto xGuardedNode =
-          ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNode));
-      xGuardedNode.InitPayload(walInitPage->mIsLeaf);
-      bf.page.mBTreeId = complexEntry->mTreeId;
-      break;
-    }
     case WALPayload::TYPE::WALInsert: {
       auto walInsert = reinterpret_cast<WALInsert*>(complexEntry->payload);
       HybridGuard guard(&bf.header.mLatch);
@@ -123,6 +113,41 @@ void Recovery::Redo() {
       BTreeVI::InsertToNode(guardedNode, walInsert->GetKey(),
                             walInsert->GetVal(), complexEntry->mWorkerId,
                             complexEntry->mTxId, complexEntry->mTxMode, slotId);
+      break;
+    }
+    case WALPayload::TYPE::WALUpdate: {
+      DCHECK(false) << "Unhandled WALPayload::TYPE: "
+                    << std::to_string(static_cast<u64>(walPayload->type));
+      break;
+    }
+    case WALPayload::TYPE::WALRemove: {
+      DCHECK(false) << "Unhandled WALPayload::TYPE: "
+                    << std::to_string(static_cast<u64>(walPayload->type));
+      break;
+    }
+    case WALPayload::TYPE::WALAfterBeforeImage: {
+      DCHECK(false) << "Unhandled WALPayload::TYPE: "
+                    << std::to_string(static_cast<u64>(walPayload->type));
+      break;
+    }
+    case WALPayload::TYPE::WALAfterImage: {
+      DCHECK(false) << "Unhandled WALPayload::TYPE: "
+                    << std::to_string(static_cast<u64>(walPayload->type));
+      break;
+    }
+    case WALPayload::TYPE::WALLogicalSplit: {
+      DCHECK(false) << "Unhandled WALPayload::TYPE: "
+                    << std::to_string(static_cast<u64>(walPayload->type));
+      break;
+    }
+    case WALPayload::TYPE::WALInitPage: {
+      auto walInitPage = reinterpret_cast<WALInitPage*>(complexEntry->payload);
+      HybridGuard guard(&bf.header.mLatch);
+      GuardedBufferFrame<BTreeNode> guardedNode(std::move(guard), &bf);
+      auto xGuardedNode =
+          ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNode));
+      xGuardedNode.InitPayload(walInitPage->mIsLeaf);
+      bf.page.mBTreeId = complexEntry->mTreeId;
       break;
     }
     default: {
