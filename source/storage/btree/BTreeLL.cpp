@@ -3,11 +3,11 @@
 #include "concurrency-recovery/CRMG.hpp"
 #include "storage/btree/core/BTreeExclusiveIterator.hpp"
 #include "storage/btree/core/BTreeSharedIterator.hpp"
+#include "utils/Misc.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include <alloca.h>
 #include <signal.h>
 
 using namespace std;
@@ -16,8 +16,6 @@ using namespace leanstore::storage;
 namespace leanstore {
 namespace storage {
 namespace btree {
-
-#define ARRAY_ON_STACK(varName, T, N) T* varName = (T*)alloca((N) * sizeof(T));
 
 OP_RESULT BTreeLL::Lookup(Slice key, ValCallback valCallback) {
   DCHECK(cr::Worker::my().IsTxStarted());
@@ -180,8 +178,8 @@ OP_RESULT BTreeLL::prefixLookup(Slice key, PrefixLookupCallback callback) {
         guardedLeaf.JumpIfModifiedByOthers();
         JUMPMU_RETURN OP_RESULT::OK;
       } else if (cur < guardedLeaf->mNumSeps) {
-        u16 fullKeySize = guardedLeaf->getFullKeyLen(cur);
-        ARRAY_ON_STACK(fullKeyBuf, u8, fullKeySize);
+        auto fullKeySize = guardedLeaf->getFullKeyLen(cur);
+        auto fullKeyBuf = utils::ArrayOnStack<u8>(fullKeySize);
         guardedLeaf->copyFullKey(cur, fullKeyBuf);
         guardedLeaf.JumpIfModifiedByOthers();
 
@@ -221,9 +219,8 @@ OP_RESULT BTreeLL::prefixLookupForPrev(Slice key,
         JUMPMU_RETURN OP_RESULT::OK;
       } else if (cur > 0) {
         cur -= 1;
-
-        u16 fullKeySize = guardedLeaf->getFullKeyLen(cur);
-        ARRAY_ON_STACK(fullKeyBuf, u8, fullKeySize);
+        auto fullKeySize = guardedLeaf->getFullKeyLen(cur);
+        auto fullKeyBuf = utils::ArrayOnStack<u8>(fullKeySize);
         guardedLeaf->copyFullKey(cur, fullKeyBuf);
         guardedLeaf.JumpIfModifiedByOthers();
 
@@ -461,17 +458,17 @@ OP_RESULT BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
             }
 
             // page start key
-            ARRAY_ON_STACK(firstKey, u8, guardedLeaf->getFullKeyLen(0));
+            auto firstKeySize = guardedLeaf->getFullKeyLen(0);
+            auto firstKey = utils::ArrayOnStack<u8>(firstKeySize);
             guardedLeaf->copyFullKey(0, firstKey);
-            Slice pageStartKey(firstKey, guardedLeaf->getFullKeyLen(0));
+            Slice pageStartKey(firstKey, firstKeySize);
 
             // page end key
-            ARRAY_ON_STACK(
-                lastKey, u8,
-                guardedLeaf->getFullKeyLen(guardedLeaf->mNumSeps - 1));
+            auto lastKeySize =
+                guardedLeaf->getFullKeyLen(guardedLeaf->mNumSeps - 1);
+            auto lastKey = utils::ArrayOnStack<u8>(lastKeySize);
             guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, lastKey);
-            Slice pageEndKey(
-                lastKey, guardedLeaf->getFullKeyLen(guardedLeaf->mNumSeps - 1));
+            Slice pageEndKey(lastKey, lastKeySize);
 
             if (pageStartKey >= startKey && pageEndKey <= endKey) {
               // Purge the whole page
