@@ -82,8 +82,18 @@ public:
 public:
   LID mPrevLSN;
 
+  /// The active simple WALEntry for the current transaction, usually used for
+  /// transaction start, commit, or abort.
+  ///
+  /// NOTE: Either mActiveWALEntrySimple or mActiveWALEntryComplex is effective
+  /// during transaction processing.
   WALEntrySimple* mActiveWALEntrySimple;
 
+  /// The active complex WALEntry for the current transaction, usually used for
+  /// insert, update, delete, or btree related operations.
+  ///
+  /// NOTE: Either mActiveWALEntrySimple or mActiveWALEntryComplex is effective
+  /// during transaction processing.
   WALEntryComplex* mActiveWALEntryComplex;
 
   /// Shared between Group Committer and Worker
@@ -145,8 +155,11 @@ public:
   // for current transaction, reset on every transaction start
   LID mMinFlushedGsn;
 
+  /// Whether the active transaction has accessed data written by other worker
+  /// transactions, i.e. dependens on the transactions on other workers.
   bool mHasRemoteDependency = false;
 
+  /// The first WAL record of the current active transaction.
   u64 mTxWalBegin;
 
 public:

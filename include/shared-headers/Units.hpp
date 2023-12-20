@@ -32,10 +32,10 @@ using s32 = int32_t;
 using s64 = int64_t;
 
 using SIZE = size_t;
-using PID = u64;    // Page ID
-using LID = u64;    // Log ID
-using TTS = u64;    // Transaction Time Stamp
-using TREEID = u64; // Datastructure ID
+using PID = u64;    // page ID
+using LID = u64;    // log ID
+using TTS = u64;    // transaction Time Stamp
+using TREEID = u64; // data structure ID
 
 using WORKERID = u16;
 using TXID = u64;

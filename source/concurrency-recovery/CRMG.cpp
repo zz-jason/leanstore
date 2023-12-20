@@ -11,9 +11,12 @@
 namespace leanstore {
 namespace cr {
 
-// Threads id order: workers (xN) -> Group Committer Thread (x1) -> Page
-// Provider Threads (xP)
+/// Threads id order:
+///   Workers (#workers)
+///   Group Committer Thread (1)
+///   Page Provider Threads (#pageProviders)
 std::unique_ptr<CRManager> CRManager::sInstance = nullptr;
+
 std::atomic<u64> CRManager::sFsyncCounter = 0;
 std::atomic<u64> CRManager::sSsdOffset = 1 * 1024 * 1024 * 1024;
 
