@@ -1,4 +1,4 @@
-name: Conventional Commits Check
+name: PR Title
 
 on:
   pull_request:
@@ -8,6 +8,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
     steps:
       - name: Conventional Commits Check
         uses: agenthunt/conventional-commit-checker-action@v2.0.0
+        with:
+          pr-body-regex: ".+"
