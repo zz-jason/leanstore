@@ -13,8 +13,8 @@ namespace leanstore {
 namespace storage {
 
 AsyncWriteBuffer::AsyncWriteBuffer(int fd, u64 page_size, u64 batch_max_size)
-    : fd(fd), page_size(page_size), batch_max_size(batch_max_size) {
-  write_buffer = make_unique<Page[]>(batch_max_size);
+    : fd(fd), page_size(page_size), batch_max_size(batch_max_size),
+      mWriteBuffer(FLAGS_page_size * batch_max_size) {
   write_buffer_commands = make_unique<WriteCommand[]>(batch_max_size);
   iocbs = make_unique<struct iocb[]>(batch_max_size);
   iocbs_ptr = make_unique<struct iocb*[]>(batch_max_size);
@@ -59,8 +59,8 @@ void AsyncWriteBuffer::AddToIOBatch(BufferFrame& bf, PID pageId) {
   write_buffer_commands[slot].bf = &bf;
   write_buffer_commands[slot].mPageId = pageId;
   bf.page.mMagicDebuging = pageId;
-  std::memcpy(&write_buffer[slot], &bf.page, page_size);
-  void* write_buffer_slot_ptr = &write_buffer[slot];
+  void* write_buffer_slot_ptr = GetWriteBuffer(slot);
+  std::memcpy(write_buffer_slot_ptr, &bf.page, page_size);
   io_prep_pwrite(/* iocb */ &iocbs[slot], /* fd */ fd,
                  /* buf */ write_buffer_slot_ptr, /* count */ page_size,
                  /* offset */ page_size * pageId);
@@ -96,11 +96,12 @@ void AsyncWriteBuffer::IterateFlushedBfs(
     std::function<void(BufferFrame&, u64)> callback, u64 numFlushedBfs) {
   for (u64 i = 0; i < numFlushedBfs; i++) {
     const auto slot =
-        (u64(events[i].data) - u64(write_buffer.get())) / page_size;
+        (u64(events[i].data) - u64(mWriteBuffer.Get())) / page_size;
 
     DCHECK(events[i].res == page_size);
     explainIfNot(events[i].res2 == 0);
-    auto flushedLSN = write_buffer[slot].mPSN;
+    auto flushedPage = reinterpret_cast<Page*>(GetWriteBuffer(slot));
+    auto flushedLSN = flushedPage->mPSN;
     auto flushedBf = write_buffer_commands[slot].bf;
     callback(*flushedBf, flushedLSN);
   }

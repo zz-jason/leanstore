@@ -165,7 +165,7 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(
   });
 
   cr::activeTX().markAsWrite();
-  cr::Worker::my().mLogging.walEnsureEnoughSpace(PAGE_SIZE * 1);
+  cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);
   OP_RESULT ret;
 
   // 20K instructions more
@@ -361,7 +361,7 @@ OP_RESULT BTreeVI::insert(Slice key, Slice val) {
   });
 
   cr::activeTX().markAsWrite();
-  cr::Worker::my().mLogging.walEnsureEnoughSpace(PAGE_SIZE * 1);
+  cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);
   u16 payloadSize = val.size() + sizeof(ChainedTuple);
 
   while (true) {
@@ -428,7 +428,7 @@ OP_RESULT BTreeVI::remove(Slice key) {
 
   // TODO: remove fat tuple
   cr::activeTX().markAsWrite();
-  cr::Worker::my().mLogging.walEnsureEnoughSpace(PAGE_SIZE * 1);
+  cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);
 
   JUMPMU_TRY() {
     BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));

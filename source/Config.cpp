@@ -1,6 +1,7 @@
 #include <gflags/gflags.h>
 
 // Buffer management
+DEFINE_uint32(page_size, 4096, "The page size (bytes)"); // 4 KiB
 DEFINE_uint64(buffer_pool_size, 1073741824,
               "The buffer pool size (bytes)"); // 1 GiB
 DEFINE_string(data_dir, "~/.leanstore",

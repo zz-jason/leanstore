@@ -111,7 +111,7 @@ public:
     } else {
       const u64 pageId = mNextPageId;
       mNextPageId += mPageIdDistance;
-      ENSURE(pageId * PAGE_SIZE <= FLAGS_db_file_capacity);
+      ENSURE(pageId * FLAGS_page_size <= FLAGS_db_file_capacity);
       return pageId;
     }
   }

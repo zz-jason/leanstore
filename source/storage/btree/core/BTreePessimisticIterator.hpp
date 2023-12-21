@@ -128,7 +128,7 @@ protected:
 public:
   BTreePessimisticIterator(BTreeGeneric& tree, const LATCH_FALLBACK_MODE mode =
                                                    LATCH_FALLBACK_MODE::SHARED)
-      : mBTree(tree), mode(mode), mBuffer(PAGE_SIZE, 0) {
+      : mBTree(tree), mode(mode), mBuffer(FLAGS_page_size, 0) {
   }
 
   void enterLeafCallback(LeafCallback cb) {

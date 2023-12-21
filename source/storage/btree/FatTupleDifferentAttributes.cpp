@@ -305,8 +305,8 @@ cont : {
       if (fat_tuple->total_space < maxFatTupleLength()) {
         auto new_fat_tuple_length =
             std::min<u32>(maxFatTupleLength(), fat_tuple->total_space * 2);
-        auto buffer = utils::ArrayOnStack<u8>(PAGE_SIZE);
-        ENSURE(iterator.value().length() <= PAGE_SIZE);
+        auto buffer = utils::ArrayOnStack<u8>(FLAGS_page_size);
+        ENSURE(iterator.value().length() <= FLAGS_page_size);
         std::memcpy(buffer, iterator.value().data(), iterator.value().length());
         //
         const bool did_extend = iterator.extendPayload(new_fat_tuple_length);
