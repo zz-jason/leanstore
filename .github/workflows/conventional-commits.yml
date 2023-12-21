@@ -12,6 +12,7 @@ jobs:
       pull-requests: read
     steps:
       - name: Conventional Commits Check
-        uses: ytanikin/PRConventionalCommits@1.1.0
+        uses: webiny/action-conventional-commits
         with:
-          task_types: '["feat","fix","perf","chore","revert"]'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          allowed-commit-types: "feat,fix,perf,chore,revert"
