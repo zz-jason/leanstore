@@ -188,6 +188,7 @@ public:
 
     const auto pageId = mBf->header.mPageId;
     const auto treeId = mBf->page.mBTreeId;
+    payloadSize = ((payloadSize - 1) / 8  + 1) * 8;  
     // TODO: verify
     auto handler =
         cr::Worker::my().mLogging.ReserveWALEntryComplex<WT, Args...>(
