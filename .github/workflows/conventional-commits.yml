@@ -1,0 +1,15 @@
+name: Conventional Commits Check
+
+on:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ytanikin/PRConventionalCommits@1.1.0
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          task_types: '["feat","fix","chore","revert"]'
