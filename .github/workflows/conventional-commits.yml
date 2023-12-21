@@ -3,7 +3,7 @@ name: PR Title
 on:
   pull_request:
     branches: [ master ]
-    types: [opened, edited, synchronize]
+      types: [opened, synchronize, reopened, edited]
 
 jobs:
   build:
@@ -12,6 +12,6 @@ jobs:
       pull-requests: read
     steps:
       - name: Conventional Commits Check
-        uses: agenthunt/conventional-commit-checker-action@v2.0.0
+        uses: ytanikin/PRConventionalCommits@1.1.0
         with:
-          pr-body-regex: ".+"
+          task_types: '["feat","fix","perf","chore","revert"]'
