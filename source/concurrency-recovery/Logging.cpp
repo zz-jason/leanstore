@@ -154,6 +154,7 @@ void Logging::SubmitWALEntryComplex(u64 totalSize) {
   COUNTERS_BLOCK() {
     WorkerCounters::myCounters().wal_write_bytes += totalSize;
   }
+  DCHECK(totalSize % 8 == 0);
   mWalBuffered += totalSize;
   UpdateWalFlushReq();
 }

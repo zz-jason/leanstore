@@ -98,7 +98,6 @@ public:
         << ", CRC calculated based on the actual WALEntry: " << actualCRC;
   }
 };
-
 class WALEntrySimple : public WALEntry {
 public:
   WALEntrySimple(LID lsn, u64 size, TYPE type) : WALEntry(lsn, size, type) {
