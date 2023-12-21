@@ -3,13 +3,11 @@ name: Conventional Commits Check
 on:
   pull_request:
     branches: [ master ]
+    types: [opened, edited, synchronize]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: webiny/action-conventional-commits@v1.1.0
-        with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          task_types: "feat","fix","chore","revert"
+      - name: Conventional Commits Check
+        uses: agenthunt/conventional-commit-checker-action@v2.0.0
