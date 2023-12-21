@@ -14,7 +14,6 @@
 #include <cassert>
 #include <cstring>
 #include <fstream>
-#include <immintrin.h>
 #include <string>
 
 using namespace std;

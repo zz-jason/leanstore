@@ -15,28 +15,28 @@ void Recovery::Analysis() {
     auto walEntry = reinterpret_cast<WALEntry*>(&page);
     switch (walEntry->type) {
     case WALEntry::TYPE::TX_START: {
-      DCHECK(bytesRead == walEntry->size);
+      DCHECK_EQ(bytesRead, walEntry->size);
       DCHECK(mActiveTxTable.find(walEntry->mTxId) == mActiveTxTable.end());
       mActiveTxTable.emplace(std::make_pair(walEntry->mTxId, offset));
       offset += bytesRead;
       continue;
     }
     case WALEntry::TYPE::TX_COMMIT: {
-      DCHECK(bytesRead == walEntry->size);
+      DCHECK_EQ(bytesRead, walEntry->size);
       DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
       mActiveTxTable[walEntry->mTxId] = offset;
       offset += bytesRead;
       continue;
     }
     case WALEntry::TYPE::TX_ABORT: {
-      DCHECK(bytesRead == walEntry->size);
+      DCHECK_EQ(bytesRead, walEntry->size);
       DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
       mActiveTxTable[walEntry->mTxId] = offset;
       offset += bytesRead;
       continue;
     }
     case WALEntry::TYPE::TX_FINISH: {
-      DCHECK(bytesRead == walEntry->size);
+      DCHECK_EQ(bytesRead, walEntry->size);
       DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
       mActiveTxTable.erase(walEntry->mTxId);
       offset += bytesRead;
@@ -49,7 +49,7 @@ void Recovery::Analysis() {
       bytesRead += ReadWalEntry(leftOffset, leftSize, leftDest);
 
       auto complexEntry = reinterpret_cast<WALEntryComplex*>(walEntryPtr);
-      DCHECK(bytesRead == complexEntry->size);
+      DCHECK_EQ(bytesRead, complexEntry->size);
       DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
       mActiveTxTable[walEntry->mTxId] = offset;
 

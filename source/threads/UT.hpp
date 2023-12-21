@@ -5,7 +5,6 @@
 #include "utils/Misc.hpp"
 #include "utils/RandomGenerator.hpp"
 // -------------------------------------------------------------------------------------
-#include <emmintrin.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <libaio.h>
