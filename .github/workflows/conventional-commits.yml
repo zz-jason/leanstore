@@ -2,17 +2,15 @@ name: PR Title
 
 on:
   pull_request:
-    branches: [ master ]
-      types: [opened, synchronize, reopened, edited]
+    types: [opened, synchronize, reopened, edited]
 
 jobs:
   build:
+    name: Conventional Commits
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read
     steps:
-      - name: Conventional Commits Check
-        uses: webiny/action-conventional-commits
+      - name: Conventional Commit Validation
+        uses:  ytanikin/PRConventionalCommits@1.1.0
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          allowed-commit-types: "feat,fix,perf,chore,revert"
+          task_types: '["feat","fix","perf","chore","revert"]'
+          add_label: 'false'
