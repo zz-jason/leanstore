@@ -35,5 +35,6 @@ endfunction(leanstore_add_test_without_gtest_main)
 # Add tests
 leanstore_add_test(BTreeLLTest)
 leanstore_add_test(BTreeVILoggingAndRecoveryTest)
+leanstore_add_test(BufferFrameTest)
 
 leanstore_add_test_without_gtest_main(BTreeVITest)

@@ -2,6 +2,7 @@
 
 #include "BufferFrame.hpp"
 #include "Units.hpp"
+#include "utils/Misc.hpp"
 
 #include <functional>
 #include <libaio.h>
@@ -25,7 +26,7 @@ public:
   u64 batch_max_size;
   u64 pending_requests = 0;
 
-  std::unique_ptr<Page[]> write_buffer;
+  utils::AlignedBuffer<512> mWriteBuffer;
   std::unique_ptr<WriteCommand[]> write_buffer_commands;
   std::unique_ptr<struct iocb[]> iocbs;
   std::unique_ptr<struct iocb*[]> iocbs_ptr;
@@ -34,6 +35,10 @@ public:
   AsyncWriteBuffer(int fd, u64 page_size, u64 batch_max_size);
 
   bool full();
+
+  u8* GetWriteBuffer(u64 slot) {
+    return &mWriteBuffer.Get()[slot * FLAGS_page_size];
+  }
 
   void AddToIOBatch(BufferFrame& bf, PID pageId);
 

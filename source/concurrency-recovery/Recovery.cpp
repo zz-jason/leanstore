@@ -7,12 +7,13 @@ using namespace leanstore::storage;
 using namespace leanstore::storage::btree;
 
 void Recovery::Analysis() {
-  Page page; // asume that each WALEntry is smaller than the page size
-  u8* walEntryPtr = (u8*)&page;
+  // asume that each WALEntry is smaller than the page size
+  utils::AlignedBuffer<512> alignedBuffer(FLAGS_page_size);
+  u8* walEntryPtr = alignedBuffer.Get();
   u64 walEntrySize = sizeof(WALEntry);
   for (auto offset = mWalStartOffset; offset < mWalSize;) {
-    auto bytesRead = ReadWalEntry(offset, walEntrySize, &page);
-    auto walEntry = reinterpret_cast<WALEntry*>(&page);
+    auto bytesRead = ReadWalEntry(offset, walEntrySize, walEntryPtr);
+    auto walEntry = reinterpret_cast<WALEntry*>(walEntryPtr);
     switch (walEntry->type) {
     case WALEntry::TYPE::TX_START: {
       DCHECK(bytesRead == walEntry->size);
@@ -73,8 +74,9 @@ void Recovery::Analysis() {
 }
 
 void Recovery::Redo() {
-  Page page; // asume that each WALEntry is smaller than the page size
-  u8* walEntryPtr = (u8*)&page;
+  // asume that each WALEntry is smaller than the page size
+  utils::AlignedBuffer<512> alignedBuffer(FLAGS_page_size);
+  u8* walEntryPtr = alignedBuffer.Get();
   u64 walEntrySize = sizeof(WALEntry);
 
   for (auto offset = mWalStartOffset; offset < mWalSize;) {

@@ -5,6 +5,7 @@
 #include <string>
 
 // Buffer management
+DECLARE_uint32(page_size);
 DECLARE_uint64(buffer_pool_size);
 DECLARE_string(data_dir);
 DECLARE_uint64(db_file_capacity);

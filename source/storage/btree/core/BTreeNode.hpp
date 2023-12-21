@@ -10,7 +10,6 @@
 #include "rapidjson/document.h"
 
 #include <algorithm>
-#include <alloca.h>
 #include <cassert>
 #include <cstring>
 #include <fstream>
@@ -43,8 +42,6 @@ static inline u8 swap(u8 x) {
 
 class BTreeNodeHeader {
 public:
-  static const u16 sUnderFullSize = EFFECTIVE_PAGE_SIZE * 0.6;
-  static const u16 sKWayMergeThreshold = EFFECTIVE_PAGE_SIZE * 0.45;
   static const u16 sHintCount = 16;
 
   struct SeparatorInfo {
@@ -80,7 +77,14 @@ public:
   /// @note !!! does not include the header, but includes fences !!!
   u16 mSpaceUsed = 0;
 
-  u16 mDataOffset = static_cast<u16>(EFFECTIVE_PAGE_SIZE);
+  /// Data offset of the current slot in the BTreeNode. The BTreeNode is
+  /// organized as follows:
+  ///
+  ///   | BTreeNodeHeader | info of slot 0..N |  ... | data of slot N..0 |
+  ///
+  /// It's initialized to the total size of the btree node, reduced and assigned
+  /// to each slot when the number of slots is increasing.
+  u16 mDataOffset;
 
   u16 mPrefixSize = 0;
 
@@ -90,7 +94,7 @@ public:
   bool mHasGarbage = false;
 
 public:
-  BTreeNodeHeader(bool isLeaf) : mIsLeaf(isLeaf) {
+  BTreeNodeHeader(bool isLeaf, u16 size) : mIsLeaf(isLeaf), mDataOffset(size) {
   }
 
   ~BTreeNodeHeader() {
@@ -146,20 +150,19 @@ public:
   };
 
 public:
-  // Just to make sizeof(BTreeNode) == EFFECTIVE_PAGE_SIZE
-  static constexpr u64 sSlotCapacity =
-      (EFFECTIVE_PAGE_SIZE - sizeof(BTreeNodeHeader)) / (sizeof(Slot));
-
-  static constexpr u64 sLeftSpaceToWaste =
-      (EFFECTIVE_PAGE_SIZE - sizeof(BTreeNodeHeader)) % (sizeof(Slot));
+  Slot slot[];
 
 public:
-  Slot slot[sSlotCapacity];
-
-  u8 padding[sLeftSpaceToWaste];
-
-public:
-  BTreeNode(bool isLeaf) : BTreeNodeHeader(isLeaf) {
+  /// Creates a BTreeNode. Since BTreeNode creations and utilizations are
+  /// critical, please use ExclusiveGuardedBufferFrame::InitPayload() or
+  /// BTreeNode::Init() to construct a BTreeNode on an existing buffer which has
+  /// at least BTreeNode::Size() bytes:
+  /// 1. ExclusiveGuardedBufferFrame::InitPayload() creates a BTreeNode on the
+  ///    holding BufferFrame.
+  /// 2. BTreeNode::Init(): creates a BTreeNode on the providing buffer. The
+  ///    size of the underlying buffer to store a BTreeNode can be obtained
+  ///    through BTreeNode::Size()
+  BTreeNode(bool isLeaf) : BTreeNodeHeader(isLeaf, BTreeNode::Size()) {
   }
 
 public:
@@ -168,12 +171,12 @@ public:
   }
 
   u16 freeSpaceAfterCompaction() {
-    return EFFECTIVE_PAGE_SIZE -
+    return BTreeNode::Size() -
            (reinterpret_cast<u8*>(slot + mNumSeps) - RawPtr()) - mSpaceUsed;
   }
 
   double fillFactorAfterCompaction() {
-    return (1 - (freeSpaceAfterCompaction() * 1.0 / EFFECTIVE_PAGE_SIZE));
+    return (1 - (freeSpaceAfterCompaction() * 1.0 / BTreeNode::Size()));
   }
 
   bool hasEnoughSpaceFor(u32 space_needed) {
@@ -258,7 +261,7 @@ public:
     const u16 old_total_length = keySizeWithoutPrefix + ValSize(slot_id);
     const u16 new_total_length = keySizeWithoutPrefix + new_payload_length;
     // Allocate a block that will be freed when the calling function exits.
-    u8* key = (u8*)alloca(keySizeWithoutPrefix * sizeof(u8));
+    auto key = utils::ArrayOnStack<u8>(keySizeWithoutPrefix);
     std::memcpy(key, KeyDataWithoutPrefix(slot_id), keySizeWithoutPrefix);
     mSpaceUsed -= old_total_length;
     if (mDataOffset == slot[slot_id].offset && 0) {
@@ -612,10 +615,21 @@ private:
     // fallback to the normal compare
     return shrinkSearchRange(lower, upper, key);
   }
-};
 
-static_assert(sizeof(BTreeNode) == EFFECTIVE_PAGE_SIZE,
-              "BTreeNode must be equal to one page");
+public:
+  template <typename... Args>
+  inline static BTreeNode* Init(void* addr, Args&&... args) {
+    return new (addr) BTreeNode(std::forward<Args>(args)...);
+  }
+
+  inline static u16 Size() {
+    return static_cast<u16>(FLAGS_page_size - sizeof(Page));
+  }
+
+  inline static u16 UnderFullSize() {
+    return BTreeNode::Size() * 0.6;
+  }
+};
 
 } // namespace btree
 } // namespace storage
