@@ -142,7 +142,7 @@ OP_RESULT BTreeLL::insert(Slice key, Slice val) {
   DCHECK(cr::Worker::my().IsTxStarted());
   cr::activeTX().markAsWrite();
   if (config.mEnableWal) {
-    cr::Worker::my().mLogging.walEnsureEnoughSpace(PAGE_SIZE * 1);
+    cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);
   }
 
   JUMPMU_TRY() {
@@ -271,11 +271,11 @@ OP_RESULT BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
       OP_RESULT ret =
           iterator.enoughSpaceInCurrentNode(o_key_length, o_value_length);
       if (ret == OP_RESULT::OK) {
-        auto key_buffer = (u8*)alloca(o_key_length * sizeof(u8));
-        o_key(key_buffer);
+        auto keyBuffer = utils::ArrayOnStack<u8>(o_key_length);
+        o_key(keyBuffer);
         const s32 pos = iterator.mGuardedLeaf->mNumSeps;
         iterator.mGuardedLeaf->insertDoNotCopyPayload(
-            Slice(key_buffer, o_key_length), o_value_length, pos);
+            Slice(keyBuffer, o_key_length), o_value_length, pos);
         iterator.mSlotId = pos;
         o_value(iterator.mutableValue().data());
         iterator.MarkAsDirty();
@@ -292,11 +292,11 @@ OP_RESULT BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
   while (true) {
     JUMPMU_TRY() {
       BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
-      auto key_buffer = (u8*)alloca(o_key_length * sizeof(u8));
+      auto keyBuffer = utils::ArrayOnStack<u8>(o_key_length);
       for (u64 i = 0; i < o_key_length; i++) {
-        key_buffer[i] = 255;
+        keyBuffer[i] = 255;
       }
-      const Slice key(key_buffer, o_key_length);
+      const Slice key(keyBuffer, o_key_length);
       OP_RESULT ret = iterator.seekToInsert(key);
       RAISE_WHEN(ret == OP_RESULT::DUPLICATE);
       ret = iterator.enoughSpaceInCurrentNode(key, o_value_length);
@@ -304,7 +304,7 @@ OP_RESULT BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
         iterator.splitForKey(key);
         JUMPMU_CONTINUE;
       }
-      o_key(key_buffer);
+      o_key(keyBuffer);
       iterator.insertInCurrentNode(key, o_value_length);
       o_value(iterator.mutableValue().data());
       iterator.MarkAsDirty();
@@ -333,7 +333,7 @@ OP_RESULT BTreeLL::updateSameSizeInPlace(
     UpdateSameSizeInPlaceDescriptor& update_descriptor) {
   cr::activeTX().markAsWrite();
   if (config.mEnableWal) {
-    cr::Worker::my().mLogging.walEnsureEnoughSpace(PAGE_SIZE * 1);
+    cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);
   }
 
   JUMPMU_TRY() {
@@ -380,7 +380,7 @@ OP_RESULT BTreeLL::updateSameSizeInPlace(
 OP_RESULT BTreeLL::remove(Slice key) {
   cr::activeTX().markAsWrite();
   if (config.mEnableWal) {
-    cr::Worker::my().mLogging.walEnsureEnoughSpace(PAGE_SIZE * 1);
+    cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);
   }
   JUMPMU_TRY() {
     BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
@@ -414,7 +414,7 @@ OP_RESULT BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
     BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
     iterator.exitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
       if (guardedLeaf->freeSpaceAfterCompaction() >=
-          BTreeNodeHeader::sUnderFullSize) {
+          BTreeNode::UnderFullSize()) {
         iterator.cleanUpCallback([&, to_find = guardedLeaf.mBf] {
           JUMPMU_TRY() {
             this->tryMerge(*to_find);

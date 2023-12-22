@@ -6,7 +6,6 @@
 #include "storage/btree/core/BTreeSharedIterator.hpp"
 #include "utils/Misc.hpp"
 
-#include <alloca.h>
 #include <atomic>
 #include <condition_variable>
 #include <functional>
@@ -152,10 +151,10 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
                                 TXID to_tx_id, RemoveVersionCallback cb,
                                 [[maybe_unused]] const u64 limit) {
   auto keySize = sizeof(to_tx_id);
-  auto keyBuffer = utils::ArrayOnStack<u8>(PAGE_SIZE);
+  auto keyBuffer = utils::ArrayOnStack<u8>(FLAGS_page_size);
   utils::fold(keyBuffer, from_tx_id);
   Slice key(keyBuffer, keySize);
-  auto payload = utils::ArrayOnStack<u8>(PAGE_SIZE);
+  auto payload = utils::ArrayOnStack<u8>(FLAGS_page_size);
   u16 payload_length;
   volatile u64 removed_versions = 0;
   BTreeLL* volatile btree = remove_btrees[workerId];
@@ -168,7 +167,7 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
       iterator.exitLeafCallback(
           [&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
             if (guardedLeaf->freeSpaceAfterCompaction() >=
-                BTreeNodeHeader::sUnderFullSize) {
+                BTreeNode::UnderFullSize()) {
               iterator.cleanUpCallback([&, to_find = guardedLeaf.mBf] {
                 JUMPMU_TRY() {
                   btree->tryMerge(*to_find);
@@ -228,12 +227,11 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
 
         if (guardedLeaf->mLowerFence.length == 0) {
           // Allocate in the stack, freed when the calling function exits.
-          u8* last_key = (u8*)alloca(
-              guardedLeaf->getFullKeyLen(guardedLeaf->mNumSeps - 1) *
-              sizeof(u8));
-          guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, last_key);
+          auto lastKey = utils::ArrayOnStack<u8>(
+              guardedLeaf->getFullKeyLen(guardedLeaf->mNumSeps - 1));
+          guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, lastKey);
           TXID last_key_tx_id;
-          utils::unfold(last_key, last_key_tx_id);
+          utils::unfold(lastKey, last_key_tx_id);
           if (last_key_tx_id > to_tx_id) {
             should_try = false;
           }
@@ -250,7 +248,7 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
       iterator.exitLeafCallback(
           [&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
             if (guardedLeaf->freeSpaceAfterCompaction() >=
-                BTreeNodeHeader::sUnderFullSize) {
+                BTreeNode::UnderFullSize()) {
               iterator.cleanUpCallback([&, to_find = guardedLeaf.mBf] {
                 JUMPMU_TRY() {
                   btree->tryMerge(*to_find);
@@ -270,19 +268,18 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
               return;
             }
             // Allocate in the stack, freed when the calling function exits.
-            auto first_key =
-                (u8*)alloca(guardedLeaf->getFullKeyLen(0) * sizeof(u8));
-            guardedLeaf->copyFullKey(0, first_key);
+            auto firstKey =
+                utils::ArrayOnStack<u8>(guardedLeaf->getFullKeyLen(0));
+            guardedLeaf->copyFullKey(0, firstKey);
             TXID first_key_tx_id;
-            utils::unfold(first_key, first_key_tx_id);
+            utils::unfold(firstKey, first_key_tx_id);
 
             // Allocate in the stack, freed when the calling function exits.
-            auto last_key = (u8*)alloca(
-                guardedLeaf->getFullKeyLen(guardedLeaf->mNumSeps - 1) *
-                sizeof(u8));
-            guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, last_key);
+            auto lastKey = utils::ArrayOnStack<u8>(
+                guardedLeaf->getFullKeyLen(guardedLeaf->mNumSeps - 1));
+            guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, lastKey);
             TXID last_key_tx_id;
-            utils::unfold(last_key, last_key_tx_id);
+            utils::unfold(lastKey, last_key_tx_id);
             if (first_key_tx_id >= from_tx_id && to_tx_id >= last_key_tx_id) {
               // Purge the whole page
               removed_versions = removed_versions + guardedLeaf->mNumSeps;
@@ -320,11 +317,11 @@ void HistoryTree::visitRemoveVersions(
   // [from, to]
   BTreeLL* btree = remove_btrees[workerId];
   auto keySize = sizeof(to_tx_id);
-  auto keyBuffer = utils::ArrayOnStack<u8>(PAGE_SIZE);
+  auto keyBuffer = utils::ArrayOnStack<u8>(FLAGS_page_size);
   u64 offset = 0;
   offset += utils::fold(keyBuffer + offset, from_tx_id);
   Slice key(keyBuffer, keySize);
-  auto payload = utils::ArrayOnStack<u8>(PAGE_SIZE);
+  auto payload = utils::ArrayOnStack<u8>(FLAGS_page_size);
   u16 payload_length;
 
   JUMPMU_TRY() {

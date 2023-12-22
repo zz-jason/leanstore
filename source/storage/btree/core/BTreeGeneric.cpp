@@ -50,7 +50,7 @@ void BTreeGeneric::Init(TREEID btreeId, Config config) {
 }
 
 void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
-  cr::Worker::my().mLogging.walEnsureEnoughSpace(PAGE_SIZE * 1);
+  cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);
   auto parentHandler = findParentEager(*this, toSplit);
   auto guardedParent = parentHandler.GetGuardedParent<BTreeNode>();
   auto guardedChild = GuardedBufferFrame(
@@ -242,8 +242,8 @@ bool BTreeGeneric::tryMerge(BufferFrame& to_merge, bool swizzleSibling) {
   GuardedBufferFrame<BTreeNode> guardedChild = GuardedBufferFrame(
       guardedParent, parentHandler.mChildSwip.CastTo<BTreeNode>());
   int posInParent = parentHandler.mPosInParent;
-  if (isMetaNode(guardedParent) || guardedChild->freeSpaceAfterCompaction() <
-                                       BTreeNodeHeader::sUnderFullSize) {
+  if (isMetaNode(guardedParent) ||
+      guardedChild->freeSpaceAfterCompaction() < BTreeNode::UnderFullSize()) {
     guardedParent.unlock();
     guardedChild.unlock();
     return false;
@@ -348,7 +348,7 @@ bool BTreeGeneric::tryMerge(BufferFrame& to_merge, bool swizzleSibling) {
     GuardedBufferFrame<BTreeNode> guardedMeta(mMetaNodeSwip);
     if (!isMetaNode(guardedParent) &&
         guardedParent->freeSpaceAfterCompaction() >=
-            BTreeNode::sUnderFullSize) {
+            BTreeNode::UnderFullSize()) {
       if (tryMerge(*guardedParent.mBf, true)) {
         WorkerCounters::myCounters().dt_merge_parent_succ[mTreeId]++;
       } else {
@@ -378,7 +378,7 @@ s16 BTreeGeneric::mergeLeftIntoRight(
     bool full_merge_or_nothing) {
   // TODO: corner cases: new upper fence is larger than the older one.
   u32 space_upper_bound = xGuardedLeft->mergeSpaceUpperBound(xGuardedRight);
-  if (space_upper_bound <= EFFECTIVE_PAGE_SIZE) {
+  if (space_upper_bound <= BTreeNode::Size()) {
     // Do a full merge TODO: threshold
     bool succ = xGuardedLeft->merge(lhsSlotId, xGuardedParent, xGuardedRight);
     static_cast<void>(succ);
@@ -399,7 +399,7 @@ s16 BTreeGeneric::mergeLeftIntoRight(
                          xGuardedLeft->ValSize(s_i);
     if (space_upper_bound + (xGuardedLeft->getFullKeyLen(s_i) -
                              xGuardedRight->mLowerFence.length) <
-        EFFECTIVE_PAGE_SIZE * 1.0) {
+        BTreeNode::Size() * 1.0) {
       till_slot_id = s_i + 1;
       break;
     }
@@ -409,7 +409,7 @@ s16 BTreeGeneric::mergeLeftIntoRight(
 
   assert((space_upper_bound + (xGuardedLeft->getFullKeyLen(till_slot_id - 1) -
                                xGuardedRight->mLowerFence.length)) <
-         EFFECTIVE_PAGE_SIZE * 1.0);
+         BTreeNode::Size() * 1.0);
   assert(till_slot_id > 0);
 
   u16 copy_from_count = xGuardedLeft->mNumSeps - till_slot_id;
@@ -424,14 +424,16 @@ s16 BTreeGeneric::mergeLeftIntoRight(
   }
 
   {
-    BTreeNode tmp(true);
-    tmp.setFences(Slice(newLeftUpperFence, newLeftUpperFenceSize),
-                  xGuardedRight->GetUpperFence());
+    auto nodeBuf = utils::ArrayOnStack<u8>(BTreeNode::Size());
+    auto tmp = BTreeNode::Init(nodeBuf, true);
 
-    xGuardedLeft->copyKeyValueRange(&tmp, 0, till_slot_id, copy_from_count);
-    xGuardedRight->copyKeyValueRange(&tmp, copy_from_count, 0,
+    tmp->setFences(Slice(newLeftUpperFence, newLeftUpperFenceSize),
+                   xGuardedRight->GetUpperFence());
+
+    xGuardedLeft->copyKeyValueRange(tmp, 0, till_slot_id, copy_from_count);
+    xGuardedRight->copyKeyValueRange(tmp, copy_from_count, 0,
                                      xGuardedRight->mNumSeps);
-    memcpy(xGuardedRight.GetPagePayloadPtr(), &tmp, sizeof(BTreeNode));
+    memcpy(xGuardedRight.GetPagePayloadPtr(), tmp, sizeof(BTreeNode));
     xGuardedRight->makeHint();
 
     // Nothing to do for the right node's separator
@@ -439,13 +441,15 @@ s16 BTreeGeneric::mergeLeftIntoRight(
                Slice(newLeftUpperFence, newLeftUpperFenceSize)) == 1);
   }
   {
-    BTreeNode tmp(true);
-    tmp.setFences(xGuardedLeft->GetLowerFence(),
-                  Slice(newLeftUpperFence, newLeftUpperFenceSize));
+    auto nodeBuf = utils::ArrayOnStack<u8>(BTreeNode::Size());
+    auto tmp = BTreeNode::Init(nodeBuf, true);
+
+    tmp->setFences(xGuardedLeft->GetLowerFence(),
+                   Slice(newLeftUpperFence, newLeftUpperFenceSize));
     // -------------------------------------------------------------------------------------
-    xGuardedLeft->copyKeyValueRange(&tmp, 0, 0,
+    xGuardedLeft->copyKeyValueRange(tmp, 0, 0,
                                     xGuardedLeft->mNumSeps - copy_from_count);
-    memcpy(xGuardedLeft.GetPagePayloadPtr(), &tmp, sizeof(BTreeNode));
+    memcpy(xGuardedLeft.GetPagePayloadPtr(), tmp, sizeof(BTreeNode));
     xGuardedLeft->makeHint();
     // -------------------------------------------------------------------------------------
     assert(xGuardedLeft->compareKeyWithBoundaries(
@@ -642,7 +646,7 @@ void BTreeGeneric::printInfos(uint64_t totalSize) {
                                       guardedParent->mRightMostChildSwip);
   uint64_t cnt = countPages();
   cout << "nodes:" << cnt << " innerNodes:" << countInner()
-       << " space:" << (cnt * EFFECTIVE_PAGE_SIZE) / (float)totalSize
+       << " space:" << (cnt * BTreeNode::Size()) / (float)totalSize
        << " height:" << mHeight << " rootCnt:" << guardedRightMost->mNumSeps
        << " bytesFree:" << bytesFree() << endl;
 }
