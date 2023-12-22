@@ -15,6 +15,30 @@ enum class OP_RESULT : u8 {
   OTHER = 5
 };
 
+inline std::string ToString(OP_RESULT result) {
+  switch (result) {
+  case OP_RESULT::OK: {
+    return "OK";
+  }
+  case OP_RESULT::NOT_FOUND: {
+    return "NOT_FOUND";
+  }
+  case OP_RESULT::DUPLICATE: {
+    return "DUPLICATE";
+  }
+  case OP_RESULT::ABORT_TX: {
+    return "ABORT_TX";
+  }
+  case OP_RESULT::NOT_ENOUGH_SPACE: {
+    return "NOT_ENOUGH_SPACE";
+  }
+  case OP_RESULT::OTHER: {
+    return "OTHER";
+  }
+  }
+  return "Unknown OP_RESULT";
+}
+
 class UpdateSameSizeInPlaceDescriptor {
 public:
   class Slot {

@@ -150,22 +150,11 @@ OP_RESULT BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
 
 OP_RESULT BTreeVI::updateSameSizeInPlace(
     Slice key, ValCallback callback,
-    UpdateSameSizeInPlaceDescriptor& update_descriptor) {
-  auto autoCommit(false);
-  if (!cr::Worker::my().IsTxStarted()) {
-    DLOG(INFO) << "Start implicit transaction";
-    cr::Worker::my().startTX();
-    autoCommit = true;
-  }
-  SCOPED_DEFER({
-    // auto-commit the implicit transaction
-    if (autoCommit) {
-      cr::Worker::my().commitTX();
-    }
-  });
+    UpdateSameSizeInPlaceDescriptor& updateDescriptor) {
+  DCHECK(cr::Worker::my().IsTxStarted());
 
   cr::activeTX().markAsWrite();
-  cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);
+  cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size);
   OP_RESULT ret;
 
   // 20K instructions more
@@ -174,20 +163,25 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(
     ret = iterator.seekExact(key);
     if (ret != OP_RESULT::OK) {
       if (cr::activeTX().isOLAP() && ret == OP_RESULT::NOT_FOUND) {
-        const bool removed_tuple_found =
+        const bool foundRemovedTuple =
             mGraveyard->Lookup(key, [&](Slice) {}) == OP_RESULT::OK;
-        if (removed_tuple_found) {
+
+        // The tuple to be updated is removed, abort the transaction.
+        // TODO(jian.z): should we just return NOT_FOUND?
+        if (foundRemovedTuple) {
           JUMPMU_RETURN OP_RESULT::ABORT_TX;
         }
       }
 
-      raise(SIGTRAP);
+      LOG(ERROR) << "Update failed, key not found, key=" << ToString(key)
+                 << ", txMode=" << ToString(cr::activeTX().mTxMode)
+                 << ", seek ret=" << ToString(ret);
       JUMPMU_RETURN ret;
     }
 
     // Record is found
   restart : {
-    MutableSlice primaryPayload = iterator.mutableValue();
+    auto primaryPayload = iterator.mutableValue();
     auto& tuple = *reinterpret_cast<Tuple*>(primaryPayload.data());
     if (tuple.IsWriteLocked() ||
         !isVisibleForMe(tuple.mWorkerId, tuple.tx_ts, true)) {
@@ -201,7 +195,7 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(
     if (tuple.tuple_format == TupleFormat::FAT_TUPLE_DIFFERENT_ATTRIBUTES) {
       const bool res =
           reinterpret_cast<FatTupleDifferentAttributes*>(&tuple)->update(
-              iterator, key, callback, update_descriptor);
+              iterator, key, callback, updateDescriptor);
       reinterpret_cast<Tuple*>(iterator.mutableValue().data())->WriteUnlock();
       // Attention: tuple pointer is not valid here
 
@@ -284,7 +278,7 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(
     MutableSlice primaryPayload = iterator.mutableValue();
     auto& tupleHead = *reinterpret_cast<ChainedTuple*>(primaryPayload.data());
     const u16 delta_and_descriptor_size =
-        update_descriptor.size() + update_descriptor.diffLength();
+        updateDescriptor.size() + updateDescriptor.diffLength();
     const u16 version_payload_length =
         delta_and_descriptor_size + sizeof(UpdateVersion);
     COMMANDID command_id;
@@ -296,11 +290,11 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(
             auto& secondary_version = *new (version_payload) UpdateVersion(
                 tupleHead.mWorkerId, tupleHead.tx_ts, tupleHead.command_id,
                 true);
-            std::memcpy(secondary_version.payload, &update_descriptor,
-                        update_descriptor.size());
-            BTreeLL::generateDiff(update_descriptor,
+            std::memcpy(secondary_version.payload, &updateDescriptor,
+                        updateDescriptor.size());
+            BTreeLL::generateDiff(updateDescriptor,
                                   secondary_version.payload +
-                                      update_descriptor.size(),
+                                      updateDescriptor.size(),
                                   tupleHead.payload);
           });
       COUNTERS_BLOCK() {
@@ -318,18 +312,18 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(
     walHandler->before_tx_id = tupleHead.tx_ts;
     walHandler->before_command_id = tupleHead.command_id;
     std::memcpy(walHandler->payload, key.data(), key.size());
-    std::memcpy(walHandler->payload + key.size(), &update_descriptor,
-                update_descriptor.size());
-    BTreeLL::generateDiff(update_descriptor,
+    std::memcpy(walHandler->payload + key.size(), &updateDescriptor,
+                updateDescriptor.size());
+    BTreeLL::generateDiff(updateDescriptor,
                           walHandler->payload + key.size() +
-                              update_descriptor.size(),
+                              updateDescriptor.size(),
                           tupleHead.payload);
     // Update
     callback(Slice(tupleHead.payload,
                    primaryPayload.length() - sizeof(ChainedTuple)));
-    BTreeLL::generateXORDiff(update_descriptor,
+    BTreeLL::generateXORDiff(updateDescriptor,
                              walHandler->payload + key.size() +
-                                 update_descriptor.size(),
+                                 updateDescriptor.size(),
                              tupleHead.payload);
     walHandler.SubmitWal();
 
@@ -435,9 +429,9 @@ OP_RESULT BTreeVI::remove(Slice key) {
     OP_RESULT ret = iterator.seekExact(key);
     if (ret != OP_RESULT::OK) {
       if (cr::activeTX().isOLAP() && ret == OP_RESULT::NOT_FOUND) {
-        const bool removed_tuple_found =
+        const bool foundRemovedTuple =
             mGraveyard->Lookup(key, [&](Slice) {}) == OP_RESULT::OK;
-        if (removed_tuple_found) {
+        if (foundRemovedTuple) {
           JUMPMU_RETURN OP_RESULT::ABORT_TX;
         }
       }
@@ -602,12 +596,12 @@ std::tuple<OP_RESULT, u16> BTreeVI::reconstructChainedTuple(
                 *reinterpret_cast<const UpdateVersion*>(version_payload);
             if (update_version.is_delta) {
               // Apply delta
-              const auto& update_descriptor =
+              const auto& updateDescriptor =
                   *reinterpret_cast<const UpdateSameSizeInPlaceDescriptor*>(
                       update_version.payload);
-              BTreeLL::applyDiff(update_descriptor, materialized_value.get(),
+              BTreeLL::applyDiff(updateDescriptor, materialized_value.get(),
                                  update_version.payload +
-                                     update_descriptor.size());
+                                     updateDescriptor.size());
             } else {
               materialized_value_length =
                   version_length - sizeof(UpdateVersion);

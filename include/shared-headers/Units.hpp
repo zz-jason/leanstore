@@ -62,3 +62,7 @@ constexpr u64 MSB = u64(1) << 63;
 constexpr u64 MSB_MASK = ~(MSB);
 constexpr u64 MSB2 = u64(1) << 62;
 constexpr u64 MSB2_MASK = ~(MSB2);
+
+inline std::string ToString(Slice slice) {
+  return std::string(reinterpret_cast<const char*>(slice.data()), slice.size());
+}
