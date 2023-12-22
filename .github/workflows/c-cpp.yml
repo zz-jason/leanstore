@@ -8,27 +8,25 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - name: Set up GCC
       uses: egor-tensin/setup-gcc@v1
       with:
         version: 12
         platform: x64
-        
+
     - name: Check out repository
       uses: actions/checkout@v3
-    
+
     - name: Install dependencies
       run: sudo apt install -y libaio-dev
-      
+
     - name: Config project
       run: cmake -B build -S .
-      
+
     - name: Build project
       run: cmake --build build -j `nproc`
-      
+
     - name: Test test
       run: ctest --test-dir build --output-on-failure
