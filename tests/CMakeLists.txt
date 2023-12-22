@@ -48,5 +48,6 @@ if(BUILD_WITH_COVERAGE)
     NAME ctest_coverage
     EXECUTABLE ctest
     DEPENDENCIES ${TEST_EXECUTABLES}
+    EXCLUDE "build/*"
   )
 endif()
