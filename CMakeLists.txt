@@ -9,12 +9,27 @@ if (NOT UNIX)
     message(SEND_ERROR "unsupported platform")
 endif ()
 
+# Define custom build options
+option(BUILD_WITH_COVERAGE "Build the library with code coverage" OFF)
+
+option(THIRD_PARTY_SRC_DIR "The directory to store downloaded third-party sources" "${CMAKE_CURRENT_BINARY_DIR}/third-party-src")
+if(NOT THIRD_PARTY_SRC_DIR)
+  set(THIRD_PARTY_SRC_DIR ${CMAKE_CURRENT_BINARY_DIR}/third-party-src)
+endif()
+message(STATUS "THIRD_PARTY_SRC_DIR: ${THIRD_PARTY_SRC_DIR}")
+
+
 enable_language(ASM)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -rdynamic -fno-omit-frame-pointer -g3 -static-libstdc++")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wunused -Wunreachable-code")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage")
+if(BUILD_WITH_COVERAGE)
+  include(${CMAKE_SOURCE_DIR}/cmake/Modules/CodeCoverage.cmake)
+  append_coverage_compiler_flags()
+  # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0 -fprofile-arcs -ftest-coverage")
+endif()
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")

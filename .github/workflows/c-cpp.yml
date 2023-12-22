@@ -24,13 +24,13 @@ jobs:
       run: sudo apt install -y libaio-dev
 
     - name: Config project
-      run: cmake -B build -S .
+      run:  cmake -B build/debug -S . -DCMAKE_BUILD_TYPE=Debug -DBUILD_WITH_COVERAGE=ON
 
     - name: Build project
-      run: cmake --build build -j `nproc`
+      run: cmake --build build/debug -j `nproc`
 
-    - name: Test test
-      run: ctest --test-dir build --output-on-failure
+    - name: Test and generate coverage
+      run: cmake --build build/debug --target ctest_coverage
 
     - name: Setup tmate session
       if: ${{ failure() }}
@@ -40,3 +40,6 @@ jobs:
       uses: codecov/codecov-action@v3
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      with:
+        files: build/debug/ctest_coverage.xml
+        verbose: true
