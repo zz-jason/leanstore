@@ -128,7 +128,6 @@ public:
     if (mThread == nullptr) {
       mKeepRunning = true;
       mThread = std::make_unique<std::thread>(&BufferFrameProvider::Run, this);
-      mThread->detach();
     }
   }
 
