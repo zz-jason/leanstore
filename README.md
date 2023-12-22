@@ -17,8 +17,8 @@ hope to make it usable in production in the future.
 
 ```sh
 # install dependencies
-sudo apt-get update
-sudo apt-get install -y libaio-dev
+sudo apt update
+sudo apt install -y libaio-dev gcovr lcov
 
 # build
 cmake -DCMAKE_BUILD_TYPE=Debug -B build -S .
