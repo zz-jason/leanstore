@@ -1,0 +1,16 @@
+name: PR Title
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  build:
+    name: Conventional Commits
+    runs-on: ubuntu-latest
+    steps:
+      - name: Conventional Commit Validation
+        uses:  ytanikin/PRConventionalCommits@1.1.0
+        with:
+          task_types: '["feat","fix","perf","chore","revert"]'
+          add_label: 'false'
