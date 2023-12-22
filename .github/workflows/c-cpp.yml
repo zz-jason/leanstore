@@ -12,11 +12,6 @@ jobs:
     name: Debug Test
     steps:
 
-    - name: Setup tmate session
-      uses: mxschmitt/action-tmate@v3
-      with:
-        limit-access-to-actor: true
-
     - name: Set up GCC
       uses: egor-tensin/setup-gcc@v1
       with:
@@ -45,3 +40,8 @@ jobs:
       with:
         files: build/debug/ctest_coverage.xml
         verbose: true
+
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+      with:
+        limit-access-to-actor: true
