@@ -851,7 +851,7 @@ private:
 
 private:
   static inline u64 maxFatTupleLength() {
-    return EFFECTIVE_PAGE_SIZE - 1000;
+    return BTreeNode::Size() - 1000;
   }
 
 public:

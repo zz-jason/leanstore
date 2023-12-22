@@ -137,7 +137,7 @@ public:
   }
 
   bool extendPayload(const u16 new_length) {
-    if (new_length >= EFFECTIVE_PAGE_SIZE) {
+    if (new_length >= BTreeNode::Size()) {
       return false;
     }
     ENSURE(mSlotId != -1 && new_length > mGuardedLeaf->ValSize(mSlotId));
@@ -240,7 +240,7 @@ public:
   // Returns true if it tried to merge
   bool mergeIfNeeded() {
     if (mGuardedLeaf->freeSpaceAfterCompaction() >=
-        BTreeNodeHeader::sUnderFullSize) {
+        BTreeNode::UnderFullSize()) {
       mGuardedLeaf.unlock();
       mSlotId = -1;
       JUMPMU_TRY() {

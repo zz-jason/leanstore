@@ -83,7 +83,7 @@ public:
   atomic<bool> mKeepRunning;
 
   const u64 mNumBfs;
-  BufferFrame* mBfs;
+  u8* mBufferPool;
 
   const u64 mNumPartitions;
   const u64 mPartitionsMask;
@@ -100,13 +100,13 @@ public:
 
 public:
   BufferFrameProvider(u64 id, const std::string& threadName, u64 numBfs,
-                      BufferFrame* bfs, u64 numPartitions, u64 partitionMask,
+                      u8* bfs, u64 numPartitions, u64 partitionMask,
                       std::vector<std::unique_ptr<Partition>>& partitions,
                       int fd)
       : mId(id), mThreadName(threadName), mThread(nullptr), mKeepRunning(false),
-        mNumBfs(numBfs), mBfs(bfs), mNumPartitions(numPartitions),
+        mNumBfs(numBfs), mBufferPool(bfs), mNumPartitions(numPartitions),
         mPartitionsMask(partitionMask), mPartitions(partitions), mFD(fd),
-        mAsyncWriteBuffer(fd, PAGE_SIZE, FLAGS_write_buffer_size) {
+        mAsyncWriteBuffer(fd, FLAGS_page_size, FLAGS_write_buffer_size) {
     mCoolCandidateBfs.reserve(FLAGS_buffer_frame_recycle_batch_size);
     mEvictCandidateBfs.reserve(FLAGS_buffer_frame_recycle_batch_size);
   }
@@ -128,7 +128,6 @@ public:
     if (mThread == nullptr) {
       mKeepRunning = true;
       mThread = std::make_unique<std::thread>(&BufferFrameProvider::Run, this);
-      mThread->detach();
     }
   }
 
@@ -180,7 +179,8 @@ private:
 
   inline BufferFrame* RandomBufferFrame() {
     auto i = utils::RandomGenerator::getRand<u64>(0, mNumBfs);
-    return &mBfs[i];
+    auto bfAddr = &mBufferPool[i * BufferFrame::Size()];
+    return reinterpret_cast<BufferFrame*>(bfAddr);
   }
 
   inline Partition& randomPartition() {
@@ -257,8 +257,7 @@ inline void BufferFrameProvider::EvictFlushedBf(
   optimisticGuard.mGuard.ToExclusiveMayJump();
 
   if (FLAGS_crc_check && cooledBf.header.crc) {
-    DCHECK(utils::CRC(cooledBf.page.mPayload, EFFECTIVE_PAGE_SIZE) ==
-           cooledBf.header.crc);
+    DCHECK(cooledBf.page.CRC() == cooledBf.header.crc);
   }
   DCHECK(!cooledBf.isDirty());
   DCHECK(!cooledBf.header.mIsBeingWrittenBack);
@@ -545,8 +544,7 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
 
       // performs crc check if necessary
       if (FLAGS_crc_check) {
-        cooledBf->header.crc =
-            utils::CRC(cooledBf->page.mPayload, EFFECTIVE_PAGE_SIZE);
+        cooledBf->header.crc = cooledBf->page.CRC();
       }
 
       // TODO: preEviction callback according to TREEID

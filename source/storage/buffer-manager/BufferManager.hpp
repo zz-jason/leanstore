@@ -56,7 +56,7 @@ private:
 
 public:
   /// All the managed buffer frames in the memory.
-  BufferFrame* mBfs;
+  u8* mBufferPool;
 
   /// FD for disk files storing pages.
   const int mPageFd;
@@ -128,8 +128,8 @@ public:
   /// Reads the page at pageId to the destination buffer. All the pages are
   /// stored in one file (mPageFd), page id (pageId) determines the offset of
   /// the pageId-th page in the underlying file:
-  ///   1. offset of pageId-th page: pageId * PAGE_SIZE
-  ///   2. size of each page: PAGE_SIZE
+  ///   1. offset of pageId-th page: pageId * FLAGS_page_size
+  ///   2. size of each page: FLAGS_page_size
   void ReadPageSync(PID pageId, void* destination);
 
   /// Reads the page at pageId, returns the buffer frame containing that page.

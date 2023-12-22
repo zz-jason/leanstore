@@ -100,6 +100,32 @@ template <typename T> inline T* ArrayOnStack(size_t n) {
   return reinterpret_cast<T*>(alloca(n * sizeof(T)));
 }
 
+template <size_t Alignment = 512> class AlignedBuffer {
+public:
+  alignas(Alignment) u8* mBuffer;
+
+public:
+  AlignedBuffer(size_t size)
+      : mBuffer(reinterpret_cast<u8*>(std::aligned_alloc(Alignment, size))) {
+  }
+
+  ~AlignedBuffer() {
+    if (mBuffer != nullptr) {
+      free(mBuffer);
+      mBuffer = nullptr;
+    }
+  }
+
+public:
+  u8* Get() {
+    return mBuffer;
+  }
+
+  template <typename T> T* CastTo() {
+    return reinterpret_cast<T*>(mBuffer);
+  }
+};
+
 struct Timer {
   std::atomic<u64>& mTimeCounterUS;
 

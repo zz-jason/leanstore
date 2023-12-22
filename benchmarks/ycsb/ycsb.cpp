@@ -160,7 +160,7 @@ int main(int argc, char** argv) {
     cout << calculateMTPS(begin, end, n) << " M tps" << endl;
     // -------------------------------------------------------------------------------------
     const u64 written_pages = db.getBufferManager().consumedPages();
-    const u64 mib = written_pages * PAGE_SIZE / 1024 / 1024;
+    const u64 mib = written_pages * FLAGS_page_size / 1024 / 1024;
     cout << "Inserted volume: (pages, MiB) = (" << written_pages << ", " << mib
          << ")" << endl;
     cout << "------------------------------------------------------------------"

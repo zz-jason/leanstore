@@ -4,6 +4,7 @@
 #include "Units.hpp"
 #include "sync-primitives/HybridGuard.hpp"
 #include "utils/JsonUtil.hpp"
+#include "utils/Misc.hpp"
 
 #include <glog/logging.h>
 #include <rapidjson/document.h>
@@ -13,12 +14,8 @@
 #include <limits>
 #include <vector>
 
-#include <alloca.h>
-
 namespace leanstore {
 namespace storage {
-
-const u64 PAGE_SIZE = 4096; // 4KB
 
 /// Used for contention based split. See more details in: "Contention and Space
 /// Management in B-Trees"
@@ -132,7 +129,7 @@ public:
 /// Page is the content stored in the disk file. Page id is not here because it
 /// is determined by the offset in the disk file, no need to store it
 /// explicitly.
-class alignas(512) Page {
+class Page {
 public:
   /// Short for "page sequence number", increased when a page is modified. A
   /// page is "dirty" when mPSN > mFlushedPSN in the header.
@@ -150,11 +147,13 @@ public:
   u64 mMagicDebuging;
 
   /// The data stored in this page. The btree node content is stored here.
-  u8 mPayload[PAGE_SIZE - sizeof(mPSN) - sizeof(mGSN) - sizeof(mBTreeId) -
-              sizeof(mMagicDebuging)];
-};
+  u8 mPayload[];
 
-static constexpr u64 EFFECTIVE_PAGE_SIZE = sizeof(Page::mPayload);
+public:
+  u64 CRC() {
+    return utils::CRC(mPayload, FLAGS_page_size - sizeof(Page));
+  }
+};
 
 /// The unit of buffer pool. Buffer pool is partitioned into several partitions,
 /// and each partition is composed of BufferFrames. A BufferFrame is used to
@@ -169,13 +168,13 @@ class BufferFrame {
 public:
   /// The control part. Information used by buffer manager, concurrent
   /// transaction control, etc. are stored here.
-  BufferFrameHeader header;
+  alignas(512) BufferFrameHeader header;
 
   // The persisted data part. Each page maps to a underlying disk page. It's
   // persisted to disk when the checkpoint happens, or when the storage is
   // shutdown. It should be recovered based on the old page content and the
   // write-ahead log of the page.
-  Page page;
+  alignas(512) Page page;
 
 public:
   BufferFrame() {
@@ -220,10 +219,12 @@ public:
 
   void ToJSON(rapidjson::Value* resultObj,
               rapidjson::Value::AllocatorType& allocator);
-};
 
-static_assert(sizeof(Page) == PAGE_SIZE, "The total sizeof page");
-// static_assert((sizeof(BufferFrame) - sizeof(Page)) == 512, "");
+public:
+  static size_t Size() {
+    return 512 + FLAGS_page_size;
+  }
+};
 
 // -----------------------------------------------------------------------------
 // BufferFrame
