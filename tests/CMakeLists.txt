@@ -45,7 +45,7 @@ leanstore_add_test_without_gtest_main(BTreeVITest)
 # # for code coverages
 # if(BUILD_WITH_COVERAGE)
 #   add_custom_target(coverage
-#       COMMAND gcovr -r . --json-pretty -o coverage.json --xml-pretty -o coverage.xml --exclude 'build/*' --exclude 'test/*'
+#       COMMAND gcovr -r . --json-pretty -json coverage.json --xml-pretty -xml coverage.xml --exclude 'build/*' --exclude 'tests/*'
 #       COMMENT "Generating code coverage reports"
 #       DEPENDS ${TEST_EXECUTABLES}
 #   )
