@@ -1,3 +1,6 @@
+[![CI](https://github.com/zz-jason/leanstore/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/zz-jason/leanstore/actions/workflows/c-cpp.yml)
+[![codecov](https://codecov.io/github/zz-jason/leanstore/graph/badge.svg?token=MBS1H361JJ)](https://codecov.io/github/zz-jason/leanstore)
+
 # LeanStore
 
 [LeanStore](https://db.in.tum.de/~leis/papers/leanstore.pdf) is a
@@ -17,8 +20,8 @@ hope to make it usable in production in the future.
 
 ```sh
 # install dependencies
-sudo apt-get update
-sudo apt-get install -y libaio-dev
+sudo apt update
+sudo apt install -y libaio-dev gcovr lcov
 
 # build
 cmake -DCMAKE_BUILD_TYPE=Debug -B build -S .
