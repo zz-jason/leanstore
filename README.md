@@ -1,3 +1,4 @@
+[![CI](https://github.com/zz-jason/leanstore/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/zz-jason/leanstore/actions/workflows/c-cpp.yml)
 [![codecov](https://codecov.io/github/zz-jason/leanstore/graph/badge.svg?token=MBS1H361JJ)](https://codecov.io/github/zz-jason/leanstore)
 
 # LeanStore
