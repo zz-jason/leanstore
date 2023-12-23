@@ -12,12 +12,6 @@ jobs:
     name: Debug Test
     steps:
 
-    - name: Set up GCC
-      uses: egor-tensin/setup-gcc@v1
-      with:
-        version: 12
-        platform: x64
-
     - name: Check out repository
       uses: actions/checkout@v3
 
