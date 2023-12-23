@@ -42,12 +42,11 @@ leanstore_add_test(BufferFrameTest)
 
 leanstore_add_test_without_gtest_main(BTreeVITest)
 
-# for code coverages
-if(BUILD_WITH_COVERAGE)
-  setup_target_for_coverage_gcovr_xml(
-    NAME ctest_coverage
-    EXECUTABLE ctest
-    DEPENDENCIES ${TEST_EXECUTABLES}
-    EXCLUDE "build/*"
-  )
-endif()
+# # for code coverages
+# if(BUILD_WITH_COVERAGE)
+#   add_custom_target(coverage
+#       COMMAND gcovr -r . --json-pretty -o coverage.json --xml-pretty -o coverage.xml --exclude 'build/*' --exclude 'test/*'
+#       COMMENT "Generating code coverage reports"
+#       DEPENDS ${TEST_EXECUTABLES}
+#   )
+# endif()
