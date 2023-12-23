@@ -6,6 +6,7 @@ function(leanstore_add_ext_lib TARGET_NAME LIB_NAME GIT_REPO GIT_TAG)
     set(TARGET_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/third-party/${TARGET_NAME}-src)
     set(TARGET_INSTALL ${CMAKE_CURRENT_BINARY_DIR}/third-party/${TARGET_NAME})
     ExternalProject_Add(${TARGET_NAME}_internal
+        SOURCE_DIR ${THIRD_PARTY_SRC_DIR}/${TARGET_NAME}_src
         PREFIX ${TARGET_PREFIX}
         GIT_REPOSITORY ${GIT_REPO}
         GIT_TAG ${GIT_TAG}
