@@ -1,3 +1,5 @@
+[![codecov](https://codecov.io/github/zz-jason/leanstore/graph/badge.svg?token=MBS1H361JJ)](https://codecov.io/github/zz-jason/leanstore)
+
 # LeanStore
 
 [LeanStore](https://db.in.tum.de/~leis/papers/leanstore.pdf) is a
