@@ -242,9 +242,9 @@ public:
     std::shared_mutex mutex;
     u64 cursor = 0;
     void cleanIfNecessary();
-    TXID commit(TXID start_ts);
-    std::optional<std::pair<TXID, TXID>> LCBUnsafe(TXID start_ts);
-    TXID LCB(TXID start_ts);
+    TXID commit(TXID startTs);
+    std::optional<std::pair<TXID, TXID>> LCBUnsafe(TXID startTs);
+    TXID LCB(TXID startTs);
     CommitTree(const u64 numWorkers) : capacity(numWorkers + 1) {
       array = new std::pair<TXID, TXID>[capacity];
     }
@@ -313,9 +313,12 @@ public:
   void switchToReadCommittedMode();
   void switchToSnapshotIsolationMode();
 
-  bool isVisibleForAll(WORKERID workerId, TXID start_ts);
+  bool isVisibleForAll(WORKERID workerId, TXID txId);
 
-  bool isVisibleForMe(WORKERID workerId, u64 tts, bool to_write = true);
+  /// Visibility check. Whethe the current tuple is visible for the current
+  /// worker transaction. Also used to check whether the tuple is write-locked,
+  /// hence we need the toWrite intention flag
+  bool VisibleForMe(WORKERID workerId, u64 txId, bool toWrite = true);
 
   VISIBILITY isVisibleForIt(WORKERID whomWorkerId, WORKERID whatWorkerId,
                             u64 tts);
@@ -352,13 +355,23 @@ public:
  */
 class Worker {
 public:
+  /// The write-ahead logging component.
   Logging mLogging;
+
   ConcurrencyControl cc;
-  u64 command_id = 0;
+
+  u64 mCommandId = 0;
+
+  /// The current running transaction.
   Transaction mActiveTx;
 
+  /// ID of the current worker itself.
   const u64 mWorkerId;
+
+  /// All the workers.
   std::vector<Worker*>& mAllWorkers;
+
+  /// Number of all the workers.
   const u64 mNumAllWorkers;
 
 public:
@@ -503,7 +516,7 @@ inline u64 ConcurrencyControl::insertVersion(TREEID treeId, bool is_remove,
   utils::Timer timer(CRCounters::myCounters().cc_ms_history_tree_insert);
   auto& curWorker = Worker::my();
   const u64 new_command_id =
-      (curWorker.command_id++) | ((is_remove) ? TYPE_MSB(COMMANDID) : 0);
+      (curWorker.mCommandId++) | ((is_remove) ? TYPE_MSB(COMMANDID) : 0);
   mHistoryTree.insertVersion(curWorker.mWorkerId, curWorker.mActiveTx.startTS(),
                              new_command_id, treeId, is_remove, payload_length,
                              cb);

@@ -17,19 +17,19 @@ namespace btree {
 class BTreeLL : public KVInterface, public BTreeGeneric {
 public:
   struct WALUpdate : WALPayload {
-    u16 key_length;
+    u16 mKeySize;
     u16 delta_length;
     u8 payload[];
   };
 
   struct WALRemove : WALPayload {
-    u16 key_length;
-    u16 value_length;
+    u16 mKeySize;
+    u16 mValSize;
     u8 payload[];
 
     WALRemove(Slice key, Slice val)
-        : WALPayload(TYPE::WALRemove), key_length(key.size()),
-          value_length(val.size()) {
+        : WALPayload(TYPE::WALRemove), mKeySize(key.size()),
+          mValSize(val.size()) {
       std::memcpy(payload, key.data(), key.size());
       std::memcpy(payload + key.size(), val.data(), val.size());
     }

@@ -18,27 +18,27 @@ namespace leanstore {
 namespace cr {
 using namespace leanstore::storage::btree;
 
-void HistoryTree::insertVersion(WORKERID session_id, TXID tx_id,
-                                COMMANDID command_id, TREEID treeId,
-                                bool is_remove, u64 payload_length,
+void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
+                                COMMANDID commandId, TREEID treeId,
+                                bool isRemove, u64 payload_length,
                                 std::function<void(u8*)> cb, bool same_thread) {
   if (!FLAGS_history_tree_inserts) {
     return;
   }
-  const u64 key_length = sizeof(tx_id) + sizeof(command_id);
-  u8 key_buffer[key_length];
+  const u64 keySize = sizeof(txId) + sizeof(commandId);
+  u8 keyBuffer[keySize];
   u64 offset = 0;
-  offset += utils::fold(key_buffer + offset, tx_id);
-  offset += utils::fold(key_buffer + offset, command_id);
-  Slice key(key_buffer, key_length);
+  offset += utils::fold(keyBuffer + offset, txId);
+  offset += utils::fold(keyBuffer + offset, commandId);
+  Slice key(keyBuffer, keySize);
   payload_length += sizeof(VersionMeta);
 
   BTreeLL* volatile btree =
-      (is_remove) ? remove_btrees[session_id] : update_btrees[session_id];
+      (isRemove) ? remove_btrees[workerId] : update_btrees[workerId];
   Session* volatile session = nullptr;
   if (same_thread) {
-    session = (is_remove) ? &remove_sessions[session_id]
-                          : &update_sessions[session_id];
+    session =
+        (isRemove) ? &remove_sessions[workerId] : &update_sessions[workerId];
   }
   if (session != nullptr && session->rightmost_init) {
     JUMPMU_TRY() {
@@ -48,15 +48,14 @@ void HistoryTree::insertVersion(WORKERID session_id, TXID tx_id,
       // -------------------------------------------------------------------------------------
       OP_RESULT ret = iterator.enoughSpaceInCurrentNode(key, payload_length);
       if (ret == OP_RESULT::OK && iterator.keyInCurrentBoundaries(key)) {
-        if (session->last_tx_id == tx_id) {
+        if (session->last_tx_id == txId) {
           iterator.mGuardedLeaf->insertDoNotCopyPayload(key, payload_length,
                                                         session->rightmost_pos);
           iterator.mSlotId = session->rightmost_pos;
         } else {
           iterator.insertInCurrentNode(key, payload_length);
         }
-        auto& version_meta =
-            *new (iterator.mutableValue().data()) VersionMeta();
+        auto& version_meta = *new (iterator.MutableVal().data()) VersionMeta();
         version_meta.mTreeId = treeId;
         cb(version_meta.payload);
         iterator.MarkAsDirty();
@@ -88,7 +87,7 @@ void HistoryTree::insertVersion(WORKERID session_id, TXID tx_id,
         JUMPMU_CONTINUE;
       }
       iterator.insertInCurrentNode(key, payload_length);
-      auto& version_meta = *new (iterator.mutableValue().data()) VersionMeta();
+      auto& version_meta = *new (iterator.MutableVal().data()) VersionMeta();
       version_meta.mTreeId = treeId;
       cb(version_meta.payload);
       iterator.MarkAsDirty();
@@ -97,7 +96,7 @@ void HistoryTree::insertVersion(WORKERID session_id, TXID tx_id,
         session->rightmost_bf = iterator.mGuardedLeaf.mBf;
         session->rightmost_version = iterator.mGuardedLeaf.mGuard.mVersion + 1;
         session->rightmost_pos = iterator.mSlotId + 1;
-        session->last_tx_id = tx_id;
+        session->last_tx_id = txId;
         session->rightmost_init = true;
       }
       // -------------------------------------------------------------------------------------
@@ -111,19 +110,19 @@ void HistoryTree::insertVersion(WORKERID session_id, TXID tx_id,
   }
 }
 // -------------------------------------------------------------------------------------
-bool HistoryTree::retrieveVersion(WORKERID workerId, TXID tx_id,
-                                  COMMANDID command_id, const bool is_remove,
+bool HistoryTree::retrieveVersion(WORKERID workerId, TXID txId,
+                                  COMMANDID commandId, const bool isRemove,
                                   std::function<void(const u8*, u64)> cb) {
   BTreeLL* volatile btree =
-      (is_remove) ? remove_btrees[workerId] : update_btrees[workerId];
+      (isRemove) ? remove_btrees[workerId] : update_btrees[workerId];
   // -------------------------------------------------------------------------------------
-  const u64 key_length = sizeof(tx_id) + sizeof(command_id);
-  u8 key_buffer[key_length];
+  const u64 keySize = sizeof(txId) + sizeof(commandId);
+  u8 keyBuffer[keySize];
   u64 offset = 0;
-  offset += utils::fold(key_buffer + offset, tx_id);
-  offset += utils::fold(key_buffer + offset, command_id);
+  offset += utils::fold(keyBuffer + offset, txId);
+  offset += utils::fold(keyBuffer + offset, commandId);
   // -------------------------------------------------------------------------------------
-  Slice key(key_buffer, key_length);
+  Slice key(keyBuffer, keySize);
   JUMPMU_TRY() {
     BTreeSharedIterator iterator(
         *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)),
@@ -133,9 +132,9 @@ bool HistoryTree::retrieveVersion(WORKERID workerId, TXID tx_id,
       JUMPMU_RETURN false;
     }
     Slice payload = iterator.value();
-    const auto& version_container =
+    const auto& versionContainer =
         *reinterpret_cast<const VersionMeta*>(payload.data());
-    cb(version_container.payload, payload.length() - sizeof(VersionMeta));
+    cb(versionContainer.payload, payload.length() - sizeof(VersionMeta));
     JUMPMU_RETURN true;
   }
   JUMPMU_CATCH() {
@@ -184,15 +183,15 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
         TXID current_tx_id;
         utils::unfold(iterator.key().data(), current_tx_id);
         if (current_tx_id >= from_tx_id && current_tx_id <= to_tx_id) {
-          auto& version_container =
-              *reinterpret_cast<VersionMeta*>(iterator.mutableValue().data());
-          const TREEID treeId = version_container.mTreeId;
-          const bool called_before = version_container.called_before;
-          version_container.called_before = true;
+          auto& versionContainer =
+              *reinterpret_cast<VersionMeta*>(iterator.MutableVal().data());
+          const TREEID treeId = versionContainer.mTreeId;
+          const bool called_before = versionContainer.called_before;
+          versionContainer.called_before = true;
           keySize = iterator.key().length();
           std::memcpy(keyBuffer, iterator.key().data(), keySize);
           payload_length = iterator.value().length() - sizeof(VersionMeta);
-          std::memcpy(payload, version_container.payload, payload_length);
+          std::memcpy(payload, versionContainer.payload, payload_length);
           key = Slice(keyBuffer, keySize + 1);
           iterator.removeCurrent();
           removed_versions = removed_versions + 1;
@@ -334,16 +333,16 @@ void HistoryTree::visitRemoveVersions(
       TXID current_tx_id;
       utils::unfold(iterator.key().data(), current_tx_id);
       if (current_tx_id >= from_tx_id && current_tx_id <= to_tx_id) {
-        auto& version_container =
-            *reinterpret_cast<VersionMeta*>(iterator.mutableValue().data());
-        const TREEID treeId = version_container.mTreeId;
-        const bool called_before = version_container.called_before;
+        auto& versionContainer =
+            *reinterpret_cast<VersionMeta*>(iterator.MutableVal().data());
+        const TREEID treeId = versionContainer.mTreeId;
+        const bool called_before = versionContainer.called_before;
         ENSURE(called_before == false);
-        version_container.called_before = true;
+        versionContainer.called_before = true;
         keySize = iterator.key().length();
         std::memcpy(keyBuffer, iterator.key().data(), keySize);
         payload_length = iterator.value().length() - sizeof(VersionMeta);
-        std::memcpy(payload, version_container.payload, payload_length);
+        std::memcpy(payload, versionContainer.payload, payload_length);
         key = Slice(keyBuffer, keySize + 1);
         if (!called_before) {
           iterator.MarkAsDirty();

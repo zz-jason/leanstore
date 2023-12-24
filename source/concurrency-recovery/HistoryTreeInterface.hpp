@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Exceptions.hpp"
-#include "Units.hpp"
 #include "Config.hpp"
+#include "Exceptions.hpp"
 #include "KVInterface.hpp"
+#include "Units.hpp"
 #include "utils/Misc.hpp"
 
 #include <atomic>
@@ -23,15 +23,14 @@ using RemoveVersionCallback = std::function<void(
 
 class HistoryTreeInterface {
 public:
-  virtual void insertVersion(WORKERID workerId, TXID tx_id,
-                             COMMANDID command_id, TREEID treeId,
-                             bool is_remove, u64 payload_length,
+  virtual void insertVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
+                             TREEID treeId, bool isRemove, u64 payloadSize,
                              std::function<void(u8*)> cb,
                              bool same_thread = true) = 0;
 
   virtual bool retrieveVersion(
-      WORKERID workerId, TXID tx_id, COMMANDID command_id, const bool is_remove,
-      std::function<void(const u8*, u64 payload_length)> cb) = 0;
+      WORKERID workerId, TXID txId, COMMANDID commandId, const bool isRemove,
+      std::function<void(const u8*, u64 payloadSize)> cb) = 0;
 
   virtual void purgeVersions(WORKERID workerId, TXID from_tx_id, TXID to_tx_id,
                              RemoveVersionCallback cb, const u64 limit = 0) = 0;
