@@ -2,6 +2,7 @@
 
 #include "BTreeLL.hpp"
 #include "Config.hpp"
+#include "Tuple.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "storage/btree/core/BTreeExclusiveIterator.hpp"
 #include "storage/btree/core/BTreeSharedIterator.hpp"
@@ -9,205 +10,13 @@
 #include "storage/buffer-manager/GuardedBufferFrame.hpp"
 #include "utils/RandomGenerator.hpp"
 
+#include <glog/logging.h>
+
 #include <set>
 
 namespace leanstore {
 namespace storage {
 namespace btree {
-
-/// Plan: we should handle frequently and infrequently updated tuples
-/// differently when it comes to maintaining versions in the b-tree. For
-/// frequently updated tuples, we store them in a FatTuple
-///
-/// Prepartion phase: iterate over the chain and check whether all updated
-/// attributes are the same and whether they fit on a page If both conditions
-/// are fullfiled then we can store them in a fat tuple When FatTuple runs out
-/// of space, we simply crash for now (real solutions approx variable-size pages
-/// or fallback to chained keys)
-///
-/// How to convert CHAINED to FAT_TUPLE: Random number generation, similar to
-/// contention split, don't eagerly remove the deltas to allow concurrent
-/// readers to continue without complicating the logic if we fail
-///
-/// Glossary:
-/// - UpdateDescriptor: (offset, length)[]
-/// - Diff: raw bytes copied from src/dst next to each other according to the
-///   descriptor Delta: WWTS + diff + (descriptor)?
-enum class TupleFormat : u8 {
-  CHAINED = 0,
-  FAT_TUPLE_DIFFERENT_ATTRIBUTES = 1,
-  FAT_TUPLE_SAME_ATTRIBUTES = 2,
-  VISIBLE_FOR_ALL = 3
-};
-
-/// NEVER SHADOW A MEMBER!!!
-class __attribute__((packed)) Tuple {
-public:
-  static constexpr COMMANDID INVALID_COMMANDID =
-      std::numeric_limits<COMMANDID>::max();
-
-  TupleFormat tuple_format;
-  WORKERID mWorkerId;
-
-  union {
-    TXID tx_ts; // Could be start_ts or tx_id for WT scheme
-    TXID start_ts;
-  };
-
-  COMMANDID command_id;
-  bool mWriteLocked : true;
-
-  Tuple(TupleFormat tuple_format, WORKERID workerId, TXID tx_id)
-      : tuple_format(tuple_format), mWorkerId(workerId), tx_ts(tx_id),
-        command_id(INVALID_COMMANDID) {
-    mWriteLocked = false;
-  }
-
-  bool IsWriteLocked() const {
-    return mWriteLocked;
-  }
-
-  void WriteLock() {
-    mWriteLocked = true;
-  }
-
-  void WriteUnlock() {
-    mWriteLocked = false;
-  }
-};
-
-struct __attribute__((packed)) Delta {
-  WORKERID mWorkerId;
-  TXID tx_ts;
-
-  /// ATTENTION: TAKE CARE OF THIS, OTHERWISE WE WOULD
-  /// OVERWRITE ANOTHER UNDO VERSION
-  COMMANDID command_id = Tuple::INVALID_COMMANDID;
-
-  /// Descriptor + Diff
-  u8 payload[];
-
-  UpdateSameSizeInPlaceDescriptor& getDescriptor() {
-    return *reinterpret_cast<UpdateSameSizeInPlaceDescriptor*>(payload);
-  }
-
-  const UpdateSameSizeInPlaceDescriptor& getConstantDescriptor() const {
-    return *reinterpret_cast<const UpdateSameSizeInPlaceDescriptor*>(payload);
-  }
-
-  inline u32 totalLength() {
-    return sizeof(Delta) + getConstantDescriptor().size() +
-           getConstantDescriptor().diffLength();
-  }
-};
-
-/// We always append the descriptor, one format to keep simple
-struct __attribute__((packed)) FatTupleDifferentAttributes : Tuple {
-  u16 value_length = 0;
-  u32 total_space = 0; // From the payload bytes array
-  u32 used_space = 0;  // does not include the struct itself
-  u32 mDataOffset = 0;
-  u16 deltas_count = 0; // Attention: coupled with used_space
-
-  // value, Delta+Descriptor+Diff[] O2N
-  u8 payload[];
-
-public:
-  FatTupleDifferentAttributes(const u32 init_total_space)
-      : Tuple(TupleFormat::FAT_TUPLE_DIFFERENT_ATTRIBUTES, 0, 0),
-        total_space(init_total_space), mDataOffset(init_total_space) {
-  }
-
-  // returns false to fallback to chained mode
-  static bool update(BTreeExclusiveIterator& iterator, Slice key, ValCallback,
-                     UpdateSameSizeInPlaceDescriptor&);
-
-  bool hasSpaceFor(const UpdateSameSizeInPlaceDescriptor&);
-  void append(UpdateSameSizeInPlaceDescriptor&);
-  Delta& allocateDelta(u32 delta_total_length);
-  void garbageCollection();
-  void undoLastUpdate();
-
-  inline Slice GetValue() {
-    return Slice(getValue(), value_length);
-  }
-
-  inline constexpr u8* getValue() {
-    return payload;
-  }
-
-  inline const u8* getValueConstant() const {
-    return payload;
-  }
-
-  inline u16* getDeltaOffsets() {
-    return reinterpret_cast<u16*>(payload + value_length);
-  }
-
-  inline const u16* getDeltaOffsetsConstant() const {
-    return reinterpret_cast<const u16*>(payload + value_length);
-  }
-
-  inline Delta& getDelta(u16 d_i) {
-    assert(reinterpret_cast<u8*>(getDeltaOffsets() + d_i) <
-           reinterpret_cast<u8*>(payload + getDeltaOffsets()[d_i]));
-    return *reinterpret_cast<Delta*>(payload + getDeltaOffsets()[d_i]);
-  }
-
-  inline const Delta& getDeltaConstant(u16 d_i) const {
-    return *reinterpret_cast<const Delta*>(payload +
-                                           getDeltaOffsetsConstant()[d_i]);
-  }
-
-  std::tuple<OP_RESULT, u16> reconstructTuple(ValCallback valCallback) const;
-
-  void convertToChained(TREEID treeId);
-
-  void resize(u32 new_length);
-};
-
-// Chained: only scheduled gc todos. FatTuple: eager pgc, no scheduled gc
-// todos
-struct __attribute__((packed)) ChainedTuple : Tuple {
-  u16 updates_counter = 0;
-  u16 oldest_tx = 0;
-  u8 is_removed = 1;
-
-  u8 payload[]; // latest version in-place
-
-public:
-  /// Construct a ChainedTuple, copy the value to its payload
-  ///
-  /// NOTE: Payload space should be allocated in advance. This constructor is
-  /// usually called by a placmenet new operator.
-  ChainedTuple(WORKERID workerId, TXID txId, Slice val)
-      : Tuple(TupleFormat::CHAINED, workerId, txId), is_removed(false) {
-    std::memcpy(payload, val.data(), val.size());
-  }
-
-  /// Construct a ChainedTuple from an existing FatTupleDifferentAttributes,
-  /// the new ChainedTuple may share the same space with the input
-  /// FatTupleDifferentAttributes, so std::memmove is used to handle the
-  /// overlap bytes.
-  ///
-  /// NOTE: This constructor is usually called by a placmenet new operator on
-  /// the address of the FatTupleDifferentAttributes
-  ChainedTuple(FatTupleDifferentAttributes& oldFatTuple)
-      : Tuple(TupleFormat::CHAINED, oldFatTuple.mWorkerId, oldFatTuple.tx_ts),
-        is_removed(false) {
-    command_id = oldFatTuple.command_id;
-    std::memmove(payload, oldFatTuple.payload, oldFatTuple.value_length);
-  }
-
-  bool isFinal() const {
-    return command_id == INVALID_COMMANDID;
-  }
-
-  void reset() {
-  }
-};
-
-static_assert(sizeof(FatTupleDifferentAttributes) >= sizeof(ChainedTuple));
 
 struct __attribute__((packed)) DanglingPointer {
   BufferFrame* bf = nullptr;
@@ -217,12 +26,17 @@ struct __attribute__((packed)) DanglingPointer {
 
 struct __attribute__((packed)) Version {
   enum class TYPE : u8 { UPDATE, REMOVE };
+
   TYPE type;
+
   WORKERID mWorkerId;
-  TXID tx_id;
-  COMMANDID command_id;
+
+  TXID mTxId;
+
+  COMMANDID mCommandId;
+
   Version(TYPE type, WORKERID workerId, TXID txId, COMMANDID commandId)
-      : type(type), mWorkerId(workerId), tx_id(txId), command_id(commandId) {
+      : type(type), mWorkerId(workerId), mTxId(txId), mCommandId(commandId) {
   }
 };
 
@@ -236,38 +50,38 @@ struct __attribute__((packed)) UpdateVersion : Version {
   }
 
   bool isFinal() const {
-    return command_id == 0;
+    return mCommandId == 0;
   }
 };
 
 struct __attribute__((packed)) RemoveVersion : Version {
-  u16 key_length;
-  u16 value_length;
+  u16 mKeySize;
+  u16 mValSize;
   DanglingPointer dangling_pointer;
   bool moved_to_graveway = false;
   u8 payload[]; // Key + Value
-  RemoveVersion(WORKERID workerId, TXID tx_id, COMMANDID command_id,
-                u16 key_length, u16 value_length)
-      : Version(Version::TYPE::REMOVE, workerId, tx_id, command_id),
-        key_length(key_length), value_length(value_length) {
+  RemoveVersion(WORKERID workerId, TXID txId, COMMANDID commandId, u16 keySize,
+                u16 valSize)
+      : Version(Version::TYPE::REMOVE, workerId, txId, commandId),
+        mKeySize(keySize), mValSize(valSize) {
   }
 };
 
 class BTreeVI : public BTreeLL {
 public:
   struct WALRemove : WALPayload {
-    u16 key_length;
-    u16 value_length;
-    WORKERID before_worker_id;
-    u64 before_tx_id;
-    u64 before_command_id;
+    u16 mKeySize;
+    u16 mValSize;
+    WORKERID mPrevWorkerId;
+    TXID mPrevTxId;
+    COMMANDID mPrevCommandId;
     u8 payload[];
 
-    WALRemove(Slice key, Slice val, WORKERID beforeWorkerId, u64 beforeTxId,
-              u64 BeforeCommandId)
-        : WALPayload(TYPE::WALRemove), key_length(key.size()),
-          value_length(val.size()), before_worker_id(beforeWorkerId),
-          before_tx_id(beforeTxId), before_command_id(BeforeCommandId) {
+    WALRemove(Slice key, Slice val, WORKERID prevWorkerId, u64 prevTxId,
+              u64 prevCommandId)
+        : WALPayload(TYPE::WALRemove), mKeySize(key.size()),
+          mValSize(val.size()), mPrevWorkerId(prevWorkerId),
+          mPrevTxId(prevTxId), mPrevCommandId(prevCommandId) {
       std::memcpy(payload, key.data(), key.size());
       std::memcpy(payload + key.size(), val.data(), val.size());
     }
@@ -331,14 +145,13 @@ public:
 
     for (u16 i = 0; i < guardedNode->mNumSeps; i++) {
       auto& tuple = *reinterpret_cast<Tuple*>(guardedNode->ValData(i));
-      if (tuple.tuple_format == TupleFormat::FAT_TUPLE_DIFFERENT_ATTRIBUTES) {
-        auto& fatTuple = *reinterpret_cast<FatTupleDifferentAttributes*>(
-            guardedNode->ValData(i));
-        const u32 newLength = fatTuple.value_length + sizeof(ChainedTuple);
+      if (tuple.mFormat == TupleFormat::FAT) {
+        auto& fatTuple = *reinterpret_cast<FatTuple*>(guardedNode->ValData(i));
+        const u32 newLength = fatTuple.mValSize + sizeof(ChainedTuple);
         fatTuple.convertToChained(mTreeId);
         DCHECK(newLength < guardedNode->ValSize(i));
         guardedNode->shortenPayload(i, newLength);
-        DCHECK(tuple.tuple_format == TupleFormat::CHAINED);
+        DCHECK(tuple.mFormat == TupleFormat::CHAINED);
       }
     }
     guardedNode->mHasGarbage = false;
@@ -361,7 +174,7 @@ public:
       // Assuming no insert after remove
       auto& insert_entry = *reinterpret_cast<const WALInsert*>(&entry);
       JUMPMU_TRY() {
-        Slice key(insert_entry.payload, insert_entry.key_length);
+        Slice key(insert_entry.payload, insert_entry.mKeySize);
         BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
         OP_RESULT ret = iterator.seekExact(key);
         ENSURE(ret == OP_RESULT::OK);
@@ -377,27 +190,26 @@ public:
     case WALPayload::TYPE::WALUpdate: {
       auto& update_entry = *reinterpret_cast<const WALUpdateSSIP*>(&entry);
       JUMPMU_TRY() {
-        Slice key(update_entry.payload, update_entry.key_length);
+        Slice key(update_entry.payload, update_entry.mKeySize);
         BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
         OP_RESULT ret = iterator.seekExact(key);
         ENSURE(ret == OP_RESULT::OK);
-        auto& tuple = *reinterpret_cast<Tuple*>(iterator.mutableValue().data());
+        auto& tuple = *reinterpret_cast<Tuple*>(iterator.MutableVal().data());
         ENSURE(!tuple.IsWriteLocked());
-        if (tuple.tuple_format == TupleFormat::FAT_TUPLE_DIFFERENT_ATTRIBUTES) {
-          reinterpret_cast<FatTupleDifferentAttributes*>(
-              iterator.mutableValue().data())
+        if (tuple.mFormat == TupleFormat::FAT) {
+          reinterpret_cast<FatTuple*>(iterator.MutableVal().data())
               ->undoLastUpdate();
         } else {
           auto& chain_head =
-              *reinterpret_cast<ChainedTuple*>(iterator.mutableValue().data());
-          chain_head.mWorkerId = update_entry.before_worker_id;
-          chain_head.tx_ts = update_entry.before_tx_id;
-          chain_head.command_id = update_entry.before_command_id;
+              *reinterpret_cast<ChainedTuple*>(iterator.MutableVal().data());
+          chain_head.mWorkerId = update_entry.mPrevWorkerId;
+          chain_head.mTxId = update_entry.mPrevTxId;
+          chain_head.mCommandId = update_entry.mPrevCommandId;
           const auto& update_descriptor =
               *reinterpret_cast<const UpdateSameSizeInPlaceDescriptor*>(
-                  update_entry.payload + update_entry.key_length);
+                  update_entry.payload + update_entry.mKeySize);
           BTreeLL::applyXORDiff(update_descriptor, chain_head.payload,
-                                update_entry.payload + update_entry.key_length +
+                                update_entry.payload + update_entry.mKeySize +
                                     update_descriptor.size());
         }
         iterator.MarkAsDirty();
@@ -409,15 +221,15 @@ public:
       break;
     }
     case WALPayload::TYPE::WALRemove: {
-      auto& remove_entry = *reinterpret_cast<const WALRemove*>(&entry);
-      Slice key(remove_entry.payload, remove_entry.key_length);
+      auto& removeEntry = *reinterpret_cast<const WALRemove*>(&entry);
+      Slice key(removeEntry.payload, removeEntry.mKeySize);
       JUMPMU_TRY() {
         BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
         OP_RESULT ret = iterator.seekExact(key);
         ENSURE(ret == OP_RESULT::OK);
         // Resize
         const u16 new_primary_payload_length =
-            remove_entry.value_length + sizeof(ChainedTuple);
+            removeEntry.mValSize + sizeof(ChainedTuple);
         const Slice old_primary_payload = iterator.value();
         if (old_primary_payload.length() < new_primary_payload_length) {
           const bool did_extend =
@@ -426,12 +238,12 @@ public:
         } else {
           iterator.shorten(new_primary_payload_length);
         }
-        MutableSlice primaryPayload = iterator.mutableValue();
+        MutableSlice primaryPayload = iterator.MutableVal();
         auto& primaryVersion = *new (primaryPayload.data()) ChainedTuple(
-            remove_entry.before_worker_id, remove_entry.before_tx_id,
-            Slice(remove_entry.payload + remove_entry.key_length,
-                  remove_entry.value_length));
-        primaryVersion.command_id = remove_entry.before_command_id;
+            removeEntry.mPrevWorkerId, removeEntry.mPrevTxId,
+            Slice(removeEntry.payload + removeEntry.mKeySize,
+                  removeEntry.mValSize));
+        primaryVersion.mCommandId = removeEntry.mPrevCommandId;
         ENSURE(primaryVersion.is_removed == false);
         primaryVersion.WriteUnlock();
         iterator.MarkAsDirty();
@@ -453,7 +265,7 @@ public:
     // Only point-gc and for removed tuples
     const auto& version = *reinterpret_cast<const RemoveVersion*>(entry_ptr);
     if (FLAGS_vi_dangling_pointer &&
-        version.tx_id < cr::Worker::my().cc.local_all_lwm) {
+        version.mTxId < cr::Worker::my().cc.local_all_lwm) {
       assert(version.dangling_pointer.bf != nullptr);
       // Optimistic fast path
       JUMPMU_TRY() {
@@ -465,9 +277,9 @@ public:
             node->ValData(version.dangling_pointer.head_slot));
         // Being chained is implicit because we check for version, so the state
         // can not be changed after staging the todo
-        ENSURE(head.tuple_format == TupleFormat::CHAINED &&
-               !head.IsWriteLocked() && head.mWorkerId == version_worker_id &&
-               head.tx_ts == version_tx_id && head.is_removed);
+        ENSURE(head.mFormat == TupleFormat::CHAINED && !head.IsWriteLocked() &&
+               head.mWorkerId == version_worker_id &&
+               head.mTxId == version_tx_id && head.is_removed);
         node->removeSlot(version.dangling_pointer.head_slot);
         iterator.MarkAsDirty();
         iterator.mergeIfNeeded();
@@ -476,7 +288,7 @@ public:
       JUMPMU_CATCH() {
       }
     }
-    Slice key(version.payload, version.key_length);
+    Slice key(version.payload, version.mKeySize);
     OP_RESULT ret;
     if (called_before) {
       // Delete from mGraveyard
@@ -505,12 +317,12 @@ public:
         JUMPMU_RETURN; // TODO:
       }
       // ENSURE(ret == OP_RESULT::OK);
-      MutableSlice primaryPayload = iterator.mutableValue();
+      MutableSlice primaryPayload = iterator.MutableVal();
       {
         // Checks
         const auto& tuple =
             *reinterpret_cast<const Tuple*>(primaryPayload.data());
-        if (tuple.tuple_format == TupleFormat::FAT_TUPLE_DIFFERENT_ATTRIBUTES) {
+        if (tuple.mFormat == TupleFormat::FAT) {
           JUMPMU_RETURN;
         }
       }
@@ -518,9 +330,9 @@ public:
           *reinterpret_cast<ChainedTuple*>(primaryPayload.data());
       if (!primaryVersion.IsWriteLocked()) {
         if (primaryVersion.mWorkerId == version_worker_id &&
-            primaryVersion.tx_ts == version_tx_id &&
+            primaryVersion.mTxId == version_tx_id &&
             primaryVersion.is_removed) {
-          if (primaryVersion.tx_ts < cr::Worker::my().cc.local_all_lwm) {
+          if (primaryVersion.mTxId < cr::Worker::my().cc.local_all_lwm) {
             ret = iterator.removeCurrent();
             iterator.MarkAsDirty();
             ENSURE(ret == OP_RESULT::OK);
@@ -528,7 +340,7 @@ public:
             COUNTERS_BLOCK() {
               WorkerCounters::myCounters().cc_todo_removed[mTreeId]++;
             }
-          } else if (primaryVersion.tx_ts <
+          } else if (primaryVersion.mTxId <
                      cr::Worker::my().cc.local_oltp_lwm) {
             // Move to mGraveyard
             {
@@ -563,17 +375,17 @@ public:
     case WALPayload::TYPE::WALInsert: {
       // Assuming no insert after remove
       auto& insert_entry = *reinterpret_cast<const WALInsert*>(&entry);
-      key = Slice(insert_entry.payload, insert_entry.key_length);
+      key = Slice(insert_entry.payload, insert_entry.mKeySize);
       break;
     }
     case WALPayload::TYPE::WALUpdate: {
       auto& update_entry = *reinterpret_cast<const WALUpdateSSIP*>(&entry);
-      key = Slice(update_entry.payload, update_entry.key_length);
+      key = Slice(update_entry.payload, update_entry.mKeySize);
       break;
     }
     case WALPayload::TYPE::WALRemove: {
-      auto& remove_entry = *reinterpret_cast<const WALRemove*>(&entry);
-      key = Slice(remove_entry.payload, remove_entry.key_length);
+      auto& removeEntry = *reinterpret_cast<const WALRemove*>(&entry);
+      key = Slice(removeEntry.payload, removeEntry.mKeySize);
       break;
     }
     default: {
@@ -586,15 +398,15 @@ public:
       BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
       OP_RESULT ret = iterator.seekExact(key);
       ENSURE(ret == OP_RESULT::OK);
-      auto& tuple = *reinterpret_cast<Tuple*>(iterator.mutableValue().data());
-      ENSURE(tuple.tuple_format == TupleFormat::CHAINED);
+      auto& tuple = *reinterpret_cast<Tuple*>(iterator.MutableVal().data());
+      ENSURE(tuple.mFormat == TupleFormat::CHAINED);
       /**
        * The major work is in traversing the tree:
        *
-       * if (tuple.tx_ts == cr::activeTX().startTS() &&
+       * if (tuple.mTxId == cr::activeTX().startTS() &&
        *     tuple.mWorkerId == cr::Worker::my().mWorkerId) {
        *   auto& chain_head =
-       *       *reinterpret_cast<ChainedTuple*>(iterator.mutableValue().data());
+       *       *reinterpret_cast<ChainedTuple*>(iterator.MutableVal().data());
        *   chain_head.mCommitTs = cr::activeTX().commitTS() | MSB;
        * }
        */
@@ -605,8 +417,7 @@ public:
   }
 
 private:
-  bool convertChainedToFatTupleDifferentAttributes(
-      BTreeExclusiveIterator& iterator);
+  bool convertChainedToFatTuple(BTreeExclusiveIterator& iterator);
 
   OP_RESULT lookupPessimistic(Slice key, ValCallback valCallback);
   OP_RESULT lookupOptimistic(Slice key, ValCallback valCallback);
@@ -638,7 +449,7 @@ private:
         iterator.assembleKey();
         Slice s_key = iterator.key();
         auto reconstruct =
-            reconstructTuple(s_key, iterator.value(), [&](Slice value) {
+            GetVisibleTuple(s_key, iterator.value(), [&](Slice value) {
               COUNTERS_BLOCK() {
                 WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
                     cr::activeTX().isOLAP();
@@ -716,7 +527,7 @@ private:
 
       g_range();
       auto take_from_oltp = [&]() {
-        reconstructTuple(iterator.key(), iterator.value(), [&](Slice value) {
+        GetVisibleTuple(iterator.key(), iterator.value(), [&](Slice value) {
           COUNTERS_BLOCK() {
             WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
                 cr::activeTX().isOLAP();
@@ -748,7 +559,7 @@ private:
         } else if (g_ret == OP_RESULT::OK && o_ret != OP_RESULT::OK) {
           g_iterator.assembleKey();
           Slice g_key = g_iterator.key();
-          reconstructTuple(g_key, g_iterator.value(), [&](Slice value) {
+          GetVisibleTuple(g_key, g_iterator.value(), [&](Slice value) {
             COUNTERS_BLOCK() {
               WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
                   cr::activeTX().isOLAP();
@@ -769,7 +580,7 @@ private:
               JUMPMU_RETURN OP_RESULT::OK;
             }
           } else {
-            reconstructTuple(g_key, g_iterator.value(), [&](Slice value) {
+            GetVisibleTuple(g_key, g_iterator.value(), [&](Slice value) {
               COUNTERS_BLOCK() {
                 WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
                     cr::activeTX().isOLAP();
@@ -793,9 +604,8 @@ private:
     JUMPMU_RETURN OP_RESULT::OTHER;
   }
 
-  inline bool isVisibleForMe(WORKERID workerId, TXID txId,
-                             bool toWrite = true) {
-    return cr::Worker::my().cc.isVisibleForMe(workerId, txId, toWrite);
+  inline bool VisibleForMe(WORKERID workerId, TXID txId, bool toWrite = true) {
+    return cr::Worker::my().cc.VisibleForMe(workerId, txId, toWrite);
   }
 
   static inline bool triggerPageWiseGarbageCollection(
@@ -807,38 +617,27 @@ private:
     return FLAGS_worker_threads;
   }
 
-  inline std::tuple<OP_RESULT, u16> reconstructTuple(
-      Slice key, Slice payload, std::function<void(Slice value)> callback) {
+  inline std::tuple<OP_RESULT, u16> GetVisibleTuple(Slice key, Slice payload,
+                                                    ValCallback callback) {
     while (true) {
       JUMPMU_TRY() {
-        if (reinterpret_cast<const Tuple*>(payload.data())->tuple_format ==
-            TupleFormat::CHAINED) {
-          const ChainedTuple& primary_version =
-              *reinterpret_cast<const ChainedTuple*>(payload.data());
-          if (isVisibleForMe(primary_version.mWorkerId, primary_version.tx_ts,
-                             false)) {
-            if (primary_version.is_removed) {
-              JUMPMU_RETURN{OP_RESULT::NOT_FOUND, 1};
-            }
-            callback(Slice(primary_version.payload,
-                           payload.length() - sizeof(ChainedTuple)));
-            JUMPMU_RETURN{OP_RESULT::OK, 1};
-          } else {
-            if (primary_version.isFinal()) {
-              JUMPMU_RETURN{OP_RESULT::NOT_FOUND, 1};
-            } else {
-              auto ret = reconstructChainedTuple(key, payload, callback);
-              if (FLAGS_tmp6)
-                RAISE_WHEN(std::get<0>(ret) == OP_RESULT::NOT_FOUND);
-              JUMPMU_RETURN ret;
-            }
-          }
-        } else {
-          auto ret = reinterpret_cast<const FatTupleDifferentAttributes*>(
-                         payload.data())
-                         ->reconstructTuple(callback);
-          RAISE_WHEN(std::get<0>(ret) == OP_RESULT::NOT_FOUND);
+        const auto& tuple = *Tuple::From(payload.data());
+        switch (tuple.mFormat) {
+        case TupleFormat::CHAINED: {
+          auto ret = reconstructChainedTuple(key, payload, callback);
           JUMPMU_RETURN ret;
+          break;
+        }
+        case TupleFormat::FAT: {
+          const auto& fatTuple = *FatTuple::From(payload.data());
+          auto ret = fatTuple.GetVisibleTuple(callback);
+          JUMPMU_RETURN ret;
+          break;
+        }
+        default: {
+          DCHECK(false) << "Unhandled tuple format: "
+                        << TupleFormatUtil::ToString(tuple.mFormat);
+        }
         }
       }
       JUMPMU_CATCH() {
@@ -882,7 +681,7 @@ public:
     auto tupleAddr = guardedNode->ValData(slotId);
     auto tuple = new (tupleAddr) ChainedTuple(workerId, txStartTs, val);
     if (txMode == TX_MODE::INSTANTLY_VISIBLE_BULK_INSERT) {
-      tuple->tx_ts = MSB | 0;
+      tuple->mTxId = MSB | 0;
     }
     guardedNode.MarkAsDirty();
   }

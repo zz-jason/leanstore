@@ -143,47 +143,47 @@ struct WALAfterImage : WALPayload {
 };
 
 struct WALInsert : WALPayload {
-  u16 key_length;
-  u16 value_length;
+  u16 mKeySize;
+  u16 mValSize;
   u8 payload[];
 
   WALInsert(Slice key, Slice val)
-      : WALPayload(TYPE::WALInsert), key_length(key.size()),
-        value_length(val.size()) {
-    std::memcpy(payload, key.data(), key_length);
-    std::memcpy(payload + key_length, val.data(), value_length);
+      : WALPayload(TYPE::WALInsert), mKeySize(key.size()),
+        mValSize(val.size()) {
+    std::memcpy(payload, key.data(), mKeySize);
+    std::memcpy(payload + mKeySize, val.data(), mValSize);
   }
 
   Slice GetKey() {
-    return Slice(payload, key_length);
+    return Slice(payload, mKeySize);
   }
 
   Slice GetVal() {
-    return Slice(payload + key_length, value_length);
+    return Slice(payload + mKeySize, mValSize);
   }
 
   virtual std::unique_ptr<rapidjson::Document> ToJSON() override {
     auto doc = WALPayload::ToJSON();
 
-    // key_length
+    // mKeySize
     {
       rapidjson::Value member;
-      member.SetUint64(key_length);
-      doc->AddMember("key_length", member, doc->GetAllocator());
+      member.SetUint64(mKeySize);
+      doc->AddMember("mKeySize", member, doc->GetAllocator());
     }
 
-    // value_length
+    // mValSize
     {
       rapidjson::Value member;
-      member.SetUint64(value_length);
-      doc->AddMember("value_length", member, doc->GetAllocator());
+      member.SetUint64(mValSize);
+      doc->AddMember("mValSize", member, doc->GetAllocator());
     }
 
     // payload
     {
       rapidjson::Value member;
       member.SetString(reinterpret_cast<const char*>(payload),
-                       key_length + value_length, doc->GetAllocator());
+                       mKeySize + mValSize, doc->GetAllocator());
       doc->AddMember("payload", member, doc->GetAllocator());
     }
 
@@ -193,12 +193,23 @@ struct WALInsert : WALPayload {
 
 // WAL for BTreeVI
 struct WALUpdateSSIP : WALPayload {
-  u16 key_length;
+  u16 mKeySize;
   u64 delta_length;
-  WORKERID before_worker_id;
-  TXID before_tx_id;
-  TXID before_command_id;
+  WORKERID mPrevWorkerId;
+  TXID mPrevTxId;
+  COMMANDID mPrevCommandId;
   u8 payload[];
+
+  WALUpdateSSIP(Slice key, UpdateSameSizeInPlaceDescriptor& updateDescriptor,
+                u64 deltaSize, WORKERID prevWorkerId, TXID prevTxId,
+                COMMANDID prevCommandId)
+      : WALPayload(TYPE::WALUpdate), mKeySize(key.size()),
+        delta_length(deltaSize), mPrevWorkerId(prevWorkerId),
+        mPrevTxId(prevTxId), mPrevCommandId(prevCommandId) {
+    std::memcpy(payload, key.data(), key.size());
+    std::memcpy(payload + key.size(), &updateDescriptor,
+                updateDescriptor.size());
+  }
 };
 
 } // namespace btree

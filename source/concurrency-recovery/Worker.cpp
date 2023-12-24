@@ -118,7 +118,7 @@ void Worker::commitTX() {
   if (activeTX().isDurable()) {
     {
       utils::Timer timer(CRCounters::myCounters().cc_ms_commit_tx);
-      command_id = 0; // Reset command_id only on commit and never on abort
+      mCommandId = 0; // Reset mCommandId only on commit and never on abort
 
       DCHECK(mActiveTx.state == TX_STATE::STARTED);
       if (FLAGS_wal_tuple_rfa) {
@@ -186,7 +186,7 @@ void Worker::abortTX() {
   ENSURE(!mActiveTx.mWalExceedBuffer);
   ENSURE(mActiveTx.state == TX_STATE::STARTED);
 
-  const u64 tx_id = mActiveTx.startTS();
+  const u64 txId = mActiveTx.startTS();
   std::vector<const WALEntry*> entries;
   mLogging.iterateOverCurrentTXEntries([&](const WALEntry& entry) {
     if (entry.type == WALEntry::TYPE::COMPLEX) {
@@ -194,9 +194,9 @@ void Worker::abortTX() {
     }
   });
   std::for_each(entries.rbegin(), entries.rend(), [&](const WALEntry* entry) {
-    const auto& dt_entry = *reinterpret_cast<const WALEntryComplex*>(entry);
-    leanstore::storage::TreeRegistry::sInstance->undo(dt_entry.mTreeId,
-                                                      dt_entry.payload, tx_id);
+    const auto& complexEntry = *reinterpret_cast<const WALEntryComplex*>(entry);
+    leanstore::storage::TreeRegistry::sInstance->undo(
+        complexEntry.mTreeId, complexEntry.payload, txId);
   });
 
   cc.mHistoryTree.purgeVersions(

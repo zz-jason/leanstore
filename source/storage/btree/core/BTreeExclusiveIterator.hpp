@@ -53,15 +53,14 @@ public:
     }
   }
 
-  virtual OP_RESULT enoughSpaceInCurrentNode(const u16 key_length,
-                                             const u16 value_length) {
-    return (mGuardedLeaf->canInsert(key_length, value_length))
+  virtual OP_RESULT enoughSpaceInCurrentNode(const u16 keySize,
+                                             const u16 valSize) {
+    return (mGuardedLeaf->canInsert(keySize, valSize))
                ? OP_RESULT::OK
                : OP_RESULT::NOT_ENOUGH_SPACE;
   }
-  virtual OP_RESULT enoughSpaceInCurrentNode(Slice key,
-                                             const u16 value_length) {
-    return (mGuardedLeaf->canInsert(key.length(), value_length))
+  virtual OP_RESULT enoughSpaceInCurrentNode(Slice key, const u16 valSize) {
+    return (mGuardedLeaf->canInsert(key.size(), valSize))
                ? OP_RESULT::OK
                : OP_RESULT::NOT_ENOUGH_SPACE;
   }
@@ -157,7 +156,7 @@ public:
     return true;
   }
 
-  virtual MutableSlice mutableValue() {
+  virtual MutableSlice MutableVal() {
     return MutableSlice(mGuardedLeaf->ValData(mSlotId),
                         mGuardedLeaf->ValSize(mSlotId));
   }

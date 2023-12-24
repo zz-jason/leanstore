@@ -148,11 +148,11 @@ synclwm : {
     // PURGE!
     CRManager::sInstance->mHistoryTreePtr->purgeVersions(
         Worker::my().mWorkerId, 0, local_all_lwm - 1,
-        [&](const TXID tx_id, const TREEID treeId, const u8* version_payload,
+        [&](const TXID txId, const TREEID treeId, const u8* version_payload,
             [[maybe_unused]] u64 version_payload_length,
             const bool called_before) {
           leanstore::storage::TreeRegistry::sInstance->todo(
-              treeId, version_payload, Worker::my().mWorkerId, tx_id,
+              treeId, version_payload, Worker::my().mWorkerId, txId,
               called_before);
           COUNTERS_BLOCK() {
             WorkerCounters::myCounters().cc_todo_olap_executed[treeId]++;
@@ -170,13 +170,13 @@ synclwm : {
           cleaned_untill_oltp_lwm > 0 ? cleaned_untill_oltp_lwm : 0;
       CRManager::sInstance->mHistoryTreePtr->visitRemoveVersions(
           Worker::my().mWorkerId, fromTxId, local_oltp_lwm - 1,
-          [&](const TXID tx_id, const TREEID treeId, const u8* version_payload,
+          [&](const TXID txId, const TREEID treeId, const u8* version_payload,
               [[maybe_unused]] u64 version_payload_length,
               const bool called_before) {
             cleaned_untill_oltp_lwm =
-                std::max(cleaned_untill_oltp_lwm, tx_id + 1);
+                std::max(cleaned_untill_oltp_lwm, txId + 1);
             leanstore::storage::TreeRegistry::sInstance->todo(
-                treeId, version_payload, Worker::my().mWorkerId, tx_id,
+                treeId, version_payload, Worker::my().mWorkerId, txId,
                 called_before);
             COUNTERS_BLOCK() {
               WorkerCounters::myCounters().cc_todo_oltp_executed[treeId]++;
@@ -206,7 +206,7 @@ TXID ConcurrencyControl::getCommitTimestamp(WORKERID workerId, TXID txTs) {
   if (txTs & MSB) {
     return txTs & MSB_MASK;
   }
-  DCHECK((txTs & MSB) || isVisibleForMe(workerId, txTs));
+  DCHECK((txTs & MSB) || VisibleForMe(workerId, txTs));
   const TXID& startTs = txTs;
   TXID lcb = other(workerId).commit_tree.LCB(startTs);
   TXID commitTs =
@@ -215,10 +215,8 @@ TXID ConcurrencyControl::getCommitTimestamp(WORKERID workerId, TXID txTs) {
   return commitTs;
 }
 
-// It is also used to check whether the tuple is write-locked, hence we need the
-// toWrite intention flag
-bool ConcurrencyControl::isVisibleForMe(WORKERID workerId, u64 txId,
-                                        bool toWrite) {
+bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId,
+                                      bool toWrite) {
   const bool isCommitTs = txId & MSB;
   const TXID commitTs = isCommitTs ? (txId & MSB_MASK) : 0;
   const TXID startTs = txId & MSB_MASK;
