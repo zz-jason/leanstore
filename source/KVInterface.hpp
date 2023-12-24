@@ -15,37 +15,61 @@ enum class OP_RESULT : u8 {
   OTHER = 5
 };
 
+inline std::string ToString(OP_RESULT result) {
+  switch (result) {
+  case OP_RESULT::OK: {
+    return "OK";
+  }
+  case OP_RESULT::NOT_FOUND: {
+    return "NOT_FOUND";
+  }
+  case OP_RESULT::DUPLICATE: {
+    return "DUPLICATE";
+  }
+  case OP_RESULT::ABORT_TX: {
+    return "ABORT_TX";
+  }
+  case OP_RESULT::NOT_ENOUGH_SPACE: {
+    return "NOT_ENOUGH_SPACE";
+  }
+  case OP_RESULT::OTHER: {
+    return "OTHER";
+  }
+  }
+  return "Unknown OP_RESULT";
+}
+
+class UpdateDiffSlot {
+public:
+  u16 offset = 0;
+
+  u16 length = 0;
+
+public:
+  bool operator==(const UpdateDiffSlot& other) const {
+    return offset == other.offset && length == other.length;
+  }
+};
+
+/// Memory layout:
+/// ---------------------------------------
+/// | N | UpdateDiffSlot 0..N | diff 0..N |
+/// ---------------------------------------
 class UpdateSameSizeInPlaceDescriptor {
 public:
-  class Slot {
-  public:
-    u16 offset;
-    u16 length;
-
-    bool operator==(const Slot& other) const {
-      return offset == other.offset && length == other.length;
-    }
-  };
-
   u8 count = 0;
-  Slot slots[];
 
+  UpdateDiffSlot mDiffSlots[];
+
+public:
   u64 size() const {
     u64 totalSize = sizeof(UpdateSameSizeInPlaceDescriptor);
-    totalSize += (count * sizeof(UpdateSameSizeInPlaceDescriptor::Slot));
+    totalSize += (count * sizeof(UpdateDiffSlot));
     return totalSize;
   }
 
-  u64 diffLength() const {
-    u64 length = 0;
-    for (u8 i = 0; i < count; i++) {
-      length += slots[i].length;
-    }
-    return length;
-  }
-
-  u64 totalLength() const {
-    return size() + diffLength();
+  u64 TotalSize() const {
+    return size() + diffSize();
   }
 
   bool operator==(const UpdateSameSizeInPlaceDescriptor& other) {
@@ -54,11 +78,20 @@ public:
     }
 
     for (u8 i = 0; i < count; i++) {
-      if (slots[i].offset != other.slots[i].offset ||
-          slots[i].length != other.slots[i].length)
+      if (mDiffSlots[i].offset != other.mDiffSlots[i].offset ||
+          mDiffSlots[i].length != other.mDiffSlots[i].length)
         return false;
     }
     return true;
+  }
+
+private:
+  u64 diffSize() const {
+    u64 length = 0;
+    for (u8 i = 0; i < count; i++) {
+      length += mDiffSlots[i].length;
+    }
+    return length;
   }
 };
 

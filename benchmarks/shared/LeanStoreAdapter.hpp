@@ -62,9 +62,9 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     u16 folded_key_len = Record::foldKey(folded_key, key);
     OP_RESULT ret = btree->scanDesc(
         folded_key, folded_key_len,
-        [&](const u8* key, [[maybe_unused]] u16 key_length, const u8* payload,
+        [&](const u8* key, [[maybe_unused]] u16 keySize, const u8* payload,
             [[maybe_unused]] u16 payload_length) {
-          if (key_length != folded_key_len) {
+          if (keySize != folded_key_len) {
             return false;
           }
           typename Record::Key typed_key;
@@ -118,8 +118,8 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
       DCHECK(update_descriptor.count > 0);
       DCHECK(!FLAGS_vi_fat_tuple);
       update_descriptor.count = 1;
-      update_descriptor.slots[0].offset = 0;
-      update_descriptor.slots[0].length = sizeof(Record);
+      update_descriptor.mDiffSlots[0].offset = 0;
+      update_descriptor.mDiffSlots[0].length = sizeof(Record);
     }
     // -------------------------------------------------------------------------------------
     const OP_RESULT res = btree->updateSameSizeInPlace(
@@ -155,9 +155,8 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     u16 folded_key_len = Record::foldKey(folded_key, key);
     OP_RESULT ret = btree->scanAsc(
         folded_key, folded_key_len,
-        [&](const u8* key, u16 key_length, const u8* payload,
-            u16 payload_length) {
-          if (key_length != folded_key_len) {
+        [&](const u8* key, u16 keySize, const u8* payload, u16 payload_length) {
+          if (keySize != folded_key_len) {
             return false;
           }
           static_cast<void>(payload_length);

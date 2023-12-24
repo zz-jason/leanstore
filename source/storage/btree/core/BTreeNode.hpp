@@ -526,10 +526,10 @@ public:
   s16 insertDoNotCopyPayload(Slice key, u16 valSize, s32 pos = -1);
 
   s32 insert(Slice key, Slice val);
-  static u16 spaceNeeded(u16 keyLength, u16 valSize, u16 prefixLength);
-  u16 spaceNeeded(u16 key_length, u16 valSize);
-  bool canInsert(u16 key_length, u16 valSize);
-  bool prepareInsert(u16 keyLength, u16 valSize);
+  static u16 spaceNeeded(u16 keySize, u16 valSize, u16 prefixLength);
+  u16 spaceNeeded(u16 keySize, u16 valSize);
+  bool canInsert(u16 keySize, u16 valSize);
+  bool prepareInsert(u16 keySize, u16 valSize);
 
   void compactify();
 

@@ -277,7 +277,7 @@ OP_RESULT BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
         iterator.mGuardedLeaf->insertDoNotCopyPayload(
             Slice(keyBuffer, o_key_length), o_value_length, pos);
         iterator.mSlotId = pos;
-        o_value(iterator.mutableValue().data());
+        o_value(iterator.MutableVal().data());
         iterator.MarkAsDirty();
         COUNTERS_BLOCK() {
           WorkerCounters::myCounters().dt_append_opt[mTreeId]++;
@@ -306,7 +306,7 @@ OP_RESULT BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
       }
       o_key(keyBuffer);
       iterator.insertInCurrentNode(key, o_value_length);
-      o_value(iterator.mutableValue().data());
+      o_value(iterator.MutableVal().data());
       iterator.MarkAsDirty();
       // -------------------------------------------------------------------------------------
       Session* session = nullptr;
@@ -330,7 +330,7 @@ OP_RESULT BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
 
 OP_RESULT BTreeLL::updateSameSizeInPlace(
     Slice key, ValCallback callback,
-    UpdateSameSizeInPlaceDescriptor& update_descriptor) {
+    UpdateSameSizeInPlaceDescriptor& updateDescriptor) {
   cr::activeTX().markAsWrite();
   if (config.mEnableWal) {
     cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);
@@ -342,27 +342,26 @@ OP_RESULT BTreeLL::updateSameSizeInPlace(
     if (ret != OP_RESULT::OK) {
       JUMPMU_RETURN ret;
     }
-    auto current_value = iterator.mutableValue();
+    auto current_value = iterator.MutableVal();
     if (config.mEnableWal) {
       // if it is a secondary index, then we can not use updateSameSize
-      assert(update_descriptor.count > 0);
+      assert(updateDescriptor.count > 0);
 
-      const u16 delta_length =
-          update_descriptor.size() + update_descriptor.diffLength();
+      const u16 delta_length = updateDescriptor.TotalSize();
       auto walHandler = iterator.mGuardedLeaf.ReserveWALPayload<WALUpdate>(
           key.length() + delta_length);
       walHandler->type = WALPayload::TYPE::WALUpdate;
-      walHandler->key_length = key.length();
+      walHandler->mKeySize = key.length();
       walHandler->delta_length = delta_length;
       u8* wal_ptr = walHandler->payload;
       std::memcpy(wal_ptr, key.data(), key.length());
       wal_ptr += key.length();
-      std::memcpy(wal_ptr, &update_descriptor, update_descriptor.size());
-      wal_ptr += update_descriptor.size();
-      generateDiff(update_descriptor, wal_ptr, current_value.data());
+      std::memcpy(wal_ptr, &updateDescriptor, updateDescriptor.size());
+      wal_ptr += updateDescriptor.size();
+      generateDiff(updateDescriptor, wal_ptr, current_value.data());
       // The actual update by the client
       callback(current_value.Immutable());
-      generateXORDiff(update_descriptor, wal_ptr, current_value.data());
+      generateXORDiff(updateDescriptor, wal_ptr, current_value.data());
       walHandler.SubmitWal();
     } else {
       callback(current_value.Immutable());
@@ -511,50 +510,49 @@ u64 BTreeLL::getHeight() {
 }
 
 void BTreeLL::generateDiff(
-    const UpdateSameSizeInPlaceDescriptor& update_descriptor, u8* dst,
+    const UpdateSameSizeInPlaceDescriptor& updateDescriptor, u8* dst,
     const u8* src) {
-  u64 dst_offset = 0;
-  for (u64 a_i = 0; a_i < update_descriptor.count; a_i++) {
-    const auto& slot = update_descriptor.slots[a_i];
-    std::memcpy(dst + dst_offset, src + slot.offset, slot.length);
-    dst_offset += slot.length;
+  u64 dstOffset = 0;
+  for (u64 i = 0; i < updateDescriptor.count; i++) {
+    const auto& slot = updateDescriptor.mDiffSlots[i];
+    std::memcpy(dst + dstOffset, src + slot.offset, slot.length);
+    dstOffset += slot.length;
   }
 }
 
-void BTreeLL::applyDiff(
-    const UpdateSameSizeInPlaceDescriptor& update_descriptor, u8* dst,
-    const u8* src) {
-  u64 src_offset = 0;
-  for (u64 a_i = 0; a_i < update_descriptor.count; a_i++) {
-    const auto& slot = update_descriptor.slots[a_i];
-    std::memcpy(dst + slot.offset, src + src_offset, slot.length);
-    src_offset += slot.length;
+void BTreeLL::applyDiff(const UpdateSameSizeInPlaceDescriptor& updateDescriptor,
+                        u8* dst, const u8* src) {
+  u64 srcOffset = 0;
+  for (u64 i = 0; i < updateDescriptor.count; i++) {
+    const auto& slot = updateDescriptor.mDiffSlots[i];
+    std::memcpy(dst + slot.offset, src + srcOffset, slot.length);
+    srcOffset += slot.length;
   }
 }
 
 void BTreeLL::generateXORDiff(
-    const UpdateSameSizeInPlaceDescriptor& update_descriptor, u8* dst,
+    const UpdateSameSizeInPlaceDescriptor& updateDescriptor, u8* dst,
     const u8* src) {
-  u64 dst_offset = 0;
-  for (u64 a_i = 0; a_i < update_descriptor.count; a_i++) {
-    const auto& slot = update_descriptor.slots[a_i];
-    for (u64 b_i = 0; b_i < slot.length; b_i++) {
-      *(dst + dst_offset + b_i) ^= *(src + slot.offset + b_i);
+  u64 dstOffset = 0;
+  for (u64 i = 0; i < updateDescriptor.count; i++) {
+    const auto& slot = updateDescriptor.mDiffSlots[i];
+    for (u64 j = 0; j < slot.length; j++) {
+      dst[dstOffset + j] ^= src[slot.offset + j];
     }
-    dst_offset += slot.length;
+    dstOffset += slot.length;
   }
 }
 
 void BTreeLL::applyXORDiff(
-    const UpdateSameSizeInPlaceDescriptor& update_descriptor, u8* dst,
+    const UpdateSameSizeInPlaceDescriptor& updateDescriptor, u8* dst,
     const u8* src) {
-  u64 src_offset = 0;
-  for (u64 a_i = 0; a_i < update_descriptor.count; a_i++) {
-    const auto& slot = update_descriptor.slots[a_i];
-    for (u64 b_i = 0; b_i < slot.length; b_i++) {
-      *(dst + slot.offset + b_i) ^= *(src + src_offset + b_i);
+  u64 srcOffset = 0;
+  for (u64 i = 0; i < updateDescriptor.count; i++) {
+    const auto& slot = updateDescriptor.mDiffSlots[i];
+    for (u64 j = 0; j < slot.length; j++) {
+      dst[slot.offset + j] ^= src[srcOffset + j];
     }
-    src_offset += slot.length;
+    srcOffset += slot.length;
   }
 }
 

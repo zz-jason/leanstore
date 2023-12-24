@@ -16,8 +16,7 @@
 // updating in a fixed-size value
 #define UpdateDescriptorInit(Name, Count)                                      \
   u8 Name##_buffer[sizeof(leanstore::UpdateSameSizeInPlaceDescriptor) +        \
-                   (sizeof(leanstore::UpdateSameSizeInPlaceDescriptor::Slot) * \
-                    Count)];                                                   \
+                   (sizeof(leanstore::UpdateDiffSlot) * Count)];               \
   auto& Name = *reinterpret_cast<leanstore::UpdateSameSizeInPlaceDescriptor*>( \
       Name##_buffer);                                                          \
   Name.count = Count;

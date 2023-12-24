@@ -47,14 +47,13 @@ public:
   std::unique_ptr<BTreeLL*[]> update_btrees;
   std::unique_ptr<BTreeLL*[]> remove_btrees;
 
-  virtual void insertVersion(WORKERID workerId, TXID tx_id,
-                             COMMANDID command_id, TREEID treeId,
-                             bool is_remove, u64 payload_length,
+  virtual void insertVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
+                             TREEID treeId, bool isRemove, u64 payload_length,
                              std::function<void(u8*)> cb,
                              bool same_thread) override;
 
   virtual bool retrieveVersion(
-      WORKERID workerId, TXID tx_id, COMMANDID command_id, const bool is_remove,
+      WORKERID workerId, TXID txId, COMMANDID commandId, const bool isRemove,
       std::function<void(const u8*, u64 payload_length)> cb) override;
 
   virtual void purgeVersions(WORKERID workerId, TXID from_tx_id, TXID to_tx_id,
