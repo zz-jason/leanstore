@@ -15,10 +15,9 @@
 // Helpers to generate a descriptor that describes which attributes are in-place
 // updating in a fixed-size value
 #define UpdateDescriptorInit(Name, Count)                                      \
-  u8 Name##_buffer[sizeof(leanstore::UpdateSameSizeInPlaceDescriptor) +        \
+  u8 Name##_buffer[sizeof(leanstore::UpdateDesc) +                             \
                    (sizeof(leanstore::UpdateDiffSlot) * Count)];               \
-  auto& Name = *reinterpret_cast<leanstore::UpdateSameSizeInPlaceDescriptor*>( \
-      Name##_buffer);                                                          \
+  auto& Name = *reinterpret_cast<leanstore::UpdateDesc*>(Name##_buffer);       \
   Name.count = Count;
 
 #define UpdateDescriptorFillSlot(Name, Index, Type, Attribute)                 \
@@ -74,7 +73,7 @@ public:
   virtual void update1(
       const typename Record::Key& key,
       const std::function<void(Record&)>& update_the_record_in_place_cb,
-      leanstore::UpdateSameSizeInPlaceDescriptor& update_descriptor) = 0;
+      leanstore::UpdateDesc& update_descriptor) = 0;
   // -------------------------------------------------------------------------------------
   // Returns false if the record was not found
   virtual bool erase(const typename Record::Key& key) = 0;

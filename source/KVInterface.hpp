@@ -2,6 +2,7 @@
 
 #include "Units.hpp"
 
+#include <cstring>
 #include <functional>
 
 namespace leanstore {
@@ -55,7 +56,7 @@ public:
 /// ---------------------------------------
 /// | N | UpdateDiffSlot 0..N | diff 0..N |
 /// ---------------------------------------
-class UpdateSameSizeInPlaceDescriptor {
+class UpdateDesc {
 public:
   u8 count = 0;
 
@@ -63,7 +64,7 @@ public:
 
 public:
   u64 size() const {
-    u64 totalSize = sizeof(UpdateSameSizeInPlaceDescriptor);
+    u64 totalSize = sizeof(UpdateDesc);
     totalSize += (count * sizeof(UpdateDiffSlot));
     return totalSize;
   }
@@ -72,7 +73,7 @@ public:
     return size() + diffSize();
   }
 
-  bool operator==(const UpdateSameSizeInPlaceDescriptor& other) {
+  bool operator==(const UpdateDesc& other) {
     if (count != other.count) {
       return false;
     }
@@ -85,6 +86,45 @@ public:
     return true;
   }
 
+  void GenerateDiff(u8* dst, const u8* src) const {
+    u64 dstOffset = 0;
+    for (u64 i = 0; i < count; i++) {
+      const auto& slot = mDiffSlots[i];
+      std::memcpy(dst + dstOffset, src + slot.offset, slot.length);
+      dstOffset += slot.length;
+    }
+  }
+
+  void GenerateXORDiff(u8* dst, const u8* src) const {
+    u64 dstOffset = 0;
+    for (u64 i = 0; i < count; i++) {
+      const auto& slot = mDiffSlots[i];
+      for (u64 j = 0; j < slot.length; j++) {
+        dst[dstOffset + j] ^= src[slot.offset + j];
+      }
+      dstOffset += slot.length;
+    }
+  }
+  void ApplyDiff(u8* dst, const u8* src) const {
+    u64 srcOffset = 0;
+    for (u64 i = 0; i < count; i++) {
+      const auto& slot = mDiffSlots[i];
+      std::memcpy(dst + slot.offset, src + srcOffset, slot.length);
+      srcOffset += slot.length;
+    }
+  }
+
+  void ApplyXORDiff(u8* dst, const u8* src) const {
+    u64 srcOffset = 0;
+    for (u64 i = 0; i < count; i++) {
+      const auto& slot = mDiffSlots[i];
+      for (u64 j = 0; j < slot.length; j++) {
+        dst[slot.offset + j] ^= src[srcOffset + j];
+      }
+      srcOffset += slot.length;
+    }
+  }
+
 private:
   u64 diffSize() const {
     u64 length = 0;
@@ -92,6 +132,11 @@ private:
       length += mDiffSlots[i].length;
     }
     return length;
+  }
+
+public:
+  inline static const UpdateDesc* From(const u8* buffer) {
+    return reinterpret_cast<const UpdateDesc*>(buffer);
   }
 };
 
@@ -105,7 +150,7 @@ public:
   virtual OP_RESULT Lookup(Slice key, ValCallback valCallback) = 0;
   virtual OP_RESULT insert(Slice key, Slice val) = 0;
   virtual OP_RESULT updateSameSizeInPlace(Slice key, ValCallback valCallback,
-                                          UpdateSameSizeInPlaceDescriptor&) = 0;
+                                          UpdateDesc&) = 0;
   virtual OP_RESULT remove(Slice key) = 0;
   virtual OP_RESULT scanAsc(Slice startKey, ScanCallback callback) = 0;
   virtual OP_RESULT scanDesc(Slice startKey, ScanCallback callback) = 0;

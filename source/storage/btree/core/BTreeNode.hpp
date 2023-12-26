@@ -133,8 +133,6 @@ public:
   }
 };
 
-class BTreeVisitor;
-
 class BTreeNode : public BTreeNodeHeader {
 public:
   struct __attribute__((packed)) Slot {
@@ -238,7 +236,7 @@ public:
 
   // Attention: the caller has to hold a copy of the existing payload
   inline void shortenPayload(u16 slotId, u16 len) {
-    assert(len <= slot[slotId].mValSize);
+    DCHECK(len <= slot[slotId].mValSize);
     const u16 freed_space = slot[slotId].mValSize - len;
     mSpaceUsed -= freed_space;
     slot[slotId].mValSize = len;
@@ -561,8 +559,6 @@ public:
   bool removeSlot(u16 slotId);
   bool remove(Slice key);
   void reset();
-
-  void Accept(BTreeVisitor* visitor);
 
   void ToJSON(rapidjson::Value* resultObj,
               rapidjson::Value::AllocatorType& allocator);

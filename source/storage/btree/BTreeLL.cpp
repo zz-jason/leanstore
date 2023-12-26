@@ -23,16 +23,6 @@ OP_RESULT BTreeLL::Lookup(Slice key, ValCallback valCallback) {
     JUMPMU_TRY() {
       GuardedBufferFrame<BTreeNode> guardedLeaf;
       FindLeafCanJump(key, guardedLeaf);
-
-      DEBUG_BLOCK() {
-        s16 sanity_check_result = guardedLeaf->compareKeyWithBoundaries(key);
-        guardedLeaf.JumpIfModifiedByOthers();
-        if (sanity_check_result != 0) {
-          cout << guardedLeaf->mNumSeps << endl;
-        }
-        ENSURE(sanity_check_result == 0);
-      }
-
       s16 slotId = guardedLeaf->lowerBound<true>(key);
       if (slotId != -1) {
         valCallback(guardedLeaf->Value(slotId));
@@ -328,46 +318,43 @@ OP_RESULT BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
   }
 }
 
-OP_RESULT BTreeLL::updateSameSizeInPlace(
-    Slice key, ValCallback callback,
-    UpdateSameSizeInPlaceDescriptor& updateDescriptor) {
+OP_RESULT BTreeLL::updateSameSizeInPlace(Slice key, ValCallback callback,
+                                         UpdateDesc& updateDesc) {
+  DCHECK(cr::Worker::my().IsTxStarted());
   cr::activeTX().markAsWrite();
   if (config.mEnableWal) {
-    cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);
+    cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size);
   }
 
   JUMPMU_TRY() {
-    BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
-    auto ret = iterator.seekExact(key);
+    BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
+    auto ret = xIter.seekExact(key);
     if (ret != OP_RESULT::OK) {
       JUMPMU_RETURN ret;
     }
-    auto current_value = iterator.MutableVal();
+    auto currentVal = xIter.MutableVal();
     if (config.mEnableWal) {
       // if it is a secondary index, then we can not use updateSameSize
-      assert(updateDescriptor.count > 0);
-
-      const u16 delta_length = updateDescriptor.TotalSize();
-      auto walHandler = iterator.mGuardedLeaf.ReserveWALPayload<WALUpdate>(
-          key.length() + delta_length);
+      DCHECK(updateDesc.count > 0);
+      auto deltaPayloadSize = updateDesc.TotalSize();
+      auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WALUpdate>(
+          key.length() + deltaPayloadSize);
       walHandler->type = WALPayload::TYPE::WALUpdate;
       walHandler->mKeySize = key.length();
-      walHandler->delta_length = delta_length;
-      u8* wal_ptr = walHandler->payload;
-      std::memcpy(wal_ptr, key.data(), key.length());
-      wal_ptr += key.length();
-      std::memcpy(wal_ptr, &updateDescriptor, updateDescriptor.size());
-      wal_ptr += updateDescriptor.size();
-      generateDiff(updateDescriptor, wal_ptr, current_value.data());
-      // The actual update by the client
-      callback(current_value.Immutable());
-      generateXORDiff(updateDescriptor, wal_ptr, current_value.data());
+      walHandler->delta_length = deltaPayloadSize;
+      u8* walPtr = walHandler->payload;
+      std::memcpy(walPtr, key.data(), key.length());
+      walPtr += key.length();
+      std::memcpy(walPtr, &updateDesc, updateDesc.size());
+      walPtr += updateDesc.size();
+      updateDesc.GenerateDiff(walPtr, currentVal.data());
+      updateDesc.GenerateXORDiff(walPtr, currentVal.data());
       walHandler.SubmitWal();
-    } else {
-      callback(current_value.Immutable());
-      iterator.MarkAsDirty();
     }
-    iterator.UpdateContentionStats();
+    // The actual update by the client
+    callback(currentVal.Immutable());
+    xIter.MarkAsDirty();
+    xIter.UpdateContentionStats();
     JUMPMU_RETURN OP_RESULT::OK;
   }
   JUMPMU_CATCH() {
@@ -379,7 +366,7 @@ OP_RESULT BTreeLL::updateSameSizeInPlace(
 OP_RESULT BTreeLL::remove(Slice key) {
   cr::activeTX().markAsWrite();
   if (config.mEnableWal) {
-    cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);
+    cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size);
   }
   JUMPMU_TRY() {
     BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
@@ -393,10 +380,8 @@ OP_RESULT BTreeLL::remove(Slice key) {
       auto walHandler = iterator.mGuardedLeaf.ReserveWALPayload<WALRemove>(
           key.size() + value.size(), key, value);
       walHandler.SubmitWal();
-      iterator.MarkAsDirty();
-    } else {
-      iterator.MarkAsDirty();
     }
+    iterator.MarkAsDirty();
     ret = iterator.removeCurrent();
     ENSURE(ret == OP_RESULT::OK);
     iterator.mergeIfNeeded();
@@ -507,53 +492,6 @@ u64 BTreeLL::countPages() {
 
 u64 BTreeLL::getHeight() {
   return BTreeGeneric::getHeight();
-}
-
-void BTreeLL::generateDiff(
-    const UpdateSameSizeInPlaceDescriptor& updateDescriptor, u8* dst,
-    const u8* src) {
-  u64 dstOffset = 0;
-  for (u64 i = 0; i < updateDescriptor.count; i++) {
-    const auto& slot = updateDescriptor.mDiffSlots[i];
-    std::memcpy(dst + dstOffset, src + slot.offset, slot.length);
-    dstOffset += slot.length;
-  }
-}
-
-void BTreeLL::applyDiff(const UpdateSameSizeInPlaceDescriptor& updateDescriptor,
-                        u8* dst, const u8* src) {
-  u64 srcOffset = 0;
-  for (u64 i = 0; i < updateDescriptor.count; i++) {
-    const auto& slot = updateDescriptor.mDiffSlots[i];
-    std::memcpy(dst + slot.offset, src + srcOffset, slot.length);
-    srcOffset += slot.length;
-  }
-}
-
-void BTreeLL::generateXORDiff(
-    const UpdateSameSizeInPlaceDescriptor& updateDescriptor, u8* dst,
-    const u8* src) {
-  u64 dstOffset = 0;
-  for (u64 i = 0; i < updateDescriptor.count; i++) {
-    const auto& slot = updateDescriptor.mDiffSlots[i];
-    for (u64 j = 0; j < slot.length; j++) {
-      dst[dstOffset + j] ^= src[slot.offset + j];
-    }
-    dstOffset += slot.length;
-  }
-}
-
-void BTreeLL::applyXORDiff(
-    const UpdateSameSizeInPlaceDescriptor& updateDescriptor, u8* dst,
-    const u8* src) {
-  u64 srcOffset = 0;
-  for (u64 i = 0; i < updateDescriptor.count; i++) {
-    const auto& slot = updateDescriptor.mDiffSlots[i];
-    for (u64 j = 0; j < slot.length; j++) {
-      dst[slot.offset + j] ^= src[srcOffset + j];
-    }
-    srcOffset += slot.length;
-  }
 }
 
 } // namespace btree

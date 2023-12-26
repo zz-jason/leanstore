@@ -18,55 +18,6 @@ namespace leanstore {
 namespace storage {
 namespace btree {
 
-struct __attribute__((packed)) DanglingPointer {
-  BufferFrame* bf = nullptr;
-  u64 latch_version_should_be = -1;
-  s32 head_slot = -1;
-};
-
-struct __attribute__((packed)) Version {
-  enum class TYPE : u8 { UPDATE, REMOVE };
-
-  TYPE type;
-
-  WORKERID mWorkerId;
-
-  TXID mTxId;
-
-  COMMANDID mCommandId;
-
-  Version(TYPE type, WORKERID workerId, TXID txId, COMMANDID commandId)
-      : type(type), mWorkerId(workerId), mTxId(txId), mCommandId(commandId) {
-  }
-};
-
-struct __attribute__((packed)) UpdateVersion : Version {
-  u8 is_delta : 1;
-  u8 payload[]; // UpdateDescriptor + Diff
-
-  UpdateVersion(WORKERID workerId, TXID txId, COMMANDID commandId, bool isDelta)
-      : Version(Version::TYPE::UPDATE, workerId, txId, commandId),
-        is_delta(isDelta) {
-  }
-
-  bool isFinal() const {
-    return mCommandId == 0;
-  }
-};
-
-struct __attribute__((packed)) RemoveVersion : Version {
-  u16 mKeySize;
-  u16 mValSize;
-  DanglingPointer dangling_pointer;
-  bool moved_to_graveway = false;
-  u8 payload[]; // Key + Value
-  RemoveVersion(WORKERID workerId, TXID txId, COMMANDID commandId, u16 keySize,
-                u16 valSize)
-      : Version(Version::TYPE::REMOVE, workerId, txId, commandId),
-        mKeySize(keySize), mValSize(valSize) {
-  }
-};
-
 class BTreeVI : public BTreeLL {
 public:
   struct WALRemove : WALPayload {
@@ -103,9 +54,8 @@ public:
   //---------------------------------------------------------------------------
   virtual OP_RESULT Lookup(Slice key, ValCallback valCallback) override;
   virtual OP_RESULT insert(Slice key, Slice val) override;
-  virtual OP_RESULT updateSameSizeInPlace(
-      Slice key, ValCallback valCallback,
-      UpdateSameSizeInPlaceDescriptor&) override;
+  virtual OP_RESULT updateSameSizeInPlace(Slice key, ValCallback valCallback,
+                                          UpdateDesc&) override;
   virtual OP_RESULT remove(Slice key) override;
   virtual OP_RESULT scanAsc(Slice startKey, ScanCallback) override;
   virtual OP_RESULT scanDesc(Slice startKey, ScanCallback) override;
@@ -146,7 +96,7 @@ public:
     for (u16 i = 0; i < guardedNode->mNumSeps; i++) {
       auto& tuple = *reinterpret_cast<Tuple*>(guardedNode->ValData(i));
       if (tuple.mFormat == TupleFormat::FAT) {
-        auto& fatTuple = *reinterpret_cast<FatTuple*>(guardedNode->ValData(i));
+        auto& fatTuple = *FatTuple::From(guardedNode->ValData(i));
         const u32 newLength = fatTuple.mValSize + sizeof(ChainedTuple);
         fatTuple.convertToChained(mTreeId);
         DCHECK(newLength < guardedNode->ValSize(i));
@@ -194,23 +144,21 @@ public:
         BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
         OP_RESULT ret = iterator.seekExact(key);
         ENSURE(ret == OP_RESULT::OK);
-        auto& tuple = *reinterpret_cast<Tuple*>(iterator.MutableVal().data());
+        auto rawVal = iterator.MutableVal();
+        auto& tuple = *Tuple::From(rawVal.data());
         ENSURE(!tuple.IsWriteLocked());
         if (tuple.mFormat == TupleFormat::FAT) {
-          reinterpret_cast<FatTuple*>(iterator.MutableVal().data())
-              ->undoLastUpdate();
+          FatTuple::From(rawVal.data())->undoLastUpdate();
         } else {
-          auto& chain_head =
-              *reinterpret_cast<ChainedTuple*>(iterator.MutableVal().data());
-          chain_head.mWorkerId = update_entry.mPrevWorkerId;
-          chain_head.mTxId = update_entry.mPrevTxId;
-          chain_head.mCommandId = update_entry.mPrevCommandId;
-          const auto& update_descriptor =
-              *reinterpret_cast<const UpdateSameSizeInPlaceDescriptor*>(
-                  update_entry.payload + update_entry.mKeySize);
-          BTreeLL::applyXORDiff(update_descriptor, chain_head.payload,
-                                update_entry.payload + update_entry.mKeySize +
-                                    update_descriptor.size());
+          auto& chainedTuple = *ChainedTuple::From(rawVal.data());
+          chainedTuple.mWorkerId = update_entry.mPrevWorkerId;
+          chainedTuple.mTxId = update_entry.mPrevTxId;
+          chainedTuple.mCommandId = update_entry.mPrevCommandId;
+          const auto& update_descriptor = *reinterpret_cast<const UpdateDesc*>(
+              update_entry.payload + update_entry.mKeySize);
+          auto diffSrc = update_entry.payload + update_entry.mKeySize +
+                         update_descriptor.size();
+          update_descriptor.ApplyXORDiff(chainedTuple.payload, diffSrc);
         }
         iterator.MarkAsDirty();
         JUMPMU_RETURN;
@@ -405,9 +353,9 @@ public:
        *
        * if (tuple.mTxId == cr::activeTX().startTS() &&
        *     tuple.mWorkerId == cr::Worker::my().mWorkerId) {
-       *   auto& chain_head =
+       *   auto& chainedTuple =
        *       *reinterpret_cast<ChainedTuple*>(iterator.MutableVal().data());
-       *   chain_head.mCommitTs = cr::activeTX().commitTS() | MSB;
+       *   chainedTuple.mCommitTs = cr::activeTX().commitTS() | MSB;
        * }
        */
     }
@@ -417,8 +365,6 @@ public:
   }
 
 private:
-  bool convertChainedToFatTuple(BTreeExclusiveIterator& iterator);
-
   OP_RESULT lookupPessimistic(Slice key, ValCallback valCallback);
   OP_RESULT lookupOptimistic(Slice key, ValCallback valCallback);
 
@@ -448,15 +394,14 @@ private:
       while (ret == OP_RESULT::OK) {
         iterator.assembleKey();
         Slice s_key = iterator.key();
-        auto reconstruct =
-            GetVisibleTuple(s_key, iterator.value(), [&](Slice value) {
-              COUNTERS_BLOCK() {
-                WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
-                    cr::activeTX().isOLAP();
-              }
-              keep_scanning = callback(s_key, value);
-              counter++;
-            });
+        auto reconstruct = GetVisibleTuple(iterator.value(), [&](Slice value) {
+          COUNTERS_BLOCK() {
+            WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
+                cr::activeTX().isOLAP();
+          }
+          keep_scanning = callback(s_key, value);
+          counter++;
+        });
         const u16 chain_length = std::get<1>(reconstruct);
         COUNTERS_BLOCK() {
           WorkerCounters::myCounters().cc_read_chains[mTreeId]++;
@@ -527,7 +472,7 @@ private:
 
       g_range();
       auto take_from_oltp = [&]() {
-        GetVisibleTuple(iterator.key(), iterator.value(), [&](Slice value) {
+        GetVisibleTuple(iterator.value(), [&](Slice value) {
           COUNTERS_BLOCK() {
             WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
                 cr::activeTX().isOLAP();
@@ -559,7 +504,7 @@ private:
         } else if (g_ret == OP_RESULT::OK && o_ret != OP_RESULT::OK) {
           g_iterator.assembleKey();
           Slice g_key = g_iterator.key();
-          GetVisibleTuple(g_key, g_iterator.value(), [&](Slice value) {
+          GetVisibleTuple(g_iterator.value(), [&](Slice value) {
             COUNTERS_BLOCK() {
               WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
                   cr::activeTX().isOLAP();
@@ -580,7 +525,7 @@ private:
               JUMPMU_RETURN OP_RESULT::OK;
             }
           } else {
-            GetVisibleTuple(g_key, g_iterator.value(), [&](Slice value) {
+            GetVisibleTuple(g_iterator.value(), [&](Slice value) {
               COUNTERS_BLOCK() {
                 WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
                     cr::activeTX().isOLAP();
@@ -608,31 +553,26 @@ private:
     return cr::Worker::my().cc.VisibleForMe(workerId, txId, toWrite);
   }
 
-  static inline bool triggerPageWiseGarbageCollection(
+  inline static bool triggerPageWiseGarbageCollection(
       GuardedBufferFrame<BTreeNode>& guardedNode) {
     return guardedNode->mHasGarbage;
   }
 
-  u64 convertToFatTupleThreshold() {
-    return FLAGS_worker_threads;
-  }
-
-  inline std::tuple<OP_RESULT, u16> GetVisibleTuple(Slice key, Slice payload,
+  inline std::tuple<OP_RESULT, u16> GetVisibleTuple(Slice payload,
                                                     ValCallback callback) {
     while (true) {
       JUMPMU_TRY() {
         const auto& tuple = *Tuple::From(payload.data());
         switch (tuple.mFormat) {
         case TupleFormat::CHAINED: {
-          auto ret = reconstructChainedTuple(key, payload, callback);
+          const auto& chainedTuple = *ChainedTuple::From(payload.data());
+          auto ret = chainedTuple.GetVisibleTuple(payload, callback);
           JUMPMU_RETURN ret;
-          break;
         }
         case TupleFormat::FAT: {
           const auto& fatTuple = *FatTuple::From(payload.data());
           auto ret = fatTuple.GetVisibleTuple(callback);
           JUMPMU_RETURN ret;
-          break;
         }
         default: {
           DCHECK(false) << "Unhandled tuple format: "
@@ -643,14 +583,6 @@ private:
       JUMPMU_CATCH() {
       }
     }
-  }
-
-  std::tuple<OP_RESULT, u16> reconstructChainedTuple(
-      Slice key, Slice payload, std::function<void(Slice val)> callback);
-
-private:
-  static inline u64 maxFatTupleLength() {
-    return BTreeNode::Size() - 1000;
   }
 
 public:
@@ -684,6 +616,10 @@ public:
       tuple->mTxId = MSB | 0;
     }
     guardedNode.MarkAsDirty();
+  }
+
+  inline static u64 convertToFatTupleThreshold() {
+    return FLAGS_worker_threads;
   }
 };
 

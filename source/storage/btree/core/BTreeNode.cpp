@@ -1,6 +1,5 @@
 #include "BTreeNode.hpp"
 
-#include "storage/btree/core/BTreeVisitor.hpp"
 #include "storage/buffer-manager/GuardedBufferFrame.hpp"
 #include "utils/JsonUtil.hpp"
 
@@ -453,10 +452,6 @@ void BTreeNode::reset() {
   mSpaceUsed = mUpperFence.length + mLowerFence.length;
   mDataOffset = BTreeNode::Size() - mSpaceUsed;
   mNumSeps = 0;
-}
-
-void BTreeNode::Accept(BTreeVisitor* visitor) {
-  visitor->Visit(this);
 }
 
 using leanstore::utils::AddMemberToJson;

@@ -33,9 +33,9 @@ void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
   Slice key(keyBuffer, keySize);
   payload_length += sizeof(VersionMeta);
 
-  BTreeLL* volatile btree =
+  BTreeLL* btree =
       (isRemove) ? remove_btrees[workerId] : update_btrees[workerId];
-  Session* volatile session = nullptr;
+  Session* session = nullptr;
   if (same_thread) {
     session =
         (isRemove) ? &remove_sessions[workerId] : &update_sessions[workerId];
@@ -45,7 +45,7 @@ void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
       BTreeExclusiveIterator iterator(
           *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)),
           session->rightmost_bf, session->rightmost_version);
-      // -------------------------------------------------------------------------------------
+
       OP_RESULT ret = iterator.enoughSpaceInCurrentNode(key, payload_length);
       if (ret == OP_RESULT::OK && iterator.keyInCurrentBoundaries(key)) {
         if (session->last_tx_id == txId) {
@@ -69,12 +69,12 @@ void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
     JUMPMU_CATCH() {
     }
   }
-  // -------------------------------------------------------------------------------------
+
   while (true) {
     JUMPMU_TRY() {
       BTreeExclusiveIterator iterator(
           *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)));
-      // -------------------------------------------------------------------------------------
+
       OP_RESULT ret = iterator.seekToInsert(key);
       if (ret == OP_RESULT::DUPLICATE) {
         iterator.removeCurrent(); // TODO: verify, this implies upsert semantic
@@ -91,7 +91,7 @@ void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
       version_meta.mTreeId = treeId;
       cb(version_meta.payload);
       iterator.MarkAsDirty();
-      // -------------------------------------------------------------------------------------
+
       if (session != nullptr) {
         session->rightmost_bf = iterator.mGuardedLeaf.mBf;
         session->rightmost_version = iterator.mGuardedLeaf.mGuard.mVersion + 1;
@@ -99,7 +99,7 @@ void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
         session->last_tx_id = txId;
         session->rightmost_init = true;
       }
-      // -------------------------------------------------------------------------------------
+
       COUNTERS_BLOCK() {
         WorkerCounters::myCounters().cc_versions_space_inserted[treeId]++;
       }
@@ -109,19 +109,20 @@ void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
     }
   }
 }
-// -------------------------------------------------------------------------------------
-bool HistoryTree::retrieveVersion(WORKERID workerId, TXID txId,
-                                  COMMANDID commandId, const bool isRemove,
+
+bool HistoryTree::retrieveVersion(WORKERID prevWorkerId, TXID prevTxId,
+                                  COMMANDID prevCommandId,
+                                  const bool isRemoveCommand,
                                   std::function<void(const u8*, u64)> cb) {
-  BTreeLL* volatile btree =
-      (isRemove) ? remove_btrees[workerId] : update_btrees[workerId];
-  // -------------------------------------------------------------------------------------
-  const u64 keySize = sizeof(txId) + sizeof(commandId);
+  BTreeLL* btree = (isRemoveCommand) ? remove_btrees[prevWorkerId]
+                                     : update_btrees[prevWorkerId];
+
+  const u64 keySize = sizeof(prevTxId) + sizeof(prevCommandId);
   u8 keyBuffer[keySize];
   u64 offset = 0;
-  offset += utils::fold(keyBuffer + offset, txId);
-  offset += utils::fold(keyBuffer + offset, commandId);
-  // -------------------------------------------------------------------------------------
+  offset += utils::fold(keyBuffer + offset, prevTxId);
+  offset += utils::fold(keyBuffer + offset, prevCommandId);
+
   Slice key(keyBuffer, keySize);
   JUMPMU_TRY() {
     BTreeSharedIterator iterator(
@@ -132,8 +133,7 @@ bool HistoryTree::retrieveVersion(WORKERID workerId, TXID txId,
       JUMPMU_RETURN false;
     }
     Slice payload = iterator.value();
-    const auto& versionContainer =
-        *reinterpret_cast<const VersionMeta*>(payload.data());
+    const auto& versionContainer = *VersionMeta::From(payload.data());
     cb(versionContainer.payload, payload.length() - sizeof(VersionMeta));
     JUMPMU_RETURN true;
   }
