@@ -329,16 +329,16 @@ public:
 
   ConcurrencyControl& other(WORKERID otherWorkerId);
 
-  u64 insertVersion(TREEID treeId, bool is_remove, u64 payload_length,
+  u64 insertVersion(TREEID treeId, bool isRemoveCommand, u64 payload_length,
                     std::function<void(u8*)> cb);
 
   inline bool retrieveVersion(
-      WORKERID its_worker_id, TXID its_tx_id, COMMANDID its_command_id,
+      WORKERID prevWorkerId, TXID prevTxId, COMMANDID prevCommandId,
       std::function<void(const u8*, u64 payload_length)> cb) {
     utils::Timer timer(CRCounters::myCounters().cc_ms_history_tree_retrieve);
-    const bool is_remove = its_command_id & TYPE_MSB(COMMANDID);
+    const bool isRemoveCommand = prevCommandId & TYPE_MSB(COMMANDID);
     const bool found = mHistoryTree.retrieveVersion(
-        its_worker_id, its_tx_id, its_command_id, is_remove, cb);
+        prevWorkerId, prevTxId, prevCommandId, isRemoveCommand, cb);
     return found;
   }
 };
@@ -510,16 +510,17 @@ inline ConcurrencyControl& ConcurrencyControl::other(WORKERID otherWorkerId) {
   return Worker::my().mAllWorkers[otherWorkerId]->cc;
 }
 
-inline u64 ConcurrencyControl::insertVersion(TREEID treeId, bool is_remove,
+inline u64 ConcurrencyControl::insertVersion(TREEID treeId,
+                                             bool isRemoveCommand,
                                              u64 payload_length,
                                              std::function<void(u8*)> cb) {
   utils::Timer timer(CRCounters::myCounters().cc_ms_history_tree_insert);
   auto& curWorker = Worker::my();
   const u64 new_command_id =
-      (curWorker.mCommandId++) | ((is_remove) ? TYPE_MSB(COMMANDID) : 0);
+      (curWorker.mCommandId++) | ((isRemoveCommand) ? TYPE_MSB(COMMANDID) : 0);
   mHistoryTree.insertVersion(curWorker.mWorkerId, curWorker.mActiveTx.startTS(),
-                             new_command_id, treeId, is_remove, payload_length,
-                             cb);
+                             new_command_id, treeId, isRemoveCommand,
+                             payload_length, cb);
   return new_command_id;
 }
 

@@ -200,15 +200,13 @@ struct WALUpdateSSIP : WALPayload {
   COMMANDID mPrevCommandId;
   u8 payload[];
 
-  WALUpdateSSIP(Slice key, UpdateSameSizeInPlaceDescriptor& updateDescriptor,
-                u64 deltaSize, WORKERID prevWorkerId, TXID prevTxId,
-                COMMANDID prevCommandId)
+  WALUpdateSSIP(Slice key, UpdateDesc& updateDesc, u64 deltaSize,
+                WORKERID prevWorkerId, TXID prevTxId, COMMANDID prevCommandId)
       : WALPayload(TYPE::WALUpdate), mKeySize(key.size()),
         delta_length(deltaSize), mPrevWorkerId(prevWorkerId),
         mPrevTxId(prevTxId), mPrevCommandId(prevCommandId) {
     std::memcpy(payload, key.data(), key.size());
-    std::memcpy(payload + key.size(), &updateDescriptor,
-                updateDescriptor.size());
+    std::memcpy(payload + key.size(), &updateDesc, updateDesc.size());
   }
 };
 
