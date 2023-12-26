@@ -24,6 +24,11 @@ struct __attribute__((packed)) VersionMeta {
   bool called_before = false;
   TREEID mTreeId;
   u8 payload[];
+
+public:
+  inline static const VersionMeta* From(const u8* buffer) {
+    return reinterpret_cast<const VersionMeta*>(buffer);
+  }
 };
 
 using BTreeLL = leanstore::storage::btree::BTreeLL;

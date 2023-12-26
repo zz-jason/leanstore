@@ -26,7 +26,19 @@ namespace btree {
 /// Glossary:
 /// - UpdateDescriptor: (offset, length)[]
 /// - Diff: raw bytes copied from src/dst next to each other according to the
-///   descriptor Delta: WWTS + diff + (descriptor)?
+///   descriptor FatTupleDelta: WWTS + diff + (descriptor)?
+
+// Forward declaration
+class FatTuple;
+class ChainedTuple;
+
+static constexpr COMMANDID INVALID_COMMANDID =
+    std::numeric_limits<COMMANDID>::max();
+
+// -----------------------------------------------------------------------------
+// TupleFormat
+// -----------------------------------------------------------------------------
+
 enum class TupleFormat : u8 {
   CHAINED = 0,
   FAT = 1,
@@ -46,12 +58,9 @@ struct TupleFormatUtil {
   }
 };
 
-// forward declaration
-class FatTuple;
-class ChainedTuple;
-
-static constexpr COMMANDID INVALID_COMMANDID =
-    std::numeric_limits<COMMANDID>::max();
+// -----------------------------------------------------------------------------
+// Tuple
+// -----------------------------------------------------------------------------
 
 /// The internal value format in BTreeVI.
 ///
@@ -83,28 +92,44 @@ public:
   }
 
 public:
-  bool IsWriteLocked() const {
+  inline bool IsWriteLocked() const {
     return mWriteLocked;
   }
 
-  void WriteLock() {
+  inline void WriteLock() {
     mWriteLocked = true;
   }
 
-  void WriteUnlock() {
+  inline void WriteUnlock() {
     mWriteLocked = false;
   }
 
 public:
+  inline static Tuple* From(u8* buffer) {
+    return reinterpret_cast<Tuple*>(buffer);
+  }
+
   inline static const Tuple* From(const u8* buffer) {
     return reinterpret_cast<const Tuple*>(buffer);
   }
+
+  static bool ToChainedTuple(BTreeExclusiveIterator& iterator);
 };
 
-/// A delta is consisted of the following parts:
+// -----------------------------------------------------------------------------
+// FatTupleDelta
+// -----------------------------------------------------------------------------
+
+/// FatTupleDelta is the delta changes made to the previous version, a delta
+/// is consisted of the following parts:
 /// 1. The creator info: mWorkerId, mTxId, mCommandId
 /// 2. The update descriptor: payload
-struct __attribute__((packed)) Delta {
+///
+/// Data loyout of a FatTupleDelta:
+/// | mWorkerId | mTxId | mCommandId | UpdateDesc | Diff |
+///
+/// FatTuple: eager pgc, no scheduled gc todos
+struct __attribute__((packed)) FatTupleDelta {
 public:
   /// ID of the worker who creates this delta.
   WORKERID mWorkerId;
@@ -120,26 +145,42 @@ public:
   u8 payload[];
 
 public:
-  UpdateSameSizeInPlaceDescriptor& getDescriptor() {
-    return *reinterpret_cast<UpdateSameSizeInPlaceDescriptor*>(payload);
+  FatTupleDelta() = default;
+
+  FatTupleDelta(WORKERID workerId, TXID txId, COMMANDID commandId,
+                const u8* buf, u32 size)
+      : mWorkerId(workerId), mTxId(txId), mCommandId(commandId) {
+    std::memcpy(payload, buf, size);
   }
 
-  const UpdateSameSizeInPlaceDescriptor& getDescriptor() const {
-    return *reinterpret_cast<const UpdateSameSizeInPlaceDescriptor*>(payload);
+public:
+  inline UpdateDesc& getDescriptor() {
+    return *reinterpret_cast<UpdateDesc*>(payload);
+  }
+
+  inline const UpdateDesc& getDescriptor() const {
+    return *reinterpret_cast<const UpdateDesc*>(payload);
   }
 
   inline u32 TotalSize() {
     const auto& desc = getDescriptor();
-    return sizeof(Delta) + desc.TotalSize();
+    return sizeof(FatTupleDelta) + desc.TotalSize();
   }
 };
 
-/// We always append the descriptor, one format to keep simple
+// -----------------------------------------------------------------------------
+// FatTuple
+// -----------------------------------------------------------------------------
+
+/// FatTuple stores all the versions in the value. Layout of FatTuple:
+///
+/// | FatTuple meta |  newest value | FatTupleDelta O2N |
+///
 struct __attribute__((packed)) FatTuple : Tuple {
   /// Size of the base value.
   u16 mValSize = 0;
 
-  u32 total_space = 0; // From the payload bytes array
+  u32 total_space = 0; // Size of the payload bytes array
 
   u32 used_space = 0; // does not include the struct itself
 
@@ -147,24 +188,27 @@ struct __attribute__((packed)) FatTuple : Tuple {
 
   u16 mNumDeltas = 0; // Attention: coupled with used_space
 
-  // value, Delta+Descriptor+Diff[] O2N
+  // value, FatTupleDelta+Descriptor+Diff[] O2N
   u8 payload[];
 
 public:
-  FatTuple(const u32 totalSize)
-      : Tuple(TupleFormat::FAT, 0, 0), total_space(totalSize),
-        mDataOffset(totalSize) {
+  FatTuple(u32 payloadSize)
+      : Tuple(TupleFormat::FAT, 0, 0), total_space(payloadSize),
+        mDataOffset(payloadSize) {
   }
+
+  FatTuple(u32 payloadSize, u32 valSize, const ChainedTuple& chainedTuple);
 
   // returns false to fallback to chained mode
   static bool update(BTreeExclusiveIterator& iterator, Slice key, ValCallback,
-                     UpdateSameSizeInPlaceDescriptor&);
+                     UpdateDesc&);
 
-  bool hasSpaceFor(const UpdateSameSizeInPlaceDescriptor&);
+  bool hasSpaceFor(const UpdateDesc&);
 
-  void append(UpdateSameSizeInPlaceDescriptor&);
+  void append(UpdateDesc&);
 
-  Delta& allocateDelta(u32 totalDeltaSize);
+  template <typename... Args>
+  FatTupleDelta& NewDelta(u32 totalDeltaSize, Args&&... args);
 
   void garbageCollection();
 
@@ -192,25 +236,27 @@ public:
 
   void resize(u32 new_length);
 
-  /// Used when converting to chained tuple. Deltas in chained tuple are stored
-  /// N2O (from newest to oldest), but are stored O2N (from oldest to newest) in
-  /// fat tuple. Reversing the deltas is a naive and simple solution.
+  /// Used when converting to chained tuple. Deltas in chained tuple are
+  /// stored N2O (from newest to oldest), but are stored O2N (from oldest to
+  /// newest) in fat tuple. Reversing the deltas is a naive and simple
+  /// solution.
   ///
-  /// TODO(jian.z): verify whether it's expected to reverse the bytes instead of
-  /// Deltas
+  /// TODO(jian.z): verify whether it's expected to reverse the bytes instead
+  /// of Deltas
   inline void ReverseDeltas() {
     std::reverse(getDeltaOffsets(), getDeltaOffsets() + mNumDeltas);
   }
 
 private:
-  inline Delta& getDelta(u16 i) {
+  inline FatTupleDelta& getDelta(u16 i) {
     DCHECK(i < mNumDeltas);
-    return *reinterpret_cast<Delta*>(payload + getDeltaOffsets()[i]);
+    return *reinterpret_cast<FatTupleDelta*>(payload + getDeltaOffsets()[i]);
   }
 
-  inline const Delta& getDelta(u16 i) const {
+  inline const FatTupleDelta& getDelta(u16 i) const {
     DCHECK(i < mNumDeltas);
-    return *reinterpret_cast<const Delta*>(payload + getDeltaOffsets()[i]);
+    return *reinterpret_cast<const FatTupleDelta*>(payload +
+                                                   getDeltaOffsets()[i]);
   }
 
   inline u16* getDeltaOffsets() {
@@ -222,13 +268,107 @@ private:
   }
 
 public:
+  inline static FatTuple* From(u8* buffer) {
+    return reinterpret_cast<FatTuple*>(buffer);
+  }
+
   inline static const FatTuple* From(const u8* buffer) {
     return reinterpret_cast<const FatTuple*>(buffer);
   }
 };
 
-// Chained: only scheduled gc todos. FatTuple: eager pgc, no scheduled gc
-// todos
+// -----------------------------------------------------------------------------
+// DanglingPointer
+// -----------------------------------------------------------------------------
+
+struct __attribute__((packed)) DanglingPointer {
+  BufferFrame* bf = nullptr;
+  u64 latch_version_should_be = -1;
+  s32 head_slot = -1;
+};
+
+// -----------------------------------------------------------------------------
+// Version
+// -----------------------------------------------------------------------------
+
+struct __attribute__((packed)) Version {
+  enum class TYPE : u8 { UPDATE, REMOVE };
+
+  TYPE type;
+
+  WORKERID mWorkerId;
+
+  TXID mTxId;
+
+  COMMANDID mCommandId;
+
+  Version(TYPE type, WORKERID workerId, TXID txId, COMMANDID commandId)
+      : type(type), mWorkerId(workerId), mTxId(txId), mCommandId(commandId) {
+  }
+};
+
+// -----------------------------------------------------------------------------
+// UpdateVersion
+// -----------------------------------------------------------------------------
+
+struct __attribute__((packed)) UpdateVersion : Version {
+  u8 is_delta : 1;
+  u8 payload[]; // UpdateDescriptor + Diff
+
+  UpdateVersion(WORKERID workerId, TXID txId, COMMANDID commandId, bool isDelta)
+      : Version(Version::TYPE::UPDATE, workerId, txId, commandId),
+        is_delta(isDelta) {
+  }
+
+  UpdateVersion(const FatTupleDelta& delta, u64 deltaPayloadSize)
+      : Version(Version::TYPE::UPDATE, delta.mWorkerId, delta.mTxId,
+                delta.mCommandId),
+        is_delta(true) {
+    std::memcpy(payload, delta.payload, deltaPayloadSize);
+  }
+
+  bool isFinal() const {
+    return mCommandId == 0;
+  }
+
+public:
+  inline static const UpdateVersion* From(const u8* buffer) {
+    return reinterpret_cast<const UpdateVersion*>(buffer);
+  }
+};
+
+// -----------------------------------------------------------------------------
+// RemoveVersion
+// -----------------------------------------------------------------------------
+
+struct __attribute__((packed)) RemoveVersion : Version {
+public:
+  u16 mKeySize;
+  u16 mValSize;
+  DanglingPointer dangling_pointer;
+  bool moved_to_graveway = false;
+  u8 payload[]; // Key + Value
+
+public:
+  RemoveVersion(WORKERID workerId, TXID txId, COMMANDID commandId, u16 keySize,
+                u16 valSize)
+      : Version(Version::TYPE::REMOVE, workerId, txId, commandId),
+        mKeySize(keySize), mValSize(valSize) {
+  }
+
+public:
+  inline static const RemoveVersion* From(const u8* buffer) {
+    return reinterpret_cast<const RemoveVersion*>(buffer);
+  }
+};
+
+// -----------------------------------------------------------------------------
+// ChainedTuple
+// -----------------------------------------------------------------------------
+
+/// History versions of chained tuple are stored in the history tree of the
+/// current worker thread.
+/// Chained: only scheduled gc todos.
 struct __attribute__((packed)) ChainedTuple : Tuple {
   u16 updates_counter = 0;
 
@@ -249,8 +389,8 @@ public:
   }
 
   /// Construct a ChainedTuple from an existing FatTuple, the new ChainedTuple
-  /// may share the same space with the input FatTuple, so std::memmove is used
-  /// to handle the overlap bytes.
+  /// may share the same space with the input FatTuple, so std::memmove is
+  /// used to handle the overlap bytes.
   ///
   /// NOTE: This constructor is usually called by a placmenet new operator on
   /// the address of the FatTuple
@@ -266,6 +406,9 @@ public:
     return Slice(payload, size);
   }
 
+  std::tuple<OP_RESULT, u16> GetVisibleTuple(Slice payload,
+                                             ValCallback callback) const;
+
   bool isFinal() const {
     return mCommandId == INVALID_COMMANDID;
   }
@@ -276,6 +419,10 @@ public:
 public:
   inline static const ChainedTuple* From(const u8* buffer) {
     return reinterpret_cast<const ChainedTuple*>(buffer);
+  }
+
+  inline static ChainedTuple* From(u8* buffer) {
+    return reinterpret_cast<ChainedTuple*>(buffer);
   }
 };
 

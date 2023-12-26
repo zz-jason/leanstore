@@ -49,9 +49,8 @@ public:
   //---------------------------------------------------------------------------
   virtual OP_RESULT Lookup(Slice key, ValCallback valCallback) override;
   virtual OP_RESULT insert(Slice key, Slice val) override;
-  virtual OP_RESULT updateSameSizeInPlace(
-      Slice key, ValCallback valCallback,
-      UpdateSameSizeInPlaceDescriptor&) override;
+  virtual OP_RESULT updateSameSizeInPlace(Slice key, ValCallback valCallback,
+                                          UpdateDesc&) override;
   virtual OP_RESULT remove(Slice key) override;
   virtual OP_RESULT scanAsc(Slice startKey, ScanCallback callback) override;
   virtual OP_RESULT scanDesc(Slice startKey, ScanCallback callback) override;
@@ -90,23 +89,6 @@ public:
     tree->Init(treeId, config);
     return tree;
   }
-
-public:
-  //---------------------------------------------------------------------------
-  // WAL && GC Utils
-  //---------------------------------------------------------------------------
-  static void generateDiff(
-      const UpdateSameSizeInPlaceDescriptor& update_descriptor, u8* dst,
-      const u8* src);
-  static void applyDiff(
-      const UpdateSameSizeInPlaceDescriptor& update_descriptor, u8* dst,
-      const u8* src);
-  static void generateXORDiff(
-      const UpdateSameSizeInPlaceDescriptor& update_descriptor, u8* dst,
-      const u8* src);
-  static void applyXORDiff(
-      const UpdateSameSizeInPlaceDescriptor& update_descriptor, u8* dst,
-      const u8* src);
 };
 
 } // namespace btree

@@ -51,7 +51,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
         FLAGS_nc_reallocation &&
         leanstore::utils::RandomGenerator::getRandU64(0, FLAGS_tmp3) == 0;
     if (move_it) {
-      UpdateSameSizeInPlaceDescriptor tmp;
+      UpdateDesc tmp;
       tmp.count = 0;
       OP_RESULT ret = key_tid->updateSameSizeInPlace(
           folded_key, folded_key_len,
@@ -118,11 +118,11 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
   // -------------------------------------------------------------------------------------
   void update1(const typename Record::Key& key,
                const std::function<void(Record&)>& cb,
-               UpdateSameSizeInPlaceDescriptor& update_descriptor) final {
+               UpdateDesc& update_descriptor) final {
     u8 folded_key[Record::maxFoldLength()];
     u16 folded_key_len = Record::foldKey(folded_key, key);
     // -------------------------------------------------------------------------------------
-    UpdateSameSizeInPlaceDescriptor tmp;
+    UpdateDesc tmp;
     tmp.count = 0;
     OP_RESULT ret;
     TID tid;
