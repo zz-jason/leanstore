@@ -56,6 +56,12 @@ public:
     u64 rand = getRandU64(min, max);
     return static_cast<T>(rand);
   }
+
+  static void getRandString(u8* dst, u64 size) {
+    for (u64 i = 0; i < size; i++) {
+      dst[i] = getRand(48, 123);
+    }
+  }
 };
 
 } // namespace utils

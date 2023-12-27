@@ -51,7 +51,7 @@ public:
     LOG(FATAL) << "BufferManagedTree::IterateChildSwips is unimplemented";
   }
 
-  virtual struct ParentSwipHandler findParent(BufferFrame&) {
+  virtual ParentSwipHandler findParent(BufferFrame&) {
     LOG(FATAL) << "BufferManagedTree::findParent is unimplemented";
   }
 
@@ -77,6 +77,7 @@ public:
 
   virtual StringMap serialize() {
     LOG(FATAL) << "BufferManagedTree::serialize is unimplemented";
+    return StringMap();
   }
 
   virtual void deserialize(StringMap) {

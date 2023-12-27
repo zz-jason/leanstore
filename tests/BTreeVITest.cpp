@@ -74,8 +74,7 @@ TEST_F(BTreeVITest, BTreeVICreate) {
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().startTX();
     SCOPED_DEFER(cr::Worker::my().commitTX());
-    EXPECT_TRUE(
-        GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree));
+    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
   });
 
@@ -83,8 +82,7 @@ TEST_F(BTreeVITest, BTreeVICreate) {
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().startTX();
     SCOPED_DEFER(cr::Worker::my().commitTX());
-    EXPECT_FALSE(
-        GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &another));
+    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &another);
     EXPECT_EQ(another, nullptr);
   });
 
@@ -92,8 +90,7 @@ TEST_F(BTreeVITest, BTreeVICreate) {
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
     cr::Worker::my().startTX();
     SCOPED_DEFER(cr::Worker::my().commitTX());
-    EXPECT_FALSE(
-        GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &another));
+    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &another);
     EXPECT_EQ(another, nullptr);
   });
 
@@ -102,8 +99,7 @@ TEST_F(BTreeVITest, BTreeVICreate) {
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().startTX();
     SCOPED_DEFER(cr::Worker::my().commitTX());
-    EXPECT_TRUE(
-        GetLeanStore()->RegisterBTreeVI(btreeName2, btreeConfig, &another));
+    GetLeanStore()->RegisterBTreeVI(btreeName2, btreeConfig, &another);
     EXPECT_NE(btree, nullptr);
   });
 
@@ -136,8 +132,7 @@ TEST_F(BTreeVITest, BTreeVIInsertAndLookup) {
   };
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().startTX();
-    EXPECT_TRUE(
-        GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree));
+    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().commitTX();
 
@@ -206,8 +201,7 @@ TEST_F(BTreeVITest, Insert1000KVs) {
     };
 
     cr::Worker::my().startTX();
-    EXPECT_TRUE(
-        GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree));
+    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().commitTX();
 
@@ -248,8 +242,7 @@ TEST_F(BTreeVITest, InsertDuplicates) {
     };
 
     cr::Worker::my().startTX();
-    EXPECT_TRUE(
-        GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree));
+    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().commitTX();
 

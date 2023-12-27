@@ -68,7 +68,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().startTX();
     SCOPED_DEFER(cr::Worker::my().commitTX());
-    EXPECT_TRUE(mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree));
+    mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
   });
 
@@ -96,7 +96,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
 
   // recreate the store, it's expected that all the meta and pages are rebult.
   mLeanStore = std::make_unique<LeanStore>();
-  EXPECT_TRUE(mLeanStore->GetBTreeVI(btreeName, &btree));
+  mLeanStore->GetBTreeVI(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
@@ -162,7 +162,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().startTX();
-    EXPECT_TRUE(mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree));
+    mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().commitTX();
 
@@ -186,7 +186,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
   mLeanStore = std::make_unique<LeanStore>();
-  EXPECT_TRUE(mLeanStore->GetBTreeVI(btreeName, &btree));
+  mLeanStore->GetBTreeVI(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().startTX();

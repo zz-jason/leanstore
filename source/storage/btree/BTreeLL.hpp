@@ -48,9 +48,13 @@ public:
   // KV Interfaces
   //---------------------------------------------------------------------------
   virtual OP_RESULT Lookup(Slice key, ValCallback valCallback) override;
+
   virtual OP_RESULT insert(Slice key, Slice val) override;
-  virtual OP_RESULT updateSameSizeInPlace(Slice key, ValCallback valCallback,
-                                          UpdateDesc&) override;
+
+  virtual OP_RESULT updateSameSizeInPlace(Slice key,
+                                          MutValCallback updateCallBack,
+                                          UpdateDesc& updateDesc) override;
+
   virtual OP_RESULT remove(Slice key) override;
   virtual OP_RESULT scanAsc(Slice startKey, ScanCallback callback) override;
   virtual OP_RESULT scanDesc(Slice startKey, ScanCallback callback) override;

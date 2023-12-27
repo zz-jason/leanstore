@@ -49,26 +49,20 @@ public:
   /// @param name The unique name of the btree
   /// @param config The config of the btree
   /// @param btree The pointer to store the registered btree
-  /// @return Whether the btree is successfully registered
-  [[nodiscard]] bool RegisterBTreeLL(
-      const std::string& name, storage::btree::BTreeGeneric::Config& config,
-      storage::btree::BTreeLL** btree) {
+  void RegisterBTreeLL(const std::string& name,
+                       storage::btree::BTreeGeneric::Config& config,
+                       storage::btree::BTreeLL** btree) {
     DCHECK(cr::Worker::my().IsTxStarted());
-    // create btree for graveyard
     *btree = storage::btree::BTreeLL::Create(name, config);
-    return (*btree) != nullptr;
   }
 
   /// Get a registered BTreeLL
   ///
   /// @param name The unique name of the btree
   /// @param btree The pointer to store the found btree
-  /// @return Whether the btree is found
-  [[nodiscard]] bool GetBTreeLL(const std::string& name,
-                                storage::btree::BTreeLL** btree) {
+  void GetBTreeLL(const std::string& name, storage::btree::BTreeLL** btree) {
     *btree = dynamic_cast<storage::btree::BTreeLL*>(
         storage::TreeRegistry::sInstance->GetTree(name));
-    return *btree != nullptr;
   }
 
   /// Unregister a BTreeLL
@@ -86,12 +80,10 @@ public:
   /// @param name The unique name of the btree
   /// @param config The config of the btree
   /// @param btree The pointer to store the registered btree
-  /// @return Whether the btree is successfully registered
-  [[nodiscard]] bool RegisterBTreeVI(
-      const std::string& name, storage::btree::BTreeGeneric::Config& config,
-      storage::btree::BTreeVI** btree) {
+  void RegisterBTreeVI(const std::string& name,
+                       storage::btree::BTreeGeneric::Config& config,
+                       storage::btree::BTreeVI** btree) {
     DCHECK(cr::Worker::my().IsTxStarted());
-    bool success(false);
     *btree = nullptr;
 
     // create btree for graveyard
@@ -101,12 +93,11 @@ public:
     auto graveyard =
         storage::btree::BTreeLL::Create(graveyardName, graveyardConfig);
     if (graveyard == nullptr) {
-      success = false;
-      return success;
+      return;
     }
 
     // clean resource on failure
-    SCOPED_DEFER(if (!success && graveyard != nullptr) {
+    SCOPED_DEFER(if (*btree == nullptr && graveyard != nullptr) {
       leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(
           *static_cast<leanstore::storage::btree::BTreeGeneric*>(graveyard));
       TreeRegistry::sInstance->UnRegisterTree(graveyard->mTreeId);
@@ -114,20 +105,15 @@ public:
 
     // create btree for main data
     *btree = storage::btree::BTreeVI::Create(name, config, graveyard);
-    success = (*btree) != nullptr;
-    return success;
   }
 
   /// Get a registered BTreeVI
   ///
   /// @param name The unique name of the btree
   /// @param btree The pointer to store the found btree
-  /// @return Whether the btree is found
-  [[nodiscard]] bool GetBTreeVI(const std::string& name,
-                                storage::btree::BTreeVI** btree) {
+  void GetBTreeVI(const std::string& name, storage::btree::BTreeVI** btree) {
     *btree = dynamic_cast<storage::btree::BTreeVI*>(
         storage::TreeRegistry::sInstance->GetTree(name));
-    return *btree != nullptr;
   }
 
   /// Unregister a BTreeVI
@@ -148,9 +134,9 @@ public:
     }
   }
 
-private:
   void startProfilingThread();
 
+private:
   u64 getConfigHash() {
     return config_hash;
   }
