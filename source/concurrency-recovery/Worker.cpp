@@ -48,6 +48,7 @@ Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers,
 
 Worker::~Worker() {
   delete[] cc.commit_tree.array;
+  free(mLogging.mWalBuffer);
 }
 
 void Worker::startTX(TX_MODE mode, TX_ISOLATION_LEVEL level, bool isReadOnly) {
