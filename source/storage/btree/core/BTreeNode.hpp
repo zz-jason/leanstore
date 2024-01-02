@@ -58,10 +58,10 @@ public:
   /// The swip of the right-most child.
   Swip<BTreeNode> mRightMostChildSwip = nullptr;
 
-  /// The lower fence of the node.
+  /// The lower fence of the node. Exclusive.
   FenceKey mLowerFence = {0, 0};
 
-  /// The upper fence of the node.
+  /// The upper fence of the node. Inclusive.
   FenceKey mUpperFence = {0, 0};
 
   /// The number of seperators. #slots = #seps + 1.
@@ -481,7 +481,7 @@ public:
           (bcmp(key.data(), getLowerFenceKey(), mPrefixSize) != 0)) {
         return -1;
       }
-    } else {
+    } else if (mPrefixSize != 0) {
       Slice keyPrefix(key.data(), min<u16>(key.size(), mPrefixSize));
       Slice lowerFencePrefix(getLowerFenceKey(), mPrefixSize);
       int cmpPrefix = CmpKeys(keyPrefix, lowerFencePrefix);

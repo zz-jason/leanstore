@@ -333,11 +333,12 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key, ValCallback callback,
 
 OP_RESULT BTreeVI::insert(Slice key, Slice val) {
   DCHECK(cr::Worker::my().IsTxStarted());
-  SCOPED_DEFER({
-    rapidjson::Document doc(rapidjson::kObjectType);
-    BTreeGeneric::ToJSON(*this, &doc);
-    DLOG(INFO) << "BTreeVI after insert: " << leanstore::utils::JsonToStr(&doc);
-  });
+  // SCOPED_DEFER({
+  //   rapidjson::Document doc(rapidjson::kObjectType);
+  //   BTreeGeneric::ToJSON(*this, &doc);
+  //   DLOG(INFO) << "BTreeVI after insert: " <<
+  //   leanstore::utils::JsonToStr(&doc);
+  // });
 
   cr::activeTX().markAsWrite();
   cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);

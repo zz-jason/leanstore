@@ -16,6 +16,22 @@ namespace leanstore {
 
 static std::unique_ptr<LeanStore> sLeanStore = nullptr;
 
+template <typename T = std::mt19937> auto RandomGenerator() -> T {
+  auto constexpr fixed_seed = 123456789; // Fixed seed for deterministic output
+  return T{fixed_seed};
+}
+
+static std::string RandomAlphString(std::size_t len) {
+  static constexpr auto chars = "0123456789"
+                                "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                                "abcdefghijklmnopqrstuvwxyz";
+  thread_local auto rng = RandomGenerator<>();
+  auto dist = std::uniform_int_distribution{{}, std::strlen(chars) - 1};
+  auto result = std::string(len, '\0');
+  std::generate_n(begin(result), len, [&]() { return chars[dist(rng)]; });
+  return result;
+}
+
 static void InitLeanStore() {
   FLAGS_vi = true;
   FLAGS_enable_print_btree_stats_on_exit = true;
@@ -177,6 +193,48 @@ TEST_F(BTreeVITest, BTreeVIInsertAndLookup) {
     cr::Worker::my().startTX();
     SCOPED_DEFER(cr::Worker::my().commitTX());
     GetLeanStore()->UnRegisterBTreeVI(btreeName);
+  });
+}
+
+TEST_F(BTreeVITest, Insert10000KVs) {
+  GetLeanStore();
+  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    storage::btree::BTreeVI* btree;
+
+    // create leanstore btree for table records
+    const auto* btreeName = "testTree1";
+    auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+        .mEnableWal = FLAGS_wal,
+        .mUseBulkInsert = FLAGS_bulk_insert,
+    };
+
+    cr::Worker::my().startTX();
+    EXPECT_TRUE(
+        GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree));
+    EXPECT_NE(btree, nullptr);
+    cr::Worker::my().commitTX();
+
+    // insert numKVs tuples
+    std::set<std::string> uniqueKeys;
+    ssize_t numKVs(10000);
+    cr::Worker::my().startTX();
+    for (ssize_t i = 0; i < numKVs; ++i) {
+      auto key = RandomAlphString(24);
+      if (uniqueKeys.find(key) != uniqueKeys.end()) {
+        i--;
+        continue;
+      }
+      uniqueKeys.insert(key);
+      auto val = RandomAlphString(128);
+      EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
+                              Slice((const u8*)val.data(), val.size())),
+                OP_RESULT::OK);
+    }
+    cr::Worker::my().commitTX();
+
+    cr::Worker::my().startTX();
+    GetLeanStore()->UnRegisterBTreeVI(btreeName);
+    cr::Worker::my().commitTX();
   });
 }
 
