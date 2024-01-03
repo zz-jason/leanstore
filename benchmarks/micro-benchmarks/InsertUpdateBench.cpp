@@ -1,10 +1,15 @@
 #include "LeanStore.hpp"
+#include "storage/btree/core/BTreeGeneric.hpp"
+#include "storage/buffer-manager/BufferFrame.hpp"
+#include "storage/buffer-manager/BufferManager.hpp"
 
 #include <benchmark/benchmark.h>
 #include <gtest/gtest.h>
 
 #include <filesystem>
 #include <random>
+#include <rapidjson/document.h>
+#include <rapidjson/rapidjson.h>
 
 namespace leanstore::test {
 
@@ -33,6 +38,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
   FLAGS_worker_threads = 4;
   FLAGS_recover = false;
   FLAGS_data_dir = "/tmp/InsertUpdateBench";
+  FLAGS_wal_fsync = false;
 
   std::filesystem::path dirPath = FLAGS_data_dir;
   std::filesystem::remove_all(dirPath);
@@ -57,36 +63,25 @@ static void BenchUpdateInsert(benchmark::State& state) {
 
   std::unordered_set<std::string> dedup;
   for (auto _ : state) {
-    std::cout << "A!" << std::endl;
-    cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::CRManager::sInstance->scheduleJobAsync(0, [&]() {
       cr::Worker::my().startTX();
       std::string key;
       std::string val;
       for (size_t i = 0; i < 16; i++) {
         key = generate_random_alphanumeric_string(24);
         val = generate_random_alphanumeric_string(128);
-        cout << "key: " << key << endl;
-        cout << "val: " << val << endl;
-        if (dedup.contains(key)) {
-          std::cout << "duplicate key: " << key << endl;
-        } else {
-          dedup.insert(key);
-        }
         btree->insert(Slice((const u8*)key.data(), key.size()),
                       Slice((const u8*)val.data(), val.size()));
       }
       cr::Worker::my().commitTX();
     });
-    std::cout << "B!" << std::endl;
   }
 
-  std::cout << "C!" << std::endl;
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().startTX();
     SCOPED_DEFER(cr::Worker::my().commitTX());
     sLeanStore->UnRegisterBTreeVI(btreeName);
   });
-  std::cout << "D!" << std::endl;
 }
 
 BENCHMARK(BenchUpdateInsert);

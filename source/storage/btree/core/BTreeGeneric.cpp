@@ -50,17 +50,6 @@ void BTreeGeneric::Init(TREEID btreeId, Config config) {
 }
 
 void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
-  {
-    rapidjson::Document doc(rapidjson::kObjectType);
-    BTreeGeneric::ToJSON(*this, &doc);
-    DLOG(INFO) << "BTree before split: " << leanstore::utils::JsonToStr(&doc);
-  }
-  SCOPED_DEFER({
-    rapidjson::Document doc(rapidjson::kObjectType);
-    BTreeGeneric::ToJSON(*this, &doc);
-    DLOG(INFO) << "BTree after split: " << leanstore::utils::JsonToStr(&doc);
-  });
-
   cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);
   auto parentHandler = findParentEager(*this, toSplit);
   auto guardedParent = parentHandler.GetGuardedParent<BTreeNode>();

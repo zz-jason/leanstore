@@ -95,7 +95,6 @@ public:
         JUMPMU_BREAK;
       }
       JUMPMU_CATCH() {
-        std::cout << "wee: " << i++ << std::endl;
       }
     }
   }
