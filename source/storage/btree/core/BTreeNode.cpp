@@ -104,8 +104,8 @@ void BTreeNode::compactify() {
   u16 should = freeSpaceAfterCompaction();
   static_cast<void>(should);
 
-  auto tmpNodeBuf = utils::ArrayOnStack<u8>(BTreeNode::Size());
-  auto tmp = BTreeNode::Init(tmpNodeBuf, mIsLeaf);
+  auto tmpNodeBuf = utils::ScopedArray<u8>(BTreeNode::Size());
+  auto tmp = BTreeNode::Init(tmpNodeBuf.get(), mIsLeaf);
 
   tmp->setFences(GetLowerFence(), GetUpperFence());
   copyKeyValueRange(tmp, 0, 0, mNumSeps);
@@ -119,8 +119,8 @@ u32 BTreeNode::mergeSpaceUpperBound(
     ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedRight) {
   DCHECK(xGuardedRight->mIsLeaf);
 
-  auto tmpNodeBuf = utils::ArrayOnStack<u8>(BTreeNode::Size());
-  auto tmp = BTreeNode::Init(tmpNodeBuf, true);
+  auto tmpNodeBuf = utils::ScopedArray<u8>(BTreeNode::Size());
+  auto tmp = BTreeNode::Init(tmpNodeBuf.get(), true);
 
   tmp->setFences(GetLowerFence(), xGuardedRight->GetUpperFence());
   u32 leftGrow = (mPrefixSize - tmp->mPrefixSize) * mNumSeps;
@@ -147,8 +147,8 @@ bool BTreeNode::merge(u16 slotId,
     assert(xGuardedRight->mIsLeaf);
     assert(xGuardedParent->isInner());
 
-    auto tmpNodeBuf = utils::ArrayOnStack<u8>(BTreeNode::Size());
-    auto tmp = BTreeNode::Init(tmpNodeBuf, true);
+    auto tmpNodeBuf = utils::ScopedArray<u8>(BTreeNode::Size());
+    auto tmp = BTreeNode::Init(tmpNodeBuf.get(), true);
 
     tmp->setFences(GetLowerFence(), xGuardedRight->GetUpperFence());
     u16 leftGrow = (mPrefixSize - tmp->mPrefixSize) * mNumSeps;
@@ -175,8 +175,8 @@ bool BTreeNode::merge(u16 slotId,
     assert(!xGuardedRight->mIsLeaf);
     assert(xGuardedParent->isInner());
 
-    auto tmpNodeBuf = utils::ArrayOnStack<u8>(BTreeNode::Size());
-    auto tmp = BTreeNode::Init(tmpNodeBuf, mIsLeaf);
+    auto tmpNodeBuf = utils::ScopedArray<u8>(BTreeNode::Size());
+    auto tmp = BTreeNode::Init(tmpNodeBuf.get(), mIsLeaf);
 
     tmp->setFences(GetLowerFence(), xGuardedRight->GetUpperFence());
     u16 leftGrow = (mPrefixSize - tmp->mPrefixSize) * mNumSeps;
@@ -193,10 +193,10 @@ bool BTreeNode::merge(u16 slotId,
       return false;
     copyKeyValueRange(tmp, 0, 0, mNumSeps);
     // Allocate in the stack, freed when the calling function exits.
-    auto extraKey = utils::ArrayOnStack<u8>(extraKeyLength);
-    xGuardedParent->copyFullKey(slotId, extraKey);
+    auto extraKey = utils::ScopedArray<u8>(extraKeyLength);
+    xGuardedParent->copyFullKey(slotId, extraKey.get());
     tmp->storeKeyValue(
-        mNumSeps, Slice(extraKey, extraKeyLength),
+        mNumSeps, Slice(extraKey.get(), extraKeyLength),
         Slice(reinterpret_cast<u8*>(&mRightMostChildSwip), sizeof(SwipType)));
     tmp->mNumSeps++;
     xGuardedRight->copyKeyValueRange(tmp, tmp->mNumSeps, 0,
@@ -264,7 +264,8 @@ void BTreeNode::copyKeyValueRange(BTreeNode* dst, u16 dstSlot, u16 srcSlot,
 
 void BTreeNode::copyKeyValue(u16 srcSlot, BTreeNode* dst, u16 dstSlot) {
   u16 fullLength = getFullKeyLen(srcSlot);
-  auto key = utils::ArrayOnStack<u8>(fullLength);
+  auto keyBuf = utils::ScopedArray<u8>(fullLength);
+  auto key = keyBuf.get();
   copyFullKey(srcSlot, key);
   dst->storeKeyValue(dstSlot, Slice(key, fullLength), Value(srcSlot));
 }
@@ -409,10 +410,8 @@ void BTreeNode::split(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
 
   xGuardedLeft->setFences(GetLowerFence(), Slice(sepKey, sepLength));
 
-  const auto tmpNodeBufSize = BTreeNode::Size();
-  u8 tmpNodeBuf[tmpNodeBufSize];
-  // auto tmpNodeBuf = utils::ArrayOnStack<u8>(BTreeNode::Size());
-  auto nodeRight = BTreeNode::Init(tmpNodeBuf, mIsLeaf);
+  auto tmpNodeBuf = utils::ScopedArray<u8>(BTreeNode::Size());
+  auto nodeRight = BTreeNode::Init(tmpNodeBuf.get(), mIsLeaf);
 
   nodeRight->setFences(Slice(sepKey, sepLength), GetUpperFence());
   auto swip = xGuardedLeft.swip();

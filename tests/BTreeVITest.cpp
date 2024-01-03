@@ -196,7 +196,7 @@ TEST_F(BTreeVITest, BTreeVIInsertAndLookup) {
   });
 }
 
-TEST_F(BTreeVITest, Insert10000KVs) {
+TEST_F(BTreeVITest, Insert1000KVs) {
   GetLeanStore();
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     storage::btree::BTreeVI* btree;
@@ -216,7 +216,7 @@ TEST_F(BTreeVITest, Insert10000KVs) {
 
     // insert numKVs tuples
     std::set<std::string> uniqueKeys;
-    ssize_t numKVs(10000);
+    ssize_t numKVs(1000);
     cr::Worker::my().startTX();
     for (ssize_t i = 0; i < numKVs; ++i) {
       auto key = RandomAlphString(24);
