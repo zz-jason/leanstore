@@ -1,21 +1,22 @@
 #include "Misc.hpp"
+
 #include "Exceptions.hpp"
 
 #include "Config.hpp"
-// -------------------------------------------------------------------------------------
+
 #include "CRC.hpp"
-// -------------------------------------------------------------------------------------
+
 #include <execinfo.h>
 
 #include <atomic>
-// -------------------------------------------------------------------------------------
+
 namespace leanstore {
 namespace utils {
-// -------------------------------------------------------------------------------------
+
 u32 getBitsNeeded(u64 input) {
   return std::max(std::floor(std::log2(input)) + 1, 1.0);
 }
-// -------------------------------------------------------------------------------------
+
 double calculateMTPS(std::chrono::high_resolution_clock::time_point begin,
                      std::chrono::high_resolution_clock::time_point end,
                      u64 factor) {
