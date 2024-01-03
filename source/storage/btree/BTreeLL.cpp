@@ -169,11 +169,12 @@ OP_RESULT BTreeLL::prefixLookup(Slice key, PrefixLookupCallback callback) {
         JUMPMU_RETURN OP_RESULT::OK;
       } else if (cur < guardedLeaf->mNumSeps) {
         auto fullKeySize = guardedLeaf->getFullKeyLen(cur);
-        auto fullKeyBuf = utils::ScopedArray<u8>(fullKeySize);
-        guardedLeaf->copyFullKey(cur, fullKeyBuf.get());
+        auto fullKeyBuf = utils::JumpScopedArray<u8>(fullKeySize);
+        guardedLeaf->copyFullKey(cur, fullKeyBuf->get());
         guardedLeaf.JumpIfModifiedByOthers();
 
-        callback(Slice(fullKeyBuf.get(), fullKeySize), guardedLeaf->Value(cur));
+        callback(Slice(fullKeyBuf->get(), fullKeySize),
+                 guardedLeaf->Value(cur));
         guardedLeaf.JumpIfModifiedByOthers();
 
         JUMPMU_RETURN OP_RESULT::OK;
@@ -210,11 +211,12 @@ OP_RESULT BTreeLL::prefixLookupForPrev(Slice key,
       } else if (cur > 0) {
         cur -= 1;
         auto fullKeySize = guardedLeaf->getFullKeyLen(cur);
-        auto fullKeyBuf = utils::ScopedArray<u8>(fullKeySize);
-        guardedLeaf->copyFullKey(cur, fullKeyBuf.get());
+        auto fullKeyBuf = utils::JumpScopedArray<u8>(fullKeySize);
+        guardedLeaf->copyFullKey(cur, fullKeyBuf->get());
         guardedLeaf.JumpIfModifiedByOthers();
 
-        callback(Slice(fullKeyBuf.get(), fullKeySize), guardedLeaf->Value(cur));
+        callback(Slice(fullKeyBuf->get(), fullKeySize),
+                 guardedLeaf->Value(cur));
         guardedLeaf.JumpIfModifiedByOthers();
 
         JUMPMU_RETURN OP_RESULT::OK;
@@ -261,11 +263,11 @@ OP_RESULT BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
       OP_RESULT ret =
           iterator.enoughSpaceInCurrentNode(o_key_length, o_value_length);
       if (ret == OP_RESULT::OK) {
-        auto keyBuffer = utils::ScopedArray<u8>(o_key_length);
-        o_key(keyBuffer.get());
+        auto keyBuffer = utils::JumpScopedArray<u8>(o_key_length);
+        o_key(keyBuffer->get());
         const s32 pos = iterator.mGuardedLeaf->mNumSeps;
         iterator.mGuardedLeaf->insertDoNotCopyPayload(
-            Slice(keyBuffer.get(), o_key_length), o_value_length, pos);
+            Slice(keyBuffer->get(), o_key_length), o_value_length, pos);
         iterator.mSlotId = pos;
         o_value(iterator.MutableVal().data());
         iterator.MarkAsDirty();
@@ -282,11 +284,11 @@ OP_RESULT BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
   while (true) {
     JUMPMU_TRY() {
       BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
-      auto keyBuffer = utils::ScopedArray<u8>(o_key_length);
+      auto keyBuffer = utils::JumpScopedArray<u8>(o_key_length);
       for (u64 i = 0; i < o_key_length; i++) {
-        keyBuffer[i] = 255;
+        keyBuffer->get()[i] = 255;
       }
-      const Slice key(keyBuffer.get(), o_key_length);
+      const Slice key(keyBuffer->get(), o_key_length);
       OP_RESULT ret = iterator.seekToInsert(key);
       RAISE_WHEN(ret == OP_RESULT::DUPLICATE);
       ret = iterator.enoughSpaceInCurrentNode(key, o_value_length);
@@ -294,7 +296,7 @@ OP_RESULT BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
         iterator.splitForKey(key);
         JUMPMU_CONTINUE;
       }
-      o_key(keyBuffer.get());
+      o_key(keyBuffer->get());
       iterator.insertInCurrentNode(key, o_value_length);
       o_value(iterator.MutableVal().data());
       iterator.MarkAsDirty();
@@ -443,16 +445,16 @@ OP_RESULT BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
 
             // page start key
             auto firstKeySize = guardedLeaf->getFullKeyLen(0);
-            auto firstKey = utils::ScopedArray<u8>(firstKeySize);
-            guardedLeaf->copyFullKey(0, firstKey.get());
-            Slice pageStartKey(firstKey.get(), firstKeySize);
+            auto firstKey = utils::JumpScopedArray<u8>(firstKeySize);
+            guardedLeaf->copyFullKey(0, firstKey->get());
+            Slice pageStartKey(firstKey->get(), firstKeySize);
 
             // page end key
             auto lastKeySize =
                 guardedLeaf->getFullKeyLen(guardedLeaf->mNumSeps - 1);
-            auto lastKey = utils::ScopedArray<u8>(lastKeySize);
-            guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, lastKey.get());
-            Slice pageEndKey(lastKey.get(), lastKeySize);
+            auto lastKey = utils::JumpScopedArray<u8>(lastKeySize);
+            guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, lastKey->get());
+            Slice pageEndKey(lastKey->get(), lastKeySize);
 
             if (pageStartKey >= startKey && pageEndKey <= endKey) {
               // Purge the whole page
