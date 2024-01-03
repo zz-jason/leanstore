@@ -4,6 +4,7 @@
 #include "utils/JsonUtil.hpp"
 
 #include <gflags/gflags.h>
+#include <glog/logging.h>
 
 namespace leanstore {
 namespace storage {
@@ -103,13 +104,13 @@ void BTreeNode::compactify() {
   u16 should = freeSpaceAfterCompaction();
   static_cast<void>(should);
 
-  auto tmpNodeBuf = utils::ArrayOnStack<u8>(BTreeNode::Size());
-  auto tmp = BTreeNode::Init(tmpNodeBuf, mIsLeaf);
+  auto tmpNodeBuf = utils::ScopedArray<u8>(BTreeNode::Size());
+  auto tmp = BTreeNode::Init(tmpNodeBuf.get(), mIsLeaf);
 
   tmp->setFences(GetLowerFence(), GetUpperFence());
   copyKeyValueRange(tmp, 0, 0, mNumSeps);
   tmp->mRightMostChildSwip = mRightMostChildSwip;
-  memcpy(reinterpret_cast<char*>(this), tmp, sizeof(BTreeNode));
+  memcpy(reinterpret_cast<char*>(this), tmp, BTreeNode::Size());
   makeHint();
   assert(freeSpace() == should);
 }
@@ -118,8 +119,8 @@ u32 BTreeNode::mergeSpaceUpperBound(
     ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedRight) {
   DCHECK(xGuardedRight->mIsLeaf);
 
-  auto tmpNodeBuf = utils::ArrayOnStack<u8>(BTreeNode::Size());
-  auto tmp = BTreeNode::Init(tmpNodeBuf, true);
+  auto tmpNodeBuf = utils::ScopedArray<u8>(BTreeNode::Size());
+  auto tmp = BTreeNode::Init(tmpNodeBuf.get(), true);
 
   tmp->setFences(GetLowerFence(), xGuardedRight->GetUpperFence());
   u32 leftGrow = (mPrefixSize - tmp->mPrefixSize) * mNumSeps;
@@ -146,8 +147,8 @@ bool BTreeNode::merge(u16 slotId,
     assert(xGuardedRight->mIsLeaf);
     assert(xGuardedParent->isInner());
 
-    auto tmpNodeBuf = utils::ArrayOnStack<u8>(BTreeNode::Size());
-    auto tmp = BTreeNode::Init(tmpNodeBuf, true);
+    auto tmpNodeBuf = utils::ScopedArray<u8>(BTreeNode::Size());
+    auto tmp = BTreeNode::Init(tmpNodeBuf.get(), true);
 
     tmp->setFences(GetLowerFence(), xGuardedRight->GetUpperFence());
     u16 leftGrow = (mPrefixSize - tmp->mPrefixSize) * mNumSeps;
@@ -167,15 +168,15 @@ bool BTreeNode::merge(u16 slotId,
     // -------------------------------------------------------------------------------------
     xGuardedRight->mHasGarbage |= mHasGarbage;
     // -------------------------------------------------------------------------------------
-    memcpy(xGuardedRight.GetPagePayloadPtr(), tmp, sizeof(BTreeNode));
+    memcpy(xGuardedRight.GetPagePayloadPtr(), tmp, BTreeNode::Size());
     xGuardedRight->makeHint();
     return true;
   } else { // Inner node
     assert(!xGuardedRight->mIsLeaf);
     assert(xGuardedParent->isInner());
 
-    auto tmpNodeBuf = utils::ArrayOnStack<u8>(BTreeNode::Size());
-    auto tmp = BTreeNode::Init(tmpNodeBuf, mIsLeaf);
+    auto tmpNodeBuf = utils::ScopedArray<u8>(BTreeNode::Size());
+    auto tmp = BTreeNode::Init(tmpNodeBuf.get(), mIsLeaf);
 
     tmp->setFences(GetLowerFence(), xGuardedRight->GetUpperFence());
     u16 leftGrow = (mPrefixSize - tmp->mPrefixSize) * mNumSeps;
@@ -192,10 +193,10 @@ bool BTreeNode::merge(u16 slotId,
       return false;
     copyKeyValueRange(tmp, 0, 0, mNumSeps);
     // Allocate in the stack, freed when the calling function exits.
-    auto extraKey = utils::ArrayOnStack<u8>(extraKeyLength);
-    xGuardedParent->copyFullKey(slotId, extraKey);
+    auto extraKey = utils::ScopedArray<u8>(extraKeyLength);
+    xGuardedParent->copyFullKey(slotId, extraKey.get());
     tmp->storeKeyValue(
-        mNumSeps, Slice(extraKey, extraKeyLength),
+        mNumSeps, Slice(extraKey.get(), extraKeyLength),
         Slice(reinterpret_cast<u8*>(&mRightMostChildSwip), sizeof(SwipType)));
     tmp->mNumSeps++;
     xGuardedRight->copyKeyValueRange(tmp, tmp->mNumSeps, 0,
@@ -203,7 +204,7 @@ bool BTreeNode::merge(u16 slotId,
     xGuardedParent->removeSlot(slotId);
     tmp->mRightMostChildSwip = xGuardedRight->mRightMostChildSwip;
     tmp->makeHint();
-    memcpy(xGuardedRight.GetPagePayloadPtr(), tmp, sizeof(BTreeNode));
+    memcpy(xGuardedRight.GetPagePayloadPtr(), tmp, BTreeNode::Size());
     return true;
   }
 }
@@ -263,7 +264,8 @@ void BTreeNode::copyKeyValueRange(BTreeNode* dst, u16 dstSlot, u16 srcSlot,
 
 void BTreeNode::copyKeyValue(u16 srcSlot, BTreeNode* dst, u16 dstSlot) {
   u16 fullLength = getFullKeyLen(srcSlot);
-  auto key = utils::ArrayOnStack<u8>(fullLength);
+  auto keyBuf = utils::ScopedArray<u8>(fullLength);
+  auto key = keyBuf.get();
   copyFullKey(srcSlot, key);
   dst->storeKeyValue(dstSlot, Slice(key, fullLength), Value(srcSlot));
 }
@@ -284,6 +286,9 @@ void BTreeNode::insertFence(BTreeNodeHeader::FenceKey& fk, Slice key) {
 void BTreeNode::setFences(Slice lowerKey, Slice upperKey) {
   insertFence(mLowerFence, lowerKey);
   insertFence(mUpperFence, upperKey);
+  DCHECK(getLowerFenceKey() == nullptr || getUpperFenceKey() == nullptr ||
+         *getLowerFenceKey() <= *getUpperFenceKey());
+
   if (FLAGS_btree_prefix_compression) {
     for (mPrefixSize = 0;
          (mPrefixSize < min(lowerKey.size(), upperKey.size())) &&
@@ -405,8 +410,8 @@ void BTreeNode::split(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
 
   xGuardedLeft->setFences(GetLowerFence(), Slice(sepKey, sepLength));
 
-  auto tmpNodeBuf = utils::ArrayOnStack<u8>(BTreeNode::Size());
-  auto nodeRight = BTreeNode::Init(tmpNodeBuf, mIsLeaf);
+  auto tmpNodeBuf = utils::ScopedArray<u8>(BTreeNode::Size());
+  auto nodeRight = BTreeNode::Init(tmpNodeBuf.get(), mIsLeaf);
 
   nodeRight->setFences(Slice(sepKey, sepLength), GetUpperFence());
   auto swip = xGuardedLeft.swip();
@@ -427,7 +432,7 @@ void BTreeNode::split(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
   }
   xGuardedLeft->makeHint();
   nodeRight->makeHint();
-  memcpy(reinterpret_cast<char*>(this), nodeRight, sizeof(BTreeNode));
+  memcpy(reinterpret_cast<char*>(this), nodeRight, BTreeNode::Size());
 }
 
 bool BTreeNode::removeSlot(u16 slotId) {
@@ -502,6 +507,7 @@ void BTreeNode::ToJSON(rapidjson::Value* resultObj,
                       static_cast<u64>(slot[i].offset));
       AddMemberToJson(&arrayElement, allocator, "mKeyLen",
                       static_cast<u64>(slot[i].mKeySizeWithoutPrefix));
+      AddMemberToJson(&arrayElement, allocator, "mKey", KeyWithoutPrefix(i));
       AddMemberToJson(&arrayElement, allocator, "mPayloadLen",
                       static_cast<u64>(slot[i].mValSize));
       AddMemberToJson(&arrayElement, allocator, "mHead",

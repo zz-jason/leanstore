@@ -48,10 +48,11 @@ bool Tuple::ToChainedTuple(BTreeExclusiveIterator& iterator) {
   DCHECK(chainedTuple.mFormat == TupleFormat::CHAINED);
 
   auto tmpBufSize = maxFatTupleLength();
-  auto tmpBuf = utils::ArrayOnStack<u8>(tmpBufSize);
+  auto tmpBuf = utils::ScopedArray<u8>(tmpBufSize);
   u32 payloadSize = tmpBufSize - sizeof(FatTuple);
   u32 valSize = rawVal.length() - sizeof(ChainedTuple);
-  auto fatTuple = new (tmpBuf) FatTuple(payloadSize, valSize, chainedTuple);
+  auto fatTuple =
+      new (tmpBuf.get()) FatTuple(payloadSize, valSize, chainedTuple);
 
   auto prevWorkerId = chainedTuple.mWorkerId;
   auto prevTxId = chainedTuple.mTxId;
@@ -136,7 +137,7 @@ bool Tuple::ToChainedTuple(BTreeExclusiveIterator& iterator) {
   }
 
   // Copy the FatTuple back to the underlying value buffer.
-  std::memcpy(rawVal.data(), tmpBuf, fatTupleSize);
+  std::memcpy(rawVal.data(), tmpBuf.get(), fatTupleSize);
   iterator.MarkAsDirty();
   return true;
 }
@@ -247,8 +248,8 @@ void FatTuple::garbageCollection() {
   }
 
   auto bufferSize = total_space + sizeof(FatTuple);
-  auto buffer = utils::ArrayOnStack<u8>(bufferSize);
-  auto& newFatTuple = *new (buffer) FatTuple(total_space);
+  auto buffer = utils::ScopedArray<u8>(bufferSize);
+  auto& newFatTuple = *new (buffer.get()) FatTuple(total_space);
   newFatTuple.mWorkerId = mWorkerId;
   newFatTuple.mTxId = mTxId;
   newFatTuple.mCommandId = mCommandId;
@@ -311,7 +312,7 @@ void FatTuple::garbageCollection() {
     }
   }
 
-  std::memcpy(this, buffer, bufferSize);
+  std::memcpy(this, buffer.get(), bufferSize);
   assert(total_space >= used_space);
 
   DEBUG_BLOCK() {
@@ -401,9 +402,9 @@ cont : {
       if (fatTuple->total_space < maxFatTupleLength()) {
         auto new_fat_tuple_length =
             std::min<u32>(maxFatTupleLength(), fatTuple->total_space * 2);
-        auto buffer = utils::ArrayOnStack<u8>(FLAGS_page_size);
+        auto buffer = utils::ScopedArray<u8>(FLAGS_page_size);
         ENSURE(xIter.value().length() <= FLAGS_page_size);
-        std::memcpy(buffer, xIter.value().data(), xIter.value().length());
+        std::memcpy(buffer.get(), xIter.value().data(), xIter.value().length());
         //
         const bool did_extend = xIter.extendPayload(new_fat_tuple_length);
         ENSURE(did_extend);
@@ -438,16 +439,16 @@ std::tuple<OP_RESULT, u16> FatTuple::GetVisibleTuple(
   DCHECK(!cr::activeTX().isOLTP());
 
   if (mNumDeltas > 0) {
-    auto materializedValue = utils::ArrayOnStack<u8>(mValSize);
-    std::memcpy(materializedValue, GetValPtr(), mValSize);
+    auto materializedValue = utils::ScopedArray<u8>(mValSize);
+    std::memcpy(materializedValue.get(), GetValPtr(), mValSize);
     // we have to apply the diffs
     u16 numVisitedVersions = 2;
     for (int i = mNumDeltas - 1; i >= 0; i--) {
       const auto& delta = getDelta(i);
       const auto& desc = delta.getDescriptor();
-      desc.ApplyDiff(materializedValue, delta.payload + desc.size());
+      desc.ApplyDiff(materializedValue.get(), delta.payload + desc.size());
       if (cr::Worker::my().cc.VisibleForMe(delta.mWorkerId, delta.mTxId)) {
-        valCallback(Slice(materializedValue, mValSize));
+        valCallback(Slice(materializedValue.get(), mValSize));
         return {OP_RESULT::OK, numVisitedVersions};
       }
 
@@ -462,8 +463,8 @@ std::tuple<OP_RESULT, u16> FatTuple::GetVisibleTuple(
 
 void FatTuple::resize(const u32 newLength) {
   auto tmpPageSize = newLength + sizeof(FatTuple);
-  auto tmpPage = utils::ArrayOnStack<u8>(tmpPageSize);
-  auto& newFatTuple = *new (tmpPage) FatTuple(newLength);
+  auto tmpPage = utils::ScopedArray<u8>(tmpPageSize);
+  auto& newFatTuple = *new (tmpPage.get()) FatTuple(newLength);
   newFatTuple.mWorkerId = mWorkerId;
   newFatTuple.mTxId = mTxId;
   newFatTuple.mCommandId = mCommandId;
@@ -483,7 +484,7 @@ void FatTuple::resize(const u32 newLength) {
     append_ll(newFatTuple, reinterpret_cast<u8*>(&getDelta(i)),
               getDelta(i).TotalSize());
   }
-  std::memcpy(this, tmpPage, tmpPageSize);
+  std::memcpy(this, tmpPage.get(), tmpPageSize);
   assert(total_space >= used_space);
 }
 

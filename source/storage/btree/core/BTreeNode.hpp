@@ -58,10 +58,10 @@ public:
   /// The swip of the right-most child.
   Swip<BTreeNode> mRightMostChildSwip = nullptr;
 
-  /// The lower fence of the node.
+  /// The lower fence of the node. Exclusive.
   FenceKey mLowerFence = {0, 0};
 
-  /// The upper fence of the node.
+  /// The upper fence of the node. Inclusive.
   FenceKey mUpperFence = {0, 0};
 
   /// The number of seperators. #slots = #seps + 1.
@@ -258,7 +258,8 @@ public:
     const u16 old_total_length = keySizeWithoutPrefix + ValSize(slot_id);
     const u16 new_total_length = keySizeWithoutPrefix + new_payload_length;
     // Allocate a block that will be freed when the calling function exits.
-    auto key = utils::ArrayOnStack<u8>(keySizeWithoutPrefix);
+    auto keyBuf = utils::ScopedArray<u8>(keySizeWithoutPrefix);
+    auto key = keyBuf.get();
     std::memcpy(key, KeyDataWithoutPrefix(slot_id), keySizeWithoutPrefix);
     mSpaceUsed -= old_total_length;
     if (mDataOffset == slot[slot_id].offset && 0) {
@@ -481,7 +482,7 @@ public:
           (bcmp(key.data(), getLowerFenceKey(), mPrefixSize) != 0)) {
         return -1;
       }
-    } else {
+    } else if (mPrefixSize != 0) {
       Slice keyPrefix(key.data(), min<u16>(key.size(), mPrefixSize));
       Slice lowerFencePrefix(getLowerFenceKey(), mPrefixSize);
       int cmpPrefix = CmpKeys(keyPrefix, lowerFencePrefix);

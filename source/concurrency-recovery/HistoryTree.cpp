@@ -150,10 +150,10 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
                                 TXID to_tx_id, RemoveVersionCallback cb,
                                 [[maybe_unused]] const u64 limit) {
   auto keySize = sizeof(to_tx_id);
-  auto keyBuffer = utils::ArrayOnStack<u8>(FLAGS_page_size);
-  utils::fold(keyBuffer, from_tx_id);
-  Slice key(keyBuffer, keySize);
-  auto payload = utils::ArrayOnStack<u8>(FLAGS_page_size);
+  auto keyBuffer = utils::ScopedArray<u8>(FLAGS_page_size);
+  utils::fold(keyBuffer.get(), from_tx_id);
+  Slice key(keyBuffer.get(), keySize);
+  auto payload = utils::ScopedArray<u8>(FLAGS_page_size);
   u16 payload_length;
   volatile u64 removed_versions = 0;
   BTreeLL* volatile btree = remove_btrees[workerId];
@@ -189,15 +189,16 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
           const bool called_before = versionContainer.called_before;
           versionContainer.called_before = true;
           keySize = iterator.key().length();
-          std::memcpy(keyBuffer, iterator.key().data(), keySize);
+          std::memcpy(keyBuffer.get(), iterator.key().data(), keySize);
           payload_length = iterator.value().length() - sizeof(VersionMeta);
-          std::memcpy(payload, versionContainer.payload, payload_length);
-          key = Slice(keyBuffer, keySize + 1);
+          std::memcpy(payload.get(), versionContainer.payload, payload_length);
+          key = Slice(keyBuffer.get(), keySize + 1);
           iterator.removeCurrent();
           removed_versions = removed_versions + 1;
           iterator.MarkAsDirty();
           iterator.reset();
-          cb(current_tx_id, treeId, payload, payload_length, called_before);
+          cb(current_tx_id, treeId, payload.get(), payload_length,
+             called_before);
           goto restartrem;
         } else {
           break;
@@ -211,7 +212,7 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
   }
 
   btree = update_btrees[workerId];
-  utils::fold(keyBuffer, from_tx_id);
+  utils::fold(keyBuffer.get(), from_tx_id);
 
   // Attention: no cross worker gc in sync
   Session* volatile session = &update_sessions[workerId];
@@ -226,11 +227,11 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
 
         if (guardedLeaf->mLowerFence.length == 0) {
           // Allocate in the stack, freed when the calling function exits.
-          auto lastKey = utils::ArrayOnStack<u8>(
+          auto lastKey = utils::ScopedArray<u8>(
               guardedLeaf->getFullKeyLen(guardedLeaf->mNumSeps - 1));
-          guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, lastKey);
+          guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, lastKey.get());
           TXID last_key_tx_id;
-          utils::unfold(lastKey, last_key_tx_id);
+          utils::unfold(lastKey.get(), last_key_tx_id);
           if (last_key_tx_id > to_tx_id) {
             should_try = false;
           }
@@ -268,17 +269,17 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
             }
             // Allocate in the stack, freed when the calling function exits.
             auto firstKey =
-                utils::ArrayOnStack<u8>(guardedLeaf->getFullKeyLen(0));
-            guardedLeaf->copyFullKey(0, firstKey);
+                utils::ScopedArray<u8>(guardedLeaf->getFullKeyLen(0));
+            guardedLeaf->copyFullKey(0, firstKey.get());
             TXID first_key_tx_id;
-            utils::unfold(firstKey, first_key_tx_id);
+            utils::unfold(firstKey.get(), first_key_tx_id);
 
             // Allocate in the stack, freed when the calling function exits.
-            auto lastKey = utils::ArrayOnStack<u8>(
+            auto lastKey = utils::ScopedArray<u8>(
                 guardedLeaf->getFullKeyLen(guardedLeaf->mNumSeps - 1));
-            guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, lastKey);
+            guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, lastKey.get());
             TXID last_key_tx_id;
-            utils::unfold(lastKey, last_key_tx_id);
+            utils::unfold(lastKey.get(), last_key_tx_id);
             if (first_key_tx_id >= from_tx_id && to_tx_id >= last_key_tx_id) {
               // Purge the whole page
               removed_versions = removed_versions + guardedLeaf->mNumSeps;
@@ -316,11 +317,11 @@ void HistoryTree::visitRemoveVersions(
   // [from, to]
   BTreeLL* btree = remove_btrees[workerId];
   auto keySize = sizeof(to_tx_id);
-  auto keyBuffer = utils::ArrayOnStack<u8>(FLAGS_page_size);
+  auto keyBuffer = utils::ScopedArray<u8>(FLAGS_page_size);
   u64 offset = 0;
-  offset += utils::fold(keyBuffer + offset, from_tx_id);
-  Slice key(keyBuffer, keySize);
-  auto payload = utils::ArrayOnStack<u8>(FLAGS_page_size);
+  offset += utils::fold(keyBuffer.get() + offset, from_tx_id);
+  Slice key(keyBuffer.get(), keySize);
+  auto payload = utils::ScopedArray<u8>(FLAGS_page_size);
   u16 payload_length;
 
   JUMPMU_TRY() {
@@ -340,15 +341,15 @@ void HistoryTree::visitRemoveVersions(
         ENSURE(called_before == false);
         versionContainer.called_before = true;
         keySize = iterator.key().length();
-        std::memcpy(keyBuffer, iterator.key().data(), keySize);
+        std::memcpy(keyBuffer.get(), iterator.key().data(), keySize);
         payload_length = iterator.value().length() - sizeof(VersionMeta);
-        std::memcpy(payload, versionContainer.payload, payload_length);
-        key = Slice(keyBuffer, keySize + 1);
+        std::memcpy(payload.get(), versionContainer.payload, payload_length);
+        key = Slice(keyBuffer.get(), keySize + 1);
         if (!called_before) {
           iterator.MarkAsDirty();
         }
         iterator.reset();
-        cb(current_tx_id, treeId, payload, payload_length, called_before);
+        cb(current_tx_id, treeId, payload.get(), payload_length, called_before);
         goto restart;
       } else {
         break;
