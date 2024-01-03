@@ -258,8 +258,8 @@ public:
     const u16 old_total_length = keySizeWithoutPrefix + ValSize(slot_id);
     const u16 new_total_length = keySizeWithoutPrefix + new_payload_length;
     // Allocate a block that will be freed when the calling function exits.
-    auto keyBuf = utils::ScopedArray<u8>(keySizeWithoutPrefix);
-    auto key = keyBuf.get();
+    auto keyBuf = utils::JumpScopedArray<u8>(keySizeWithoutPrefix);
+    auto key = keyBuf->get();
     std::memcpy(key, KeyDataWithoutPrefix(slot_id), keySizeWithoutPrefix);
     mSpaceUsed -= old_total_length;
     if (mDataOffset == slot[slot_id].offset && 0) {

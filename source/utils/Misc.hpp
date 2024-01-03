@@ -1,5 +1,6 @@
 #pragma once
 
+#include "JumpMU.hpp"
 #include "Units.hpp"
 
 #include "Config.hpp"
@@ -98,6 +99,11 @@ inline u64 unfold(const u8* input, s64& x) {
 
 template <typename T> std::unique_ptr<T[]> ScopedArray(size_t size) {
   return std::move(std::make_unique<T[]>(size));
+}
+
+template <typename T>
+JumpScoped<std::unique_ptr<T[]>> JumpScopedArray(size_t size) {
+  return JumpScoped<std::unique_ptr<T[]>>(ScopedArray<T>(size));
 }
 
 template <size_t Alignment = 512> class AlignedBuffer {

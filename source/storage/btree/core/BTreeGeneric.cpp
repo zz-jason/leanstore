@@ -90,8 +90,8 @@ void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
         BTreeNode::SeparatorInfo{guardedChild->getFullKeyLen(favoredSplitPos),
                                  static_cast<u16>(favoredSplitPos), false};
   }
-  auto sepKeyBuf = utils::ScopedArray<u8>(sepInfo.length);
-  auto sepKey = sepKeyBuf.get();
+  auto sepKeyBuf = utils::JumpScopedArray<u8>(sepInfo.length);
+  auto sepKey = sepKeyBuf->get();
   if (isMetaNode(guardedParent)) {
     // split the root node
     auto xGuardedParent = ExclusiveGuardedBufferFrame(std::move(guardedParent));
@@ -416,17 +416,17 @@ s16 BTreeGeneric::mergeLeftIntoRight(
 
   u16 newLeftUpperFenceSize = xGuardedLeft->getFullKeyLen(till_slot_id - 1);
   ENSURE(newLeftUpperFenceSize > 0);
-  auto newLeftUpperFenceBuf = utils::ScopedArray<u8>(newLeftUpperFenceSize);
-  auto newLeftUpperFence = newLeftUpperFenceBuf.get();
+  auto newLeftUpperFenceBuf = utils::JumpScopedArray<u8>(newLeftUpperFenceSize);
+  auto newLeftUpperFence = newLeftUpperFenceBuf->get();
   xGuardedLeft->copyFullKey(till_slot_id - 1, newLeftUpperFence);
 
   if (!xGuardedParent->prepareInsert(newLeftUpperFenceSize, 0)) {
     return 0; // false
   }
 
-  auto nodeBuf = utils::ScopedArray<u8>(BTreeNode::Size());
+  auto nodeBuf = utils::JumpScopedArray<u8>(BTreeNode::Size());
   {
-    auto tmp = BTreeNode::Init(nodeBuf.get(), true);
+    auto tmp = BTreeNode::Init(nodeBuf->get(), true);
 
     tmp->setFences(Slice(newLeftUpperFence, newLeftUpperFenceSize),
                    xGuardedRight->GetUpperFence());
@@ -442,7 +442,7 @@ s16 BTreeGeneric::mergeLeftIntoRight(
                Slice(newLeftUpperFence, newLeftUpperFenceSize)) == 1);
   }
   {
-    auto tmp = BTreeNode::Init(nodeBuf.get(), true);
+    auto tmp = BTreeNode::Init(nodeBuf->get(), true);
 
     tmp->setFences(xGuardedLeft->GetLowerFence(),
                    Slice(newLeftUpperFence, newLeftUpperFenceSize));
@@ -483,11 +483,11 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
   u8 pages_count = 1;
   s16 max_right;
   auto guardedNodesBuf =
-      utils::ScopedArray<GuardedBufferFrame<BTreeNode>>(MAX_MERGE_PAGES);
-  auto guardedNodes = guardedNodesBuf.get();
+      utils::JumpScopedArray<GuardedBufferFrame<BTreeNode>>(MAX_MERGE_PAGES);
+  auto guardedNodes = guardedNodesBuf->get();
 
-  auto fullyMergedBuf = utils::ScopedArray<bool>(MAX_MERGE_PAGES);
-  auto fullyMerged = fullyMergedBuf.get();
+  auto fullyMergedBuf = utils::JumpScopedArray<bool>(MAX_MERGE_PAGES);
+  auto fullyMerged = fullyMergedBuf->get();
 
   guardedNodes[0] = std::move(guardedChild);
   fullyMerged[0] = false;
