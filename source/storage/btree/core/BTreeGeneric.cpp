@@ -50,6 +50,17 @@ void BTreeGeneric::Init(TREEID btreeId, Config config) {
 }
 
 void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
+  {
+    rapidjson::Document doc(rapidjson::kObjectType);
+    BTreeGeneric::ToJSON(*this, &doc);
+    DLOG(INFO) << "BTree before split: " << leanstore::utils::JsonToStr(&doc);
+  }
+  SCOPED_DEFER({
+    rapidjson::Document doc(rapidjson::kObjectType);
+    BTreeGeneric::ToJSON(*this, &doc);
+    DLOG(INFO) << "BTree after split: " << leanstore::utils::JsonToStr(&doc);
+  });
+
   cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);
   auto parentHandler = findParentEager(*this, toSplit);
   auto guardedParent = parentHandler.GetGuardedParent<BTreeNode>();
@@ -79,7 +90,8 @@ void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
         BTreeNode::SeparatorInfo{guardedChild->getFullKeyLen(favoredSplitPos),
                                  static_cast<u16>(favoredSplitPos), false};
   }
-  auto sepKey = utils::ArrayOnStack<u8>(sepInfo.length);
+  auto sepKeyBuf = utils::ScopedArray<u8>(sepInfo.length);
+  auto sepKey = sepKeyBuf.get();
   if (isMetaNode(guardedParent)) {
     // split the root node
     auto xGuardedParent = ExclusiveGuardedBufferFrame(std::move(guardedParent));
@@ -105,17 +117,6 @@ void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
       xGuardedChild.MarkAsDirty();
     }
 
-    auto exec = [&]() {
-      xGuardedNewRoot.keepAlive();
-      xGuardedNewRoot.InitPayload(false);
-      xGuardedNewRoot->mRightMostChildSwip = xGuardedChild.bf();
-      xGuardedParent->mRightMostChildSwip = xGuardedNewRoot.bf();
-
-      xGuardedNewLeft.InitPayload(xGuardedChild->mIsLeaf);
-      xGuardedChild->getSep(sepKey, sepInfo);
-      xGuardedChild->split(xGuardedNewRoot, xGuardedNewLeft, sepInfo.slot,
-                           sepKey, sepInfo.length);
-    };
     if (config.mEnableWal) {
       auto newRootWalHandler =
           xGuardedNewRoot.ReserveWALPayload<WALInitPage>(0, mTreeId, false);
@@ -134,8 +135,6 @@ void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
               0, parentPageId, lhsPageId, rhsPageId);
       curRightWalHandler.SubmitWal();
 
-      exec();
-
       auto rootWalHandler = xGuardedNewRoot.ReserveWALPayload<WALLogicalSplit>(
           0, parentPageId, lhsPageId, rhsPageId);
       rootWalHandler.SubmitWal();
@@ -143,10 +142,17 @@ void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
       auto leftWalHandler = xGuardedNewLeft.ReserveWALPayload<WALLogicalSplit>(
           0, parentPageId, lhsPageId, rhsPageId);
       leftWalHandler.SubmitWal();
-    } else {
-      exec();
     }
 
+    xGuardedNewRoot.keepAlive();
+    xGuardedNewRoot.InitPayload(false);
+    xGuardedNewRoot->mRightMostChildSwip = xGuardedChild.bf();
+    xGuardedParent->mRightMostChildSwip = xGuardedNewRoot.bf();
+
+    xGuardedNewLeft.InitPayload(xGuardedChild->mIsLeaf);
+    xGuardedChild->getSep(sepKey, sepInfo);
+    xGuardedChild->split(xGuardedNewRoot, xGuardedNewLeft, sepInfo.slot, sepKey,
+                         sepInfo.length);
     mHeight++;
     COUNTERS_BLOCK() {
       WorkerCounters::myCounters().dt_split[mTreeId]++;
@@ -182,13 +188,6 @@ void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
         xGuardedChild.MarkAsDirty();
       }
 
-      auto exec = [&]() {
-        xGuardedNewLeft.InitPayload(xGuardedChild->mIsLeaf);
-        xGuardedChild->getSep(sepKey, sepInfo);
-        xGuardedChild->split(xGuardedParent, xGuardedNewLeft, sepInfo.slot,
-                             sepKey, sepInfo.length);
-      };
-
       if (config.mEnableWal) {
         auto newLeftWalHandler = xGuardedNewLeft.ReserveWALPayload<WALInitPage>(
             0, mTreeId, xGuardedNewLeft->mIsLeaf);
@@ -203,8 +202,6 @@ void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
                 0, parentPageId, lhsPageId, rhsPageId);
         curRightWalHandler.SubmitWal();
 
-        exec();
-
         auto parentWalHandler =
             xGuardedParent.ReserveWALPayload<WALLogicalSplit>(
                 0, parentPageId, lhsPageId, rhsPageId);
@@ -218,9 +215,12 @@ void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
             xGuardedNewLeft.ReserveWALPayload<WALLogicalSplit>(
                 0, parentPageId, lhsPageId, rhsPageId);
         leftWalHandler.SubmitWal();
-      } else {
-        exec();
       }
+
+      xGuardedNewLeft.InitPayload(xGuardedChild->mIsLeaf);
+      xGuardedChild->getSep(sepKey, sepInfo);
+      xGuardedChild->split(xGuardedParent, xGuardedNewLeft, sepInfo.slot,
+                           sepKey, sepInfo.length);
       COUNTERS_BLOCK() {
         WorkerCounters::myCounters().dt_split[mTreeId]++;
       }
@@ -416,16 +416,17 @@ s16 BTreeGeneric::mergeLeftIntoRight(
 
   u16 newLeftUpperFenceSize = xGuardedLeft->getFullKeyLen(till_slot_id - 1);
   ENSURE(newLeftUpperFenceSize > 0);
-  auto newLeftUpperFence = utils::ArrayOnStack<u8>(newLeftUpperFenceSize);
+  auto newLeftUpperFenceBuf = utils::ScopedArray<u8>(newLeftUpperFenceSize);
+  auto newLeftUpperFence = newLeftUpperFenceBuf.get();
   xGuardedLeft->copyFullKey(till_slot_id - 1, newLeftUpperFence);
 
   if (!xGuardedParent->prepareInsert(newLeftUpperFenceSize, 0)) {
     return 0; // false
   }
 
+  auto nodeBuf = utils::ScopedArray<u8>(BTreeNode::Size());
   {
-    auto nodeBuf = utils::ArrayOnStack<u8>(BTreeNode::Size());
-    auto tmp = BTreeNode::Init(nodeBuf, true);
+    auto tmp = BTreeNode::Init(nodeBuf.get(), true);
 
     tmp->setFences(Slice(newLeftUpperFence, newLeftUpperFenceSize),
                    xGuardedRight->GetUpperFence());
@@ -433,7 +434,7 @@ s16 BTreeGeneric::mergeLeftIntoRight(
     xGuardedLeft->copyKeyValueRange(tmp, 0, till_slot_id, copy_from_count);
     xGuardedRight->copyKeyValueRange(tmp, copy_from_count, 0,
                                      xGuardedRight->mNumSeps);
-    memcpy(xGuardedRight.GetPagePayloadPtr(), tmp, sizeof(BTreeNode));
+    memcpy(xGuardedRight.GetPagePayloadPtr(), tmp, BTreeNode::Size());
     xGuardedRight->makeHint();
 
     // Nothing to do for the right node's separator
@@ -441,15 +442,14 @@ s16 BTreeGeneric::mergeLeftIntoRight(
                Slice(newLeftUpperFence, newLeftUpperFenceSize)) == 1);
   }
   {
-    auto nodeBuf = utils::ArrayOnStack<u8>(BTreeNode::Size());
-    auto tmp = BTreeNode::Init(nodeBuf, true);
+    auto tmp = BTreeNode::Init(nodeBuf.get(), true);
 
     tmp->setFences(xGuardedLeft->GetLowerFence(),
                    Slice(newLeftUpperFence, newLeftUpperFenceSize));
     // -------------------------------------------------------------------------------------
     xGuardedLeft->copyKeyValueRange(tmp, 0, 0,
                                     xGuardedLeft->mNumSeps - copy_from_count);
-    memcpy(xGuardedLeft.GetPagePayloadPtr(), tmp, sizeof(BTreeNode));
+    memcpy(xGuardedLeft.GetPagePayloadPtr(), tmp, BTreeNode::Size());
     xGuardedLeft->makeHint();
     // -------------------------------------------------------------------------------------
     assert(xGuardedLeft->compareKeyWithBoundaries(
@@ -482,9 +482,12 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
   s16 pos = parentHandler.mPosInParent;
   u8 pages_count = 1;
   s16 max_right;
-  auto guardedNodes =
-      utils::ArrayOnStack<GuardedBufferFrame<BTreeNode>>(MAX_MERGE_PAGES);
-  auto fullyMerged = utils::ArrayOnStack<bool>(MAX_MERGE_PAGES);
+  auto guardedNodesBuf =
+      utils::ScopedArray<GuardedBufferFrame<BTreeNode>>(MAX_MERGE_PAGES);
+  auto guardedNodes = guardedNodesBuf.get();
+
+  auto fullyMergedBuf = utils::ScopedArray<bool>(MAX_MERGE_PAGES);
+  auto fullyMerged = fullyMergedBuf.get();
 
   guardedNodes[0] = std::move(guardedChild);
   fullyMerged[0] = false;

@@ -96,8 +96,8 @@ inline u64 unfold(const u8* input, s64& x) {
   return sizeof(x);
 }
 
-template <typename T> inline T* ArrayOnStack(size_t n) {
-  return reinterpret_cast<T*>(alloca(n * sizeof(T)));
+template <typename T> std::unique_ptr<T[]> ScopedArray(size_t size) {
+  return std::move(std::make_unique<T[]>(size));
 }
 
 template <size_t Alignment = 512> class AlignedBuffer {
