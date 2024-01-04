@@ -5,6 +5,7 @@
 #include "Units.hpp"
 #include "Worker.hpp"
 #include "Config.hpp"
+#include "utils/ThreadHolder.hpp"
 
 #include <atomic>
 #include <condition_variable>
@@ -19,7 +20,7 @@ struct WorkerThread {
   std::mutex mutex;
   std::condition_variable cv;
   std::function<void()> job = nullptr;
-  bool mIsJobDone = true; // Job done
+  std::atomic<bool> mIsJobDone = true; // Job done
 };
 
 /// Manages a fixed number of worker threads, each one gets a partition. CR is
@@ -37,12 +38,15 @@ public:
 
   std::atomic<u64> mRunningThreads = 0;
 
-  std::atomic<bool> mKeepRunning = true;
+  std::atomic<bool> mWorkerKeepRunning = true;
+  std::atomic<bool> mGroupCommitterKeepRunning = true;
 
   u32 mNumWorkerThreads;
-  std::vector<std::thread> mWorkerThreads;
+  std::vector<utils::ThreadHolder> mWorkerThreads;
   std::vector<WorkerThread> mWorkerThreadsMeta;
   std::vector<Worker*> mWorkers; // all the thread-local worker references
+
+  std::unique_ptr<utils::ThreadHolder> mGroupCommitterThread;
 
 public:
   //---------------------------------------------------------------------------

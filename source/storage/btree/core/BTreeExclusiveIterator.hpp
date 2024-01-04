@@ -80,6 +80,7 @@ public:
   }
 
   virtual void splitForKey(Slice key) {
+    int i = 0;
     while (true) {
       JUMPMU_TRY() {
         if (mSlotId == -1 || !keyInCurrentBoundaries(key)) {

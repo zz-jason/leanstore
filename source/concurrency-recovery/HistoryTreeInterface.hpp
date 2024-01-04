@@ -23,6 +23,8 @@ using RemoveVersionCallback = std::function<void(
 
 class HistoryTreeInterface {
 public:
+  virtual ~HistoryTreeInterface() = default;
+
   virtual void insertVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
                              TREEID treeId, bool isRemove, u64 payloadSize,
                              std::function<void(u8*)> cb,
