@@ -293,8 +293,7 @@ TEST_F(BTreeVITest, Remove) {
     };
 
     cr::Worker::my().startTX();
-    EXPECT_TRUE(
-        GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree));
+    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().commitTX();
 
@@ -351,8 +350,7 @@ TEST_F(BTreeVITest, RemoveNotExisted) {
     };
 
     cr::Worker::my().startTX();
-    EXPECT_TRUE(
-        GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree));
+    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().commitTX();
 
@@ -411,8 +409,7 @@ TEST_F(BTreeVITest, RemoveFromOthers) {
     };
 
     cr::Worker::my().startTX();
-    EXPECT_TRUE(
-        GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree));
+        GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().commitTX();
 
@@ -495,8 +492,7 @@ TEST_F(BTreeVITest, BTreeVIToJSON) {
     };
 
     cr::Worker::my().startTX();
-    EXPECT_TRUE(
-        GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree));
+    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().commitTX();
 
