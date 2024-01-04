@@ -3,6 +3,8 @@
 #include "Exceptions.hpp"
 #include "Units.hpp"
 
+#include <glog/logging.h>
+
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -110,15 +112,15 @@ void DeleteFile(const std::string& fileName) {
 uint64_t GetFileLength(const string& fileName) {
   int fileFD = open(fileName.c_str(), O_RDWR);
   if (fileFD < 0) {
-    cout << "Unable to open file"
-         << endl; // You can POSIX_CHECK errno to see what happend
-    throw;
+    LOG(ERROR) << "Unable to open file: " << fileName;
+    return 0;
   }
+
   if (fcntl(fileFD, F_GETFL) == -1) {
-    cout << "Unable to call fcntl on file"
-         << endl; // You can POSIX_CHECK errno to see what happend
-    throw;
+    LOG(ERROR) << "Unable to call fcntl on file: " << fileName;
+    return 0;
   }
+
   struct stat st;
   fstat(fileFD, &st);
   close(fileFD);

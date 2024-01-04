@@ -21,10 +21,13 @@ jobs:
         version: 12
 
     - name: Install dependencies
-      run: sudo apt install -y libaio-dev gcovr
+      run: sudo apt install -y libaio-dev gcovr cppcheck
 
     - name: Config project
       run: cmake -B build/debug -S . -DCMAKE_BUILD_TYPE=Debug -DBUILD_WITH_COVERAGE=ON
+
+    - name: Cppcheck
+      run: cppcheck --project=build/debug/compile_commands.json -i tests --error-exitcode=1
 
     - name: Build project
       run: cmake --build build/debug -j `nproc`
