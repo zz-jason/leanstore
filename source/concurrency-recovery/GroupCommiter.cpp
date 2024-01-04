@@ -28,7 +28,8 @@ void CRManager::runGroupCommiter() {
   mRunningThreads++;
 
   // set thread name
-  std::string thread_name("leanstore_group_committer");
+  std::string thread_name("group_committer");
+  DCHECK(thread_name.size() < 16);
   pthread_setname_np(pthread_self(), thread_name.c_str());
   CPUCounters::registerThread(thread_name, false);
 

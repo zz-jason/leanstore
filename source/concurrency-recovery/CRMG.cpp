@@ -75,7 +75,8 @@ CRManager::~CRManager() {
 
 void CRManager::runWorker(u64 workerId) {
   // set name of the worker thread
-  std::string workerName("leanstore_worker_" + std::to_string(workerId));
+  std::string workerName("worker_" + std::to_string(workerId));
+  DCHECK(workerName.size() < 16);
   pthread_setname_np(pthread_self(), workerName.c_str());
 
   // pin the worker thread by need
