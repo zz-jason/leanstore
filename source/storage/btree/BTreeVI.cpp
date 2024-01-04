@@ -75,6 +75,7 @@ OP_RESULT BTreeVI::lookupPessimistic(Slice key, ValCallback valCallback) {
     JUMPMU_RETURN ret;
   }
   JUMPMU_CATCH() {
+    DLOG(ERROR) << "lookupPessimistic failed";
   }
   UNREACHABLE();
   return OP_RESULT::OTHER;
