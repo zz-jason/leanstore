@@ -278,7 +278,7 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key, ValCallback callback,
     auto& chainedTuple = *reinterpret_cast<ChainedTuple*>(rawVal.data());
     auto deltaPayloadSize = updateDesc.TotalSize();
     const u64 versionSize = deltaPayloadSize + sizeof(UpdateVersion);
-    COMMANDID commandId;
+    COMMANDID commandId = INVALID_COMMANDID;
 
     // Move the newest tuple to the history version tree.
     if (!FLAGS_vi_fupdate_chained) {

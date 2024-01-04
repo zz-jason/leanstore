@@ -7,7 +7,8 @@
 #include "storage/buffer-manager/GuardedBufferFrame.hpp"
 #include "storage/buffer-manager/TreeRegistry.hpp"
 
-#include "rapidjson/document.h"
+#include <glog/logging.h>
+#include <rapidjson/document.h>
 
 #include <algorithm>
 #include <cassert>
@@ -378,7 +379,7 @@ public:
           upper_out = (pos2 + 1) * dist;
         }
 #else
-        throw;
+        LOG(ERROR) << "Search hint with AVX512 failed: __AVX512F__ not found";
 #endif
       } else if (FLAGS_btree_hints == 1) {
         const u16 dist = mNumSeps / (sHintCount + 1);
@@ -416,14 +417,13 @@ public:
 
   template <bool equality_only = false>
   s16 linearSearchWithBias(Slice key, u16 start_pos, bool higher = true) {
-    throw;
     // EXP
     if (key.size() < mPrefixSize ||
         (bcmp(key.data(), getLowerFenceKey(), mPrefixSize) != 0)) {
       return -1;
     }
-    assert((key.size() >= mPrefixSize) &&
-           (bcmp(key.data(), getLowerFenceKey(), mPrefixSize) == 0));
+    DCHECK(key.size() >= mPrefixSize &&
+           bcmp(key.data(), getLowerFenceKey(), mPrefixSize) == 0);
 
     // the compared key has the same prefix
     key.remove_prefix(mPrefixSize);
