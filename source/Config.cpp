@@ -78,7 +78,7 @@ DEFINE_bool(
 DEFINE_bool(btree_prefix_compression, true, "");
 DEFINE_bool(btree_heads, true,
             "Enable heads optimization in lowerBound search");
-DEFINE_int64(btree_hints, 1, "0: disabled 1: serial 1: AVX512");
+DEFINE_int64(btree_hints, 1, "0: disabled, 1: serial, 2: AVX512");
 DEFINE_bool(nc_reallocation, false,
             "Reallocate hot pages in non-clustered btree index");
 // -------------------------------------------------------------------------------------

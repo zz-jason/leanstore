@@ -315,19 +315,16 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
 
   // [corner cases]: prevent starving when free list is empty and cooling to
   // the required level can not be achieved
-  volatile u64 failedAttempts = 0;
+  u64 failedAttempts = 0;
   if (targetPartition.NeedMoreFreeBfs() && failedAttempts < 10) {
     RandomBufferFramesToCoolOrEvict();
     while (mCoolCandidateBfs.size() > 0) {
-      BufferFrame* coolCandidate;
+      auto coolCandidate = mCoolCandidateBfs.back();
+      mCoolCandidateBfs.pop_back();
+      COUNTERS_BLOCK() {
+        PPCounters::myCounters().phase_1_counter++;
+      }
       JUMPMU_TRY() {
-        coolCandidate = mCoolCandidateBfs.back();
-        mCoolCandidateBfs.pop_back();
-
-        COUNTERS_BLOCK() {
-          PPCounters::myCounters().phase_1_counter++;
-        }
-
         BMOptimisticGuard readGuard(coolCandidate->header.mLatch);
         if (coolCandidate->ShouldRemainInMem()) {
           failedAttempts = failedAttempts + 1;

@@ -66,7 +66,8 @@ DECLARE_bool(bulk_insert);
 // -------------------------------------------------------------------------------------
 DECLARE_int64(trace_dt_id);
 DECLARE_int64(trace_trigger_probability);
-DECLARE_bool(pid_tracing;) DECLARE_string(tag);
+DECLARE_bool(pid_tracing);
+DECLARE_string(tag);
 // -------------------------------------------------------------------------------------
 DECLARE_uint64(buffer_frame_recycle_batch_size);
 DECLARE_bool(reclaim_page_ids);
