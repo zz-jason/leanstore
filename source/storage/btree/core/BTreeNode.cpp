@@ -53,7 +53,7 @@ bool BTreeNode::prepareInsert(u16 keySize, u16 valSize) {
 }
 
 s16 BTreeNode::insertDoNotCopyPayload(Slice key, u16 valSize, s32 pos) {
-  assert(canInsert(key.size(), valSize));
+  DCHECK(canInsert(key.size(), valSize));
   prepareInsert(key.size(), valSize);
 
   s32 slotId = (pos == -1) ? lowerBound<false>(key) : pos;

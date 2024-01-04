@@ -30,9 +30,8 @@ atomic<u64> Worker::sAllLwm = 0;
 atomic<u64> Worker::sOltpLwm = 0;
 atomic<u64> Worker::sNewestOlapStartTx = 0;
 
-Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers,
-               HistoryTreeInterface& historyTree)
-    : cc(historyTree, numWorkers), mWorkerId(workerId), mAllWorkers(allWorkers),
+Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers)
+    : cc(numWorkers), mWorkerId(workerId), mAllWorkers(allWorkers),
       mNumAllWorkers(numWorkers) {
   CRCounters::myCounters().mWorkerId = workerId;
 
@@ -203,7 +202,7 @@ void Worker::abortTX() {
         complexEntry.mTreeId, complexEntry.payload, txId);
   });
 
-  cc.mHistoryTree.purgeVersions(
+  cc.mHistoryTree->purgeVersions(
       mWorkerId, mActiveTx.startTS(), mActiveTx.startTS(),
       [&](const TXID, const TREEID, const u8*, u64, const bool) {});
 

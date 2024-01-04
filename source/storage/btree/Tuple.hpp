@@ -285,6 +285,12 @@ struct __attribute__((packed)) DanglingPointer {
   BufferFrame* bf = nullptr;
   u64 latch_version_should_be = -1;
   s32 head_slot = -1;
+
+public:
+  DanglingPointer() = default;
+  DanglingPointer(BufferFrame* bf, u64 latchVersion, s32 headSlot)
+      : bf(bf), latch_version_should_be(latchVersion), head_slot(headSlot) {
+  }
 };
 
 // -----------------------------------------------------------------------------
@@ -344,9 +350,13 @@ public:
 struct __attribute__((packed)) RemoveVersion : Version {
 public:
   u16 mKeySize;
+
   u16 mValSize;
+
   DanglingPointer dangling_pointer;
+
   bool moved_to_graveway = false;
+
   u8 payload[]; // Key + Value
 
 public:
@@ -370,11 +380,11 @@ public:
 /// current worker thread.
 /// Chained: only scheduled gc todos.
 struct __attribute__((packed)) ChainedTuple : Tuple {
-  u16 updates_counter = 0;
+  u16 mTotalUpdates = 0;
 
-  u16 oldest_tx = 0;
+  u16 mOldestTx = 0;
 
-  u8 is_removed = 1;
+  u8 mIsRemoved = 1;
 
   u8 payload[]; // latest version in-place
 
@@ -384,7 +394,7 @@ public:
   /// NOTE: Payload space should be allocated in advance. This constructor is
   /// usually called by a placmenet new operator.
   ChainedTuple(WORKERID workerId, TXID txId, Slice val)
-      : Tuple(TupleFormat::CHAINED, workerId, txId), is_removed(false) {
+      : Tuple(TupleFormat::CHAINED, workerId, txId), mIsRemoved(false) {
     std::memcpy(payload, val.data(), val.size());
   }
 
@@ -396,7 +406,7 @@ public:
   /// the address of the FatTuple
   ChainedTuple(FatTuple& oldFatTuple)
       : Tuple(TupleFormat::CHAINED, oldFatTuple.mWorkerId, oldFatTuple.mTxId),
-        is_removed(false) {
+        mIsRemoved(false) {
     mCommandId = oldFatTuple.mCommandId;
     std::memmove(payload, oldFatTuple.payload, oldFatTuple.mValSize);
   }
