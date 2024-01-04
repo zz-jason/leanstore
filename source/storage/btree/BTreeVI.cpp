@@ -37,79 +37,80 @@ OP_RESULT BTreeVI::Lookup(Slice key, ValCallback valCallback) {
 
 OP_RESULT BTreeVI::lookupPessimistic(Slice key, ValCallback valCallback) {
   JUMPMU_TRY() {
-    BTreeSharedIterator iterator(*static_cast<BTreeGeneric*>(this),
-                                 LATCH_FALLBACK_MODE::SHARED);
-    auto ret = iterator.seekExact(key);
+    BTreeSharedIterator iter(*static_cast<BTreeGeneric*>(this));
+    auto ret = iter.seekExact(key);
     if (ret != OP_RESULT::OK) {
       JUMPMU_RETURN OP_RESULT::NOT_FOUND;
     }
-    const auto& chainedTuple = *ChainedTuple::From(iterator.value().data());
-    iterator.assembleKey();
-    auto reconstruct = GetVisibleTuple(iterator.value(), valCallback);
+
+    auto versionsRead(0);
+    std::tie(ret, versionsRead) = GetVisibleTuple(iter.value(), valCallback);
     COUNTERS_BLOCK() {
       WorkerCounters::myCounters().cc_read_chains[mTreeId]++;
       WorkerCounters::myCounters().cc_read_versions_visited[mTreeId] +=
-          std::get<1>(reconstruct);
+          versionsRead;
     }
-    ret = std::get<0>(reconstruct);
 
     if (cr::activeTX().isOLAP() && ret == OP_RESULT::NOT_FOUND) {
-      BTreeSharedIterator g_iterator(*static_cast<BTreeGeneric*>(mGraveyard));
-      OP_RESULT ret = g_iterator.seekExact(key);
-      if (ret == OP_RESULT::OK) {
-        iterator.assembleKey();
-        reconstruct = GetVisibleTuple(iterator.value(), valCallback);
+      BTreeSharedIterator gIter(*static_cast<BTreeGeneric*>(mGraveyard));
+      ret = gIter.seekExact(key);
+      if (ret != OP_RESULT::OK) {
+        JUMPMU_RETURN OP_RESULT::NOT_FOUND;
+      }
+      std::tie(ret, versionsRead) = GetVisibleTuple(iter.value(), valCallback);
+      COUNTERS_BLOCK() {
+        WorkerCounters::myCounters().cc_read_chains[mTreeId]++;
+        WorkerCounters::myCounters().cc_read_versions_visited[mTreeId] +=
+            versionsRead;
       }
     }
 
-    if (ret != OP_RESULT::ABORT_TX && ret != OP_RESULT::OK) {
-      // For debugging
-      raise(SIGTRAP);
-      cout << endl;
-      cout << u64(std::get<1>(reconstruct)) << " , " << mTreeId << endl;
+    if (ret != OP_RESULT::OK) {
+      JUMPMU_RETURN OP_RESULT::NOT_FOUND;
     }
-
-    cr::Worker::my().mLogging.checkLogDepdency(chainedTuple.mWorkerId,
-                                               chainedTuple.mTxId);
-
+    const auto tuple = Tuple::From(iter.value().data());
+    cr::Worker::my().mLogging.checkLogDepdency(tuple->mWorkerId, tuple->mTxId);
     JUMPMU_RETURN ret;
   }
   JUMPMU_CATCH() {
-    DLOG(ERROR) << "lookupPessimistic failed";
+    LOG(ERROR) << "lookupPessimistic failed";
   }
-  UNREACHABLE();
-  return OP_RESULT::OTHER;
+
+  return OP_RESULT::NOT_FOUND;
 }
 
 OP_RESULT BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
-  while (true) {
+  const size_t maxAttempts = 2;
+  for (size_t i = maxAttempts; i > 0; i--) {
     JUMPMU_TRY() {
-      GuardedBufferFrame<BTreeNode> guardedLeaf;
-
       // Find the correct page containing the key
+      GuardedBufferFrame<BTreeNode> guardedLeaf;
       FindLeafCanJump(key, guardedLeaf);
 
       // Find the correct slot of the key
-      s16 slotId = guardedLeaf->lowerBound<true>(key);
-
       // Return NOT_FOUND if could find the slot
+      s16 slotId = guardedLeaf->lowerBound<true>(key);
       if (slotId == -1) {
         guardedLeaf.JumpIfModifiedByOthers();
         JUMPMU_RETURN OP_RESULT::NOT_FOUND;
       }
 
-      auto chainedTuple =
-          *reinterpret_cast<Tuple*>(guardedLeaf->ValData(slotId));
+      auto rawVal = guardedLeaf->ValData(slotId);
+      auto tuple = *Tuple::From(rawVal);
       guardedLeaf.JumpIfModifiedByOthers();
 
       // Return NOT_FOUND if the tuple is not visible
-      if (!VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId, false)) {
+      if (!VisibleForMe(tuple.mWorkerId, tuple.mTxId, false)) {
         JUMPMU_RETURN OP_RESULT::NOT_FOUND;
       }
 
       u32 offset = 0;
-      switch (chainedTuple.mFormat) {
+      switch (tuple.mFormat) {
       case TupleFormat::CHAINED: {
+        const auto chainedTuple = ChainedTuple::From(rawVal);
+        if (chainedTuple->mIsRemoved) {
+          JUMPMU_RETURN OP_RESULT::NOT_FOUND;
+        }
         offset = sizeof(ChainedTuple);
         break;
       }
@@ -118,8 +119,8 @@ OP_RESULT BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
         break;
       }
       default: {
-        guardedLeaf.JumpIfModifiedByOthers();
-        UNREACHABLE();
+        LOG(ERROR) << "Unhandled tuple format: "
+                   << TupleFormatUtil::ToString(tuple.mFormat);
       }
       }
 
@@ -134,9 +135,7 @@ OP_RESULT BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
         WorkerCounters::myCounters().cc_read_versions_visited[mTreeId] += 1;
       }
 
-      cr::Worker::my().mLogging.checkLogDepdency(chainedTuple.mWorkerId,
-                                                 chainedTuple.mTxId);
-
+      cr::Worker::my().mLogging.checkLogDepdency(tuple.mWorkerId, tuple.mTxId);
       JUMPMU_RETURN OP_RESULT::OK;
     }
     JUMPMU_CATCH() {
@@ -144,6 +143,8 @@ OP_RESULT BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
   }
 
   // lookup failed, fallback to lookupPessimistic
+  LOG(INFO) << "lookupOptimistic failed " << maxAttempts
+            << " times, fallback to lookupPessimistic";
   return OP_RESULT::OTHER;
 }
 
@@ -223,21 +224,21 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key, ValCallback callback,
       if (FLAGS_vi_fat_tuple_trigger == 0) {
         if (cr::Worker::my().cc.isVisibleForAll(chainedTuple.mWorkerId,
                                                 chainedTuple.mTxId)) {
-          chainedTuple.oldest_tx = 0;
-          chainedTuple.updates_counter = 0;
+          chainedTuple.mOldestTx = 0;
+          chainedTuple.mTotalUpdates = 0;
           convert_to_fat_tuple = false;
         } else {
-          if (chainedTuple.oldest_tx ==
+          if (chainedTuple.mOldestTx ==
               static_cast<u16>(cr::Worker::sOldestAllStartTs & 0xFFFF)) {
-            chainedTuple.updates_counter++;
+            chainedTuple.mTotalUpdates++;
           } else {
-            chainedTuple.oldest_tx =
+            chainedTuple.mOldestTx =
                 static_cast<u16>(cr::Worker::sOldestAllStartTs & 0xFFFF);
-            chainedTuple.updates_counter = 0;
+            chainedTuple.mTotalUpdates = 0;
           }
         }
         convert_to_fat_tuple &=
-            chainedTuple.updates_counter > convertToFatTupleThreshold();
+            chainedTuple.mTotalUpdates > convertToFatTupleThreshold();
       } else if (FLAGS_vi_fat_tuple_trigger == 1) {
         convert_to_fat_tuple &= utils::RandomGenerator::getRandU64(
                                     0, convertToFatTupleThreshold()) == 0;
@@ -249,7 +250,7 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key, ValCallback callback,
         COUNTERS_BLOCK() {
           WorkerCounters::myCounters().cc_fat_tuple_triggered[mTreeId]++;
         }
-        chainedTuple.updates_counter = 0;
+        chainedTuple.mTotalUpdates = 0;
         const bool convert_ret = Tuple::ToChainedTuple(xIter);
         if (convert_ret) {
           xIter.mGuardedLeaf->mHasGarbage = true;
@@ -334,60 +335,46 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key, ValCallback callback,
 
 OP_RESULT BTreeVI::insert(Slice key, Slice val) {
   DCHECK(cr::Worker::my().IsTxStarted());
-  // SCOPED_DEFER({
-  //   rapidjson::Document doc(rapidjson::kObjectType);
-  //   BTreeGeneric::ToJSON(*this, &doc);
-  //   DLOG(INFO) << "BTreeVI after insert: " <<
-  //   leanstore::utils::JsonToStr(&doc);
-  // });
 
   cr::activeTX().markAsWrite();
   cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);
   u16 payloadSize = val.size() + sizeof(ChainedTuple);
 
   while (true) {
-    JUMPMU_TRY() {
-      BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
-      auto ret = iterator.seekToInsert(key);
+    BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
+    auto ret = xIter.seekToInsert(key);
 
-      if (ret == OP_RESULT::DUPLICATE) {
-        auto rawVal = iterator.MutableVal();
-        auto& chainedTuple = *ChainedTuple::From(rawVal.data());
-        auto writeLocked = chainedTuple.IsWriteLocked();
-        auto visibleForMe =
-            VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId);
-        if (writeLocked || !visibleForMe) {
-          DLOG(ERROR) << "Insert failed, writeLocked=" << writeLocked
-                      << ", visibleForMe=" << visibleForMe;
-          JUMPMU_RETURN OP_RESULT::ABORT_TX;
-        }
-        DLOG(ERROR) << "Insert failed, key is duplicated";
-        JUMPMU_RETURN OP_RESULT::DUPLICATE;
-        // ENSURE(false);
-        // Not implemented: maybe it has been removed but no GCed
+    if (ret == OP_RESULT::DUPLICATE) {
+      auto mutRawVal = xIter.MutableVal();
+      auto& chainedTuple = *ChainedTuple::From(mutRawVal.data());
+      auto writeLocked = chainedTuple.IsWriteLocked();
+      auto visibleForMe =
+          VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId);
+      if (writeLocked || !visibleForMe) {
+        DLOG(ERROR) << "Insert failed, writeLocked=" << writeLocked
+                    << ", visibleForMe=" << visibleForMe;
+        return OP_RESULT::ABORT_TX;
       }
-
-      ret = iterator.enoughSpaceInCurrentNode(key, payloadSize);
-      if (ret == OP_RESULT::NOT_ENOUGH_SPACE) {
-        iterator.splitForKey(key);
-        JUMPMU_CONTINUE;
-      }
-
-      // WAL
-      auto walHandler = iterator.mGuardedLeaf.ReserveWALPayload<WALInsert>(
-          key.size() + val.size(), key, val);
-      walHandler.SubmitWal();
-
-      // insert
-      BTreeVI::InsertToNode(
-          iterator.mGuardedLeaf, key, val, cr::Worker::my().mWorkerId,
-          cr::activeTX().startTS(), cr::activeTX().mTxMode, iterator.mSlotId);
-      JUMPMU_RETURN OP_RESULT::OK;
+      LOG(INFO) << "Insert failed, key is duplicated";
+      return OP_RESULT::DUPLICATE;
     }
-    JUMPMU_CATCH() {
-      DLOG(ERROR) << "Encounter unhandled jump";
-      UNREACHABLE();
+
+    ret = xIter.enoughSpaceInCurrentNode(key, payloadSize);
+    if (ret == OP_RESULT::NOT_ENOUGH_SPACE) {
+      xIter.splitForKey(key);
+      continue;
     }
+
+    // WAL
+    auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WALInsert>(
+        key.size() + val.size(), key, val);
+    walHandler.SubmitWal();
+
+    // insert
+    BTreeVI::InsertToNode(xIter.mGuardedLeaf, key, val,
+                          cr::Worker::my().mWorkerId, cr::activeTX().startTS(),
+                          cr::activeTX().mTxMode, xIter.mSlotId);
+    return OP_RESULT::OK;
   }
   return OP_RESULT::OTHER;
 }
@@ -410,7 +397,6 @@ OP_RESULT BTreeVI::remove(Slice key) {
         }
       }
 
-      RAISE_WHEN(cr::activeTX().atLeastSI());
       JUMPMU_RETURN OP_RESULT::NOT_FOUND;
     }
 
@@ -421,26 +407,24 @@ OP_RESULT BTreeVI::remove(Slice key) {
       JUMPMU_RETURN OP_RESULT::OK;
     }
 
-    auto payload = xIter.MutableVal();
-    ChainedTuple& chainedTuple = *ChainedTuple::From(payload.data());
+    auto mutRawVal = xIter.MutableVal();
+    ChainedTuple& chainedTuple = *ChainedTuple::From(mutRawVal.data());
     // TODO: removing fat tuple is not supported atm
     DCHECK(chainedTuple.mFormat == TupleFormat::CHAINED);
     if (chainedTuple.IsWriteLocked() ||
         !VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId, true)) {
       JUMPMU_RETURN OP_RESULT::ABORT_TX;
     }
-    ENSURE(!cr::activeTX().atLeastSI() || chainedTuple.is_removed == false);
-    if (chainedTuple.is_removed) {
+    ENSURE(!cr::activeTX().atLeastSI() || chainedTuple.mIsRemoved == false);
+    if (chainedTuple.mIsRemoved) {
       JUMPMU_RETURN OP_RESULT::NOT_FOUND;
     }
 
     chainedTuple.WriteLock();
 
-    DanglingPointer dangling_pointer;
-    dangling_pointer.bf = xIter.mGuardedLeaf.mBf;
-    dangling_pointer.latch_version_should_be =
-        xIter.mGuardedLeaf.mGuard.mVersion;
-    dangling_pointer.head_slot = xIter.mSlotId;
+    DanglingPointer danglingPointer(xIter.mGuardedLeaf.mBf,
+                                    xIter.mGuardedLeaf.mGuard.mVersion,
+                                    xIter.mSlotId);
     u16 valSize = xIter.value().length() - sizeof(ChainedTuple);
     u16 versionSize = sizeof(RemoveVersion) + valSize + key.size();
     COMMANDID commandId = cr::Worker::my().cc.insertVersion(
@@ -448,7 +432,7 @@ OP_RESULT BTreeVI::remove(Slice key) {
           auto& removeVersion = *new (versionBuf) RemoveVersion(
               chainedTuple.mWorkerId, chainedTuple.mTxId,
               chainedTuple.mCommandId, key.size(), valSize);
-          removeVersion.dangling_pointer = dangling_pointer;
+          removeVersion.dangling_pointer = danglingPointer;
           std::memcpy(removeVersion.payload, key.data(), key.size());
           std::memcpy(removeVersion.payload + key.size(), chainedTuple.payload,
                       valSize);
@@ -467,10 +451,10 @@ OP_RESULT BTreeVI::remove(Slice key) {
       xIter.mGuardedLeaf.IncPageGSN();
     }
 
-    if (payload.length() - sizeof(ChainedTuple) > 1) {
+    if (mutRawVal.length() - sizeof(ChainedTuple) > 1) {
       xIter.shorten(sizeof(ChainedTuple));
     }
-    chainedTuple.is_removed = true;
+    chainedTuple.mIsRemoved = true;
     chainedTuple.mWorkerId = cr::Worker::my().mWorkerId;
     chainedTuple.mTxId = cr::activeTX().startTS();
     chainedTuple.mCommandId = commandId;

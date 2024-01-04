@@ -15,6 +15,8 @@ buildAndTest() {
   cppcheck --project=${build_dir}/compile_commands.json -i tests --error-exitcode=0
   cmake --build ${build_dir} -j `nproc`
   ctest --test-dir ${build_dir}
+  gcovr -v -r . --html-details --output coverage/ --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*'
+  # to view the html report:  python3 -m http.server --directory coverage
   popd
 }
 

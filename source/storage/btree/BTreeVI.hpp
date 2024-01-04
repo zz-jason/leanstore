@@ -187,13 +187,13 @@ public:
           iterator.shorten(new_primary_payload_length);
         }
         MutableSlice primaryPayload = iterator.MutableVal();
-        auto& primaryVersion = *new (primaryPayload.data()) ChainedTuple(
+        auto& chainedTuple = *new (primaryPayload.data()) ChainedTuple(
             removeEntry.mPrevWorkerId, removeEntry.mPrevTxId,
             Slice(removeEntry.payload + removeEntry.mKeySize,
                   removeEntry.mValSize));
-        primaryVersion.mCommandId = removeEntry.mPrevCommandId;
-        ENSURE(primaryVersion.is_removed == false);
-        primaryVersion.WriteUnlock();
+        chainedTuple.mCommandId = removeEntry.mPrevCommandId;
+        ENSURE(chainedTuple.mIsRemoved == false);
+        chainedTuple.WriteUnlock();
         iterator.MarkAsDirty();
       }
       JUMPMU_CATCH() {
@@ -221,13 +221,14 @@ public:
             *static_cast<BTreeGeneric*>(this), version.dangling_pointer.bf,
             version.dangling_pointer.latch_version_should_be);
         auto& node = iterator.mGuardedLeaf;
-        auto& head = *reinterpret_cast<ChainedTuple*>(
+        auto& chainedTuple = *ChainedTuple::From(
             node->ValData(version.dangling_pointer.head_slot));
         // Being chained is implicit because we check for version, so the state
         // can not be changed after staging the todo
-        ENSURE(head.mFormat == TupleFormat::CHAINED && !head.IsWriteLocked() &&
-               head.mWorkerId == version_worker_id &&
-               head.mTxId == version_tx_id && head.is_removed);
+        ENSURE(chainedTuple.mFormat == TupleFormat::CHAINED &&
+               !chainedTuple.IsWriteLocked() &&
+               chainedTuple.mWorkerId == version_worker_id &&
+               chainedTuple.mTxId == version_tx_id && chainedTuple.mIsRemoved);
         node->removeSlot(version.dangling_pointer.head_slot);
         iterator.MarkAsDirty();
         iterator.mergeIfNeeded();
@@ -274,13 +275,11 @@ public:
           JUMPMU_RETURN;
         }
       }
-      ChainedTuple& primaryVersion =
-          *reinterpret_cast<ChainedTuple*>(primaryPayload.data());
-      if (!primaryVersion.IsWriteLocked()) {
-        if (primaryVersion.mWorkerId == version_worker_id &&
-            primaryVersion.mTxId == version_tx_id &&
-            primaryVersion.is_removed) {
-          if (primaryVersion.mTxId < cr::Worker::my().cc.local_all_lwm) {
+      ChainedTuple& chainedTuple = *ChainedTuple::From(primaryPayload.data());
+      if (!chainedTuple.IsWriteLocked()) {
+        if (chainedTuple.mWorkerId == version_worker_id &&
+            chainedTuple.mTxId == version_tx_id && chainedTuple.mIsRemoved) {
+          if (chainedTuple.mTxId < cr::Worker::my().cc.local_all_lwm) {
             ret = iterator.removeCurrent();
             iterator.MarkAsDirty();
             ENSURE(ret == OP_RESULT::OK);
@@ -288,8 +287,7 @@ public:
             COUNTERS_BLOCK() {
               WorkerCounters::myCounters().cc_todo_removed[mTreeId]++;
             }
-          } else if (primaryVersion.mTxId <
-                     cr::Worker::my().cc.local_oltp_lwm) {
+          } else if (chainedTuple.mTxId < cr::Worker::my().cc.local_oltp_lwm) {
             // Move to mGraveyard
             {
               BTreeExclusiveIterator g_iterator(
@@ -562,21 +560,21 @@ private:
                                                     ValCallback callback) {
     while (true) {
       JUMPMU_TRY() {
-        const auto& tuple = *Tuple::From(payload.data());
-        switch (tuple.mFormat) {
+        const auto tuple = Tuple::From(payload.data());
+        switch (tuple->mFormat) {
         case TupleFormat::CHAINED: {
-          const auto& chainedTuple = *ChainedTuple::From(payload.data());
-          auto ret = chainedTuple.GetVisibleTuple(payload, callback);
+          const auto chainedTuple = ChainedTuple::From(payload.data());
+          auto ret = chainedTuple->GetVisibleTuple(payload, callback);
           JUMPMU_RETURN ret;
         }
         case TupleFormat::FAT: {
-          const auto& fatTuple = *FatTuple::From(payload.data());
-          auto ret = fatTuple.GetVisibleTuple(callback);
+          const auto fatTuple = FatTuple::From(payload.data());
+          auto ret = fatTuple->GetVisibleTuple(callback);
           JUMPMU_RETURN ret;
         }
         default: {
-          DCHECK(false) << "Unhandled tuple format: "
-                        << TupleFormatUtil::ToString(tuple.mFormat);
+          LOG(ERROR) << "Unhandled tuple format: "
+                     << TupleFormatUtil::ToString(tuple->mFormat);
         }
         }
       }

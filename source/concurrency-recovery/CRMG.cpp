@@ -54,6 +54,9 @@ CRManager::CRManager(s32 walFd)
 
   // setup history tree
   scheduleJobSync(0, [&]() { setupHistoryTree(); });
+  for (u64 workerId = 0; workerId < mNumWorkerThreads; workerId++) {
+    mWorkers[workerId]->cc.mHistoryTree = mHistoryTreePtr.get();
+  }
 }
 
 CRManager::~CRManager() {
@@ -86,8 +89,8 @@ void CRManager::runWorker(u64 workerId) {
   WorkerCounters::myCounters().mWorkerId = workerId;
   CRCounters::myCounters().mWorkerId = workerId;
 
-  Worker::sTlsWorker = std::make_unique<Worker>(
-      workerId, mWorkers, mNumWorkerThreads, *mHistoryTreePtr.get());
+  Worker::sTlsWorker =
+      std::make_unique<Worker>(workerId, mWorkers, mNumWorkerThreads);
   mWorkers[workerId] = Worker::sTlsWorker.get();
   mRunningThreads++;
 
