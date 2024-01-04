@@ -32,7 +32,7 @@ static std::string RandomAlphString(std::size_t len) {
   return result;
 }
 
-static void InitLeanStore() {
+static auto InitLeanStore() {
   FLAGS_vi = true;
   FLAGS_enable_print_btree_stats_on_exit = true;
   FLAGS_wal = true;
@@ -44,15 +44,12 @@ static void InitLeanStore() {
   std::filesystem::path dirPath = FLAGS_data_dir;
   std::filesystem::remove_all(dirPath);
   std::filesystem::create_directories(dirPath);
-  sLeanStore = std::make_unique<leanstore::LeanStore>();
+  return std::make_unique<leanstore::LeanStore>();
 }
 
 static leanstore::LeanStore* GetLeanStore() {
-  return sLeanStore.get();
-}
-
-static void DeInitLeanStore() {
-  sLeanStore = nullptr;
+  static auto leanStore = InitLeanStore();
+  return leanStore.get();
 }
 
 class BTreeVITest : public ::testing::Test {
@@ -286,9 +283,6 @@ TEST_F(BTreeVITest, BTreeVIToJSON) {
 } // namespace leanstore
 
 int main(int argc, char** argv) {
-  leanstore::InitLeanStore();
-  SCOPED_DEFER(leanstore::DeInitLeanStore());
-
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

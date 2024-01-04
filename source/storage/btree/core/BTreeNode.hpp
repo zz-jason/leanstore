@@ -13,6 +13,7 @@
 #include <cassert>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <string>
 
 using namespace std;

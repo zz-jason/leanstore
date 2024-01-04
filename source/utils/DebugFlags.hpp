@@ -11,6 +11,7 @@ namespace utils {
 #ifdef NDEBUG
 #define LS_DEBUG_EXECUTE(name, action)
 #define LS_DEBUG_ENABLE(name)
+#define LS_DEBUG_DISABLE(name)
 #else
 #define LS_DEBUG_EXECUTE(name, action)                                         \
   if (leanstore::utils::DebugFlagsRegistry::sInstance->IsExists(name)) {       \

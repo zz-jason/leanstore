@@ -84,7 +84,7 @@ void CRManager::runGroupCommiter() {
   walFlushReqs.resize(mNumWorkerThreads);
 
   /// write WAL records from every worker thread to SSD.
-  while (mKeepRunning) {
+  while (mGroupCommitterKeepRunning) {
     /// Phase 1: Prepare pwrite requests
     ///
     /// We use the asynchronous IO interface from libaio to batch all log writes

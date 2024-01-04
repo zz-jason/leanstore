@@ -28,7 +28,7 @@ void CRManager::groupCommitCordinator() {
     LID maxFlushedGsn; // Sync all workers to this point
     TXID minFlushedCommitTs;
 
-    while (mKeepRunning) {
+    while (mGroupCommitterKeepRunning) {
       minFlushedGsn = std::numeric_limits<LID>::max();
       maxFlushedGsn = 0;
       minFlushedCommitTs = std::numeric_limits<TXID>::max();

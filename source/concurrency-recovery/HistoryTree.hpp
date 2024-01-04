@@ -52,6 +52,8 @@ public:
   std::unique_ptr<BTreeLL*[]> update_btrees;
   std::unique_ptr<BTreeLL*[]> remove_btrees;
 
+  virtual ~HistoryTree() = default;
+
   virtual void insertVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
                              TREEID treeId, bool isRemove, u64 payload_length,
                              std::function<void(u8*)> cb,

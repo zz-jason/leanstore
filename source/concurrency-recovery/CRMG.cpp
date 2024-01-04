@@ -3,10 +3,13 @@
 #include "concurrency-recovery/HistoryTree.hpp"
 #include "profiling/counters/CPUCounters.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "utils/ThreadHolder.hpp"
 
+#include <cassert>
 #include <glog/logging.h>
 
 #include <mutex>
+#include <stdexcept>
 
 namespace leanstore {
 namespace cr {
@@ -33,33 +36,20 @@ CRManager::CRManager(s32 walFd)
     mWorkerThreads.emplace_back(workerThreadMain, workerId);
   }
 
-  // make the worker threads to run in background
-  for (auto& worker : mWorkerThreads) {
-    worker.detach();
-  }
-
   // wait until all worker threads are initialized
   while (mRunningThreads < mNumWorkerThreads) {
   }
 
   // setup group commit worker if WAL is enabled
   if (FLAGS_wal) {
-    if (FLAGS_wal_variant == 0) {
-      std::thread groupCommitWorker([&]() {
-        if (FLAGS_enable_pin_worker_threads) {
-          utils::pinThisThread(mNumWorkerThreads);
-        }
-        runGroupCommiter();
-      });
-      groupCommitWorker.detach();
-    } else {
-      groupCommitCordinator();
-      if (FLAGS_wal_variant == 1) {
-        groupCommiter1();
-      } else if (FLAGS_wal_variant == 2) {
-        groupCommiter2();
+    utils::ThreadHolder groupCommitWorker([&]() {
+      if (FLAGS_enable_pin_worker_threads) {
+        utils::pinThisThread(mNumWorkerThreads);
       }
-    }
+      runGroupCommiter();
+    });
+    mGroupCommitterThread =
+        std::make_unique<utils::ThreadHolder>(std::move(groupCommitWorker));
   }
 
   // setup history tree
@@ -67,11 +57,16 @@ CRManager::CRManager(s32 walFd)
 }
 
 CRManager::~CRManager() {
-  mKeepRunning = false;
+  mGroupCommitterKeepRunning = false;
+  mGroupCommitterThread.release();
+
+  mWorkerKeepRunning = false;
   for (auto& meta : mWorkerThreadsMeta) {
     meta.cv.notify_one();
   }
-  while (mRunningThreads) {
+
+  mWorkerThreads.clear();
+  while (mRunningThreads > 1) {
   }
 }
 
@@ -101,10 +96,11 @@ void CRManager::runWorker(u64 workerId) {
   }
 
   auto& meta = mWorkerThreadsMeta[workerId];
-  while (mKeepRunning) {
+  while (mWorkerKeepRunning) {
     std::unique_lock guard(meta.mutex);
-    meta.cv.wait(guard, [&]() { return !mKeepRunning || meta.job != nullptr; });
-    if (!mKeepRunning) {
+    meta.cv.wait(guard,
+                 [&]() { return !mWorkerKeepRunning || meta.job != nullptr; });
+    if (!mWorkerKeepRunning) {
       break;
     }
 
@@ -159,7 +155,7 @@ void CRManager::setupHistoryTree() {
 
 void CRManager::scheduleJobSync(u64 workerId, std::function<void()> job) {
   setJob(workerId, job);
-  joinOne(workerId, [&](WorkerThread& meta) { return meta.mIsJobDone; });
+  joinOne(workerId, [&](WorkerThread& meta) { return meta.mIsJobDone.load(); });
 }
 
 void CRManager::scheduleJobAsync(u64 workerId, std::function<void()> job) {
