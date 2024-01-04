@@ -90,9 +90,13 @@ void BufferManager::StartBufferFrameProviders() {
   DCHECK(FLAGS_pp_threads <= mNumPartitions);
   mBfProviders.reserve(FLAGS_pp_threads);
   for (auto i = 0u; i < FLAGS_pp_threads; ++i) {
+    std::string threadName = "bf_provider";
+    if (FLAGS_pp_threads > 1) {
+      threadName = "bf_provider_" + std::to_string(i);
+    }
     mBfProviders.push_back(std::move(std::make_unique<BufferFrameProvider>(
-        i, "leanstore_bf_provider_" + std::to_string(i), mNumBfs, mBufferPool,
-        mNumPartitions, mPartitionsMask, mPartitions, mPageFd)));
+        i, threadName, mNumBfs, mBufferPool, mNumPartitions, mPartitionsMask,
+        mPartitions, mPageFd)));
   }
 
   for (auto i = 0u; i < mBfProviders.size(); ++i) {

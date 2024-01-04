@@ -241,6 +241,7 @@ inline void BufferFrameProvider::InitThread() {
     POSIX_CHECK(setpriority(PRIO_PROCESS, 0, -20) == 0);
   }
 
+  DCHECK(mThreadName.size() < 16);
   pthread_setname_np(pthread_self(), mThreadName.c_str());
 }
 
