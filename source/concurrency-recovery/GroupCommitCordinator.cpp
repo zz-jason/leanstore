@@ -20,7 +20,7 @@ namespace cr {
 void CRManager::groupCommitCordinator() {
   std::thread log_cordinator([&]() {
     mRunningThreads++;
-    std::string thread_name("leanstore_log_cordinator");
+    std::string thread_name("log_cordinator");
     pthread_setname_np(pthread_self(), thread_name.c_str());
     CPUCounters::registerThread(thread_name, false);
 
