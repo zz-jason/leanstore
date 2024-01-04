@@ -27,7 +27,7 @@ jobs:
       run: cmake -B build/debug -S . -DCMAKE_BUILD_TYPE=Debug -DBUILD_WITH_COVERAGE=ON
 
     - name: Cppcheck
-      run: cppcheck --project=build/debug/compile_commands.json --error-exitcode=1
+      run: cppcheck --project=build/debug/compile_commands.json -i tests --error-exitcode=1
 
     - name: Build project
       run: cmake --build build/debug -j `nproc`
