@@ -148,9 +148,10 @@ void CRManager::runGroupCommiter() {
           << "io_getevents failed, return value=" << done_requests;
       DLOG_IF(INFO, done_requests >= 0)
           << "io_getevents succeed, done_requests=" << done_requests;
-    }
-    if (FLAGS_wal_fsync) {
-      fdatasync(mWalFd);
+
+      if (FLAGS_wal_fsync) {
+        fdatasync(mWalFd);
+      }
     }
 
     /// Phase 2: calculate the new safe set of transactions that are hardened

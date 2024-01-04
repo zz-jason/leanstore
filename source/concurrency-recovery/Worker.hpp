@@ -260,8 +260,8 @@ public:
   //-------------------------------------------------------------------------
   // Constructor and Destructors
   //-------------------------------------------------------------------------
-  ConcurrencyControl(HistoryTreeInterface& ht, const u64 numWorkers)
-      : mHistoryTree(ht), commit_tree(numWorkers) {
+  ConcurrencyControl(const u64 numWorkers)
+      : mHistoryTree(nullptr), commit_tree(numWorkers) {
   }
 
 public:
@@ -297,7 +297,7 @@ public:
   unique_ptr<TXID[]> local_workers_start_ts;
 
   // LeanStore NoSteal, Nothing for now
-  HistoryTreeInterface& mHistoryTree;
+  HistoryTreeInterface* mHistoryTree;
 
   CommitTree commit_tree;
 
@@ -337,7 +337,7 @@ public:
       std::function<void(const u8*, u64 payload_length)> cb) {
     utils::Timer timer(CRCounters::myCounters().cc_ms_history_tree_retrieve);
     const bool isRemoveCommand = prevCommandId & TYPE_MSB(COMMANDID);
-    const bool found = mHistoryTree.retrieveVersion(
+    const bool found = mHistoryTree->retrieveVersion(
         prevWorkerId, prevTxId, prevCommandId, isRemoveCommand, cb);
     return found;
   }
@@ -375,8 +375,7 @@ public:
   const u64 mNumAllWorkers;
 
 public:
-  Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers,
-         HistoryTreeInterface& historyTree);
+  Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers);
 
   ~Worker();
 
@@ -518,9 +517,9 @@ inline u64 ConcurrencyControl::insertVersion(TREEID treeId,
   auto& curWorker = Worker::my();
   const u64 new_command_id =
       (curWorker.mCommandId++) | ((isRemoveCommand) ? TYPE_MSB(COMMANDID) : 0);
-  mHistoryTree.insertVersion(curWorker.mWorkerId, curWorker.mActiveTx.startTS(),
-                             new_command_id, treeId, isRemoveCommand,
-                             payload_length, cb);
+  mHistoryTree->insertVersion(curWorker.mWorkerId,
+                              curWorker.mActiveTx.startTS(), new_command_id,
+                              treeId, isRemoveCommand, payload_length, cb);
   return new_command_id;
 }
 

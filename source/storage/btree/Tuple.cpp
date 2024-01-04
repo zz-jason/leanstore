@@ -497,7 +497,7 @@ void FatTuple::convertToChained(TREEID treeId) {
     auto& delta = getDelta(i);
     auto deltaPayloadSize = delta.getDescriptor().TotalSize();
     auto versionSize = deltaPayloadSize + sizeof(UpdateVersion);
-    cr::Worker::my().cc.mHistoryTree.insertVersion(
+    cr::Worker::my().cc.mHistoryTree->insertVersion(
         prevWorkerId, prevTxId, prevCommandId, treeId, false, versionSize,
         [&](u8* versionBuf) {
           new (versionBuf) UpdateVersion(delta, deltaPayloadSize);
@@ -519,7 +519,7 @@ void FatTuple::convertToChained(TREEID treeId) {
 std::tuple<OP_RESULT, u16> ChainedTuple::GetVisibleTuple(
     Slice payload, ValCallback callback) const {
   if (cr::Worker::my().cc.VisibleForMe(mWorkerId, mTxId, false)) {
-    if (is_removed) {
+    if (mIsRemoved) {
       return {OP_RESULT::NOT_FOUND, 1};
     }
 
