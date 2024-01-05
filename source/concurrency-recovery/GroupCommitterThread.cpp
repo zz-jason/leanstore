@@ -1,40 +1,23 @@
+#include "GroupCommitterThread.hpp"
 #include "CRMG.hpp"
+#include "Worker.hpp"
 
-#include "profiling/counters/CPUCounters.hpp"
-#include "profiling/counters/CRCounters.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
-#include "utils/Misc.hpp"
-#include "utils/Timer.hpp"
-
-#include <glog/logging.h>
-
-#include <chrono>
-#include <cstring>
-#include <thread>
-
-#include <libaio.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
-using namespace std::chrono_literals;
 namespace leanstore {
 namespace cr {
 
-void CRManager::runGroupCommiter() {
+void GroupCommitterThread::runImpl() {
+  if (FLAGS_enable_pin_worker_threads) {
+    utils::pinThisThread(FLAGS_worker_threads);
+  }
+
+  CPUCounters::registerThread(mThreadName, false);
+
   [[maybe_unused]] leanstore::utils::SteadyTimer phase1Timer;
   [[maybe_unused]] leanstore::utils::SteadyTimer phase2Timer;
   [[maybe_unused]] leanstore::utils::SteadyTimer writeTimer;
 
-  mRunningThreads++;
-
-  // set thread name
-  std::string thread_name("group_committer");
-  DCHECK(thread_name.size() < 16);
-  pthread_setname_np(pthread_self(), thread_name.c_str());
-  CPUCounters::registerThread(thread_name, false);
-
   // Async IO. 2x because of potential wrapping around
-  const u64 maxBatchSize = (mNumWorkerThreads * 2) + 2;
+  const u64 maxBatchSize = (FLAGS_worker_threads * 2) + 2;
   s32 numIoSlots = 0;
   auto iocbs = make_unique<struct iocb[]>(maxBatchSize);
   auto iocbs_ptr = make_unique<struct iocb*[]>(maxBatchSize);
@@ -81,11 +64,11 @@ void CRManager::runGroupCommiter() {
   TXID minFlushedCommitTs;
   std::vector<u64> readyToCommitRfaCut; // Exclusive
   std::vector<WalFlushReq> walFlushReqs;
-  readyToCommitRfaCut.resize(mNumWorkerThreads, 0);
-  walFlushReqs.resize(mNumWorkerThreads);
+  readyToCommitRfaCut.resize(FLAGS_worker_threads, 0);
+  walFlushReqs.resize(FLAGS_worker_threads);
 
   /// write WAL records from every worker thread to SSD.
-  while (mGroupCommitterKeepRunning) {
+  while (mKeepRunning) {
     /// Phase 1: Prepare pwrite requests
     ///
     /// We use the asynchronous IO interface from libaio to batch all log writes
@@ -102,7 +85,7 @@ void CRManager::runGroupCommiter() {
     maxFlushedGSN = 0;
     minFlushedCommitTs = std::numeric_limits<TXID>::max();
 
-    for (u32 workerId = 0; workerId < mNumWorkerThreads; workerId++) {
+    for (u32 workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
       auto& logging = mWorkers[workerId]->mLogging;
       readyToCommitRfaCut[workerId] = logging.PreCommittedQueueRfaSize();
       walFlushReqs[workerId] = logging.mWalFlushReq.getSync();
@@ -168,7 +151,7 @@ void CRManager::runGroupCommiter() {
     }
 
     u64 numCommitted = 0;
-    for (WORKERID workerId = 0; workerId < mNumWorkerThreads; workerId++) {
+    for (WORKERID workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
       auto& logging = mWorkers[workerId]->mLogging;
       const auto& walFlushReq = walFlushReqs[workerId];
       logging.UpdateFlushedCommitTs(walFlushReq.mPrevTxCommitTs);
@@ -251,7 +234,6 @@ void CRManager::runGroupCommiter() {
       Logging::UpdateMaxFlushedGsn(maxFlushedGSN);
     }
   }
-  mRunningThreads--;
 }
 
 } // namespace cr

@@ -6,7 +6,6 @@
 #include "shared/Schema.hpp"
 
 #include "utils/FVector.hpp"
-#include "utils/Files.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
 #include "utils/ScrambledZipfGenerator.hpp"

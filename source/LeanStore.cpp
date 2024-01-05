@@ -133,7 +133,7 @@ LeanStore::LeanStore() {
   if (FLAGS_recover) {
     // deserialize meta from disk
     DeSerializeMeta();
-    BufferManager::sInstance->RecoveryFromDisk();
+    BufferManager::sInstance->RecoveryFromDisk(mWalFd);
   }
 }
 
@@ -150,7 +150,7 @@ LeanStore::~LeanStore() {
 
   // wait all concurrent jobs to finsh
   cr::CRManager::sInstance->joinAll();
-  
+
   if (FLAGS_enable_print_btree_stats_on_exit) {
     // print trees
     for (auto& it : storage::TreeRegistry::sInstance->mTrees) {

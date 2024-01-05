@@ -7,7 +7,6 @@
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/profiling/counters/WorkerCounters.hpp"
 #include "leanstore/utils/FVector.hpp"
-#include "leanstore/utils/Files.hpp"
 #include "leanstore/utils/Parallelize.hpp"
 #include "leanstore/utils/RandomGenerator.hpp"
 #include "leanstore/utils/ScrambledZipfGenerator.hpp"
