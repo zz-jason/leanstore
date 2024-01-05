@@ -12,7 +12,7 @@ jobs:
       - image: zzjason/leanstore-dev:latest
         auth:
           username: zzjason
-          password: $DOCKERHUB_PASSWORD
+          password: ${{ vars.DOCKERHUB_PASSWORD }}
     # Add steps to the job
     # See: https://circleci.com/docs/configuration-reference/#steps
     steps:
