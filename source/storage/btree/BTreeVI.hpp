@@ -95,10 +95,10 @@ public:
     }
 
     guardedNode.ToExclusiveMayJump();
-    guardedNode.IncPageGSN();
+    guardedNode.SyncGSNBeforeWrite();
 
     for (u16 i = 0; i < guardedNode->mNumSeps; i++) {
-      auto& tuple = *reinterpret_cast<Tuple*>(guardedNode->ValData(i));
+      auto& tuple = *Tuple::From(guardedNode->ValData(i));
       if (tuple.mFormat == TupleFormat::FAT) {
         auto& fatTuple = *FatTuple::From(guardedNode->ValData(i));
         const u32 newLength = fatTuple.mValSize + sizeof(ChainedTuple);

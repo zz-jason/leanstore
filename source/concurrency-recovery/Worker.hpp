@@ -36,7 +36,7 @@ struct WalFlushReq {
   u64 mVersion = 0;
 
   /// Regarding the changes made by the current worker.
-  LID mCurrGSN = 0;
+  u64 mCurrGSN = 0;
 
   /// The offset in the wal ring buffer.
   u64 mWalBuffered = 0;
@@ -61,8 +61,9 @@ public:
   static atomic<u64> sMinFlushedCommitTs;
 
 public:
-  static void UpdateMinFlushedGsn(LID minGsn) {
-    DCHECK(sMinFlushedGsn.load() <= minGsn);
+  static void UpdateMinFlushedGsn(u64 minGsn) {
+    DCHECK(sMinFlushedGsn.load() <= minGsn)
+        << "sMinFlushedGsn=" << sMinFlushedGsn << ", minGsn=" << minGsn;
     sMinFlushedGsn.store(minGsn, std::memory_order_release);
   }
 
@@ -129,10 +130,6 @@ public:
 
   utils::OptimisticSpinStruct<WalFlushReq> mWalFlushReq;
 
-  // RFA: check for user tx dependency on tuple insert, update, lookup.
-  // Deletes are treated as system transaction
-  std::vector<std::tuple<WORKERID, TXID>> mRfaChecksAtPreCommit;
-
   /// The ring buffer of the current worker thread. All the wal entries of the
   /// current worker are writtern to this ring buffer firstly, then flushed to
   /// disk by the group commit thread.
@@ -142,7 +139,7 @@ public:
   LID mLsnClock = 0;
 
   /// Used to track transaction dependencies.
-  LID mGsnClock;
+  u64 mGSNClock = 0;
 
   /// The written offset of the wal ring buffer.
   u64 mWalBuffered = 0;
@@ -188,18 +185,11 @@ public:
     return mPreCommittedQueueRfa.size();
   }
 
-  void checkLogDepdency(WORKERID otherWorkerId, TXID otherTxId);
-
   void publishOffset() {
     mWalFlushReq.updateAttribute(&WalFlushReq::mWalBuffered, mWalBuffered);
   }
 
-  void UpdateWalFlushReq() {
-    auto current = mWalFlushReq.getNoSync();
-    current.mWalBuffered = mWalBuffered;
-    current.mCurrGSN = GetCurrentGsn();
-    mWalFlushReq.SetSync(current);
-  }
+  void UpdateWalFlushReq();
 
   u32 walFreeSpace();
   u32 walContiguousFreeSpace();
@@ -220,12 +210,12 @@ public:
 
   void SubmitWALEntryComplex(u64 totalSize);
 
-  inline LID GetCurrentGsn() {
-    return mGsnClock;
+  inline u64 GetCurrentGsn() {
+    return mGSNClock;
   }
 
-  inline void SetCurrentGsn(LID gsn) {
-    mGsnClock = gsn;
+  inline void SetCurrentGsn(u64 gsn) {
+    mGSNClock = gsn;
   }
 
   Logging& other(WORKERID otherWorkerId);
@@ -462,18 +452,6 @@ template <typename T> inline void WALPayloadHandler<T>::SubmitWal() {
 // Logging
 //------------------------------------------------------------------------------
 
-inline void Logging::checkLogDepdency(WORKERID otherWorkerId, TXID otherTxId) {
-  if (FLAGS_recover) {
-    return;
-  }
-
-  if (!mHasRemoteDependency && Worker::my().mWorkerId != otherWorkerId) {
-    if (other(otherWorkerId).TxUnCommitted(otherTxId)) {
-      mRfaChecksAtPreCommit.push_back({otherWorkerId, otherTxId});
-    }
-  }
-}
-
 inline Logging& Logging::other(WORKERID otherWorkerId) {
   return Worker::my().mAllWorkers[otherWorkerId]->mLogging;
 }
@@ -499,6 +477,14 @@ inline WALPayloadHandler<T> Logging::ReserveWALEntryComplex(u64 payloadSize,
   auto payloadPtr = mActiveWALEntryComplex->payload;
   auto walPayload = new (payloadPtr) T(std::forward<Args>(args)...);
   return {walPayload, entrySize, entryLSN};
+}
+
+inline void Logging::UpdateWalFlushReq() {
+  auto current = mWalFlushReq.getNoSync();
+  current.mWalBuffered = mWalBuffered;
+  current.mCurrGSN = GetCurrentGsn();
+  current.mPrevTxCommitTs = Worker::my().mActiveTx.startTS();
+  mWalFlushReq.SetSync(current);
 }
 
 //------------------------------------------------------------------------------
