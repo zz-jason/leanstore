@@ -9,22 +9,41 @@ jobs:
     # Specify the execution environment. You can specify an image from Docker Hub or use one of our convenience images from CircleCI's Developer Hub.
     # See: https://circleci.com/docs/configuration-reference/#executor-job
     docker:
-      - image: zzjason/leanstore-dev:latest
-        auth:
-          username: zzjason
-          password: ${{ vars.DOCKERHUB_PASSWORD }}
+      - image: ubuntu:23.04
+
     # Add steps to the job
     # See: https://circleci.com/docs/configuration-reference/#steps
     steps:
       - checkout
+      
       - run:
-          name: "build and test"
-          command: "./scripts/build.sh"
+          name: "Install dependencies"
+          command: sudo apt install -y gcc cmake libaio-dev gcovr cppcheck
+          
+      - run:
+          name: "Config project"
+          command: cmake -B build/debug -S . -DCMAKE_BUILD_TYPE=Debug -DBUILD_WITH_COVERAGE=ON
+          
+      - run:
+          name: "Cppcheck"
+          command: cppcheck --project=build/debug/compile_commands.json -i tests --error-exitcode=1
+          
+      - run:
+          name: "Build project"
+          command: cmake --build build/debug -j `nproc`
+
+      - run:
+          name: "Test project"
+          command: ctest --test-dir build/debug
+      
+      - run:
+          name: "Generate coverage file"
+          command: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*'
 
 
 # Orchestrate jobs using workflows
 # See: https://circleci.com/docs/configuration-reference/#workflows
 workflows:
-  say-hello-workflow:
+  build-debug:
     jobs:
       - build
