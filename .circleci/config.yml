@@ -22,7 +22,7 @@ jobs:
           
       - run:
           name: "Install dependencies"
-          command: apt update && apt install -y gcc cmake libaio-dev gcovr cppcheck
+          command: apt update && apt install -y build-essential cmake git libaio-dev gcovr cppcheck
           
       - run:
           name: "Config project"
