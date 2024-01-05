@@ -49,7 +49,7 @@ jobs:
           command: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*'
 
       - codecov/upload
-          parameters: {"file": "coverage.xml"}
+          file: coverage.xml
 
 
 # Orchestrate jobs using workflows
