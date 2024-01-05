@@ -4,6 +4,7 @@
 DEFINE_uint32(page_size, 4096, "The page size (bytes)"); // 4 KiB
 DEFINE_uint64(buffer_pool_size, 1073741824,
               "The buffer pool size (bytes)"); // 1 GiB
+
 DEFINE_string(data_dir, "~/.leanstore",
               "Where to put all the database files, meta file, and log files");
 DEFINE_uint64(db_file_capacity, 1825361100800,
@@ -104,8 +105,6 @@ DEFINE_bool(reclaim_page_ids, true, "Whether to reclaim unused free page ids");
 
 // -------------------------------------------------------------------------------------
 DEFINE_bool(wal, true, "Whether wal is enabled");
-DEFINE_bool(wal_rfa, true, "Whether remote flush avoidance (RFA) is enabled");
-DEFINE_bool(wal_tuple_rfa, true, "tuple-wise tracking");
 DEFINE_bool(wal_fsync, true, "Whether to explicitly flush wal to disk");
 
 // WAL variant 0:

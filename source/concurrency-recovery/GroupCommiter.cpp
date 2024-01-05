@@ -76,8 +76,8 @@ void CRManager::runGroupCommiter() {
     }
   };
 
-  LID minFlushedGsn; // For Remote Flush Avoidance
-  LID maxFlushedGsn; // Sync all workers to this point
+  u64 minFlushedGSN; // For Remote Flush Avoidance
+  u64 maxFlushedGSN; // Sync all workers to this point
   TXID minFlushedCommitTs;
   std::vector<u64> readyToCommitRfaCut; // Exclusive
   std::vector<WalFlushReq> walFlushReqs;
@@ -93,13 +93,13 @@ void CRManager::runGroupCommiter() {
     /// flush the block device with fsync to make sure that the log records we
     /// have just written are durable.
     numIoSlots = 0;
-    CRCounters::myCounters().gct_rounds++;
     COUNTERS_BLOCK() {
+      CRCounters::myCounters().gct_rounds++;
       phase1Timer.Start();
     }
 
-    minFlushedGsn = std::numeric_limits<LID>::max();
-    maxFlushedGsn = 0;
+    minFlushedGSN = std::numeric_limits<u64>::max();
+    maxFlushedGSN = 0;
     minFlushedCommitTs = std::numeric_limits<TXID>::max();
 
     for (u32 workerId = 0; workerId < mNumWorkerThreads; workerId++) {
@@ -107,16 +107,17 @@ void CRManager::runGroupCommiter() {
       readyToCommitRfaCut[workerId] = logging.PreCommittedQueueRfaSize();
       walFlushReqs[workerId] = logging.mWalFlushReq.getSync();
       const auto& walFlushReq = walFlushReqs[workerId];
+      if (walFlushReq.mCurrGSN <= 0) {
+        continue;
+      }
 
-      maxFlushedGsn = std::max<LID>(maxFlushedGsn, walFlushReq.mCurrGSN);
-      minFlushedGsn = std::min<LID>(minFlushedGsn, walFlushReq.mCurrGSN);
+      maxFlushedGSN = std::max<u64>(maxFlushedGSN, walFlushReq.mCurrGSN);
+      minFlushedGSN = std::min<u64>(minFlushedGSN, walFlushReq.mCurrGSN);
       minFlushedCommitTs =
           std::min<TXID>(minFlushedCommitTs, walFlushReq.mPrevTxCommitTs);
-
       const u64 buffered = walFlushReq.mWalBuffered;
       const u64 flushed = logging.mWalFlushed;
       const u64 bufferEnd = FLAGS_wal_buffer_size;
-
       if (buffered > flushed) {
         setUpIOControlBlock(logging.mWalBuffer, flushed, buffered);
       } else if (buffered < flushed) {
@@ -183,7 +184,7 @@ void CRManager::runGroupCommiter() {
         // erase the committed transactions
         u64 tx_i = 0;
         while (tx_i < logging.mPreCommittedQueue.size() &&
-               logging.mPreCommittedQueue[tx_i].CanCommit(minFlushedGsn,
+               logging.mPreCommittedQueue[tx_i].CanCommit(minFlushedGSN,
                                                           minFlushedCommitTs)) {
           DLOG(INFO) << "Transaction (startTs="
                      << logging.mPreCommittedQueue[tx_i].mStartTs
@@ -206,12 +207,14 @@ void CRManager::runGroupCommiter() {
         // commit transactions in mPreCommittedQueueRfa as many as possible, and
         // erase the committed transactions
         for (tx_i = 0; tx_i < readyToCommitRfaCut[workerId]; tx_i++) {
-          DLOG(INFO)
-              << "Transaction (startTs="
-              << logging.mPreCommittedQueueRfa[tx_i].mStartTs
-              << ", commitTs=" << logging.mPreCommittedQueueRfa[tx_i].mCommitTs
-              << ") in pre-committed RFA queue is committed and erased from "
-                 "the queue";
+          DLOG(INFO) << "workerId=" << workerId
+                     << ", commit transaction in pre-committed RFA queue"
+                     << ", startaTs="
+                     << logging.mPreCommittedQueueRfa[tx_i].mStartTs
+                     << ", commitTs="
+                     << logging.mPreCommittedQueueRfa[tx_i].mCommitTs
+                     << ", posInQueue=" << tx_i
+                     << ", minFlushedGSN=" << minFlushedGSN;
           logging.mPreCommittedQueueRfa[tx_i].state = TX_STATE::COMMITTED;
         }
 
@@ -229,22 +232,24 @@ void CRManager::runGroupCommiter() {
         logging.UpdateSignaledCommitTs(signaledUpTo);
         DLOG_IF(INFO, numCommitted > 0 ||
                           signaledUpTo < std::numeric_limits<TXID>::max())
-            << "Updated transaction commit info for worker(" << workerId
-            << "), signaledUpTo=" << signaledUpTo
+            << "workerId=" << workerId << ", update transaction commit info"
+            << ", signaledUpTo=" << signaledUpTo
             << ", numCommitted=" << numCommitted;
       }
     }
 
-    CRCounters::myCounters().gct_committed_tx += numCommitted;
     COUNTERS_BLOCK() {
+      CRCounters::myCounters().gct_committed_tx += numCommitted;
       phase2Timer.Stop();
       CRCounters::myCounters().gct_phase_1_ms += phase1Timer.ElaspedUS();
       CRCounters::myCounters().gct_write_ms += writeTimer.ElaspedUS();
       CRCounters::myCounters().gct_phase_2_ms += phase2Timer.ElaspedUS();
     }
 
-    Logging::UpdateMinFlushedGsn(minFlushedGsn);
-    Logging::UpdateMaxFlushedGsn(maxFlushedGsn);
+    if (minFlushedGSN < std::numeric_limits<u64>::max()) {
+      Logging::UpdateMinFlushedGsn(minFlushedGSN);
+      Logging::UpdateMaxFlushedGsn(maxFlushedGSN);
+    }
   }
   mRunningThreads--;
 }

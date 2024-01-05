@@ -71,17 +71,19 @@ void Worker::startTX(TX_MODE mode, TX_ISOLATION_LEVEL level, bool isReadOnly) {
   });
 
   // Advance local GSN on demand to maintain transaction dependency
-  const LID maxFlushedGsn = Logging::sMaxFlushedGsn.load();
+  const auto maxFlushedGsn = Logging::sMaxFlushedGsn.load();
   if (maxFlushedGsn > mLogging.GetCurrentGsn()) {
     mLogging.SetCurrentGsn(maxFlushedGsn);
     mLogging.UpdateWalFlushReq();
   }
 
-  if (FLAGS_wal_rfa) {
+  // RFA
+  {
     mLogging.mMinFlushedGsn = Logging::sMinFlushedGsn.load();
     mLogging.mHasRemoteDependency = false;
-  } else {
-    mLogging.mHasRemoteDependency = true;
+    DLOG(INFO) << "workerId=" << mWorkerId << ", start transaction"
+               << ", startTs=" << mActiveTx.mStartTs
+               << ", workerMinFlushedGSN=" << mLogging.mMinFlushedGsn;
   }
 
   // Draw TXID from global counter and publish it with the TX type (i.e., OLAP
@@ -124,17 +126,6 @@ void Worker::commitTX() {
       mCommandId = 0; // Reset mCommandId only on commit and never on abort
 
       DCHECK(mActiveTx.state == TX_STATE::STARTED);
-      if (FLAGS_wal_tuple_rfa) {
-        for (auto& dependency : mLogging.mRfaChecksAtPreCommit) {
-          auto& otherLogging = mLogging.other(std::get<0>(dependency));
-          auto& otherWorkerTx = std::get<1>(dependency);
-          if (otherLogging.TxUnCommitted(otherWorkerTx)) {
-            mLogging.mHasRemoteDependency = true;
-            break;
-          }
-        }
-        mLogging.mRfaChecksAtPreCommit.clear();
-      }
 
       if (activeTX().hasWrote()) {
         TXID commitTs = cc.commit_tree.commit(mActiveTx.startTS());

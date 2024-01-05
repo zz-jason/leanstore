@@ -63,9 +63,6 @@ void ConfigsTable::open() {
                   [&](Column& col) { col << FLAGS_zipf_factor; });
 
   columns.emplace("c_wal", [&](Column& col) { col << FLAGS_wal; });
-  columns.emplace("c_wal_rfa", [&](Column& col) { col << FLAGS_wal_rfa; });
-  columns.emplace("c_wal_tuple_rfa",
-                  [&](Column& col) { col << FLAGS_wal_tuple_rfa; });
   columns.emplace("c_wal_io_hack", [&](Column& col) { col << 1; });
   columns.emplace("c_wal_fsync", [&](Column& col) { col << FLAGS_wal_fsync; });
   columns.emplace("c_wal_variant",

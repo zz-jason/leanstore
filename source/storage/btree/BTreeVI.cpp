@@ -68,8 +68,6 @@ OP_RESULT BTreeVI::lookupPessimistic(Slice key, ValCallback valCallback) {
     if (ret != OP_RESULT::OK) {
       JUMPMU_RETURN OP_RESULT::NOT_FOUND;
     }
-    const auto tuple = Tuple::From(iter.value().data());
-    cr::Worker::my().mLogging.checkLogDepdency(tuple->mWorkerId, tuple->mTxId);
     JUMPMU_RETURN ret;
   }
   JUMPMU_CATCH() {
@@ -135,7 +133,6 @@ OP_RESULT BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
         WorkerCounters::myCounters().cc_read_versions_visited[mTreeId] += 1;
       }
 
-      cr::Worker::my().mLogging.checkLogDepdency(tuple.mWorkerId, tuple.mTxId);
       JUMPMU_RETURN OP_RESULT::OK;
     }
     JUMPMU_CATCH() {
@@ -148,7 +145,8 @@ OP_RESULT BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
   return OP_RESULT::OTHER;
 }
 
-OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
+OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key,
+                                         MutValCallback updateCallBack,
                                          UpdateDesc& updateDesc) {
   DCHECK(cr::Worker::my().IsTxStarted());
   cr::activeTX().markAsWrite();
@@ -312,11 +310,7 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key, MutValCallback updateCallBac
 
     // Update
     updateCallBack(MutableSlice(chainedTuple.payload,
-                          rawVal.length() - sizeof(ChainedTuple)));
-
-    cr::Worker::my().mLogging.checkLogDepdency(chainedTuple.mWorkerId,
-                                               chainedTuple.mTxId);
-
+                                rawVal.length() - sizeof(ChainedTuple)));
     chainedTuple.mWorkerId = cr::Worker::my().mWorkerId;
     chainedTuple.mTxId = cr::activeTX().startTS();
     chainedTuple.mCommandId = commandId;
@@ -446,10 +440,6 @@ OP_RESULT BTreeVI::remove(Slice key) {
         key.size() + valSize, key, Slice(chainedTuple.payload, valSize),
         prevWorkerId, prevTxId, prevCommandId);
     walHandler.SubmitWal();
-
-    if (FLAGS_wal_tuple_rfa) {
-      xIter.mGuardedLeaf.IncPageGSN();
-    }
 
     if (mutRawVal.length() - sizeof(ChainedTuple) > 1) {
       xIter.shorten(sizeof(ChainedTuple));
