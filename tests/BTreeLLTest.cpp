@@ -47,7 +47,7 @@ TEST_F(BTreeLLTest, BTreeLLCreate) {
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().startTX();
     SCOPED_DEFER(cr::Worker::my().commitTX());
-    EXPECT_TRUE(mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &btree));
+    mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
   });
 
@@ -55,7 +55,7 @@ TEST_F(BTreeLLTest, BTreeLLCreate) {
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().startTX();
     SCOPED_DEFER(cr::Worker::my().commitTX());
-    EXPECT_FALSE(mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &another));
+    mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &another);
     EXPECT_EQ(another, nullptr);
   });
 
@@ -63,7 +63,7 @@ TEST_F(BTreeLLTest, BTreeLLCreate) {
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
     cr::Worker::my().startTX();
     SCOPED_DEFER(cr::Worker::my().commitTX());
-    EXPECT_FALSE(mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &another));
+    mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &another);
     EXPECT_EQ(another, nullptr);
   });
 
@@ -72,7 +72,7 @@ TEST_F(BTreeLLTest, BTreeLLCreate) {
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().startTX();
     SCOPED_DEFER(cr::Worker::my().commitTX());
-    EXPECT_TRUE(mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &another));
+    mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &another);
     EXPECT_NE(btree, nullptr);
   });
 }
@@ -104,7 +104,7 @@ TEST_F(BTreeLLTest, BTreeLLInsertAndLookup) {
   };
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().startTX();
-    EXPECT_TRUE(mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &btree));
+    mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().commitTX();
 

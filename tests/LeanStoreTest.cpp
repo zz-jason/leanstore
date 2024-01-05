@@ -58,7 +58,7 @@ TEST_F(LeanStoreTest, RecoverAfterInsert) {
   };
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    EXPECT_TRUE(mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree));
+    mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
 
     // insert some values
@@ -80,7 +80,7 @@ TEST_F(LeanStoreTest, RecoverAfterInsert) {
   // based on the WAL entries
   FLAGS_recover = true;
   mLeanStore = std::make_unique<leanstore::LeanStore>();
-  EXPECT_TRUE(mLeanStore->GetBTreeVI(btreeName, &btree));
+  mLeanStore->GetBTreeVI(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
 
   // lookup the restored btree

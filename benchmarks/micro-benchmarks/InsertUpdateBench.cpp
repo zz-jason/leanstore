@@ -13,8 +13,7 @@
 
 namespace leanstore::test {
 
-template <typename T = std::mt19937>
-auto random_generator() -> T {
+template <typename T = std::mt19937> auto random_generator() -> T {
   auto constexpr fixed_seed = 123456789; // Fixed seed for deterministic output
   return T{fixed_seed};
 }
@@ -55,8 +54,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
   };
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().startTX();
-    EXPECT_TRUE(
-        sLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree));
+    sLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().commitTX();
   });

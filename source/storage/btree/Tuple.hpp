@@ -177,31 +177,37 @@ public:
 /// | FatTuple meta |  newest value | FatTupleDelta O2N |
 ///
 struct __attribute__((packed)) FatTuple : Tuple {
-  /// Size of the base value.
+  /// Size of the newest value.
   u16 mValSize = 0;
 
-  u32 total_space = 0; // Size of the payload bytes array
+  /// Capacity of the payload bytes array
+  u32 mPayloadCapacity = 0;
 
-  u32 used_space = 0; // does not include the struct itself
+  /// Size of used space in the payload bytes array
+  u32 mPayloadSize = 0;
 
+  ///
   u32 mDataOffset = 0;
 
-  u16 mNumDeltas = 0; // Attention: coupled with used_space
+  u16 mNumDeltas = 0; // Attention: coupled with mPayloadSize
 
   // value, FatTupleDelta+Descriptor+Diff[] O2N
   u8 payload[];
 
 public:
-  FatTuple(u32 payloadSize)
-      : Tuple(TupleFormat::FAT, 0, 0), total_space(payloadSize),
-        mDataOffset(payloadSize) {
+  FatTuple(u32 payloadCapacity)
+      : Tuple(TupleFormat::FAT, 0, 0), mPayloadCapacity(payloadCapacity),
+        mDataOffset(payloadCapacity) {
   }
 
-  FatTuple(u32 payloadSize, u32 valSize, const ChainedTuple& chainedTuple);
+  FatTuple(u32 payloadCapacity, u32 valSize, const ChainedTuple& chainedTuple);
 
-  // returns false to fallback to chained mode
-  static bool update(BTreeExclusiveIterator& iterator, Slice key, ValCallback,
-                     UpdateDesc&);
+  /// Updates the value stored in FatTuple. The former newest version value is
+  /// moved to the tail of the delta array.
+  ///
+  /// @return false to fallback to chained mode
+  static bool update(BTreeExclusiveIterator& xIter, Slice key,
+                     MutValCallback updateCallBack, UpdateDesc& updateDesc);
 
   bool hasSpaceFor(const UpdateDesc&);
 
@@ -213,6 +219,10 @@ public:
   void garbageCollection();
 
   void undoLastUpdate();
+
+  inline MutableSlice GetMutableValue() {
+    return MutableSlice(GetValPtr(), mValSize);
+  }
 
   inline Slice GetValue() const {
     return Slice(GetValPtr(), mValSize);

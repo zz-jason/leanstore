@@ -42,7 +42,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
                             sizeof(Record));
     ensure(res == leanstore::OP_RESULT::OK);
   }
-  // -------------------------------------------------------------------------------------
+
   void moveIt(TID tid, u8* folded_key, u16 folded_key_len) {
     if (tid & (1ull << 63)) {
       return;
@@ -55,12 +55,12 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
       tmp.count = 0;
       OP_RESULT ret = key_tid->updateSameSizeInPlace(
           folded_key, folded_key_len,
-          [&](u8* payload, u16 payload_length) {
-            ensure(payload_length == sizeof(TID));
-            TID old_tid = *reinterpret_cast<TID*>(payload);
+          [&](MutableSlice val) {
+            ensure(val.Size() == sizeof(TID));
+            TID old_tid = *reinterpret_cast<TID*>(val.data());
             TID new_tid =
                 global_tid[Record::id * 8].fetch_add(1) | (1ull << 63);
-            // -------------------------------------------------------------------------------------
+
             u8 copy[16 * 1024];
             u64 copy_length;
             OP_RESULT ret2 =
@@ -73,14 +73,14 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
             if (ret2 != OP_RESULT::OK) {
               return;
             }
-            // -------------------------------------------------------------------------------------
+
             OP_RESULT ret3 = tid_value->insert((u8*)&new_tid, sizeof(TID), copy,
                                                copy_length);
             ensure(ret3 == OP_RESULT::OK);
-            // -------------------------------------------------------------------------------------
+
             OP_RESULT ret4 = tid_value->remove((u8*)&old_tid, sizeof(TID));
             ensure(ret4 == OP_RESULT::OK);
-            // -------------------------------------------------------------------------------------
+
             *reinterpret_cast<TID*>(payload) = new_tid;
           },
           tmp);

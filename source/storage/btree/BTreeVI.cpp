@@ -148,7 +148,7 @@ OP_RESULT BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
   return OP_RESULT::OTHER;
 }
 
-OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key, ValCallback callback,
+OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
                                          UpdateDesc& updateDesc) {
   DCHECK(cr::Worker::my().IsTxStarted());
   cr::activeTX().markAsWrite();
@@ -198,7 +198,7 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key, ValCallback callback,
 
     if (tuple.mFormat == TupleFormat::FAT) {
       auto& fatTuple = *FatTuple::From(rawVal.data());
-      auto res = fatTuple.update(xIter, key, callback, updateDesc);
+      auto res = fatTuple.update(xIter, key, updateCallBack, updateDesc);
 
       // Attention: previous tuple pointer is not valid here
       Tuple::From(rawVal.data())->WriteUnlock();
@@ -311,8 +311,8 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key, ValCallback callback,
     walHandler.SubmitWal();
 
     // Update
-    callback(
-        Slice(chainedTuple.payload, rawVal.length() - sizeof(ChainedTuple)));
+    updateCallBack(MutableSlice(chainedTuple.payload,
+                          rawVal.length() - sizeof(ChainedTuple)));
 
     cr::Worker::my().mLogging.checkLogDepdency(chainedTuple.mWorkerId,
                                                chainedTuple.mTxId);

@@ -142,7 +142,7 @@ int main(int argc, char** argv) {
   atomic<u64> running_threads_counter = 0;
   const u32 exec_threads =
       FLAGS_ycsb_threads ? FLAGS_ycsb_threads : FLAGS_worker_threads;
-  UpdateDescriptorGenerator1(tabular_update_descriptor, KVTable, my_payload);
+  UpdateDescriptorGenerator1(tabular_update_descriptor, KVTable, mValue);
   auto btree_vi =
       reinterpret_cast<leanstore::storage::btree::BTreeVI*>(table.btree);
   for (u64 t_i = 0; t_i < exec_threads; t_i++) {
@@ -199,8 +199,7 @@ int main(int argc, char** argv) {
                     reinterpret_cast<u8*>(&result), sizeof(YCSBPayload));
                 // -------------------------------------------------------------------------------------
                 table.update1(
-                    {keys[op_i]},
-                    [&](KVTable& rec) { rec.my_payload = result; },
+                    {keys[op_i]}, [&](KVTable& rec) { rec.mValue = result; },
                     tabular_update_descriptor);
               }
               cr::Worker::my().commitTX();
