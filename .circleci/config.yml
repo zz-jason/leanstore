@@ -25,7 +25,7 @@ jobs:
 
       - run:
           name: "Check token"
-          command: echo CI_CODECOV_TOKEN
+          command: echo ${CI_CODECOV_TOKEN}
           
       - run:
           name: "Install dependencies"
@@ -54,7 +54,7 @@ jobs:
 
       - codecov/upload:
           file: coverage.xml
-          token: codecov_upload_token
+          token: ${CI_CODECOV_TOKEN}
 
 # Orchestrate jobs using workflows
 # See: https://circleci.com/docs/configuration-reference/#workflows
