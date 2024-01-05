@@ -51,7 +51,7 @@ jobs:
 
       - codecov/upload:
           file: coverage.xml
-          token: $codecov_upload_token
+          token: codecov_upload_token
 
 # Orchestrate jobs using workflows
 # See: https://circleci.com/docs/configuration-reference/#workflows
