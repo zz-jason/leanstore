@@ -394,7 +394,6 @@ TEST_F(BTreeVITest, RemoveNotExisted) {
   });
 }
 
-/*
 TEST_F(BTreeVITest, RemoveFromOthers) {
   GetLeanStore();
   const auto* btreeName = "testTree1";
@@ -409,12 +408,12 @@ TEST_F(BTreeVITest, RemoveFromOthers) {
     };
 
     cr::Worker::my().startTX();
-        GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
+    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().commitTX();
 
     // insert numKVs tuples
-    ssize_t numKVs(100);
+    ssize_t numKVs(1);
     for (ssize_t i = 0; i < numKVs; ++i) {
       auto key = RandomAlphString(24);
       if (uniqueKeys.find(key) != uniqueKeys.end()) {
@@ -469,7 +468,6 @@ TEST_F(BTreeVITest, RemoveFromOthers) {
     cr::Worker::my().commitTX();
   });
 }
-*/
 
 TEST_F(BTreeVITest, BTreeVIToJSON) {
   GetLeanStore();

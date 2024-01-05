@@ -198,9 +198,11 @@ public:
   private:
     void InitTable();
 
-    Parameters<CRCType, CRCWidth>
-        parameters; ///< CRC parameters used to construct the table
-    CRCType table[1 << CHAR_BIT]; ///< CRC lookup table
+    ///< CRC parameters used to construct the table
+    Parameters<CRCType, CRCWidth> parameters;
+
+    ///< CRC lookup table
+    CRCType table[1 << CHAR_BIT];
   };
 
   // The number of bits in CRCType must be at least as large as CRCWidth.
@@ -428,13 +430,12 @@ inline void CRC::Table<CRCType, CRCWidth>::InitTable() {
   static crcpp_constexpr CRCType SHIFT(
       (CHAR_BIT >= CRCWidth) ? static_cast<CRCType>(CHAR_BIT - CRCWidth) : 0);
 
-  CRCType crc;
   unsigned char byte = 0;
 
   // Loop over each dividend (each possible number storable in an unsigned char)
   do {
-    crc = CRC::CalculateRemainder<CRCType, CRCWidth>(&byte, sizeof(byte),
-                                                     parameters, CRCType(0));
+    auto crc = CRC::CalculateRemainder<CRCType, CRCWidth>(
+        &byte, sizeof(byte), parameters, CRCType(0));
 
     // This mask might not be necessary; all unit tests pass with this line
     // commented out, but that might just be a coincidence based on the CRC

@@ -63,7 +63,7 @@ public:
       const LATCH_FALLBACK_MODE ifContended = LATCH_FALLBACK_MODE::SPIN)
       : mBf(&hotSwip.AsBufferFrame()), mGuard(&mBf->header.mLatch) {
     latchMayJump(mGuard, ifContended);
-    syncGSN();
+    SyncGSNBeforeRead();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
@@ -84,7 +84,7 @@ public:
             guardedParent.mGuard, childSwip.template CastTo<BufferFrame>())),
         mGuard(&mBf->header.mLatch) {
     latchMayJump(mGuard, ifContended);
-    syncGSN();
+    SyncGSNBeforeRead();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
 
     PARANOID_BLOCK() {
@@ -145,35 +145,36 @@ public:
     mBf->page.mPSN++;
   }
 
-  inline void IncPageGSN() {
+  inline void SyncGSNBeforeWrite() {
     DCHECK(mBf != nullptr);
     DCHECK(mBf->page.mGSN <= cr::Worker::my().mLogging.GetCurrentGsn());
 
-    mBf->page.mPSN++;
-    mBf->page.mGSN = cr::Worker::my().mLogging.GetCurrentGsn() + 1;
-    mBf->header.mLastWriterWorker = cr::Worker::my().mWorkerId; // RFA
-    cr::Worker::my().mLogging.SetCurrentGsn(mBf->page.mGSN);
+    MarkAsDirty();
+    mBf->header.mLastWriterWorker = cr::Worker::my().mWorkerId;
+
+    const auto workerGSN = cr::Worker::my().mLogging.GetCurrentGsn();
+    mBf->page.mGSN = workerGSN + 1;
+    cr::Worker::my().mLogging.SetCurrentGsn(workerGSN + 1);
   }
 
-  inline bool HasRemoteDependency() {
-    return mBf->page.mGSN > cr::Worker::my().mLogging.mMinFlushedGsn &&
-           mBf->header.mLastWriterWorker != cr::Worker::my().mWorkerId;
-  }
-
-  inline void syncGSN() {
-    if (!FLAGS_wal) {
-      return;
-    }
-
-    // TODO: don't sync on temporary table pages like HistoryTree
-    if (FLAGS_wal_rfa && HasRemoteDependency()) {
+  // TODO: don't sync on temporary table pages like HistoryTree
+  inline void SyncGSNBeforeRead() {
+    if (!cr::Worker::my().mLogging.mHasRemoteDependency &&
+        mBf->page.mGSN > cr::Worker::my().mLogging.mMinFlushedGsn &&
+        mBf->header.mLastWriterWorker != cr::Worker::my().mWorkerId) {
       cr::Worker::my().mLogging.mHasRemoteDependency = true;
+      DLOG(INFO) << "workerId=" << cr::Worker::my().mWorkerId
+                 << ", detect remote dependency"
+                 << ", workerMinFlushedGSN="
+                 << cr::Worker::my().mLogging.mMinFlushedGsn
+                 << ", pageGSN=" << mBf->page.mGSN
+                 << ", pageLastWriterWorker=" << mBf->header.mLastWriterWorker;
     }
 
-    const auto currentGsn = cr::Worker::my().mLogging.GetCurrentGsn();
-    const auto pageGsn = mBf->page.mGSN;
-    if (currentGsn < pageGsn) {
-      cr::Worker::my().mLogging.SetCurrentGsn(pageGsn);
+    const auto workerGSN = cr::Worker::my().mLogging.GetCurrentGsn();
+    const auto pageGSN = mBf->page.mGSN;
+    if (workerGSN < pageGSN) {
+      cr::Worker::my().mLogging.SetCurrentGsn(pageGSN);
     }
   }
 
@@ -182,13 +183,11 @@ public:
     DCHECK(FLAGS_wal);
     DCHECK(mGuard.mState == GUARD_STATE::EXCLUSIVE);
 
-    if (!FLAGS_wal_tuple_rfa) {
-      IncPageGSN();
-    }
+    SyncGSNBeforeWrite();
 
     const auto pageId = mBf->header.mPageId;
     const auto treeId = mBf->page.mBTreeId;
-    payloadSize = ((payloadSize - 1) / 8  + 1) * 8;  
+    payloadSize = ((payloadSize - 1) / 8 + 1) * 8;
     // TODO: verify
     auto handler =
         cr::Worker::my().mLogging.ReserveWALEntryComplex<WT, Args...>(
@@ -306,8 +305,8 @@ public:
     mRefGuard.MarkAsDirty();
   }
 
-  void IncPageGSN() {
-    mRefGuard.IncPageGSN();
+  void SyncGSNBeforeWrite() {
+    mRefGuard.SyncGSNBeforeWrite();
   }
 
   ~ExclusiveGuardedBufferFrame() {

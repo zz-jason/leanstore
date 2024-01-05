@@ -134,10 +134,7 @@ void Logging::SubmitWALEntrySimple() {
   }
 
   mWalBuffered += sizeof(WALEntrySimple);
-  auto flushReqCopy = mWalFlushReq.getNoSync();
-  flushReqCopy.mWalBuffered = mWalBuffered;
-  flushReqCopy.mPrevTxCommitTs = Worker::my().mActiveTx.startTS();
-  mWalFlushReq.SetSync(flushReqCopy);
+  UpdateWalFlushReq();
 }
 
 /// @brief SubmitWALEntryComplex submits the wal record to group committer when

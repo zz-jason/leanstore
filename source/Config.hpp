@@ -73,8 +73,6 @@ DECLARE_uint64(buffer_frame_recycle_batch_size);
 DECLARE_bool(reclaim_page_ids);
 // -------------------------------------------------------------------------------------
 DECLARE_bool(wal);
-DECLARE_bool(wal_rfa);
-DECLARE_bool(wal_tuple_rfa);
 DECLARE_bool(wal_fsync);
 DECLARE_int64(wal_variant);
 DECLARE_uint64(wal_log_writers);

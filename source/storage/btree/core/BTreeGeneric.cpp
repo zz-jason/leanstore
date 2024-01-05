@@ -45,8 +45,8 @@ void BTreeGeneric::Init(TREEID btreeId, Config config) {
     metaWalHandler.SubmitWal();
   }
 
-  xGuardedRoot.IncPageGSN();
-  xGuardedMeta.IncPageGSN();
+  xGuardedRoot.SyncGSNBeforeWrite();
+  xGuardedMeta.SyncGSNBeforeWrite();
 }
 
 void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
@@ -97,9 +97,9 @@ void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
 
     if (config.mEnableWal) {
       // TODO: System transactions
-      xGuardedNewRoot.IncPageGSN();
-      xGuardedNewLeft.IncPageGSN();
-      xGuardedChild.IncPageGSN();
+      xGuardedNewRoot.SyncGSNBeforeWrite();
+      xGuardedNewLeft.SyncGSNBeforeWrite();
+      xGuardedChild.SyncGSNBeforeWrite();
     } else {
       xGuardedNewRoot.MarkAsDirty();
       xGuardedNewLeft.MarkAsDirty();
@@ -168,9 +168,9 @@ void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
       // Increment GSNs before writing WAL to make sure that these pages marked
       // as dirty regardless of the FLAGS_wal
       if (config.mEnableWal) {
-        xGuardedParent.IncPageGSN();
-        xGuardedNewLeft.IncPageGSN();
-        xGuardedChild.IncPageGSN();
+        xGuardedParent.SyncGSNBeforeWrite();
+        xGuardedNewLeft.SyncGSNBeforeWrite();
+        xGuardedChild.SyncGSNBeforeWrite();
       } else {
         xGuardedParent.MarkAsDirty();
         xGuardedNewLeft.MarkAsDirty();
@@ -268,9 +268,9 @@ bool BTreeGeneric::tryMerge(BufferFrame& to_merge, bool swizzleSibling) {
       }
 
       if (config.mEnableWal) {
-        guardedParent.IncPageGSN();
-        guardedChild.IncPageGSN();
-        guardedLeft.IncPageGSN();
+        guardedParent.SyncGSNBeforeWrite();
+        guardedChild.SyncGSNBeforeWrite();
+        guardedLeft.SyncGSNBeforeWrite();
       } else {
         guardedParent.MarkAsDirty();
         guardedChild.MarkAsDirty();
@@ -307,9 +307,9 @@ bool BTreeGeneric::tryMerge(BufferFrame& to_merge, bool swizzleSibling) {
       }
       // -------------------------------------------------------------------------------------
       if (config.mEnableWal) {
-        guardedParent.IncPageGSN();
-        guardedChild.IncPageGSN();
-        guardedRight.IncPageGSN();
+        guardedParent.SyncGSNBeforeWrite();
+        guardedChild.SyncGSNBeforeWrite();
+        guardedRight.SyncGSNBeforeWrite();
       } else {
         guardedParent.MarkAsDirty();
         guardedChild.MarkAsDirty();
@@ -514,7 +514,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
 
   ExclusiveGuardedBufferFrame<BTreeNode> xGuardedParent =
       std::move(guardedParent);
-  xGuardedParent.IncPageGSN();
+  xGuardedParent.SyncGSNBeforeWrite();
 
   XMergeReturnCode ret_code = XMergeReturnCode::PARTIAL_MERGE;
   s16 left_hand, right_hand, ret;
@@ -536,8 +536,8 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
           std::move(guardedNodes[right_hand - pos]));
       ExclusiveGuardedBufferFrame<BTreeNode> xGuardedLeft(
           std::move(guardedNodes[left_hand - pos]));
-      xGuardedRight.IncPageGSN();
-      xGuardedLeft.IncPageGSN();
+      xGuardedRight.SyncGSNBeforeWrite();
+      xGuardedLeft.SyncGSNBeforeWrite();
       max_right = left_hand;
       ret = mergeLeftIntoRight(xGuardedParent, left_hand, xGuardedLeft,
                                xGuardedRight, left_hand == pos);

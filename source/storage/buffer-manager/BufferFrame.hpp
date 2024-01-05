@@ -138,7 +138,7 @@ public:
   /// Short for "global sequence number", increased when a page is accessed.
   /// It's used to check whether the page has been read or written by
   /// transactions in other workers.
-  LID mGSN = 0;
+  u64 mGSN = 0;
 
   /// The btree ID it belongs to.
   TREEID mBTreeId = std::numeric_limits<TREEID>::max();

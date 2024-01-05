@@ -12,7 +12,7 @@ buildAndTest() {
   build_dir=$2
   pushd ${PROJECT_DIR}
   cmake -B ${build_dir} -S . -DCMAKE_BUILD_TYPE=${build_type}
-  cppcheck --project=${build_dir}/compile_commands.json -i tests --error-exitcode=0
+  cppcheck --project=${build_dir}/compile_commands.json -i tests --enable=all --error-exitcode=0
   cmake --build ${build_dir} -j `nproc`
   ctest --test-dir ${build_dir}
   gcovr -v -r . --html-details --output coverage/ --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*'
