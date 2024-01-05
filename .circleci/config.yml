@@ -48,9 +48,8 @@ jobs:
           name: "Generate coverage file"
           command: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*'
 
-      - codecov/upload
+      - codecov/upload:
           file: coverage.xml
-
 
 # Orchestrate jobs using workflows
 # See: https://circleci.com/docs/configuration-reference/#workflows
