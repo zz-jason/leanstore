@@ -17,6 +17,7 @@ jobs:
     environment:
       DEBIAN_FRONTEND: "noninteractive"
       TZ: "Asia/Shanghai"
+      codecov_upload_token: ${CODECOV_TOKEN}
 
     # Add steps to the job
     # See: https://circleci.com/docs/configuration-reference/#steps
@@ -50,7 +51,7 @@ jobs:
 
       - codecov/upload:
           file: coverage.xml
-          token: ${CODECOV_TOKEN}
+          token: $codecov_upload_token
 
 # Orchestrate jobs using workflows
 # See: https://circleci.com/docs/configuration-reference/#workflows
