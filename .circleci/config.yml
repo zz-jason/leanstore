@@ -62,3 +62,5 @@ workflows:
   build-debug:
     jobs:
       - build
+          context:
+            - build
