@@ -2,6 +2,9 @@
 # See: https://circleci.com/docs/configuration-reference
 version: 2.1
 
+orbs:
+  codecov: codecov/codecov@3.2.5
+
 # Define a job to be invoked later in a workflow.
 # See: https://circleci.com/docs/configuration-reference/#jobs
 jobs:
@@ -22,7 +25,7 @@ jobs:
           
       - run:
           name: "Install dependencies"
-          command: apt update && apt install -y build-essential cmake git libaio-dev gcovr cppcheck
+          command: apt update && apt install -y build-essential cmake git libaio-dev gcovr cppcheck coreutils curl gnupg
           
       - run:
           name: "Config project"
@@ -35,6 +38,7 @@ jobs:
       - run:
           name: "Build project"
           command: cmake --build build/debug -j `nproc`
+          no_output_timeout: 1m
 
       - run:
           name: "Test project"
@@ -43,6 +47,9 @@ jobs:
       - run:
           name: "Generate coverage file"
           command: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*'
+
+      - codecov/upload
+          parameters: {"file": "coverage.xml"}
 
 
 # Orchestrate jobs using workflows
