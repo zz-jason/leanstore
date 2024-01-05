@@ -9,7 +9,7 @@ jobs:
     # Specify the execution environment. You can specify an image from Docker Hub or use one of our convenience images from CircleCI's Developer Hub.
     # See: https://circleci.com/docs/configuration-reference/#executor-job
     docker:
-      - image: ubuntu-2204:2023.10.1
+      - image: ubuntu-2204:current
     # Add steps to the job
     # See: https://circleci.com/docs/configuration-reference/#steps
     steps:
