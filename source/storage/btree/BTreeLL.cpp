@@ -320,7 +320,8 @@ OP_RESULT BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
   }
 }
 
-OP_RESULT BTreeLL::updateSameSizeInPlace(Slice key, ValCallback callback,
+OP_RESULT BTreeLL::updateSameSizeInPlace(Slice key,
+                                         MutValCallback updateCallBack,
                                          UpdateDesc& updateDesc) {
   DCHECK(cr::Worker::my().IsTxStarted());
   cr::activeTX().markAsWrite();
@@ -353,8 +354,9 @@ OP_RESULT BTreeLL::updateSameSizeInPlace(Slice key, ValCallback callback,
       updateDesc.GenerateXORDiff(walPtr, currentVal.data());
       walHandler.SubmitWal();
     }
+
     // The actual update by the client
-    callback(currentVal.Immutable());
+    updateCallBack(currentVal);
     xIter.MarkAsDirty();
     xIter.UpdateContentionStats();
     JUMPMU_RETURN OP_RESULT::OK;

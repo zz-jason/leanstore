@@ -105,6 +105,7 @@ public:
       dstOffset += slot.length;
     }
   }
+
   void ApplyDiff(u8* dst, const u8* src) const {
     u64 srcOffset = 0;
     for (u64 i = 0; i < count; i++) {
@@ -138,10 +139,16 @@ public:
   inline static const UpdateDesc* From(const u8* buffer) {
     return reinterpret_cast<const UpdateDesc*>(buffer);
   }
+
+  inline static UpdateDesc* From(u8* buffer) {
+    return reinterpret_cast<UpdateDesc*>(buffer);
+  }
 };
 
+class MutableSlice;
 using StringU = std::basic_string<u8>;
 using ValCallback = std::function<void(Slice val)>;
+using MutValCallback = std::function<void(MutableSlice val)>;
 using ScanCallback = std::function<bool(Slice key, Slice val)>;
 using PrefixLookupCallback = std::function<void(Slice key, Slice val)>;
 
@@ -149,8 +156,13 @@ class KVInterface {
 public:
   virtual OP_RESULT Lookup(Slice key, ValCallback valCallback) = 0;
   virtual OP_RESULT insert(Slice key, Slice val) = 0;
-  virtual OP_RESULT updateSameSizeInPlace(Slice key, ValCallback valCallback,
-                                          UpdateDesc&) = 0;
+
+  /// Update the old value with a same sized new value.
+  /// NOTE: The value is updated via user provided callback.
+  virtual OP_RESULT updateSameSizeInPlace(Slice key,
+                                          MutValCallback updateCallBack,
+                                          UpdateDesc& updateDesc) = 0;
+
   virtual OP_RESULT remove(Slice key) = 0;
   virtual OP_RESULT scanAsc(Slice startKey, ScanCallback callback) = 0;
   virtual OP_RESULT scanDesc(Slice startKey, ScanCallback callback) = 0;
@@ -184,6 +196,10 @@ struct MutableSlice {
   }
 
   u64 length() {
+    return len;
+  }
+
+  u64 Size() {
     return len;
   }
 
