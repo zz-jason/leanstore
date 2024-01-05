@@ -38,7 +38,6 @@ public:
 
   std::atomic<bool> mWorkerKeepRunning = true;
 
-  u32 mNumWorkerThreads;
   std::vector<utils::ThreadHolder> mWorkerThreads;
   std::vector<WorkerThread> mWorkerThreadsMeta;
   std::vector<Worker*> mWorkers; // all the thread-local worker references
@@ -54,13 +53,6 @@ public:
   //---------------------------------------------------------------------------
   // Public Object Utils
   //---------------------------------------------------------------------------
-
-  /**
-   * @brief the number of worker threads
-   */
-  u32 NumWorkerThreads() {
-    return mNumWorkerThreads;
-  }
 
   /**
    * @brief Schedule same job on specific amount of workers.

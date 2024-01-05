@@ -26,19 +26,18 @@ std::atomic<u64> CRManager::sSsdOffset = 1 * 1024 * 1024 * 1024;
 
 CRManager::CRManager(s32 walFd)
     : mGroupCommitterThread(nullptr), mHistoryTreePtr(nullptr),
-      mNumWorkerThreads(FLAGS_worker_threads),
       mWorkerThreadsMeta(FLAGS_worker_threads) {
 
   // create worker threads to handle user transactions
-  mWorkerThreads.reserve(mNumWorkerThreads);
-  mWorkers.resize(mNumWorkerThreads);
-  for (u64 workerId = 0; workerId < mNumWorkerThreads; workerId++) {
+  mWorkerThreads.reserve(FLAGS_worker_threads);
+  mWorkers.resize(FLAGS_worker_threads);
+  for (u64 workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
     auto workerThreadMain = [&](u64 workerId) { runWorker(workerId); };
     mWorkerThreads.emplace_back(workerThreadMain, workerId);
   }
 
   // wait until all worker threads are initialized
-  while (mRunningThreads < mNumWorkerThreads) {
+  while (mRunningThreads < FLAGS_worker_threads) {
   }
 
   // setup group commit worker if WAL is enabled
@@ -50,7 +49,7 @@ CRManager::CRManager(s32 walFd)
 
   // setup history tree
   scheduleJobSync(0, [&]() { setupHistoryTree(); });
-  for (u64 workerId = 0; workerId < mNumWorkerThreads; workerId++) {
+  for (u64 workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
     mWorkers[workerId]->cc.mHistoryTree = mHistoryTreePtr.get();
   }
 }
@@ -86,12 +85,12 @@ void CRManager::runWorker(u64 workerId) {
   CRCounters::myCounters().mWorkerId = workerId;
 
   Worker::sTlsWorker =
-      std::make_unique<Worker>(workerId, mWorkers, mNumWorkerThreads);
+      std::make_unique<Worker>(workerId, mWorkers, FLAGS_worker_threads);
   mWorkers[workerId] = Worker::sTlsWorker.get();
   mRunningThreads++;
 
   // wait other worker threads to run
-  while (mRunningThreads < mNumWorkerThreads) {
+  while (mRunningThreads < FLAGS_worker_threads) {
   }
 
   // wait group committer thread to run
@@ -120,12 +119,12 @@ void CRManager::setupHistoryTree() {
   auto historyTree = std::make_unique<HistoryTree>();
   historyTree->update_btrees =
       std::make_unique<leanstore::storage::btree::BTreeLL*[]>(
-          mNumWorkerThreads);
+          FLAGS_worker_threads);
   historyTree->remove_btrees =
       std::make_unique<leanstore::storage::btree::BTreeLL*[]>(
-          mNumWorkerThreads);
+          FLAGS_worker_threads);
 
-  for (u64 i = 0; i < mNumWorkerThreads; i++) {
+  for (u64 i = 0; i < FLAGS_worker_threads; i++) {
     std::string name = "_history_tree_" + std::to_string(i);
     storage::btree::BTreeGeneric::Config config = {.mEnableWal = false,
                                                    .mUseBulkInsert = true};
@@ -179,7 +178,7 @@ void CRManager::scheduleJobs(u64 numWorkers,
 }
 
 void CRManager::joinAll() {
-  for (u32 i = 0; i < mNumWorkerThreads; i++) {
+  for (u32 i = 0; i < FLAGS_worker_threads; i++) {
     joinOne(i, [&](WorkerThread& meta) {
       return meta.mIsJobDone && meta.job == nullptr;
     });
@@ -187,7 +186,7 @@ void CRManager::joinAll() {
 }
 
 void CRManager::setJob(u64 workerId, std::function<void()> job) {
-  DCHECK(workerId < mNumWorkerThreads);
+  DCHECK(workerId < FLAGS_worker_threads);
   auto& meta = mWorkerThreadsMeta[workerId];
   std::unique_lock guard(meta.mutex);
   meta.cv.wait(guard, [&]() { return meta.mIsJobDone && meta.job == nullptr; });
@@ -199,7 +198,7 @@ void CRManager::setJob(u64 workerId, std::function<void()> job) {
 
 void CRManager::joinOne(u64 workerId,
                         std::function<bool(WorkerThread&)> condition) {
-  DCHECK(workerId < mNumWorkerThreads);
+  DCHECK(workerId < FLAGS_worker_threads);
   auto& meta = mWorkerThreadsMeta[workerId];
   std::unique_lock guard(meta.mutex);
   meta.cv.wait(guard, [&]() { return condition(meta); });
