@@ -23,6 +23,10 @@ jobs:
     # See: https://circleci.com/docs/configuration-reference/#steps
     steps:
       - checkout
+
+      - run:
+          name: "Check token"
+          command: echo codecov_upload_token
           
       - run:
           name: "Install dependencies"
