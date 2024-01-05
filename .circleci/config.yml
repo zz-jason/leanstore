@@ -10,15 +10,15 @@ jobs:
     # See: https://circleci.com/docs/configuration-reference/#executor-job
     docker:
       - image: ubuntu:23.04
+      
+    environment:
+      DEBIAN_FRONTEND: "noninteractive"
+      TZ: "Asia/Shanghai"
 
     # Add steps to the job
     # See: https://circleci.com/docs/configuration-reference/#steps
     steps:
       - checkout
-      
-      - run:
-          name: "Setup Environment Variables"
-          command: export DEBIAN_FRONTEND="noninteractive";export TZ="Europe/London";
           
       - run:
           name: "Install dependencies"
