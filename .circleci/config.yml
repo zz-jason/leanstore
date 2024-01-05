@@ -9,14 +9,14 @@ jobs:
     # Specify the execution environment. You can specify an image from Docker Hub or use one of our convenience images from CircleCI's Developer Hub.
     # See: https://circleci.com/docs/configuration-reference/#executor-job
     docker:
-      - image: ubuntu:23.04
+      - image: zzjason/leanstore-dev:latest
     # Add steps to the job
     # See: https://circleci.com/docs/configuration-reference/#steps
     steps:
       - checkout
       - run:
           name: "build and test"
-          command: "DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get update && apt-get install -y build-essential cmake git libaio-dev gcovr && ./scripts/build.sh"
+          command: "./scripts/build.sh"
 
 
 # Orchestrate jobs using workflows
