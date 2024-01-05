@@ -413,7 +413,7 @@ TEST_F(BTreeVITest, RemoveFromOthers) {
     cr::Worker::my().commitTX();
 
     // insert numKVs tuples
-    ssize_t numKVs(1);
+    ssize_t numKVs(100);
     for (ssize_t i = 0; i < numKVs; ++i) {
       auto key = RandomAlphString(24);
       if (uniqueKeys.find(key) != uniqueKeys.end()) {
