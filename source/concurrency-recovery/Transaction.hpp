@@ -160,8 +160,8 @@ struct Transaction {
     state = TX_STATE::STARTED;
   }
 
-  bool CanCommit(u64 minFlushedGsn, TXID minFlushedCommitTs) {
-    return mMaxObservedGSN <= minFlushedGsn && mStartTs <= minFlushedCommitTs;
+  bool CanCommit(u64 minFlushedGSN, TXID minFlushedTxId) {
+    return mMaxObservedGSN <= minFlushedGSN && mStartTs <= minFlushedTxId;
   }
 };
 
