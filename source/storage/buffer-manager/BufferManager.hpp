@@ -155,7 +155,7 @@ public:
   /// Checkpoints all the buffer frames.
   void CheckpointAllBufferFrames();
 
-  void RecoveryFromDisk(s32 walFd);
+  void RecoveryFromDisk();
 
   StringMap serialize();
 

@@ -1,11 +1,11 @@
-#include "GroupCommitterThread.hpp"
+#include "GroupCommitter.hpp"
 #include "CRMG.hpp"
 #include "Worker.hpp"
 
 namespace leanstore {
 namespace cr {
 
-void GroupCommitterThread::runImpl() {
+void GroupCommitter::runImpl() {
   if (FLAGS_enable_pin_worker_threads) {
     utils::pinThisThread(FLAGS_worker_threads);
   }

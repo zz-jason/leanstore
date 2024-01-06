@@ -23,14 +23,14 @@ struct WorkerThread {
   std::atomic<bool> mIsJobDone = true; // Job done
 };
 
-class GroupCommitterThread;
+class GroupCommitter;
 
 /// Manages a fixed number of worker threads, each one gets a partition. CR is
 /// short for "concurrent resource"
 class CRManager {
 
 public:
-  std::unique_ptr<GroupCommitterThread> mGroupCommitterThread;
+  std::unique_ptr<GroupCommitter> mGrouopCommitter;
 
   std::unique_ptr<HistoryTreeInterface> mHistoryTreePtr;
 

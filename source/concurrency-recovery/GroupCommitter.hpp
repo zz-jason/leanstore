@@ -25,7 +25,7 @@ namespace cr {
 
 class Worker;
 
-class GroupCommitterThread : public leanstore::utils::UserThread {
+class GroupCommitter : public leanstore::utils::UserThread {
 public:
   /// File descriptor of the underlying WAL file.
   const s32 mWalFd;
@@ -37,12 +37,12 @@ public:
   std::vector<Worker*>& mWorkers;
 
 public:
-  GroupCommitterThread(s32 walFd, std::vector<Worker*>& workers)
+  GroupCommitter(s32 walFd, std::vector<Worker*>& workers)
       : UserThread("group-committer"), mWalFd(walFd), mWalSize(0),
         mWorkers(workers) {
   }
 
-  virtual ~GroupCommitterThread() override = default;
+  virtual ~GroupCommitter() override = default;
 
 protected:
   virtual void runImpl() override;

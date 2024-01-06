@@ -133,7 +133,7 @@ LeanStore::LeanStore() {
   if (FLAGS_recover) {
     // deserialize meta from disk
     DeSerializeMeta();
-    BufferManager::sInstance->RecoveryFromDisk(mWalFd);
+    BufferManager::sInstance->RecoveryFromDisk();
   }
 }
 
