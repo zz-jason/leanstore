@@ -30,6 +30,11 @@ class GroupCommitter;
 class CRManager {
 
 public:
+  /// The group committer thread, created and started if WAL is enabled when the
+  /// CRManager instance is created.
+  ///
+  /// NOTE: It should be created after all the worker threads are created and
+  /// started.
   std::unique_ptr<GroupCommitter> mGrouopCommitter;
 
   std::unique_ptr<HistoryTreeInterface> mHistoryTreePtr;
@@ -39,8 +44,11 @@ public:
   std::atomic<bool> mWorkerKeepRunning = true;
 
   std::vector<utils::ThreadHolder> mWorkerThreads;
+
   std::vector<WorkerThread> mWorkerThreadsMeta;
-  std::vector<Worker*> mWorkers; // all the thread-local worker references
+
+  /// All the thread-local worker references
+  std::vector<Worker*> mWorkers;
 
 public:
   //---------------------------------------------------------------------------

@@ -42,7 +42,8 @@ CRManager::CRManager(s32 walFd)
 
   // setup group commit worker if WAL is enabled
   if (FLAGS_wal) {
-    mGrouopCommitter = std::make_unique<GroupCommitter>(walFd, mWorkers);
+    const int cpu = FLAGS_enable_pin_worker_threads ? FLAGS_worker_threads : -1;
+    mGrouopCommitter = std::make_unique<GroupCommitter>(walFd, mWorkers, cpu);
     mGrouopCommitter->Start();
   }
 

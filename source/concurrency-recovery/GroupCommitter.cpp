@@ -6,10 +6,6 @@ namespace leanstore {
 namespace cr {
 
 void GroupCommitter::runImpl() {
-  if (FLAGS_enable_pin_worker_threads) {
-    utils::pinThisThread(FLAGS_worker_threads);
-  }
-
   CPUCounters::registerThread(mThreadName, false);
 
   [[maybe_unused]] leanstore::utils::SteadyTimer phase1Timer;

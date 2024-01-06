@@ -1,5 +1,8 @@
 #pragma once
 
+#include "Defer.hpp"
+#include "Misc.hpp"
+
 #include <glog/logging.h>
 
 #include <atomic>
@@ -12,17 +15,19 @@
 namespace leanstore {
 namespace utils {
 
-/// User thread with custom thread name, started by expicitly calling Start().
+/// User thread with custom thread name.
 class UserThread {
 protected:
   std::string mThreadName = "";
+  int mRunningCPU = -1;
   std::unique_ptr<std::thread> mThread = nullptr;
   std::atomic<bool> mKeepRunning = false;
 
 public:
   UserThread() = default;
 
-  UserThread(const std::string& name) : mThreadName(name) {
+  UserThread(const std::string& name, int runningCPU = -1)
+      : mThreadName(name), mRunningCPU(runningCPU) {
     LOG_IF(ERROR, mThreadName.size() > 15)
         << "Thread name should be restricted to 15 characters"
         << ", name=" << name << ", size=" << name.size();
@@ -56,12 +61,21 @@ public:
 
 protected:
   void run() {
-    LOG(INFO) << "Thread started, name=" << mThreadName;
+    // log info about thread start and stop events
+    LOG(INFO) << mThreadName << " thread started";
+    SCOPED_DEFER(LOG(INFO) << mThreadName << " thread stopped");
+
     // setup thread name
     pthread_setname_np(pthread_self(), mThreadName.c_str());
+
+    // pin the thread to a specific CPU
+    if (mRunningCPU != -1) {
+      utils::pinThisThread(mRunningCPU);
+      LOG(INFO) << mThreadName << " pined to CPU " << mRunningCPU;
+    }
+
     // run custom thread loop
     runImpl();
-    LOG(INFO) << "Thread stopped, name=" << mThreadName;
   }
 
   /// Custom thread loop

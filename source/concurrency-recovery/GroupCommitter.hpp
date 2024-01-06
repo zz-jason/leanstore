@@ -37,8 +37,8 @@ public:
   std::vector<Worker*>& mWorkers;
 
 public:
-  GroupCommitter(s32 walFd, std::vector<Worker*>& workers)
-      : UserThread("group-committer"), mWalFd(walFd), mWalSize(0),
+  GroupCommitter(s32 walFd, std::vector<Worker*>& workers, int cpu)
+      : UserThread("GroupCommitter", cpu), mWalFd(walFd), mWalSize(0),
         mWorkers(workers) {
   }
 
