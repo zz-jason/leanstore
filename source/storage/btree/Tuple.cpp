@@ -38,11 +38,11 @@ static u64 maxFatTupleLength() {
   return BTreeNode::Size() - 1000;
 }
 
-bool Tuple::ToChainedTuple(BTreeExclusiveIterator& iterator) {
+bool Tuple::ToFat(BTreeExclusiveIterator& xIter) {
   utils::Timer timer(CRCounters::myCounters().cc_ms_fat_tuple_conversion);
 
   // Process the chain tuple
-  MutableSlice rawVal = iterator.MutableVal();
+  MutableSlice rawVal = xIter.MutableVal();
   auto& chainedTuple = *ChainedTuple::From(rawVal.data());
   DCHECK(chainedTuple.IsWriteLocked());
   DCHECK(chainedTuple.mFormat == TupleFormat::CHAINED);
@@ -62,7 +62,7 @@ bool Tuple::ToChainedTuple(BTreeExclusiveIterator& iterator) {
   bool abortConversion = false;
   u16 numDeltasToReplace = 0;
   while (!abortConversion) {
-    if (cr::Worker::my().cc.isVisibleForAll(prevWorkerId, prevTxId)) {
+    if (cr::Worker::my().cc.isVisibleForAll(prevTxId)) {
       // No need to convert versions that are visible for all to the FatTuple,
       // these old version can be GCed. Pruning versions space might get delayed
       break;
@@ -126,19 +126,19 @@ bool Tuple::ToChainedTuple(BTreeExclusiveIterator& iterator) {
   // Finalize the new FatTuple
   // TODO: corner cases, more careful about space usage
   const u16 fatTupleSize = sizeof(FatTuple) + fatTuple->mPayloadCapacity;
-  if (iterator.value().size() < fatTupleSize) {
-    auto succeed = iterator.extendPayload(fatTupleSize);
+  if (xIter.value().size() < fatTupleSize) {
+    auto succeed = xIter.extendPayload(fatTupleSize);
     LOG_IF(FATAL, !succeed)
         << "Failed to extend current value buffer to fit the FatTuple"
         << ", fatTupleSize=" << fatTupleSize
-        << ", current value buffer size=" << iterator.value().size();
+        << ", current value buffer size=" << xIter.value().size();
   } else {
-    iterator.shorten(fatTupleSize);
+    xIter.shorten(fatTupleSize);
   }
 
   // Copy the FatTuple back to the underlying value buffer.
   std::memcpy(rawVal.data(), tmpBuf->get(), fatTupleSize);
-  iterator.MarkAsDirty();
+  xIter.MarkAsDirty();
   return true;
 }
 
@@ -189,7 +189,7 @@ void FatTuple::garbageCollection() {
   };
 
   // Delete for all visible deltas, atm using cheap visibility check
-  if (cr::Worker::my().cc.isVisibleForAll(mWorkerId, mTxId)) {
+  if (cr::Worker::my().cc.isVisibleForAll(mTxId)) {
     mNumDeltas = 0;
     mDataOffset = mPayloadCapacity;
     mPayloadSize = mValSize;
@@ -199,7 +199,7 @@ void FatTuple::garbageCollection() {
   u16 deltas_visible_by_all_counter = 0;
   for (s32 i = mNumDeltas - 1; i >= 1; i--) {
     auto& delta = getDelta(i);
-    if (cr::Worker::my().cc.isVisibleForAll(delta.mWorkerId, delta.mTxId)) {
+    if (cr::Worker::my().cc.isVisibleForAll(delta.mTxId)) {
       deltas_visible_by_all_counter = i - 1;
       break;
     }
@@ -357,14 +357,9 @@ bool FatTuple::update(BTreeExclusiveIterator& xIter, Slice key,
                       MutValCallback updateCallBack, UpdateDesc& updateDesc) {
   utils::Timer timer(CRCounters::myCounters().cc_ms_fat_tuple);
   while (true) {
-
     auto fatTuple = reinterpret_cast<FatTuple*>(xIter.MutableVal().data());
     DCHECK(fatTuple->IsWriteLocked())
         << "Tuple should be write locked before update";
-    if (FLAGS_vi_fupdate_fat_tuple) {
-      updateCallBack(fatTuple->GetMutableValue());
-      return true;
-    }
 
     if (fatTuple->hasSpaceFor(updateDesc)) {
       // WAL
@@ -566,7 +561,6 @@ std::tuple<OP_RESULT, u16> ChainedTuple::GetVisibleTuple(
       return {OP_RESULT::OK, numVisitedVersions};
     }
     numVisitedVersions++;
-    ENSURE(numVisitedVersions <= FLAGS_vi_max_chain_length);
   }
   return {OP_RESULT::NOT_FOUND, numVisitedVersions};
 }

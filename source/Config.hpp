@@ -10,6 +10,11 @@ DECLARE_uint64(buffer_pool_size);
 DECLARE_string(data_dir);
 DECLARE_uint64(db_file_capacity);
 
+// Config for multi-version, OLAP-isolated BTree
+DECLARE_bool(vi);
+DECLARE_bool(enable_fat_tuple);
+DECLARE_bool(enable_olap_mode);
+
 DECLARE_uint32(worker_threads);
 DECLARE_bool(cpu_counters);
 DECLARE_bool(enable_pin_worker_threads);
@@ -21,7 +26,6 @@ DECLARE_uint32(partition_bits);
 DECLARE_uint32(write_buffer_size);
 DECLARE_uint32(db_file_prealloc_gib);
 DECLARE_uint32(pp_threads);
-DECLARE_bool(worker_page_eviction);
 DECLARE_bool(root);
 DECLARE_bool(print_debug);
 DECLARE_bool(print_tx_console);
@@ -61,7 +65,6 @@ DECLARE_bool(enable_print_btree_stats_on_exit);
 DECLARE_bool(btree_prefix_compression);
 DECLARE_int64(btree_hints);
 DECLARE_bool(btree_heads);
-DECLARE_bool(nc_reallocation);
 DECLARE_bool(bulk_insert);
 // -------------------------------------------------------------------------------------
 DECLARE_int64(trace_dt_id);
@@ -79,36 +82,16 @@ DECLARE_uint64(wal_log_writers);
 DECLARE_uint64(wal_buffer_size);
 // -------------------------------------------------------------------------------------
 DECLARE_string(isolation_level);
-DECLARE_bool(mv);
 DECLARE_uint64(si_refresh_rate);
 DECLARE_bool(todo);
-// -------------------------------------------------------------------------------------
-DECLARE_bool(vi);
-DECLARE_bool(vi_delta);
-DECLARE_bool(vi_utodo);
-DECLARE_bool(vi_rtodo);
-DECLARE_bool(vi_flookup);
-DECLARE_bool(vi_fremove);
-DECLARE_bool(vi_update_version_elision);
-DECLARE_bool(vi_fupdate_chained);
-DECLARE_bool(vi_fupdate_fat_tuple);
-DECLARE_uint64(vi_fat_tuple_trigger);
-DECLARE_bool(vi_fat_tuple_alternative);
-DECLARE_uint64(vi_pgc_batch_size);
-DECLARE_bool(vi_fat_tuple);
-DECLARE_string(vi_fat_tuple_dts);
-DECLARE_bool(vi_dangling_pointer);
-DECLARE_bool(vi_fat_tuple_decompose);
-// -------------------------------------------------------------------------------------
-DECLARE_bool(olap_mode);
-DECLARE_bool(graveyard);
-// -------------------------------------------------------------------------------------
+
+// Config for MVCC GC
 DECLARE_bool(pgc);
 DECLARE_uint64(pgc_variant);
 DECLARE_double(garbage_in_page_pct);
-DECLARE_uint64(vi_max_chain_length);
 DECLARE_uint64(todo_batch_size);
 DECLARE_bool(history_tree_inserts);
+
 // -------------------------------------------------------------------------------------
 DECLARE_bool(recover);
 

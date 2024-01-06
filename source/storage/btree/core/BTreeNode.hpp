@@ -237,11 +237,11 @@ public:
   }
 
   // Attention: the caller has to hold a copy of the existing payload
-  inline void shortenPayload(u16 slotId, u16 len) {
-    DCHECK(len <= slot[slotId].mValSize);
-    const u16 freed_space = slot[slotId].mValSize - len;
-    mSpaceUsed -= freed_space;
-    slot[slotId].mValSize = len;
+  inline void shortenPayload(u16 slotId, u16 targetSize) {
+    DCHECK(targetSize <= slot[slotId].mValSize);
+    const u16 freeSpace = slot[slotId].mValSize - targetSize;
+    mSpaceUsed -= freeSpace;
+    slot[slotId].mValSize = targetSize;
   }
 
   inline bool canExtendPayload(u16 slot_id, u16 new_length) {

@@ -108,15 +108,6 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     u8 foldedKey[Record::maxFoldLength()];
     u16 foldedKeySize = Record::foldKey(foldedKey, key);
 
-    if (!FLAGS_vi_delta) {
-      // Disable deltas, copy the whole tuple [hacky]
-      DCHECK(updateDesc.count > 0);
-      DCHECK(!FLAGS_vi_fat_tuple);
-      updateDesc.count = 1;
-      updateDesc.mDiffSlots[0].offset = 0;
-      updateDesc.mDiffSlots[0].length = sizeof(Record);
-    }
-
     const OP_RESULT res = btree->updateSameSizeInPlace(
         Slice(foldedKey, foldedKeySize),
         [&](MutableSlice val) {

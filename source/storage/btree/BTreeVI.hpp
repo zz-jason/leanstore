@@ -78,10 +78,6 @@ public:
       return SpaceCheckResult::NOTHING;
     }
 
-    if (!FLAGS_vi_fat_tuple_decompose) {
-      return BTreeGeneric::checkSpaceUtilization(bf);
-    }
-
     HybridGuard bfGuard(&bf.header.mLatch);
     bfGuard.toOptimisticOrJump();
     if (bf.page.mBTreeId != mTreeId) {
@@ -216,9 +212,8 @@ public:
                     const bool called_before) override {
     // Only point-gc and for removed tuples
     const auto& version = *reinterpret_cast<const RemoveVersion*>(entry_ptr);
-    if (FLAGS_vi_dangling_pointer &&
-        version.mTxId < cr::Worker::my().cc.local_all_lwm) {
-      assert(version.dangling_pointer.bf != nullptr);
+    if (version.mTxId < cr::Worker::my().cc.local_all_lwm) {
+      DCHECK(version.dangling_pointer.bf != nullptr);
       // Optimistic fast path
       JUMPMU_TRY() {
         BTreeExclusiveIterator iterator(

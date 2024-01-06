@@ -100,7 +100,7 @@ void Worker::startTX(TX_MODE mode, TX_ISOLATION_LEVEL level, bool isReadOnly) {
                               std::memory_order_release);
 
       mActiveTx.mStartTs = ConcurrencyControl::sGlobalClock.fetch_add(1);
-      if (FLAGS_olap_mode) {
+      if (FLAGS_enable_olap_mode) {
         curWorkerSnapshot.store(mActiveTx.mStartTs |
                                     ((mActiveTx.isOLAP()) ? OLAP_BIT : 0),
                                 std::memory_order_release);

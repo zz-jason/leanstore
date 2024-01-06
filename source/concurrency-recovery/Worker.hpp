@@ -279,7 +279,7 @@ public:
   void switchToReadCommittedMode();
   void switchToSnapshotIsolationMode();
 
-  bool isVisibleForAll(WORKERID workerId, TXID txId);
+  bool isVisibleForAll(TXID txId);
 
   /// Visibility check. Whethe the current tuple is visible for the current
   /// worker transaction. Also used to check whether the tuple is write-locked,

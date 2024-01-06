@@ -4,18 +4,23 @@
 DEFINE_uint32(page_size, 4096, "The page size (bytes)"); // 4 KiB
 DEFINE_uint64(buffer_pool_size, 1073741824,
               "The buffer pool size (bytes)"); // 1 GiB
-
 DEFINE_string(data_dir, "~/.leanstore",
               "Where to put all the database files, meta file, and log files");
 DEFINE_uint64(db_file_capacity, 1825361100800,
               "DB file capacity (bytes)"); // 1700 GB
+
+// Config for multi-version, OLAP-isolated BTree
+DEFINE_bool(vi, true, "BTree with SI using in-place version");
+DEFINE_bool(enable_fat_tuple, false, "");
+DEFINE_bool(enable_olap_mode, true,
+            "Use OLAP mode for long running transactions");
+
 DEFINE_uint32(db_file_prealloc_gib, 0, "Disk size to pre-allocate on DB file");
 DEFINE_bool(recover, false, "");
 
 DEFINE_uint32(free_pct, 1, "pct");
 DEFINE_uint32(partition_bits, 6, "bits per partition");
 DEFINE_uint32(pp_threads, 1, "number of page provider threads");
-DEFINE_bool(worker_page_eviction, false, "");
 DEFINE_uint32(write_buffer_size, 1024, "");
 
 DEFINE_string(csv_path, "./log", "");
@@ -80,8 +85,6 @@ DEFINE_bool(btree_prefix_compression, true, "");
 DEFINE_bool(btree_heads, true,
             "Enable heads optimization in lowerBound search");
 DEFINE_int64(btree_hints, 1, "0: disabled, 1: serial, 2: AVX512");
-DEFINE_bool(nc_reallocation, false,
-            "Reallocate hot pages in non-clustered btree index");
 // -------------------------------------------------------------------------------------
 DEFINE_bool(bulk_insert, false, "");
 // -------------------------------------------------------------------------------------
@@ -120,36 +123,14 @@ DEFINE_uint64(wal_buffer_size, 1024 * 1024 * 10,
 DEFINE_string(isolation_level, "si",
               "options: ru (READ_UNCOMMITTED), rc (READ_COMMITTED), si "
               "(SNAPSHOT_ISOLATION), ser (SERIALIZABLE)");
-DEFINE_bool(mv, true, "Multi-version");
 DEFINE_uint64(si_refresh_rate, 0, "");
 DEFINE_bool(todo, true, "");
 // -------------------------------------------------------------------------------------
-DEFINE_bool(vi, true, "BTree with SI using in-place version");
-DEFINE_bool(vi_delta, true, "");
-DEFINE_bool(vi_utodo, true, "");
-DEFINE_bool(vi_rtodo, true, "");
-DEFINE_bool(vi_flookup, false, "");
-DEFINE_bool(vi_fremove, false, "");
-DEFINE_bool(vi_update_version_elision, false, "");
-DEFINE_bool(vi_fupdate_chained, false, "");
-DEFINE_bool(vi_fupdate_fat_tuple, false, "");
-DEFINE_uint64(vi_pgc_batch_size, 2, "");
-DEFINE_bool(vi_fat_tuple, false, "");
-DEFINE_string(vi_fat_tuple_dts, "", "");
-DEFINE_bool(vi_fat_tuple_decompose, true, "");
-DEFINE_uint64(vi_fat_tuple_trigger, 0, "1: oldest_oltp, 1: probability");
-DEFINE_bool(vi_fat_tuple_alternative, false,
-            "hit the previous version at every update");
-DEFINE_bool(vi_dangling_pointer, true, "");
-// -------------------------------------------------------------------------------------
-DEFINE_bool(olap_mode, true, "Use OLAP mode for long running transactions");
-DEFINE_bool(graveyard, true, "Use Graveyard Index");
 // -------------------------------------------------------------------------------------
 DEFINE_bool(pgc, true, "Precise garbage collection/recycling");
 DEFINE_uint64(pgc_variant, 0, "0 naive, 1 bit faster, 2 ...");
 DEFINE_double(garbage_in_page_pct, 15,
               "Threshold to trigger page-wise garbage collection (%)");
-DEFINE_uint64(vi_max_chain_length, 1000, "");
 DEFINE_uint64(todo_batch_size, 1024, "");
 DEFINE_bool(history_tree_inserts, true, "");
 // -------------------------------------------------------------------------------------

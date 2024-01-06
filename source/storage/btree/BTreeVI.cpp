@@ -194,15 +194,14 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key,
       WorkerCounters::myCounters().cc_update_chains[mTreeId]++;
     }
 
+    // update on fat tuple
     if (tuple.mFormat == TupleFormat::FAT) {
       auto& fatTuple = *FatTuple::From(rawVal.data());
       auto res = fatTuple.update(xIter, key, updateCallBack, updateDesc);
-
       // Attention: previous tuple pointer is not valid here
-      Tuple::From(rawVal.data())->WriteUnlock();
       xIter.MarkAsDirty();
       xIter.UpdateContentionStats();
-
+      Tuple::From(rawVal.data())->WriteUnlock();
       if (!res) {
         // Converted back to chained -> restart
         goto restart;
@@ -212,88 +211,43 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key,
     }
 
     auto& chainedTuple = *ChainedTuple::From(rawVal.data());
-    if (FLAGS_vi_fat_tuple) {
-      bool convert_to_fat_tuple =
-          chainedTuple.mCommandId != INVALID_COMMANDID &&
-          cr::Worker::sOldestOltpStartTx != cr::Worker::sOldestAllStartTs &&
-          !(chainedTuple.mWorkerId == cr::Worker::my().mWorkerId &&
-            chainedTuple.mTxId == cr::activeTX().startTS());
-
-      if (FLAGS_vi_fat_tuple_trigger == 0) {
-        if (cr::Worker::my().cc.isVisibleForAll(chainedTuple.mWorkerId,
-                                                chainedTuple.mTxId)) {
-          chainedTuple.mOldestTx = 0;
-          chainedTuple.mTotalUpdates = 0;
-          convert_to_fat_tuple = false;
-        } else {
-          if (chainedTuple.mOldestTx ==
-              static_cast<u16>(cr::Worker::sOldestAllStartTs & 0xFFFF)) {
-            chainedTuple.mTotalUpdates++;
-          } else {
-            chainedTuple.mOldestTx =
-                static_cast<u16>(cr::Worker::sOldestAllStartTs & 0xFFFF);
-            chainedTuple.mTotalUpdates = 0;
-          }
-        }
-        convert_to_fat_tuple &=
-            chainedTuple.mTotalUpdates > convertToFatTupleThreshold();
-      } else if (FLAGS_vi_fat_tuple_trigger == 1) {
-        convert_to_fat_tuple &= utils::RandomGenerator::getRandU64(
-                                    0, convertToFatTupleThreshold()) == 0;
-      } else {
-        UNREACHABLE();
+    chainedTuple.UpdateStats();
+    // convert to fat tuple if it's frequently updated by me and other workers
+    if (FLAGS_enable_fat_tuple && chainedTuple.ShouldConvertToFatTuple()) {
+      COUNTERS_BLOCK() {
+        WorkerCounters::myCounters().cc_fat_tuple_triggered[mTreeId]++;
       }
-
-      if (convert_to_fat_tuple) {
+      chainedTuple.mTotalUpdates = 0;
+      if (Tuple::ToFat(xIter)) {
+        // convert succeed
+        xIter.mGuardedLeaf->mHasGarbage = true;
         COUNTERS_BLOCK() {
-          WorkerCounters::myCounters().cc_fat_tuple_triggered[mTreeId]++;
+          WorkerCounters::myCounters().cc_fat_tuple_convert[mTreeId]++;
         }
-        chainedTuple.mTotalUpdates = 0;
-        const bool convert_ret = Tuple::ToChainedTuple(xIter);
-        if (convert_ret) {
-          xIter.mGuardedLeaf->mHasGarbage = true;
-          COUNTERS_BLOCK() {
-            WorkerCounters::myCounters().cc_fat_tuple_convert[mTreeId]++;
-          }
-        }
-        goto restart;
-        UNREACHABLE();
       }
-    } else if (FLAGS_vi_fat_tuple_alternative) {
-      if (!cr::Worker::my().cc.isVisibleForAll(chainedTuple.mWorkerId,
-                                               chainedTuple.mTxId)) {
-        cr::Worker::my().cc.retrieveVersion(
-            chainedTuple.mWorkerId, chainedTuple.mTxId, chainedTuple.mCommandId,
-            [&](const u8* versionBuf, u64) {
-              auto& version = *reinterpret_cast<const Version*>(versionBuf);
-              cr::Worker::my().cc.retrieveVersion(
-                  version.mWorkerId, version.mTxId, version.mCommandId,
-                  [&](const u8*, u64) {});
-            });
-      }
+      goto restart;
+      UNREACHABLE();
     }
   }
     // Update in chained mode
     MutableSlice rawVal = xIter.MutableVal();
-    auto& chainedTuple = *reinterpret_cast<ChainedTuple*>(rawVal.data());
+    auto& chainedTuple = *ChainedTuple::From(rawVal.data());
     auto deltaPayloadSize = updateDesc.TotalSize();
     const u64 versionSize = deltaPayloadSize + sizeof(UpdateVersion);
     COMMANDID commandId = INVALID_COMMANDID;
 
     // Move the newest tuple to the history version tree.
-    if (!FLAGS_vi_fupdate_chained) {
-      commandId = cr::Worker::my().cc.insertVersion(
-          mTreeId, false, versionSize, [&](u8* versionBuf) {
-            auto& updateVersion = *new (versionBuf) UpdateVersion(
-                chainedTuple.mWorkerId, chainedTuple.mTxId,
-                chainedTuple.mCommandId, true);
-            std::memcpy(updateVersion.payload, &updateDesc, updateDesc.size());
-            auto diffDest = updateVersion.payload + updateDesc.size();
-            updateDesc.GenerateDiff(diffDest, chainedTuple.payload);
-          });
-      COUNTERS_BLOCK() {
-        WorkerCounters::myCounters().cc_update_versions_created[mTreeId]++;
-      }
+    commandId = cr::Worker::my().cc.insertVersion(
+        mTreeId, false, versionSize, [&](u8* versionBuf) {
+          auto& updateVersion = *new (versionBuf) UpdateVersion(
+              chainedTuple.mWorkerId, chainedTuple.mTxId,
+              chainedTuple.mCommandId, true);
+          std::memcpy(updateVersion.payload, &updateDesc, updateDesc.size());
+          auto diffDest = updateVersion.payload + updateDesc.size();
+          updateDesc.GenerateDiff(diffDest, chainedTuple.payload);
+        });
+    COUNTERS_BLOCK() {
+      WorkerCounters::myCounters().cc_update_versions_created[mTreeId]++;
     }
 
     // WAL
@@ -392,13 +346,6 @@ OP_RESULT BTreeVI::remove(Slice key) {
       }
 
       JUMPMU_RETURN OP_RESULT::NOT_FOUND;
-    }
-
-    if (FLAGS_vi_fremove) {
-      ret = xIter.removeCurrent();
-      ENSURE(ret == OP_RESULT::OK);
-      xIter.mergeIfNeeded();
-      JUMPMU_RETURN OP_RESULT::OK;
     }
 
     auto mutRawVal = xIter.MutableVal();

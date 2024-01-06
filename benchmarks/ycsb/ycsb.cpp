@@ -197,8 +197,9 @@ int main(int argc, char** argv) {
   }
 
   if (FLAGS_ycsb_sleepy_thread) {
-    const leanstore::TX_MODE tx_type =
-        FLAGS_olap_mode ? leanstore::TX_MODE::OLAP : leanstore::TX_MODE::OLTP;
+    const leanstore::TX_MODE tx_type = FLAGS_enable_olap_mode
+                                           ? leanstore::TX_MODE::OLAP
+                                           : leanstore::TX_MODE::OLTP;
     crm.scheduleJobAsync(exec_threads - 1, [&]() {
       running_threads_counter++;
       while (keep_running) {

@@ -134,17 +134,17 @@ public:
 
   // The caller must retain the payload when using any of the following payload
   // resize functions
-  virtual void shorten(const u16 new_size) {
-    mGuardedLeaf->shortenPayload(mSlotId, new_size);
+  virtual void shorten(const u16 targetSize) {
+    mGuardedLeaf->shortenPayload(mSlotId, targetSize);
   }
 
-  bool extendPayload(const u16 new_length) {
-    if (new_length >= BTreeNode::Size()) {
+  bool extendPayload(const u16 targetSize) {
+    if (targetSize >= BTreeNode::Size()) {
       return false;
     }
-    ENSURE(mSlotId != -1 && new_length > mGuardedLeaf->ValSize(mSlotId));
+    DCHECK(mSlotId != -1 && targetSize > mGuardedLeaf->ValSize(mSlotId));
     OP_RESULT ret;
-    while (!mGuardedLeaf->canExtendPayload(mSlotId, new_length)) {
+    while (!mGuardedLeaf->canExtendPayload(mSlotId, targetSize)) {
       if (mGuardedLeaf->mNumSeps == 1) {
         return false;
       }
@@ -152,10 +152,10 @@ public:
       Slice key = this->key();
       splitForKey(key);
       ret = seekExact(key);
-      ENSURE(ret == OP_RESULT::OK);
+      DCHECK(ret == OP_RESULT::OK);
     }
-    assert(mSlotId != -1);
-    mGuardedLeaf->extendPayload(mSlotId, new_length);
+    DCHECK(mSlotId != -1);
+    mGuardedLeaf->extendPayload(mSlotId, targetSize);
     return true;
   }
 

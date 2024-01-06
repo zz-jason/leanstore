@@ -35,8 +35,6 @@ void ConfigsTable::open() {
                   [&](Column& col) { col << FLAGS_run_for_seconds; });
   columns.emplace("c_bulk_insert",
                   [&](Column& col) { col << FLAGS_bulk_insert; });
-  columns.emplace("c_nc_reallocation",
-                  [&](Column& col) { col << FLAGS_nc_reallocation; });
 
   columns.emplace("c_contention_split",
                   [&](Column& col) { col << FLAGS_contention_split; });
@@ -70,17 +68,14 @@ void ConfigsTable::open() {
   columns.emplace("c_wal_log_writers",
                   [&](Column& col) { col << FLAGS_wal_log_writers; });
   columns.emplace("c_todo", [&](Column& col) { col << FLAGS_todo; });
-  columns.emplace("c_mv", [&](Column& col) { col << FLAGS_mv; });
   columns.emplace("c_vi", [&](Column& col) { col << FLAGS_vi; });
   columns.emplace("c_vi_fat_tuple",
-                  [&](Column& col) { col << FLAGS_vi_fat_tuple; });
-  columns.emplace("c_vi_fat_tuple_alternative",
-                  [&](Column& col) { col << FLAGS_vi_fat_tuple_alternative; });
+                  [&](Column& col) { col << FLAGS_enable_fat_tuple; });
   columns.emplace("c_pgc", [&](Column& col) { col << FLAGS_pgc; });
   columns.emplace("c_isolation_level",
                   [&](Column& col) { col << FLAGS_isolation_level; });
-  columns.emplace("c_olap_mode", [&](Column& col) { col << FLAGS_olap_mode; });
-  columns.emplace("c_graveyard", [&](Column& col) { col << FLAGS_graveyard; });
+  columns.emplace("c_olap_mode",
+                  [&](Column& col) { col << FLAGS_enable_olap_mode; });
   columns.emplace("c_history_tree_inserts",
                   [&](Column& col) { col << FLAGS_history_tree_inserts; });
 
