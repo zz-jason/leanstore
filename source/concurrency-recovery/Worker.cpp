@@ -63,6 +63,12 @@ void Worker::startTX(TX_MODE mode, TX_ISOLATION_LEVEL level, bool isReadOnly) {
     return;
   }
 
+  // Advance local GSN on demand to maintain transaction dependency
+  const auto maxFlushedGsn = Logging::sMaxFlushedGsn.load();
+  if (maxFlushedGsn > mLogging.GetCurrentGsn()) {
+    mLogging.SetCurrentGsn(maxFlushedGsn);
+  }
+
   // Init wal and group commit related transaction information
   mLogging.mTxWalBegin = mLogging.mWalBuffered;
   SCOPED_DEFER(if (!isReadOnly) {
@@ -70,20 +76,13 @@ void Worker::startTX(TX_MODE mode, TX_ISOLATION_LEVEL level, bool isReadOnly) {
     mLogging.SubmitWALEntrySimple();
   });
 
-  // Advance local GSN on demand to maintain transaction dependency
-  const auto maxFlushedGsn = Logging::sMaxFlushedGsn.load();
-  if (maxFlushedGsn > mLogging.GetCurrentGsn()) {
-    mLogging.SetCurrentGsn(maxFlushedGsn);
-    mLogging.UpdateWalFlushReq();
-  }
-
   // RFA
   {
-    mLogging.mMinFlushedGsn = Logging::sMinFlushedGsn.load();
+    mLogging.mMinFlushedGSN = Logging::sMinFlushedGsn.load();
     mLogging.mHasRemoteDependency = false;
     DLOG(INFO) << "workerId=" << mWorkerId << ", start transaction"
                << ", startTs=" << mActiveTx.mStartTs
-               << ", workerMinFlushedGSN=" << mLogging.mMinFlushedGsn;
+               << ", workerMinFlushedGSN=" << mLogging.mMinFlushedGSN;
   }
 
   // Draw TXID from global counter and publish it with the TX type (i.e., OLAP
@@ -149,12 +148,13 @@ void Worker::commitTX() {
 
       mActiveTx.stats.precommit = std::chrono::high_resolution_clock::now();
 
-      std::unique_lock<std::mutex> g(mLogging.mPreCommittedQueueMutex);
       if (mLogging.mHasRemoteDependency) {
-        mLogging.mPreCommittedQueue.push_back(mActiveTx);
+        std::unique_lock<std::mutex> g(mLogging.mTxToCommitMutex);
+        mLogging.mTxToCommit.push_back(mActiveTx);
       } else { // RFA
+        std::unique_lock<std::mutex> g(mLogging.mRfaTxToCommitMutex);
         CRCounters::myCounters().rfa_committed_tx++;
-        mLogging.mPreCommittedQueueRfa.push_back(mActiveTx);
+        mLogging.mRfaTxToCommit.push_back(mActiveTx);
       }
     }
 

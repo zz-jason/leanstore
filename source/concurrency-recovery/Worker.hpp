@@ -35,14 +35,14 @@ struct WalFlushReq {
   /// Used for optimistic locking.
   u64 mVersion = 0;
 
-  /// Regarding the changes made by the current worker.
-  u64 mCurrGSN = 0;
-
   /// The offset in the wal ring buffer.
   u64 mWalBuffered = 0;
 
-  /// The commit TS of the previous transaction.
-  TXID mPrevTxCommitTs = 0;
+  /// GSN of the current WAL record.
+  u64 mCurrGSN = 0;
+
+  /// ID of the current transaction.
+  TXID mCurrTxId = 0;
 };
 
 /// Helps to transaction concurrenct control and write-ahead logging.
@@ -97,30 +97,19 @@ public:
   /// during transaction processing.
   WALEntryComplex* mActiveWALEntryComplex;
 
-  /// Shared between Group Committer and Worker
-  std::mutex mPreCommittedQueueMutex;
+  /// Protects mTxToCommit
+  std::mutex mTxToCommitMutex;
 
   /// The queue for each worker thread to store pending-to-commit transactions
   /// which have remote dependencies.
-  std::vector<Transaction> mPreCommittedQueue;
+  std::vector<Transaction> mTxToCommit;
+
+  /// Protects mTxToCommit
+  std::mutex mRfaTxToCommitMutex;
 
   /// The queue for each worker thread to store pending-to-commit transactions
   /// which doesn't have any remote dependencies.
-  std::vector<Transaction> mPreCommittedQueueRfa;
-
-  /// Represents the commit TS of the last transaction in the current worker,
-  /// whose wal records are all flushed by the group commit thread. Advanced by
-  /// the group commit thread.
-  ///
-  /// Updated by group committer
-  std::atomic<TXID> mFlushedCommitTs = 0;
-
-  /// Tepresents the GSN of the transaction whose wal records are all flushed by
-  /// the group commit thread. It is advanced by the group commit thread after a
-  /// group commit round.
-  ///
-  /// Updated by group committer
-  std::atomic<TXID> mFlushedGsn = 0;
+  std::vector<Transaction> mRfaTxToCommit;
 
   /// Represents the maximum commit timestamp in the worker. Transactions in the
   /// worker are committed if their commit timestamps are smaller than it.
@@ -150,7 +139,7 @@ public:
   atomic<u64> mWalFlushed = 0;
 
   // for current transaction, reset on every transaction start
-  LID mMinFlushedGsn;
+  u64 mMinFlushedGSN;
 
   /// Whether the active transaction has accessed data written by other worker
   /// transactions, i.e. dependens on the transactions on other workers.
@@ -164,25 +153,12 @@ public:
   // Object utils
   //---------------------------------------------------------------------------
 
-  void UpdateFlushedCommitTs(const TXID flushedCommitTs) {
-    mFlushedCommitTs.store(flushedCommitTs, std::memory_order_release);
-  }
-
-  void UpdateFlushedGsn(const LID flushedGsn) {
-    mFlushedGsn.store(flushedGsn, std::memory_order_release);
-  }
-
   void UpdateSignaledCommitTs(const LID signaledCommitTs) {
     mSignaledCommitTs.store(signaledCommitTs, std::memory_order_release);
   }
 
   bool TxUnCommitted(const TXID dependency) {
     return mSignaledCommitTs.load() < dependency;
-  }
-
-  size_t PreCommittedQueueRfaSize() {
-    std::unique_lock<std::mutex> guard(mPreCommittedQueueMutex);
-    return mPreCommittedQueueRfa.size();
   }
 
   void publishOffset() {
@@ -483,7 +459,7 @@ inline void Logging::UpdateWalFlushReq() {
   auto current = mWalFlushReq.getNoSync();
   current.mWalBuffered = mWalBuffered;
   current.mCurrGSN = GetCurrentGsn();
-  current.mPrevTxCommitTs = Worker::my().mActiveTx.startTS();
+  current.mCurrTxId = Worker::my().mActiveTx.startTS();
   mWalFlushReq.SetSync(current);
 }
 

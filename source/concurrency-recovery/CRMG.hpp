@@ -1,10 +1,10 @@
 #pragma once
 
+#include "Config.hpp"
 #include "Exceptions.hpp"
 #include "HistoryTreeInterface.hpp"
 #include "Units.hpp"
 #include "Worker.hpp"
-#include "Config.hpp"
 #include "utils/ThreadHolder.hpp"
 
 #include <atomic>
@@ -23,30 +23,32 @@ struct WorkerThread {
   std::atomic<bool> mIsJobDone = true; // Job done
 };
 
+class GroupCommitter;
+
 /// Manages a fixed number of worker threads, each one gets a partition. CR is
 /// short for "concurrent resource"
 class CRManager {
 
 public:
-  /// File descriptor of the underlying WAL file.
-  const s32 mWalFd;
-
-  /// Start file offset of the next WALEntry.
-  u64 mWalSize;
+  /// The group committer thread, created and started if WAL is enabled when the
+  /// CRManager instance is created.
+  ///
+  /// NOTE: It should be created after all the worker threads are created and
+  /// started.
+  std::unique_ptr<GroupCommitter> mGrouopCommitter;
 
   std::unique_ptr<HistoryTreeInterface> mHistoryTreePtr;
 
   std::atomic<u64> mRunningThreads = 0;
 
   std::atomic<bool> mWorkerKeepRunning = true;
-  std::atomic<bool> mGroupCommitterKeepRunning = true;
 
-  u32 mNumWorkerThreads;
   std::vector<utils::ThreadHolder> mWorkerThreads;
-  std::vector<WorkerThread> mWorkerThreadsMeta;
-  std::vector<Worker*> mWorkers; // all the thread-local worker references
 
-  std::unique_ptr<utils::ThreadHolder> mGroupCommitterThread;
+  std::vector<WorkerThread> mWorkerThreadsMeta;
+
+  /// All the thread-local worker references
+  std::vector<Worker*> mWorkers;
 
 public:
   //---------------------------------------------------------------------------
@@ -59,13 +61,6 @@ public:
   //---------------------------------------------------------------------------
   // Public Object Utils
   //---------------------------------------------------------------------------
-
-  /**
-   * @brief the number of worker threads
-   */
-  u32 NumWorkerThreads() {
-    return mNumWorkerThreads;
-  }
 
   /**
    * @brief Schedule same job on specific amount of workers.
@@ -116,9 +111,6 @@ private:
 
   void runGroupCommiter();
   void runWorker(u64 workerId);
-  void groupCommitCordinator();
-  void groupCommiter1();
-  void groupCommiter2();
 
   /**
    * @brief Set the Job to specific worker.

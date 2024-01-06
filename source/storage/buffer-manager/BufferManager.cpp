@@ -4,6 +4,7 @@
 #include "BufferFrame.hpp"
 #include "Config.hpp"
 #include "Exceptions.hpp"
+#include "concurrency-recovery/GroupCommitter.hpp"
 #include "concurrency-recovery/Recovery.hpp"
 #include "profiling/counters/CPUCounters.hpp"
 #include "profiling/counters/PPCounters.hpp"
@@ -163,8 +164,8 @@ void BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
 
 void BufferManager::RecoveryFromDisk() {
   auto recovery = std::make_unique<leanstore::cr::Recovery>(
-      leanstore::cr::CRManager::sInstance->mWalFd, 0,
-      leanstore::cr::CRManager::sInstance->mWalSize);
+      leanstore::cr::CRManager::sInstance->mGrouopCommitter->mWalFd, 0,
+      leanstore::cr::CRManager::sInstance->mGrouopCommitter->mWalSize);
   recovery->Run();
 }
 
