@@ -181,6 +181,7 @@ void GroupCommitter::commitTXs(
     }
 
     // commit transactions without remote dependency
+    // TODO(jian.z): commit these transactions in the worker itself
     {
       std::unique_lock<std::mutex> g(logging.mRfaTxToCommitMutex);
       u64 i = 0;

@@ -66,33 +66,33 @@ public:
 protected:
   virtual void runImpl() override;
 
-  /// Phase 1: Prepare pwrite requests
+  /// Phase 1: Prepare IOCBs
   ///
-  /// We use the asynchronous IO interface from libaio to batch all log writes
-  /// and submit them using a single system call. Once the writes are done, we
-  /// flush the block device with fsync to make sure that the log records we
-  /// have just written are durable.
+  /// libaio is used to batch all log writes, these log writes are then
+  /// submitted using a single system call.
   ///
   /// @param[out] numIOCBS number of prepared IOCBs
-  /// @param[out] minFlushedGSN
-  /// @param[out] maxFlushedGSN
-  /// @param[out] minFlushedTxId
-  /// @param[out] numRfaTxs
-  /// @param[out] walFlushReqCopies
+  /// @param[out] minFlushedGSN the min flushed GSN among all the wal records
+  /// @param[out] maxFlushedGSN the max flushed GSN among all the wal records
+  /// @param[out] minFlushedTxId the min flushed transaction ID
+  /// @param[out] numRfaTxs number of transactions without dependency
+  /// @param[out] walFlushReqCopies snapshot of the flush requests
   void prepareIOCBs(s32& numIOCBs, u64& minFlushedGSN, u64& maxFlushedGSN,
                     TXID& minFlushedTxId, std::vector<u64>& numRfaTxs,
                     std::vector<WalFlushReq>& walFlushReqCopies);
 
   /// Phase 2: write all the prepared IOCBs
+  ///
   /// @param[in] numIOCBs number of IOCBs to write
   void writeIOCBs(s32 numIOCBs);
 
-  /// Phase 3: calculate the new safe set of transactions that are hardened
-  /// and ready, signal their commit to the client.
+  /// Phase 3: commit transactions
   ///
-  /// With this information in hand, we can commit the pre-committed
-  /// transactions in each worker that have their own log and their
-  /// dependencies hardened.
+  /// @param[in] minFlushedGSN the min flushed GSN among all the wal records
+  /// @param[in] maxFlushedGSN the max flushed GSN among all the wal records
+  /// @param[in] minFlushedTxId the min flushed transaction ID
+  /// @param[in] numRfaTxs number of transactions without dependency
+  /// @param[in] walFlushReqCopies snapshot of the flush requests
   void commitTXs(u64 minFlushedGSN, u64 maxFlushedGSN, TXID minFlushedTxId,
                  const std::vector<u64>& numRfaTxs,
                  const std::vector<WalFlushReq>& walFlushReqCopies);
