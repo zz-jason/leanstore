@@ -63,19 +63,18 @@ void Worker::startTX(TX_MODE mode, TX_ISOLATION_LEVEL level, bool isReadOnly) {
     return;
   }
 
+  // Advance local GSN on demand to maintain transaction dependency
+  const auto maxFlushedGsn = Logging::sMaxFlushedGsn.load();
+  if (maxFlushedGsn > mLogging.GetCurrentGsn()) {
+    mLogging.SetCurrentGsn(maxFlushedGsn);
+  }
+
   // Init wal and group commit related transaction information
   mLogging.mTxWalBegin = mLogging.mWalBuffered;
   SCOPED_DEFER(if (!isReadOnly) {
     mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_START);
     mLogging.SubmitWALEntrySimple();
   });
-
-  // Advance local GSN on demand to maintain transaction dependency
-  const auto maxFlushedGsn = Logging::sMaxFlushedGsn.load();
-  if (maxFlushedGsn > mLogging.GetCurrentGsn()) {
-    mLogging.SetCurrentGsn(maxFlushedGsn);
-    mLogging.UpdateWalFlushReq();
-  }
 
   // RFA
   {
