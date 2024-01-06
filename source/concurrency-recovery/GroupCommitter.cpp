@@ -11,7 +11,7 @@ void GroupCommitter::runImpl() {
   s32 numIOCBs = 0;
   u64 minFlushedGSN = std::numeric_limits<u64>::max();
   u64 maxFlushedGSN = 0;
-  TXID minFlushedCommitTs = std::numeric_limits<TXID>::max();
+  TXID minFlushedTxId = std::numeric_limits<TXID>::max();
   std::vector<u64> numRfaTxs(FLAGS_worker_threads, 0);
   std::vector<WalFlushReq> walFlushReqCopies(FLAGS_worker_threads);
 
@@ -19,7 +19,7 @@ void GroupCommitter::runImpl() {
   while (mKeepRunning) {
 
     // phase 1
-    prepareIOCBs(numIOCBs, minFlushedGSN, maxFlushedGSN, minFlushedCommitTs,
+    prepareIOCBs(numIOCBs, minFlushedGSN, maxFlushedGSN, minFlushedTxId,
                  numRfaTxs, walFlushReqCopies);
 
     if (numIOCBs > 0) {
@@ -27,14 +27,14 @@ void GroupCommitter::runImpl() {
       writeIOCBs(numIOCBs);
 
       // phase 3
-      commitTXs(minFlushedGSN, maxFlushedGSN, minFlushedCommitTs, numRfaTxs,
+      commitTXs(minFlushedGSN, maxFlushedGSN, minFlushedTxId, numRfaTxs,
                 walFlushReqCopies);
     }
   }
 }
 
 void GroupCommitter::prepareIOCBs(s32& numIOCBs, u64& minFlushedGSN,
-                                  u64& maxFlushedGSN, TXID& minFlushedCommitTs,
+                                  u64& maxFlushedGSN, TXID& minFlushedTxId,
                                   std::vector<u64>& numRfaTxs,
                                   std::vector<WalFlushReq>& walFlushReqCopies) {
   /// counters
@@ -51,13 +51,16 @@ void GroupCommitter::prepareIOCBs(s32& numIOCBs, u64& minFlushedGSN,
   numIOCBs = 0;
   minFlushedGSN = std::numeric_limits<u64>::max();
   maxFlushedGSN = 0;
-  minFlushedCommitTs = std::numeric_limits<TXID>::max();
+  minFlushedTxId = std::numeric_limits<TXID>::max();
 
   for (u32 workerId = 0; workerId < mWorkers.size(); workerId++) {
     auto& logging = mWorkers[workerId]->mLogging;
 
     // collect logging info
-    numRfaTxs[workerId] = logging.PreCommittedQueueRfaSize();
+    std::unique_lock<std::mutex> guard(logging.mRfaTxToCommitMutex);
+    numRfaTxs[workerId] = logging.mRfaTxToCommit.size();
+    guard.unlock();
+
     walFlushReqCopies[workerId] = logging.mWalFlushReq.getSync();
 
     const auto& reqCopy = walFlushReqCopies[workerId];
@@ -69,8 +72,7 @@ void GroupCommitter::prepareIOCBs(s32& numIOCBs, u64& minFlushedGSN,
     // update GSN and commitTS info
     maxFlushedGSN = std::max<u64>(maxFlushedGSN, reqCopy.mCurrGSN);
     minFlushedGSN = std::min<u64>(minFlushedGSN, reqCopy.mCurrGSN);
-    minFlushedCommitTs =
-        std::min<TXID>(minFlushedCommitTs, reqCopy.mPrevTxCommitTs);
+    minFlushedTxId = std::min<TXID>(minFlushedTxId, reqCopy.mCurrTxId);
 
     // prepare IOCBs on demand
     const u64 buffered = reqCopy.mWalBuffered;
@@ -128,7 +130,7 @@ void GroupCommitter::writeIOCBs(s32 numIOCBs) {
 }
 
 void GroupCommitter::commitTXs(
-    u64 minFlushedGSN, u64 maxFlushedGSN, TXID minFlushedCommitTs,
+    u64 minFlushedGSN, u64 maxFlushedGSN, TXID minFlushedTxId,
     const std::vector<u64>& numRfaTxs,
     const std::vector<WalFlushReq>& walFlushReqCopies) {
   // commited transactions
@@ -150,17 +152,16 @@ void GroupCommitter::commitTXs(
     const auto& reqCopy = walFlushReqCopies[workerId];
 
     // update the flushed commit TS info
-    logging.UpdateFlushedCommitTs(reqCopy.mPrevTxCommitTs);
     logging.mWalFlushed.store(reqCopy.mWalBuffered, std::memory_order_release);
     TXID signaledUpTo = std::numeric_limits<TXID>::max();
 
     // commit transactions with remote dependency
     {
-      std::unique_lock<std::mutex> g(logging.mPreCommittedQueueMutex);
+      std::unique_lock<std::mutex> g(logging.mTxToCommitMutex);
       u64 i = 0;
-      for (; i < logging.mPreCommittedQueue.size(); ++i) {
-        auto& tx = logging.mPreCommittedQueue[i];
-        if (!tx.CanCommit(minFlushedGSN, minFlushedCommitTs)) {
+      for (; i < logging.mTxToCommit.size(); ++i) {
+        auto& tx = logging.mTxToCommit[i];
+        if (!tx.CanCommit(minFlushedGSN, minFlushedTxId)) {
           break;
         }
         tx.state = TX_STATE::COMMITTED;
@@ -168,24 +169,23 @@ void GroupCommitter::commitTXs(
                    << ", workerId=" << workerId << ", startTs=" << tx.mStartTs
                    << ", commitTs=" << tx.mCommitTs
                    << ", minFlushedGSN=" << minFlushedGSN
-                   << ", minFlushedCommitTs=" << minFlushedCommitTs;
+                   << ", minFlushedTxId=" << minFlushedTxId;
       }
       if (i > 0) {
-        auto maxCommitTs = logging.mPreCommittedQueue[i - 1].commitTS();
+        auto maxCommitTs = logging.mTxToCommit[i - 1].commitTS();
         signaledUpTo = std::min<TXID>(signaledUpTo, maxCommitTs);
-        logging.mPreCommittedQueue.erase(logging.mPreCommittedQueue.begin(),
-                                         logging.mPreCommittedQueue.begin() +
-                                             i);
+        logging.mTxToCommit.erase(logging.mTxToCommit.begin(),
+                                  logging.mTxToCommit.begin() + i);
         numCommitted += i;
       }
     }
 
     // commit transactions without remote dependency
     {
-      std::unique_lock<std::mutex> g(logging.mPreCommittedQueueMutex);
+      std::unique_lock<std::mutex> g(logging.mRfaTxToCommitMutex);
       u64 i = 0;
       for (; i < numRfaTxs[workerId]; ++i) {
-        auto& tx = logging.mPreCommittedQueueRfa[i];
+        auto& tx = logging.mRfaTxToCommit[i];
         tx.state = TX_STATE::COMMITTED;
         DLOG(INFO) << "Transaction (RFA) committed"
                    << ", workerId=" << workerId << ", startTs=" << tx.mStartTs
@@ -193,11 +193,10 @@ void GroupCommitter::commitTXs(
       }
 
       if (i > 0) {
-        auto maxCommitTs = logging.mPreCommittedQueueRfa[i - 1].commitTS();
+        auto maxCommitTs = logging.mRfaTxToCommit[i - 1].commitTS();
         signaledUpTo = std::min<TXID>(signaledUpTo, maxCommitTs);
-        logging.mPreCommittedQueueRfa.erase(
-            logging.mPreCommittedQueueRfa.begin(),
-            logging.mPreCommittedQueueRfa.begin() + i);
+        logging.mRfaTxToCommit.erase(logging.mRfaTxToCommit.begin(),
+                                     logging.mRfaTxToCommit.begin() + i);
         numCommitted += i;
       }
     }

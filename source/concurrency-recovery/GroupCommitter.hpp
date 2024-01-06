@@ -76,11 +76,11 @@ protected:
   /// @param[out] numIOCBS number of prepared IOCBs
   /// @param[out] minFlushedGSN
   /// @param[out] maxFlushedGSN
-  /// @param[out] minFlushedCommitTs
+  /// @param[out] minFlushedTxId
   /// @param[out] numRfaTxs
   /// @param[out] walFlushReqCopies
   void prepareIOCBs(s32& numIOCBs, u64& minFlushedGSN, u64& maxFlushedGSN,
-                    TXID& minFlushedCommitTs, std::vector<u64>& numRfaTxs,
+                    TXID& minFlushedTxId, std::vector<u64>& numRfaTxs,
                     std::vector<WalFlushReq>& walFlushReqCopies);
 
   /// Phase 2: write all the prepared IOCBs
@@ -93,7 +93,7 @@ protected:
   /// With this information in hand, we can commit the pre-committed
   /// transactions in each worker that have their own log and their
   /// dependencies hardened.
-  void commitTXs(u64 minFlushedGSN, u64 maxFlushedGSN, TXID minFlushedCommitTs,
+  void commitTXs(u64 minFlushedGSN, u64 maxFlushedGSN, TXID minFlushedTxId,
                  const std::vector<u64>& numRfaTxs,
                  const std::vector<WalFlushReq>& walFlushReqCopies);
 

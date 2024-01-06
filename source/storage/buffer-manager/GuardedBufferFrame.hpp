@@ -160,13 +160,13 @@ public:
   // TODO: don't sync on temporary table pages like HistoryTree
   inline void SyncGSNBeforeRead() {
     if (!cr::Worker::my().mLogging.mHasRemoteDependency &&
-        mBf->page.mGSN > cr::Worker::my().mLogging.mMinFlushedGsn &&
+        mBf->page.mGSN > cr::Worker::my().mLogging.mMinFlushedGSN &&
         mBf->header.mLastWriterWorker != cr::Worker::my().mWorkerId) {
       cr::Worker::my().mLogging.mHasRemoteDependency = true;
       DLOG(INFO) << "workerId=" << cr::Worker::my().mWorkerId
                  << ", detect remote dependency"
                  << ", workerMinFlushedGSN="
-                 << cr::Worker::my().mLogging.mMinFlushedGsn
+                 << cr::Worker::my().mLogging.mMinFlushedGSN
                  << ", pageGSN=" << mBf->page.mGSN
                  << ", pageLastWriterWorker=" << mBf->header.mLastWriterWorker;
     }

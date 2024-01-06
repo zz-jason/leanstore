@@ -107,7 +107,7 @@ WALEntrySimple& Logging::ReserveWALEntrySimple(WALEntry::TYPE type) {
 }
 
 /// Submits the WALEntrySimple to group committer when transaction is started,
-/// committed, or aborted. It updates mPrevTxCommitTs to notify the group commit
+/// committed, or aborted. It updates mCurrTxId to notify the group commit
 /// thread to flush WAL records for finished (committed or aborted)
 /// transactions.
 ///
