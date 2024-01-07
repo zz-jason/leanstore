@@ -10,7 +10,6 @@ DEFINE_uint64(db_file_capacity, 1825361100800,
               "DB file capacity (bytes)"); // 1700 GB
 
 // Config for multi-version, OLAP-isolated BTree
-DEFINE_bool(vi, true, "BTree with SI using in-place version");
 DEFINE_bool(enable_fat_tuple, false, "");
 DEFINE_bool(enable_olap_mode, true,
             "Use OLAP mode for long running transactions");

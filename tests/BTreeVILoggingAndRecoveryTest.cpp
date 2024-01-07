@@ -18,7 +18,6 @@ protected:
   std::unique_ptr<LeanStore> mLeanStore;
 
   BTreeVILoggingAndRecoveryTest() {
-    FLAGS_vi = true;
     FLAGS_enable_print_btree_stats_on_exit = true;
     FLAGS_wal = true;
     FLAGS_bulk_insert = false;

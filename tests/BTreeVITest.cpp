@@ -14,8 +14,6 @@
 
 namespace leanstore {
 
-static std::unique_ptr<LeanStore> sLeanStore = nullptr;
-
 template <typename T = std::mt19937> auto RandomGenerator() -> T {
   auto constexpr fixed_seed = 123456789; // Fixed seed for deterministic output
   return T{fixed_seed};
@@ -33,7 +31,6 @@ static std::string RandomAlphString(std::size_t len) {
 }
 
 static auto InitLeanStore() {
-  FLAGS_vi = true;
   FLAGS_enable_print_btree_stats_on_exit = true;
   FLAGS_wal = true;
   FLAGS_bulk_insert = false;

@@ -41,6 +41,7 @@ leanstore_add_test(BTreeVILoggingAndRecoveryTest)
 leanstore_add_test(BufferFrameTest)
 
 leanstore_add_test_without_gtest_main(BTreeVITest)
+leanstore_add_test_without_gtest_main(MVCCTest)
 
 # # for code coverages
 # if(BUILD_WITH_COVERAGE)

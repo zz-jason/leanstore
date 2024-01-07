@@ -68,7 +68,6 @@ void ConfigsTable::open() {
   columns.emplace("c_wal_log_writers",
                   [&](Column& col) { col << FLAGS_wal_log_writers; });
   columns.emplace("c_todo", [&](Column& col) { col << FLAGS_todo; });
-  columns.emplace("c_vi", [&](Column& col) { col << FLAGS_vi; });
   columns.emplace("c_vi_fat_tuple",
                   [&](Column& col) { col << FLAGS_enable_fat_tuple; });
   columns.emplace("c_pgc", [&](Column& col) { col << FLAGS_pgc; });

@@ -23,30 +23,16 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
   }
 
   LeanStoreAdapter(LeanStore& db, string name) : name(name) {
-    if (FLAGS_vi) {
-      if (FLAGS_recover) {
-        leanstore::storage::btree::BTreeVI* tree;
-        db.GetBTreeVI(name, &tree);
-        btree = reinterpret_cast<leanstore::KVInterface*>(tree);
-      } else {
-        leanstore::storage::btree::BTreeVI* tree;
-        storage::btree::BTreeGeneric::Config config{.mEnableWal = FLAGS_wal,
-                                                    .mUseBulkInsert = false};
-        db.RegisterBTreeVI(name, config, &tree);
-        btree = reinterpret_cast<leanstore::KVInterface*>(tree);
-      }
+    if (FLAGS_recover) {
+      leanstore::storage::btree::BTreeVI* tree;
+      db.GetBTreeVI(name, &tree);
+      btree = reinterpret_cast<leanstore::KVInterface*>(tree);
     } else {
-      if (FLAGS_recover) {
-        leanstore::storage::btree::BTreeLL* tree;
-        db.GetBTreeLL(name, &tree);
-        btree = reinterpret_cast<leanstore::KVInterface*>(tree);
-      } else {
-        leanstore::storage::btree::BTreeLL* tree;
-        storage::btree::BTreeGeneric::Config config{.mEnableWal = FLAGS_wal,
-                                                    .mUseBulkInsert = false};
-        db.RegisterBTreeLL(name, config, &tree);
-        btree = reinterpret_cast<leanstore::KVInterface*>(tree);
-      }
+      leanstore::storage::btree::BTreeVI* tree;
+      storage::btree::BTreeGeneric::Config config{.mEnableWal = FLAGS_wal,
+                                                  .mUseBulkInsert = false};
+      db.RegisterBTreeVI(name, config, &tree);
+      btree = reinterpret_cast<leanstore::KVInterface*>(tree);
     }
   }
 

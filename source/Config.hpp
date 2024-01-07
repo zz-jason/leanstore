@@ -11,7 +11,6 @@ DECLARE_string(data_dir);
 DECLARE_uint64(db_file_capacity);
 
 // Config for multi-version, OLAP-isolated BTree
-DECLARE_bool(vi);
 DECLARE_bool(enable_fat_tuple);
 DECLARE_bool(enable_olap_mode);
 

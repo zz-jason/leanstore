@@ -57,12 +57,8 @@ LeanStore::LeanStore() {
   if (FLAGS_recover) {
     DeSerializeFlags();
   }
-  if ((FLAGS_vi) && !FLAGS_wal) {
+  if (!FLAGS_wal) {
     LOG(FATAL) << "BTreeVI is enabled without WAL, please enable FLAGS_wal";
-  }
-  if (FLAGS_isolation_level == "si" && !FLAGS_vi) {
-    LOG(FATAL) << "Snapshot Isolation is only supported on BTreeVI with "
-                  "multi-version enabled, please enable FLAGS_mv and FLAGS_vi";
   }
 
   // open file
