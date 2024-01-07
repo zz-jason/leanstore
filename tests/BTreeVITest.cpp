@@ -589,6 +589,10 @@ TEST_F(BTreeVITest, UpdateBasic) {
       cr::Worker::my().commitTX();
       EXPECT_EQ(copiedValue, newVal);
     }
+
+    cr::Worker::my().startTX();
+    GetLeanStore()->UnRegisterBTreeVI(btreeName);
+    cr::Worker::my().commitTX();
   });
 }
 
