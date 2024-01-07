@@ -58,15 +58,13 @@ public:
 /// ---------------------------------------
 class UpdateDesc {
 public:
-  u8 count = 0;
+  u8 mNumSlots = 0;
 
   UpdateDiffSlot mDiffSlots[];
 
 public:
   u64 size() const {
-    u64 totalSize = sizeof(UpdateDesc);
-    totalSize += (count * sizeof(UpdateDiffSlot));
-    return totalSize;
+    return UpdateDesc::Size(mNumSlots);
   }
 
   u64 TotalSize() const {
@@ -74,11 +72,11 @@ public:
   }
 
   bool operator==(const UpdateDesc& other) {
-    if (count != other.count) {
+    if (mNumSlots != other.mNumSlots) {
       return false;
     }
 
-    for (u8 i = 0; i < count; i++) {
+    for (u8 i = 0; i < mNumSlots; i++) {
       if (mDiffSlots[i].offset != other.mDiffSlots[i].offset ||
           mDiffSlots[i].length != other.mDiffSlots[i].length)
         return false;
@@ -86,18 +84,18 @@ public:
     return true;
   }
 
-  void GenerateDiff(u8* dst, const u8* src) const {
+  void CopySlots(u8* dst, const u8* src) const {
     u64 dstOffset = 0;
-    for (u64 i = 0; i < count; i++) {
+    for (u64 i = 0; i < mNumSlots; i++) {
       const auto& slot = mDiffSlots[i];
       std::memcpy(dst + dstOffset, src + slot.offset, slot.length);
       dstOffset += slot.length;
     }
   }
 
-  void GenerateXORDiff(u8* dst, const u8* src) const {
+  void XORSlots(u8* dst, const u8* src) const {
     u64 dstOffset = 0;
-    for (u64 i = 0; i < count; i++) {
+    for (u64 i = 0; i < mNumSlots; i++) {
       const auto& slot = mDiffSlots[i];
       for (u64 j = 0; j < slot.length; j++) {
         dst[dstOffset + j] ^= src[slot.offset + j];
@@ -108,7 +106,7 @@ public:
 
   void ApplyDiff(u8* dst, const u8* src) const {
     u64 srcOffset = 0;
-    for (u64 i = 0; i < count; i++) {
+    for (u64 i = 0; i < mNumSlots; i++) {
       const auto& slot = mDiffSlots[i];
       std::memcpy(dst + slot.offset, src + srcOffset, slot.length);
       srcOffset += slot.length;
@@ -117,7 +115,7 @@ public:
 
   void ApplyXORDiff(u8* dst, const u8* src) const {
     u64 srcOffset = 0;
-    for (u64 i = 0; i < count; i++) {
+    for (u64 i = 0; i < mNumSlots; i++) {
       const auto& slot = mDiffSlots[i];
       for (u64 j = 0; j < slot.length; j++) {
         dst[slot.offset + j] ^= src[srcOffset + j];
@@ -129,7 +127,7 @@ public:
 private:
   u64 diffSize() const {
     u64 length = 0;
-    for (u8 i = 0; i < count; i++) {
+    for (u8 i = 0; i < mNumSlots; i++) {
       length += mDiffSlots[i].length;
     }
     return length;
@@ -142,6 +140,17 @@ public:
 
   inline static UpdateDesc* From(u8* buffer) {
     return reinterpret_cast<UpdateDesc*>(buffer);
+  }
+
+  inline static u64 Size(u8 numSlots) {
+    u64 selfSize = sizeof(UpdateDesc);
+    selfSize += (numSlots * sizeof(UpdateDiffSlot));
+    return selfSize;
+  }
+
+  inline static UpdateDesc* CreateFrom(u8* buffer) {
+    auto updateDesc = new (buffer) UpdateDesc();
+    return updateDesc;
   }
 };
 

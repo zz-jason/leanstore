@@ -151,31 +151,28 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key,
   DCHECK(cr::Worker::my().IsTxStarted());
   cr::activeTX().markAsWrite();
   cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size);
-  OP_RESULT ret;
 
-  // 20K instructions more
-  JUMPMU_TRY() {
-    BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
-    ret = xIter.seekExact(key);
-    if (ret != OP_RESULT::OK) {
-      if (cr::activeTX().isOLAP() && ret == OP_RESULT::NOT_FOUND) {
-        const bool foundRemovedTuple =
-            mGraveyard->Lookup(key, [&](Slice) {}) == OP_RESULT::OK;
+  BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
+  auto ret = xIter.seekExact(key);
+  if (ret != OP_RESULT::OK) {
+    if (cr::activeTX().isOLAP() && ret == OP_RESULT::NOT_FOUND) {
+      const bool foundRemovedTuple =
+          mGraveyard->Lookup(key, [&](Slice) {}) == OP_RESULT::OK;
 
-        // The tuple to be updated is removed, abort the transaction.
-        if (foundRemovedTuple) {
-          JUMPMU_RETURN OP_RESULT::ABORT_TX;
-        }
+      // The tuple to be updated is removed, abort the transaction.
+      if (foundRemovedTuple) {
+        return OP_RESULT::ABORT_TX;
       }
-
-      LOG(ERROR) << "Update failed, key not found, key=" << ToString(key)
-                 << ", txMode=" << ToString(cr::activeTX().mTxMode)
-                 << ", seek ret=" << ToString(ret);
-      JUMPMU_RETURN ret;
     }
 
-    // Record is found
-  restart : {
+    LOG(ERROR) << "Update failed, key not found, key=" << ToString(key)
+               << ", txMode=" << ToString(cr::activeTX().mTxMode)
+               << ", seek ret=" << ToString(ret);
+    return ret;
+  }
+
+  // Record is found
+  while (true) {
     auto rawVal = xIter.MutableVal();
     auto& tuple = *Tuple::From(rawVal.data());
     auto visibleForMe = VisibleForMe(tuple.mWorkerId, tuple.mTxId, true);
@@ -185,99 +182,59 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key,
                  << ", key=" << ToString(key)
                  << ", writeLocked=" << tuple.IsWriteLocked()
                  << ", visibleForMe=" << visibleForMe;
-      JUMPMU_RETURN OP_RESULT::ABORT_TX;
+      return OP_RESULT::ABORT_TX;
     }
 
-    // write lock the tuple
-    tuple.WriteLock();
     COUNTERS_BLOCK() {
       WorkerCounters::myCounters().cc_update_chains[mTreeId]++;
     }
 
-    // update on fat tuple
-    if (tuple.mFormat == TupleFormat::FAT) {
+    // write lock the tuple
+    tuple.WriteLock();
+
+    switch (tuple.mFormat) {
+    case TupleFormat::FAT: {
       auto& fatTuple = *FatTuple::From(rawVal.data());
-      auto res = fatTuple.update(xIter, key, updateCallBack, updateDesc);
-      // Attention: previous tuple pointer is not valid here
+      auto succeed = fatTuple.update(xIter, key, updateCallBack, updateDesc);
       xIter.MarkAsDirty();
       xIter.UpdateContentionStats();
       Tuple::From(rawVal.data())->WriteUnlock();
-      if (!res) {
-        // Converted back to chained -> restart
-        goto restart;
+      if (!succeed) {
+        continue;
       }
-
-      JUMPMU_RETURN OP_RESULT::OK;
+      return OP_RESULT::OK;
     }
+    case TupleFormat::CHAINED: {
+      auto& chainedTuple = *ChainedTuple::From(rawVal.data());
+      chainedTuple.UpdateStats();
 
-    auto& chainedTuple = *ChainedTuple::From(rawVal.data());
-    chainedTuple.UpdateStats();
-    // convert to fat tuple if it's frequently updated by me and other workers
-    if (FLAGS_enable_fat_tuple && chainedTuple.ShouldConvertToFatTuple()) {
-      COUNTERS_BLOCK() {
-        WorkerCounters::myCounters().cc_fat_tuple_triggered[mTreeId]++;
-      }
-      chainedTuple.mTotalUpdates = 0;
-      if (Tuple::ToFat(xIter)) {
-        // convert succeed
-        xIter.mGuardedLeaf->mHasGarbage = true;
+      // convert to fat tuple if it's frequently updated by me and other workers
+      if (FLAGS_enable_fat_tuple && chainedTuple.ShouldConvertToFatTuple()) {
         COUNTERS_BLOCK() {
-          WorkerCounters::myCounters().cc_fat_tuple_convert[mTreeId]++;
+          WorkerCounters::myCounters().cc_fat_tuple_triggered[mTreeId]++;
         }
+        chainedTuple.mTotalUpdates = 0;
+        auto succeed = Tuple::ToFat(xIter);
+        if (succeed) {
+          xIter.mGuardedLeaf->mHasGarbage = true;
+          COUNTERS_BLOCK() {
+            WorkerCounters::myCounters().cc_fat_tuple_convert[mTreeId]++;
+          }
+        }
+        Tuple::From(rawVal.data())->WriteUnlock();
+        continue;
       }
-      goto restart;
-      UNREACHABLE();
+
+      // update the chained tuple
+      chainedTuple.Update(xIter, key, updateCallBack, updateDesc);
+      return OP_RESULT::OK;
+    }
+    default: {
+      LOG(ERROR) << "Unhandled tuple format: "
+                 << TupleFormatUtil::ToString(tuple.mFormat);
+    }
     }
   }
-    // Update in chained mode
-    MutableSlice rawVal = xIter.MutableVal();
-    auto& chainedTuple = *ChainedTuple::From(rawVal.data());
-    auto deltaPayloadSize = updateDesc.TotalSize();
-    const u64 versionSize = deltaPayloadSize + sizeof(UpdateVersion);
-    COMMANDID commandId = INVALID_COMMANDID;
-
-    // Move the newest tuple to the history version tree.
-    commandId = cr::Worker::my().cc.insertVersion(
-        mTreeId, false, versionSize, [&](u8* versionBuf) {
-          auto& updateVersion = *new (versionBuf) UpdateVersion(
-              chainedTuple.mWorkerId, chainedTuple.mTxId,
-              chainedTuple.mCommandId, true);
-          std::memcpy(updateVersion.payload, &updateDesc, updateDesc.size());
-          auto diffDest = updateVersion.payload + updateDesc.size();
-          updateDesc.GenerateDiff(diffDest, chainedTuple.payload);
-        });
-    COUNTERS_BLOCK() {
-      WorkerCounters::myCounters().cc_update_versions_created[mTreeId]++;
-    }
-
-    // WAL
-    auto prevWorkerId = chainedTuple.mWorkerId;
-    auto prevTxId = chainedTuple.mTxId;
-    auto prevCommandId = chainedTuple.mCommandId;
-    auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WALUpdateSSIP>(
-        key.size() + deltaPayloadSize, key, updateDesc, deltaPayloadSize,
-        prevWorkerId, prevTxId, prevCommandId);
-    auto diffDest = walHandler->payload + key.size() + updateDesc.size();
-    updateDesc.GenerateDiff(diffDest, chainedTuple.payload);
-    updateDesc.GenerateXORDiff(diffDest, chainedTuple.payload);
-    walHandler.SubmitWal();
-
-    // Update
-    updateCallBack(MutableSlice(chainedTuple.payload,
-                                rawVal.length() - sizeof(ChainedTuple)));
-    chainedTuple.mWorkerId = cr::Worker::my().mWorkerId;
-    chainedTuple.mTxId = cr::activeTX().startTS();
-    chainedTuple.mCommandId = commandId;
-
-    chainedTuple.WriteUnlock();
-    xIter.MarkAsDirty();
-    xIter.UpdateContentionStats();
-
-    JUMPMU_RETURN OP_RESULT::OK;
-  }
-  JUMPMU_CATCH() {
-  }
-  UNREACHABLE();
   return OP_RESULT::OTHER;
 }
 

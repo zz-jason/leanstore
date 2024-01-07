@@ -328,18 +328,19 @@ struct __attribute__((packed)) Version {
 // -----------------------------------------------------------------------------
 
 struct __attribute__((packed)) UpdateVersion : Version {
-  u8 is_delta : 1;
+  u8 mIsDelta = 1;
+
   u8 payload[]; // UpdateDescriptor + Diff
 
   UpdateVersion(WORKERID workerId, TXID txId, COMMANDID commandId, bool isDelta)
       : Version(Version::TYPE::UPDATE, workerId, txId, commandId),
-        is_delta(isDelta) {
+        mIsDelta(isDelta) {
   }
 
   UpdateVersion(const FatTupleDelta& delta, u64 deltaPayloadSize)
       : Version(Version::TYPE::UPDATE, delta.mWorkerId, delta.mTxId,
                 delta.mCommandId),
-        is_delta(true) {
+        mIsDelta(true) {
     std::memcpy(payload, delta.payload, deltaPayloadSize);
   }
 
@@ -449,6 +450,9 @@ public:
     return commandValid && hasLongRunningOLAP && recentUpdatedByOthers &&
            frequentlyUpdated;
   }
+
+  void Update(BTreeExclusiveIterator& xIter, Slice key,
+              MutValCallback updateCallBack, UpdateDesc& updateDesc);
 
   bool isFinal() const {
     return mCommandId == INVALID_COMMANDID;

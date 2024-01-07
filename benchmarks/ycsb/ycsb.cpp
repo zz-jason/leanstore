@@ -173,7 +173,7 @@ int main(int argc, char** argv) {
                   (sizeof(leanstore::UpdateDiffSlot) * 1);
               u8 updateDescBuf[updateDescBufSize];
               auto& updateDesc = *leanstore::UpdateDesc::From(updateDescBuf);
-              updateDesc.count = 1;
+              updateDesc.mNumSlots = 1;
               updateDesc.mDiffSlots[0].offset = offsetof(KVTable, mValue);
               updateDesc.mDiffSlots[0].length = sizeof(KVTable::mValue);
 

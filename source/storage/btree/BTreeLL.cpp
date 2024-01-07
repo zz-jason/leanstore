@@ -338,7 +338,7 @@ OP_RESULT BTreeLL::updateSameSizeInPlace(Slice key,
     auto currentVal = xIter.MutableVal();
     if (config.mEnableWal) {
       // if it is a secondary index, then we can not use updateSameSize
-      DCHECK(updateDesc.count > 0);
+      DCHECK(updateDesc.mNumSlots > 0);
       auto deltaPayloadSize = updateDesc.TotalSize();
       auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WALUpdate>(
           key.length() + deltaPayloadSize);
@@ -350,8 +350,8 @@ OP_RESULT BTreeLL::updateSameSizeInPlace(Slice key,
       walPtr += key.length();
       std::memcpy(walPtr, &updateDesc, updateDesc.size());
       walPtr += updateDesc.size();
-      updateDesc.GenerateDiff(walPtr, currentVal.data());
-      updateDesc.GenerateXORDiff(walPtr, currentVal.data());
+      updateDesc.CopySlots(walPtr, currentVal.data());
+      updateDesc.XORSlots(walPtr, currentVal.data());
       walHandler.SubmitWal();
     }
 

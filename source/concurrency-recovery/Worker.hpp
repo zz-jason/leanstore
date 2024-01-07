@@ -471,18 +471,17 @@ inline ConcurrencyControl& ConcurrencyControl::other(WORKERID otherWorkerId) {
   return Worker::my().mAllWorkers[otherWorkerId]->cc;
 }
 
-inline u64 ConcurrencyControl::insertVersion(TREEID treeId,
-                                             bool isRemoveCommand,
-                                             u64 payload_length,
-                                             std::function<void(u8*)> cb) {
+inline u64 ConcurrencyControl::insertVersion(
+    TREEID treeId, bool isRemoveCommand, u64 versionSize,
+    std::function<void(u8*)> insertCallBack) {
   utils::Timer timer(CRCounters::myCounters().cc_ms_history_tree_insert);
   auto& curWorker = Worker::my();
-  const u64 new_command_id =
+  const u64 commandId =
       (curWorker.mCommandId++) | ((isRemoveCommand) ? TYPE_MSB(COMMANDID) : 0);
   mHistoryTree->insertVersion(curWorker.mWorkerId,
-                              curWorker.mActiveTx.startTS(), new_command_id,
-                              treeId, isRemoveCommand, payload_length, cb);
-  return new_command_id;
+                              curWorker.mActiveTx.startTS(), commandId, treeId,
+                              isRemoveCommand, versionSize, insertCallBack);
+  return commandId;
 }
 
 } // namespace cr
