@@ -46,7 +46,8 @@ jobs:
 
       - run:
           name: "Test project"
-          command: ctest --test-dir build/debug
+          command: ctest --test-dir build/debug --output-on-failure
+          no_output_timeout: 3m
       
       - run:
           name: "Generate coverage file"
