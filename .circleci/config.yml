@@ -13,7 +13,7 @@ jobs:
     # See: https://circleci.com/docs/configuration-reference/#executor-job
     docker:
       - image: ubuntu:23.04
-      
+
     environment:
       DEBIAN_FRONTEND: "noninteractive"
       TZ: "Asia/Shanghai"
@@ -26,19 +26,19 @@ jobs:
       - run:
           name: "Check token"
           command: echo ${CI_CODECOV_TOKEN}
-          
+
       - run:
           name: "Install dependencies"
-          command: apt update && apt install -y build-essential cmake git libaio-dev gcovr cppcheck coreutils curl gnupg
-          
+          command: apt update && apt install -y build-essential cmake git libaio-dev gcovr cppcheck coreutils curl gnupg openssh-client openssh-server
+
       - run:
           name: "Config project"
           command: cmake -B build/debug -S . -DCMAKE_BUILD_TYPE=Debug -DBUILD_WITH_COVERAGE=ON
-          
+
       - run:
           name: "Cppcheck"
           command: cppcheck --project=build/debug/compile_commands.json -i tests --error-exitcode=1
-          
+
       - run:
           name: "Build project"
           command: cmake --build build/debug -j `nproc`
@@ -48,7 +48,7 @@ jobs:
           name: "Test project"
           command: ctest --test-dir build/debug --output-on-failure
           no_output_timeout: 3m
-      
+
       - run:
           name: "Generate coverage file"
           command: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*'
