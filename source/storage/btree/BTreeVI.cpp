@@ -12,7 +12,7 @@
 
 using namespace std;
 using namespace leanstore::storage;
-using OP_RESULT = leanstore::OP_RESULT;
+using OpCode = leanstore::OpCode;
 
 // Assumptions made in this implementation:
 // 1. We don't insert an already removed key
@@ -25,22 +25,22 @@ namespace leanstore {
 namespace storage {
 namespace btree {
 
-OP_RESULT BTreeVI::Lookup(Slice key, ValCallback valCallback) {
+OpCode BTreeVI::Lookup(Slice key, ValCallback valCallback) {
   DCHECK(cr::Worker::my().IsTxStarted());
 
-  OP_RESULT ret = lookupOptimistic(key, valCallback);
-  if (ret == OP_RESULT::OTHER) {
+  OpCode ret = lookupOptimistic(key, valCallback);
+  if (ret == OpCode::OTHER) {
     return lookupPessimistic(key, valCallback);
   }
   return ret;
 }
 
-OP_RESULT BTreeVI::lookupPessimistic(Slice key, ValCallback valCallback) {
+OpCode BTreeVI::lookupPessimistic(Slice key, ValCallback valCallback) {
   JUMPMU_TRY() {
     BTreeSharedIterator iter(*static_cast<BTreeGeneric*>(this));
     auto ret = iter.seekExact(key);
-    if (ret != OP_RESULT::OK) {
-      JUMPMU_RETURN OP_RESULT::NOT_FOUND;
+    if (ret != OpCode::OK) {
+      JUMPMU_RETURN OpCode::NOT_FOUND;
     }
 
     auto versionsRead(0);
@@ -51,11 +51,11 @@ OP_RESULT BTreeVI::lookupPessimistic(Slice key, ValCallback valCallback) {
           versionsRead;
     }
 
-    if (cr::activeTX().isOLAP() && ret == OP_RESULT::NOT_FOUND) {
+    if (cr::activeTX().isOLAP() && ret == OpCode::NOT_FOUND) {
       BTreeSharedIterator gIter(*static_cast<BTreeGeneric*>(mGraveyard));
       ret = gIter.seekExact(key);
-      if (ret != OP_RESULT::OK) {
-        JUMPMU_RETURN OP_RESULT::NOT_FOUND;
+      if (ret != OpCode::OK) {
+        JUMPMU_RETURN OpCode::NOT_FOUND;
       }
       std::tie(ret, versionsRead) = GetVisibleTuple(iter.value(), valCallback);
       COUNTERS_BLOCK() {
@@ -65,8 +65,8 @@ OP_RESULT BTreeVI::lookupPessimistic(Slice key, ValCallback valCallback) {
       }
     }
 
-    if (ret != OP_RESULT::OK) {
-      JUMPMU_RETURN OP_RESULT::NOT_FOUND;
+    if (ret != OpCode::OK) {
+      JUMPMU_RETURN OpCode::NOT_FOUND;
     }
     JUMPMU_RETURN ret;
   }
@@ -74,10 +74,10 @@ OP_RESULT BTreeVI::lookupPessimistic(Slice key, ValCallback valCallback) {
     LOG(ERROR) << "lookupPessimistic failed";
   }
 
-  return OP_RESULT::NOT_FOUND;
+  return OpCode::NOT_FOUND;
 }
 
-OP_RESULT BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
+OpCode BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
   const size_t maxAttempts = 2;
   for (size_t i = maxAttempts; i > 0; i--) {
     JUMPMU_TRY() {
@@ -90,7 +90,7 @@ OP_RESULT BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
       s16 slotId = guardedLeaf->lowerBound<true>(key);
       if (slotId == -1) {
         guardedLeaf.JumpIfModifiedByOthers();
-        JUMPMU_RETURN OP_RESULT::NOT_FOUND;
+        JUMPMU_RETURN OpCode::NOT_FOUND;
       }
 
       auto rawVal = guardedLeaf->ValData(slotId);
@@ -99,7 +99,7 @@ OP_RESULT BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
 
       // Return NOT_FOUND if the tuple is not visible
       if (!VisibleForMe(tuple.mWorkerId, tuple.mTxId, false)) {
-        JUMPMU_RETURN OP_RESULT::NOT_FOUND;
+        JUMPMU_RETURN OpCode::NOT_FOUND;
       }
 
       u32 offset = 0;
@@ -107,7 +107,7 @@ OP_RESULT BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
       case TupleFormat::CHAINED: {
         const auto chainedTuple = ChainedTuple::From(rawVal);
         if (chainedTuple->mIsRemoved) {
-          JUMPMU_RETURN OP_RESULT::NOT_FOUND;
+          JUMPMU_RETURN OpCode::NOT_FOUND;
         }
         offset = sizeof(ChainedTuple);
         break;
@@ -133,7 +133,7 @@ OP_RESULT BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
         WorkerCounters::myCounters().cc_read_versions_visited[mTreeId] += 1;
       }
 
-      JUMPMU_RETURN OP_RESULT::OK;
+      JUMPMU_RETURN OpCode::OK;
     }
     JUMPMU_CATCH() {
     }
@@ -142,10 +142,10 @@ OP_RESULT BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
   // lookup failed, fallback to lookupPessimistic
   LOG(INFO) << "lookupOptimistic failed " << maxAttempts
             << " times, fallback to lookupPessimistic";
-  return OP_RESULT::OTHER;
+  return OpCode::OTHER;
 }
 
-OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key,
+OpCode BTreeVI::updateSameSizeInPlace(Slice key,
                                          MutValCallback updateCallBack,
                                          UpdateDesc& updateDesc) {
   DCHECK(cr::Worker::my().IsTxStarted());
@@ -154,14 +154,14 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key,
 
   BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
   auto ret = xIter.seekExact(key);
-  if (ret != OP_RESULT::OK) {
-    if (cr::activeTX().isOLAP() && ret == OP_RESULT::NOT_FOUND) {
+  if (ret != OpCode::OK) {
+    if (cr::activeTX().isOLAP() && ret == OpCode::NOT_FOUND) {
       const bool foundRemovedTuple =
-          mGraveyard->Lookup(key, [&](Slice) {}) == OP_RESULT::OK;
+          mGraveyard->Lookup(key, [&](Slice) {}) == OpCode::OK;
 
       // The tuple to be updated is removed, abort the transaction.
       if (foundRemovedTuple) {
-        return OP_RESULT::ABORT_TX;
+        return OpCode::ABORT_TX;
       }
     }
 
@@ -182,7 +182,7 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key,
                  << ", key=" << ToString(key)
                  << ", writeLocked=" << tuple.IsWriteLocked()
                  << ", visibleForMe=" << visibleForMe;
-      return OP_RESULT::ABORT_TX;
+      return OpCode::ABORT_TX;
     }
 
     COUNTERS_BLOCK() {
@@ -202,7 +202,7 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key,
       if (!succeed) {
         continue;
       }
-      return OP_RESULT::OK;
+      return OpCode::OK;
     }
     case TupleFormat::CHAINED: {
       auto& chainedTuple = *ChainedTuple::From(rawVal.data());
@@ -227,7 +227,7 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key,
 
       // update the chained tuple
       chainedTuple.Update(xIter, key, updateCallBack, updateDesc);
-      return OP_RESULT::OK;
+      return OpCode::OK;
     }
     default: {
       LOG(ERROR) << "Unhandled tuple format: "
@@ -235,10 +235,10 @@ OP_RESULT BTreeVI::updateSameSizeInPlace(Slice key,
     }
     }
   }
-  return OP_RESULT::OTHER;
+  return OpCode::OTHER;
 }
 
-OP_RESULT BTreeVI::insert(Slice key, Slice val) {
+OpCode BTreeVI::insert(Slice key, Slice val) {
   DCHECK(cr::Worker::my().IsTxStarted());
 
   cr::activeTX().markAsWrite();
@@ -249,7 +249,7 @@ OP_RESULT BTreeVI::insert(Slice key, Slice val) {
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
     auto ret = xIter.seekToInsert(key);
 
-    if (ret == OP_RESULT::DUPLICATE) {
+    if (ret == OpCode::DUPLICATE) {
       auto mutRawVal = xIter.MutableVal();
       auto& chainedTuple = *ChainedTuple::From(mutRawVal.data());
       auto writeLocked = chainedTuple.IsWriteLocked();
@@ -258,14 +258,14 @@ OP_RESULT BTreeVI::insert(Slice key, Slice val) {
       if (writeLocked || !visibleForMe) {
         DLOG(ERROR) << "Insert failed, writeLocked=" << writeLocked
                     << ", visibleForMe=" << visibleForMe;
-        return OP_RESULT::ABORT_TX;
+        return OpCode::ABORT_TX;
       }
       LOG(INFO) << "Insert failed, key is duplicated";
-      return OP_RESULT::DUPLICATE;
+      return OpCode::DUPLICATE;
     }
 
     ret = xIter.enoughSpaceInCurrentNode(key, payloadSize);
-    if (ret == OP_RESULT::NOT_ENOUGH_SPACE) {
+    if (ret == OpCode::NOT_ENOUGH_SPACE) {
       xIter.splitForKey(key);
       continue;
     }
@@ -279,12 +279,12 @@ OP_RESULT BTreeVI::insert(Slice key, Slice val) {
     BTreeVI::InsertToNode(xIter.mGuardedLeaf, key, val,
                           cr::Worker::my().mWorkerId, cr::activeTX().startTS(),
                           cr::activeTX().mTxMode, xIter.mSlotId);
-    return OP_RESULT::OK;
+    return OpCode::OK;
   }
-  return OP_RESULT::OTHER;
+  return OpCode::OTHER;
 }
 
-OP_RESULT BTreeVI::remove(Slice key) {
+OpCode BTreeVI::remove(Slice key) {
   DCHECK(cr::Worker::my().IsTxStarted());
 
   cr::activeTX().markAsWrite();
@@ -292,17 +292,17 @@ OP_RESULT BTreeVI::remove(Slice key) {
 
   JUMPMU_TRY() {
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
-    OP_RESULT ret = xIter.seekExact(key);
-    if (ret != OP_RESULT::OK) {
-      if (cr::activeTX().isOLAP() && ret == OP_RESULT::NOT_FOUND) {
+    OpCode ret = xIter.seekExact(key);
+    if (ret != OpCode::OK) {
+      if (cr::activeTX().isOLAP() && ret == OpCode::NOT_FOUND) {
         auto foundRemovedTuple =
-            mGraveyard->Lookup(key, [&](Slice) {}) == OP_RESULT::OK;
+            mGraveyard->Lookup(key, [&](Slice) {}) == OpCode::OK;
         if (foundRemovedTuple) {
-          JUMPMU_RETURN OP_RESULT::ABORT_TX;
+          JUMPMU_RETURN OpCode::ABORT_TX;
         }
       }
 
-      JUMPMU_RETURN OP_RESULT::NOT_FOUND;
+      JUMPMU_RETURN OpCode::NOT_FOUND;
     }
 
     auto mutRawVal = xIter.MutableVal();
@@ -311,11 +311,11 @@ OP_RESULT BTreeVI::remove(Slice key) {
     DCHECK(chainedTuple.mFormat == TupleFormat::CHAINED);
     if (chainedTuple.IsWriteLocked() ||
         !VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId, true)) {
-      JUMPMU_RETURN OP_RESULT::ABORT_TX;
+      JUMPMU_RETURN OpCode::ABORT_TX;
     }
     ENSURE(!cr::activeTX().atLeastSI() || chainedTuple.mIsRemoved == false);
     if (chainedTuple.mIsRemoved) {
-      JUMPMU_RETURN OP_RESULT::NOT_FOUND;
+      JUMPMU_RETURN OpCode::NOT_FOUND;
     }
 
     chainedTuple.WriteLock();
@@ -356,15 +356,15 @@ OP_RESULT BTreeVI::remove(Slice key) {
     chainedTuple.WriteUnlock();
     xIter.MarkAsDirty();
 
-    JUMPMU_RETURN OP_RESULT::OK;
+    JUMPMU_RETURN OpCode::OK;
   }
   JUMPMU_CATCH() {
   }
   UNREACHABLE();
-  return OP_RESULT::OTHER;
+  return OpCode::OTHER;
 }
 
-OP_RESULT BTreeVI::scanDesc(Slice startKey, ScanCallback callback) {
+OpCode BTreeVI::scanDesc(Slice startKey, ScanCallback callback) {
   auto autoCommit(false);
   if (!cr::Worker::my().IsTxStarted()) {
     DLOG(INFO) << "Start implicit transaction";
@@ -380,12 +380,12 @@ OP_RESULT BTreeVI::scanDesc(Slice startKey, ScanCallback callback) {
 
   if (cr::activeTX().isOLAP()) {
     TODOException();
-    return OP_RESULT::ABORT_TX;
+    return OpCode::ABORT_TX;
   }
   return scan<false>(startKey, callback);
 }
 
-OP_RESULT BTreeVI::scanAsc(Slice startKey, ScanCallback callback) {
+OpCode BTreeVI::scanAsc(Slice startKey, ScanCallback callback) {
   auto autoCommit(false);
   if (!cr::Worker::my().IsTxStarted()) {
     DLOG(INFO) << "Start implicit transaction";

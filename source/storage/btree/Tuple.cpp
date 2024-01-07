@@ -14,7 +14,7 @@
 
 using namespace std;
 using namespace leanstore::storage;
-using OP_RESULT = leanstore::OP_RESULT;
+using OpCode = leanstore::OpCode;
 
 namespace std {
 
@@ -400,13 +400,13 @@ bool FatTuple::update(BTreeExclusiveIterator& xIter, Slice key,
   }
 }
 
-std::tuple<OP_RESULT, u16> FatTuple::GetVisibleTuple(
+std::tuple<OpCode, u16> FatTuple::GetVisibleTuple(
     ValCallback valCallback) const {
 
   // Latest version is visible
   if (cr::Worker::my().cc.VisibleForMe(mWorkerId, mTxId)) {
     valCallback(GetValue());
-    return {OP_RESULT::OK, 1};
+    return {OpCode::OK, 1};
   }
 
   DCHECK(!cr::activeTX().isOLTP());
@@ -422,16 +422,16 @@ std::tuple<OP_RESULT, u16> FatTuple::GetVisibleTuple(
       desc.ApplyDiff(materializedValue->get(), delta.payload + desc.size());
       if (cr::Worker::my().cc.VisibleForMe(delta.mWorkerId, delta.mTxId)) {
         valCallback(Slice(materializedValue->get(), mValSize));
-        return {OP_RESULT::OK, numVisitedVersions};
+        return {OpCode::OK, numVisitedVersions};
       }
 
       numVisitedVersions++;
     }
 
-    return {OP_RESULT::NOT_FOUND, numVisitedVersions};
+    return {OpCode::NOT_FOUND, numVisitedVersions};
   }
 
-  return {OP_RESULT::NOT_FOUND, 1};
+  return {OpCode::NOT_FOUND, 1};
 }
 
 void FatTuple::resize(const u32 newLength) {
@@ -488,20 +488,20 @@ void FatTuple::convertToChained(TREEID treeId) {
 }
 
 // TODO: Implement inserts after remove cases
-std::tuple<OP_RESULT, u16> ChainedTuple::GetVisibleTuple(
+std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
     Slice payload, ValCallback callback) const {
   if (cr::Worker::my().cc.VisibleForMe(mWorkerId, mTxId, false)) {
     if (mIsRemoved) {
-      return {OP_RESULT::NOT_FOUND, 1};
+      return {OpCode::NOT_FOUND, 1};
     }
 
     auto valSize = payload.length() - sizeof(ChainedTuple);
     callback(GetValue(valSize));
-    return {OP_RESULT::OK, 1};
+    return {OpCode::OK, 1};
   }
 
   if (isFinal()) {
-    JUMPMU_RETURN{OP_RESULT::NOT_FOUND, 1};
+    JUMPMU_RETURN{OpCode::NOT_FOUND, 1};
   }
 
   // Head is not visible
@@ -554,15 +554,15 @@ std::tuple<OP_RESULT, u16> ChainedTuple::GetVisibleTuple(
       cerr << "tls = " << cr::Worker::my().mActiveTx.startTS() << endl;
       RAISE_WHEN(true);
       RAISE_WHEN(prevCommandId != INVALID_COMMANDID);
-      return {OP_RESULT::NOT_FOUND, numVisitedVersions};
+      return {OpCode::NOT_FOUND, numVisitedVersions};
     }
     if (cr::Worker::my().cc.VisibleForMe(prevWorkerId, prevTxId, false)) {
       callback(Slice(valueBuf.get(), valueSize));
-      return {OP_RESULT::OK, numVisitedVersions};
+      return {OpCode::OK, numVisitedVersions};
     }
     numVisitedVersions++;
   }
-  return {OP_RESULT::NOT_FOUND, numVisitedVersions};
+  return {OpCode::NOT_FOUND, numVisitedVersions};
 }
 
 void ChainedTuple::Update(BTreeExclusiveIterator& xIter, Slice key,

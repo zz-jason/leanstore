@@ -142,7 +142,7 @@ TEST_F(BTreeVITest, BTreeVIInsertAndLookup) {
       const auto& [key, val] = kvToTest[i];
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
-                OP_RESULT::OK);
+                OpCode::OK);
     }
     cr::Worker::my().commitTX();
   });
@@ -159,7 +159,7 @@ TEST_F(BTreeVITest, BTreeVIInsertAndLookup) {
       const auto& [key, expectedVal] = kvToTest[i];
       EXPECT_EQ(
           btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OP_RESULT::OK);
+          OpCode::OK);
       EXPECT_EQ(copiedValue, expectedVal);
     }
   });
@@ -176,7 +176,7 @@ TEST_F(BTreeVITest, BTreeVIInsertAndLookup) {
       const auto& [key, expectedVal] = kvToTest[i];
       EXPECT_EQ(
           btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OP_RESULT::OK);
+          OpCode::OK);
       EXPECT_EQ(copiedValue, expectedVal);
     }
   });
@@ -219,7 +219,7 @@ TEST_F(BTreeVITest, Insert1000KVs) {
       auto val = RandomAlphString(128);
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
-                OP_RESULT::OK);
+                OpCode::OK);
     }
     cr::Worker::my().commitTX();
 
@@ -260,7 +260,7 @@ TEST_F(BTreeVITest, InsertDuplicates) {
       cr::Worker::my().startTX();
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
-                OP_RESULT::OK);
+                OpCode::OK);
       cr::Worker::my().commitTX();
     }
 
@@ -270,7 +270,7 @@ TEST_F(BTreeVITest, InsertDuplicates) {
       cr::Worker::my().startTX();
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
-                OP_RESULT::DUPLICATE);
+                OpCode::DUPLICATE);
       cr::Worker::my().commitTX();
     }
 
@@ -312,14 +312,14 @@ TEST_F(BTreeVITest, Remove) {
       cr::Worker::my().startTX();
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
-                OP_RESULT::OK);
+                OpCode::OK);
       cr::Worker::my().commitTX();
     }
 
     for (auto& key : uniqueKeys) {
       cr::Worker::my().startTX();
       EXPECT_EQ(btree->remove(Slice((const u8*)key.data(), key.size())),
-                OP_RESULT::OK);
+                OpCode::OK);
       cr::Worker::my().commitTX();
     }
 
@@ -327,7 +327,7 @@ TEST_F(BTreeVITest, Remove) {
       cr::Worker::my().startTX();
       EXPECT_EQ(
           btree->Lookup(Slice((const u8*)key.data(), key.size()), [](Slice) {}),
-          OP_RESULT::NOT_FOUND);
+          OpCode::NOT_FOUND);
       cr::Worker::my().commitTX();
     }
 
@@ -369,7 +369,7 @@ TEST_F(BTreeVITest, RemoveNotExisted) {
       cr::Worker::my().startTX();
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
-                OP_RESULT::OK);
+                OpCode::OK);
       cr::Worker::my().commitTX();
     }
 
@@ -384,7 +384,7 @@ TEST_F(BTreeVITest, RemoveNotExisted) {
 
       cr::Worker::my().startTX();
       EXPECT_EQ(btree->remove(Slice((const u8*)key.data(), key.size())),
-                OP_RESULT::NOT_FOUND);
+                OpCode::NOT_FOUND);
       cr::Worker::my().commitTX();
     }
 
@@ -426,7 +426,7 @@ TEST_F(BTreeVITest, RemoveFromOthers) {
       cr::Worker::my().startTX();
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
-                OP_RESULT::OK);
+                OpCode::OK);
       cr::Worker::my().commitTX();
     }
   });
@@ -436,7 +436,7 @@ TEST_F(BTreeVITest, RemoveFromOthers) {
     for (auto& key : uniqueKeys) {
       cr::Worker::my().startTX();
       EXPECT_EQ(btree->remove(Slice((const u8*)key.data(), key.size())),
-                OP_RESULT::OK);
+                OpCode::OK);
       cr::Worker::my().commitTX();
     }
 
@@ -445,7 +445,7 @@ TEST_F(BTreeVITest, RemoveFromOthers) {
       cr::Worker::my().startTX();
       EXPECT_EQ(
           btree->Lookup(Slice((const u8*)key.data(), key.size()), [](Slice) {}),
-          OP_RESULT::NOT_FOUND);
+          OpCode::NOT_FOUND);
       cr::Worker::my().commitTX();
     }
   });
@@ -456,7 +456,7 @@ TEST_F(BTreeVITest, RemoveFromOthers) {
       cr::Worker::my().startTX();
       EXPECT_EQ(
           btree->Lookup(Slice((const u8*)key.data(), key.size()), [](Slice) {}),
-          OP_RESULT::NOT_FOUND);
+          OpCode::NOT_FOUND);
       cr::Worker::my().commitTX();
     }
   });
@@ -500,7 +500,7 @@ TEST_F(BTreeVITest, BTreeVIToJSON) {
       const auto& [key, val] = kvToTest[i];
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
-                OP_RESULT::OK);
+                OpCode::OK);
     }
     cr::Worker::my().commitTX();
 
@@ -548,7 +548,7 @@ TEST_F(BTreeVITest, UpdateBasic) {
       auto res = btree->insert(Slice((const u8*)key.data(), key.size()),
                                Slice((const u8*)val.data(), val.size()));
       cr::Worker::my().commitTX();
-      EXPECT_EQ(res, OP_RESULT::OK);
+      EXPECT_EQ(res, OpCode::OK);
     }
 
     // update all the values to this newVal
@@ -571,7 +571,7 @@ TEST_F(BTreeVITest, UpdateBasic) {
           btree->updateSameSizeInPlace(Slice((const u8*)key.data(), key.size()),
                                        updateCallBack, *updateDesc);
       cr::Worker::my().commitTX();
-      EXPECT_EQ(res, OP_RESULT::OK);
+      EXPECT_EQ(res, OpCode::OK);
     }
 
     // verify updated values
@@ -585,7 +585,7 @@ TEST_F(BTreeVITest, UpdateBasic) {
       cr::Worker::my().startTX();
       EXPECT_EQ(
           btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OP_RESULT::OK);
+          OpCode::OK);
       cr::Worker::my().commitTX();
       EXPECT_EQ(copiedValue, newVal);
     }

@@ -7,7 +7,7 @@
 
 namespace leanstore {
 
-enum class OP_RESULT : u8 {
+enum class OpCode : u8 {
   OK = 0,
   NOT_FOUND = 1,
   DUPLICATE = 2,
@@ -16,28 +16,28 @@ enum class OP_RESULT : u8 {
   OTHER = 5
 };
 
-inline std::string ToString(OP_RESULT result) {
+inline std::string ToString(OpCode result) {
   switch (result) {
-  case OP_RESULT::OK: {
+  case OpCode::OK: {
     return "OK";
   }
-  case OP_RESULT::NOT_FOUND: {
+  case OpCode::NOT_FOUND: {
     return "NOT_FOUND";
   }
-  case OP_RESULT::DUPLICATE: {
+  case OpCode::DUPLICATE: {
     return "DUPLICATE";
   }
-  case OP_RESULT::ABORT_TX: {
+  case OpCode::ABORT_TX: {
     return "ABORT_TX";
   }
-  case OP_RESULT::NOT_ENOUGH_SPACE: {
+  case OpCode::NOT_ENOUGH_SPACE: {
     return "NOT_ENOUGH_SPACE";
   }
-  case OP_RESULT::OTHER: {
+  case OpCode::OTHER: {
     return "OTHER";
   }
   }
-  return "Unknown OP_RESULT";
+  return "Unknown OpCode";
 }
 
 class UpdateDiffSlot {
@@ -163,33 +163,33 @@ using PrefixLookupCallback = std::function<void(Slice key, Slice val)>;
 
 class KVInterface {
 public:
-  virtual OP_RESULT Lookup(Slice key, ValCallback valCallback) = 0;
-  virtual OP_RESULT insert(Slice key, Slice val) = 0;
+  virtual OpCode Lookup(Slice key, ValCallback valCallback) = 0;
+  virtual OpCode insert(Slice key, Slice val) = 0;
 
   /// Update the old value with a same sized new value.
   /// NOTE: The value is updated via user provided callback.
-  virtual OP_RESULT updateSameSizeInPlace(Slice key,
+  virtual OpCode updateSameSizeInPlace(Slice key,
                                           MutValCallback updateCallBack,
                                           UpdateDesc& updateDesc) = 0;
 
-  virtual OP_RESULT remove(Slice key) = 0;
-  virtual OP_RESULT scanAsc(Slice startKey, ScanCallback callback) = 0;
-  virtual OP_RESULT scanDesc(Slice startKey, ScanCallback callback) = 0;
-  virtual OP_RESULT prefixLookup(Slice, PrefixLookupCallback) {
-    return OP_RESULT::OTHER;
+  virtual OpCode remove(Slice key) = 0;
+  virtual OpCode scanAsc(Slice startKey, ScanCallback callback) = 0;
+  virtual OpCode scanDesc(Slice startKey, ScanCallback callback) = 0;
+  virtual OpCode prefixLookup(Slice, PrefixLookupCallback) {
+    return OpCode::OTHER;
   }
-  virtual OP_RESULT prefixLookupForPrev(Slice, PrefixLookupCallback) {
-    return OP_RESULT::OTHER;
+  virtual OpCode prefixLookupForPrev(Slice, PrefixLookupCallback) {
+    return OpCode::OTHER;
   }
-  virtual OP_RESULT append(std::function<void(u8*)>, u16,
+  virtual OpCode append(std::function<void(u8*)>, u16,
                            std::function<void(u8*)>, u16,
                            std::unique_ptr<u8[]>&) {
-    return OP_RESULT::OTHER;
+    return OpCode::OTHER;
   }
-  virtual OP_RESULT rangeRemove(Slice startKey [[maybe_unused]],
+  virtual OpCode rangeRemove(Slice startKey [[maybe_unused]],
                                 Slice endKey [[maybe_unused]],
                                 bool page_wise [[maybe_unused]] = true) {
-    return OP_RESULT::OTHER;
+    return OpCode::OTHER;
   }
 
   virtual u64 countPages() = 0;

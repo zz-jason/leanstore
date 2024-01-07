@@ -240,7 +240,7 @@ public:
   /// callback if the newest visible tuple is found.
   ///
   /// @return whether the tuple is found, and the number of visited versions
-  std::tuple<OP_RESULT, u16> GetVisibleTuple(ValCallback valCallback) const;
+  std::tuple<OpCode, u16> GetVisibleTuple(ValCallback valCallback) const;
 
   void convertToChained(TREEID treeId);
 
@@ -427,7 +427,7 @@ public:
     return Slice(payload, size);
   }
 
-  std::tuple<OP_RESULT, u16> GetVisibleTuple(Slice payload,
+  std::tuple<OpCode, u16> GetVisibleTuple(Slice payload,
                                              ValCallback callback) const;
 
   void UpdateStats() {

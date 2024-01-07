@@ -114,7 +114,7 @@ TEST_F(BTreeLLTest, BTreeLLInsertAndLookup) {
       const auto& [key, val] = kvToTest[i];
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
-                OP_RESULT::OK);
+                OpCode::OK);
     }
     cr::Worker::my().commitTX();
   });
@@ -131,7 +131,7 @@ TEST_F(BTreeLLTest, BTreeLLInsertAndLookup) {
       const auto& [key, expectedVal] = kvToTest[i];
       EXPECT_EQ(
           btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OP_RESULT::OK);
+          OpCode::OK);
       EXPECT_EQ(copiedValue, expectedVal);
     }
   });
@@ -148,7 +148,7 @@ TEST_F(BTreeLLTest, BTreeLLInsertAndLookup) {
       const auto& [key, expectedVal] = kvToTest[i];
       EXPECT_EQ(
           btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OP_RESULT::OK);
+          OpCode::OK);
       EXPECT_EQ(copiedValue, expectedVal);
     }
   });

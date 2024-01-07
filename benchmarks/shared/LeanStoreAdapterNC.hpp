@@ -35,12 +35,12 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     u16 folded_key_len = Record::foldKey(folded_key, key);
     // -------------------------------------------------------------------------------------
     TID tid = global_tid[Record::id * 8].fetch_add(1);
-    OP_RESULT res;
+    OpCode res;
     res = key_tid->insert(folded_key, folded_key_len, (u8*)(&tid), sizeof(TID));
-    ensure(res == leanstore::OP_RESULT::OK);
+    ensure(res == leanstore::OpCode::OK);
     res = tid_value->insert((u8*)&tid, sizeof(TID), (u8*)(&record),
                             sizeof(Record));
-    ensure(res == leanstore::OP_RESULT::OK);
+    ensure(res == leanstore::OpCode::OK);
   }
 
   void moveIt(TID tid, u8* folded_key, u16 folded_key_len) {
@@ -54,7 +54,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     u8 folded_key[Record::maxFoldLength()];
     u16 folded_key_len = Record::foldKey(folded_key, key);
     // -------------------------------------------------------------------------------------
-    OP_RESULT ret;
+    OpCode ret;
     TID tid;
     ret = key_tid->lookup(
         folded_key, folded_key_len, [&](const u8* payload, u16 payload_length) {
@@ -69,7 +69,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
                               cb(typed_payload);
                             });
         });
-    ensure(ret == OP_RESULT::OK);
+    ensure(ret == OpCode::OK);
     // -------------------------------------------------------------------------------------
     moveIt(tid, folded_key, folded_key_len);
   }
@@ -82,7 +82,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     // -------------------------------------------------------------------------------------
     UpdateDesc tmp;
     tmp.count = 0;
-    OP_RESULT ret;
+    OpCode ret;
     TID tid;
     ret = key_tid->updateSameSizeInPlace(
         folded_key, folded_key_len,
@@ -90,7 +90,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
           ensure(tid_payload_length == sizeof(TID));
           tid = *reinterpret_cast<const TID*>(tid_payload);
           // -------------------------------------------------------------------------------------
-          OP_RESULT ret2 = tid_value->updateSameSizeInPlace(
+          OpCode ret2 = tid_value->updateSameSizeInPlace(
               (u8*)&tid, sizeof(TID),
               [&](u8* payload, u16 payload_length) {
                 static_cast<void>(payload_length);
@@ -99,10 +99,10 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
                 cb(typed_payload);
               },
               update_descriptor);
-          ensure(ret2 == OP_RESULT::OK);
+          ensure(ret2 == OpCode::OK);
         },
         tmp);
-    ensure(ret == OP_RESULT::OK);
+    ensure(ret == OpCode::OK);
     moveIt(tid, folded_key, folded_key_len);
   }
   // -------------------------------------------------------------------------------------
@@ -110,23 +110,23 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     u8 folded_key[Record::maxFoldLength()];
     u16 folded_key_len = Record::foldKey(folded_key, key);
     // -------------------------------------------------------------------------------------
-    OP_RESULT ret;
+    OpCode ret;
     TID tid;
     ret = key_tid->lookup(folded_key, folded_key_len,
                           [&](const u8* payload, u16 payload_length) {
                             ensure(payload_length == sizeof(TID));
                             tid = *reinterpret_cast<const TID*>(payload);
                           });
-    if (ret != OP_RESULT::OK) {
+    if (ret != OpCode::OK) {
       return false;
     }
     // -------------------------------------------------------------------------------------
     ret = tid_value->remove((u8*)&tid, sizeof(TID));
-    if (ret != OP_RESULT::OK) {
+    if (ret != OpCode::OK) {
       return false;
     }
     ret = key_tid->remove(folded_key, folded_key_len);
-    if (ret != OP_RESULT::OK) {
+    if (ret != OpCode::OK) {
       return false;
     }
     return true;
@@ -139,7 +139,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     u8 folded_key[Record::maxFoldLength()];
     u16 folded_key_len = Record::foldKey(folded_key, key);
     // -------------------------------------------------------------------------------------
-    OP_RESULT ret;
+    OpCode ret;
     ret = key_tid->scanAsc(
         folded_key, folded_key_len,
         [&](const u8* key, [[maybe_unused]] u16 keySize, const u8* tid_ptr,
@@ -148,7 +148,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
           ensure(tid_length == sizeof(TID));
           // -------------------------------------------------------------------------------------
           bool should_continue;
-          OP_RESULT res2 = tid_value->lookup(
+          OpCode res2 = tid_value->lookup(
               (u8*)&tid, sizeof(TID), [&](const u8* value_ptr, u16 valSize) {
                 ensure(valSize == sizeof(Record));
                 typename Record::Key typed_key;
@@ -157,14 +157,14 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
                     *reinterpret_cast<const Record*>(value_ptr);
                 should_continue = cb(typed_key, typed_payload);
               });
-          if (res2 == OP_RESULT::OK) {
+          if (res2 == OpCode::OK) {
             return should_continue;
           } else {
             return true;
           }
         },
         undo);
-    ensure(ret == OP_RESULT::OK);
+    ensure(ret == OpCode::OK);
   }
   // -------------------------------------------------------------------------------------
   void scanDesc(
@@ -174,7 +174,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     u8 folded_key[Record::maxFoldLength()];
     u16 folded_key_len = Record::foldKey(folded_key, key);
     // -------------------------------------------------------------------------------------
-    OP_RESULT ret;
+    OpCode ret;
     ret = key_tid->scanDesc(
         folded_key, folded_key_len,
         [&](const u8* key, [[maybe_unused]] u16 keySize, const u8* tid_ptr,
@@ -183,7 +183,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
           ensure(tid_length == sizeof(TID));
           // -------------------------------------------------------------------------------------
           bool should_continue;
-          OP_RESULT res2 = tid_value->lookup(
+          OpCode res2 = tid_value->lookup(
               (u8*)&tid, sizeof(TID), [&](const u8* value_ptr, u16 valSize) {
                 ensure(valSize == sizeof(Record));
                 typename Record::Key typed_key;
@@ -192,14 +192,14 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
                     *reinterpret_cast<const Record*>(value_ptr);
                 should_continue = cb(typed_key, typed_payload);
               });
-          if (res2 == OP_RESULT::OK) {
+          if (res2 == OpCode::OK) {
             return should_continue;
           } else {
             return true;
           }
         },
         undo);
-    ensure(ret == OP_RESULT::OK);
+    ensure(ret == OpCode::OK);
   }
   // -------------------------------------------------------------------------------------
   template <class Field>
@@ -207,14 +207,14 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     u8 folded_key[Record::maxFoldLength()];
     u16 folded_key_len = Record::foldKey(folded_key, key);
     // -------------------------------------------------------------------------------------
-    OP_RESULT ret;
+    OpCode ret;
     TID tid;
     ret = key_tid->lookup(folded_key, folded_key_len,
                           [&](const u8* payload, u16 payload_length) {
                             ensure(payload_length == sizeof(TID));
                             tid = *reinterpret_cast<const TID*>(payload);
                           });
-    ensure(ret == OP_RESULT::OK);
+    ensure(ret == OpCode::OK);
     // -------------------------------------------------------------------------------------
     Field local_f;
     ret = tid_value->lookup((u8*)&tid, sizeof(TID),
@@ -224,7 +224,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
                                   *reinterpret_cast<const Record*>(payload);
                               local_f = (typed_payload).*f;
                             });
-    ensure(ret == OP_RESULT::OK);
+    ensure(ret == OpCode::OK);
     moveIt(tid, folded_key, folded_key_len);
     return local_f;
   }

@@ -47,24 +47,24 @@ public:
   //---------------------------------------------------------------------------
   // KV Interfaces
   //---------------------------------------------------------------------------
-  virtual OP_RESULT Lookup(Slice key, ValCallback valCallback) override;
+  virtual OpCode Lookup(Slice key, ValCallback valCallback) override;
 
-  virtual OP_RESULT insert(Slice key, Slice val) override;
+  virtual OpCode insert(Slice key, Slice val) override;
 
-  virtual OP_RESULT updateSameSizeInPlace(Slice key,
+  virtual OpCode updateSameSizeInPlace(Slice key,
                                           MutValCallback updateCallBack,
                                           UpdateDesc& updateDesc) override;
 
-  virtual OP_RESULT remove(Slice key) override;
-  virtual OP_RESULT scanAsc(Slice startKey, ScanCallback callback) override;
-  virtual OP_RESULT scanDesc(Slice startKey, ScanCallback callback) override;
-  virtual OP_RESULT prefixLookup(Slice, PrefixLookupCallback callback) override;
-  virtual OP_RESULT prefixLookupForPrev(Slice key,
+  virtual OpCode remove(Slice key) override;
+  virtual OpCode scanAsc(Slice startKey, ScanCallback callback) override;
+  virtual OpCode scanDesc(Slice startKey, ScanCallback callback) override;
+  virtual OpCode prefixLookup(Slice, PrefixLookupCallback callback) override;
+  virtual OpCode prefixLookupForPrev(Slice key,
                                         PrefixLookupCallback callback) override;
-  virtual OP_RESULT append(std::function<void(u8*)>, u16,
+  virtual OpCode append(std::function<void(u8*)>, u16,
                            std::function<void(u8*)>, u16,
                            std::unique_ptr<u8[]>&) override;
-  virtual OP_RESULT rangeRemove(Slice staryKey, Slice endKey,
+  virtual OpCode rangeRemove(Slice staryKey, Slice endKey,
                                 bool page_used) override;
 
   virtual u64 countPages() override;

@@ -148,7 +148,7 @@ public:
   }
 
   // EXP
-  OP_RESULT
+  OpCode
   seekExactWithHint(Slice key, bool higher = true) {
     if (mSlotId == -1) {
       return seekExact(key);
@@ -157,29 +157,29 @@ public:
     if (mSlotId == -1) {
       return seekExact(key);
     } else {
-      return OP_RESULT::OK;
+      return OpCode::OK;
     }
   }
 
-  virtual OP_RESULT seekExact(Slice key) override {
+  virtual OpCode seekExact(Slice key) override {
     if (mSlotId == -1 || !keyInCurrentBoundaries(key)) {
       gotoPage(key);
     }
     mSlotId = mGuardedLeaf->lowerBound<true>(key);
     if (mSlotId != -1) {
-      return OP_RESULT::OK;
+      return OpCode::OK;
     } else {
-      return OP_RESULT::NOT_FOUND;
+      return OpCode::NOT_FOUND;
     }
   }
 
-  virtual OP_RESULT seek(Slice key) override {
+  virtual OpCode seek(Slice key) override {
     if (mSlotId == -1 || mGuardedLeaf->compareKeyWithBoundaries(key) != 0) {
       gotoPage(key);
     }
     mSlotId = mGuardedLeaf->lowerBound<false>(key);
     if (mSlotId < mGuardedLeaf->mNumSeps) {
-      return OP_RESULT::OK;
+      return OpCode::OK;
     } else {
       // TODO: Is there a better solution?
       // In composed keys {K1, K2}, it can happen that when we look for {2, 0}
@@ -189,23 +189,23 @@ public:
     }
   }
 
-  virtual OP_RESULT seekForPrev(Slice key) override {
+  virtual OpCode seekForPrev(Slice key) override {
     if (mSlotId == -1 || mGuardedLeaf->compareKeyWithBoundaries(key) != 0) {
       gotoPage(key);
     }
     bool is_equal = false;
     mSlotId = mGuardedLeaf->lowerBound<false>(key, &is_equal);
     if (is_equal == true) {
-      return OP_RESULT::OK;
+      return OpCode::OK;
     } else if (mSlotId == 0) {
       return prev();
     } else {
       mSlotId -= 1;
-      return OP_RESULT::OK;
+      return OpCode::OK;
     }
   }
 
-  virtual OP_RESULT next() override {
+  virtual OpCode next() override {
     COUNTERS_BLOCK() {
       WorkerCounters::myCounters().dt_next_tuple[mBTree.mTreeId]++;
     }
@@ -213,9 +213,9 @@ public:
       ENSURE(mGuardedLeaf.mGuard.mState != GUARD_STATE::OPTIMISTIC);
       if ((mSlotId + 1) < mGuardedLeaf->mNumSeps) {
         mSlotId += 1;
-        return OP_RESULT::OK;
+        return OpCode::OK;
       } else if (mGuardedLeaf->mUpperFence.length == 0) {
-        return OP_RESULT::NOT_FOUND;
+        return OpCode::NOT_FOUND;
       } else {
         mFenceSize = mGuardedLeaf->mUpperFence.length + 1;
         mIsUsingUpperFence = true;
@@ -268,7 +268,7 @@ public:
                 WorkerCounters::myCounters()
                     .dt_next_tuple_opt[mBTree.mTreeId]++;
               }
-              JUMPMU_RETURN OP_RESULT::OK;
+              JUMPMU_RETURN OpCode::OK;
             }
           }
           JUMPMU_CATCH() {
@@ -294,12 +294,12 @@ public:
         if (mSlotId == mGuardedLeaf->mNumSeps) {
           continue;
         }
-        return OP_RESULT::OK;
+        return OpCode::OK;
       }
     }
   }
 
-  virtual OP_RESULT prev() override {
+  virtual OpCode prev() override {
     COUNTERS_BLOCK() {
       WorkerCounters::myCounters().dt_prev_tuple[mBTree.mTreeId]++;
     }
@@ -308,9 +308,9 @@ public:
       ENSURE(mGuardedLeaf.mGuard.mState != GUARD_STATE::OPTIMISTIC);
       if ((mSlotId - 1) >= 0) {
         mSlotId -= 1;
-        return OP_RESULT::OK;
+        return OpCode::OK;
       } else if (mGuardedLeaf->mLowerFence.length == 0) {
-        return OP_RESULT::NOT_FOUND;
+        return OpCode::NOT_FOUND;
       } else {
         mFenceSize = mGuardedLeaf->mLowerFence.length;
         mIsUsingUpperFence = false;
@@ -359,7 +359,7 @@ public:
                 WorkerCounters::myCounters()
                     .dt_prev_tuple_opt[mBTree.mTreeId]++;
               }
-              JUMPMU_RETURN OP_RESULT::OK;
+              JUMPMU_RETURN OpCode::OK;
             }
           }
           JUMPMU_CATCH() {
@@ -377,7 +377,7 @@ public:
         bool is_equal = false;
         mSlotId = mGuardedLeaf->lowerBound<false>(BufferedFence(), &is_equal);
         if (is_equal) {
-          return OP_RESULT::OK;
+          return OpCode::OK;
         } else if (mSlotId > 0) {
           mSlotId -= 1;
         } else {
