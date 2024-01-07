@@ -29,7 +29,7 @@ OpCode BTreeVI::Lookup(Slice key, ValCallback valCallback) {
   DCHECK(cr::Worker::my().IsTxStarted());
 
   OpCode ret = lookupOptimistic(key, valCallback);
-  if (ret == OpCode::OTHER) {
+  if (ret == OpCode::kOther) {
     return lookupPessimistic(key, valCallback);
   }
   return ret;
@@ -39,8 +39,8 @@ OpCode BTreeVI::lookupPessimistic(Slice key, ValCallback valCallback) {
   JUMPMU_TRY() {
     BTreeSharedIterator iter(*static_cast<BTreeGeneric*>(this));
     auto ret = iter.seekExact(key);
-    if (ret != OpCode::OK) {
-      JUMPMU_RETURN OpCode::NOT_FOUND;
+    if (ret != OpCode::kOk) {
+      JUMPMU_RETURN OpCode::kNotFound;
     }
 
     auto versionsRead(0);
@@ -51,11 +51,11 @@ OpCode BTreeVI::lookupPessimistic(Slice key, ValCallback valCallback) {
           versionsRead;
     }
 
-    if (cr::activeTX().isOLAP() && ret == OpCode::NOT_FOUND) {
+    if (cr::activeTX().isOLAP() && ret == OpCode::kNotFound) {
       BTreeSharedIterator gIter(*static_cast<BTreeGeneric*>(mGraveyard));
       ret = gIter.seekExact(key);
-      if (ret != OpCode::OK) {
-        JUMPMU_RETURN OpCode::NOT_FOUND;
+      if (ret != OpCode::kOk) {
+        JUMPMU_RETURN OpCode::kNotFound;
       }
       std::tie(ret, versionsRead) = GetVisibleTuple(iter.value(), valCallback);
       COUNTERS_BLOCK() {
@@ -65,8 +65,8 @@ OpCode BTreeVI::lookupPessimistic(Slice key, ValCallback valCallback) {
       }
     }
 
-    if (ret != OpCode::OK) {
-      JUMPMU_RETURN OpCode::NOT_FOUND;
+    if (ret != OpCode::kOk) {
+      JUMPMU_RETURN OpCode::kNotFound;
     }
     JUMPMU_RETURN ret;
   }
@@ -74,7 +74,7 @@ OpCode BTreeVI::lookupPessimistic(Slice key, ValCallback valCallback) {
     LOG(ERROR) << "lookupPessimistic failed";
   }
 
-  return OpCode::NOT_FOUND;
+  return OpCode::kNotFound;
 }
 
 OpCode BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
@@ -90,7 +90,7 @@ OpCode BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
       s16 slotId = guardedLeaf->lowerBound<true>(key);
       if (slotId == -1) {
         guardedLeaf.JumpIfModifiedByOthers();
-        JUMPMU_RETURN OpCode::NOT_FOUND;
+        JUMPMU_RETURN OpCode::kNotFound;
       }
 
       auto rawVal = guardedLeaf->ValData(slotId);
@@ -99,7 +99,7 @@ OpCode BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
 
       // Return NOT_FOUND if the tuple is not visible
       if (!VisibleForMe(tuple.mWorkerId, tuple.mTxId, false)) {
-        JUMPMU_RETURN OpCode::NOT_FOUND;
+        JUMPMU_RETURN OpCode::kNotFound;
       }
 
       u32 offset = 0;
@@ -107,7 +107,7 @@ OpCode BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
       case TupleFormat::CHAINED: {
         const auto chainedTuple = ChainedTuple::From(rawVal);
         if (chainedTuple->mIsRemoved) {
-          JUMPMU_RETURN OpCode::NOT_FOUND;
+          JUMPMU_RETURN OpCode::kNotFound;
         }
         offset = sizeof(ChainedTuple);
         break;
@@ -133,7 +133,7 @@ OpCode BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
         WorkerCounters::myCounters().cc_read_versions_visited[mTreeId] += 1;
       }
 
-      JUMPMU_RETURN OpCode::OK;
+      JUMPMU_RETURN OpCode::kOk;
     }
     JUMPMU_CATCH() {
     }
@@ -142,26 +142,25 @@ OpCode BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
   // lookup failed, fallback to lookupPessimistic
   LOG(INFO) << "lookupOptimistic failed " << maxAttempts
             << " times, fallback to lookupPessimistic";
-  return OpCode::OTHER;
+  return OpCode::kOther;
 }
 
-OpCode BTreeVI::updateSameSizeInPlace(Slice key,
-                                         MutValCallback updateCallBack,
-                                         UpdateDesc& updateDesc) {
+OpCode BTreeVI::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
+                                      UpdateDesc& updateDesc) {
   DCHECK(cr::Worker::my().IsTxStarted());
   cr::activeTX().markAsWrite();
   cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size);
 
   BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
   auto ret = xIter.seekExact(key);
-  if (ret != OpCode::OK) {
-    if (cr::activeTX().isOLAP() && ret == OpCode::NOT_FOUND) {
+  if (ret != OpCode::kOk) {
+    if (cr::activeTX().isOLAP() && ret == OpCode::kNotFound) {
       const bool foundRemovedTuple =
-          mGraveyard->Lookup(key, [&](Slice) {}) == OpCode::OK;
+          mGraveyard->Lookup(key, [&](Slice) {}) == OpCode::kOk;
 
       // The tuple to be updated is removed, abort the transaction.
       if (foundRemovedTuple) {
-        return OpCode::ABORT_TX;
+        return OpCode::kAbortTx;
       }
     }
 
@@ -182,7 +181,7 @@ OpCode BTreeVI::updateSameSizeInPlace(Slice key,
                  << ", key=" << ToString(key)
                  << ", writeLocked=" << tuple.IsWriteLocked()
                  << ", visibleForMe=" << visibleForMe;
-      return OpCode::ABORT_TX;
+      return OpCode::kAbortTx;
     }
 
     COUNTERS_BLOCK() {
@@ -202,7 +201,7 @@ OpCode BTreeVI::updateSameSizeInPlace(Slice key,
       if (!succeed) {
         continue;
       }
-      return OpCode::OK;
+      return OpCode::kOk;
     }
     case TupleFormat::CHAINED: {
       auto& chainedTuple = *ChainedTuple::From(rawVal.data());
@@ -227,7 +226,7 @@ OpCode BTreeVI::updateSameSizeInPlace(Slice key,
 
       // update the chained tuple
       chainedTuple.Update(xIter, key, updateCallBack, updateDesc);
-      return OpCode::OK;
+      return OpCode::kOk;
     }
     default: {
       LOG(ERROR) << "Unhandled tuple format: "
@@ -235,7 +234,7 @@ OpCode BTreeVI::updateSameSizeInPlace(Slice key,
     }
     }
   }
-  return OpCode::OTHER;
+  return OpCode::kOther;
 }
 
 OpCode BTreeVI::insert(Slice key, Slice val) {
@@ -249,7 +248,7 @@ OpCode BTreeVI::insert(Slice key, Slice val) {
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
     auto ret = xIter.seekToInsert(key);
 
-    if (ret == OpCode::DUPLICATE) {
+    if (ret == OpCode::kDuplicated) {
       auto mutRawVal = xIter.MutableVal();
       auto& chainedTuple = *ChainedTuple::From(mutRawVal.data());
       auto writeLocked = chainedTuple.IsWriteLocked();
@@ -258,14 +257,14 @@ OpCode BTreeVI::insert(Slice key, Slice val) {
       if (writeLocked || !visibleForMe) {
         DLOG(ERROR) << "Insert failed, writeLocked=" << writeLocked
                     << ", visibleForMe=" << visibleForMe;
-        return OpCode::ABORT_TX;
+        return OpCode::kAbortTx;
       }
       LOG(INFO) << "Insert failed, key is duplicated";
-      return OpCode::DUPLICATE;
+      return OpCode::kDuplicated;
     }
 
     ret = xIter.enoughSpaceInCurrentNode(key, payloadSize);
-    if (ret == OpCode::NOT_ENOUGH_SPACE) {
+    if (ret == OpCode::kSpaceNotEnough) {
       xIter.splitForKey(key);
       continue;
     }
@@ -279,9 +278,9 @@ OpCode BTreeVI::insert(Slice key, Slice val) {
     BTreeVI::InsertToNode(xIter.mGuardedLeaf, key, val,
                           cr::Worker::my().mWorkerId, cr::activeTX().startTS(),
                           cr::activeTX().mTxMode, xIter.mSlotId);
-    return OpCode::OK;
+    return OpCode::kOk;
   }
-  return OpCode::OTHER;
+  return OpCode::kOther;
 }
 
 OpCode BTreeVI::remove(Slice key) {
@@ -293,16 +292,16 @@ OpCode BTreeVI::remove(Slice key) {
   JUMPMU_TRY() {
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
     OpCode ret = xIter.seekExact(key);
-    if (ret != OpCode::OK) {
-      if (cr::activeTX().isOLAP() && ret == OpCode::NOT_FOUND) {
+    if (ret != OpCode::kOk) {
+      if (cr::activeTX().isOLAP() && ret == OpCode::kNotFound) {
         auto foundRemovedTuple =
-            mGraveyard->Lookup(key, [&](Slice) {}) == OpCode::OK;
+            mGraveyard->Lookup(key, [&](Slice) {}) == OpCode::kOk;
         if (foundRemovedTuple) {
-          JUMPMU_RETURN OpCode::ABORT_TX;
+          JUMPMU_RETURN OpCode::kAbortTx;
         }
       }
 
-      JUMPMU_RETURN OpCode::NOT_FOUND;
+      JUMPMU_RETURN OpCode::kNotFound;
     }
 
     auto mutRawVal = xIter.MutableVal();
@@ -311,11 +310,11 @@ OpCode BTreeVI::remove(Slice key) {
     DCHECK(chainedTuple.mFormat == TupleFormat::CHAINED);
     if (chainedTuple.IsWriteLocked() ||
         !VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId, true)) {
-      JUMPMU_RETURN OpCode::ABORT_TX;
+      JUMPMU_RETURN OpCode::kAbortTx;
     }
     ENSURE(!cr::activeTX().atLeastSI() || chainedTuple.mIsRemoved == false);
     if (chainedTuple.mIsRemoved) {
-      JUMPMU_RETURN OpCode::NOT_FOUND;
+      JUMPMU_RETURN OpCode::kNotFound;
     }
 
     chainedTuple.WriteLock();
@@ -356,12 +355,12 @@ OpCode BTreeVI::remove(Slice key) {
     chainedTuple.WriteUnlock();
     xIter.MarkAsDirty();
 
-    JUMPMU_RETURN OpCode::OK;
+    JUMPMU_RETURN OpCode::kOk;
   }
   JUMPMU_CATCH() {
   }
   UNREACHABLE();
-  return OpCode::OTHER;
+  return OpCode::kOther;
 }
 
 OpCode BTreeVI::scanDesc(Slice startKey, ScanCallback callback) {
@@ -380,7 +379,7 @@ OpCode BTreeVI::scanDesc(Slice startKey, ScanCallback callback) {
 
   if (cr::activeTX().isOLAP()) {
     TODOException();
-    return OpCode::ABORT_TX;
+    return OpCode::kAbortTx;
   }
   return scan<false>(startKey, callback);
 }

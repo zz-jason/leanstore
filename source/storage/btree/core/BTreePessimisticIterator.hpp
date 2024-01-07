@@ -148,8 +148,7 @@ public:
   }
 
   // EXP
-  OpCode
-  seekExactWithHint(Slice key, bool higher = true) {
+  OpCode seekExactWithHint(Slice key, bool higher = true) {
     if (mSlotId == -1) {
       return seekExact(key);
     }
@@ -157,7 +156,7 @@ public:
     if (mSlotId == -1) {
       return seekExact(key);
     } else {
-      return OpCode::OK;
+      return OpCode::kOk;
     }
   }
 
@@ -167,9 +166,9 @@ public:
     }
     mSlotId = mGuardedLeaf->lowerBound<true>(key);
     if (mSlotId != -1) {
-      return OpCode::OK;
+      return OpCode::kOk;
     } else {
-      return OpCode::NOT_FOUND;
+      return OpCode::kNotFound;
     }
   }
 
@@ -179,7 +178,7 @@ public:
     }
     mSlotId = mGuardedLeaf->lowerBound<false>(key);
     if (mSlotId < mGuardedLeaf->mNumSeps) {
-      return OpCode::OK;
+      return OpCode::kOk;
     } else {
       // TODO: Is there a better solution?
       // In composed keys {K1, K2}, it can happen that when we look for {2, 0}
@@ -196,12 +195,12 @@ public:
     bool is_equal = false;
     mSlotId = mGuardedLeaf->lowerBound<false>(key, &is_equal);
     if (is_equal == true) {
-      return OpCode::OK;
+      return OpCode::kOk;
     } else if (mSlotId == 0) {
       return prev();
     } else {
       mSlotId -= 1;
-      return OpCode::OK;
+      return OpCode::kOk;
     }
   }
 
@@ -213,9 +212,9 @@ public:
       ENSURE(mGuardedLeaf.mGuard.mState != GUARD_STATE::OPTIMISTIC);
       if ((mSlotId + 1) < mGuardedLeaf->mNumSeps) {
         mSlotId += 1;
-        return OpCode::OK;
+        return OpCode::kOk;
       } else if (mGuardedLeaf->mUpperFence.length == 0) {
-        return OpCode::NOT_FOUND;
+        return OpCode::kNotFound;
       } else {
         mFenceSize = mGuardedLeaf->mUpperFence.length + 1;
         mIsUsingUpperFence = true;
@@ -268,7 +267,7 @@ public:
                 WorkerCounters::myCounters()
                     .dt_next_tuple_opt[mBTree.mTreeId]++;
               }
-              JUMPMU_RETURN OpCode::OK;
+              JUMPMU_RETURN OpCode::kOk;
             }
           }
           JUMPMU_CATCH() {
@@ -294,7 +293,7 @@ public:
         if (mSlotId == mGuardedLeaf->mNumSeps) {
           continue;
         }
-        return OpCode::OK;
+        return OpCode::kOk;
       }
     }
   }
@@ -308,9 +307,9 @@ public:
       ENSURE(mGuardedLeaf.mGuard.mState != GUARD_STATE::OPTIMISTIC);
       if ((mSlotId - 1) >= 0) {
         mSlotId -= 1;
-        return OpCode::OK;
+        return OpCode::kOk;
       } else if (mGuardedLeaf->mLowerFence.length == 0) {
-        return OpCode::NOT_FOUND;
+        return OpCode::kNotFound;
       } else {
         mFenceSize = mGuardedLeaf->mLowerFence.length;
         mIsUsingUpperFence = false;
@@ -359,7 +358,7 @@ public:
                 WorkerCounters::myCounters()
                     .dt_prev_tuple_opt[mBTree.mTreeId]++;
               }
-              JUMPMU_RETURN OpCode::OK;
+              JUMPMU_RETURN OpCode::kOk;
             }
           }
           JUMPMU_CATCH() {
@@ -377,7 +376,7 @@ public:
         bool is_equal = false;
         mSlotId = mGuardedLeaf->lowerBound<false>(BufferedFence(), &is_equal);
         if (is_equal) {
-          return OpCode::OK;
+          return OpCode::kOk;
         } else if (mSlotId > 0) {
           mSlotId -= 1;
         } else {

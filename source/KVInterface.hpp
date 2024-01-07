@@ -8,32 +8,32 @@
 namespace leanstore {
 
 enum class OpCode : u8 {
-  OK = 0,
-  NOT_FOUND = 1,
-  DUPLICATE = 2,
-  ABORT_TX = 3,
-  NOT_ENOUGH_SPACE = 4,
-  OTHER = 5
+  kOk = 0,
+  kNotFound = 1,
+  kDuplicated = 2,
+  kAbortTx = 3,
+  kSpaceNotEnough = 4,
+  kOther = 5
 };
 
 inline std::string ToString(OpCode result) {
   switch (result) {
-  case OpCode::OK: {
+  case OpCode::kOk: {
     return "OK";
   }
-  case OpCode::NOT_FOUND: {
+  case OpCode::kNotFound: {
     return "NOT_FOUND";
   }
-  case OpCode::DUPLICATE: {
-    return "DUPLICATE";
+  case OpCode::kDuplicated: {
+    return "DUPLICATED";
   }
-  case OpCode::ABORT_TX: {
+  case OpCode::kAbortTx: {
     return "ABORT_TX";
   }
-  case OpCode::NOT_ENOUGH_SPACE: {
+  case OpCode::kSpaceNotEnough: {
     return "NOT_ENOUGH_SPACE";
   }
-  case OpCode::OTHER: {
+  case OpCode::kOther: {
     return "OTHER";
   }
   }
@@ -168,28 +168,26 @@ public:
 
   /// Update the old value with a same sized new value.
   /// NOTE: The value is updated via user provided callback.
-  virtual OpCode updateSameSizeInPlace(Slice key,
-                                          MutValCallback updateCallBack,
-                                          UpdateDesc& updateDesc) = 0;
+  virtual OpCode updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
+                                       UpdateDesc& updateDesc) = 0;
 
   virtual OpCode remove(Slice key) = 0;
   virtual OpCode scanAsc(Slice startKey, ScanCallback callback) = 0;
   virtual OpCode scanDesc(Slice startKey, ScanCallback callback) = 0;
   virtual OpCode prefixLookup(Slice, PrefixLookupCallback) {
-    return OpCode::OTHER;
+    return OpCode::kOther;
   }
   virtual OpCode prefixLookupForPrev(Slice, PrefixLookupCallback) {
-    return OpCode::OTHER;
+    return OpCode::kOther;
   }
-  virtual OpCode append(std::function<void(u8*)>, u16,
-                           std::function<void(u8*)>, u16,
-                           std::unique_ptr<u8[]>&) {
-    return OpCode::OTHER;
+  virtual OpCode append(std::function<void(u8*)>, u16, std::function<void(u8*)>,
+                        u16, std::unique_ptr<u8[]>&) {
+    return OpCode::kOther;
   }
   virtual OpCode rangeRemove(Slice startKey [[maybe_unused]],
-                                Slice endKey [[maybe_unused]],
-                                bool page_wise [[maybe_unused]] = true) {
-    return OpCode::OTHER;
+                             Slice endKey [[maybe_unused]],
+                             bool page_wise [[maybe_unused]] = true) {
+    return OpCode::kOther;
   }
 
   virtual u64 countPages() = 0;

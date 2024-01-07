@@ -66,7 +66,7 @@ TEST_F(LeanStoreTest, RecoverAfterInsert) {
       const auto& [key, val] = kvToTest[i];
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
-                OpCode::OK);
+                OpCode::kOk);
     }
   });
 
@@ -93,7 +93,7 @@ TEST_F(LeanStoreTest, RecoverAfterInsert) {
       const auto& [key, expectedVal] = kvToTest[i];
       EXPECT_EQ(
           btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OpCode::OK);
+          OpCode::kOk);
       EXPECT_EQ(copiedValue, expectedVal);
     }
   });

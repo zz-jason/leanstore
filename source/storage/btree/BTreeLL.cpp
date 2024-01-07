@@ -27,10 +27,10 @@ OpCode BTreeLL::Lookup(Slice key, ValCallback valCallback) {
       if (slotId != -1) {
         valCallback(guardedLeaf->Value(slotId));
         guardedLeaf.JumpIfModifiedByOthers();
-        JUMPMU_RETURN OpCode::OK;
+        JUMPMU_RETURN OpCode::kOk;
       } else {
         guardedLeaf.JumpIfModifiedByOthers();
-        JUMPMU_RETURN OpCode::NOT_FOUND;
+        JUMPMU_RETURN OpCode::kNotFound;
       }
     }
     JUMPMU_CATCH() {
@@ -39,7 +39,7 @@ OpCode BTreeLL::Lookup(Slice key, ValCallback valCallback) {
     }
   }
   UNREACHABLE();
-  return OpCode::OTHER;
+  return OpCode::kOther;
 }
 
 bool BTreeLL::isRangeSurelyEmpty(Slice startKey, Slice endKey) {
@@ -82,7 +82,7 @@ OpCode BTreeLL::scanAsc(Slice startKey, ScanCallback callback) {
   JUMPMU_TRY() {
     BTreeSharedIterator iterator(*static_cast<BTreeGeneric*>(this));
     OpCode ret = iterator.seek(startKey);
-    while (ret == OpCode::OK) {
+    while (ret == OpCode::kOk) {
       iterator.assembleKey();
       auto key = iterator.key();
       auto value = iterator.value();
@@ -91,12 +91,12 @@ OpCode BTreeLL::scanAsc(Slice startKey, ScanCallback callback) {
       }
       ret = iterator.next();
     }
-    JUMPMU_RETURN OpCode::OK;
+    JUMPMU_RETURN OpCode::kOk;
   }
   JUMPMU_CATCH() {
   }
   UNREACHABLE();
-  return OpCode::OTHER;
+  return OpCode::kOther;
 }
 
 OpCode BTreeLL::scanDesc(Slice scanKey, ScanCallback callback) {
@@ -106,7 +106,7 @@ OpCode BTreeLL::scanDesc(Slice scanKey, ScanCallback callback) {
   JUMPMU_TRY() {
     BTreeSharedIterator iterator(*static_cast<BTreeGeneric*>(this));
     auto ret = iterator.seekForPrev(scanKey);
-    if (ret != OpCode::OK) {
+    if (ret != OpCode::kOk) {
       JUMPMU_RETURN ret;
     }
     while (true) {
@@ -114,10 +114,10 @@ OpCode BTreeLL::scanDesc(Slice scanKey, ScanCallback callback) {
       auto key = iterator.key();
       auto value = iterator.value();
       if (!callback(key, value)) {
-        JUMPMU_RETURN OpCode::OK;
+        JUMPMU_RETURN OpCode::kOk;
       } else {
-        if (iterator.prev() != OpCode::OK) {
-          JUMPMU_RETURN OpCode::NOT_FOUND;
+        if (iterator.prev() != OpCode::kOk) {
+          JUMPMU_RETURN OpCode::kNotFound;
         }
       }
     }
@@ -125,7 +125,7 @@ OpCode BTreeLL::scanDesc(Slice scanKey, ScanCallback callback) {
   JUMPMU_CATCH() {
   }
   UNREACHABLE();
-  return OpCode::OTHER;
+  return OpCode::kOther;
 }
 
 OpCode BTreeLL::insert(Slice key, Slice val) {
@@ -138,7 +138,7 @@ OpCode BTreeLL::insert(Slice key, Slice val) {
   JUMPMU_TRY() {
     BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
     OpCode ret = iterator.insertKV(key, val);
-    ENSURE(ret == OpCode::OK);
+    ENSURE(ret == OpCode::kOk);
     if (config.mEnableWal) {
       auto walSize = key.length() + val.length();
       auto walHandler =
@@ -147,12 +147,12 @@ OpCode BTreeLL::insert(Slice key, Slice val) {
     } else {
       iterator.MarkAsDirty();
     }
-    JUMPMU_RETURN OpCode::OK;
+    JUMPMU_RETURN OpCode::kOk;
   }
   JUMPMU_CATCH() {
   }
   UNREACHABLE();
-  return OpCode::OTHER;
+  return OpCode::kOther;
 }
 
 OpCode BTreeLL::prefixLookup(Slice key, PrefixLookupCallback callback) {
@@ -166,7 +166,7 @@ OpCode BTreeLL::prefixLookup(Slice key, PrefixLookupCallback callback) {
       if (isEqual) {
         callback(key, guardedLeaf->Value(cur));
         guardedLeaf.JumpIfModifiedByOthers();
-        JUMPMU_RETURN OpCode::OK;
+        JUMPMU_RETURN OpCode::kOk;
       } else if (cur < guardedLeaf->mNumSeps) {
         auto fullKeySize = guardedLeaf->getFullKeyLen(cur);
         auto fullKeyBuf = utils::JumpScopedArray<u8>(fullKeySize);
@@ -177,7 +177,7 @@ OpCode BTreeLL::prefixLookup(Slice key, PrefixLookupCallback callback) {
                  guardedLeaf->Value(cur));
         guardedLeaf.JumpIfModifiedByOthers();
 
-        JUMPMU_RETURN OpCode::OK;
+        JUMPMU_RETURN OpCode::kOk;
       } else {
         OpCode ret = scanAsc(key, [&](Slice scannedKey, Slice scannedVal) {
           callback(scannedKey, scannedVal);
@@ -192,11 +192,10 @@ OpCode BTreeLL::prefixLookup(Slice key, PrefixLookupCallback callback) {
   }
 
   UNREACHABLE();
-  return OpCode::OTHER;
+  return OpCode::kOther;
 }
 
-OpCode BTreeLL::prefixLookupForPrev(Slice key,
-                                       PrefixLookupCallback callback) {
+OpCode BTreeLL::prefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
   while (true) {
     JUMPMU_TRY() {
       GuardedBufferFrame<BTreeNode> guardedLeaf;
@@ -207,7 +206,7 @@ OpCode BTreeLL::prefixLookupForPrev(Slice key,
       if (isEqual == true) {
         callback(key, guardedLeaf->Value(cur));
         guardedLeaf.JumpIfModifiedByOthers();
-        JUMPMU_RETURN OpCode::OK;
+        JUMPMU_RETURN OpCode::kOk;
       } else if (cur > 0) {
         cur -= 1;
         auto fullKeySize = guardedLeaf->getFullKeyLen(cur);
@@ -219,7 +218,7 @@ OpCode BTreeLL::prefixLookupForPrev(Slice key,
                  guardedLeaf->Value(cur));
         guardedLeaf.JumpIfModifiedByOthers();
 
-        JUMPMU_RETURN OpCode::OK;
+        JUMPMU_RETURN OpCode::kOk;
       } else {
         OpCode ret = scanDesc(key, [&](Slice scannedKey, Slice scannedVal) {
           callback(scannedKey, scannedVal);
@@ -234,12 +233,12 @@ OpCode BTreeLL::prefixLookupForPrev(Slice key,
   }
 
   UNREACHABLE();
-  return OpCode::OTHER;
+  return OpCode::kOther;
 }
 
 OpCode BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
-                          std::function<void(u8*)> o_value, u16 o_value_length,
-                          std::unique_ptr<u8[]>& session_ptr) {
+                       std::function<void(u8*)> o_value, u16 o_value_length,
+                       std::unique_ptr<u8[]>& session_ptr) {
   struct alignas(64) Session {
     BufferFrame* bf;
   };
@@ -262,7 +261,7 @@ OpCode BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
       // -------------------------------------------------------------------------------------
       OpCode ret =
           iterator.enoughSpaceInCurrentNode(o_key_length, o_value_length);
-      if (ret == OpCode::OK) {
+      if (ret == OpCode::kOk) {
         auto keyBuffer = utils::JumpScopedArray<u8>(o_key_length);
         o_key(keyBuffer->get());
         const s32 pos = iterator.mGuardedLeaf->mNumSeps;
@@ -274,7 +273,7 @@ OpCode BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
         COUNTERS_BLOCK() {
           WorkerCounters::myCounters().dt_append_opt[mTreeId]++;
         }
-        JUMPMU_RETURN OpCode::OK;
+        JUMPMU_RETURN OpCode::kOk;
       }
     }
     JUMPMU_CATCH() {
@@ -290,9 +289,9 @@ OpCode BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
       }
       const Slice key(keyBuffer->get(), o_key_length);
       OpCode ret = iterator.seekToInsert(key);
-      RAISE_WHEN(ret == OpCode::DUPLICATE);
+      RAISE_WHEN(ret == OpCode::kDuplicated);
       ret = iterator.enoughSpaceInCurrentNode(key, o_value_length);
-      if (ret == OpCode::NOT_ENOUGH_SPACE) {
+      if (ret == OpCode::kSpaceNotEnough) {
         iterator.splitForKey(key);
         JUMPMU_CONTINUE;
       }
@@ -313,16 +312,15 @@ OpCode BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
       COUNTERS_BLOCK() {
         WorkerCounters::myCounters().dt_append[mTreeId]++;
       }
-      JUMPMU_RETURN OpCode::OK;
+      JUMPMU_RETURN OpCode::kOk;
     }
     JUMPMU_CATCH() {
     }
   }
 }
 
-OpCode BTreeLL::updateSameSizeInPlace(Slice key,
-                                         MutValCallback updateCallBack,
-                                         UpdateDesc& updateDesc) {
+OpCode BTreeLL::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
+                                      UpdateDesc& updateDesc) {
   DCHECK(cr::Worker::my().IsTxStarted());
   cr::activeTX().markAsWrite();
   if (config.mEnableWal) {
@@ -332,7 +330,7 @@ OpCode BTreeLL::updateSameSizeInPlace(Slice key,
   JUMPMU_TRY() {
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
     auto ret = xIter.seekExact(key);
-    if (ret != OpCode::OK) {
+    if (ret != OpCode::kOk) {
       JUMPMU_RETURN ret;
     }
     auto currentVal = xIter.MutableVal();
@@ -359,12 +357,12 @@ OpCode BTreeLL::updateSameSizeInPlace(Slice key,
     updateCallBack(currentVal);
     xIter.MarkAsDirty();
     xIter.UpdateContentionStats();
-    JUMPMU_RETURN OpCode::OK;
+    JUMPMU_RETURN OpCode::kOk;
   }
   JUMPMU_CATCH() {
   }
   UNREACHABLE();
-  return OpCode::OTHER;
+  return OpCode::kOther;
 }
 
 OpCode BTreeLL::remove(Slice key) {
@@ -375,7 +373,7 @@ OpCode BTreeLL::remove(Slice key) {
   JUMPMU_TRY() {
     BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
     auto ret = iterator.seekExact(key);
-    if (ret != OpCode::OK) {
+    if (ret != OpCode::kOk) {
       JUMPMU_RETURN ret;
     }
 
@@ -387,14 +385,14 @@ OpCode BTreeLL::remove(Slice key) {
     }
     iterator.MarkAsDirty();
     ret = iterator.removeCurrent();
-    ENSURE(ret == OpCode::OK);
+    ENSURE(ret == OpCode::kOk);
     iterator.mergeIfNeeded();
-    JUMPMU_RETURN OpCode::OK;
+    JUMPMU_RETURN OpCode::kOk;
   }
   JUMPMU_CATCH() {
   }
   UNREACHABLE();
-  return OpCode::OTHER;
+  return OpCode::kOther;
 }
 
 OpCode BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
@@ -416,7 +414,7 @@ OpCode BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
     ENSURE(config.mEnableWal == false);
     if (!page_wise) {
       auto ret = iterator.seek(startKey);
-      if (ret != OpCode::OK) {
+      if (ret != OpCode::kOk) {
         JUMPMU_RETURN ret;
       }
       while (true) {
@@ -427,7 +425,7 @@ OpCode BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
             WorkerCounters::myCounters().dt_range_removed[mTreeId]++;
           }
           ret = iterator.removeCurrent();
-          ENSURE(ret == OpCode::OK);
+          ENSURE(ret == OpCode::kOk);
           iterator.MarkAsDirty();
           if (iterator.mSlotId == iterator.mGuardedLeaf->mNumSeps) {
             ret = iterator.next();
@@ -436,7 +434,7 @@ OpCode BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
           break;
         }
       }
-      JUMPMU_RETURN OpCode::OK;
+      JUMPMU_RETURN OpCode::kOk;
     } else {
       bool did_purge_full_page = false;
       iterator.enterLeafCallback(
@@ -483,7 +481,7 @@ OpCode BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
   }
   JUMPMU_CATCH() {
   }
-  return OpCode::OK;
+  return OpCode::kOk;
 }
 
 u64 BTreeLL::countEntries() {

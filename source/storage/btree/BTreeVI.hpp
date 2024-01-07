@@ -56,9 +56,8 @@ public:
 
   virtual OpCode insert(Slice key, Slice val) override;
 
-  virtual OpCode updateSameSizeInPlace(Slice key,
-                                          MutValCallback updateCallBack,
-                                          UpdateDesc& updateDesc) override;
+  virtual OpCode updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
+                                       UpdateDesc& updateDesc) override;
 
   virtual OpCode remove(Slice key) override;
   virtual OpCode scanAsc(Slice startKey, ScanCallback) override;
@@ -127,9 +126,9 @@ public:
         Slice key(insert_entry.payload, insert_entry.mKeySize);
         BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
         OpCode ret = iterator.seekExact(key);
-        ENSURE(ret == OpCode::OK);
+        ENSURE(ret == OpCode::kOk);
         ret = iterator.removeCurrent();
-        ENSURE(ret == OpCode::OK);
+        ENSURE(ret == OpCode::kOk);
         iterator.MarkAsDirty(); // TODO: write CLS
         iterator.mergeIfNeeded();
       }
@@ -143,7 +142,7 @@ public:
         Slice key(update_entry.payload, update_entry.mKeySize);
         BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
         OpCode ret = iterator.seekExact(key);
-        ENSURE(ret == OpCode::OK);
+        ENSURE(ret == OpCode::kOk);
         auto rawVal = iterator.MutableVal();
         auto& tuple = *Tuple::From(rawVal.data());
         ENSURE(!tuple.IsWriteLocked());
@@ -174,7 +173,7 @@ public:
       JUMPMU_TRY() {
         BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
         OpCode ret = iterator.seekExact(key);
-        ENSURE(ret == OpCode::OK);
+        ENSURE(ret == OpCode::kOk);
         // Resize
         const u16 new_primary_payload_length =
             removeEntry.mValSize + sizeof(ChainedTuple);
@@ -245,9 +244,9 @@ public:
         BTreeExclusiveIterator g_iterator(
             *static_cast<BTreeGeneric*>(mGraveyard));
         ret = g_iterator.seekExact(key);
-        if (ret == OpCode::OK) {
+        if (ret == OpCode::kOk) {
           ret = g_iterator.removeCurrent();
-          ENSURE(ret == OpCode::OK);
+          ENSURE(ret == OpCode::kOk);
           g_iterator.MarkAsDirty();
         } else {
           UNREACHABLE();
@@ -261,10 +260,10 @@ public:
     JUMPMU_TRY() {
       BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
       ret = iterator.seekExact(key);
-      if (ret != OpCode::OK) {
+      if (ret != OpCode::kOk) {
         JUMPMU_RETURN; // TODO:
       }
-      // ENSURE(ret == OpCode::OK);
+      // ENSURE(ret == OpCode::kOk);
       MutableSlice primaryPayload = iterator.MutableVal();
       {
         // Checks
@@ -281,7 +280,7 @@ public:
           if (chainedTuple.mTxId < cr::Worker::my().cc.local_all_lwm) {
             ret = iterator.removeCurrent();
             iterator.MarkAsDirty();
-            ENSURE(ret == OpCode::OK);
+            ENSURE(ret == OpCode::kOk);
             iterator.mergeIfNeeded();
             COUNTERS_BLOCK() {
               WorkerCounters::myCounters().cc_todo_removed[mTreeId]++;
@@ -292,11 +291,11 @@ public:
               BTreeExclusiveIterator g_iterator(
                   *static_cast<BTreeGeneric*>(mGraveyard));
               OpCode g_ret = g_iterator.insertKV(key, iterator.value());
-              ENSURE(g_ret == OpCode::OK);
+              ENSURE(g_ret == OpCode::kOk);
               g_iterator.MarkAsDirty();
             }
             ret = iterator.removeCurrent();
-            ENSURE(ret == OpCode::OK);
+            ENSURE(ret == OpCode::kOk);
             iterator.MarkAsDirty();
             iterator.mergeIfNeeded();
             COUNTERS_BLOCK() {
@@ -342,7 +341,7 @@ public:
     JUMPMU_TRY() {
       BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
       OpCode ret = iterator.seekExact(key);
-      ENSURE(ret == OpCode::OK);
+      ENSURE(ret == OpCode::kOk);
       auto& tuple = *reinterpret_cast<Tuple*>(iterator.MutableVal().data());
       ENSURE(tuple.mFormat == TupleFormat::CHAINED);
       /**
@@ -388,7 +387,7 @@ private:
         ret = iterator.seekForPrev(key);
       }
       // -------------------------------------------------------------------------------------
-      while (ret == OpCode::OK) {
+      while (ret == OpCode::kOk) {
         iterator.assembleKey();
         Slice s_key = iterator.key();
         auto reconstruct = GetVisibleTuple(iterator.value(), [&](Slice value) {
@@ -404,14 +403,14 @@ private:
           WorkerCounters::myCounters().cc_read_chains[mTreeId]++;
           WorkerCounters::myCounters().cc_read_versions_visited[mTreeId] +=
               chain_length;
-          if (std::get<0>(reconstruct) != OpCode::OK) {
+          if (std::get<0>(reconstruct) != OpCode::kOk) {
             WorkerCounters::myCounters().cc_read_chains_not_found[mTreeId]++;
             WorkerCounters::myCounters()
                 .cc_read_versions_visited_not_found[mTreeId] += chain_length;
           }
         }
         if (!keep_scanning) {
-          JUMPMU_RETURN OpCode::OK;
+          JUMPMU_RETURN OpCode::kOk;
         }
 
         if constexpr (asc) {
@@ -420,18 +419,17 @@ private:
           ret = iterator.prev();
         }
       }
-      JUMPMU_RETURN OpCode::OK;
+      JUMPMU_RETURN OpCode::kOk;
     }
     JUMPMU_CATCH() {
       ENSURE(false);
     }
     UNREACHABLE();
-    JUMPMU_RETURN OpCode::OTHER;
+    JUMPMU_RETURN OpCode::kOther;
   }
 
   // TODO: atm, only ascending
-  template <bool asc = true>
-  OpCode scanOLAP(Slice key, ScanCallback callback) {
+  template <bool asc = true> OpCode scanOLAP(Slice key, ScanCallback callback) {
     volatile bool keep_scanning = true;
 
     JUMPMU_TRY() {
@@ -443,8 +441,8 @@ private:
       g_lower_bound = key;
 
       o_ret = iterator.seek(key);
-      if (o_ret != OpCode::OK) {
-        JUMPMU_RETURN OpCode::OK;
+      if (o_ret != OpCode::kOk) {
+        JUMPMU_RETURN OpCode::kOk;
       }
       iterator.assembleKey();
 
@@ -454,13 +452,13 @@ private:
       auto g_range = [&]() {
         g_iterator.reset();
         if (mGraveyard->isRangeSurelyEmpty(g_lower_bound, g_upper_bound)) {
-          g_ret = OpCode::OTHER;
+          g_ret = OpCode::kOther;
         } else {
           g_ret = g_iterator.seek(g_lower_bound);
-          if (g_ret == OpCode::OK) {
+          if (g_ret == OpCode::kOk) {
             g_iterator.assembleKey();
             if (g_iterator.key() > g_upper_bound) {
-              g_ret = OpCode::OTHER;
+              g_ret = OpCode::kOther;
               g_iterator.reset();
             }
           }
@@ -493,12 +491,12 @@ private:
         return true;
       };
       while (true) {
-        if (g_ret != OpCode::OK && o_ret == OpCode::OK) {
+        if (g_ret != OpCode::kOk && o_ret == OpCode::kOk) {
           iterator.assembleKey();
           if (!take_from_oltp()) {
-            JUMPMU_RETURN OpCode::OK;
+            JUMPMU_RETURN OpCode::kOk;
           }
-        } else if (g_ret == OpCode::OK && o_ret != OpCode::OK) {
+        } else if (g_ret == OpCode::kOk && o_ret != OpCode::kOk) {
           g_iterator.assembleKey();
           Slice g_key = g_iterator.key();
           GetVisibleTuple(g_iterator.value(), [&](Slice value) {
@@ -509,17 +507,17 @@ private:
             keep_scanning = callback(g_key, value);
           });
           if (!keep_scanning) {
-            JUMPMU_RETURN OpCode::OK;
+            JUMPMU_RETURN OpCode::kOk;
           }
           g_ret = g_iterator.next();
-        } else if (g_ret == OpCode::OK && o_ret == OpCode::OK) {
+        } else if (g_ret == OpCode::kOk && o_ret == OpCode::kOk) {
           iterator.assembleKey();
           g_iterator.assembleKey();
           Slice g_key = g_iterator.key();
           Slice oltp_key = iterator.key();
           if (oltp_key <= g_key) {
             if (!take_from_oltp()) {
-              JUMPMU_RETURN OpCode::OK;
+              JUMPMU_RETURN OpCode::kOk;
             }
           } else {
             GetVisibleTuple(g_iterator.value(), [&](Slice value) {
@@ -530,12 +528,12 @@ private:
               keep_scanning = callback(g_key, value);
             });
             if (!keep_scanning) {
-              JUMPMU_RETURN OpCode::OK;
+              JUMPMU_RETURN OpCode::kOk;
             }
             g_ret = g_iterator.next();
           }
         } else {
-          JUMPMU_RETURN OpCode::OK;
+          JUMPMU_RETURN OpCode::kOk;
         }
       }
     }
@@ -543,7 +541,7 @@ private:
       ENSURE(false);
     }
     UNREACHABLE();
-    JUMPMU_RETURN OpCode::OTHER;
+    JUMPMU_RETURN OpCode::kOther;
   }
 
   inline bool VisibleForMe(WORKERID workerId, TXID txId, bool toWrite = true) {
@@ -556,7 +554,7 @@ private:
   }
 
   inline std::tuple<OpCode, u16> GetVisibleTuple(Slice payload,
-                                                    ValCallback callback) {
+                                                 ValCallback callback) {
     while (true) {
       JUMPMU_TRY() {
         const auto tuple = Tuple::From(payload.data());

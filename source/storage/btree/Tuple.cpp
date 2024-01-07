@@ -406,7 +406,7 @@ std::tuple<OpCode, u16> FatTuple::GetVisibleTuple(
   // Latest version is visible
   if (cr::Worker::my().cc.VisibleForMe(mWorkerId, mTxId)) {
     valCallback(GetValue());
-    return {OpCode::OK, 1};
+    return {OpCode::kOk, 1};
   }
 
   DCHECK(!cr::activeTX().isOLTP());
@@ -422,16 +422,16 @@ std::tuple<OpCode, u16> FatTuple::GetVisibleTuple(
       desc.ApplyDiff(materializedValue->get(), delta.payload + desc.size());
       if (cr::Worker::my().cc.VisibleForMe(delta.mWorkerId, delta.mTxId)) {
         valCallback(Slice(materializedValue->get(), mValSize));
-        return {OpCode::OK, numVisitedVersions};
+        return {OpCode::kOk, numVisitedVersions};
       }
 
       numVisitedVersions++;
     }
 
-    return {OpCode::NOT_FOUND, numVisitedVersions};
+    return {OpCode::kNotFound, numVisitedVersions};
   }
 
-  return {OpCode::NOT_FOUND, 1};
+  return {OpCode::kNotFound, 1};
 }
 
 void FatTuple::resize(const u32 newLength) {
@@ -492,16 +492,16 @@ std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
     Slice payload, ValCallback callback) const {
   if (cr::Worker::my().cc.VisibleForMe(mWorkerId, mTxId, false)) {
     if (mIsRemoved) {
-      return {OpCode::NOT_FOUND, 1};
+      return {OpCode::kNotFound, 1};
     }
 
     auto valSize = payload.length() - sizeof(ChainedTuple);
     callback(GetValue(valSize));
-    return {OpCode::OK, 1};
+    return {OpCode::kOk, 1};
   }
 
   if (isFinal()) {
-    JUMPMU_RETURN{OpCode::NOT_FOUND, 1};
+    JUMPMU_RETURN{OpCode::kNotFound, 1};
   }
 
   // Head is not visible
@@ -554,15 +554,15 @@ std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
       cerr << "tls = " << cr::Worker::my().mActiveTx.startTS() << endl;
       RAISE_WHEN(true);
       RAISE_WHEN(prevCommandId != INVALID_COMMANDID);
-      return {OpCode::NOT_FOUND, numVisitedVersions};
+      return {OpCode::kNotFound, numVisitedVersions};
     }
     if (cr::Worker::my().cc.VisibleForMe(prevWorkerId, prevTxId, false)) {
       callback(Slice(valueBuf.get(), valueSize));
-      return {OpCode::OK, numVisitedVersions};
+      return {OpCode::kOk, numVisitedVersions};
     }
     numVisitedVersions++;
   }
-  return {OpCode::NOT_FOUND, numVisitedVersions};
+  return {OpCode::kNotFound, numVisitedVersions};
 }
 
 void ChainedTuple::Update(BTreeExclusiveIterator& xIter, Slice key,
