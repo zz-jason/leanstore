@@ -3,7 +3,7 @@
 version: 2.1
 
 orbs:
-  codecov: codecov/codecov@1.0.2
+  codecov: codecov/codecov@3.3.0
 
 # Define a job to be invoked later in a workflow.
 # See: https://circleci.com/docs/configuration-reference/#jobs
@@ -22,10 +22,6 @@ jobs:
     # See: https://circleci.com/docs/configuration-reference/#steps
     steps:
       - checkout
-
-      - run:
-          name: "Check token"
-          command: echo ${CI_CODECOV_TOKEN}
 
       - run:
           name: "Install dependencies"
@@ -60,12 +56,12 @@ jobs:
       - run:
           name: "Build project"
           command: cmake --build build/debug -j `nproc`
-          no_output_timeout: 3m
+          no_output_timeout: 5m
 
       - run:
           name: "Test project"
           command: ctest --test-dir build/debug --output-on-failure
-          no_output_timeout: 3m
+          no_output_timeout: 5m
 
       - run:
           name: "Generate coverage file"
@@ -73,7 +69,7 @@ jobs:
 
       - codecov/upload:
           file: coverage.xml
-          token: ${CI_CODECOV_TOKEN}
+          token: CI_CODECOV_TOKEN
 
 # Orchestrate jobs using workflows
 # See: https://circleci.com/docs/configuration-reference/#workflows
