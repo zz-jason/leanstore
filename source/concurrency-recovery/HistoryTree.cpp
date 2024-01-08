@@ -20,8 +20,9 @@ using namespace leanstore::storage::btree;
 
 void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
                                 COMMANDID commandId, TREEID treeId,
-                                bool isRemove, u64 payload_length,
-                                std::function<void(u8*)> cb, bool same_thread) {
+                                bool isRemove, u64 versionSize,
+                                std::function<void(u8*)> insertCallBack,
+                                bool sameThread) {
   if (!FLAGS_history_tree_inserts) {
     return;
   }
@@ -31,38 +32,38 @@ void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
   offset += utils::fold(keyBuffer + offset, txId);
   offset += utils::fold(keyBuffer + offset, commandId);
   Slice key(keyBuffer, keySize);
-  payload_length += sizeof(VersionMeta);
+  versionSize += sizeof(VersionMeta);
 
   BTreeLL* btree =
       (isRemove) ? remove_btrees[workerId] : update_btrees[workerId];
   Session* session = nullptr;
-  if (same_thread) {
+  if (sameThread) {
     session =
         (isRemove) ? &remove_sessions[workerId] : &update_sessions[workerId];
   }
   if (session != nullptr && session->rightmost_init) {
     JUMPMU_TRY() {
-      BTreeExclusiveIterator iterator(
+      BTreeExclusiveIterator xIter(
           *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)),
           session->rightmost_bf, session->rightmost_version);
 
-      OP_RESULT ret = iterator.enoughSpaceInCurrentNode(key, payload_length);
-      if (ret == OP_RESULT::OK && iterator.keyInCurrentBoundaries(key)) {
+      OpCode ret = xIter.enoughSpaceInCurrentNode(key, versionSize);
+      if (ret == OpCode::kOk && xIter.keyInCurrentBoundaries(key)) {
         if (session->last_tx_id == txId) {
-          iterator.mGuardedLeaf->insertDoNotCopyPayload(key, payload_length,
-                                                        session->rightmost_pos);
-          iterator.mSlotId = session->rightmost_pos;
+          xIter.mGuardedLeaf->insertDoNotCopyPayload(key, versionSize,
+                                                     session->rightmost_pos);
+          xIter.mSlotId = session->rightmost_pos;
         } else {
-          iterator.insertInCurrentNode(key, payload_length);
+          xIter.insertInCurrentNode(key, versionSize);
         }
-        auto& version_meta = *new (iterator.MutableVal().data()) VersionMeta();
-        version_meta.mTreeId = treeId;
-        cb(version_meta.payload);
-        iterator.MarkAsDirty();
+        auto& versionMeta = *new (xIter.MutableVal().data()) VersionMeta();
+        versionMeta.mTreeId = treeId;
+        insertCallBack(versionMeta.payload);
+        xIter.MarkAsDirty();
         COUNTERS_BLOCK() {
           WorkerCounters::myCounters().cc_versions_space_inserted_opt[treeId]++;
         }
-        iterator.mGuardedLeaf.unlock();
+        xIter.mGuardedLeaf.unlock();
         JUMPMU_RETURN;
       }
     }
@@ -72,30 +73,30 @@ void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
 
   while (true) {
     JUMPMU_TRY() {
-      BTreeExclusiveIterator iterator(
+      BTreeExclusiveIterator xIter(
           *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)));
 
-      OP_RESULT ret = iterator.seekToInsert(key);
-      if (ret == OP_RESULT::DUPLICATE) {
-        iterator.removeCurrent(); // TODO: verify, this implies upsert semantic
+      OpCode ret = xIter.seekToInsert(key);
+      if (ret == OpCode::kDuplicated) {
+        xIter.removeCurrent();
       } else {
-        ENSURE(ret == OP_RESULT::OK);
+        ENSURE(ret == OpCode::kOk);
       }
-      ret = iterator.enoughSpaceInCurrentNode(key, payload_length);
-      if (ret == OP_RESULT::NOT_ENOUGH_SPACE) {
-        iterator.splitForKey(key);
+      ret = xIter.enoughSpaceInCurrentNode(key, versionSize);
+      if (ret == OpCode::kSpaceNotEnough) {
+        xIter.splitForKey(key);
         JUMPMU_CONTINUE;
       }
-      iterator.insertInCurrentNode(key, payload_length);
-      auto& version_meta = *new (iterator.MutableVal().data()) VersionMeta();
-      version_meta.mTreeId = treeId;
-      cb(version_meta.payload);
-      iterator.MarkAsDirty();
+      xIter.insertInCurrentNode(key, versionSize);
+      auto& versionMeta = *new (xIter.MutableVal().data()) VersionMeta();
+      versionMeta.mTreeId = treeId;
+      insertCallBack(versionMeta.payload);
+      xIter.MarkAsDirty();
 
       if (session != nullptr) {
-        session->rightmost_bf = iterator.mGuardedLeaf.mBf;
-        session->rightmost_version = iterator.mGuardedLeaf.mGuard.mVersion + 1;
-        session->rightmost_pos = iterator.mSlotId + 1;
+        session->rightmost_bf = xIter.mGuardedLeaf.mBf;
+        session->rightmost_version = xIter.mGuardedLeaf.mGuard.mVersion + 1;
+        session->rightmost_pos = xIter.mSlotId + 1;
         session->last_tx_id = txId;
         session->rightmost_init = true;
       }
@@ -128,8 +129,8 @@ bool HistoryTree::retrieveVersion(WORKERID prevWorkerId, TXID prevTxId,
     BTreeSharedIterator iterator(
         *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)),
         LATCH_FALLBACK_MODE::SHARED);
-    OP_RESULT ret = iterator.seekExact(key);
-    if (ret != OP_RESULT::OK) {
+    OpCode ret = iterator.seekExact(key);
+    if (ret != OpCode::kOk) {
       JUMPMU_RETURN false;
     }
     Slice payload = iterator.value();
@@ -177,8 +178,8 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
             }
           });
       // -------------------------------------------------------------------------------------
-      OP_RESULT ret = iterator.seek(key);
-      while (ret == OP_RESULT::OK) {
+      OpCode ret = iterator.seek(key);
+      while (ret == OpCode::kOk) {
         iterator.assembleKey();
         TXID current_tx_id;
         utils::unfold(iterator.key().data(), current_tx_id);
@@ -328,8 +329,8 @@ void HistoryTree::visitRemoveVersions(
   restart : {
     leanstore::storage::btree::BTreeExclusiveIterator iterator(
         *static_cast<BTreeGeneric*>(btree));
-    OP_RESULT ret = iterator.seek(key);
-    while (ret == OP_RESULT::OK) {
+    OpCode ret = iterator.seek(key);
+    while (ret == OpCode::kOk) {
       iterator.assembleKey();
       TXID current_tx_id;
       utils::unfold(iterator.key().data(), current_tx_id);

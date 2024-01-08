@@ -20,7 +20,7 @@ message(STATUS "THIRD_PARTY_SRC_DIR: ${THIRD_PARTY_SRC_DIR}")
 
 
 enable_language(ASM)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -rdynamic -fno-omit-frame-pointer -g3 -static-libstdc++")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wunused -Wunreachable-code -fno-omit-frame-pointer")

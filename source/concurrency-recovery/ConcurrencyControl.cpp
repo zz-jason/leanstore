@@ -71,7 +71,7 @@ void ConcurrencyControl::refreshGlobalState() {
       TXID itsOltpLwmBuffer =
           workerState.commit_tree.LCB(Worker::sOldestOltpStartTx);
 
-      if (FLAGS_olap_mode &&
+      if (FLAGS_enable_olap_mode &&
           Worker::sOldestAllStartTs != Worker::sOldestOltpStartTx) {
         globalOltpLwmBuffer =
             std::min<TXID>(itsOltpLwmBuffer, globalOltpLwmBuffer);
@@ -139,7 +139,7 @@ synclwm : {
   if (lwmVersion != local_lwm_latch.load()) {
     goto synclwm;
   }
-  ENSURE(!FLAGS_olap_mode || local_all_lwm <= local_oltp_lwm);
+  ENSURE(!FLAGS_enable_olap_mode || local_all_lwm <= local_oltp_lwm);
 }
 
   // ATTENTION: atm, with out extra sync, the two lwm can not
@@ -161,9 +161,8 @@ synclwm : {
         0);
     cleaned_untill_oltp_lwm = std::max(local_all_lwm, cleaned_untill_oltp_lwm);
   }
-  if (FLAGS_olap_mode && local_all_lwm != local_oltp_lwm) {
-    if (FLAGS_graveyard && local_oltp_lwm > 0 &&
-        local_oltp_lwm > cleaned_untill_oltp_lwm) {
+  if (FLAGS_enable_olap_mode && local_all_lwm != local_oltp_lwm) {
+    if (local_oltp_lwm > 0 && local_oltp_lwm > cleaned_untill_oltp_lwm) {
       utils::Timer timer(CRCounters::myCounters().cc_ms_gc_graveyard);
       // MOVE deletes to the graveyard
       const u64 fromTxId =
@@ -232,8 +231,8 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId,
   }
 
   switch (activeTX().mTxIsolationLevel) {
-  case TX_ISOLATION_LEVEL::READ_UNCOMMITTED:
-  case TX_ISOLATION_LEVEL::READ_COMMITTED: {
+  case IsolationLevel::READ_UNCOMMITTED:
+  case IsolationLevel::READ_COMMITTED: {
     if (isCommitTs) {
       return true;
     }
@@ -258,8 +257,8 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId,
 
     return isVisible;
   }
-  case TX_ISOLATION_LEVEL::SNAPSHOT_ISOLATION:
-  case TX_ISOLATION_LEVEL::SERIALIZABLE: {
+  case IsolationLevel::kSnapshotIsolation:
+  case IsolationLevel::SERIALIZABLE: {
     if (isCommitTs) {
       return Worker::my().mActiveTx.startTS() > commitTs;
     }
@@ -290,7 +289,7 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId,
   }
 }
 
-bool ConcurrencyControl::isVisibleForAll(WORKERID, TXID ts) {
+bool ConcurrencyControl::isVisibleForAll(TXID ts) {
   if (ts & MSB) {
     // Commit Timestamp
     return (ts & MSB_MASK) < Worker::sOldestAllStartTs.load();

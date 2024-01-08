@@ -30,50 +30,50 @@ public:
     mGuardedLeaf.MarkAsDirty();
   }
 
-  virtual OP_RESULT seekToInsertWithHint(Slice key, bool higher = true) {
+  virtual OpCode seekToInsertWithHint(Slice key, bool higher = true) {
     ENSURE(mSlotId != -1);
     mSlotId = mGuardedLeaf->linearSearchWithBias(key, mSlotId, higher);
     if (mSlotId == -1) {
       return seekToInsert(key);
     } else {
-      return OP_RESULT::OK;
+      return OpCode::kOk;
     }
   }
 
-  virtual OP_RESULT seekToInsert(Slice key) {
+  virtual OpCode seekToInsert(Slice key) {
     if (mSlotId == -1 || !keyInCurrentBoundaries(key)) {
       gotoPage(key);
     }
     bool isEqual = false;
     mSlotId = mGuardedLeaf->lowerBound<false>(key, &isEqual);
     if (isEqual) {
-      return OP_RESULT::DUPLICATE;
+      return OpCode::kDuplicated;
     } else {
-      return OP_RESULT::OK;
+      return OpCode::kOk;
     }
   }
 
-  virtual OP_RESULT enoughSpaceInCurrentNode(const u16 keySize,
-                                             const u16 valSize) {
+  virtual OpCode enoughSpaceInCurrentNode(const u16 keySize,
+                                          const u16 valSize) {
     return (mGuardedLeaf->canInsert(keySize, valSize))
-               ? OP_RESULT::OK
-               : OP_RESULT::NOT_ENOUGH_SPACE;
+               ? OpCode::kOk
+               : OpCode::kSpaceNotEnough;
   }
-  virtual OP_RESULT enoughSpaceInCurrentNode(Slice key, const u16 valSize) {
+  virtual OpCode enoughSpaceInCurrentNode(Slice key, const u16 valSize) {
     return (mGuardedLeaf->canInsert(key.size(), valSize))
-               ? OP_RESULT::OK
-               : OP_RESULT::NOT_ENOUGH_SPACE;
+               ? OpCode::kOk
+               : OpCode::kSpaceNotEnough;
   }
 
   virtual void insertInCurrentNode(Slice key, u16 valSize) {
     DCHECK(keyInCurrentBoundaries(key));
-    DCHECK(enoughSpaceInCurrentNode(key, valSize) == OP_RESULT::OK);
+    DCHECK(enoughSpaceInCurrentNode(key, valSize) == OpCode::kOk);
     mSlotId = mGuardedLeaf->insertDoNotCopyPayload(key, valSize, mSlotId);
   }
 
   virtual void insertInCurrentNode(Slice key, Slice val) {
     DCHECK(keyInCurrentBoundaries(key));
-    DCHECK(enoughSpaceInCurrentNode(key, val.size()) == OP_RESULT::OK);
+    DCHECK(enoughSpaceInCurrentNode(key, val.size()) == OpCode::kOk);
     DCHECK(mSlotId != -1);
     mSlotId = mGuardedLeaf->insertDoNotCopyPayload(key, val.size(), mSlotId);
     std::memcpy(mGuardedLeaf->ValData(mSlotId), val.data(), val.size());
@@ -101,10 +101,10 @@ public:
     }
   }
 
-  virtual OP_RESULT insertKV(Slice key, Slice val) {
+  virtual OpCode insertKV(Slice key, Slice val) {
   restart : {
-    OP_RESULT ret = seekToInsert(key);
-    if (ret != OP_RESULT::OK) {
+    OpCode ret = seekToInsert(key);
+    if (ret != OpCode::kOk) {
       return ret;
     }
 
@@ -112,13 +112,13 @@ public:
 
     ret = enoughSpaceInCurrentNode(key, val.length());
     switch (ret) {
-    case OP_RESULT::NOT_ENOUGH_SPACE: {
+    case OpCode::kSpaceNotEnough: {
       splitForKey(key);
       goto restart;
     }
-    case OP_RESULT::OK: {
+    case OpCode::kOk: {
       insertInCurrentNode(key, val);
-      return OP_RESULT::OK;
+      return OpCode::kOk;
     }
     default: {
       return ret;
@@ -127,24 +127,24 @@ public:
   }
   }
 
-  virtual OP_RESULT replaceKV(Slice, Slice) {
+  virtual OpCode replaceKV(Slice, Slice) {
     ENSURE(false);
-    return OP_RESULT::NOT_FOUND;
+    return OpCode::kNotFound;
   }
 
   // The caller must retain the payload when using any of the following payload
   // resize functions
-  virtual void shorten(const u16 new_size) {
-    mGuardedLeaf->shortenPayload(mSlotId, new_size);
+  virtual void shorten(const u16 targetSize) {
+    mGuardedLeaf->shortenPayload(mSlotId, targetSize);
   }
 
-  bool extendPayload(const u16 new_length) {
-    if (new_length >= BTreeNode::Size()) {
+  bool extendPayload(const u16 targetSize) {
+    if (targetSize >= BTreeNode::Size()) {
       return false;
     }
-    ENSURE(mSlotId != -1 && new_length > mGuardedLeaf->ValSize(mSlotId));
-    OP_RESULT ret;
-    while (!mGuardedLeaf->canExtendPayload(mSlotId, new_length)) {
+    DCHECK(mSlotId != -1 && targetSize > mGuardedLeaf->ValSize(mSlotId));
+    OpCode ret;
+    while (!mGuardedLeaf->canExtendPayload(mSlotId, targetSize)) {
       if (mGuardedLeaf->mNumSeps == 1) {
         return false;
       }
@@ -152,10 +152,10 @@ public:
       Slice key = this->key();
       splitForKey(key);
       ret = seekExact(key);
-      ENSURE(ret == OP_RESULT::OK);
+      DCHECK(ret == OpCode::kOk);
     }
-    assert(mSlotId != -1);
-    mGuardedLeaf->extendPayload(mSlotId, new_length);
+    DCHECK(mSlotId != -1);
+    mGuardedLeaf->extendPayload(mSlotId, targetSize);
     return true;
   }
 
@@ -218,22 +218,22 @@ public:
     }
   }
 
-  virtual OP_RESULT removeCurrent() {
+  virtual OpCode removeCurrent() {
     if (!(mGuardedLeaf.mBf != nullptr && mSlotId >= 0 &&
           mSlotId < mGuardedLeaf->mNumSeps)) {
       ENSURE(false);
-      return OP_RESULT::OTHER;
+      return OpCode::kOther;
     } else {
       mGuardedLeaf->removeSlot(mSlotId);
-      return OP_RESULT::OK;
+      return OpCode::kOk;
     }
   }
 
-  virtual OP_RESULT removeKV(Slice key) {
+  virtual OpCode removeKV(Slice key) {
     auto ret = seekExact(key);
-    if (ret == OP_RESULT::OK) {
+    if (ret == OpCode::kOk) {
       mGuardedLeaf->removeSlot(mSlotId);
-      return OP_RESULT::OK;
+      return OpCode::kOk;
     } else {
       return ret;
     }

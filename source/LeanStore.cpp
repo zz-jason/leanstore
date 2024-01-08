@@ -57,12 +57,8 @@ LeanStore::LeanStore() {
   if (FLAGS_recover) {
     DeSerializeFlags();
   }
-  if ((FLAGS_vi) && !FLAGS_wal) {
+  if (!FLAGS_wal) {
     LOG(FATAL) << "BTreeVI is enabled without WAL, please enable FLAGS_wal";
-  }
-  if (FLAGS_isolation_level == "si" && (!FLAGS_mv | !FLAGS_vi)) {
-    LOG(FATAL) << "Snapshot Isolation is only supported on BTreeVI with "
-                  "multi-version enabled, please enable FLAGS_mv and FLAGS_vi";
   }
 
   // open file
@@ -518,6 +514,24 @@ void LeanStore::DeSerializeMeta() {
     }
     case leanstore::storage::btree::BTREE_TYPE::VI: {
       auto btree = std::make_unique<leanstore::storage::btree::BTreeVI>();
+
+      cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+        // create btree for graveyard
+        auto graveyardName = "_" + btreeName + "_graveyard";
+        auto graveyardConfig = storage::btree::BTreeGeneric::Config{
+            .mEnableWal = false, .mUseBulkInsert = false};
+        auto res =
+            storage::btree::BTreeLL::Create(graveyardName, graveyardConfig);
+        if (!res) {
+          LOG(ERROR) << "Failed to create BTreeVI graveyard"
+                     << ", btreeVI=" << btreeName
+                     << ", graveyardName=" << graveyardName
+                     << ", error=" << res.error().mMessage;
+          return;
+        }
+        btree->mGraveyard = res.value();
+      });
+
       TreeRegistry::sInstance->RegisterTree(btreeId, std::move(btree),
                                             btreeName);
       break;

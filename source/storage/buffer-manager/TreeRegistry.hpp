@@ -4,9 +4,11 @@
 #include "BufferFrame.hpp"
 #include "Units.hpp"
 #include "utils/Defer.hpp"
+#include "utils/Error.hpp"
 
 #include <glog/logging.h>
 
+#include <expected>
 #include <functional>
 #include <mutex>
 #include <tuple>
@@ -167,24 +169,32 @@ public:
     return true;
   }
 
-  inline void UnregisterTree(const std::string& treeName) {
+  [[nodiscard]] inline auto UnregisterTree(const std::string& treeName)
+      -> std::expected<bool, utils::Error> {
     std::unique_lock uniqueGuard(mMutex);
     auto it = mTreeIndexByName.find(treeName);
     if (it != mTreeIndexByName.end()) {
       auto treeIt = it->second;
       mTreeIndexByName.erase(treeName);
       mTrees.erase(treeIt);
+      return true;
     }
+    return std::unexpected<utils::Error>(
+        utils::Error::General("TreeId not found"));
   }
 
-  inline void UnRegisterTree(TREEID treeId) {
+  [[nodiscard]] inline auto UnRegisterTree(TREEID treeId)
+      -> std::expected<bool, utils::Error> {
     std::unique_lock uniqueGuard(mMutex);
     auto it = mTrees.find(treeId);
     if (it != mTrees.end()) {
       auto& [tree, treeName] = it->second;
       mTreeIndexByName.erase(treeName);
       mTrees.erase(it);
+      return true;
     }
+    return std::unexpected<utils::Error>(
+        utils::Error::General("TreeId not found"));
   }
 
   inline BufferManagedTree* GetTree(const std::string& treeName) {

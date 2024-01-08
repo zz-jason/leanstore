@@ -18,7 +18,6 @@ protected:
   std::unique_ptr<LeanStore> mLeanStore;
 
   BTreeVILoggingAndRecoveryTest() {
-    FLAGS_vi = true;
     FLAGS_enable_print_btree_stats_on_exit = true;
     FLAGS_wal = true;
     FLAGS_bulk_insert = false;
@@ -80,7 +79,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
       const auto& [key, val] = kvToTest[i];
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
-                OP_RESULT::OK);
+                OpCode::kOk);
     }
   });
 
@@ -117,7 +116,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
       const auto& [key, expectedVal] = kvToTest[i];
       EXPECT_EQ(
           btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OP_RESULT::OK);
+          OpCode::kOk);
       EXPECT_EQ(copiedValue, expectedVal);
     }
   });
@@ -172,7 +171,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
       const auto& [key, val] = kvToTest[i];
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
-                OP_RESULT::OK);
+                OpCode::kOk);
     }
     cr::Worker::my().commitTX();
   });
@@ -208,7 +207,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
       const auto& [key, expectedVal] = kvToTest[i];
       EXPECT_EQ(
           btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OP_RESULT::OK);
+          OpCode::kOk);
       EXPECT_EQ(copiedValue, expectedVal);
     }
   });

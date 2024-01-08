@@ -130,27 +130,25 @@ void CRManager::setupHistoryTree() {
                                                    .mUseBulkInsert = true};
     // setup update tree
     std::string updateBtreeName = name + "_updates";
-    auto updateBtree = storage::btree::BTreeLL::Create(updateBtreeName, config);
-    if (updateBtree == nullptr) {
+    auto res = storage::btree::BTreeLL::Create(updateBtreeName, config);
+    if (!res) {
       LOG(FATAL) << "Failed to set up _updates tree"
                  << ", treeName=" << name
                  << ", updateBTreeName=" << updateBtreeName
-                 << ", workerId=" << i;
-      // TODO(jian.z): error handling
+                 << ", workerId=" << i << ", error=" << res.error().mMessage;
     }
-    historyTree->update_btrees[i] = updateBtree;
+    historyTree->update_btrees[i] = res.value();
 
     // setup delete tree
     std::string removeBtreeName = name + "_removes";
-    auto removeBtree = storage::btree::BTreeLL::Create(removeBtreeName, config);
-    if (removeBtree == nullptr) {
+    res = storage::btree::BTreeLL::Create(removeBtreeName, config);
+    if (!res) {
       LOG(FATAL) << "Failed to set up _removes tree"
                  << ", treeName=" << name
                  << ", removeBtreeName=" << removeBtreeName
-                 << ", workerId=" << i;
-      // TODO(jian.z): error handling
+                 << ", workerId=" << i << ", error=" << res.error().mMessage;
     }
-    historyTree->remove_btrees[i] = removeBtree;
+    historyTree->remove_btrees[i] = res.value();
   }
 
   mHistoryTreePtr = std::move(historyTree);

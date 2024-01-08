@@ -23,30 +23,16 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
   }
 
   LeanStoreAdapter(LeanStore& db, string name) : name(name) {
-    if (FLAGS_vi) {
-      if (FLAGS_recover) {
-        leanstore::storage::btree::BTreeVI* tree;
-        db.GetBTreeVI(name, &tree);
-        btree = reinterpret_cast<leanstore::KVInterface*>(tree);
-      } else {
-        leanstore::storage::btree::BTreeVI* tree;
-        storage::btree::BTreeGeneric::Config config{.mEnableWal = FLAGS_wal,
-                                                    .mUseBulkInsert = false};
-        db.RegisterBTreeVI(name, config, &tree);
-        btree = reinterpret_cast<leanstore::KVInterface*>(tree);
-      }
+    if (FLAGS_recover) {
+      leanstore::storage::btree::BTreeVI* tree;
+      db.GetBTreeVI(name, &tree);
+      btree = reinterpret_cast<leanstore::KVInterface*>(tree);
     } else {
-      if (FLAGS_recover) {
-        leanstore::storage::btree::BTreeLL* tree;
-        db.GetBTreeLL(name, &tree);
-        btree = reinterpret_cast<leanstore::KVInterface*>(tree);
-      } else {
-        leanstore::storage::btree::BTreeLL* tree;
-        storage::btree::BTreeGeneric::Config config{.mEnableWal = FLAGS_wal,
-                                                    .mUseBulkInsert = false};
-        db.RegisterBTreeLL(name, config, &tree);
-        btree = reinterpret_cast<leanstore::KVInterface*>(tree);
-      }
+      leanstore::storage::btree::BTreeVI* tree;
+      storage::btree::BTreeGeneric::Config config{.mEnableWal = FLAGS_wal,
+                                                  .mUseBulkInsert = false};
+      db.RegisterBTreeVI(name, config, &tree);
+      btree = reinterpret_cast<leanstore::KVInterface*>(tree);
     }
   }
 
@@ -60,7 +46,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
       std::function<void()> undo [[maybe_unused]]) final {
     u8 foldedKey[Record::maxFoldLength()];
     u16 foldedKeySize = Record::foldKey(foldedKey, key);
-    OP_RESULT ret = btree->scanDesc(
+    OpCode ret = btree->scanDesc(
         Slice(foldedKey, foldedKeySize), [&](Slice key, Slice val) {
           if (key.size() != foldedKeySize) {
             return false;
@@ -70,7 +56,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
           const auto& record = *reinterpret_cast<const Record*>(val.data());
           return cb(typed_key, record);
         });
-    if (ret == leanstore::OP_RESULT::ABORT_TX) {
+    if (ret == leanstore::OpCode::kAbortTx) {
       cr::Worker::my().abortTX();
     }
   }
@@ -78,11 +64,10 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
   void insert(const typename Record::Key& key, const Record& record) final {
     u8 foldedKey[Record::maxFoldLength()];
     u16 foldedKeySize = Record::foldKey(foldedKey, key);
-    const OP_RESULT res = btree->insert(Slice(foldedKey, foldedKeySize),
-                                        Slice((u8*)(&record), sizeof(Record)));
-    DCHECK(res == leanstore::OP_RESULT::OK ||
-           res == leanstore::OP_RESULT::ABORT_TX);
-    if (res == leanstore::OP_RESULT::ABORT_TX) {
+    const OpCode res = btree->insert(Slice(foldedKey, foldedKeySize),
+                                     Slice((u8*)(&record), sizeof(Record)));
+    DCHECK(res == leanstore::OpCode::kOk || res == leanstore::OpCode::kAbortTx);
+    if (res == leanstore::OpCode::kAbortTx) {
       cr::Worker::my().abortTX();
     }
   }
@@ -91,15 +76,15 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
                const std::function<void(const Record&)>& cb) final {
     u8 foldedKey[Record::maxFoldLength()];
     u16 foldedKeySize = Record::foldKey(foldedKey, key);
-    const OP_RESULT res =
+    const OpCode res =
         btree->Lookup(Slice(foldedKey, foldedKeySize), [&](Slice val) {
           const Record& record = *reinterpret_cast<const Record*>(val.data());
           cb(record);
         });
-    if (res == leanstore::OP_RESULT::ABORT_TX) {
+    if (res == leanstore::OpCode::kAbortTx) {
       cr::Worker::my().abortTX();
     }
-    DCHECK(res == leanstore::OP_RESULT::OK);
+    DCHECK(res == leanstore::OpCode::kOk);
   }
 
   void update1(const typename Record::Key& key,
@@ -108,16 +93,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     u8 foldedKey[Record::maxFoldLength()];
     u16 foldedKeySize = Record::foldKey(foldedKey, key);
 
-    if (!FLAGS_vi_delta) {
-      // Disable deltas, copy the whole tuple [hacky]
-      DCHECK(updateDesc.count > 0);
-      DCHECK(!FLAGS_vi_fat_tuple);
-      updateDesc.count = 1;
-      updateDesc.mDiffSlots[0].offset = 0;
-      updateDesc.mDiffSlots[0].length = sizeof(Record);
-    }
-
-    const OP_RESULT res = btree->updateSameSizeInPlace(
+    const OpCode res = btree->updateSameSizeInPlace(
         Slice(foldedKey, foldedKeySize),
         [&](MutableSlice val) {
           DCHECK(val.Size() == sizeof(Record));
@@ -125,8 +101,8 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
           cb(record);
         },
         updateDesc);
-    DCHECK(res != leanstore::OP_RESULT::NOT_FOUND);
-    if (res == leanstore::OP_RESULT::ABORT_TX) {
+    DCHECK(res != leanstore::OpCode::kNotFound);
+    if (res == leanstore::OpCode::kAbortTx) {
       cr::Worker::my().abortTX();
     }
   }
@@ -135,10 +111,10 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     u8 foldedKey[Record::maxFoldLength()];
     u16 foldedKeySize = Record::foldKey(foldedKey, key);
     const auto res = btree->remove(Slice(foldedKey, foldedKeySize));
-    if (res == leanstore::OP_RESULT::ABORT_TX) {
+    if (res == leanstore::OpCode::kAbortTx) {
       cr::Worker::my().abortTX();
     }
-    return (res == leanstore::OP_RESULT::OK);
+    return (res == leanstore::OpCode::kOk);
   }
 
   void scan(
@@ -147,7 +123,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
       std::function<void()> undo [[maybe_unused]]) final {
     u8 foldedKey[Record::maxFoldLength()];
     u16 foldedKeySize = Record::foldKey(foldedKey, key);
-    OP_RESULT ret = btree->scanAsc(
+    OpCode ret = btree->scanAsc(
         Slice(foldedKey, foldedKeySize), [&](Slice key, Slice val) {
           if (key.size() != foldedKeySize) {
             return false;
@@ -158,7 +134,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
           const Record& record = *reinterpret_cast<const Record*>(val.data());
           return cb(typed_key, record);
         });
-    if (ret == leanstore::OP_RESULT::ABORT_TX) {
+    if (ret == leanstore::OpCode::kAbortTx) {
       cr::Worker::my().abortTX();
     }
   }
@@ -168,16 +144,16 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     u8 foldedKey[Record::maxFoldLength()];
     u16 foldedKeySize = Record::foldKey(foldedKey, key);
     Field local_f;
-    const OP_RESULT res = btree->Lookup(
+    const OpCode res = btree->Lookup(
         foldedKey, foldedKeySize, [&](const u8* payload, u16 payloadSize) {
           Record& record =
               *const_cast<Record*>(reinterpret_cast<const Record*>(payload));
           local_f = (record).*f;
         });
-    if (res == leanstore::OP_RESULT::ABORT_TX) {
+    if (res == leanstore::OpCode::kAbortTx) {
       cr::Worker::my().abortTX();
     }
-    DCHECK(res == OP_RESULT::OK);
+    DCHECK(res == OpCode::kOk);
     return local_f;
   }
 
