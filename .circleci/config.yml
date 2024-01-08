@@ -17,7 +17,7 @@ jobs:
     environment:
       DEBIAN_FRONTEND: "noninteractive"
       TZ: "Asia/Shanghai"
-      PATH: /opt/pip-installed/local/bin:$PATH
+      PATH: "/opt/pip-installed/local/bin:$PATH"
 
     # Add steps to the job
     # See: https://circleci.com/docs/configuration-reference/#steps
