@@ -360,18 +360,7 @@ OpCode BTreeVI::remove(Slice key) {
 }
 
 OpCode BTreeVI::ScanDesc(Slice startKey, ScanCallback callback) {
-  auto autoCommit(false);
-  if (!cr::Worker::my().IsTxStarted()) {
-    DLOG(INFO) << "Start implicit transaction";
-    cr::Worker::my().startTX();
-    autoCommit = true;
-  }
-  SCOPED_DEFER({
-    // auto-commit the implicit transaction
-    if (autoCommit) {
-      cr::Worker::my().commitTX();
-    }
-  });
+  DCHECK(cr::Worker::my().IsTxStarted());
 
   if (cr::activeTX().isOLAP()) {
     TODOException();
@@ -381,18 +370,7 @@ OpCode BTreeVI::ScanDesc(Slice startKey, ScanCallback callback) {
 }
 
 OpCode BTreeVI::ScanAsc(Slice startKey, ScanCallback callback) {
-  auto autoCommit(false);
-  if (!cr::Worker::my().IsTxStarted()) {
-    DLOG(INFO) << "Start implicit transaction";
-    cr::Worker::my().startTX();
-    autoCommit = true;
-  }
-  SCOPED_DEFER({
-    // auto-commit the implicit transaction
-    if (autoCommit) {
-      cr::Worker::my().commitTX();
-    }
-  });
+  DCHECK(cr::Worker::my().IsTxStarted());
 
   if (cr::activeTX().isOLAP()) {
     return scanOLAP(startKey, callback);
