@@ -156,7 +156,7 @@ public:
     if (mSlotId == -1) {
       return seekExact(key);
     } else {
-      return OpCode::kOk;
+      return OpCode::kOK;
     }
   }
 
@@ -166,7 +166,7 @@ public:
     }
     mSlotId = mGuardedLeaf->lowerBound<true>(key);
     if (mSlotId != -1) {
-      return OpCode::kOk;
+      return OpCode::kOK;
     } else {
       return OpCode::kNotFound;
     }
@@ -178,7 +178,7 @@ public:
     }
     mSlotId = mGuardedLeaf->lowerBound<false>(key);
     if (mSlotId < mGuardedLeaf->mNumSeps) {
-      return OpCode::kOk;
+      return OpCode::kOK;
     } else {
       // TODO: Is there a better solution?
       // In composed keys {K1, K2}, it can happen that when we look for {2, 0}
@@ -195,12 +195,12 @@ public:
     bool is_equal = false;
     mSlotId = mGuardedLeaf->lowerBound<false>(key, &is_equal);
     if (is_equal == true) {
-      return OpCode::kOk;
+      return OpCode::kOK;
     } else if (mSlotId == 0) {
       return prev();
     } else {
       mSlotId -= 1;
-      return OpCode::kOk;
+      return OpCode::kOK;
     }
   }
 
@@ -212,7 +212,7 @@ public:
       ENSURE(mGuardedLeaf.mGuard.mState != GUARD_STATE::OPTIMISTIC);
       if ((mSlotId + 1) < mGuardedLeaf->mNumSeps) {
         mSlotId += 1;
-        return OpCode::kOk;
+        return OpCode::kOK;
       } else if (mGuardedLeaf->mUpperFence.length == 0) {
         return OpCode::kNotFound;
       } else {
@@ -267,7 +267,7 @@ public:
                 WorkerCounters::myCounters()
                     .dt_next_tuple_opt[mBTree.mTreeId]++;
               }
-              JUMPMU_RETURN OpCode::kOk;
+              JUMPMU_RETURN OpCode::kOK;
             }
           }
           JUMPMU_CATCH() {
@@ -293,7 +293,7 @@ public:
         if (mSlotId == mGuardedLeaf->mNumSeps) {
           continue;
         }
-        return OpCode::kOk;
+        return OpCode::kOK;
       }
     }
   }
@@ -307,7 +307,7 @@ public:
       ENSURE(mGuardedLeaf.mGuard.mState != GUARD_STATE::OPTIMISTIC);
       if ((mSlotId - 1) >= 0) {
         mSlotId -= 1;
-        return OpCode::kOk;
+        return OpCode::kOK;
       } else if (mGuardedLeaf->mLowerFence.length == 0) {
         return OpCode::kNotFound;
       } else {
@@ -358,7 +358,7 @@ public:
                 WorkerCounters::myCounters()
                     .dt_prev_tuple_opt[mBTree.mTreeId]++;
               }
-              JUMPMU_RETURN OpCode::kOk;
+              JUMPMU_RETURN OpCode::kOK;
             }
           }
           JUMPMU_CATCH() {
@@ -376,7 +376,7 @@ public:
         bool is_equal = false;
         mSlotId = mGuardedLeaf->lowerBound<false>(BufferedFence(), &is_equal);
         if (is_equal) {
-          return OpCode::kOk;
+          return OpCode::kOK;
         } else if (mSlotId > 0) {
           mSlotId -= 1;
         } else {

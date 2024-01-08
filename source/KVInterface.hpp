@@ -8,7 +8,7 @@
 namespace leanstore {
 
 enum class OpCode : u8 {
-  kOk = 0,
+  kOK = 0,
   kNotFound = 1,
   kDuplicated = 2,
   kAbortTx = 3,
@@ -18,7 +18,7 @@ enum class OpCode : u8 {
 
 inline std::string ToString(OpCode result) {
   switch (result) {
-  case OpCode::kOk: {
+  case OpCode::kOK: {
     return "OK";
   }
   case OpCode::kNotFound: {
@@ -172,8 +172,8 @@ public:
                                        UpdateDesc& updateDesc) = 0;
 
   virtual OpCode remove(Slice key) = 0;
-  virtual OpCode scanAsc(Slice startKey, ScanCallback callback) = 0;
-  virtual OpCode scanDesc(Slice startKey, ScanCallback callback) = 0;
+  virtual OpCode ScanAsc(Slice startKey, ScanCallback callback) = 0;
+  virtual OpCode ScanDesc(Slice startKey, ScanCallback callback) = 0;
   virtual OpCode prefixLookup(Slice, PrefixLookupCallback) {
     return OpCode::kOther;
   }

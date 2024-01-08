@@ -48,7 +48,7 @@ void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
           session->rightmost_bf, session->rightmost_version);
 
       OpCode ret = xIter.enoughSpaceInCurrentNode(key, versionSize);
-      if (ret == OpCode::kOk && xIter.keyInCurrentBoundaries(key)) {
+      if (ret == OpCode::kOK && xIter.keyInCurrentBoundaries(key)) {
         if (session->last_tx_id == txId) {
           xIter.mGuardedLeaf->insertDoNotCopyPayload(key, versionSize,
                                                      session->rightmost_pos);
@@ -80,7 +80,7 @@ void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
       if (ret == OpCode::kDuplicated) {
         xIter.removeCurrent();
       } else {
-        ENSURE(ret == OpCode::kOk);
+        ENSURE(ret == OpCode::kOK);
       }
       ret = xIter.enoughSpaceInCurrentNode(key, versionSize);
       if (ret == OpCode::kSpaceNotEnough) {
@@ -130,7 +130,7 @@ bool HistoryTree::retrieveVersion(WORKERID prevWorkerId, TXID prevTxId,
         *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)),
         LATCH_FALLBACK_MODE::SHARED);
     OpCode ret = iterator.seekExact(key);
-    if (ret != OpCode::kOk) {
+    if (ret != OpCode::kOK) {
       JUMPMU_RETURN false;
     }
     Slice payload = iterator.value();
@@ -179,7 +179,7 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
           });
       // -------------------------------------------------------------------------------------
       OpCode ret = iterator.seek(key);
-      while (ret == OpCode::kOk) {
+      while (ret == OpCode::kOK) {
         iterator.assembleKey();
         TXID current_tx_id;
         utils::unfold(iterator.key().data(), current_tx_id);
@@ -330,7 +330,7 @@ void HistoryTree::visitRemoveVersions(
     leanstore::storage::btree::BTreeExclusiveIterator iterator(
         *static_cast<BTreeGeneric*>(btree));
     OpCode ret = iterator.seek(key);
-    while (ret == OpCode::kOk) {
+    while (ret == OpCode::kOK) {
       iterator.assembleKey();
       TXID current_tx_id;
       utils::unfold(iterator.key().data(), current_tx_id);

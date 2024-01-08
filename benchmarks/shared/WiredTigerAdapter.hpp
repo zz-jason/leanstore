@@ -209,7 +209,7 @@ template <class Record> struct WiredTigerAdapter : public Adapter<Record> {
     }
   }
   // -------------------------------------------------------------------------------------
-  void scanDesc(
+  void ScanDesc(
       const typename Record::Key& key,
       const std::function<bool(const typename Record::Key&, const Record&)>& fn,
       std::function<void()>) final {

@@ -36,7 +36,7 @@ public:
     if (mSlotId == -1) {
       return seekToInsert(key);
     } else {
-      return OpCode::kOk;
+      return OpCode::kOK;
     }
   }
 
@@ -49,31 +49,31 @@ public:
     if (isEqual) {
       return OpCode::kDuplicated;
     } else {
-      return OpCode::kOk;
+      return OpCode::kOK;
     }
   }
 
   virtual OpCode enoughSpaceInCurrentNode(const u16 keySize,
                                           const u16 valSize) {
     return (mGuardedLeaf->canInsert(keySize, valSize))
-               ? OpCode::kOk
+               ? OpCode::kOK
                : OpCode::kSpaceNotEnough;
   }
   virtual OpCode enoughSpaceInCurrentNode(Slice key, const u16 valSize) {
     return (mGuardedLeaf->canInsert(key.size(), valSize))
-               ? OpCode::kOk
+               ? OpCode::kOK
                : OpCode::kSpaceNotEnough;
   }
 
   virtual void insertInCurrentNode(Slice key, u16 valSize) {
     DCHECK(keyInCurrentBoundaries(key));
-    DCHECK(enoughSpaceInCurrentNode(key, valSize) == OpCode::kOk);
+    DCHECK(enoughSpaceInCurrentNode(key, valSize) == OpCode::kOK);
     mSlotId = mGuardedLeaf->insertDoNotCopyPayload(key, valSize, mSlotId);
   }
 
   virtual void insertInCurrentNode(Slice key, Slice val) {
     DCHECK(keyInCurrentBoundaries(key));
-    DCHECK(enoughSpaceInCurrentNode(key, val.size()) == OpCode::kOk);
+    DCHECK(enoughSpaceInCurrentNode(key, val.size()) == OpCode::kOK);
     DCHECK(mSlotId != -1);
     mSlotId = mGuardedLeaf->insertDoNotCopyPayload(key, val.size(), mSlotId);
     std::memcpy(mGuardedLeaf->ValData(mSlotId), val.data(), val.size());
@@ -104,7 +104,7 @@ public:
   virtual OpCode insertKV(Slice key, Slice val) {
   restart : {
     OpCode ret = seekToInsert(key);
-    if (ret != OpCode::kOk) {
+    if (ret != OpCode::kOK) {
       return ret;
     }
 
@@ -116,9 +116,9 @@ public:
       splitForKey(key);
       goto restart;
     }
-    case OpCode::kOk: {
+    case OpCode::kOK: {
       insertInCurrentNode(key, val);
-      return OpCode::kOk;
+      return OpCode::kOK;
     }
     default: {
       return ret;
@@ -152,7 +152,7 @@ public:
       Slice key = this->key();
       splitForKey(key);
       ret = seekExact(key);
-      DCHECK(ret == OpCode::kOk);
+      DCHECK(ret == OpCode::kOK);
     }
     DCHECK(mSlotId != -1);
     mGuardedLeaf->extendPayload(mSlotId, targetSize);
@@ -225,15 +225,15 @@ public:
       return OpCode::kOther;
     } else {
       mGuardedLeaf->removeSlot(mSlotId);
-      return OpCode::kOk;
+      return OpCode::kOK;
     }
   }
 
   virtual OpCode removeKV(Slice key) {
     auto ret = seekExact(key);
-    if (ret == OpCode::kOk) {
+    if (ret == OpCode::kOK) {
       mGuardedLeaf->removeSlot(mSlotId);
-      return OpCode::kOk;
+      return OpCode::kOK;
     } else {
       return ret;
     }

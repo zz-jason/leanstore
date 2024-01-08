@@ -193,7 +193,7 @@ template <class Record> struct RocksDBAdapter : public Adapter<Record> {
     delete it;
   }
   // -------------------------------------------------------------------------------------
-  void scanDesc(
+  void ScanDesc(
       const typename Record::Key& key,
       const std::function<bool(const typename Record::Key&, const Record&)>& fn,
       std::function<void()>) final {

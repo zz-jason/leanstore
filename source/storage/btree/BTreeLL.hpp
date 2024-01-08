@@ -58,8 +58,8 @@ public:
                                        UpdateDesc& updateDesc) override;
 
   virtual OpCode remove(Slice key) override;
-  virtual OpCode scanAsc(Slice startKey, ScanCallback callback) override;
-  virtual OpCode scanDesc(Slice startKey, ScanCallback callback) override;
+  virtual OpCode ScanAsc(Slice startKey, ScanCallback callback) override;
+  virtual OpCode ScanDesc(Slice startKey, ScanCallback callback) override;
   virtual OpCode prefixLookup(Slice, PrefixLookupCallback callback) override;
   virtual OpCode prefixLookupForPrev(Slice key,
                                      PrefixLookupCallback callback) override;
