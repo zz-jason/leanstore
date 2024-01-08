@@ -143,10 +143,6 @@ public:
     mFuncCleanUp = cb;
   }
 
-  inline Slice BufferedFence() {
-    return Slice(&mBuffer[0], mFenceSize);
-  }
-
   // EXP
   OpCode seekExactWithHint(Slice key, bool higher = true) {
     if (mSlotId == -1) {
@@ -156,7 +152,7 @@ public:
     if (mSlotId == -1) {
       return seekExact(key);
     } else {
-      return OpCode::kOk;
+      return OpCode::kOK;
     }
   }
 
@@ -166,7 +162,7 @@ public:
     }
     mSlotId = mGuardedLeaf->lowerBound<true>(key);
     if (mSlotId != -1) {
-      return OpCode::kOk;
+      return OpCode::kOK;
     } else {
       return OpCode::kNotFound;
     }
@@ -178,7 +174,7 @@ public:
     }
     mSlotId = mGuardedLeaf->lowerBound<false>(key);
     if (mSlotId < mGuardedLeaf->mNumSeps) {
-      return OpCode::kOk;
+      return OpCode::kOK;
     } else {
       // TODO: Is there a better solution?
       // In composed keys {K1, K2}, it can happen that when we look for {2, 0}
@@ -195,12 +191,12 @@ public:
     bool is_equal = false;
     mSlotId = mGuardedLeaf->lowerBound<false>(key, &is_equal);
     if (is_equal == true) {
-      return OpCode::kOk;
+      return OpCode::kOK;
     } else if (mSlotId == 0) {
       return prev();
     } else {
       mSlotId -= 1;
-      return OpCode::kOk;
+      return OpCode::kOK;
     }
   }
 
@@ -212,89 +208,85 @@ public:
       ENSURE(mGuardedLeaf.mGuard.mState != GUARD_STATE::OPTIMISTIC);
       if ((mSlotId + 1) < mGuardedLeaf->mNumSeps) {
         mSlotId += 1;
-        return OpCode::kOk;
-      } else if (mGuardedLeaf->mUpperFence.length == 0) {
+        return OpCode::kOK;
+      }
+
+      if (mGuardedLeaf->mUpperFence.length == 0) {
         return OpCode::kNotFound;
-      } else {
-        mFenceSize = mGuardedLeaf->mUpperFence.length + 1;
-        mIsUsingUpperFence = true;
-        DCHECK(mBuffer.size() >= mFenceSize);
-        std::memcpy(mBuffer.data(), mGuardedLeaf->getUpperFenceKey(),
-                    mGuardedLeaf->mUpperFence.length);
-        mBuffer[mFenceSize - 1] = 0;
+      }
 
-        if (mFuncExitLeaf != nullptr) {
-          mFuncExitLeaf(mGuardedLeaf);
-          mFuncExitLeaf = nullptr;
-        }
+      AssembleUpperFence();
 
-        mGuardedParent.unlock();
-        mGuardedLeaf.unlock();
+      if (mFuncExitLeaf != nullptr) {
+        mFuncExitLeaf(mGuardedLeaf);
+        mFuncExitLeaf = nullptr;
+      }
 
-        if (mFuncCleanUp != nullptr) {
-          mFuncCleanUp();
-          mFuncCleanUp = nullptr;
-        }
+      mGuardedLeaf.unlock();
 
-        if (FLAGS_optimistic_scan && mLeafPosInParent != -1) {
-          JUMPMU_TRY() {
-            if ((mLeafPosInParent + 1) <= mGuardedParent->mNumSeps) {
-              s32 next_leaf_pos = mLeafPosInParent + 1;
-              auto& c_swip =
-                  mGuardedParent->GetChildIncludingRightMost(next_leaf_pos);
-              GuardedBufferFrame guardedNextLeaf(mGuardedParent, c_swip,
-                                                 LATCH_FALLBACK_MODE::JUMP);
-              if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
-                guardedNextLeaf.TryToExclusiveMayJump();
-              } else {
-                guardedNextLeaf.TryToSharedMayJump();
-              }
-              mGuardedLeaf.JumpIfModifiedByOthers();
-              mGuardedLeaf = std::move(guardedNextLeaf);
-              mLeafPosInParent = next_leaf_pos;
-              mSlotId = 0;
-              mIsPrefixCopied = false;
+      if (mFuncCleanUp != nullptr) {
+        mFuncCleanUp();
+        mFuncCleanUp = nullptr;
+      }
 
-              if (mFuncEnterLeaf != nullptr) {
-                mFuncEnterLeaf(mGuardedLeaf);
-              }
-
-              if (mGuardedLeaf->mNumSeps == 0) {
-                JUMPMU_CONTINUE;
-              }
-              ENSURE(mSlotId < mGuardedLeaf->mNumSeps);
-              COUNTERS_BLOCK() {
-                WorkerCounters::myCounters()
-                    .dt_next_tuple_opt[mBTree.mTreeId]++;
-              }
-              JUMPMU_RETURN OpCode::kOk;
+      if (FLAGS_optimistic_scan && mLeafPosInParent != -1) {
+        JUMPMU_TRY() {
+          if ((mLeafPosInParent + 1) <= mGuardedParent->mNumSeps) {
+            s32 nextLeafPos = mLeafPosInParent + 1;
+            auto& nextLeafSwip =
+                mGuardedParent->GetChildIncludingRightMost(nextLeafPos);
+            GuardedBufferFrame guardedNextLeaf(mGuardedParent, nextLeafSwip,
+                                               LATCH_FALLBACK_MODE::JUMP);
+            if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
+              guardedNextLeaf.TryToExclusiveMayJump();
+            } else {
+              guardedNextLeaf.TryToSharedMayJump();
             }
+            mGuardedLeaf.JumpIfModifiedByOthers();
+            mGuardedLeaf = std::move(guardedNextLeaf);
+            mLeafPosInParent = nextLeafPos;
+            mSlotId = 0;
+            mIsPrefixCopied = false;
+
+            if (mFuncEnterLeaf != nullptr) {
+              mFuncEnterLeaf(mGuardedLeaf);
+            }
+
+            if (mGuardedLeaf->mNumSeps == 0) {
+              JUMPMU_CONTINUE;
+            }
+            ENSURE(mSlotId < mGuardedLeaf->mNumSeps);
+            COUNTERS_BLOCK() {
+              WorkerCounters::myCounters().dt_next_tuple_opt[mBTree.mTreeId]++;
+            }
+            JUMPMU_RETURN OpCode::kOK;
+          }
+        }
+        JUMPMU_CATCH() {
+        }
+      }
+
+      mGuardedParent.unlock();
+      gotoPage(AssembedFence());
+
+      if (mGuardedLeaf->mNumSeps == 0) {
+        cleanUpCallback([&, toMerge = mGuardedLeaf.mBf]() {
+          JUMPMU_TRY() {
+            mBTree.tryMerge(*toMerge, true);
           }
           JUMPMU_CATCH() {
           }
+        });
+        COUNTERS_BLOCK() {
+          WorkerCounters::myCounters().dt_empty_leaf[mBTree.mTreeId]++;
         }
-        // Construct the next key (lower bound)
-        gotoPage(BufferedFence());
-
-        if (mGuardedLeaf->mNumSeps == 0) {
-          cleanUpCallback([&, to_find = mGuardedLeaf.mBf]() {
-            JUMPMU_TRY() {
-              mBTree.tryMerge(*to_find, true);
-            }
-            JUMPMU_CATCH() {
-            }
-          });
-          COUNTERS_BLOCK() {
-            WorkerCounters::myCounters().dt_empty_leaf[mBTree.mTreeId]++;
-          }
-          continue;
-        }
-        mSlotId = mGuardedLeaf->lowerBound<false>(BufferedFence());
-        if (mSlotId == mGuardedLeaf->mNumSeps) {
-          continue;
-        }
-        return OpCode::kOk;
+        continue;
       }
+      mSlotId = mGuardedLeaf->lowerBound<false>(AssembedFence());
+      if (mSlotId == mGuardedLeaf->mNumSeps) {
+        continue;
+      }
+      return OpCode::kOK;
     }
   }
 
@@ -307,7 +299,7 @@ public:
       ENSURE(mGuardedLeaf.mGuard.mState != GUARD_STATE::OPTIMISTIC);
       if ((mSlotId - 1) >= 0) {
         mSlotId -= 1;
-        return OpCode::kOk;
+        return OpCode::kOK;
       } else if (mGuardedLeaf->mLowerFence.length == 0) {
         return OpCode::kNotFound;
       } else {
@@ -316,6 +308,7 @@ public:
         DCHECK(mBuffer.size() >= mFenceSize);
         std::memcpy(&mBuffer[0], mGuardedLeaf->getLowerFenceKey(), mFenceSize);
 
+        // callback before exiting current leaf
         if (mFuncExitLeaf != nullptr) {
           mFuncExitLeaf(mGuardedLeaf);
           mFuncExitLeaf = nullptr;
@@ -324,6 +317,7 @@ public:
         mGuardedParent.unlock();
         mGuardedLeaf.unlock();
 
+        // callback after exiting current leaf
         if (mFuncCleanUp != nullptr) {
           mFuncCleanUp();
           mFuncCleanUp = nullptr;
@@ -332,9 +326,9 @@ public:
         if (FLAGS_optimistic_scan && mLeafPosInParent != -1) {
           JUMPMU_TRY() {
             if ((mLeafPosInParent - 1) >= 0) {
-              s32 next_leaf_pos = mLeafPosInParent - 1;
-              Swip<BTreeNode>& c_swip = mGuardedParent->getChild(next_leaf_pos);
-              GuardedBufferFrame guardedNextLeaf(mGuardedParent, c_swip,
+              s32 nextLeafPos = mLeafPosInParent - 1;
+              auto& nextLeafSwip = mGuardedParent->getChild(nextLeafPos);
+              GuardedBufferFrame guardedNextLeaf(mGuardedParent, nextLeafSwip,
                                                  LATCH_FALLBACK_MODE::JUMP);
               if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
                 guardedNextLeaf.TryToExclusiveMayJump();
@@ -343,7 +337,7 @@ public:
               }
               mGuardedLeaf.JumpIfModifiedByOthers();
               mGuardedLeaf = std::move(guardedNextLeaf);
-              mLeafPosInParent = next_leaf_pos;
+              mLeafPosInParent = nextLeafPos;
               mSlotId = mGuardedLeaf->mNumSeps - 1;
               mIsPrefixCopied = false;
 
@@ -358,14 +352,14 @@ public:
                 WorkerCounters::myCounters()
                     .dt_prev_tuple_opt[mBTree.mTreeId]++;
               }
-              JUMPMU_RETURN OpCode::kOk;
+              JUMPMU_RETURN OpCode::kOK;
             }
           }
           JUMPMU_CATCH() {
           }
         }
         // Construct the next key (lower bound)
-        gotoPage(BufferedFence());
+        gotoPage(AssembedFence());
 
         if (mGuardedLeaf->mNumSeps == 0) {
           COUNTERS_BLOCK() {
@@ -374,9 +368,9 @@ public:
           continue;
         }
         bool is_equal = false;
-        mSlotId = mGuardedLeaf->lowerBound<false>(BufferedFence(), &is_equal);
+        mSlotId = mGuardedLeaf->lowerBound<false>(AssembedFence(), &is_equal);
         if (is_equal) {
-          return OpCode::kOk;
+          return OpCode::kOK;
         } else if (mSlotId > 0) {
           mSlotId -= 1;
         } else {
@@ -446,6 +440,20 @@ public:
 
   PID CurrentPageID() {
     return mGuardedLeaf.mBf->header.mPageId;
+  }
+
+private:
+  void AssembleUpperFence() {
+    mFenceSize = mGuardedLeaf->mUpperFence.length + 1;
+    mIsUsingUpperFence = true;
+    DCHECK(mBuffer.size() >= mFenceSize);
+    std::memcpy(mBuffer.data(), mGuardedLeaf->getUpperFenceKey(),
+                mGuardedLeaf->mUpperFence.length);
+    mBuffer[mFenceSize - 1] = 0;
+  }
+
+  inline Slice AssembedFence() {
+    return Slice(&mBuffer[0], mFenceSize);
   }
 };
 
