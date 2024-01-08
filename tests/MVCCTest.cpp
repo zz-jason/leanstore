@@ -143,6 +143,78 @@ TEST_F(MVCCTest, LookupWhileInsert) {
   });
 }
 
+TEST_F(MVCCTest, InsertConflict) {
+  // insert a base record
+  auto key0 = RandomGenerator::RandomAlphString(42);
+  auto val0 = RandomGenerator::RandomAlphString(151);
+  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::Worker::my().startTX();
+    auto res = mBTree->insert(Slice((const u8*)key0.data(), key0.size()),
+                              Slice((const u8*)val0.data(), val0.size()));
+    cr::Worker::my().commitTX();
+    EXPECT_EQ(res, OpCode::kOK);
+  });
+
+  // start a transaction to insert a bigger key, don't commit
+  auto key1 = key0 + "a";
+  auto val1 = val0;
+  cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+    cr::Worker::my().startTX();
+    auto res = mBTree->insert(Slice((const u8*)key1.data(), key1.size()),
+                              Slice((const u8*)val1.data(), val1.size()));
+    EXPECT_EQ(res, OpCode::kOK);
+  });
+
+  // start another transaction to insert the same key
+  cr::CRManager::sInstance->scheduleJobSync(2, [&]() {
+    cr::Worker::my().startTX();
+    auto res = mBTree->insert(Slice((const u8*)key1.data(), key1.size()),
+                              Slice((const u8*)val1.data(), val1.size()));
+    EXPECT_EQ(res, OpCode::kAbortTx);
+    cr::Worker::my().abortTX();
+  });
+
+  // start another transaction to insert a smaller key
+  auto key2 = std::string(key0.data(), key0.size() - 1);
+  auto val2 = val0;
+  cr::CRManager::sInstance->scheduleJobSync(2, [&]() {
+    cr::Worker::my().startTX();
+    auto res = mBTree->insert(Slice((const u8*)key1.data(), key1.size()),
+                              Slice((const u8*)val1.data(), val1.size()));
+    EXPECT_EQ(res, OpCode::kAbortTx);
+    cr::Worker::my().abortTX();
+  });
+
+  // commit the transaction
+  cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+    std::string copiedValue;
+    auto copyValueOut = [&](Slice val) {
+      copiedValue = std::string((const char*)val.data(), val.size());
+    };
+
+    EXPECT_EQ(mBTree->Lookup(Slice((const u8*)key1.data(), key1.size()),
+                             copyValueOut),
+              OpCode::kOK);
+    EXPECT_EQ(copiedValue, val1);
+    cr::Worker::my().commitTX();
+  });
+
+  // now we can see the latest record
+  cr::CRManager::sInstance->scheduleJobSync(2, [&]() {
+    std::string copiedValue;
+    auto copyValueOut = [&](Slice val) {
+      copiedValue = std::string((const char*)val.data(), val.size());
+    };
+    cr::Worker::my().startTX(TX_MODE::OLTP, IsolationLevel::kSnapshotIsolation,
+                             true);
+    EXPECT_EQ(mBTree->Lookup(Slice((const u8*)key1.data(), key1.size()),
+                             copyValueOut),
+              OpCode::kOK);
+    EXPECT_EQ(copiedValue, val1);
+    cr::Worker::my().commitTX();
+  });
+}
+
 } // namespace leanstore
 
 int main(int argc, char** argv) {

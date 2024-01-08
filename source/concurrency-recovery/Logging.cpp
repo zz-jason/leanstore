@@ -11,6 +11,8 @@
 
 #include <glog/logging.h>
 
+#include <cstring>
+
 namespace leanstore {
 namespace cr {
 
@@ -73,9 +75,7 @@ void Logging::walEnsureEnoughSpace(u32 requiredBytes) {
     auto entryPtr = mWalBuffer + mWalBuffered;
     auto entry = new (entryPtr) WALEntrySimple(0, entrySize, entryType);
 
-    DEBUG_BLOCK() {
-      entry->computeCRC();
-    }
+    entry->mCRC32 = entry->ComputeCRC32();
 
     // start a new round
     mWalBuffered = 0;
@@ -94,6 +94,7 @@ WALEntrySimple& Logging::ReserveWALEntrySimple(WALEntry::TYPE type) {
   walEnsureEnoughSpace(sizeof(WALEntrySimple));
   auto entryPtr = mWalBuffer + mWalBuffered;
   auto entrySize = sizeof(WALEntrySimple);
+  std::memset(entryPtr, 0, entrySize);
   mActiveWALEntrySimple =
       new (entryPtr) WALEntrySimple(mLsnClock++, entrySize, type);
 
@@ -119,13 +120,9 @@ void Logging::SubmitWALEntrySimple() {
     Worker::my().mActiveTx.mWalExceedBuffer = true;
   }
 
+  mActiveWALEntrySimple->mCRC32 = mActiveWALEntrySimple->ComputeCRC32();
   DEBUG_BLOCK() {
-    mActiveWALEntrySimple->computeCRC();
-
-    auto entryPtr = mWalBuffer + mWalBuffered;
-    auto entry = reinterpret_cast<WALEntrySimple*>(entryPtr);
-    auto doc = entry->ToJSON();
-
+    auto doc = mActiveWALEntrySimple->ToJSON();
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
     doc->Accept(writer);
@@ -144,14 +141,11 @@ void Logging::SubmitWALEntrySimple() {
 /// it is ready to flush to disk.
 /// @param totalSize is the size of the wal record to be flush.
 void Logging::SubmitWALEntryComplex(u64 totalSize) {
-  DCHECK(totalSize % 8 == 0);
   if (!((mWalBuffered >= mTxWalBegin) ||
         (mWalBuffered + totalSize < mTxWalBegin))) {
     Worker::my().mActiveTx.mWalExceedBuffer = true;
   }
-  DEBUG_BLOCK() {
-    mActiveWALEntryComplex->computeCRC();
-  }
+  mActiveWALEntryComplex->mCRC32 = mActiveWALEntryComplex->ComputeCRC32();
   mWalBuffered += totalSize;
   UpdateWalFlushReq();
   Worker::my().mActiveTx.markAsWrite();
@@ -170,7 +164,8 @@ void Logging::iterateOverCurrentTXEntries(
     ENSURE(entry.size > 0);
     DEBUG_BLOCK() {
       if (entry.type != WALEntry::TYPE::CARRIAGE_RETURN)
-        entry.checkCRC();
+        // entry.checkCRC();
+        ;
     }
     if (entry.type == WALEntry::TYPE::CARRIAGE_RETURN) {
       cursor = 0;

@@ -232,7 +232,6 @@ void Worker::abortTX() {
   mLogging.SubmitWALEntrySimple();
 
   mActiveTx.state = TX_STATE::ABORTED;
-  jumpmu::jump();
 }
 
 void Worker::shutdown() {
