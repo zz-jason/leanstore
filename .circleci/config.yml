@@ -65,7 +65,7 @@ jobs:
 
       - run:
           name: "Generate coverage file"
-          command: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*'
+          command: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*' --verbose
 
       - codecov/upload:
           file: coverage.xml
