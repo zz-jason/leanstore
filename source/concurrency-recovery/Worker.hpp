@@ -279,7 +279,7 @@ public:
   void switchToReadCommittedMode();
   void switchToSnapshotIsolationMode();
 
-  bool isVisibleForAll(WORKERID workerId, TXID txId);
+  bool isVisibleForAll(TXID txId);
 
   /// Visibility check. Whethe the current tuple is visible for the current
   /// worker transaction. Also used to check whether the tuple is write-locked,
@@ -350,10 +350,9 @@ public:
     return mActiveTx.state == TX_STATE::STARTED;
   }
 
-  void startTX(
-      TX_MODE mode = TX_MODE::OLTP,
-      TX_ISOLATION_LEVEL level = TX_ISOLATION_LEVEL::SNAPSHOT_ISOLATION,
-      bool isReadOnly = false);
+  void startTX(TX_MODE mode = TX_MODE::OLTP,
+               IsolationLevel level = IsolationLevel::kSnapshotIsolation,
+               bool isReadOnly = false);
 
   void commitTX();
 
@@ -418,7 +417,11 @@ template <typename T> inline void WALPayloadHandler<T>::SubmitWal() {
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
     dtDoc->Accept(writer);
 
-    DLOG(INFO) << "SubmitWal: " << buffer.GetString();
+    LOG(INFO) << "SubmitWal"
+              << ", workerId=" << Worker::my().mWorkerId
+              << ", startTs=" << Worker::my().mActiveTx.mStartTs
+              << ", curGSN=" << Worker::my().mLogging.GetCurrentGsn()
+              << ", walJson=" << buffer.GetString();
   }
 
   cr::Worker::my().mLogging.SubmitWALEntryComplex(mTotalSize);
@@ -471,18 +474,17 @@ inline ConcurrencyControl& ConcurrencyControl::other(WORKERID otherWorkerId) {
   return Worker::my().mAllWorkers[otherWorkerId]->cc;
 }
 
-inline u64 ConcurrencyControl::insertVersion(TREEID treeId,
-                                             bool isRemoveCommand,
-                                             u64 payload_length,
-                                             std::function<void(u8*)> cb) {
+inline u64 ConcurrencyControl::insertVersion(
+    TREEID treeId, bool isRemoveCommand, u64 versionSize,
+    std::function<void(u8*)> insertCallBack) {
   utils::Timer timer(CRCounters::myCounters().cc_ms_history_tree_insert);
   auto& curWorker = Worker::my();
-  const u64 new_command_id =
+  const u64 commandId =
       (curWorker.mCommandId++) | ((isRemoveCommand) ? TYPE_MSB(COMMANDID) : 0);
   mHistoryTree->insertVersion(curWorker.mWorkerId,
-                              curWorker.mActiveTx.startTS(), new_command_id,
-                              treeId, isRemoveCommand, payload_length, cb);
-  return new_command_id;
+                              curWorker.mActiveTx.startTS(), commandId, treeId,
+                              isRemoveCommand, versionSize, insertCallBack);
+  return commandId;
 }
 
 } // namespace cr

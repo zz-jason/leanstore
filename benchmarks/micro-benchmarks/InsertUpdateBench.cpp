@@ -30,7 +30,6 @@ static std::string generate_random_alphanumeric_string(std::size_t len) {
 }
 
 static void BenchUpdateInsert(benchmark::State& state) {
-  FLAGS_vi = true;
   FLAGS_enable_print_btree_stats_on_exit = true;
   FLAGS_wal = true;
   FLAGS_bulk_insert = false;

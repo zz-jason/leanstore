@@ -36,7 +36,6 @@ public:
   DebugFlagsRegistry() = default;
   ~DebugFlagsRegistry() = default;
 
-private:
 public:
   void Insert(const std::string& name) {
     std::unique_lock uniqueGuard(mMutex);
@@ -55,12 +54,7 @@ public:
   }
 
 public:
-#ifdef NDEBUG
-  static inline std::unique_ptr<DebugFlagsRegistry> sInstance = nullptr;
-#else
-  static inline std::unique_ptr<DebugFlagsRegistry> sInstance =
-      std::make_unique<DebugFlagsRegistry>();
-#endif
+  static std::unique_ptr<DebugFlagsRegistry> sInstance;
 };
 
 } // namespace utils

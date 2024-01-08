@@ -98,7 +98,7 @@ inline u64 unfold(const u8* input, s64& x) {
 }
 
 template <typename T> std::unique_ptr<T[]> ScopedArray(size_t size) {
-  return std::move(std::make_unique<T[]>(size));
+  return std::make_unique<T[]>(size);
 }
 
 template <typename T>

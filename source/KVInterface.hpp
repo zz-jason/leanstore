@@ -7,37 +7,37 @@
 
 namespace leanstore {
 
-enum class OP_RESULT : u8 {
-  OK = 0,
-  NOT_FOUND = 1,
-  DUPLICATE = 2,
-  ABORT_TX = 3,
-  NOT_ENOUGH_SPACE = 4,
-  OTHER = 5
+enum class OpCode : u8 {
+  kOk = 0,
+  kNotFound = 1,
+  kDuplicated = 2,
+  kAbortTx = 3,
+  kSpaceNotEnough = 4,
+  kOther = 5
 };
 
-inline std::string ToString(OP_RESULT result) {
+inline std::string ToString(OpCode result) {
   switch (result) {
-  case OP_RESULT::OK: {
+  case OpCode::kOk: {
     return "OK";
   }
-  case OP_RESULT::NOT_FOUND: {
+  case OpCode::kNotFound: {
     return "NOT_FOUND";
   }
-  case OP_RESULT::DUPLICATE: {
-    return "DUPLICATE";
+  case OpCode::kDuplicated: {
+    return "DUPLICATED";
   }
-  case OP_RESULT::ABORT_TX: {
+  case OpCode::kAbortTx: {
     return "ABORT_TX";
   }
-  case OP_RESULT::NOT_ENOUGH_SPACE: {
+  case OpCode::kSpaceNotEnough: {
     return "NOT_ENOUGH_SPACE";
   }
-  case OP_RESULT::OTHER: {
+  case OpCode::kOther: {
     return "OTHER";
   }
   }
-  return "Unknown OP_RESULT";
+  return "Unknown OpCode";
 }
 
 class UpdateDiffSlot {
@@ -58,15 +58,13 @@ public:
 /// ---------------------------------------
 class UpdateDesc {
 public:
-  u8 count = 0;
+  u8 mNumSlots = 0;
 
   UpdateDiffSlot mDiffSlots[];
 
 public:
   u64 size() const {
-    u64 totalSize = sizeof(UpdateDesc);
-    totalSize += (count * sizeof(UpdateDiffSlot));
-    return totalSize;
+    return UpdateDesc::Size(mNumSlots);
   }
 
   u64 TotalSize() const {
@@ -74,11 +72,11 @@ public:
   }
 
   bool operator==(const UpdateDesc& other) {
-    if (count != other.count) {
+    if (mNumSlots != other.mNumSlots) {
       return false;
     }
 
-    for (u8 i = 0; i < count; i++) {
+    for (u8 i = 0; i < mNumSlots; i++) {
       if (mDiffSlots[i].offset != other.mDiffSlots[i].offset ||
           mDiffSlots[i].length != other.mDiffSlots[i].length)
         return false;
@@ -86,18 +84,18 @@ public:
     return true;
   }
 
-  void GenerateDiff(u8* dst, const u8* src) const {
+  void CopySlots(u8* dst, const u8* src) const {
     u64 dstOffset = 0;
-    for (u64 i = 0; i < count; i++) {
+    for (u64 i = 0; i < mNumSlots; i++) {
       const auto& slot = mDiffSlots[i];
       std::memcpy(dst + dstOffset, src + slot.offset, slot.length);
       dstOffset += slot.length;
     }
   }
 
-  void GenerateXORDiff(u8* dst, const u8* src) const {
+  void XORSlots(u8* dst, const u8* src) const {
     u64 dstOffset = 0;
-    for (u64 i = 0; i < count; i++) {
+    for (u64 i = 0; i < mNumSlots; i++) {
       const auto& slot = mDiffSlots[i];
       for (u64 j = 0; j < slot.length; j++) {
         dst[dstOffset + j] ^= src[slot.offset + j];
@@ -108,7 +106,7 @@ public:
 
   void ApplyDiff(u8* dst, const u8* src) const {
     u64 srcOffset = 0;
-    for (u64 i = 0; i < count; i++) {
+    for (u64 i = 0; i < mNumSlots; i++) {
       const auto& slot = mDiffSlots[i];
       std::memcpy(dst + slot.offset, src + srcOffset, slot.length);
       srcOffset += slot.length;
@@ -117,7 +115,7 @@ public:
 
   void ApplyXORDiff(u8* dst, const u8* src) const {
     u64 srcOffset = 0;
-    for (u64 i = 0; i < count; i++) {
+    for (u64 i = 0; i < mNumSlots; i++) {
       const auto& slot = mDiffSlots[i];
       for (u64 j = 0; j < slot.length; j++) {
         dst[slot.offset + j] ^= src[srcOffset + j];
@@ -129,7 +127,7 @@ public:
 private:
   u64 diffSize() const {
     u64 length = 0;
-    for (u8 i = 0; i < count; i++) {
+    for (u8 i = 0; i < mNumSlots; i++) {
       length += mDiffSlots[i].length;
     }
     return length;
@@ -143,6 +141,17 @@ public:
   inline static UpdateDesc* From(u8* buffer) {
     return reinterpret_cast<UpdateDesc*>(buffer);
   }
+
+  inline static u64 Size(u8 numSlots) {
+    u64 selfSize = sizeof(UpdateDesc);
+    selfSize += (numSlots * sizeof(UpdateDiffSlot));
+    return selfSize;
+  }
+
+  inline static UpdateDesc* CreateFrom(u8* buffer) {
+    auto updateDesc = new (buffer) UpdateDesc();
+    return updateDesc;
+  }
 };
 
 class MutableSlice;
@@ -154,33 +163,31 @@ using PrefixLookupCallback = std::function<void(Slice key, Slice val)>;
 
 class KVInterface {
 public:
-  virtual OP_RESULT Lookup(Slice key, ValCallback valCallback) = 0;
-  virtual OP_RESULT insert(Slice key, Slice val) = 0;
+  virtual OpCode Lookup(Slice key, ValCallback valCallback) = 0;
+  virtual OpCode insert(Slice key, Slice val) = 0;
 
   /// Update the old value with a same sized new value.
   /// NOTE: The value is updated via user provided callback.
-  virtual OP_RESULT updateSameSizeInPlace(Slice key,
-                                          MutValCallback updateCallBack,
-                                          UpdateDesc& updateDesc) = 0;
+  virtual OpCode updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
+                                       UpdateDesc& updateDesc) = 0;
 
-  virtual OP_RESULT remove(Slice key) = 0;
-  virtual OP_RESULT scanAsc(Slice startKey, ScanCallback callback) = 0;
-  virtual OP_RESULT scanDesc(Slice startKey, ScanCallback callback) = 0;
-  virtual OP_RESULT prefixLookup(Slice, PrefixLookupCallback) {
-    return OP_RESULT::OTHER;
+  virtual OpCode remove(Slice key) = 0;
+  virtual OpCode scanAsc(Slice startKey, ScanCallback callback) = 0;
+  virtual OpCode scanDesc(Slice startKey, ScanCallback callback) = 0;
+  virtual OpCode prefixLookup(Slice, PrefixLookupCallback) {
+    return OpCode::kOther;
   }
-  virtual OP_RESULT prefixLookupForPrev(Slice, PrefixLookupCallback) {
-    return OP_RESULT::OTHER;
+  virtual OpCode prefixLookupForPrev(Slice, PrefixLookupCallback) {
+    return OpCode::kOther;
   }
-  virtual OP_RESULT append(std::function<void(u8*)>, u16,
-                           std::function<void(u8*)>, u16,
-                           std::unique_ptr<u8[]>&) {
-    return OP_RESULT::OTHER;
+  virtual OpCode append(std::function<void(u8*)>, u16, std::function<void(u8*)>,
+                        u16, std::unique_ptr<u8[]>&) {
+    return OpCode::kOther;
   }
-  virtual OP_RESULT rangeRemove(Slice startKey [[maybe_unused]],
-                                Slice endKey [[maybe_unused]],
-                                bool page_wise [[maybe_unused]] = true) {
-    return OP_RESULT::OTHER;
+  virtual OpCode rangeRemove(Slice startKey [[maybe_unused]],
+                             Slice endKey [[maybe_unused]],
+                             bool page_wise [[maybe_unused]] = true) {
+    return OpCode::kOther;
   }
 
   virtual u64 countPages() = 0;

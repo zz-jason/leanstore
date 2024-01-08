@@ -3,7 +3,7 @@
 version: 2.1
 
 orbs:
-  codecov: codecov/codecov@1.0.2
+  codecov: codecov/codecov@3.3.0
 
 # Define a job to be invoked later in a workflow.
 # See: https://circleci.com/docs/configuration-reference/#jobs
@@ -13,7 +13,7 @@ jobs:
     # See: https://circleci.com/docs/configuration-reference/#executor-job
     docker:
       - image: ubuntu:23.04
-      
+
     environment:
       DEBIAN_FRONTEND: "noninteractive"
       TZ: "Asia/Shanghai"
@@ -24,37 +24,52 @@ jobs:
       - checkout
 
       - run:
-          name: "Check token"
-          command: echo ${CI_CODECOV_TOKEN}
-          
-      - run:
           name: "Install dependencies"
           command: apt update && apt install -y build-essential cmake git libaio-dev gcovr cppcheck coreutils curl gnupg
-          
+
+      - run:
+          name: "Install gcc 13"
+          command: |
+            apt remove gcc g++ -y
+            apt install -y gcc-13 g++-13 -y
+            ln -sf /usr/bin/cpp-13        /usr/bin/cpp
+            ln -sf /usr/bin/g++-13        /usr/bin/g++
+            ln -sf /usr/bin/gcc-13        /usr/bin/gcc
+            ln -sf /usr/bin/gcc-ar-13     /usr/bin/gcc-ar
+            ln -sf /usr/bin/gcc-nm-13     /usr/bin/gcc-nm
+            ln -sf /usr/bin/gcc-ranlib-13 /usr/bin/gcc-ranlib
+            ln -sf /usr/bin/gcov-13       /usr/bin/gcov
+            ln -sf /usr/bin/gcov-dump-13  /usr/bin/gcov-dump
+            ln -sf /usr/bin/gcov-tool-13  /usr/bin/gcov-tool
+            ln -sf /usr/bin/lto-dump-13   /usr/bin/lto-dump
+            ln -sf /usr/bin/g++-13        /usr/bin/c++
+            ln -sf /usr/bin/gcc-13        /usr/bin/cc
+
       - run:
           name: "Config project"
           command: cmake -B build/debug -S . -DCMAKE_BUILD_TYPE=Debug -DBUILD_WITH_COVERAGE=ON
-          
+
       - run:
           name: "Cppcheck"
           command: cppcheck --project=build/debug/compile_commands.json -i tests --error-exitcode=1
-          
+
       - run:
           name: "Build project"
           command: cmake --build build/debug -j `nproc`
-          no_output_timeout: 3m
+          no_output_timeout: 5m
 
       - run:
           name: "Test project"
-          command: ctest --test-dir build/debug
-      
-      - run:
-          name: "Generate coverage file"
-          command: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*'
+          command: ctest --test-dir build/debug --output-on-failure
+          no_output_timeout: 5m
 
-      - codecov/upload:
-          file: coverage.xml
-          token: ${CI_CODECOV_TOKEN}
+      # - run:
+      #     name: "Generate coverage file"
+      #     command: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*' --verbose
+
+      # - codecov/upload:
+      #     file: coverage.xml
+      #     token: CI_CODECOV_TOKEN
 
 # Orchestrate jobs using workflows
 # See: https://circleci.com/docs/configuration-reference/#workflows

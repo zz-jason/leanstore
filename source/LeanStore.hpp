@@ -53,7 +53,15 @@ public:
                        storage::btree::BTreeGeneric::Config& config,
                        storage::btree::BTreeLL** btree) {
     DCHECK(cr::Worker::my().IsTxStarted());
-    *btree = storage::btree::BTreeLL::Create(name, config);
+    auto res = storage::btree::BTreeLL::Create(name, config);
+    if (!res) {
+      LOG(ERROR) << "Failed to register BTreeLL"
+                 << ", name=" << name << ", error=" << res.error().mMessage;
+      *btree = nullptr;
+      return;
+    }
+
+    *btree = res.value();
   }
 
   /// Get a registered BTreeLL
@@ -72,7 +80,11 @@ public:
     auto btree = dynamic_cast<storage::btree::BTreeGeneric*>(
         storage::TreeRegistry::sInstance->GetTree(name));
     leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
-    storage::TreeRegistry::sInstance->UnregisterTree(name);
+    auto res = storage::TreeRegistry::sInstance->UnregisterTree(name);
+    if (!res) {
+      LOG(ERROR) << "UnRegister BTreeLL failed"
+                 << ", error=" << res.error().mMessage;
+    }
   }
 
   /// Register a BTreeVI
@@ -90,17 +102,24 @@ public:
     auto graveyardName = "_" + name + "_graveyard";
     auto graveyardConfig = storage::btree::BTreeGeneric::Config{
         .mEnableWal = false, .mUseBulkInsert = false};
-    auto graveyard =
-        storage::btree::BTreeLL::Create(graveyardName, graveyardConfig);
-    if (graveyard == nullptr) {
+    auto res = storage::btree::BTreeLL::Create(graveyardName, graveyardConfig);
+    if (!res) {
+      LOG(ERROR) << "Failed to create BTreeVI graveyard"
+                 << ", btreeVI=" << name << ", graveyardName=" << graveyardName
+                 << ", error=" << res.error().mMessage;
       return;
     }
+    auto graveyard = res.value();
 
     // clean resource on failure
     SCOPED_DEFER(if (*btree == nullptr && graveyard != nullptr) {
       leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(
           *static_cast<leanstore::storage::btree::BTreeGeneric*>(graveyard));
-      TreeRegistry::sInstance->UnRegisterTree(graveyard->mTreeId);
+      auto res = TreeRegistry::sInstance->UnRegisterTree(graveyard->mTreeId);
+      if (!res) {
+        LOG(ERROR) << "UnRegister graveyard failed"
+                   << ", error=" << res.error().mMessage;
+      }
     });
 
     // create btree for main data
@@ -123,14 +142,21 @@ public:
     auto btree = dynamic_cast<storage::btree::BTreeGeneric*>(
         storage::TreeRegistry::sInstance->GetTree(name));
     leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
-    storage::TreeRegistry::sInstance->UnregisterTree(name);
+    auto res = storage::TreeRegistry::sInstance->UnregisterTree(name);
+    if (!res) {
+      LOG(ERROR) << "UnRegister BTreeVI failed"
+                 << ", error=" << res.error().mMessage;
+    }
 
     auto graveyardName = "_" + name + "_graveyard";
     btree = dynamic_cast<storage::btree::BTreeGeneric*>(
         storage::TreeRegistry::sInstance->GetTree(graveyardName));
-    if (btree != nullptr) {
-      leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
-      storage::TreeRegistry::sInstance->UnregisterTree(graveyardName);
+    DCHECK(btree != nullptr) << "graveyard not found";
+    leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
+    res = storage::TreeRegistry::sInstance->UnregisterTree(graveyardName);
+    if (!res) {
+      LOG(ERROR) << "UnRegister BTreeVI graveyard failed"
+                 << ", error=" << res.error().mMessage;
     }
   }
 

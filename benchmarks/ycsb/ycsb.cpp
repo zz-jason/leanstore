@@ -115,7 +115,7 @@ int main(int argc, char** argv) {
                   reinterpret_cast<u8*>(&payload), sizeof(YCSBPayload));
               YCSBKey key = i;
               cr::Worker::my().startTX(
-                  tx_type, leanstore::TX_ISOLATION_LEVEL::SNAPSHOT_ISOLATION);
+                  tx_type, leanstore::IsolationLevel::kSnapshotIsolation);
               table.insert({key}, {payload});
               cr::Worker::my().commitTX();
             }
@@ -173,7 +173,7 @@ int main(int argc, char** argv) {
                   (sizeof(leanstore::UpdateDiffSlot) * 1);
               u8 updateDescBuf[updateDescBufSize];
               auto& updateDesc = *leanstore::UpdateDesc::From(updateDescBuf);
-              updateDesc.count = 1;
+              updateDesc.mNumSlots = 1;
               updateDesc.mDiffSlots[0].offset = offsetof(KVTable, mValue);
               updateDesc.mDiffSlots[0].length = sizeof(KVTable::mValue);
 
@@ -197,14 +197,15 @@ int main(int argc, char** argv) {
   }
 
   if (FLAGS_ycsb_sleepy_thread) {
-    const leanstore::TX_MODE tx_type =
-        FLAGS_olap_mode ? leanstore::TX_MODE::OLAP : leanstore::TX_MODE::OLTP;
+    const leanstore::TX_MODE tx_type = FLAGS_enable_olap_mode
+                                           ? leanstore::TX_MODE::OLAP
+                                           : leanstore::TX_MODE::OLTP;
     crm.scheduleJobAsync(exec_threads - 1, [&]() {
       running_threads_counter++;
       while (keep_running) {
         JUMPMU_TRY() {
           cr::Worker::my().startTX(
-              tx_type, leanstore::TX_ISOLATION_LEVEL::SNAPSHOT_ISOLATION);
+              tx_type, leanstore::IsolationLevel::kSnapshotIsolation);
           sleep(FLAGS_ycsb_sleepy_thread);
           cr::Worker::my().commitTX();
         }

@@ -25,11 +25,11 @@ void GroupCommitter::runImpl() {
     if (numIOCBs > 0) {
       // phase 2
       writeIOCBs(numIOCBs);
-
-      // phase 3
-      commitTXs(minFlushedGSN, maxFlushedGSN, minFlushedTxId, numRfaTxs,
-                walFlushReqCopies);
     }
+
+    // phase 3
+    commitTXs(minFlushedGSN, maxFlushedGSN, minFlushedTxId, numRfaTxs,
+              walFlushReqCopies);
   }
 }
 
@@ -55,17 +55,16 @@ void GroupCommitter::prepareIOCBs(s32& numIOCBs, u64& minFlushedGSN,
 
   for (u32 workerId = 0; workerId < mWorkers.size(); workerId++) {
     auto& logging = mWorkers[workerId]->mLogging;
-
     // collect logging info
     std::unique_lock<std::mutex> guard(logging.mRfaTxToCommitMutex);
     numRfaTxs[workerId] = logging.mRfaTxToCommit.size();
     guard.unlock();
 
+    auto lastReqVersion = walFlushReqCopies[workerId].mVersion;
     walFlushReqCopies[workerId] = logging.mWalFlushReq.getSync();
-
     const auto& reqCopy = walFlushReqCopies[workerId];
-    if (reqCopy.mCurrGSN <= 0) {
-      // no transaction executed in the worker, skip it.
+    if (reqCopy.mVersion == lastReqVersion) {
+      // no transaction log write since last round group commit, skip.
       continue;
     }
 
@@ -109,20 +108,13 @@ void GroupCommitter::writeIOCBs(s32 numIOCBs) {
     s32 submitted = io_submit(mIOContext, left, iocbToSubmit);
     LOG_IF(ERROR, submitted < 0)
         << "io_submit failed, error=" << submitted << ", mWalFd=" << mWalFd;
-
     left -= submitted;
-    DLOG_IF(INFO, submitted >= 0)
-        << "io_submit succeed"
-        << ", submitted=" << submitted << ", left=" << left
-        << ", numIOCBs=" << numIOCBs << ", mWalFd=" << mWalFd;
   }
 
   auto numCompleted =
       io_getevents(mIOContext, numIOCBs, numIOCBs, mIOEvents.get(), nullptr);
   LOG_IF(ERROR, numCompleted < 0)
       << "io_getevents failed, error=" << numCompleted << ", mWalFd=" << mWalFd;
-  DLOG_IF(INFO, numCompleted >= 0)
-      << "io_getevents succeed, numCompleted=" << numCompleted;
 
   if (FLAGS_wal_fsync) {
     fdatasync(mWalFd);
@@ -169,6 +161,7 @@ void GroupCommitter::commitTXs(
                    << ", workerId=" << workerId << ", startTs=" << tx.mStartTs
                    << ", commitTs=" << tx.mCommitTs
                    << ", minFlushedGSN=" << minFlushedGSN
+                   << ", maxFlushedGSN=" << maxFlushedGSN
                    << ", minFlushedTxId=" << minFlushedTxId;
       }
       if (i > 0) {
@@ -190,7 +183,10 @@ void GroupCommitter::commitTXs(
         tx.state = TX_STATE::COMMITTED;
         DLOG(INFO) << "Transaction (RFA) committed"
                    << ", workerId=" << workerId << ", startTs=" << tx.mStartTs
-                   << ", commitTs=" << tx.mCommitTs;
+                   << ", commitTs=" << tx.mCommitTs
+                   << ", minFlushedGSN=" << minFlushedGSN
+                   << ", maxFlushedGSN=" << maxFlushedGSN
+                   << ", minFlushedTxId=" << minFlushedTxId;
       }
 
       if (i > 0) {
@@ -230,10 +226,6 @@ void GroupCommitter::setUpIOCB(s32 ioSlot, u8* buf, u64 lower, u64 upper) {
   mWalSize += upper - lower;
   mIOCBs[ioSlot].data = bufAligned;
   mIOCBPtrs[ioSlot] = &mIOCBs[ioSlot];
-  DLOG(INFO) << "setUpIOCB"
-             << ", ioSlot=" << ioSlot << ", lower=" << lower
-             << ", upper=" << upper << ", countAligned=" << countAligned
-             << ", mWalSize=" << mWalSize;
   COUNTERS_BLOCK() {
     CRCounters::myCounters().gct_write_bytes += countAligned;
   }

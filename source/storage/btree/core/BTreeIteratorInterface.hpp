@@ -10,11 +10,11 @@ namespace btree {
 
 class BTreeIteratorInterface {
 public:
-  virtual OP_RESULT seek(Slice key) = 0;
-  virtual OP_RESULT seekForPrev(Slice key) = 0;
-  virtual OP_RESULT seekExact(Slice key) = 0;
-  virtual OP_RESULT next() = 0;
-  virtual OP_RESULT prev() = 0;
+  virtual OpCode seek(Slice key) = 0;
+  virtual OpCode seekForPrev(Slice key) = 0;
+  virtual OpCode seekExact(Slice key) = 0;
+  virtual OpCode next() = 0;
+  virtual OpCode prev() = 0;
   virtual bool isKeyEqualTo(Slice key) = 0;
 };
 

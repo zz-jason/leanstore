@@ -2,8 +2,11 @@
 
 #include "Exceptions.hpp"
 
+#include <algorithm>
 #include <atomic>
+#include <cstring>
 #include <random>
+#include <string>
 
 namespace leanstore {
 namespace utils {
@@ -61,6 +64,18 @@ public:
     for (u64 i = 0; i < size; i++) {
       dst[i] = getRand(48, 123);
     }
+  }
+
+  static std::string RandomAlphString(size_t len) {
+    static constexpr auto chars = "0123456789"
+                                  "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                                  "abcdefghijklmnopqrstuvwxyz";
+    auto result = std::string(len, '\0');
+    std::generate_n(begin(result), len, [&]() {
+      auto i = getRandU64STD(0, std::strlen(chars));
+      return chars[i];
+    });
+    return result;
   }
 };
 

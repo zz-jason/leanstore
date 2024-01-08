@@ -34,25 +34,25 @@ inline std::string ToString(TX_MODE txMode) {
   return "Unknown TX_MODE";
 }
 
-enum class TX_ISOLATION_LEVEL : u8 {
+enum class IsolationLevel : u8 {
   SERIALIZABLE = 3,
-  SNAPSHOT_ISOLATION = 2,
+  kSnapshotIsolation = 2,
   READ_COMMITTED = 1,
   READ_UNCOMMITTED = 0
 };
 
-inline TX_ISOLATION_LEVEL parseIsolationLevel(std::string str) {
+inline IsolationLevel parseIsolationLevel(std::string str) {
   if (str == "ser") {
-    return leanstore::TX_ISOLATION_LEVEL::SERIALIZABLE;
+    return leanstore::IsolationLevel::SERIALIZABLE;
   } else if (str == "si") {
-    return leanstore::TX_ISOLATION_LEVEL::SNAPSHOT_ISOLATION;
+    return leanstore::IsolationLevel::kSnapshotIsolation;
   } else if (str == "rc") {
-    return leanstore::TX_ISOLATION_LEVEL::READ_COMMITTED;
+    return leanstore::IsolationLevel::READ_COMMITTED;
   } else if (str == "ru") {
-    return leanstore::TX_ISOLATION_LEVEL::READ_UNCOMMITTED;
+    return leanstore::IsolationLevel::READ_UNCOMMITTED;
   } else {
     UNREACHABLE();
-    return leanstore::TX_ISOLATION_LEVEL::READ_UNCOMMITTED;
+    return leanstore::IsolationLevel::READ_UNCOMMITTED;
   }
 }
 
@@ -80,13 +80,13 @@ struct Transaction {
   /// mMaxObservedGSN is the maximum observed global sequence number during
   /// transaction processing. It's used to determine whether a transaction can
   /// be committed.
-  LID mMaxObservedGSN;
+  LID mMaxObservedGSN = 0;
 
   /// mTxMode is the mode of the current transaction.
   TX_MODE mTxMode = TX_MODE::OLTP;
 
   /// mTxIsolationLevel is the isolation level for the current transaction.
-  TX_ISOLATION_LEVEL mTxIsolationLevel = TX_ISOLATION_LEVEL::SNAPSHOT_ISOLATION;
+  IsolationLevel mTxIsolationLevel = IsolationLevel::kSnapshotIsolation;
 
   bool mIsDurable = false;
 
@@ -120,16 +120,16 @@ struct Transaction {
     return mIsDurable;
   }
   bool atLeastSI() {
-    return mTxIsolationLevel >= TX_ISOLATION_LEVEL::SNAPSHOT_ISOLATION;
+    return mTxIsolationLevel >= IsolationLevel::kSnapshotIsolation;
   }
   bool isSI() {
-    return mTxIsolationLevel == TX_ISOLATION_LEVEL::SNAPSHOT_ISOLATION;
+    return mTxIsolationLevel == IsolationLevel::kSnapshotIsolation;
   }
   bool isReadCommitted() {
-    return mTxIsolationLevel == TX_ISOLATION_LEVEL::READ_COMMITTED;
+    return mTxIsolationLevel == IsolationLevel::READ_COMMITTED;
   }
   bool isReadUncommitted() {
-    return mTxIsolationLevel == TX_ISOLATION_LEVEL::READ_UNCOMMITTED;
+    return mTxIsolationLevel == IsolationLevel::READ_UNCOMMITTED;
   }
 
   inline u64 startTS() {
@@ -145,19 +145,23 @@ struct Transaction {
     mHasWrote = true;
   }
 
-  void Start(TX_MODE mode, TX_ISOLATION_LEVEL level, bool isReadOnly) {
-    stats.start = std::chrono::high_resolution_clock::now();
-    if (!FLAGS_wal) {
-      return;
-    }
-
-    mWalExceedBuffer = false;
-    mHasWrote = false;
-    mIsReadOnly = isReadOnly;
-    mIsDurable = FLAGS_wal;
-    mTxIsolationLevel = level;
-    mTxMode = mode;
+  // Start a new transaction, reset all fields used by previous transaction
+  void Start(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
     state = TX_STATE::STARTED;
+    mStartTs = 0;
+    mCommitTs = 0;
+    mMaxObservedGSN = 0;
+    mTxMode = mode;
+    mTxIsolationLevel = level;
+    mIsDurable = FLAGS_wal;
+    mIsReadOnly = isReadOnly;
+    mHasWrote = false;
+    mWalExceedBuffer = false;
+
+    stats.start = std::chrono::high_resolution_clock::now();
+    stats.precommit = std::chrono::high_resolution_clock::time_point();
+    stats.commit = std::chrono::high_resolution_clock::time_point();
+    stats.flushes_counter = 0;
   }
 
   bool CanCommit(u64 minFlushedGSN, TXID minFlushedTxId) {

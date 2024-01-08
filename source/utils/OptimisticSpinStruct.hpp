@@ -40,7 +40,9 @@ public:
   void SetSync(const T& newValue) {
     mOptimisticLatch.store(mOptimisticLatch.load() + LSB,
                            std::memory_order_release);
+    auto newVersion = mValue.mVersion + 1;
     mValue = newValue;
+    mValue.mVersion = newVersion;
     mOptimisticLatch.store(mOptimisticLatch.load() + LSB,
                            std::memory_order_release);
   }
@@ -49,13 +51,11 @@ public:
   void updateAttribute(AttributeType T::*a, const AttributeType& newValue) {
     mOptimisticLatch.store(mOptimisticLatch.load() + LSB,
                            std::memory_order_release);
+    auto newVersion = mValue.mVersion + 1;
     mValue.*a = newValue;
+    mValue.mVersion = newVersion;
     mOptimisticLatch.store(mOptimisticLatch.load() + LSB,
                            std::memory_order_release);
-  }
-
-  void wait(T& copy) {
-    mOptimisticLatch.wait(copy.mVersion);
   }
 };
 
