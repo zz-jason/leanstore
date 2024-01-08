@@ -406,7 +406,7 @@ std::tuple<OpCode, u16> FatTuple::GetVisibleTuple(
   // Latest version is visible
   if (cr::Worker::my().cc.VisibleForMe(mWorkerId, mTxId)) {
     valCallback(GetValue());
-    return {OpCode::kOk, 1};
+    return {OpCode::kOK, 1};
   }
 
   DCHECK(!cr::activeTX().isOLTP());
@@ -422,7 +422,7 @@ std::tuple<OpCode, u16> FatTuple::GetVisibleTuple(
       desc.ApplyDiff(materializedValue->get(), delta.payload + desc.size());
       if (cr::Worker::my().cc.VisibleForMe(delta.mWorkerId, delta.mTxId)) {
         valCallback(Slice(materializedValue->get(), mValSize));
-        return {OpCode::kOk, numVisitedVersions};
+        return {OpCode::kOK, numVisitedVersions};
       }
 
       numVisitedVersions++;
@@ -497,7 +497,7 @@ std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
 
     auto valSize = payload.length() - sizeof(ChainedTuple);
     callback(GetValue(valSize));
-    return {OpCode::kOk, 1};
+    return {OpCode::kOK, 1};
   }
 
   if (isFinal()) {
@@ -558,7 +558,7 @@ std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
     }
     if (cr::Worker::my().cc.VisibleForMe(prevWorkerId, prevTxId, false)) {
       callback(Slice(valueBuf.get(), valueSize));
-      return {OpCode::kOk, numVisitedVersions};
+      return {OpCode::kOK, numVisitedVersions};
     }
     numVisitedVersions++;
   }

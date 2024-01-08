@@ -84,7 +84,7 @@ TEST_F(MVCCTest, LookupWhileInsert) {
     auto res = mBTree->insert(Slice((const u8*)key0.data(), key0.size()),
                               Slice((const u8*)val0.data(), val0.size()));
     cr::Worker::my().commitTX();
-    EXPECT_EQ(res, OpCode::kOk);
+    EXPECT_EQ(res, OpCode::kOK);
   });
 
   // start a transaction to insert another record, don't commit
@@ -94,7 +94,7 @@ TEST_F(MVCCTest, LookupWhileInsert) {
     cr::Worker::my().startTX();
     auto res = mBTree->insert(Slice((const u8*)key1.data(), key1.size()),
                               Slice((const u8*)val1.data(), val1.size()));
-    EXPECT_EQ(res, OpCode::kOk);
+    EXPECT_EQ(res, OpCode::kOK);
   });
 
   // start a transaction to lookup the base record
@@ -108,7 +108,7 @@ TEST_F(MVCCTest, LookupWhileInsert) {
                              true);
     EXPECT_EQ(mBTree->Lookup(Slice((const u8*)key0.data(), key0.size()),
                              copyValueOut),
-              OpCode::kOk);
+              OpCode::kOK);
     EXPECT_EQ(copiedValue, val0);
     cr::Worker::my().commitTX();
   });
@@ -122,7 +122,7 @@ TEST_F(MVCCTest, LookupWhileInsert) {
 
     EXPECT_EQ(mBTree->Lookup(Slice((const u8*)key1.data(), key1.size()),
                              copyValueOut),
-              OpCode::kOk);
+              OpCode::kOK);
     EXPECT_EQ(copiedValue, val1);
     cr::Worker::my().commitTX();
   });
@@ -137,7 +137,7 @@ TEST_F(MVCCTest, LookupWhileInsert) {
                              true);
     EXPECT_EQ(mBTree->Lookup(Slice((const u8*)key1.data(), key1.size()),
                              copyValueOut),
-              OpCode::kOk);
+              OpCode::kOK);
     EXPECT_EQ(copiedValue, val1);
     cr::Worker::my().commitTX();
   });

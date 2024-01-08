@@ -58,7 +58,7 @@ public:
                                              const Record&)>& found_record_cb,
                     std::function<void()> reset_if_scan_failed_cb) = 0;
   // -------------------------------------------------------------------------------------
-  virtual void scanDesc(
+  virtual void ScanDesc(
       const typename Record::Key& key,
       const std::function<bool(const typename Record::Key&, const Record&)>&
           found_record_cb,
