@@ -398,9 +398,9 @@ OpCode BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
     iterator.exitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
       if (guardedLeaf->freeSpaceAfterCompaction() >=
           BTreeNode::UnderFullSize()) {
-        iterator.cleanUpCallback([&, to_find = guardedLeaf.mBf] {
+        iterator.cleanUpCallback([&, toMerge = guardedLeaf.mBf] {
           JUMPMU_TRY() {
-            this->tryMerge(*to_find);
+            this->tryMerge(*toMerge);
           }
           JUMPMU_CATCH() {
           }

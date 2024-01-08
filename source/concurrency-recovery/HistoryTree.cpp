@@ -168,9 +168,9 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
           [&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
             if (guardedLeaf->freeSpaceAfterCompaction() >=
                 BTreeNode::UnderFullSize()) {
-              iterator.cleanUpCallback([&, to_find = guardedLeaf.mBf] {
+              iterator.cleanUpCallback([&, toMerge = guardedLeaf.mBf] {
                 JUMPMU_TRY() {
-                  btree->tryMerge(*to_find);
+                  btree->tryMerge(*toMerge);
                 }
                 JUMPMU_CATCH() {
                 }
@@ -250,9 +250,9 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
           [&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
             if (guardedLeaf->freeSpaceAfterCompaction() >=
                 BTreeNode::UnderFullSize()) {
-              iterator.cleanUpCallback([&, to_find = guardedLeaf.mBf] {
+              iterator.cleanUpCallback([&, toMerge = guardedLeaf.mBf] {
                 JUMPMU_TRY() {
-                  btree->tryMerge(*to_find);
+                  btree->tryMerge(*toMerge);
                 }
                 JUMPMU_CATCH() {
                 }
