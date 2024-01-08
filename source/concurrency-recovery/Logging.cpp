@@ -129,8 +129,11 @@ void Logging::SubmitWALEntrySimple() {
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
     doc->Accept(writer);
-
-    LOG(INFO) << "Submit WALEntrySimple: " << buffer.GetString();
+    LOG(INFO) << "Submit WALEntrySimple"
+              << ", workerId=" << Worker::my().mWorkerId
+              << ", startTs=" << Worker::my().mActiveTx.mStartTs
+              << ", curGSN=" << GetCurrentGsn()
+              << ", walJson=" << buffer.GetString();
   }
 
   mWalBuffered += sizeof(WALEntrySimple);
@@ -141,6 +144,7 @@ void Logging::SubmitWALEntrySimple() {
 /// it is ready to flush to disk.
 /// @param totalSize is the size of the wal record to be flush.
 void Logging::SubmitWALEntryComplex(u64 totalSize) {
+  DCHECK(totalSize % 8 == 0);
   if (!((mWalBuffered >= mTxWalBegin) ||
         (mWalBuffered + totalSize < mTxWalBegin))) {
     Worker::my().mActiveTx.mWalExceedBuffer = true;
@@ -148,12 +152,13 @@ void Logging::SubmitWALEntryComplex(u64 totalSize) {
   DEBUG_BLOCK() {
     mActiveWALEntryComplex->computeCRC();
   }
+  mWalBuffered += totalSize;
+  UpdateWalFlushReq();
+  Worker::my().mActiveTx.markAsWrite();
+
   COUNTERS_BLOCK() {
     WorkerCounters::myCounters().wal_write_bytes += totalSize;
   }
-  DCHECK(totalSize % 8 == 0);
-  mWalBuffered += totalSize;
-  UpdateWalFlushReq();
 }
 
 // Called by worker, so concurrent writes on the buffer

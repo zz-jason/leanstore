@@ -231,8 +231,8 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId,
   }
 
   switch (activeTX().mTxIsolationLevel) {
-  case TX_ISOLATION_LEVEL::READ_UNCOMMITTED:
-  case TX_ISOLATION_LEVEL::READ_COMMITTED: {
+  case IsolationLevel::READ_UNCOMMITTED:
+  case IsolationLevel::READ_COMMITTED: {
     if (isCommitTs) {
       return true;
     }
@@ -257,8 +257,8 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId,
 
     return isVisible;
   }
-  case TX_ISOLATION_LEVEL::SNAPSHOT_ISOLATION:
-  case TX_ISOLATION_LEVEL::SERIALIZABLE: {
+  case IsolationLevel::kSnapshotIsolation:
+  case IsolationLevel::SERIALIZABLE: {
     if (isCommitTs) {
       return Worker::my().mActiveTx.startTS() > commitTs;
     }

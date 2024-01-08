@@ -350,10 +350,9 @@ public:
     return mActiveTx.state == TX_STATE::STARTED;
   }
 
-  void startTX(
-      TX_MODE mode = TX_MODE::OLTP,
-      TX_ISOLATION_LEVEL level = TX_ISOLATION_LEVEL::SNAPSHOT_ISOLATION,
-      bool isReadOnly = false);
+  void startTX(TX_MODE mode = TX_MODE::OLTP,
+               IsolationLevel level = IsolationLevel::kSnapshotIsolation,
+               bool isReadOnly = false);
 
   void commitTX();
 
@@ -418,7 +417,11 @@ template <typename T> inline void WALPayloadHandler<T>::SubmitWal() {
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
     dtDoc->Accept(writer);
 
-    DLOG(INFO) << "SubmitWal: " << buffer.GetString();
+    LOG(INFO) << "SubmitWal"
+              << ", workerId=" << Worker::my().mWorkerId
+              << ", startTs=" << Worker::my().mActiveTx.mStartTs
+              << ", curGSN=" << Worker::my().mLogging.GetCurrentGsn()
+              << ", walJson=" << buffer.GetString();
   }
 
   cr::Worker::my().mLogging.SubmitWALEntryComplex(mTotalSize);

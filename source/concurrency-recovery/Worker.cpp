@@ -53,10 +53,22 @@ Worker::~Worker() {
   mLogging.mWalBuffer = nullptr;
 }
 
-void Worker::startTX(TX_MODE mode, TX_ISOLATION_LEVEL level, bool isReadOnly) {
+void Worker::startTX(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
   utils::Timer timer(CRCounters::myCounters().cc_ms_start_tx);
   Transaction prevTx = mActiveTx;
   DCHECK(prevTx.state != TX_STATE::STARTED);
+  SCOPED_DEFER({
+    DLOG(INFO) << "workerId=" << mWorkerId << ", start transaction"
+               << ", startTs=" << mActiveTx.mStartTs
+               << ", workerMinFlushedGSN=" << mLogging.mMinFlushedGSN
+               << ", workerGSN=" << mLogging.GetCurrentGsn()
+               << ", globalMaxFlushedGSN=" << Logging::sMaxFlushedGsn.load();
+    if (!isReadOnly && FLAGS_wal) {
+      mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_START);
+      mLogging.SubmitWALEntrySimple();
+    }
+  });
+
   mActiveTx.Start(mode, level, isReadOnly);
 
   if (!FLAGS_wal) {
@@ -71,24 +83,15 @@ void Worker::startTX(TX_MODE mode, TX_ISOLATION_LEVEL level, bool isReadOnly) {
 
   // Init wal and group commit related transaction information
   mLogging.mTxWalBegin = mLogging.mWalBuffered;
-  SCOPED_DEFER(if (!isReadOnly) {
-    mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_START);
-    mLogging.SubmitWALEntrySimple();
-  });
 
-  // RFA
-  {
-    mLogging.mMinFlushedGSN = Logging::sMinFlushedGsn.load();
-    mLogging.mHasRemoteDependency = false;
-    DLOG(INFO) << "workerId=" << mWorkerId << ", start transaction"
-               << ", startTs=" << mActiveTx.mStartTs
-               << ", workerMinFlushedGSN=" << mLogging.mMinFlushedGSN;
-  }
+  // For remote dependency validation
+  mLogging.mMinFlushedGSN = Logging::sMinFlushedGsn.load();
+  mLogging.mHasRemoteDependency = false;
 
   // Draw TXID from global counter and publish it with the TX type (i.e., OLAP
   // or OLTP) We have to acquire a transaction id and use it for locking in
   // ANY isolation level
-  if (level >= TX_ISOLATION_LEVEL::SNAPSHOT_ISOLATION) {
+  if (level >= IsolationLevel::kSnapshotIsolation) {
     // implies multi-statement
     if (prevTx.isReadCommitted() || prevTx.isReadUncommitted()) {
       cc.switchToSnapshotIsolationMode();
@@ -119,58 +122,82 @@ void Worker::startTX(TX_MODE mode, TX_ISOLATION_LEVEL level, bool isReadOnly) {
 }
 
 void Worker::commitTX() {
-  if (activeTX().isDurable()) {
-    {
-      utils::Timer timer(CRCounters::myCounters().cc_ms_commit_tx);
-      mCommandId = 0; // Reset mCommandId only on commit and never on abort
-
-      DCHECK(mActiveTx.state == TX_STATE::STARTED);
-
-      if (activeTX().hasWrote()) {
-        TXID commitTs = cc.commit_tree.commit(mActiveTx.startTS());
-        cc.mLatestWriteTx.store(commitTs, std::memory_order_release);
-        mActiveTx.mCommitTs = commitTs;
-      }
-
-      mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
-      mActiveTx.state = TX_STATE::READY_TO_COMMIT;
-
-      // TODO: commitTs in log
-      mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_COMMIT);
-      mLogging.SubmitWALEntrySimple();
-
-      mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_FINISH);
-      mLogging.SubmitWALEntrySimple();
-
-      if (FLAGS_wal_variant == 2) {
-        mLogging.mWalFlushReq.mOptimisticLatch.notify_all();
-      }
-
-      mActiveTx.stats.precommit = std::chrono::high_resolution_clock::now();
-
-      if (mLogging.mHasRemoteDependency) {
-        std::unique_lock<std::mutex> g(mLogging.mTxToCommitMutex);
-        mLogging.mTxToCommit.push_back(mActiveTx);
-      } else { // RFA
-        std::unique_lock<std::mutex> g(mLogging.mRfaTxToCommitMutex);
-        CRCounters::myCounters().rfa_committed_tx++;
-        mLogging.mRfaTxToCommit.push_back(mActiveTx);
-      }
-    }
-
-    // Only committing snapshot/ changing between SI and lower modes
-    if (activeTX().atLeastSI()) {
-      cc.refreshGlobalState();
-    }
-
-    // All isolation level generate garbage
-    cc.garbageCollection();
-
-    // wait transaction to be committed
-    while (mLogging.TxUnCommitted(mActiveTx.mCommitTs)) {
-    }
-    mActiveTx.state = TX_STATE::COMMITTED;
+  if (!activeTX().isDurable()) {
+    return;
   }
+
+  utils::Timer timer(CRCounters::myCounters().cc_ms_commit_tx);
+  mCommandId = 0; // Reset mCommandId only on commit and never on abort
+
+  DCHECK(mActiveTx.state == TX_STATE::STARTED);
+
+  if (activeTX().hasWrote()) {
+    TXID commitTs = cc.commit_tree.commit(mActiveTx.startTS());
+    cc.mLatestWriteTx.store(commitTs, std::memory_order_release);
+    mActiveTx.mCommitTs = commitTs;
+    DCHECK(mActiveTx.mStartTs < mActiveTx.mCommitTs)
+        << "startTs should be smaller than commitTs"
+        << ", workerId=" << my().mWorkerId
+        << ", actual startTs=" << mActiveTx.mStartTs
+        << ", actual commitTs=" << mActiveTx.mCommitTs;
+  } else {
+    DLOG(INFO) << "Transaction has no writes, skip assigning commitTs"
+               << ", workerId=" << my().mWorkerId
+               << ", actual startTs=" << mActiveTx.mStartTs;
+  }
+
+  mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
+  mActiveTx.state = TX_STATE::READY_TO_COMMIT;
+
+  // TODO: commitTs in log
+  mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_COMMIT);
+  mLogging.SubmitWALEntrySimple();
+
+  mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_FINISH);
+  mLogging.SubmitWALEntrySimple();
+
+  if (FLAGS_wal_variant == 2) {
+    mLogging.mWalFlushReq.mOptimisticLatch.notify_all();
+  }
+
+  mActiveTx.stats.precommit = std::chrono::high_resolution_clock::now();
+
+  if (mLogging.mHasRemoteDependency) {
+    std::unique_lock<std::mutex> g(mLogging.mTxToCommitMutex);
+    mLogging.mTxToCommit.push_back(mActiveTx);
+    DLOG(INFO) << "Puting transaction with remote dependency to mTxToCommit"
+               << ", workerId=" << mWorkerId
+               << ", startTs=" << mActiveTx.mStartTs
+               << ", commitTs=" << mActiveTx.mCommitTs
+               << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
+  } else {
+    std::unique_lock<std::mutex> g(mLogging.mRfaTxToCommitMutex);
+    CRCounters::myCounters().rfa_committed_tx++;
+    mLogging.mRfaTxToCommit.push_back(mActiveTx);
+    DLOG(INFO) << "Puting transaction (RFA) to mRfaTxToCommit"
+               << ", workerId=" << mWorkerId
+               << ", startTs=" << mActiveTx.mStartTs
+               << ", commitTs=" << mActiveTx.mCommitTs
+               << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
+  }
+
+  // Only committing snapshot/ changing between SI and lower modes
+  if (activeTX().atLeastSI()) {
+    cc.refreshGlobalState();
+  }
+
+  // All isolation level generate garbage
+  // cc.garbageCollection();
+
+  // wait transaction to be committed
+  while (mLogging.TxUnCommitted(mActiveTx.mCommitTs)) {
+  }
+
+  DLOG(INFO) << "Transaction committed"
+             << ", workerId=" << mWorkerId << ", startTs=" << mActiveTx.mStartTs
+             << ", commitTs=" << mActiveTx.mCommitTs
+             << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
+  mActiveTx.state = TX_STATE::COMMITTED;
 }
 
 void Worker::abortTX() {

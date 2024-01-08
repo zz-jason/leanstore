@@ -148,7 +148,6 @@ OpCode BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
 OpCode BTreeVI::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
                                       UpdateDesc& updateDesc) {
   DCHECK(cr::Worker::my().IsTxStarted());
-  cr::activeTX().markAsWrite();
   cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size);
 
   BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
@@ -240,7 +239,6 @@ OpCode BTreeVI::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
 OpCode BTreeVI::insert(Slice key, Slice val) {
   DCHECK(cr::Worker::my().IsTxStarted());
 
-  cr::activeTX().markAsWrite();
   cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);
   u16 payloadSize = val.size() + sizeof(ChainedTuple);
 
@@ -285,8 +283,6 @@ OpCode BTreeVI::insert(Slice key, Slice val) {
 
 OpCode BTreeVI::remove(Slice key) {
   DCHECK(cr::Worker::my().IsTxStarted());
-
-  cr::activeTX().markAsWrite();
   cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size);
 
   JUMPMU_TRY() {

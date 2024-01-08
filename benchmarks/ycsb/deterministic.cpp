@@ -58,7 +58,7 @@ int main(int argc, char** argv) {
   db.registerConfigEntry("ycsb_deterministic", FLAGS_ycsb_deterministic);
   db.registerConfigEntry("ycsb_ops_per_tx", FLAGS_ycsb_ops_per_tx);
   // -------------------------------------------------------------------------------------
-  leanstore::TX_ISOLATION_LEVEL isolation_level =
+  leanstore::IsolationLevel isolation_level =
       leanstore::parseIsolationLevel(FLAGS_isolation_level);
   const TX_MODE tx_type = TX_MODE::OLTP;
   // -------------------------------------------------------------------------------------

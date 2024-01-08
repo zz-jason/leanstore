@@ -115,7 +115,7 @@ int main(int argc, char** argv) {
                   reinterpret_cast<u8*>(&payload), sizeof(YCSBPayload));
               YCSBKey key = i;
               cr::Worker::my().startTX(
-                  tx_type, leanstore::TX_ISOLATION_LEVEL::SNAPSHOT_ISOLATION);
+                  tx_type, leanstore::IsolationLevel::kSnapshotIsolation);
               table.insert({key}, {payload});
               cr::Worker::my().commitTX();
             }
@@ -205,7 +205,7 @@ int main(int argc, char** argv) {
       while (keep_running) {
         JUMPMU_TRY() {
           cr::Worker::my().startTX(
-              tx_type, leanstore::TX_ISOLATION_LEVEL::SNAPSHOT_ISOLATION);
+              tx_type, leanstore::IsolationLevel::kSnapshotIsolation);
           sleep(FLAGS_ycsb_sleepy_thread);
           cr::Worker::my().commitTX();
         }

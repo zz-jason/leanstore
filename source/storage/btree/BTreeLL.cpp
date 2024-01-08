@@ -130,7 +130,6 @@ OpCode BTreeLL::scanDesc(Slice scanKey, ScanCallback callback) {
 
 OpCode BTreeLL::insert(Slice key, Slice val) {
   DCHECK(cr::Worker::my().IsTxStarted());
-  cr::activeTX().markAsWrite();
   if (config.mEnableWal) {
     cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);
   }
@@ -322,7 +321,6 @@ OpCode BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
 OpCode BTreeLL::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
                                       UpdateDesc& updateDesc) {
   DCHECK(cr::Worker::my().IsTxStarted());
-  cr::activeTX().markAsWrite();
   if (config.mEnableWal) {
     cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size);
   }
@@ -366,7 +364,6 @@ OpCode BTreeLL::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
 }
 
 OpCode BTreeLL::remove(Slice key) {
-  cr::activeTX().markAsWrite();
   if (config.mEnableWal) {
     cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size);
   }

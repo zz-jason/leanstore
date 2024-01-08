@@ -104,8 +104,8 @@ TEST_F(MVCCTest, LookupWhileInsert) {
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
-    cr::Worker::my().startTX(TX_MODE::OLTP,
-                             TX_ISOLATION_LEVEL::SNAPSHOT_ISOLATION, true);
+    cr::Worker::my().startTX(TX_MODE::OLTP, IsolationLevel::kSnapshotIsolation,
+                             true);
     EXPECT_EQ(mBTree->Lookup(Slice((const u8*)key0.data(), key0.size()),
                              copyValueOut),
               OpCode::kOk);
@@ -133,8 +133,8 @@ TEST_F(MVCCTest, LookupWhileInsert) {
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
-    cr::Worker::my().startTX(TX_MODE::OLTP,
-                             TX_ISOLATION_LEVEL::SNAPSHOT_ISOLATION, true);
+    cr::Worker::my().startTX(TX_MODE::OLTP, IsolationLevel::kSnapshotIsolation,
+                             true);
     EXPECT_EQ(mBTree->Lookup(Slice((const u8*)key1.data(), key1.size()),
                              copyValueOut),
               OpCode::kOk);
