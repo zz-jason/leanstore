@@ -18,6 +18,7 @@ ExternalProject_Add(${TARGET_NAME}_internal
         -DCMAKE_PREFIX_PATH=${TARGET_INSTALL}
         -DENABLE_PUSH=OFF
         -DENABLE_COMPRESSION=OFF
+        -DENABLE_TESTING=OFF
     UPDATE_COMMAND ""
 )
 

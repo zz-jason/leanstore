@@ -25,10 +25,10 @@ jobs:
 
       - run:
           name: "Install dependencies"
-          command: apt update && apt install -y build-essential cmake git libaio-dev gcovr cppcheck coreutils curl gnupg
+          command: apt update && apt install -y build-essential cmake git libaio-dev cppcheck coreutils curl gnupg python3-pip
 
       - run:
-          name: "Install gcc 13"
+          name: "Install gcc-13 && gcovr 6.0"
           command: |
             apt remove gcc g++ -y
             apt install -y gcc-13 g++-13 -y
@@ -44,6 +44,7 @@ jobs:
             ln -sf /usr/bin/lto-dump-13   /usr/bin/lto-dump
             ln -sf /usr/bin/g++-13        /usr/bin/c++
             ln -sf /usr/bin/gcc-13        /usr/bin/cc
+            pip3 install gcovr==6.0 --break-system-packages
 
       - run:
           name: "Config project"
@@ -63,13 +64,13 @@ jobs:
           command: ctest --test-dir build/debug --output-on-failure
           no_output_timeout: 5m
 
-      # - run:
-      #     name: "Generate coverage file"
-      #     command: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*' --verbose
+      - run:
+          name: "Generate coverage file"
+          command: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*' --verbose
 
-      # - codecov/upload:
-      #     file: coverage.xml
-      #     token: CI_CODECOV_TOKEN
+      - codecov/upload:
+          file: coverage.xml
+          token: CI_CODECOV_TOKEN
 
 # Orchestrate jobs using workflows
 # See: https://circleci.com/docs/configuration-reference/#workflows
