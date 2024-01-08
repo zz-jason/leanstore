@@ -17,7 +17,6 @@ jobs:
     environment:
       DEBIAN_FRONTEND: "noninteractive"
       TZ: "Asia/Shanghai"
-      PATH: "/opt/pip-installed/local/bin:$PATH"
 
     # Add steps to the job
     # See: https://circleci.com/docs/configuration-reference/#steps
@@ -45,7 +44,7 @@ jobs:
             ln -sf /usr/bin/lto-dump-13   /usr/bin/lto-dump
             ln -sf /usr/bin/g++-13        /usr/bin/c++
             ln -sf /usr/bin/gcc-13        /usr/bin/cc
-            pip install gcovr==6.0 --prefix=/opt/pip-installed
+            pip install gcovr==6.0 --break-system-packages
 
       - run:
           name: "Config project"
