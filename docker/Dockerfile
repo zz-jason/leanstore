@@ -4,7 +4,7 @@ FROM ubuntu:23.04
 # install prerequisted libriaries
 ################################################################################
 RUN apt-get update && apt-get install -y \
-        build-essential cmake git libaio-dev gcovr \
+        build-essential cmake git libaio-dev python3-pip \
  && apt remove gcc g++ -y \
  && apt install -y gcc-13 g++-13 -y \
  && ln -sf /usr/bin/cpp-13        /usr/bin/cpp \
@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y \
  && ln -sf /usr/bin/lto-dump-13   /usr/bin/lto-dump \
  && ln -sf /usr/bin/g++-13        /usr/bin/c++ \
  && ln -sf /usr/bin/gcc-13        /usr/bin/cc \
+ && pip3 install gcovr==6.0 --break-system-packages \
  && rm -rf /var/lib/apt/lists/*
 
 
