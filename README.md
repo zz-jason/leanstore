@@ -1,4 +1,7 @@
+<!--
 [![CI](https://github.com/zz-jason/leanstore/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/zz-jason/leanstore/actions/workflows/c-cpp.yml)
+-->
+[![CircleCI](https://dl.circleci.com/status-badge/img/circleci/MkFUq3aTNH5S7gLVEtwrGF/XCiiFNumkGdcD65tKp4EEy/tree/master.svg?style=shield&circle-token=28e7f69f9698ab8b805730e038065a9f54c29668)](https://dl.circleci.com/status-badge/redirect/circleci/MkFUq3aTNH5S7gLVEtwrGF/XCiiFNumkGdcD65tKp4EEy/tree/master)
 [![codecov](https://codecov.io/github/zz-jason/leanstore/graph/badge.svg?token=MBS1H361JJ)](https://codecov.io/github/zz-jason/leanstore)
 
 # LeanStore
