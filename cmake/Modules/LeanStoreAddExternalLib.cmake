@@ -13,6 +13,7 @@ function(leanstore_add_ext_lib TARGET_NAME LIB_NAME GIT_REPO GIT_TAG)
         CMAKE_ARGS
             -DCMAKE_INSTALL_PREFIX=${TARGET_INSTALL}
             -DCMAKE_PREFIX_PATH=${TARGET_INSTALL}
+            -DBUILD_TESTING=OFF
         UPDATE_COMMAND ""
     )
 
