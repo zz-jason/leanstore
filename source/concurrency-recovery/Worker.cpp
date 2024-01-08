@@ -53,7 +53,7 @@ Worker::~Worker() {
   mLogging.mWalBuffer = nullptr;
 }
 
-void Worker::startTX(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
+void Worker::StartTx(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
   utils::Timer timer(CRCounters::myCounters().cc_ms_start_tx);
   Transaction prevTx = mActiveTx;
   DCHECK(prevTx.state != TX_STATE::STARTED);
@@ -121,7 +121,7 @@ void Worker::startTX(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
   }
 }
 
-void Worker::commitTX() {
+void Worker::CommitTx() {
   if (!activeTX().isDurable()) {
     return;
   }
@@ -200,7 +200,7 @@ void Worker::commitTX() {
   mActiveTx.state = TX_STATE::COMMITTED;
 }
 
-void Worker::abortTX() {
+void Worker::AbortTx() {
   utils::Timer timer(CRCounters::myCounters().cc_ms_abort_tx);
 
   ENSURE(FLAGS_wal);

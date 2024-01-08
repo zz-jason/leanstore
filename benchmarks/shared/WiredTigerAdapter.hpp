@@ -51,13 +51,13 @@ struct WiredTigerDB {
     int ret = conn->open_session(conn, NULL, session_config.c_str(), &session);
     error_check(ret);
   }
-  void startTX(bool si = true) {
+  void StartTx(bool si = true) {
     if (si)
       session->begin_transaction(session, "isolation=snapshot");
     else
       session->begin_transaction(session, "isolation=read-uncommitted");
   }
-  void commitTX() {
+  void CommitTx() {
     session->commit_transaction(session, NULL);
   }
   void closeSession() {

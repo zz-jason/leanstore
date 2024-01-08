@@ -350,13 +350,13 @@ public:
     return mActiveTx.state == TX_STATE::STARTED;
   }
 
-  void startTX(TX_MODE mode = TX_MODE::OLTP,
+  void StartTx(TX_MODE mode = TX_MODE::OLTP,
                IsolationLevel level = IsolationLevel::kSnapshotIsolation,
                bool isReadOnly = false);
 
-  void commitTX();
+  void CommitTx();
 
-  void abortTX();
+  void AbortTx();
 
   void shutdown();
 

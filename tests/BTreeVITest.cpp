@@ -71,24 +71,24 @@ TEST_F(BTreeVITest, Create) {
   };
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    cr::Worker::my().startTX();
-    SCOPED_DEFER(cr::Worker::my().commitTX());
+    cr::Worker::my().StartTx();
+    SCOPED_DEFER(cr::Worker::my().CommitTx());
     GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
   });
 
   // create btree with same should fail in the same worker
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    cr::Worker::my().startTX();
-    SCOPED_DEFER(cr::Worker::my().commitTX());
+    cr::Worker::my().StartTx();
+    SCOPED_DEFER(cr::Worker::my().CommitTx());
     GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &another);
     EXPECT_EQ(another, nullptr);
   });
 
   // create btree with same should also fail in other workers
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
-    cr::Worker::my().startTX();
-    SCOPED_DEFER(cr::Worker::my().commitTX());
+    cr::Worker::my().StartTx();
+    SCOPED_DEFER(cr::Worker::my().CommitTx());
     GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &another);
     EXPECT_EQ(another, nullptr);
   });
@@ -96,15 +96,15 @@ TEST_F(BTreeVITest, Create) {
   // create btree with another different name should success
   const auto* btreeName2 = "testTree2";
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    cr::Worker::my().startTX();
-    SCOPED_DEFER(cr::Worker::my().commitTX());
+    cr::Worker::my().StartTx();
+    SCOPED_DEFER(cr::Worker::my().CommitTx());
     GetLeanStore()->RegisterBTreeVI(btreeName2, btreeConfig, &another);
     EXPECT_NE(btree, nullptr);
   });
 
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
-    cr::Worker::my().startTX();
-    SCOPED_DEFER(cr::Worker::my().commitTX());
+    cr::Worker::my().StartTx();
+    SCOPED_DEFER(cr::Worker::my().CommitTx());
     GetLeanStore()->UnRegisterBTreeVI(btreeName);
     GetLeanStore()->UnRegisterBTreeVI(btreeName2);
   });
@@ -130,26 +130,26 @@ TEST_F(BTreeVITest, InsertAndLookup) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
 
     // insert some values
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
     }
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
   });
 
   // query on the created btree in the same worker
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    cr::Worker::my().startTX();
-    SCOPED_DEFER(cr::Worker::my().commitTX());
+    cr::Worker::my().StartTx();
+    SCOPED_DEFER(cr::Worker::my().CommitTx());
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
@@ -165,8 +165,8 @@ TEST_F(BTreeVITest, InsertAndLookup) {
 
   // query on the created btree in another worker
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
-    cr::Worker::my().startTX();
-    SCOPED_DEFER(cr::Worker::my().commitTX());
+    cr::Worker::my().StartTx();
+    SCOPED_DEFER(cr::Worker::my().CommitTx());
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
@@ -181,8 +181,8 @@ TEST_F(BTreeVITest, InsertAndLookup) {
   });
 
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
-    cr::Worker::my().startTX();
-    SCOPED_DEFER(cr::Worker::my().commitTX());
+    cr::Worker::my().StartTx();
+    SCOPED_DEFER(cr::Worker::my().CommitTx());
     GetLeanStore()->UnRegisterBTreeVI(btreeName);
   });
 }
@@ -199,15 +199,15 @@ TEST_F(BTreeVITest, Insert1000KVs) {
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
 
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
 
     // insert numKVs tuples
     std::set<std::string> uniqueKeys;
     ssize_t numKVs(1000);
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     for (ssize_t i = 0; i < numKVs; ++i) {
       auto key = RandomAlphString(24);
       if (uniqueKeys.find(key) != uniqueKeys.end()) {
@@ -220,11 +220,11 @@ TEST_F(BTreeVITest, Insert1000KVs) {
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
     }
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
 
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     GetLeanStore()->UnRegisterBTreeVI(btreeName);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
   });
 }
 
@@ -240,10 +240,10 @@ TEST_F(BTreeVITest, InsertDuplicates) {
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
 
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
 
     // insert numKVs tuples
     std::set<std::string> uniqueKeys;
@@ -256,26 +256,26 @@ TEST_F(BTreeVITest, InsertDuplicates) {
       }
       uniqueKeys.insert(key);
       auto val = RandomAlphString(128);
-      cr::Worker::my().startTX();
+      cr::Worker::my().StartTx();
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
-      cr::Worker::my().commitTX();
+      cr::Worker::my().CommitTx();
     }
 
     // insert duplicated keys
     for (auto& key : uniqueKeys) {
       auto val = RandomAlphString(128);
-      cr::Worker::my().startTX();
+      cr::Worker::my().StartTx();
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kDuplicated);
-      cr::Worker::my().commitTX();
+      cr::Worker::my().CommitTx();
     }
 
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     GetLeanStore()->UnRegisterBTreeVI(btreeName);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
   });
 }
 
@@ -291,10 +291,10 @@ TEST_F(BTreeVITest, Remove) {
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
 
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
 
     // insert numKVs tuples
     std::set<std::string> uniqueKeys;
@@ -308,31 +308,31 @@ TEST_F(BTreeVITest, Remove) {
       uniqueKeys.insert(key);
       auto val = RandomAlphString(128);
 
-      cr::Worker::my().startTX();
+      cr::Worker::my().StartTx();
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
-      cr::Worker::my().commitTX();
+      cr::Worker::my().CommitTx();
     }
 
     for (auto& key : uniqueKeys) {
-      cr::Worker::my().startTX();
+      cr::Worker::my().StartTx();
       EXPECT_EQ(btree->remove(Slice((const u8*)key.data(), key.size())),
                 OpCode::kOK);
-      cr::Worker::my().commitTX();
+      cr::Worker::my().CommitTx();
     }
 
     for (auto& key : uniqueKeys) {
-      cr::Worker::my().startTX();
+      cr::Worker::my().StartTx();
       EXPECT_EQ(
           btree->Lookup(Slice((const u8*)key.data(), key.size()), [](Slice) {}),
           OpCode::kNotFound);
-      cr::Worker::my().commitTX();
+      cr::Worker::my().CommitTx();
     }
 
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     GetLeanStore()->UnRegisterBTreeVI(btreeName);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
   });
 }
 
@@ -348,10 +348,10 @@ TEST_F(BTreeVITest, RemoveNotExisted) {
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
 
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
 
     // insert numKVs tuples
     std::set<std::string> uniqueKeys;
@@ -365,11 +365,11 @@ TEST_F(BTreeVITest, RemoveNotExisted) {
       uniqueKeys.insert(key);
       auto val = RandomAlphString(128);
 
-      cr::Worker::my().startTX();
+      cr::Worker::my().StartTx();
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
-      cr::Worker::my().commitTX();
+      cr::Worker::my().CommitTx();
     }
 
     // remove keys not existed
@@ -381,15 +381,15 @@ TEST_F(BTreeVITest, RemoveNotExisted) {
       }
       uniqueKeys.insert(key);
 
-      cr::Worker::my().startTX();
+      cr::Worker::my().StartTx();
       EXPECT_EQ(btree->remove(Slice((const u8*)key.data(), key.size())),
                 OpCode::kNotFound);
-      cr::Worker::my().commitTX();
+      cr::Worker::my().CommitTx();
     }
 
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     GetLeanStore()->UnRegisterBTreeVI(btreeName);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
   });
 }
 
@@ -406,10 +406,10 @@ TEST_F(BTreeVITest, RemoveFromOthers) {
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
 
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
 
     // insert numKVs tuples
     ssize_t numKVs(100);
@@ -422,49 +422,49 @@ TEST_F(BTreeVITest, RemoveFromOthers) {
       uniqueKeys.insert(key);
       auto val = RandomAlphString(128);
 
-      cr::Worker::my().startTX();
+      cr::Worker::my().StartTx();
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
-      cr::Worker::my().commitTX();
+      cr::Worker::my().CommitTx();
     }
   });
 
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
     // remove from another worker
     for (auto& key : uniqueKeys) {
-      cr::Worker::my().startTX();
+      cr::Worker::my().StartTx();
       EXPECT_EQ(btree->remove(Slice((const u8*)key.data(), key.size())),
                 OpCode::kOK);
-      cr::Worker::my().commitTX();
+      cr::Worker::my().CommitTx();
     }
 
     // should not found any keys
     for (auto& key : uniqueKeys) {
-      cr::Worker::my().startTX();
+      cr::Worker::my().StartTx();
       EXPECT_EQ(
           btree->Lookup(Slice((const u8*)key.data(), key.size()), [](Slice) {}),
           OpCode::kNotFound);
-      cr::Worker::my().commitTX();
+      cr::Worker::my().CommitTx();
     }
   });
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     // lookup from another worker, should not found any keys
     for (auto& key : uniqueKeys) {
-      cr::Worker::my().startTX();
+      cr::Worker::my().StartTx();
       EXPECT_EQ(
           btree->Lookup(Slice((const u8*)key.data(), key.size()), [](Slice) {}),
           OpCode::kNotFound);
-      cr::Worker::my().commitTX();
+      cr::Worker::my().CommitTx();
     }
   });
 
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
     // unregister the tree from another worker
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     GetLeanStore()->UnRegisterBTreeVI(btreeName);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
   });
 }
 
@@ -488,27 +488,27 @@ TEST_F(BTreeVITest, ToJSON) {
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
 
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
 
     // insert some values
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
     }
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
 
     // auto doc = leanstore::storage::btree::BTreeGeneric::ToJSON(*btree);
     // std::cout << leanstore::utils::JsonToStr(&doc);
 
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     GetLeanStore()->UnRegisterBTreeVI(btreeName);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
   });
 }
 
@@ -535,18 +535,18 @@ TEST_F(BTreeVITest, Update) {
     };
 
     // create btree
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
     EXPECT_NE(btree, nullptr);
 
     // insert values
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
-      cr::Worker::my().startTX();
+      cr::Worker::my().StartTx();
       auto res = btree->insert(Slice((const u8*)key.data(), key.size()),
                                Slice((const u8*)val.data(), val.size()));
-      cr::Worker::my().commitTX();
+      cr::Worker::my().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
     }
 
@@ -565,11 +565,11 @@ TEST_F(BTreeVITest, Update) {
     updateDesc->mDiffSlots[0].length = valSize;
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
-      cr::Worker::my().startTX();
+      cr::Worker::my().StartTx();
       auto res =
           btree->updateSameSizeInPlace(Slice((const u8*)key.data(), key.size()),
                                        updateCallBack, *updateDesc);
-      cr::Worker::my().commitTX();
+      cr::Worker::my().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
     }
 
@@ -580,17 +580,17 @@ TEST_F(BTreeVITest, Update) {
     };
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
-      cr::Worker::my().startTX();
+      cr::Worker::my().StartTx();
       EXPECT_EQ(
           btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
           OpCode::kOK);
-      cr::Worker::my().commitTX();
+      cr::Worker::my().CommitTx();
       EXPECT_EQ(copiedValue, newVal);
     }
 
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     GetLeanStore()->UnRegisterBTreeVI(btreeName);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
   });
 }
 
@@ -629,17 +629,17 @@ TEST_F(BTreeVITest, ScanAsc) {
     };
 
     // create btree
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
     EXPECT_NE(btree, nullptr);
 
     // insert values
     for (const auto& [key, val] : kvToTest) {
-      cr::Worker::my().startTX();
+      cr::Worker::my().StartTx();
       auto res = btree->insert(Slice((const u8*)key.data(), key.size()),
                                Slice((const u8*)val.data(), val.size()));
-      cr::Worker::my().commitTX();
+      cr::Worker::my().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
     }
 
@@ -653,11 +653,11 @@ TEST_F(BTreeVITest, ScanAsc) {
 
     // scan from the smallest key
     copiedKVs.clear();
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     EXPECT_EQ(btree->ScanAsc(Slice((const u8*)smallest.data(), smallest.size()),
                              scanCallBack),
               OpCode::kOK);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
     EXPECT_EQ(copiedKVs.size(), numKVs);
     for (const auto& [key, val] : copiedKVs) {
       EXPECT_EQ(val, kvToTest[key]);
@@ -665,18 +665,18 @@ TEST_F(BTreeVITest, ScanAsc) {
 
     // scan from the bigest key
     copiedKVs.clear();
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     EXPECT_EQ(btree->ScanAsc(Slice((const u8*)bigest.data(), bigest.size()),
                              scanCallBack),
               OpCode::kOK);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
     EXPECT_EQ(copiedKVs.size(), 1u);
     EXPECT_EQ(copiedKVs[bigest], kvToTest[bigest]);
 
     // destroy the tree
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     GetLeanStore()->UnRegisterBTreeVI(btreeName);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
   });
 }
 
@@ -715,17 +715,17 @@ TEST_F(BTreeVITest, ScanDesc) {
     };
 
     // create btree
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
     EXPECT_NE(btree, nullptr);
 
     // insert values
     for (const auto& [key, val] : kvToTest) {
-      cr::Worker::my().startTX();
+      cr::Worker::my().StartTx();
       auto res = btree->insert(Slice((const u8*)key.data(), key.size()),
                                Slice((const u8*)val.data(), val.size()));
-      cr::Worker::my().commitTX();
+      cr::Worker::my().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
     }
 
@@ -739,11 +739,11 @@ TEST_F(BTreeVITest, ScanDesc) {
 
     // scan from the bigest key
     copiedKVs.clear();
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     EXPECT_EQ(btree->ScanDesc(Slice((const u8*)bigest.data(), bigest.size()),
                               scanCallBack),
               OpCode::kOK);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
     EXPECT_EQ(copiedKVs.size(), numKVs);
     for (const auto& [key, val] : copiedKVs) {
       EXPECT_EQ(val, kvToTest[key]);
@@ -751,19 +751,19 @@ TEST_F(BTreeVITest, ScanDesc) {
 
     // scan from the smallest key
     copiedKVs.clear();
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     EXPECT_EQ(
         btree->ScanDesc(Slice((const u8*)smallest.data(), smallest.size()),
                         scanCallBack),
         OpCode::kOK);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
     EXPECT_EQ(copiedKVs.size(), 1u);
     EXPECT_EQ(copiedKVs[smallest], kvToTest[smallest]);
 
     // destroy the tree
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     GetLeanStore()->UnRegisterBTreeVI(btreeName);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
   });
 }
 

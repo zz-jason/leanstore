@@ -26,15 +26,15 @@ struct LMDB {
     env.open(FLAGS_ssd_path.c_str(), MDB_NOSYNC);
   }
   // -------------------------------------------------------------------------------------
-  void startTX(bool read_only = false) {
+  void StartTx(bool read_only = false) {
     txn = lmdb::txn::begin(env, nullptr, read_only ? MDB_RDONLY : 0);
   }
   // -------------------------------------------------------------------------------------
-  void commitTX() {
+  void CommitTx() {
     txn.commit();
   }
   // -------------------------------------------------------------------------------------
-  void abortTX() {
+  void AbortTx() {
     txn.abort();
   }
   // -------------------------------------------------------------------------------------

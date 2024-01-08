@@ -102,7 +102,7 @@ int main(int argc, char** argv) {
       wiredtiger_db.prepareThread();
       while (keep_running) {
         jumpmuTry() {
-          wiredtiger_db.startTX();
+          wiredtiger_db.StartTx();
           YCSBKey key;
           if (FLAGS_zipf_factor == 0) {
             key = leanstore::utils::RandomGenerator::getRandU64(
@@ -126,7 +126,7 @@ int main(int argc, char** argv) {
                 {key}, [&](YCSBTable& rec) { rec.mValue = result; },
                 tabular_update_descriptor);
           }
-          wiredtiger_db.commitTX();
+          wiredtiger_db.CommitTx();
           thread_committed[t_i]++;
         }
         jumpmuCatch() {

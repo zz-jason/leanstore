@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
   cout << "Inserting " << ycsb_tuple_count << " values" << endl;
   begin = chrono::high_resolution_clock::now();
   // LMDB is single-writer
-  lm_db.startTX();
+  lm_db.StartTx();
   for (u64 i = 0; i < ycsb_tuple_count; i++) {
     YCSBPayload payload;
     leanstore::utils::RandomGenerator::getRandString(
@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
     YCSBKey& key = i;
     table.insert({key}, {payload});
   }
-  lm_db.commitTX();
+  lm_db.CommitTx();
   end = chrono::high_resolution_clock::now();
   cout << "time elapsed = "
        << (chrono::duration_cast<chrono::microseconds>(end - begin).count() /
@@ -107,11 +107,11 @@ int main(int argc, char** argv) {
           if (FLAGS_ycsb_read_ratio == 100 ||
               leanstore::utils::RandomGenerator::getRandU64(0, 100) <
                   FLAGS_ycsb_read_ratio) {
-            lm_db.startTX(true);
+            lm_db.StartTx(true);
             table.lookup1({key},
                           [&](const YCSBTable&) {}); // result = record.mValue;
           } else {
-            lm_db.startTX();
+            lm_db.StartTx();
             UpdateDescriptorGenerator1(tabular_update_descriptor, YCSBTable,
                                        mValue);
             leanstore::utils::RandomGenerator::getRandString(
@@ -120,7 +120,7 @@ int main(int argc, char** argv) {
                 {key}, [&](YCSBTable& rec) { rec.mValue = result; },
                 tabular_update_descriptor);
           }
-          lm_db.commitTX();
+          lm_db.CommitTx();
           thread_committed[t_i]++;
         }
         jumpmuCatch() {

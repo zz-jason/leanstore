@@ -108,9 +108,9 @@ int main(int argc, char** argv) {
               utils::RandomGenerator::getRandString(
                   reinterpret_cast<u8*>(&payload), sizeof(YCSBPayload));
               YCSBKey key = i;
-              cr::Worker::my().startTX(tx_type, isolation_level);
+              cr::Worker::my().StartTx(tx_type, isolation_level);
               table.insert({key}, {payload});
-              cr::Worker::my().commitTX();
+              cr::Worker::my().CommitTx();
             }
           });
         });
@@ -174,8 +174,8 @@ int main(int argc, char** argv) {
                        leanstore::storage::GUARD_STATE::EXCLUSIVE);
               }
               // -------------------------------------------------------------------------------------
-              cr::Worker::my().startTX(tx_type, isolation_level);
-              cr::Worker::my().commitTX();
+              cr::Worker::my().StartTx(tx_type, isolation_level);
+              cr::Worker::my().CommitTx();
               // -------------------------------------------------------------------------------------
               for (u64 op_i = 0; op_i < FLAGS_ycsb_ops_per_tx; op_i++) {
                 u8 folded_key[sizeof(YCSBKey)];
@@ -192,7 +192,7 @@ int main(int argc, char** argv) {
               WorkerCounters::myCounters().tx++;
             } else {
               std::random_shuffle(keys.begin(), keys.end());
-              cr::Worker::my().startTX(tx_type, isolation_level);
+              cr::Worker::my().StartTx(tx_type, isolation_level);
               for (u64 op_i = 0; op_i < FLAGS_ycsb_ops_per_tx; op_i++) {
                 utils::RandomGenerator::getRandString(
                     reinterpret_cast<u8*>(&result), sizeof(YCSBPayload));
@@ -201,7 +201,7 @@ int main(int argc, char** argv) {
                     {keys[op_i]}, [&](KVTable& rec) { rec.mValue = result; },
                     tabular_update_descriptor);
               }
-              cr::Worker::my().commitTX();
+              cr::Worker::my().CommitTx();
               WorkerCounters::myCounters().tx++;
             }
           }
