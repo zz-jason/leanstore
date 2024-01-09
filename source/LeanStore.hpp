@@ -77,7 +77,7 @@ public:
   /// @param name The unique name of the btree
   void UnRegisterBTreeLL(const std::string& name) {
     DCHECK(cr::Worker::my().IsTxStarted());
-    auto btree = dynamic_cast<storage::btree::BTreeGeneric*>(
+    auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(
         storage::TreeRegistry::sInstance->GetTree(name));
     leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
     auto res = storage::TreeRegistry::sInstance->UnregisterTree(name);
@@ -109,7 +109,7 @@ public:
                  << ", error=" << res.error().mMessage;
       return;
     }
-    auto graveyard = res.value();
+    auto* graveyard = res.value();
 
     // clean resource on failure
     SCOPED_DEFER(if (*btree == nullptr && graveyard != nullptr) {
@@ -139,7 +139,7 @@ public:
   /// @param name The unique name of the btree
   void UnRegisterBTreeVI(const std::string& name) {
     DCHECK(cr::Worker::my().IsTxStarted());
-    auto btree = dynamic_cast<storage::btree::BTreeGeneric*>(
+    auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(
         storage::TreeRegistry::sInstance->GetTree(name));
     leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
     auto res = storage::TreeRegistry::sInstance->UnregisterTree(name);
