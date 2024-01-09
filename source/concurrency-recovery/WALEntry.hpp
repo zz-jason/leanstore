@@ -11,6 +11,7 @@
 #include <glog/logging.h>
 
 #include <atomic>
+#include <cstddef>
 #include <iostream>
 #include <string>
 
@@ -33,7 +34,7 @@ namespace cr {
 /// The basic WAL record representation, there are two kinds of WAL entries:
 /// 1. WALEntrySimple, whose type might be: TX_START, TX_COMMIT, TX_ABORT
 /// 2. WALEntryComplex, whose type is COMPLEX
-class __attribute__((packed)) WALEntry {
+class WALEntry {
 public:
   enum class TYPE : u8 { DO_WITH_WAL_ENTRY_TYPES(DECR_WAL_ENTRY_TYPE) };
 
@@ -84,25 +85,15 @@ public:
   virtual std::unique_ptr<rapidjson::Document> ToJSON();
 
   u32 ComputeCRC32() const {
-    auto src = reinterpret_cast<const u8*>(this) + sizeof(u32);
-    auto srcSize = size - sizeof(u32);
+    // auto startOffset = offsetof(WALEntry, lsn);
+    auto startOffset = ptrdiff_t(&this->lsn) - ptrdiff_t(this);
+    const auto* src = reinterpret_cast<const u8*>(this) + startOffset;
+    auto srcSize = size - startOffset;
     auto crc32 = utils::CRC(src, srcSize);
-
-    DEBUG_BLOCK() {
-      auto computeAgain = utils::CRC(src, srcSize);
-      auto doc = const_cast<WALEntry*>(this)->ToJSON();
-      rapidjson::StringBuffer buffer;
-      rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-      doc->Accept(writer);
-      DLOG(INFO) << "Computed CRC32"
-                 << ", crc32=" << crc32 << ", computeAgain=" << computeAgain
-                 << ", src=" << (void*)src << ", srcSize=" << srcSize
-                 << ", walJson=" << buffer.GetString();
-    };
     return crc32;
   }
 
-  void checkCRC() const {
+  void CheckCRC() const {
     auto actualCRC = ComputeCRC32();
     if (mCRC32 != actualCRC) {
       auto doc = const_cast<WALEntry*>(this)->ToJSON();
@@ -116,13 +107,13 @@ public:
     }
   }
 };
-class __attribute__((packed)) WALEntrySimple : public WALEntry {
+class WALEntrySimple : public WALEntry {
 public:
   WALEntrySimple(LID lsn, u64 size, TYPE type) : WALEntry(lsn, size, type) {
   }
 };
 
-class __attribute__((packed)) WALEntryComplex : public WALEntry {
+class WALEntryComplex : public WALEntry {
 public:
   /// Page sequence number of the WALEntry, indicate the page version this WAL
   /// entry is based on.
@@ -238,6 +229,13 @@ inline std::unique_ptr<rapidjson::Document> WALEntry::ToJSON() {
     auto txModeStr = ToString(mTxMode);
     member.SetString(txModeStr.data(), txModeStr.size(), doc->GetAllocator());
     doc->AddMember("mTxMode", member, doc->GetAllocator());
+  }
+
+  // workerId
+  {
+    rapidjson::Value member;
+    member.SetUint64(mWorkerId);
+    doc->AddMember("mWorkerId", member, doc->GetAllocator());
   }
 
   // prev_lsn_in_tx

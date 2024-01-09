@@ -58,11 +58,13 @@ void Worker::StartTx(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
   Transaction prevTx = mActiveTx;
   DCHECK(prevTx.state != TX_STATE::STARTED);
   SCOPED_DEFER({
-    DLOG(INFO) << "workerId=" << mWorkerId << ", start transaction"
+    DLOG(INFO) << "Start transaction"
+               << ", workerId=" << mWorkerId
                << ", startTs=" << mActiveTx.mStartTs
-               << ", workerMinFlushedGSN=" << mLogging.mMinFlushedGSN
+               << ", txReadSnapshot(GSN)=" << mLogging.mTxReadSnapshot
                << ", workerGSN=" << mLogging.GetCurrentGsn()
-               << ", globalMaxFlushedGSN=" << Logging::sMaxFlushedGsn.load();
+               << ", globalMinFlushedGSN=" << Logging::sGlobalMinFlushedGSN
+               << ", globalMaxFlushedGSN=" << Logging::sGlobalMaxFlushedGSN;
     if (!isReadOnly && FLAGS_wal) {
       mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_START);
       mLogging.SubmitWALEntrySimple();
@@ -75,8 +77,10 @@ void Worker::StartTx(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
     return;
   }
 
-  // Advance local GSN on demand to maintain transaction dependency
-  const auto maxFlushedGsn = Logging::sMaxFlushedGsn.load();
+  // Sync GSN clock with the global max flushed (observed) GSN, so that the
+  // global min flushed GSN can be advanced, transactions with remote dependency
+  // can be committed in time.
+  const auto maxFlushedGsn = Logging::sGlobalMaxFlushedGSN.load();
   if (maxFlushedGsn > mLogging.GetCurrentGsn()) {
     mLogging.SetCurrentGsn(maxFlushedGsn);
   }
@@ -85,7 +89,7 @@ void Worker::StartTx(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
   mLogging.mTxWalBegin = mLogging.mWalBuffered;
 
   // For remote dependency validation
-  mLogging.mMinFlushedGSN = Logging::sMinFlushedGsn.load();
+  mLogging.mTxReadSnapshot = Logging::sGlobalMinFlushedGSN.load();
   mLogging.mHasRemoteDependency = false;
 
   // Draw TXID from global counter and publish it with the TX type (i.e., OLAP

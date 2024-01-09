@@ -160,15 +160,15 @@ public:
   // TODO: don't sync on temporary table pages like HistoryTree
   inline void SyncGSNBeforeRead() {
     if (!cr::Worker::my().mLogging.mHasRemoteDependency &&
-        mBf->page.mGSN > cr::Worker::my().mLogging.mMinFlushedGSN &&
+        mBf->page.mGSN > cr::Worker::my().mLogging.mTxReadSnapshot &&
         mBf->header.mLastWriterWorker != cr::Worker::my().mWorkerId) {
       cr::Worker::my().mLogging.mHasRemoteDependency = true;
-      DLOG(INFO) << "workerId=" << cr::Worker::my().mWorkerId
-                 << ", detect remote dependency"
-                 << ", workerMinFlushedGSN="
-                 << cr::Worker::my().mLogging.mMinFlushedGSN
-                 << ", pageGSN=" << mBf->page.mGSN
-                 << ", pageLastWriterWorker=" << mBf->header.mLastWriterWorker;
+      DLOG(INFO) << "detect remote dependency"
+                 << ", workerId=" << cr::Worker::my().mWorkerId
+                 << ", txReadSnapshot(GSN)="
+                 << cr::Worker::my().mLogging.mTxReadSnapshot
+                 << ", pageLastWriterWorker=" << mBf->header.mLastWriterWorker
+                 << ", pageGSN=" << mBf->page.mGSN;
     }
 
     const auto workerGSN = cr::Worker::my().mLogging.GetCurrentGsn();

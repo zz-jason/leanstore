@@ -1,4 +1,5 @@
 #include "LeanStore.hpp"
+#include "concurrency-recovery/CRMG.hpp"
 #include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/DebugFlags.hpp"
@@ -29,7 +30,7 @@ protected:
 
   void SetUp() override {
     // init the leanstore
-    auto leanstore = GetLeanStore();
+    auto* leanstore = GetLeanStore();
 
     mTreeName = RandomGenerator::RandomAlphString(10);
     auto config = BTreeGeneric::Config{
@@ -70,8 +71,8 @@ public:
   }
 
   inline static leanstore::LeanStore* GetLeanStore() {
-    static auto leanStore = MVCCTest::CreateLeanStore();
-    return leanStore.get();
+    static auto sleanStore = MVCCTest::CreateLeanStore();
+    return sleanStore.get();
   }
 };
 

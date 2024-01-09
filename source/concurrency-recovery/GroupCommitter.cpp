@@ -72,6 +72,9 @@ void GroupCommitter::prepareIOCBs(s32& numIOCBs, u64& minFlushedGSN,
     maxFlushedGSN = std::max<u64>(maxFlushedGSN, reqCopy.mCurrGSN);
     minFlushedGSN = std::min<u64>(minFlushedGSN, reqCopy.mCurrGSN);
     minFlushedTxId = std::min<TXID>(minFlushedTxId, reqCopy.mCurrTxId);
+    DLOG_IF(INFO, reqCopy.mCurrGSN == 27 || reqCopy.mCurrGSN == 28)
+        << "minFlushedGSN=" << minFlushedGSN
+        << ", workerGSN=" << reqCopy.mCurrGSN << ", workerId=" << workerId;
 
     // prepare IOCBs on demand
     const u64 buffered = reqCopy.mWalBuffered;
@@ -204,15 +207,17 @@ void GroupCommitter::commitTXs(
   }
 
   if (minFlushedGSN < std::numeric_limits<u64>::max()) {
-    Logging::UpdateMinFlushedGsn(minFlushedGSN);
-    Logging::UpdateMaxFlushedGsn(maxFlushedGSN);
+    DLOG(INFO) << "Update globalMinFlushedGSN=" << minFlushedGSN
+               << ", globalMaxFlushedGSN=" << maxFlushedGSN;
+    Logging::UpdateGlobalMinFlushedGSN(minFlushedGSN);
+    Logging::UpdateGlobalMaxFlushedGSN(maxFlushedGSN);
   }
 }
 
 void GroupCommitter::setUpIOCB(s32 ioSlot, u8* buf, u64 lower, u64 upper) {
   auto lowerAligned = utils::downAlign(lower);
   auto upperAligned = utils::upAlign(upper);
-  auto bufAligned = buf + lowerAligned;
+  auto* bufAligned = buf + lowerAligned;
   auto countAligned = upperAligned - lowerAligned;
   auto offsetAligned = utils::downAlign(mWalSize);
 
