@@ -61,7 +61,7 @@ struct RocksDB {
   ~RocksDB() {
     delete db;
   }
-  void startTX() {
+  void StartTx() {
     rocksdb::Status s;
     if (type == DB_TYPE::TransactionDB) {
       txn = tx_db->BeginTransaction(wo, {});
@@ -70,7 +70,7 @@ struct RocksDB {
     } else {
     }
   }
-  void commitTX() {
+  void CommitTx() {
     if (type != DB_TYPE::DB) {
       rocksdb::Status s;
       s = txn->Commit();

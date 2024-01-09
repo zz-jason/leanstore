@@ -83,9 +83,9 @@ int main(int argc, char** argv) {
             leanstore::utils::RandomGenerator::getRandString(
                 reinterpret_cast<u8*>(&payload), sizeof(YCSBPayload));
             YCSBKey& key = i;
-            rocks_db.startTX();
+            rocks_db.StartTx();
             table.insert({key}, {payload});
-            rocks_db.commitTX();
+            rocks_db.CommitTx();
           }
         });
     end = chrono::high_resolution_clock::now();
@@ -123,7 +123,7 @@ int main(int argc, char** argv) {
           }
           assert(key < ycsb_tuple_count);
           YCSBPayload result;
-          rocks_db.startTX();
+          rocks_db.StartTx();
           if (FLAGS_ycsb_read_ratio == 100 ||
               leanstore::utils::RandomGenerator::getRandU64(0, 100) <
                   FLAGS_ycsb_read_ratio) {
@@ -138,7 +138,7 @@ int main(int argc, char** argv) {
                 {key}, [&](YCSBTable& rec) { rec.mValue = result; },
                 tabular_update_descriptor);
           }
-          rocks_db.commitTX();
+          rocks_db.CommitTx();
           thread_committed[t_i]++;
         }
         jumpmuCatch() {

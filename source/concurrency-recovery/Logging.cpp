@@ -11,12 +11,13 @@
 
 #include <glog/logging.h>
 
+#include <cstring>
+
 namespace leanstore {
 namespace cr {
 
-atomic<u64> Logging::sMinFlushedGsn = 0;
-atomic<u64> Logging::sMaxFlushedGsn = 0;
-atomic<u64> Logging::sMinFlushedCommitTs = 0;
+atomic<u64> Logging::sGlobalMinFlushedGSN = 0;
+atomic<u64> Logging::sGlobalMaxFlushedGSN = 0;
 
 /// @brief Calculate the free space left in the wal ring buffer.
 /// @return Size of the free space
@@ -24,11 +25,11 @@ u32 Logging::walFreeSpace() {
   const auto flushed = mWalFlushed.load();
   if (flushed == mWalBuffered) {
     return FLAGS_wal_buffer_size;
-  } else if (flushed < mWalBuffered) {
-    return flushed + (FLAGS_wal_buffer_size - mWalBuffered);
-  } else {
-    return flushed - mWalBuffered;
   }
+  if (flushed < mWalBuffered) {
+    return flushed + (FLAGS_wal_buffer_size - mWalBuffered);
+  }
+  return flushed - mWalBuffered;
 }
 
 /// @brief Calculate the continuous free space left in the wal ring buffer.
@@ -37,11 +38,11 @@ u32 Logging::walContiguousFreeSpace() {
   const auto flushed = mWalFlushed.load();
   if (flushed == mWalBuffered) {
     return FLAGS_wal_buffer_size;
-  } else if (flushed < mWalBuffered) {
-    return FLAGS_wal_buffer_size - mWalBuffered;
-  } else {
-    return flushed - mWalBuffered;
   }
+  if (flushed < mWalBuffered) {
+    return FLAGS_wal_buffer_size - mWalBuffered;
+  }
+  return flushed - mWalBuffered;
 }
 
 void Logging::walEnsureEnoughSpace(u32 requiredBytes) {
@@ -70,12 +71,10 @@ void Logging::walEnsureEnoughSpace(u32 requiredBytes) {
     // Always keep place for CR entry
     auto entrySize = FLAGS_wal_buffer_size - mWalBuffered;
     auto entryType = WALEntry::TYPE::CARRIAGE_RETURN;
-    auto entryPtr = mWalBuffer + mWalBuffered;
-    auto entry = new (entryPtr) WALEntrySimple(0, entrySize, entryType);
+    auto* entryPtr = mWalBuffer + mWalBuffered;
+    auto* entry = new (entryPtr) WALEntrySimple(0, entrySize, entryType);
 
-    DEBUG_BLOCK() {
-      entry->computeCRC();
-    }
+    entry->mCRC32 = entry->ComputeCRC32();
 
     // start a new round
     mWalBuffered = 0;
@@ -94,6 +93,7 @@ WALEntrySimple& Logging::ReserveWALEntrySimple(WALEntry::TYPE type) {
   walEnsureEnoughSpace(sizeof(WALEntrySimple));
   auto entryPtr = mWalBuffer + mWalBuffered;
   auto entrySize = sizeof(WALEntrySimple);
+  std::memset(entryPtr, 0, entrySize);
   mActiveWALEntrySimple =
       new (entryPtr) WALEntrySimple(mLsnClock++, entrySize, type);
 
@@ -114,18 +114,8 @@ WALEntrySimple& Logging::ReserveWALEntrySimple(WALEntry::TYPE type) {
 /// NOTE: users should call ReserveWALEntrySimple() firstly to initialize the
 /// WALEntrySimple to be flushed in the wal ring buffer.
 void Logging::SubmitWALEntrySimple() {
-  if (!((mWalBuffered >= mTxWalBegin) ||
-        (mWalBuffered + sizeof(WALEntrySimple) < mTxWalBegin))) {
-    Worker::my().mActiveTx.mWalExceedBuffer = true;
-  }
-
-  DEBUG_BLOCK() {
-    mActiveWALEntrySimple->computeCRC();
-
-    auto entryPtr = mWalBuffer + mWalBuffered;
-    auto entry = reinterpret_cast<WALEntrySimple*>(entryPtr);
-    auto doc = entry->ToJSON();
-
+  SCOPED_DEFER(DEBUG_BLOCK() {
+    auto doc = mActiveWALEntrySimple->ToJSON();
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
     doc->Accept(writer);
@@ -134,8 +124,13 @@ void Logging::SubmitWALEntrySimple() {
               << ", startTs=" << Worker::my().mActiveTx.mStartTs
               << ", curGSN=" << GetCurrentGsn()
               << ", walJson=" << buffer.GetString();
-  }
+  });
 
+  if (!((mWalBuffered >= mTxWalBegin) ||
+        (mWalBuffered + sizeof(WALEntrySimple) < mTxWalBegin))) {
+    Worker::my().mActiveTx.mWalExceedBuffer = true;
+  }
+  mActiveWALEntrySimple->mCRC32 = mActiveWALEntrySimple->ComputeCRC32();
   mWalBuffered += sizeof(WALEntrySimple);
   UpdateWalFlushReq();
 }
@@ -144,14 +139,11 @@ void Logging::SubmitWALEntrySimple() {
 /// it is ready to flush to disk.
 /// @param totalSize is the size of the wal record to be flush.
 void Logging::SubmitWALEntryComplex(u64 totalSize) {
-  DCHECK(totalSize % 8 == 0);
   if (!((mWalBuffered >= mTxWalBegin) ||
         (mWalBuffered + totalSize < mTxWalBegin))) {
     Worker::my().mActiveTx.mWalExceedBuffer = true;
   }
-  DEBUG_BLOCK() {
-    mActiveWALEntryComplex->computeCRC();
-  }
+  mActiveWALEntryComplex->mCRC32 = mActiveWALEntryComplex->ComputeCRC32();
   mWalBuffered += totalSize;
   UpdateWalFlushReq();
   Worker::my().mActiveTx.markAsWrite();
@@ -170,7 +162,7 @@ void Logging::iterateOverCurrentTXEntries(
     ENSURE(entry.size > 0);
     DEBUG_BLOCK() {
       if (entry.type != WALEntry::TYPE::CARRIAGE_RETURN)
-        entry.checkCRC();
+        entry.CheckCRC();
     }
     if (entry.type == WALEntry::TYPE::CARRIAGE_RETURN) {
       cursor = 0;

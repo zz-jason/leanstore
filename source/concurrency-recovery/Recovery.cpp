@@ -18,7 +18,8 @@ void Recovery::Analysis() {
     case WALEntry::TYPE::TX_START: {
       DCHECK_EQ(bytesRead, walEntry->size);
       DCHECK(mActiveTxTable.find(walEntry->mTxId) == mActiveTxTable.end());
-      mActiveTxTable.emplace(std::make_pair(walEntry->mTxId, offset));
+      auto txId = walEntry->mTxId;
+      mActiveTxTable.emplace(txId, offset);
       offset += bytesRead;
       continue;
     }
@@ -60,7 +61,8 @@ void Recovery::Analysis() {
           mDirtyPageTable.find(complexEntry->mPageId) ==
               mDirtyPageTable.end()) {
         // record the first WALEntry that makes the page dirty
-        mDirtyPageTable.emplace(std::make_pair(complexEntry->mPageId, offset));
+        auto pageId = complexEntry->mPageId;
+        mDirtyPageTable.emplace(pageId, offset);
       }
 
       offset += bytesRead;

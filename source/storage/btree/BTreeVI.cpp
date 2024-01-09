@@ -253,8 +253,12 @@ OpCode BTreeVI::insert(Slice key, Slice val) {
       auto visibleForMe =
           VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId);
       if (writeLocked || !visibleForMe) {
-        DLOG(ERROR) << "Insert failed, writeLocked=" << writeLocked
-                    << ", visibleForMe=" << visibleForMe;
+        LOG(INFO) << "Conflict detected, please abort and retry"
+                  << ", workerId=" << cr::Worker::my().mWorkerId
+                  << ", startTs=" << cr::Worker::my().mActiveTx.mStartTs
+                  << ", tupleLastWriter=" << chainedTuple.mWorkerId
+                  << ", tupleLastStartTs=" << chainedTuple.mTxId
+                  << ", visibleForMe=" << visibleForMe;
         return OpCode::kAbortTx;
       }
       LOG(INFO) << "Insert failed, key is duplicated";

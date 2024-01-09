@@ -97,6 +97,21 @@ inline u64 unfold(const u8* input, s64& x) {
   return sizeof(x);
 }
 
+inline std::string ToHex(const u8* buf, size_t size) {
+  static const char S_HEX_DIGITS[] = "0123456789ABCDEF";
+  std::string output;
+  output.reserve(size * 2);
+  for (size_t i = 0u; i < size; i++) {
+    output.push_back(S_HEX_DIGITS[buf[i] >> 4]);
+    output.push_back(S_HEX_DIGITS[buf[i] & 15]);
+  }
+  return output;
+}
+
+inline std::string StringToHex(const std::string& input) {
+  return ToHex((u8*)input.data(), input.size());
+}
+
 template <typename T> std::unique_ptr<T[]> ScopedArray(size_t size) {
   return std::make_unique<T[]>(size);
 }
