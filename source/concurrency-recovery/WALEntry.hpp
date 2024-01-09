@@ -5,10 +5,13 @@
 #include "utils/Misc.hpp"
 
 #include "rapidjson/document.h"
+#include "rapidjson/stringbuffer.h"
+#include "rapidjson/writer.h"
 
 #include <glog/logging.h>
 
 #include <atomic>
+#include <cstddef>
 #include <iostream>
 #include <string>
 
@@ -37,13 +40,11 @@ public:
 
 public:
   /// Used for debuging purpose.
-  u64 mMagicDebuging = 99;
+  u32 mCRC32 = 99;
 
   /// The log sequence number of this WALEntry. The number is globally and
   /// monotonically increased.
-  ///
-  /// TODO(jian.z): verify whether we can remove atomic value.
-  std::atomic<LID> lsn;
+  LID lsn;
 
   // Size of the whole WALEntry, including all the payloads. The entire WAL
   // entry stays in the WAL ring buffer of the current worker thread.
@@ -69,8 +70,7 @@ public:
   WALEntry() = default;
 
   WALEntry(LID lsn, u64 size, TYPE type)
-      : mMagicDebuging(99), size(size), type(type) {
-    this->lsn.store(lsn, std::memory_order_release);
+      : mCRC32(99), lsn(lsn), size(size), type(type) {
   }
 
 public:
@@ -84,18 +84,27 @@ public:
 
   virtual std::unique_ptr<rapidjson::Document> ToJSON();
 
-  void computeCRC() {
-    mMagicDebuging = utils::CRC(reinterpret_cast<u8*>(this) + sizeof(u64),
-                                size - sizeof(u64));
+  u32 ComputeCRC32() const {
+    // auto startOffset = offsetof(WALEntry, lsn);
+    auto startOffset = ptrdiff_t(&this->lsn) - ptrdiff_t(this);
+    const auto* src = reinterpret_cast<const u8*>(this) + startOffset;
+    auto srcSize = size - startOffset;
+    auto crc32 = utils::CRC(src, srcSize);
+    return crc32;
   }
 
-  void checkCRC() const {
-    auto actualCRC = utils::CRC(reinterpret_cast<const u8*>(this) + sizeof(u64),
-                                size - sizeof(u64));
-    LOG_IF(FATAL, mMagicDebuging != actualCRC)
-        << "CRC checksum mismatch"
-        << ", CRC recorded in the WALEntry: " << mMagicDebuging
-        << ", CRC calculated based on the actual WALEntry: " << actualCRC;
+  void CheckCRC() const {
+    auto actualCRC = ComputeCRC32();
+    if (mCRC32 != actualCRC) {
+      auto doc = const_cast<WALEntry*>(this)->ToJSON();
+      rapidjson::StringBuffer buffer;
+      rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+      doc->Accept(writer);
+      LOG(FATAL) << "CRC32 mismatch"
+                 << ", this=" << (void*)this << ", actual=" << actualCRC
+                 << ", expected=" << mCRC32
+                 << ", walJson=" << buffer.GetString();
+    }
   }
 };
 class WALEntrySimple : public WALEntry {
@@ -181,7 +190,7 @@ inline std::unique_ptr<rapidjson::Document> WALEntry::ToJSON() {
   // crc
   {
     rapidjson::Value member;
-    member.SetUint64(mMagicDebuging);
+    member.SetUint(mCRC32);
     doc->AddMember("CRC", member, doc->GetAllocator());
   }
 
@@ -220,6 +229,13 @@ inline std::unique_ptr<rapidjson::Document> WALEntry::ToJSON() {
     auto txModeStr = ToString(mTxMode);
     member.SetString(txModeStr.data(), txModeStr.size(), doc->GetAllocator());
     doc->AddMember("mTxMode", member, doc->GetAllocator());
+  }
+
+  // workerId
+  {
+    rapidjson::Value member;
+    member.SetUint64(mWorkerId);
+    doc->AddMember("mWorkerId", member, doc->GetAllocator());
   }
 
   // prev_lsn_in_tx

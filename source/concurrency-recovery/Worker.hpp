@@ -49,35 +49,22 @@ struct WalFlushReq {
 class Logging {
 public:
   /// The minimum flushed GSN among all worker threads. Transactions whose max
-  /// observed GSN not larger than sMinFlushedGsn can be committed safely.
-  static atomic<u64> sMinFlushedGsn;
+  /// observed GSN not larger than sGlobalMinFlushedGSN can be committed safely.
+  static atomic<u64> sGlobalMinFlushedGSN;
 
   /// The maximum flushed GSN among all worker threads in each group commit
   /// round. It is updated by the group commit thread and used to update the GCN
   /// counter of the current worker thread to prevent GSN from skewing and
   /// undermining RFA.
-  static atomic<u64> sMaxFlushedGsn;
-
-  static atomic<u64> sMinFlushedCommitTs;
+  static atomic<u64> sGlobalMaxFlushedGSN;
 
 public:
-  static void UpdateMinFlushedGsn(u64 minGsn) {
-    DCHECK(sMinFlushedGsn.load() <= minGsn)
-        << "sMinFlushedGsn=" << sMinFlushedGsn << ", minGsn=" << minGsn;
-    sMinFlushedGsn.store(minGsn, std::memory_order_release);
+  static void UpdateGlobalMinFlushedGSN(u64 toUpdate) {
+    sGlobalMinFlushedGSN.store(toUpdate, std::memory_order_release);
   }
 
-  static void UpdateMaxFlushedGsn(LID maxGsn) {
-    sMaxFlushedGsn.store(maxGsn, std::memory_order_release);
-  }
-
-  static void UpdateMinFlushedCommitTs(TXID minCommitTs) {
-    sMinFlushedCommitTs.store(minCommitTs, std::memory_order_release);
-  }
-
-  static bool NeedIncrementFlushesCounter(const Transaction& tx) {
-    return tx.mMaxObservedGSN > sMinFlushedGsn ||
-           tx.mStartTs > sMinFlushedCommitTs;
+  static void UpdateGlobalMaxFlushedGSN(LID toUpdate) {
+    sGlobalMaxFlushedGSN.store(toUpdate, std::memory_order_release);
   }
 
 public:
@@ -138,8 +125,10 @@ public:
   /// group commit thread.
   atomic<u64> mWalFlushed = 0;
 
-  // for current transaction, reset on every transaction start
-  u64 mMinFlushedGSN;
+  // The global min flushed GSN when transaction started. Pages whose GSN larger
+  // than this value might be modified by other transactions running at the same
+  // time, which cause the remote transaction dependency.
+  u64 mTxReadSnapshot;
 
   /// Whether the active transaction has accessed data written by other worker
   /// transactions, i.e. dependens on the transactions on other workers.
@@ -350,13 +339,13 @@ public:
     return mActiveTx.state == TX_STATE::STARTED;
   }
 
-  void startTX(TX_MODE mode = TX_MODE::OLTP,
+  void StartTx(TX_MODE mode = TX_MODE::OLTP,
                IsolationLevel level = IsolationLevel::kSnapshotIsolation,
                bool isReadOnly = false);
 
-  void commitTX();
+  void CommitTx();
 
-  void abortTX();
+  void AbortTx();
 
   void shutdown();
 
@@ -401,28 +390,21 @@ inline Transaction& activeTX() {
 //------------------------------------------------------------------------------
 
 template <typename T> inline void WALPayloadHandler<T>::SubmitWal() {
-  DEBUG_BLOCK() {
-    auto dtEntryPtr = cr::Worker::my().mLogging.mWalBuffer +
-                      cr::Worker::my().mLogging.mWalBuffered;
-    auto dtEntry = reinterpret_cast<WALEntryComplex*>(dtEntryPtr);
-    auto dtDoc = dtEntry->ToJSON();
-
-    auto entryPtr = dtEntryPtr + sizeof(WALEntryComplex);
-    auto entry = reinterpret_cast<T*>(entryPtr);
-    auto doc = entry->ToJSON();
-
-    dtDoc->AddMember("payload", *doc, dtDoc->GetAllocator());
-
+  SCOPED_DEFER(DEBUG_BLOCK() {
+    auto walDoc = cr::Worker::my().mLogging.mActiveWALEntryComplex->ToJSON();
+    auto entry = reinterpret_cast<T*>(
+        cr::Worker::my().mLogging.mActiveWALEntryComplex->payload);
+    auto payloadDoc = entry->ToJSON();
+    walDoc->AddMember("payload", *payloadDoc, walDoc->GetAllocator());
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-    dtDoc->Accept(writer);
-
+    walDoc->Accept(writer);
     LOG(INFO) << "SubmitWal"
               << ", workerId=" << Worker::my().mWorkerId
               << ", startTs=" << Worker::my().mActiveTx.mStartTs
               << ", curGSN=" << Worker::my().mLogging.GetCurrentGsn()
               << ", walJson=" << buffer.GetString();
-  }
+  });
 
   cr::Worker::my().mLogging.SubmitWALEntryComplex(mTotalSize);
 }
@@ -443,7 +425,7 @@ inline WALPayloadHandler<T> Logging::ReserveWALEntryComplex(u64 payloadSize,
   SCOPED_DEFER(mPrevLSN = mActiveWALEntryComplex->lsn);
 
   auto entryLSN = mLsnClock++;
-  auto entryPtr = mWalBuffer + mWalBuffered;
+  auto* entryPtr = mWalBuffer + mWalBuffered;
   auto entrySize = sizeof(WALEntryComplex) + payloadSize;
   DCHECK(walContiguousFreeSpace() >= entrySize);
 
@@ -453,7 +435,7 @@ inline WALPayloadHandler<T> Logging::ReserveWALEntryComplex(u64 payloadSize,
   auto& curWorker = leanstore::cr::Worker::my();
   mActiveWALEntryComplex->InitTxInfo(&curWorker.mActiveTx, curWorker.mWorkerId);
 
-  auto payloadPtr = mActiveWALEntryComplex->payload;
+  auto* payloadPtr = mActiveWALEntryComplex->payload;
   auto walPayload = new (payloadPtr) T(std::forward<Args>(args)...);
   return {walPayload, entrySize, entryLSN};
 }

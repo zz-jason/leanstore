@@ -23,7 +23,7 @@ CheckOptions:
   - key:             readability-identifier-naming.PublicMethodCase
     value:           CamelCase
   - key:             readability-identifier-naming.PublicMemberCase
-    value:           CamelCase
+    value:           camelBack
   - key:             readability-identifier-naming.PrivateMethodCase
     value:           camelBack
   - key:             readability-identifier-naming.PrivateMemberCase

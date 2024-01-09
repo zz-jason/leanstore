@@ -53,16 +53,18 @@ Worker::~Worker() {
   mLogging.mWalBuffer = nullptr;
 }
 
-void Worker::startTX(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
+void Worker::StartTx(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
   utils::Timer timer(CRCounters::myCounters().cc_ms_start_tx);
   Transaction prevTx = mActiveTx;
   DCHECK(prevTx.state != TX_STATE::STARTED);
   SCOPED_DEFER({
-    DLOG(INFO) << "workerId=" << mWorkerId << ", start transaction"
+    DLOG(INFO) << "Start transaction"
+               << ", workerId=" << mWorkerId
                << ", startTs=" << mActiveTx.mStartTs
-               << ", workerMinFlushedGSN=" << mLogging.mMinFlushedGSN
+               << ", txReadSnapshot(GSN)=" << mLogging.mTxReadSnapshot
                << ", workerGSN=" << mLogging.GetCurrentGsn()
-               << ", globalMaxFlushedGSN=" << Logging::sMaxFlushedGsn.load();
+               << ", globalMinFlushedGSN=" << Logging::sGlobalMinFlushedGSN
+               << ", globalMaxFlushedGSN=" << Logging::sGlobalMaxFlushedGSN;
     if (!isReadOnly && FLAGS_wal) {
       mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_START);
       mLogging.SubmitWALEntrySimple();
@@ -75,8 +77,10 @@ void Worker::startTX(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
     return;
   }
 
-  // Advance local GSN on demand to maintain transaction dependency
-  const auto maxFlushedGsn = Logging::sMaxFlushedGsn.load();
+  // Sync GSN clock with the global max flushed (observed) GSN, so that the
+  // global min flushed GSN can be advanced, transactions with remote dependency
+  // can be committed in time.
+  const auto maxFlushedGsn = Logging::sGlobalMaxFlushedGSN.load();
   if (maxFlushedGsn > mLogging.GetCurrentGsn()) {
     mLogging.SetCurrentGsn(maxFlushedGsn);
   }
@@ -85,7 +89,7 @@ void Worker::startTX(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
   mLogging.mTxWalBegin = mLogging.mWalBuffered;
 
   // For remote dependency validation
-  mLogging.mMinFlushedGSN = Logging::sMinFlushedGsn.load();
+  mLogging.mTxReadSnapshot = Logging::sGlobalMinFlushedGSN.load();
   mLogging.mHasRemoteDependency = false;
 
   // Draw TXID from global counter and publish it with the TX type (i.e., OLAP
@@ -121,7 +125,7 @@ void Worker::startTX(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
   }
 }
 
-void Worker::commitTX() {
+void Worker::CommitTx() {
   if (!activeTX().isDurable()) {
     return;
   }
@@ -200,7 +204,7 @@ void Worker::commitTX() {
   mActiveTx.state = TX_STATE::COMMITTED;
 }
 
-void Worker::abortTX() {
+void Worker::AbortTx() {
   utils::Timer timer(CRCounters::myCounters().cc_ms_abort_tx);
 
   ENSURE(FLAGS_wal);
@@ -232,7 +236,6 @@ void Worker::abortTX() {
   mLogging.SubmitWALEntrySimple();
 
   mActiveTx.state = TX_STATE::ABORTED;
-  jumpmu::jump();
 }
 
 void Worker::shutdown() {

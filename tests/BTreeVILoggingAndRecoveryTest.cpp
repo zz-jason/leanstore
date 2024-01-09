@@ -65,16 +65,16 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
   // TODO(jian.z): need to create btree within a transaction, otherwise
   // transactions depend on the btree creator worker may hang on commit.
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    cr::Worker::my().startTX();
-    SCOPED_DEFER(cr::Worker::my().commitTX());
+    cr::Worker::my().StartTx();
+    SCOPED_DEFER(cr::Worker::my().CommitTx());
     mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
   });
 
   // insert some values
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    cr::Worker::my().startTX();
-    SCOPED_DEFER(cr::Worker::my().commitTX());
+    cr::Worker::my().StartTx();
+    SCOPED_DEFER(cr::Worker::my().CommitTx());
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
@@ -106,8 +106,8 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
 
   // lookup the restored btree
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    cr::Worker::my().startTX();
-    SCOPED_DEFER(cr::Worker::my().commitTX());
+    cr::Worker::my().StartTx();
+    SCOPED_DEFER(cr::Worker::my().CommitTx());
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
@@ -122,8 +122,8 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
   });
 
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
-    cr::Worker::my().startTX();
-    SCOPED_DEFER(cr::Worker::my().commitTX());
+    cr::Worker::my().StartTx();
+    SCOPED_DEFER(cr::Worker::my().CommitTx());
     mLeanStore->UnRegisterBTreeVI(btreeName);
   });
 }
@@ -160,20 +160,20 @@ TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
   };
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
 
     // insert some values
-    cr::Worker::my().startTX();
+    cr::Worker::my().StartTx();
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
     }
-    cr::Worker::my().commitTX();
+    cr::Worker::my().CommitTx();
   });
 
   // skip dumpping buffer frames on exit
@@ -188,8 +188,8 @@ TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
   mLeanStore->GetBTreeVI(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    cr::Worker::my().startTX();
-    SCOPED_DEFER(cr::Worker::my().commitTX());
+    cr::Worker::my().StartTx();
+    SCOPED_DEFER(cr::Worker::my().CommitTx());
     rapidjson::Document doc(rapidjson::kObjectType);
     BTreeGeneric::ToJSON(*static_cast<BTreeGeneric*>(btree), &doc);
     DLOG(INFO) << "BTreeVI after recovery: " << utils::JsonToStr(&doc);
@@ -197,8 +197,8 @@ TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
 
   // lookup the restored btree
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    cr::Worker::my().startTX();
-    SCOPED_DEFER(cr::Worker::my().commitTX());
+    cr::Worker::my().StartTx();
+    SCOPED_DEFER(cr::Worker::my().CommitTx());
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
