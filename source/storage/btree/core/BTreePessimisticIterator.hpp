@@ -79,7 +79,7 @@ protected:
             WorkerCounters::myCounters().dt_inner_page[mBTree.mTreeId]++;
           }
           mLeafPosInParent = guardedChild->lowerBound<false>(key);
-          auto childSwip =
+          auto* childSwip =
               &guardedChild->GetChildIncludingRightMost(mLeafPosInParent);
           mGuardedParent = std::move(guardedChild);
           if (level == mBTree.mHeight - 1) {
@@ -163,9 +163,8 @@ public:
     mSlotId = mGuardedLeaf->lowerBound<true>(key);
     if (mSlotId != -1) {
       return OpCode::kOK;
-    } else {
-      return OpCode::kNotFound;
     }
+    return OpCode::kNotFound;
   }
 
   virtual OpCode seek(Slice key) override {

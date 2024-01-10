@@ -137,7 +137,6 @@ TEST_F(AnomaliesTest, NoG1b) {
 
 // G1c: Circular Information Flow (dirty reads)
 TEST_F(AnomaliesTest, NoG1c) {
-  GTEST_SKIP() << "Unfixed";
   auto* s1 = mStore->GetSession(1);
   auto* s2 = mStore->GetSession(2);
 
@@ -146,16 +145,23 @@ TEST_F(AnomaliesTest, NoG1c) {
 
   std::string key2("2");
   std::string newVal21("21"), newVal22("22");
-  std::string res;
+  std::string valRead;
 
   s1->StartTx();
   s2->StartTx();
   EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
   EXPECT_TRUE(s2->Update(mTbl, ToSlice(key2), ToSlice(newVal22)));
-  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key2), res));
-  EXPECT_EQ(res, "20");
-  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res));
-  EXPECT_EQ(res, "10");
+
+  auto res = s1->Get(mTbl, ToSlice(key2), valRead);
+  EXPECT_TRUE(res);
+  EXPECT_TRUE(res.value() == 1);
+  EXPECT_EQ(valRead, "20");
+
+  res = s2->Get(mTbl, ToSlice(key1), valRead);
+  EXPECT_TRUE(res);
+  EXPECT_TRUE(res.value() == 1);
+  EXPECT_EQ(valRead, "10");
+
   s1->CommitTx();
   s2->CommitTx();
 }
@@ -201,14 +207,20 @@ TEST_F(AnomaliesTest, NoPMP) {
 
   // Prepare: insert into test (id, value) values (1, 10), (2, 20);
   std::string key3("3"), val3("30");
-  std::string result;
+  std::string valRead;
 
   s1->StartTx();
   s2->StartTx();
-  EXPECT_FALSE(s1->Get(mTbl, ToSlice(key3), result));
+
+  auto res = s1->Get(mTbl, ToSlice(key3), valRead);
+  EXPECT_TRUE(res && res.value() == 0u);
+
   EXPECT_TRUE(s2->Put(mTbl, ToSlice(key3), ToSlice(val3)));
   s2->CommitTx();
-  EXPECT_FALSE(s1->Get(mTbl, ToSlice(key3), result));
+
+  res = s1->Get(mTbl, ToSlice(key3), valRead);
+  EXPECT_TRUE(res && res.value() == 0u);
+
   s1->CommitTx();
 }
 
