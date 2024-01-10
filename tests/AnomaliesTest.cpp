@@ -113,7 +113,6 @@ TEST_F(AnomaliesTest, NoG1a) {
 
 // G1b: Intermediate Reads (dirty reads)
 TEST_F(AnomaliesTest, NoG1b) {
-  GTEST_SKIP() << "Unfixed";
   auto* s1 = mStore->GetSession(1);
   auto* s2 = mStore->GetSession(2);
 
@@ -248,7 +247,6 @@ TEST_F(AnomaliesTest, NoP4) {
 
 // G-single: Single Anti-dependency Cycles (read skew)
 TEST_F(AnomaliesTest, NoGSingle) {
-  GTEST_SKIP() << "Unfixed";
   auto* s1 = mStore->GetSession(1);
   auto* s2 = mStore->GetSession(2);
 

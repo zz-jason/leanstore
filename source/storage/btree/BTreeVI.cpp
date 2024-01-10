@@ -60,89 +60,94 @@ OpCode BTreeVI::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
                                       UpdateDesc& updateDesc) {
   DCHECK(cr::Worker::my().IsTxStarted());
   cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size);
+  JUMPMU_TRY() {
 
-  BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
-  auto ret = xIter.seekExact(key);
-  if (ret != OpCode::kOK) {
-    if (cr::activeTX().isOLAP() && ret == OpCode::kNotFound) {
-      const bool foundRemovedTuple =
-          mGraveyard->Lookup(key, [&](Slice) {}) == OpCode::kOK;
+    BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
+    auto ret = xIter.seekExact(key);
+    if (ret != OpCode::kOK) {
+      if (cr::activeTX().isOLAP() && ret == OpCode::kNotFound) {
+        const bool foundRemovedTuple =
+            mGraveyard->Lookup(key, [&](Slice) {}) == OpCode::kOK;
 
-      // The tuple to be updated is removed, abort the transaction.
-      if (foundRemovedTuple) {
-        return OpCode::kAbortTx;
-      }
-    }
-
-    LOG(ERROR) << "Update failed, key not found, key=" << ToString(key)
-               << ", txMode=" << ToString(cr::activeTX().mTxMode)
-               << ", seek ret=" << ToString(ret);
-    return ret;
-  }
-
-  // Record is found
-  while (true) {
-    auto rawVal = xIter.MutableVal();
-    auto& tuple = *Tuple::From(rawVal.data());
-    auto visibleForMe = VisibleForMe(tuple.mWorkerId, tuple.mTxId, true);
-    if (tuple.IsWriteLocked() || !visibleForMe) {
-      LOG(ERROR) << "Update failed, primary tuple is write locked or not "
-                    "visible for me"
-                 << ", key=" << ToString(key)
-                 << ", writeLocked=" << tuple.IsWriteLocked()
-                 << ", visibleForMe=" << visibleForMe;
-      return OpCode::kAbortTx;
-    }
-
-    COUNTERS_BLOCK() {
-      WorkerCounters::myCounters().cc_update_chains[mTreeId]++;
-    }
-
-    // write lock the tuple
-    tuple.WriteLock();
-
-    switch (tuple.mFormat) {
-    case TupleFormat::FAT: {
-      auto& fatTuple = *FatTuple::From(rawVal.data());
-      auto succeed = fatTuple.update(xIter, key, updateCallBack, updateDesc);
-      xIter.MarkAsDirty();
-      xIter.UpdateContentionStats();
-      Tuple::From(rawVal.data())->WriteUnlock();
-      if (!succeed) {
-        continue;
-      }
-      return OpCode::kOK;
-    }
-    case TupleFormat::CHAINED: {
-      auto& chainedTuple = *ChainedTuple::From(rawVal.data());
-      chainedTuple.UpdateStats();
-
-      // convert to fat tuple if it's frequently updated by me and other workers
-      if (FLAGS_enable_fat_tuple && chainedTuple.ShouldConvertToFatTuple()) {
-        COUNTERS_BLOCK() {
-          WorkerCounters::myCounters().cc_fat_tuple_triggered[mTreeId]++;
+        // The tuple to be updated is removed, abort the transaction.
+        if (foundRemovedTuple) {
+          JUMPMU_RETURN OpCode::kAbortTx;
         }
-        chainedTuple.mTotalUpdates = 0;
-        auto succeed = Tuple::ToFat(xIter);
-        if (succeed) {
-          xIter.mGuardedLeaf->mHasGarbage = true;
-          COUNTERS_BLOCK() {
-            WorkerCounters::myCounters().cc_fat_tuple_convert[mTreeId]++;
-          }
-        }
+      }
+
+      LOG(ERROR) << "Update failed, key not found, key=" << ToString(key)
+                 << ", txMode=" << ToString(cr::activeTX().mTxMode)
+                 << ", seek ret=" << ToString(ret);
+      JUMPMU_RETURN ret;
+    }
+
+    // Record is found
+    while (true) {
+      auto rawVal = xIter.MutableVal();
+      auto& tuple = *Tuple::From(rawVal.data());
+      auto visibleForMe = VisibleForMe(tuple.mWorkerId, tuple.mTxId, true);
+      if (tuple.IsWriteLocked() || !visibleForMe) {
+        LOG(ERROR) << "Update failed, primary tuple is write locked or not "
+                      "visible for me"
+                   << ", key=" << ToString(key)
+                   << ", writeLocked=" << tuple.IsWriteLocked()
+                   << ", visibleForMe=" << visibleForMe;
+        JUMPMU_RETURN OpCode::kAbortTx;
+      }
+
+      COUNTERS_BLOCK() {
+        WorkerCounters::myCounters().cc_update_chains[mTreeId]++;
+      }
+
+      // write lock the tuple
+      tuple.WriteLock();
+
+      switch (tuple.mFormat) {
+      case TupleFormat::FAT: {
+        auto& fatTuple = *FatTuple::From(rawVal.data());
+        auto succeed = fatTuple.update(xIter, key, updateCallBack, updateDesc);
+        xIter.MarkAsDirty();
+        xIter.UpdateContentionStats();
         Tuple::From(rawVal.data())->WriteUnlock();
-        continue;
+        if (!succeed) {
+          JUMPMU_CONTINUE;
+        }
+        JUMPMU_RETURN OpCode::kOK;
       }
+      case TupleFormat::CHAINED: {
+        auto& chainedTuple = *ChainedTuple::From(rawVal.data());
+        chainedTuple.UpdateStats();
 
-      // update the chained tuple
-      chainedTuple.Update(xIter, key, updateCallBack, updateDesc);
-      return OpCode::kOK;
+        // convert to fat tuple if it's frequently updated by me and other
+        // workers
+        if (FLAGS_enable_fat_tuple && chainedTuple.ShouldConvertToFatTuple()) {
+          COUNTERS_BLOCK() {
+            WorkerCounters::myCounters().cc_fat_tuple_triggered[mTreeId]++;
+          }
+          chainedTuple.mTotalUpdates = 0;
+          auto succeed = Tuple::ToFat(xIter);
+          if (succeed) {
+            xIter.mGuardedLeaf->mHasGarbage = true;
+            COUNTERS_BLOCK() {
+              WorkerCounters::myCounters().cc_fat_tuple_convert[mTreeId]++;
+            }
+          }
+          Tuple::From(rawVal.data())->WriteUnlock();
+          JUMPMU_CONTINUE;
+        }
+
+        // update the chained tuple
+        chainedTuple.Update(xIter, key, updateCallBack, updateDesc);
+        JUMPMU_RETURN OpCode::kOK;
+      }
+      default: {
+        LOG(ERROR) << "Unhandled tuple format: "
+                   << TupleFormatUtil::ToString(tuple.mFormat);
+      }
+      }
     }
-    default: {
-      LOG(ERROR) << "Unhandled tuple format: "
-                 << TupleFormatUtil::ToString(tuple.mFormat);
-    }
-    }
+  }
+  JUMPMU_CATCH() {
   }
   return OpCode::kOther;
 }

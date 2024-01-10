@@ -1,5 +1,6 @@
 #include "JumpMU.hpp"
 
+#include <glog/logging.h>
 #include <signal.h>
 
 namespace jumpmu {
@@ -13,8 +14,8 @@ __thread void* tlsObjs[JUMPMU_STACK_OBJECTS_LIMIT];
 __thread void (*tlsObjDtors[JUMPMU_STACK_OBJECTS_LIMIT])(void*);
 
 void jump() {
-  assert(tlsNumJumpPoints > 0);
-  assert(tlsNumStackObjs >= 0);
+  DCHECK(tlsNumJumpPoints > 0) << "tlsNumJumpPoints=" << tlsNumJumpPoints;
+  DCHECK(tlsNumStackObjs >= 0) << "tlsNumStackObjs=" << tlsNumStackObjs;
 
   auto numJumpStackObjs = tlsJumpPointNumStackObjs[tlsNumJumpPoints - 1];
 
