@@ -1,5 +1,6 @@
 #pragma once
 
+#include "KVInterface.hpp"
 #include "LeanStore.hpp"
 #include "Units.hpp"
 #include "utils/Defer.hpp"
@@ -66,15 +67,15 @@ public:
 
   [[nodiscard]] virtual auto Update(TableRef* tbl, Slice key, Slice val,
                                     bool implicitTx = false)
-      -> std::expected<void, utils::Error> = 0;
+      -> std::expected<u64, utils::Error> = 0;
 
   [[nodiscard]] virtual auto Get(TableRef* tbl, Slice key, std::string& val,
                                  bool implicitTx = false)
-      -> std::expected<void, utils::Error> = 0;
+      -> std::expected<u64, utils::Error> = 0;
 
   [[nodiscard]] virtual auto Delete(TableRef* tbl, Slice key,
                                     bool implicitTx = false)
-      -> std::expected<void, utils::Error> = 0;
+      -> std::expected<u64, utils::Error> = 0;
 };
 
 class TableRef {
@@ -141,14 +142,14 @@ public:
 
   [[nodiscard]] auto Get(TableRef* tbl, Slice key, std::string& val,
                          bool implicitTx = false)
-      -> std::expected<void, utils::Error> override;
+      -> std::expected<u64, utils::Error> override;
 
   [[nodiscard]] auto Update(TableRef* tbl, Slice key, Slice val,
                             bool implicitTx = false)
-      -> std::expected<void, utils::Error> override;
+      -> std::expected<u64, utils::Error> override;
 
   [[nodiscard]] auto Delete(TableRef* tbl, Slice key, bool implicitTx = false)
-      -> std::expected<void, utils::Error> override;
+      -> std::expected<u64, utils::Error> override;
 };
 
 class LeanStoreMVCCTableRef : public TableRef {
@@ -248,13 +249,13 @@ auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
                                bool implicitTx)
     -> std::expected<void, utils::Error> {
   auto* btree = reinterpret_cast<storage::btree::BTreeVI*>(tbl);
-  leanstore::OpCode res;
+  OpCode res;
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
       cr::Worker::my().StartTx();
     }
     SCOPED_DEFER(if (implicitTx) {
-      if (res == leanstore::OpCode::kOK) {
+      if (res == OpCode::kOK) {
         cr::Worker::my().CommitTx();
       } else {
         cr::Worker::my().AbortTx();
@@ -273,9 +274,9 @@ auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
 
 auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key, std::string& val,
                                bool implicitTx)
-    -> std::expected<void, utils::Error> {
+    -> std::expected<u64, utils::Error> {
   auto* btree = reinterpret_cast<storage::btree::BTreeVI*>(tbl);
-  leanstore::OpCode res;
+  OpCode res;
   auto copyValueOut = [&](Slice res) {
     val.resize(res.size());
     memcpy(val.data(), res.data(), res.size());
@@ -287,7 +288,7 @@ auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key, std::string& val,
                                IsolationLevel::kSnapshotIsolation, true);
     }
     SCOPED_DEFER(if (implicitTx) {
-      if (res == leanstore::OpCode::kOK) {
+      if (res == OpCode::kOK || res == OpCode::kNotFound) {
         cr::Worker::my().CommitTx();
       } else {
         cr::Worker::my().AbortTx();
@@ -296,18 +297,21 @@ auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key, std::string& val,
 
     res = btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut);
   });
-  if (res != OpCode::kOK) {
-    return std::unexpected<utils::Error>(
-        utils::Error::General("Get failed: " + ToString(res)));
+  if (res == OpCode::kOK) {
+    return 1;
   }
-  return {};
+  if (res == OpCode::kNotFound) {
+    return 0;
+  }
+  return std::unexpected<utils::Error>(
+      utils::Error::General("Get failed: " + ToString(res)));
 }
 
 auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
                                   bool implicitTx)
-    -> std::expected<void, utils::Error> {
+    -> std::expected<u64, utils::Error> {
   auto* btree = reinterpret_cast<storage::btree::BTreeVI*>(tbl);
-  leanstore::OpCode res;
+  OpCode res;
   auto updateCallBack = [&](MutableSlice toUpdate) {
     std::memcpy(toUpdate.data(), val.data(), val.length());
   };
@@ -316,7 +320,7 @@ auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
       cr::Worker::my().StartTx();
     }
     SCOPED_DEFER(if (implicitTx) {
-      if (res == leanstore::OpCode::kOK) {
+      if (res == OpCode::kOK || res == OpCode::kNotFound) {
         cr::Worker::my().CommitTx();
       } else {
         cr::Worker::my().AbortTx();
@@ -332,23 +336,26 @@ auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
     res = btree->updateSameSizeInPlace(Slice((const u8*)key.data(), key.size()),
                                        updateCallBack, *updateDesc);
   });
-  if (res != OpCode::kOK) {
-    return std::unexpected<utils::Error>(
-        utils::Error::General("Update failed: " + ToString(res)));
+  if (res == OpCode::kOK) {
+    return 1;
   }
-  return {};
+  if (res == OpCode::kNotFound) {
+    return 0;
+  }
+  return std::unexpected<utils::Error>(
+      utils::Error::General("Update failed: " + ToString(res)));
 }
 
 auto LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key, bool implicitTx)
-    -> std::expected<void, utils::Error> {
+    -> std::expected<u64, utils::Error> {
   auto* btree = reinterpret_cast<storage::btree::BTreeVI*>(tbl);
-  leanstore::OpCode res;
+  OpCode res;
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
       cr::Worker::my().StartTx();
     }
     SCOPED_DEFER(if (implicitTx) {
-      if (res == leanstore::OpCode::kOK) {
+      if (res == OpCode::kOK || res == OpCode::kNotFound) {
         cr::Worker::my().CommitTx();
       } else {
         cr::Worker::my().AbortTx();
@@ -357,11 +364,14 @@ auto LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key, bool implicitTx)
 
     res = btree->remove(Slice((const u8*)key.data(), key.size()));
   });
-  if (res != OpCode::kOK) {
-    return std::unexpected<utils::Error>(
-        utils::Error::General("Delete failed: " + ToString(res)));
+  if (res == OpCode::kOK) {
+    return 1;
   }
-  return {};
+  if (res == OpCode::kNotFound) {
+    return 0;
+  }
+  return std::unexpected<utils::Error>(
+      utils::Error::General("Delete failed: " + ToString(res)));
 }
 
 inline Slice ToSlice(const std::string& src) {
