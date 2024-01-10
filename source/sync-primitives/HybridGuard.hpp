@@ -45,9 +45,9 @@ public:
   }
 
   // Manually construct a guard from a snapshot. Use with caution!
-  HybridGuard(HybridLatch& latch, const u64 last_seen_version)
+  HybridGuard(HybridLatch& latch, const u64 lastSeenVersion)
       : mLatch(&latch), mState(GUARD_STATE::OPTIMISTIC),
-        mVersion(last_seen_version), mEncounteredContention(false) {
+        mVersion(lastSeenVersion), mEncounteredContention(false) {
   }
 
   HybridGuard(HybridLatch& latch, GUARD_STATE state)

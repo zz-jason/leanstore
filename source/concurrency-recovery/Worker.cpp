@@ -204,6 +204,7 @@ void Worker::CommitTx() {
   mActiveTx.state = TX_STATE::COMMITTED;
 }
 
+// TODO(jian.z): revert changes made in-place on the btree
 void Worker::AbortTx() {
   utils::Timer timer(CRCounters::myCounters().cc_ms_abort_tx);
 

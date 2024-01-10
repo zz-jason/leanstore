@@ -17,12 +17,12 @@ public:
   }
 
   BTreeExclusiveIterator(BTreeGeneric& tree, BufferFrame* bf,
-                         const u64 bf_version)
+                         const u64 bfVersion)
       : BTreePessimisticIterator(tree, LATCH_FALLBACK_MODE::EXCLUSIVE) {
-    HybridGuard as_it_was_witnessed(bf->header.mLatch, bf_version);
-    as_it_was_witnessed.JumpIfModifiedByOthers();
+    HybridGuard asItWasWitnessed(bf->header.mLatch, bfVersion);
+    asItWasWitnessed.JumpIfModifiedByOthers();
     mGuardedLeaf =
-        GuardedBufferFrame<BTreeNode>(std::move(as_it_was_witnessed), bf);
+        GuardedBufferFrame<BTreeNode>(std::move(asItWasWitnessed), bf);
     mGuardedLeaf.ToExclusiveMayJump();
   }
 
@@ -35,9 +35,8 @@ public:
     mSlotId = mGuardedLeaf->linearSearchWithBias(key, mSlotId, higher);
     if (mSlotId == -1) {
       return seekToInsert(key);
-    } else {
-      return OpCode::kOK;
     }
+    return OpCode::kOK;
   }
 
   virtual OpCode seekToInsert(Slice key) {
@@ -48,9 +47,8 @@ public:
     mSlotId = mGuardedLeaf->lowerBound<false>(key, &isEqual);
     if (isEqual) {
       return OpCode::kDuplicated;
-    } else {
-      return OpCode::kOK;
     }
+    return OpCode::kOK;
   }
 
   virtual OpCode enoughSpaceInCurrentNode(const u16 keySize,

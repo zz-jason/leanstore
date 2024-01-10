@@ -579,7 +579,7 @@ void ChainedTuple::Update(BTreeExclusiveIterator& xIter, Slice key,
         auto& updateVersion =
             *new (versionBuf) UpdateVersion(mWorkerId, mTxId, mCommandId, true);
         std::memcpy(updateVersion.payload, &updateDesc, updateDesc.size());
-        auto dest = updateVersion.payload + updateDesc.size();
+        auto* dest = updateVersion.payload + updateDesc.size();
         updateDesc.CopySlots(dest, payload);
       });
   COUNTERS_BLOCK() {
