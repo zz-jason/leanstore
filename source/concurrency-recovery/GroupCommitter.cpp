@@ -1,6 +1,7 @@
 #include "GroupCommitter.hpp"
 #include "CRMG.hpp"
 #include "Worker.hpp"
+#include <algorithm>
 
 namespace leanstore {
 namespace cr {
@@ -148,9 +149,9 @@ void GroupCommitter::commitTXs(
 
     // update the flushed commit TS info
     logging.mWalFlushed.store(reqCopy.mWalBuffered, std::memory_order_release);
-    TXID signaledUpTo = std::numeric_limits<TXID>::max();
 
     // commit transactions with remote dependency
+    TXID maxCommitTs = 0;
     {
       std::unique_lock<std::mutex> g(logging.mTxToCommitMutex);
       u64 i = 0;
@@ -159,6 +160,7 @@ void GroupCommitter::commitTXs(
         if (!tx.CanCommit(minFlushedGSN, minFlushedTxId)) {
           break;
         }
+        maxCommitTs = std::max<TXID>(maxCommitTs, tx.mCommitTs);
         tx.state = TX_STATE::COMMITTED;
         DLOG(INFO) << "Transaction with remote dependency committed"
                    << ", workerId=" << workerId << ", startTs=" << tx.mStartTs
@@ -168,8 +170,6 @@ void GroupCommitter::commitTXs(
                    << ", minFlushedTxId=" << minFlushedTxId;
       }
       if (i > 0) {
-        auto maxCommitTs = logging.mTxToCommit[i - 1].commitTS();
-        signaledUpTo = std::min<TXID>(signaledUpTo, maxCommitTs);
         logging.mTxToCommit.erase(logging.mTxToCommit.begin(),
                                   logging.mTxToCommit.begin() + i);
         numCommitted += i;
@@ -178,11 +178,13 @@ void GroupCommitter::commitTXs(
 
     // commit transactions without remote dependency
     // TODO(jian.z): commit these transactions in the worker itself
+    TXID maxCommitTsRfa = 0;
     {
       std::unique_lock<std::mutex> g(logging.mRfaTxToCommitMutex);
       u64 i = 0;
       for (; i < numRfaTxs[workerId]; ++i) {
         auto& tx = logging.mRfaTxToCommit[i];
+        maxCommitTsRfa = std::max<TXID>(maxCommitTsRfa, tx.mCommitTs);
         tx.state = TX_STATE::COMMITTED;
         DLOG(INFO) << "Transaction (RFA) committed"
                    << ", workerId=" << workerId << ", startTs=" << tx.mStartTs
@@ -193,15 +195,22 @@ void GroupCommitter::commitTXs(
       }
 
       if (i > 0) {
-        auto maxCommitTs = logging.mRfaTxToCommit[i - 1].commitTS();
-        signaledUpTo = std::min<TXID>(signaledUpTo, maxCommitTs);
         logging.mRfaTxToCommit.erase(logging.mRfaTxToCommit.begin(),
                                      logging.mRfaTxToCommit.begin() + i);
         numCommitted += i;
       }
     }
 
-    if (signaledUpTo < std::numeric_limits<TXID>::max() && signaledUpTo > 0) {
+    // Has committed transaction
+    TXID signaledUpTo = 0;
+    if (maxCommitTs == 0 && maxCommitTsRfa != 0) {
+      signaledUpTo = maxCommitTsRfa;
+    } else if (maxCommitTs != 0 && maxCommitTsRfa == 0) {
+      signaledUpTo = maxCommitTs;
+    } else if (maxCommitTs != 0 && maxCommitTsRfa != 0) {
+      signaledUpTo = std::min<TXID>(maxCommitTs, maxCommitTsRfa);
+    }
+    if (signaledUpTo > 0) {
       logging.UpdateSignaledCommitTs(signaledUpTo);
     }
   }
