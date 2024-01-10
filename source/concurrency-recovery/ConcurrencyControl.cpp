@@ -270,7 +270,8 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId,
     // Use the cache
     if (local_snapshot_cache_ts[workerId] == activeTX().startTS()) {
       return mLocalSnapshotCache[workerId] >= startTs;
-    } else if (mLocalSnapshotCache[workerId] >= startTs) {
+    }
+    if (mLocalSnapshotCache[workerId] >= startTs) {
       return true;
     }
     utils::Timer timer(CRCounters::myCounters().cc_ms_snapshotting);
