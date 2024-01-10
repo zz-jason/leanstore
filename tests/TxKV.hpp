@@ -277,11 +277,11 @@ auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
       }
     }
   });
-  if (res == OpCode::kOK) {
-    return {};
+  if (res != OpCode::kOK) {
+    return std::unexpected<utils::Error>(
+        utils::Error::General("Insert failed: " + ToString(res)));
   }
-  return std::unexpected<utils::Error>(
-      utils::Error::General("Insert failed: " + ToString(res)));
+  return {};
 }
 
 auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key, std::string& val,
@@ -304,6 +304,9 @@ auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key, std::string& val,
       cr::Worker::my().CommitTx();
     }
   });
+  if (res != OpCode::kOK) {
+    return std::unexpected<utils::Error>(utils::Error::General("not found"));
+  }
   return {};
 }
 
