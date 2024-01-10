@@ -32,69 +32,176 @@ protected:
   ~AnomaliesTest() = default;
 
   void SetUp() override {
-    mStore = StoreFactory::GetLeanStoreMVCC("/tmp/AnomaliesTest", 3);
+    mStore = StoreFactory::GetLeanStoreMVCC("/tmp/AnomaliesTest", 4);
     ASSERT_NE(mStore, nullptr);
 
-    auto* session = mStore->GetSession(0);
+    auto* s0 = mStore->GetSession(0);
     mTblName = RandomGenerator::RandomAlphString(10);
-    auto res = session->CreateTable(mTblName, true);
+    auto res = s0->CreateTable(mTblName, true);
     ASSERT_TRUE(res);
 
     mTbl = res.value();
     ASSERT_NE(mTbl, nullptr);
+
+    std::string key1("1"), val1("10");
+    std::string key2("2"), val2("20");
+    ASSERT_TRUE(s0->Put(mTbl, ToSlice(key1), ToSlice(val1), true));
+    ASSERT_TRUE(s0->Put(mTbl, ToSlice(key2), ToSlice(val2), true));
   }
 
   void TearDown() override {
-    auto* session = mStore->GetSession(0);
-    auto res = session->DropTable(mTblName, true);
+    auto* s0 = mStore->GetSession(0);
+    auto res = s0->DropTable(mTblName, true);
     ASSERT_TRUE(res);
   }
 };
 
 // G0: Write Cycles (dirty writes)
-//
-// set session transaction isolation level read uncommitted; begin; -- T1
-// set session transaction isolation level read uncommitted; begin; -- T2
-// update test set value = 11 where id = 1; -- T1
-// update test set value = 12 where id = 1; -- T2, BLOCKS
-// update test set value = 21 where id = 2; -- T1
-// commit; -- T1. This unblocks T2
-// select * from test; -- T1. Shows 1 => 12, 2 => 21
-// update test set value = 22 where id = 2; -- T2
-// commit; -- T2
-// select * from test; -- either. Shows 1 => 12, 2 => 22
-TEST_F(AnomaliesTest, G0) {
-  // create table test (id int primary key, value int) engine=innodb;
-  // insert into test (id, value) values (1, 10), (2, 20);
+TEST_F(AnomaliesTest, NoG0) {
+  auto* s1 = mStore->GetSession(1);
+  auto* s2 = mStore->GetSession(2);
+
+  std::string key1("1");
+  std::string newVal11("11"), newVal12("12");
+
+  std::string key2("2");
+  std::string newVal21("21"), newVal22("22");
+  std::string res;
+
+  s1->StartTx();
+  s2->StartTx();
+  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
+  EXPECT_FALSE(s2->Update(mTbl, ToSlice(key1), ToSlice(newVal12)));
+  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key2), ToSlice(newVal21)));
+  s1->CommitTx();
+  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key1), res, true));
+  EXPECT_EQ(res, newVal11);
+  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key2), res, true));
+  EXPECT_EQ(res, newVal21);
+
+  EXPECT_FALSE(s2->Update(mTbl, ToSlice(key2), ToSlice(newVal22)));
+  s2->CommitTx();
+  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res, true));
+  EXPECT_EQ(res, newVal11);
+  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key2), res, true));
+  EXPECT_EQ(res, newVal21);
 }
 
 // G1a: Aborted Reads (dirty reads, cascaded aborts)
+TEST_F(AnomaliesTest, NoG1a) {
+  GTEST_SKIP() << "Unfixed";
+  auto* s1 = mStore->GetSession(1);
+  auto* s2 = mStore->GetSession(2);
+
+  std::string key1("1");
+  std::string newVal11("11"), newVal12("12");
+
+  std::string key2("2");
+  std::string newVal21("21"), newVal22("22");
+  std::string res;
+
+  s1->StartTx();
+  s2->StartTx();
+  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
+  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res));
+  EXPECT_EQ(res, "10");
+  s1->AbortTx();
+  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res));
+  EXPECT_EQ(res, "10");
+  s2->CommitTx();
+}
+
 // G1b: Intermediate Reads (dirty reads)
+TEST_F(AnomaliesTest, NoG1b) {
+  GTEST_SKIP() << "Unfixed";
+  auto* s1 = mStore->GetSession(1);
+  auto* s2 = mStore->GetSession(2);
+
+  std::string key1("1");
+  std::string newVal11("11"), newVal12("12");
+
+  std::string key2("2");
+  std::string newVal21("21"), newVal22("22");
+  std::string res;
+
+  s1->StartTx();
+  s2->StartTx();
+  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
+  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res));
+  EXPECT_EQ(res, "10");
+  s1->CommitTx();
+  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res));
+  EXPECT_EQ(res, "10");
+  s2->CommitTx();
+}
+
 // G1c: Circular Information Flow (dirty reads)
+TEST_F(AnomaliesTest, NoG1c) {
+  GTEST_SKIP() << "Unfixed";
+  auto* s1 = mStore->GetSession(1);
+  auto* s2 = mStore->GetSession(2);
+
+  std::string key1("1");
+  std::string newVal11("11"), newVal12("12");
+
+  std::string key2("2");
+  std::string newVal21("21"), newVal22("22");
+  std::string res;
+
+  s1->StartTx();
+  s2->StartTx();
+  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
+  EXPECT_TRUE(s2->Update(mTbl, ToSlice(key2), ToSlice(newVal22)));
+  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key2), res));
+  EXPECT_EQ(res, "20");
+  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res));
+  EXPECT_EQ(res, "10");
+  s1->CommitTx();
+  s2->CommitTx();
+}
+
 // OTV: Observed Transaction Vanishes
+TEST_F(AnomaliesTest, NoOTV) {
+  GTEST_SKIP() << "Unfixed";
+  auto* s1 = mStore->GetSession(1);
+  auto* s2 = mStore->GetSession(2);
+  auto* s3 = mStore->GetSession(3);
+
+  std::string key1("1");
+  std::string newVal11("11"), newVal12("12");
+
+  std::string key2("2");
+  std::string newVal21("21"), newVal22("22");
+  std::string res;
+
+  s1->StartTx();
+  s2->StartTx();
+  s3->StartTx();
+  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
+  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key2), ToSlice(newVal21)));
+  EXPECT_TRUE(s2->Update(mTbl, ToSlice(key1), ToSlice(newVal12)));
+  s1->CommitTx();
+  EXPECT_TRUE(s3->Get(mTbl, ToSlice(key1), res));
+  EXPECT_EQ(res, "10");
+  EXPECT_TRUE(s2->Update(mTbl, ToSlice(key2), ToSlice(newVal22)));
+  EXPECT_TRUE(s3->Get(mTbl, ToSlice(key2), res));
+  EXPECT_EQ(res, "20");
+  s2->CommitTx();
+  EXPECT_TRUE(s3->Get(mTbl, ToSlice(key1), res));
+  EXPECT_EQ(res, "10");
+  EXPECT_TRUE(s3->Get(mTbl, ToSlice(key2), res));
+  EXPECT_EQ(res, "20");
+  s3->CommitTx();
+}
 
 // PMP: Predicate-Many-Preceders
-//
-// set session transaction isolation level read committed; begin; -- T1
-// set session transaction isolation level read committed; begin; -- T2
-// select * from test where value = 30; -- T1. Returns nothing
-// insert into test (id, value) values(3, 30); -- T2
-// commit; -- T2
-// select * from test where value % 3 = 0; -- T1. Returns the newly inserted row
-// commit; -- T1
 TEST_F(AnomaliesTest, NoPMP) {
-  auto* s0 = mStore->GetSession(0);
   auto* s1 = mStore->GetSession(1);
   auto* s2 = mStore->GetSession(2);
 
   // Prepare: insert into test (id, value) values (1, 10), (2, 20);
-  std::string key1("1"), val1("10");
-  std::string key2("2"), val2("20");
   std::string key3("3"), val3("30");
   std::string result;
-
-  EXPECT_TRUE(s0->Put(mTbl, ToSlice(key1), ToSlice(val1), true));
-  EXPECT_TRUE(s0->Put(mTbl, ToSlice(key2), ToSlice(val2), true));
 
   s1->StartTx();
   s2->StartTx();
@@ -106,9 +213,92 @@ TEST_F(AnomaliesTest, NoPMP) {
 }
 
 // P4: Lost Update
+TEST_F(AnomaliesTest, NoP4) {
+  GTEST_SKIP() << "Unfixed";
+  auto* s1 = mStore->GetSession(1);
+  auto* s2 = mStore->GetSession(2);
+
+  // Prepare: insert into test (id, value) values (1, 10), (2, 20);
+  std::string key1("1"), newVal11("11"), newVal12("12");
+  std::string res;
+
+  s1->StartTx();
+  s2->StartTx();
+  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key1), res));
+  EXPECT_EQ(res, "10");
+  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res));
+  EXPECT_EQ(res, "10");
+  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
+  EXPECT_TRUE(s2->Update(mTbl, ToSlice(key1), ToSlice(newVal12)));
+  s1->CommitTx();
+  s2->AbortTx();
+}
+
 // G-single: Single Anti-dependency Cycles (read skew)
+TEST_F(AnomaliesTest, NoGSingle) {
+  GTEST_SKIP() << "Unfixed";
+  auto* s1 = mStore->GetSession(1);
+  auto* s2 = mStore->GetSession(2);
+
+  // Prepare: insert into test (id, value) values (1, 10), (2, 20);
+  std::string key1("1"), newVal11("11");
+  std::string key2("2"), newVal21("21");
+  std::string res;
+
+  s1->StartTx();
+  s2->StartTx();
+  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key1), res));
+  EXPECT_EQ(res, "10");
+  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res));
+  EXPECT_EQ(res, "10");
+  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key2), res));
+  EXPECT_EQ(res, "20");
+  EXPECT_TRUE(s2->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
+  EXPECT_TRUE(s2->Update(mTbl, ToSlice(key2), ToSlice(newVal21)));
+  s2->CommitTx();
+  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key2), res));
+  EXPECT_EQ(res, "20");
+  s1->CommitTx();
+}
+
 // G2-item: Item Anti-dependency Cycles (write skew on disjoint read)
-// G2: Anti-Dependency Cycles (write skew on predicate read)
+// begin; set transaction isolation level serializable; -- T1
+// begin; set transaction isolation level serializable; -- T2
+// select * from test where id in (1,2); -- T1
+// select * from test where id in (1,2); -- T2
+// update test set value = 11 where id = 1; -- T1
+// update test set value = 21 where id = 2; -- T2
+// commit; -- T1
+// commit; -- T2. Prints out "ERROR: could not serialize access due to
+// read/write dependencies among transactions"
+TEST_F(AnomaliesTest, G2Item) {
+  auto* s1 = mStore->GetSession(1);
+  auto* s2 = mStore->GetSession(2);
+
+  // Prepare: insert into test (id, value) values (1, 10), (2, 20);
+  std::string key1("1"), newVal11("11");
+  std::string key2("2"), newVal21("21");
+  std::string res;
+
+  s1->StartTx();
+  s2->StartTx();
+
+  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key1), res));
+  EXPECT_EQ(res, "10");
+  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key2), res));
+  EXPECT_EQ(res, "20");
+
+  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res));
+  EXPECT_EQ(res, "10");
+  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key2), res));
+  EXPECT_EQ(res, "20");
+
+  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
+  EXPECT_TRUE(s2->Update(mTbl, ToSlice(key2), ToSlice(newVal21)));
+
+  s1->CommitTx();
+  s2->CommitTx();
+}
 
 } // namespace test
 } // namespace leanstore

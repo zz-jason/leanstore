@@ -149,7 +149,7 @@ public:
   }
 
   inline static UpdateDesc* CreateFrom(u8* buffer) {
-    auto updateDesc = new (buffer) UpdateDesc();
+    auto* updateDesc = new (buffer) UpdateDesc();
     return updateDesc;
   }
 };
