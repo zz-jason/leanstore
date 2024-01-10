@@ -93,7 +93,7 @@ OpCode BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
         JUMPMU_RETURN OpCode::kNotFound;
       }
 
-      auto rawVal = guardedLeaf->ValData(slotId);
+      auto* rawVal = guardedLeaf->ValData(slotId);
       auto tuple = *Tuple::From(rawVal);
       guardedLeaf.JumpIfModifiedByOthers();
 
@@ -105,7 +105,7 @@ OpCode BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
       u32 offset = 0;
       switch (tuple.mFormat) {
       case TupleFormat::CHAINED: {
-        const auto chainedTuple = ChainedTuple::From(rawVal);
+        const auto* chainedTuple = ChainedTuple::From(rawVal);
         if (chainedTuple->mIsRemoved) {
           JUMPMU_RETURN OpCode::kNotFound;
         }
@@ -122,7 +122,7 @@ OpCode BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
       }
       }
 
-      // Fiund target payload, apply the callback
+      // Find target payload, apply the callback
       Slice payload = guardedLeaf->Value(slotId);
       payload.remove_prefix(offset);
       valCallback(payload);
