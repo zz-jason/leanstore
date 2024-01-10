@@ -8,11 +8,13 @@
 #include "storage/btree/core/BTreeSharedIterator.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "storage/buffer-manager/GuardedBufferFrame.hpp"
+#include "utils/Defer.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <glog/logging.h>
 
 #include <set>
+#include <variant>
 
 namespace leanstore {
 namespace storage {
@@ -361,9 +363,6 @@ public:
   }
 
 private:
-  OpCode lookupPessimistic(Slice key, ValCallback valCallback);
-  OpCode lookupOptimistic(Slice key, ValCallback valCallback);
-
   template <bool asc = true> OpCode scan(Slice key, ScanCallback callback) {
     // TODO: index range lock for serializability
     COUNTERS_BLOCK() {
@@ -555,18 +554,22 @@ private:
 
   inline std::tuple<OpCode, u16> GetVisibleTuple(Slice payload,
                                                  ValCallback callback) {
+    std::tuple<OpCode, u16> ret;
+    SCOPED_DEFER(DCHECK(std::get<0>(ret) == OpCode::kOK ||
+                        std::get<0>(ret) == OpCode::kNotFound)
+                     << "GetVisibleTuple should return either OK or NotFound";);
     while (true) {
       JUMPMU_TRY() {
-        const auto tuple = Tuple::From(payload.data());
+        const auto* const tuple = Tuple::From(payload.data());
         switch (tuple->mFormat) {
         case TupleFormat::CHAINED: {
-          const auto chainedTuple = ChainedTuple::From(payload.data());
-          auto ret = chainedTuple->GetVisibleTuple(payload, callback);
+          const auto* const chainedTuple = ChainedTuple::From(payload.data());
+          ret = chainedTuple->GetVisibleTuple(payload, callback);
           JUMPMU_RETURN ret;
         }
         case TupleFormat::FAT: {
-          const auto fatTuple = FatTuple::From(payload.data());
-          auto ret = fatTuple->GetVisibleTuple(callback);
+          const auto* const fatTuple = FatTuple::From(payload.data());
+          ret = fatTuple->GetVisibleTuple(callback);
           JUMPMU_RETURN ret;
         }
         default: {

@@ -27,122 +27,33 @@ namespace btree {
 
 OpCode BTreeVI::Lookup(Slice key, ValCallback valCallback) {
   DCHECK(cr::Worker::my().IsTxStarted());
-
-  OpCode ret = lookupOptimistic(key, valCallback);
-  if (ret == OpCode::kOther) {
-    return lookupPessimistic(key, valCallback);
+  BTreeSharedIterator iter(*static_cast<BTreeGeneric*>(this));
+  if (iter.seekExact(key) != OpCode::kOK) {
+    return OpCode::kNotFound;
   }
-  return ret;
-}
 
-OpCode BTreeVI::lookupPessimistic(Slice key, ValCallback valCallback) {
-  JUMPMU_TRY() {
-    BTreeSharedIterator iter(*static_cast<BTreeGeneric*>(this));
-    auto ret = iter.seekExact(key);
+  auto [ret, versionsRead] = GetVisibleTuple(iter.value(), valCallback);
+  COUNTERS_BLOCK() {
+    WorkerCounters::myCounters().cc_read_chains[mTreeId]++;
+    WorkerCounters::myCounters().cc_read_versions_visited[mTreeId] +=
+        versionsRead;
+  }
+
+  if (cr::activeTX().isOLAP() && ret == OpCode::kNotFound) {
+    BTreeSharedIterator gIter(*static_cast<BTreeGeneric*>(mGraveyard));
+    ret = gIter.seekExact(key);
     if (ret != OpCode::kOK) {
-      JUMPMU_RETURN OpCode::kNotFound;
+      return OpCode::kNotFound;
     }
-
-    auto versionsRead(0);
-    std::tie(ret, versionsRead) = GetVisibleTuple(iter.value(), valCallback);
+    std::tie(ret, versionsRead) = GetVisibleTuple(gIter.value(), valCallback);
     COUNTERS_BLOCK() {
       WorkerCounters::myCounters().cc_read_chains[mTreeId]++;
       WorkerCounters::myCounters().cc_read_versions_visited[mTreeId] +=
           versionsRead;
     }
-
-    if (cr::activeTX().isOLAP() && ret == OpCode::kNotFound) {
-      BTreeSharedIterator gIter(*static_cast<BTreeGeneric*>(mGraveyard));
-      ret = gIter.seekExact(key);
-      if (ret != OpCode::kOK) {
-        JUMPMU_RETURN OpCode::kNotFound;
-      }
-      std::tie(ret, versionsRead) = GetVisibleTuple(iter.value(), valCallback);
-      COUNTERS_BLOCK() {
-        WorkerCounters::myCounters().cc_read_chains[mTreeId]++;
-        WorkerCounters::myCounters().cc_read_versions_visited[mTreeId] +=
-            versionsRead;
-      }
-    }
-
-    if (ret != OpCode::kOK) {
-      JUMPMU_RETURN OpCode::kNotFound;
-    }
-    JUMPMU_RETURN ret;
-  }
-  JUMPMU_CATCH() {
-    LOG(ERROR) << "lookupPessimistic failed";
   }
 
-  return OpCode::kNotFound;
-}
-
-OpCode BTreeVI::lookupOptimistic(Slice key, ValCallback valCallback) {
-  const size_t maxAttempts = 2;
-  for (size_t i = maxAttempts; i > 0; i--) {
-    JUMPMU_TRY() {
-      // Find the correct page containing the key
-      GuardedBufferFrame<BTreeNode> guardedLeaf;
-      FindLeafCanJump(key, guardedLeaf);
-
-      // Find the correct slot of the key
-      // Return NOT_FOUND if could find the slot
-      s16 slotId = guardedLeaf->lowerBound<true>(key);
-      if (slotId == -1) {
-        guardedLeaf.JumpIfModifiedByOthers();
-        JUMPMU_RETURN OpCode::kNotFound;
-      }
-
-      auto* rawVal = guardedLeaf->ValData(slotId);
-      auto tuple = *Tuple::From(rawVal);
-      guardedLeaf.JumpIfModifiedByOthers();
-
-      // Return NOT_FOUND if the tuple is not visible
-      if (!VisibleForMe(tuple.mWorkerId, tuple.mTxId, false)) {
-        JUMPMU_RETURN OpCode::kNotFound;
-      }
-
-      u32 offset = 0;
-      switch (tuple.mFormat) {
-      case TupleFormat::CHAINED: {
-        const auto* chainedTuple = ChainedTuple::From(rawVal);
-        if (chainedTuple->mIsRemoved) {
-          JUMPMU_RETURN OpCode::kNotFound;
-        }
-        offset = sizeof(ChainedTuple);
-        break;
-      }
-      case TupleFormat::FAT: {
-        offset = sizeof(FatTuple);
-        break;
-      }
-      default: {
-        LOG(ERROR) << "Unhandled tuple format: "
-                   << TupleFormatUtil::ToString(tuple.mFormat);
-      }
-      }
-
-      // Find target payload, apply the callback
-      Slice payload = guardedLeaf->Value(slotId);
-      payload.remove_prefix(offset);
-      valCallback(payload);
-      guardedLeaf.JumpIfModifiedByOthers();
-
-      COUNTERS_BLOCK() {
-        WorkerCounters::myCounters().cc_read_chains[mTreeId]++;
-        WorkerCounters::myCounters().cc_read_versions_visited[mTreeId] += 1;
-      }
-
-      JUMPMU_RETURN OpCode::kOK;
-    }
-    JUMPMU_CATCH() {
-    }
-  }
-
-  // lookup failed, fallback to lookupPessimistic
-  LOG(INFO) << "lookupOptimistic failed " << maxAttempts
-            << " times, fallback to lookupPessimistic";
-  return OpCode::kOther;
+  return ret;
 }
 
 OpCode BTreeVI::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
