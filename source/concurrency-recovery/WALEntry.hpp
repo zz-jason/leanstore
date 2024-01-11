@@ -57,7 +57,7 @@ public:
   TXID mTxId;
 
   /// Transaction mode.
-  TX_MODE mTxMode;
+  TxMode mTxMode;
 
   /// ID of the worker who executes the transaction and records the WALEntry.
   WORKERID mWorkerId;

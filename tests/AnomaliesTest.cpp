@@ -1,4 +1,3 @@
-#include "LeanStore.hpp"
 #include "TxKV.hpp"
 #include "concurrency-recovery/CRMG.hpp"
 #include "storage/buffer-manager/BufferFrame.hpp"

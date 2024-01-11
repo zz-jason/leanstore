@@ -605,12 +605,12 @@ public:
 
   static void InsertToNode(GuardedBufferFrame<BTreeNode>& guardedNode,
                            Slice key, Slice val, WORKERID workerId,
-                           TXID txStartTs, TX_MODE txMode, s32& slotId) {
+                           TXID txStartTs, TxMode txMode, s32& slotId) {
     auto totalValSize = sizeof(ChainedTuple) + val.size();
     slotId = guardedNode->insertDoNotCopyPayload(key, totalValSize, slotId);
     auto tupleAddr = guardedNode->ValData(slotId);
     auto tuple = new (tupleAddr) ChainedTuple(workerId, txStartTs, val);
-    if (txMode == TX_MODE::INSTANTLY_VISIBLE_BULK_INSERT) {
+    if (txMode == TxMode::kInstantlyVisibleBulkInsert) {
       tuple->mTxId = MSB | 0;
     }
     guardedNode.MarkAsDirty();

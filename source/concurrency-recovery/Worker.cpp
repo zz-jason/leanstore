@@ -53,10 +53,10 @@ Worker::~Worker() {
   mLogging.mWalBuffer = nullptr;
 }
 
-void Worker::StartTx(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
+void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   utils::Timer timer(CRCounters::myCounters().cc_ms_start_tx);
   Transaction prevTx = mActiveTx;
-  DCHECK(prevTx.state != TX_STATE::STARTED);
+  DCHECK(prevTx.state != TxState::kStarted);
   SCOPED_DEFER({
     DLOG(INFO) << "Start transaction"
                << ", workerId=" << mWorkerId
@@ -92,8 +92,8 @@ void Worker::StartTx(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
   mLogging.mTxReadSnapshot = Logging::sGlobalMinFlushedGSN.load();
   mLogging.mHasRemoteDependency = false;
 
-  // Draw TXID from global counter and publish it with the TX type (i.e., OLAP
-  // or OLTP) We have to acquire a transaction id and use it for locking in
+  // Draw TXID from global counter and publish it with the TX type (i.e., kOLAP
+  // or kOLTP) We have to acquire a transaction id and use it for locking in
   // ANY isolation level
   if (level >= IsolationLevel::kSnapshotIsolation) {
     // implies multi-statement
@@ -133,7 +133,7 @@ void Worker::CommitTx() {
   utils::Timer timer(CRCounters::myCounters().cc_ms_commit_tx);
   mCommandId = 0; // Reset mCommandId only on commit and never on abort
 
-  DCHECK(mActiveTx.state == TX_STATE::STARTED);
+  DCHECK(mActiveTx.state == TxState::kStarted);
 
   if (activeTX().hasWrote()) {
     TXID commitTs = cc.commit_tree.commit(mActiveTx.startTS());
@@ -151,7 +151,7 @@ void Worker::CommitTx() {
   }
 
   mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
-  mActiveTx.state = TX_STATE::READY_TO_COMMIT;
+  mActiveTx.state = TxState::kReadyToCommit;
 
   // TODO: commitTs in log
   mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_COMMIT);
@@ -201,7 +201,7 @@ void Worker::CommitTx() {
              << ", workerId=" << mWorkerId << ", startTs=" << mActiveTx.mStartTs
              << ", commitTs=" << mActiveTx.mCommitTs
              << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
-  mActiveTx.state = TX_STATE::COMMITTED;
+  mActiveTx.state = TxState::kCommitted;
 }
 
 // TODO(jian.z): revert changes made in-place on the btree
@@ -210,7 +210,7 @@ void Worker::AbortTx() {
 
   ENSURE(FLAGS_wal);
   ENSURE(!mActiveTx.mWalExceedBuffer);
-  ENSURE(mActiveTx.state == TX_STATE::STARTED);
+  ENSURE(mActiveTx.state == TxState::kStarted);
 
   const u64 txId = mActiveTx.startTS();
   std::vector<const WALEntry*> entries;
@@ -236,7 +236,7 @@ void Worker::AbortTx() {
   mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_FINISH);
   mLogging.SubmitWALEntrySimple();
 
-  mActiveTx.state = TX_STATE::ABORTED;
+  mActiveTx.state = TxState::kAborted;
 }
 
 void Worker::shutdown() {

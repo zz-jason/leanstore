@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
   // -------------------------------------------------------------------------------------
   leanstore::IsolationLevel isolation_level =
       leanstore::parseIsolationLevel(FLAGS_isolation_level);
-  const TX_MODE tx_type = TX_MODE::OLTP;
+  const TxMode tx_type = TxMode::kOLTP;
   // -------------------------------------------------------------------------------------
   const u64 ycsb_tuple_count =
       (FLAGS_ycsb_tuple_count)

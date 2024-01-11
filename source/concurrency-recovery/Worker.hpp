@@ -336,10 +336,10 @@ public:
 
 public:
   bool IsTxStarted() {
-    return mActiveTx.state == TX_STATE::STARTED;
+    return mActiveTx.state == TxState::kStarted;
   }
 
-  void StartTx(TX_MODE mode = TX_MODE::OLTP,
+  void StartTx(TxMode mode = TxMode::kOLTP,
                IsolationLevel level = IsolationLevel::kSnapshotIsolation,
                bool isReadOnly = false);
 

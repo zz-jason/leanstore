@@ -3,6 +3,7 @@
 #include "KVInterface.hpp"
 #include "LeanStore.hpp"
 #include "Units.hpp"
+#include "concurrency-recovery/Transaction.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
 
@@ -47,6 +48,7 @@ class TableRef;
 class Session {
 public:
   // Transaction operations
+  virtual void SetIsolationLevel(IsolationLevel) = 0;
   virtual void StartTx() = 0;
   virtual void CommitTx() = 0;
   virtual void AbortTx() = 0;
@@ -113,15 +115,19 @@ class LeanStoreMVCCSession : public Session {
 private:
   WORKERID mWorkerId;
   LeanStoreMVCC* mStore;
+  TxMode mTxMode = TxMode::kOLTP;
+  IsolationLevel mIsolationLevel = IsolationLevel::kSnapshotIsolation;
 
 public:
   LeanStoreMVCCSession(WORKERID sessionId, LeanStoreMVCC* store)
-      : mWorkerId(sessionId), mStore(store) {
+      : mWorkerId(sessionId), mStore(store),
+        mIsolationLevel(IsolationLevel::kSnapshotIsolation) {
   }
   ~LeanStoreMVCCSession() = default;
 
 public:
   // Transaction operations
+  void SetIsolationLevel(IsolationLevel) override;
   void StartTx() override;
   void CommitTx() override;
   void AbortTx() override;
@@ -189,9 +195,12 @@ inline Session* LeanStoreMVCC::GetSession(WORKERID sessionId) {
 //------------------------------------------------------------------------------
 // LeanStoreMVCC
 //------------------------------------------------------------------------------
+inline void LeanStoreMVCCSession::SetIsolationLevel(IsolationLevel) {
+}
+
 inline void LeanStoreMVCCSession::StartTx() {
   cr::CRManager::sInstance->scheduleJobSync(
-      mWorkerId, [&]() { cr::Worker::my().StartTx(); });
+      mWorkerId, [&]() { cr::Worker::my().StartTx(mTxMode, mIsolationLevel); });
 }
 
 inline void LeanStoreMVCCSession::CommitTx() {
@@ -216,7 +225,7 @@ auto LeanStoreMVCCSession::CreateTable(const std::string& tblName,
   storage::btree::BTreeVI* btree;
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::my().StartTx();
+      cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
     }
     mStore->mLeanStore->RegisterBTreeVI(tblName, config, &btree);
     if (implicitTx) {
@@ -234,7 +243,7 @@ auto LeanStoreMVCCSession::DropTable(const std::string& tblName,
     -> std::expected<void, utils::Error> {
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::my().StartTx();
+      cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
     }
     mStore->mLeanStore->UnRegisterBTreeVI(tblName);
     if (implicitTx) {
@@ -252,7 +261,7 @@ auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
   OpCode res;
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::my().StartTx();
+      cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
     }
     SCOPED_DEFER(if (implicitTx) {
       if (res == OpCode::kOK) {
@@ -284,8 +293,7 @@ auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key, std::string& val,
 
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::my().StartTx(TX_MODE::OLTP,
-                               IsolationLevel::kSnapshotIsolation, true);
+      cr::Worker::my().StartTx(mTxMode, mIsolationLevel, true);
     }
     SCOPED_DEFER(if (implicitTx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
@@ -317,7 +325,7 @@ auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
   };
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::my().StartTx();
+      cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
     }
     SCOPED_DEFER(if (implicitTx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
@@ -352,7 +360,7 @@ auto LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key, bool implicitTx)
   OpCode res;
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::my().StartTx();
+      cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
     }
     SCOPED_DEFER(if (implicitTx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
