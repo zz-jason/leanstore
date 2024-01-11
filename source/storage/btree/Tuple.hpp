@@ -428,7 +428,7 @@ public:
   }
 
   std::tuple<OpCode, u16> GetVisibleTuple(Slice payload,
-                                             ValCallback callback) const;
+                                          ValCallback callback) const;
 
   void UpdateStats() {
     if (cr::Worker::my().cc.isVisibleForAll(mTxId) ||
@@ -446,7 +446,7 @@ public:
         cr::Worker::sOldestOltpStartTx != cr::Worker::sOldestAllStartTs;
     bool frequentlyUpdated = mTotalUpdates > FLAGS_worker_threads;
     bool recentUpdatedByOthers = mWorkerId != cr::Worker::my().mWorkerId ||
-                                 mTxId != cr::activeTX().startTS();
+                                 mTxId != cr::activeTX().mStartTs;
     return commandValid && hasLongRunningOLAP && recentUpdatedByOthers &&
            frequentlyUpdated;
   }

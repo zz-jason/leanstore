@@ -59,7 +59,7 @@ protected:
 };
 
 // G0: Write Cycles (dirty writes)
-TEST_F(AnomaliesTest, G0) {
+TEST_F(AnomaliesTest, NoG0) {
   auto* s1 = mStore->GetSession(1);
   auto* s2 = mStore->GetSession(2);
 
@@ -73,6 +73,27 @@ TEST_F(AnomaliesTest, G0) {
   // Snapshot isolation can prevent G0
   s1->SetIsolationLevel(IsolationLevel::kSnapshotIsolation);
   s2->SetIsolationLevel(IsolationLevel::kSnapshotIsolation);
+  s1->StartTx();
+  s2->StartTx();
+  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
+  EXPECT_FALSE(s2->Update(mTbl, ToSlice(key1), ToSlice(newVal12)));
+  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key2), ToSlice(newVal21)));
+  s1->CommitTx();
+  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key1), res, true));
+  EXPECT_EQ(res, newVal11);
+  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key2), res, true));
+  EXPECT_EQ(res, newVal21);
+
+  EXPECT_FALSE(s2->Update(mTbl, ToSlice(key2), ToSlice(newVal22)));
+  s2->CommitTx();
+  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res, true));
+  EXPECT_EQ(res, newVal11);
+  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key2), res, true));
+  EXPECT_EQ(res, newVal21);
+
+  // Serializable can prevent G0
+  s1->SetIsolationLevel(IsolationLevel::kSerializable);
+  s2->SetIsolationLevel(IsolationLevel::kSerializable);
   s1->StartTx();
   s2->StartTx();
   EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));

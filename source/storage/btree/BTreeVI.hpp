@@ -349,11 +349,11 @@ public:
       /**
        * The major work is in traversing the tree:
        *
-       * if (tuple.mTxId == cr::activeTX().startTS() &&
+       * if (tuple.mTxId == cr::activeTX().mStartTs &&
        *     tuple.mWorkerId == cr::Worker::my().mWorkerId) {
        *   auto& chainedTuple =
        *       *reinterpret_cast<ChainedTuple*>(iterator.MutableVal().data());
-       *   chainedTuple.mCommitTs = cr::activeTX().commitTS() | MSB;
+       *   chainedTuple.mCommitTs = cr::activeTX().mCommitTs | MSB;
        * }
        */
     }
@@ -392,7 +392,7 @@ private:
         auto reconstruct = GetVisibleTuple(iterator.value(), [&](Slice value) {
           COUNTERS_BLOCK() {
             WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
-                cr::activeTX().isOLAP();
+                cr::activeTX().IsOLAP();
           }
           keep_scanning = callback(s_key, value);
           counter++;
@@ -469,7 +469,7 @@ private:
         GetVisibleTuple(iterator.value(), [&](Slice value) {
           COUNTERS_BLOCK() {
             WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
-                cr::activeTX().isOLAP();
+                cr::activeTX().IsOLAP();
           }
           keep_scanning = callback(iterator.key(), value);
         });
@@ -501,7 +501,7 @@ private:
           GetVisibleTuple(g_iterator.value(), [&](Slice value) {
             COUNTERS_BLOCK() {
               WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
-                  cr::activeTX().isOLAP();
+                  cr::activeTX().IsOLAP();
             }
             keep_scanning = callback(g_key, value);
           });
@@ -522,7 +522,7 @@ private:
             GetVisibleTuple(g_iterator.value(), [&](Slice value) {
               COUNTERS_BLOCK() {
                 WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
-                    cr::activeTX().isOLAP();
+                    cr::activeTX().IsOLAP();
               }
               keep_scanning = callback(g_key, value);
             });

@@ -379,7 +379,7 @@ bool FatTuple::update(BTreeExclusiveIterator& xIter, Slice key,
       // Update the value in-place
       fatTuple->append(updateDesc);
       fatTuple->mWorkerId = cr::Worker::my().mWorkerId;
-      fatTuple->mTxId = cr::activeTX().startTS();
+      fatTuple->mTxId = cr::activeTX().mStartTs;
       fatTuple->mCommandId = cr::Worker::my().mCommandId++;
       updateCallBack(fatTuple->GetMutableValue());
       DCHECK(fatTuple->mPayloadCapacity >= fatTuple->mPayloadSize);
@@ -409,7 +409,7 @@ std::tuple<OpCode, u16> FatTuple::GetVisibleTuple(
     return {OpCode::kOK, 1};
   }
 
-  DCHECK(!cr::activeTX().isOLTP());
+  DCHECK(!cr::activeTX().IsOLTP());
 
   if (mNumDeltas > 0) {
     auto materializedValue = utils::JumpScopedArray<u8>(mValSize);
@@ -551,7 +551,7 @@ std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
                         prevTxId) -
                   cr::Worker::my().cc.local_workers_start_ts.get()
            << endl;
-      cerr << "tls = " << cr::Worker::my().mActiveTx.startTS() << endl;
+      cerr << "tls = " << cr::Worker::my().mActiveTx.mStartTs << endl;
       RAISE_WHEN(true);
       RAISE_WHEN(prevCommandId != INVALID_COMMANDID);
       return {OpCode::kNotFound, numVisitedVersions};
@@ -606,7 +606,7 @@ void ChainedTuple::Update(BTreeExclusiveIterator& xIter, Slice key,
          rawVal.length() - sizeof(ChainedTuple));
   updateCallBack(MutableSlice(payload, rawVal.length() - sizeof(ChainedTuple)));
   mWorkerId = cr::Worker::my().mWorkerId;
-  mTxId = cr::activeTX().startTS();
+  mTxId = cr::activeTX().mStartTs;
   mCommandId = commandId;
 
   WriteUnlock();

@@ -31,7 +31,7 @@ void ConcurrencyControl::refreshGlobalState() {
       u64 workerInFlightTxId = workerSnapshot.load();
       while ((workerInFlightTxId & Worker::LATCH_BIT) &&
              ((workerInFlightTxId & Worker::CLEAN_BITS_MASK) <
-              activeTX().startTS())) {
+              activeTX().mStartTs)) {
         workerInFlightTxId = workerSnapshot.load();
       }
 
@@ -228,7 +228,7 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId) {
   case IsolationLevel::kSnapshotIsolation:
   case IsolationLevel::kSerializable: {
     if (isCommitTs) {
-      return Worker::my().mActiveTx.startTS() > commitTs;
+      return Worker::my().mActiveTx.mStartTs > commitTs;
     }
 
     if (startTs < local_global_all_lwm_cache) {
@@ -236,7 +236,7 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId) {
     }
 
     // Use the cache
-    if (local_snapshot_cache_ts[workerId] == activeTX().startTS()) {
+    if (local_snapshot_cache_ts[workerId] == activeTX().mStartTs) {
       return mLocalSnapshotCache[workerId] >= startTs;
     }
     if (mLocalSnapshotCache[workerId] >= startTs) {
@@ -244,10 +244,10 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId) {
     }
     utils::Timer timer(CRCounters::myCounters().cc_ms_snapshotting);
     TXID largestVisibleTxId =
-        other(workerId).commit_tree.LCB(Worker::my().mActiveTx.startTS());
+        other(workerId).commit_tree.LCB(Worker::my().mActiveTx.mStartTs);
     if (largestVisibleTxId) {
       mLocalSnapshotCache[workerId] = largestVisibleTxId;
-      local_snapshot_cache_ts[workerId] = Worker::my().mActiveTx.startTS();
+      local_snapshot_cache_ts[workerId] = Worker::my().mActiveTx.mStartTs;
       return largestVisibleTxId >= startTs;
     }
     return false;

@@ -42,7 +42,7 @@ enum class IsolationLevel : u8 {
   kSerializable = 3,
 };
 
-inline IsolationLevel parseIsolationLevel(std::string str) {
+inline IsolationLevel ParseIsolationLevel(std::string str) {
   if (str == "ser") {
     return leanstore::IsolationLevel::kSerializable;
   }
@@ -60,14 +60,15 @@ struct TxStats {
   std::chrono::high_resolution_clock::time_point start;
   std::chrono::high_resolution_clock::time_point precommit;
   std::chrono::high_resolution_clock::time_point commit;
-  u64 flushes_counter = 0;
 };
 
-struct Transaction {
+class Transaction {
+public:
+  /// The state of the current transaction.
   TxState state = TxState::kIdle;
 
   /// mStartTs is the start timestamp of the transaction. Also used as
-  /// teansaction ID
+  /// teansaction ID.
   TXID mStartTs = 0;
 
   /// mCommitTs is the commit timestamp of the transaction.
@@ -84,54 +85,33 @@ struct Transaction {
   /// mTxIsolationLevel is the isolation level for the current transaction.
   IsolationLevel mTxIsolationLevel = IsolationLevel::kSnapshotIsolation;
 
-  bool mIsDurable = false;
-
+  /// Whether the transaction is assumed to be read-only. Read-only transactions
+  /// should not have any data writes during the transaction processing.
   bool mIsReadOnly = false;
 
+  /// Whether the transaction has any data writes. Transaction writes can be
+  /// detected once it generates a WAL entry.
   bool mHasWrote = false;
 
   bool mWalExceedBuffer = false;
 
   TxStats stats;
 
-  //---------------------------------------------------------------------------
-  // Object Utils
-  //---------------------------------------------------------------------------
-  bool isOLAP() {
+public:
+  bool IsOLAP() {
     return mTxMode == TxMode::kOLAP;
   }
 
-  bool isOLTP() {
+  bool IsOLTP() {
     return mTxMode == TxMode::kOLTP;
   }
 
-  bool isReadOnly() {
-    return mIsReadOnly;
-  }
-
-  bool hasWrote() {
-    return mHasWrote;
-  }
-  bool isDurable() {
-    return mIsDurable;
-  }
-  bool atLeastSI() {
+  bool AtLeastSI() {
     return mTxIsolationLevel >= IsolationLevel::kSnapshotIsolation;
   }
-  bool isSI() {
-    return mTxIsolationLevel == IsolationLevel::kSnapshotIsolation;
-  }
 
-  inline u64 startTS() {
-    return mStartTs;
-  }
-
-  inline u64 commitTS() {
-    return mCommitTs;
-  }
-
-  void markAsWrite() {
-    DCHECK(isReadOnly() == false);
+  void MarkAsWrite() {
+    DCHECK(mIsReadOnly == false);
     mHasWrote = true;
   }
 
@@ -143,15 +123,15 @@ struct Transaction {
     mMaxObservedGSN = 0;
     mTxMode = mode;
     mTxIsolationLevel = level;
-    mIsDurable = FLAGS_wal;
     mIsReadOnly = isReadOnly;
     mHasWrote = false;
     mWalExceedBuffer = false;
 
-    stats.start = std::chrono::high_resolution_clock::now();
-    stats.precommit = std::chrono::high_resolution_clock::time_point();
-    stats.commit = std::chrono::high_resolution_clock::time_point();
-    stats.flushes_counter = 0;
+    COUNTERS_BLOCK() {
+      stats.start = std::chrono::high_resolution_clock::now();
+      stats.precommit = std::chrono::high_resolution_clock::time_point();
+      stats.commit = std::chrono::high_resolution_clock::time_point();
+    }
   }
 
   bool CanCommit(u64 minFlushedGSN, TXID minFlushedTxId) {

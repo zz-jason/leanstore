@@ -443,7 +443,7 @@ inline void Logging::UpdateWalFlushReq() {
   auto current = mWalFlushReq.getNoSync();
   current.mWalBuffered = mWalBuffered;
   current.mCurrGSN = GetCurrentGsn();
-  current.mCurrTxId = Worker::my().mActiveTx.startTS();
+  current.mCurrTxId = Worker::my().mActiveTx.mStartTs;
   mWalFlushReq.SetSync(current);
 }
 
@@ -462,9 +462,9 @@ inline u64 ConcurrencyControl::insertVersion(
   auto& curWorker = Worker::my();
   const u64 commandId =
       (curWorker.mCommandId++) | ((isRemoveCommand) ? TYPE_MSB(COMMANDID) : 0);
-  mHistoryTree->insertVersion(curWorker.mWorkerId,
-                              curWorker.mActiveTx.startTS(), commandId, treeId,
-                              isRemoveCommand, versionSize, insertCallBack);
+  mHistoryTree->insertVersion(curWorker.mWorkerId, curWorker.mActiveTx.mStartTs,
+                              commandId, treeId, isRemoveCommand, versionSize,
+                              insertCallBack);
   return commandId;
 }
 

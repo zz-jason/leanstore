@@ -61,8 +61,8 @@ int main(int argc, char** argv) {
   // db.registerConfigEntry("ycsb_threads", FLAGS_ycsb_threads);
   // db.registerConfigEntry("ycsb_ops_per_tx", FLAGS_ycsb_ops_per_tx);
 
-  auto isolation_level = leanstore::parseIsolationLevel(FLAGS_isolation_level);
-  const TxMode tx_type = TxMode::kOLTP;
+  auto isolationLevel = leanstore::ParseIsolationLevel(FLAGS_isolation_level);
+  const TxMode txType = TxMode::kOLTP;
 
   const u64 ycsb_tuple_count =
       (FLAGS_ycsb_tuple_count)
@@ -83,7 +83,7 @@ int main(int argc, char** argv) {
             crm.scheduleJobAsync(t_i, [&, begin, end]() {
               for (u64 i = begin; i < end; i++) {
                 YCSBPayload result;
-                cr::Worker::my().StartTx(tx_type, isolation_level);
+                cr::Worker::my().StartTx(txType, isolationLevel);
                 table.lookup1(
                     {static_cast<YCSBKey>(i)},
                     [&](const KVTable& record) { result = record.mValue; });
@@ -115,7 +115,7 @@ int main(int argc, char** argv) {
                   reinterpret_cast<u8*>(&payload), sizeof(YCSBPayload));
               YCSBKey key = i;
               cr::Worker::my().StartTx(
-                  tx_type, leanstore::IsolationLevel::kSnapshotIsolation);
+                  txType, leanstore::IsolationLevel::kSnapshotIsolation);
               table.insert({key}, {payload});
               cr::Worker::my().CommitTx();
             }
@@ -160,7 +160,7 @@ int main(int argc, char** argv) {
           }
           DCHECK(key < ycsb_tuple_count);
           YCSBPayload result;
-          cr::Worker::my().StartTx(tx_type, isolation_level);
+          cr::Worker::my().StartTx(txType, isolationLevel);
           for (u64 op_i = 0; op_i < FLAGS_ycsb_ops_per_tx; op_i++) {
             if (FLAGS_ycsb_read_ratio == 100 ||
                 utils::RandomGenerator::getRandU64(0, 100) <

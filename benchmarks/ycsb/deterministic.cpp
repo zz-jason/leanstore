@@ -59,7 +59,7 @@ int main(int argc, char** argv) {
   db.registerConfigEntry("ycsb_ops_per_tx", FLAGS_ycsb_ops_per_tx);
   // -------------------------------------------------------------------------------------
   leanstore::IsolationLevel isolation_level =
-      leanstore::parseIsolationLevel(FLAGS_isolation_level);
+      leanstore::ParseIsolationLevel(FLAGS_isolation_level);
   const TxMode tx_type = TxMode::kOLTP;
   // -------------------------------------------------------------------------------------
   const u64 ycsb_tuple_count =
