@@ -35,7 +35,7 @@ public:
   ///
   /// NOTE: It should be created after all the worker threads are created and
   /// started.
-  std::unique_ptr<GroupCommitter> mGrouopCommitter;
+  std::unique_ptr<GroupCommitter> mGroupCommitter;
 
   std::unique_ptr<HistoryTreeInterface> mHistoryTreePtr;
 
@@ -104,6 +104,8 @@ public:
   StringMap serialize();
 
   void deserialize(StringMap map);
+
+  void stop();
 
 private:
   static std::atomic<u64> sFsyncCounter;

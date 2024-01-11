@@ -1,8 +1,10 @@
 #include "Units.hpp"
 
+#include <atomic>
 #include <functional>
 #include <list>
 #include <memory>
+#include <type_traits>
 #include <vector>
 
 namespace leanstore {
@@ -11,7 +13,9 @@ namespace utils {
 /**
  * Makes sense for single-writer multiple-readers pattern for short write
  */
-template <typename T> class OptimisticSpinStruct {
+template <typename T>
+  requires std::is_trivially_copy_assignable_v<T>
+class OptimisticSpinStruct {
 public:
   T mValue;
   std::atomic<u64> mOptimisticLatch;
