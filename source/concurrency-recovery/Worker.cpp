@@ -1,8 +1,8 @@
 #include "Worker.hpp"
 
 #include "Config.hpp"
-#include "Exceptions.hpp"
 #include "profiling/counters/CRCounters.hpp"
+#include "shared-headers/Exceptions.hpp"
 #include "storage/buffer-manager/TreeRegistry.hpp"
 #include "utils/Defer.hpp"
 

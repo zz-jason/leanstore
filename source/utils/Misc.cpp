@@ -1,14 +1,8 @@
 #include "Misc.hpp"
 
-#include "Exceptions.hpp"
-
-#include "Config.hpp"
-
-#include "CRC.hpp"
+#include "shared-headers/CRC.hpp"
 
 #include <execinfo.h>
-
-#include <atomic>
 
 namespace leanstore {
 namespace utils {
@@ -27,10 +21,10 @@ void PrintBackTrace() {
 
   free(strings);
 }
-// -------------------------------------------------------------------------------------
+
 u32 CRC(const u8* src, u64 size) {
   return CRC::Calculate(src, size, CRC::CRC_32());
 }
-// -------------------------------------------------------------------------------------
+
 } // namespace utils
 } // namespace leanstore

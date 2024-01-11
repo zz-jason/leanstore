@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Exceptions.hpp"
+#include "shared-headers/Exceptions.hpp"
 #include "KVInterface.hpp"
 #include "Types.hpp"
 #include "storage/btree/core/WALMacros.hpp"

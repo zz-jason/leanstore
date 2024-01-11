@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Transaction.hpp"
-#include "Units.hpp"
+#include "shared-headers/Units.hpp"
 #include "utils/Misc.hpp"
 
 #include "rapidjson/document.h"

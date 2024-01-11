@@ -1,7 +1,7 @@
 #include "Parallelize.hpp"
 
-#include "Exceptions.hpp"
-#include "Units.hpp"
+#include "shared-headers/Exceptions.hpp"
+#include "shared-headers/Units.hpp"
 
 #include <glog/logging.h>
 

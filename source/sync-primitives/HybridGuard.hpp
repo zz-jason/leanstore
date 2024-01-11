@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Exceptions.hpp"
+#include "shared-headers/Exceptions.hpp"
 #include "HybridLatch.hpp"
-#include "Units.hpp"
+#include "shared-headers/Units.hpp"
 #include "utils/JumpMU.hpp"
 
 #include <glog/logging.h>

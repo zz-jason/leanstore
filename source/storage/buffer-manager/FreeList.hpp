@@ -1,8 +1,8 @@
 #pragma once
 
 #include "BufferFrame.hpp"
-#include "Exceptions.hpp"
-#include "Units.hpp"
+#include "shared-headers/Exceptions.hpp"
+#include "shared-headers/Units.hpp"
 
 #include <mutex>
 

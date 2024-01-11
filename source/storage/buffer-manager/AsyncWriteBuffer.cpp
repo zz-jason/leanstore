@@ -1,6 +1,6 @@
 #include "AsyncWriteBuffer.hpp"
 
-#include "Exceptions.hpp"
+#include "shared-headers/Exceptions.hpp"
 #include "Tracing.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "PerfEvent.hpp"
-#include "Units.hpp"
+#include "shared-headers/PerfEvent.hpp"
+#include "shared-headers/Units.hpp"
 
 #include <memory>
 #include <mutex>

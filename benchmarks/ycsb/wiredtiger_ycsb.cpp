@@ -2,7 +2,7 @@
 
 #include "../shared/Schema.hpp"
 #include "../shared/WiredTigerAdapter.hpp"
-#include "Units.hpp"
+#include "shared-headers/Units.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/profiling/counters/WorkerCounters.hpp"

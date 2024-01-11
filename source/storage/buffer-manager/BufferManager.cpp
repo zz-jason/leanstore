@@ -2,7 +2,7 @@
 
 #include "BufferFrame.hpp"
 #include "Config.hpp"
-#include "Exceptions.hpp"
+#include "shared-headers/Exceptions.hpp"
 #include "concurrency-recovery/CRMG.hpp"
 #include "concurrency-recovery/GroupCommitter.hpp"
 #include "concurrency-recovery/Recovery.hpp"

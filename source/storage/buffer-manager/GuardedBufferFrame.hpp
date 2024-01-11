@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Exceptions.hpp"
+#include "shared-headers/Exceptions.hpp"
 #include "concurrency-recovery/WALEntry.hpp"
 #include "concurrency-recovery/Worker.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
