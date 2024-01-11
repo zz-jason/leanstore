@@ -1,17 +1,7 @@
 #include "TxKV.hpp"
-#include "concurrency-recovery/CRMG.hpp"
-#include "storage/buffer-manager/BufferFrame.hpp"
-#include "storage/buffer-manager/BufferManager.hpp"
-#include "utils/DebugFlags.hpp"
-#include "utils/Defer.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <gtest/gtest.h>
-
-#include <filesystem>
-#include <iostream>
-#include <mutex>
-#include <shared_mutex>
 
 using namespace leanstore::utils;
 using namespace leanstore::storage::btree;
@@ -271,20 +261,10 @@ TEST_F(AnomaliesTest, NoGSingle) {
 }
 
 // G2-item: Item Anti-dependency Cycles (write skew on disjoint read)
-// begin; set transaction isolation level serializable; -- T1
-// begin; set transaction isolation level serializable; -- T2
-// select * from test where id in (1,2); -- T1
-// select * from test where id in (1,2); -- T2
-// update test set value = 11 where id = 1; -- T1
-// update test set value = 21 where id = 2; -- T2
-// commit; -- T1
-// commit; -- T2. Prints out "ERROR: could not serialize access due to
-// read/write dependencies among transactions"
 TEST_F(AnomaliesTest, G2Item) {
   auto* s1 = mStore->GetSession(1);
   auto* s2 = mStore->GetSession(2);
 
-  // Prepare: insert into test (id, value) values (1, 10), (2, 20);
   std::string key1("1"), newVal11("11");
   std::string key2("2"), newVal21("21");
   std::string res;
