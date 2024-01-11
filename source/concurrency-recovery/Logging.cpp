@@ -146,7 +146,7 @@ void Logging::SubmitWALEntryComplex(u64 totalSize) {
   mActiveWALEntryComplex->mCRC32 = mActiveWALEntryComplex->ComputeCRC32();
   mWalBuffered += totalSize;
   UpdateWalFlushReq();
-  Worker::my().mActiveTx.markAsWrite();
+  Worker::my().mActiveTx.MarkAsWrite();
 
   COUNTERS_BLOCK() {
     WorkerCounters::myCounters().wal_write_bytes += totalSize;

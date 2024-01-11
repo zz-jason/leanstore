@@ -1,8 +1,10 @@
 #include "Worker.hpp"
 
 #include "Config.hpp"
+#include "Exceptions.hpp"
 #include "profiling/counters/CRCounters.hpp"
 #include "storage/buffer-manager/TreeRegistry.hpp"
+#include "utils/Defer.hpp"
 
 #include <glog/logging.h>
 
@@ -53,10 +55,10 @@ Worker::~Worker() {
   mLogging.mWalBuffer = nullptr;
 }
 
-void Worker::StartTx(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
+void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   utils::Timer timer(CRCounters::myCounters().cc_ms_start_tx);
   Transaction prevTx = mActiveTx;
-  DCHECK(prevTx.state != TX_STATE::STARTED);
+  DCHECK(prevTx.state != TxState::kStarted);
   SCOPED_DEFER({
     DLOG(INFO) << "Start transaction"
                << ", workerId=" << mWorkerId
@@ -93,13 +95,9 @@ void Worker::StartTx(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
   mLogging.mHasRemoteDependency = false;
 
   // Draw TXID from global counter and publish it with the TX type (i.e., OLAP
-  // or OLTP) We have to acquire a transaction id and use it for locking in
-  // ANY isolation level
+  // or OLTP) We have to acquire a transaction id and use it for locking in ANY
+  // isolation level
   if (level >= IsolationLevel::kSnapshotIsolation) {
-    // implies multi-statement
-    if (prevTx.isReadCommitted() || prevTx.isReadUncommitted()) {
-      cc.switchToSnapshotIsolationMode();
-    }
     {
       utils::Timer timer(CRCounters::myCounters().cc_ms_snapshotting);
       auto& curWorkerSnapshot = sWorkersCurrentSnapshot[mWorkerId];
@@ -109,7 +107,7 @@ void Worker::StartTx(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
       mActiveTx.mStartTs = ConcurrencyControl::sGlobalClock.fetch_add(1);
       if (FLAGS_enable_olap_mode) {
         curWorkerSnapshot.store(mActiveTx.mStartTs |
-                                    ((mActiveTx.isOLAP()) ? OLAP_BIT : 0),
+                                    ((mActiveTx.IsOLAP()) ? OLAP_BIT : 0),
                                 std::memory_order_release);
       } else {
         curWorkerSnapshot.store(mActiveTx.mStartTs, std::memory_order_release);
@@ -118,7 +116,7 @@ void Worker::StartTx(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
     cc.commit_tree.cleanIfNecessary();
     cc.local_global_all_lwm_cache = sAllLwm.load();
   } else {
-    if (prevTx.atLeastSI()) {
+    if (prevTx.AtLeastSI()) {
       cc.switchToReadCommittedMode();
     }
     cc.commit_tree.cleanIfNecessary();
@@ -126,17 +124,21 @@ void Worker::StartTx(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
 }
 
 void Worker::CommitTx() {
-  if (!activeTX().isDurable()) {
+  SCOPED_DEFER(COUNTERS_BLOCK() {
+    mActiveTx.stats.commit = std::chrono::high_resolution_clock::now();
+  });
+
+  if (!FLAGS_wal) {
     return;
   }
 
   utils::Timer timer(CRCounters::myCounters().cc_ms_commit_tx);
   mCommandId = 0; // Reset mCommandId only on commit and never on abort
 
-  DCHECK(mActiveTx.state == TX_STATE::STARTED);
+  DCHECK(mActiveTx.state == TxState::kStarted);
 
-  if (activeTX().hasWrote()) {
-    TXID commitTs = cc.commit_tree.commit(mActiveTx.startTS());
+  if (activeTX().mHasWrote) {
+    TXID commitTs = cc.commit_tree.commit(mActiveTx.mStartTs);
     cc.mLatestWriteTx.store(commitTs, std::memory_order_release);
     mActiveTx.mCommitTs = commitTs;
     DCHECK(mActiveTx.mStartTs < mActiveTx.mCommitTs)
@@ -151,7 +153,7 @@ void Worker::CommitTx() {
   }
 
   mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
-  mActiveTx.state = TX_STATE::READY_TO_COMMIT;
+  mActiveTx.state = TxState::kReadyToCommit;
 
   // TODO: commitTs in log
   mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_COMMIT);
@@ -164,8 +166,9 @@ void Worker::CommitTx() {
     mLogging.mWalFlushReq.mOptimisticLatch.notify_all();
   }
 
-  mActiveTx.stats.precommit = std::chrono::high_resolution_clock::now();
-
+  COUNTERS_BLOCK() {
+    mActiveTx.stats.precommit = std::chrono::high_resolution_clock::now();
+  }
   if (mLogging.mHasRemoteDependency) {
     std::unique_lock<std::mutex> g(mLogging.mTxToCommitMutex);
     mLogging.mTxToCommit.push_back(mActiveTx);
@@ -186,7 +189,7 @@ void Worker::CommitTx() {
   }
 
   // Only committing snapshot/ changing between SI and lower modes
-  if (activeTX().atLeastSI()) {
+  if (activeTX().AtLeastSI()) {
     cc.refreshGlobalState();
   }
 
@@ -201,7 +204,7 @@ void Worker::CommitTx() {
              << ", workerId=" << mWorkerId << ", startTs=" << mActiveTx.mStartTs
              << ", commitTs=" << mActiveTx.mCommitTs
              << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
-  mActiveTx.state = TX_STATE::COMMITTED;
+  mActiveTx.state = TxState::kCommitted;
 }
 
 // TODO(jian.z): revert changes made in-place on the btree
@@ -210,9 +213,9 @@ void Worker::AbortTx() {
 
   ENSURE(FLAGS_wal);
   ENSURE(!mActiveTx.mWalExceedBuffer);
-  ENSURE(mActiveTx.state == TX_STATE::STARTED);
+  ENSURE(mActiveTx.state == TxState::kStarted);
 
-  const u64 txId = mActiveTx.startTS();
+  const u64 txId = mActiveTx.mStartTs;
   std::vector<const WALEntry*> entries;
   mLogging.iterateOverCurrentTXEntries([&](const WALEntry& entry) {
     if (entry.type == WALEntry::TYPE::COMPLEX) {
@@ -226,7 +229,7 @@ void Worker::AbortTx() {
   });
 
   cc.mHistoryTree->purgeVersions(
-      mWorkerId, mActiveTx.startTS(), mActiveTx.startTS(),
+      mWorkerId, mActiveTx.mStartTs, mActiveTx.mStartTs,
       [&](const TXID, const TREEID, const u8*, u64, const bool) {});
 
   mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_ABORT);
@@ -236,7 +239,7 @@ void Worker::AbortTx() {
   mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_FINISH);
   mLogging.SubmitWALEntrySimple();
 
-  mActiveTx.state = TX_STATE::ABORTED;
+  mActiveTx.state = TxState::kAborted;
 }
 
 void Worker::shutdown() {

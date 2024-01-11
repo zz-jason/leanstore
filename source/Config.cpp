@@ -120,7 +120,7 @@ DEFINE_uint64(wal_buffer_size, 1024 * 1024 * 10,
               "WAL buffer size for each worker (Bytes)");
 // -------------------------------------------------------------------------------------
 DEFINE_string(isolation_level, "si",
-              "options: si (Snapshot Isolation), ser (SERIALIZABLE)");
+              "options: si (Snapshot Isolation), ser (Serializable)");
 DEFINE_uint64(si_refresh_rate, 0, "");
 DEFINE_bool(todo, true, "");
 // -------------------------------------------------------------------------------------
