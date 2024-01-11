@@ -5,7 +5,6 @@
 
 #include <glog/logging.h>
 
-#include <atomic>
 #include <condition_variable>
 #include <functional>
 #include <mutex>
