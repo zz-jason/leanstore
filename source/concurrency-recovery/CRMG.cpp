@@ -45,6 +45,7 @@ CRManager::CRManager(s32 walFd)
     const int cpu = FLAGS_enable_pin_worker_threads ? FLAGS_worker_threads : -1;
     mGroupCommitter = std::make_unique<GroupCommitter>(walFd, mWorkers, cpu);
     mGroupCommitter->Start();
+    mGroupCommitterStarted = true;
   }
 
   // setup history tree
@@ -55,7 +56,8 @@ CRManager::CRManager(s32 walFd)
 }
 
 void CRManager::stop() {
-  mGroupCommitter->Stop(); 
+  mGroupCommitter->Stop();
+  mGroupCommitterStarted = false;
   mWorkerKeepRunning = false;
   for (auto& meta : mWorkerThreadsMeta) {
     meta.cv.notify_one();
@@ -97,8 +99,7 @@ void CRManager::runWorker(u64 workerId) {
   }
 
   // wait group committer thread to run
-  while (FLAGS_wal &&
-         (mGroupCommitter == nullptr || !mGroupCommitter->IsStarted())) {
+  while (FLAGS_wal && !mGroupCommitterStarted) {
   }
 
   auto& meta = mWorkerThreadsMeta[workerId];

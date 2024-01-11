@@ -22,18 +22,18 @@ public:
 
 public:
   T getSync() {
-  retry : {
-    u64 version = mOptimisticLatch.load();
-    while (version & LSB) {
-      version = mOptimisticLatch.load();
+    while (true) {
+      u64 version = mOptimisticLatch.load();
+      while (version & LSB) {
+        version = mOptimisticLatch.load();
+      }
+      T copy = mValue;
+      if (version != mOptimisticLatch.load()) {
+        continue;
+      }
+      copy.mVersion = version;
+      return copy;
     }
-    T copy = mValue;
-    if (version != mOptimisticLatch.load()) {
-      goto retry;
-    }
-    copy.mVersion = version;
-    return copy;
-  }
   }
 
   // Only writer should call this

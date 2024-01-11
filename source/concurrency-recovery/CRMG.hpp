@@ -37,6 +37,10 @@ public:
   /// started.
   std::unique_ptr<GroupCommitter> mGroupCommitter;
 
+  /// Whether the group committer thread is started. Worker threads can serve
+  /// user transactions only whent the group committer thread is started.
+  std::atomic<bool> mGroupCommitterStarted = false;
+
   std::unique_ptr<HistoryTreeInterface> mHistoryTreePtr;
 
   std::atomic<u64> mRunningThreads = 0;
