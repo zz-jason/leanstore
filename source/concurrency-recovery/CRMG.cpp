@@ -4,13 +4,10 @@
 #include "concurrency-recovery/HistoryTree.hpp"
 #include "profiling/counters/CPUCounters.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
-#include "utils/ThreadHolder.hpp"
 
-#include <cassert>
 #include <glog/logging.h>
 
 #include <mutex>
-#include <stdexcept>
 
 namespace leanstore {
 namespace cr {

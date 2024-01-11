@@ -1,16 +1,13 @@
 #pragma once
 
-#include <stdint.h>
-
 #include <algorithm>
 #include <cassert>
 #include <chrono>
-#include <fstream>
 #include <functional>
-#include <memory>
 #include <string>
-#include <utility>
 #include <vector>
+
+#include <stdint.h>
 
 namespace leanstore {
 namespace utils {

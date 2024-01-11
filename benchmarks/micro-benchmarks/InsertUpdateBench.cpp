@@ -1,33 +1,19 @@
 #include "LeanStore.hpp"
+#include "concurrency-recovery/CRMG.hpp"
 #include "storage/btree/core/BTreeGeneric.hpp"
-#include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
+#include "utils/RandomGenerator.hpp"
 
 #include <benchmark/benchmark.h>
-#include <gtest/gtest.h>
 
-#include <filesystem>
-#include <random>
+#include <gtest/gtest.h>
 #include <rapidjson/document.h>
 #include <rapidjson/rapidjson.h>
 
+#include <filesystem>
+#include <unordered_set>
+
 namespace leanstore::test {
-
-template <typename T = std::mt19937> auto random_generator() -> T {
-  auto constexpr fixed_seed = 123456789; // Fixed seed for deterministic output
-  return T{fixed_seed};
-}
-
-static std::string generate_random_alphanumeric_string(std::size_t len) {
-  static constexpr auto chars = "0123456789"
-                                "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                                "abcdefghijklmnopqrstuvwxyz";
-  thread_local auto rng = random_generator<>();
-  auto dist = std::uniform_int_distribution{{}, std::strlen(chars) - 1};
-  auto result = std::string(len, '\0');
-  std::generate_n(begin(result), len, [&]() { return chars[dist(rng)]; });
-  return result;
-}
 
 static void BenchUpdateInsert(benchmark::State& state) {
   FLAGS_enable_print_btree_stats_on_exit = true;
@@ -65,8 +51,8 @@ static void BenchUpdateInsert(benchmark::State& state) {
       std::string key;
       std::string val;
       for (size_t i = 0; i < 16; i++) {
-        key = generate_random_alphanumeric_string(24);
-        val = generate_random_alphanumeric_string(128);
+        key = utils::RandomGenerator::RandomAlphString(24);
+        val = utils::RandomGenerator::RandomAlphString(128);
         btree->insert(Slice((const u8*)key.data(), key.size()),
                       Slice((const u8*)val.data(), val.size()));
       }

@@ -1,12 +1,10 @@
 #include "Worker.hpp"
-
 #include "profiling/counters/WorkerCounters.hpp"
 #include "utils/Defer.hpp"
 
-#include "rapidjson/stringbuffer.h"
-#include "rapidjson/writer.h"
-
 #include <glog/logging.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 
 #include <cstring>
 

@@ -3,41 +3,33 @@
 #include "AsyncWriteBuffer.hpp"
 #include "BMPlainGuard.hpp"
 #include "BufferFrame.hpp"
-#include "BufferManager.hpp"
 #include "Config.hpp"
 #include "Exceptions.hpp"
 #include "FreeList.hpp"
 #include "Partition.hpp"
-#include "PerfEvent.hpp"
 #include "Swip.hpp"
 #include "Tracing.hpp"
 #include "TreeRegistry.hpp"
 #include "Units.hpp"
-#include "concurrency-recovery/CRMG.hpp"
 #include "profiling/counters/CPUCounters.hpp"
 #include "profiling/counters/PPCounters.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
 #include "storage/buffer-manager/AsyncWriteBuffer.hpp"
 #include "storage/buffer-manager/BufferFrame.hpp"
 #include "utils/Defer.hpp"
-#include "utils/FVector.hpp"
 #include "utils/Misc.hpp"
-#include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include <cstring>
-#include <fcntl.h>
-#include <list>
 #include <mutex>
-#include <queue>
+#include <thread>
+#include <unordered_map>
+
+#include <fcntl.h>
 #include <sys/resource.h>
 #include <sys/time.h>
-#include <thread>
 #include <unistd.h>
-#include <unordered_map>
 
 namespace leanstore {
 

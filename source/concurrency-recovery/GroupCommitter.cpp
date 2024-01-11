@@ -1,6 +1,10 @@
 #include "GroupCommitter.hpp"
+
 #include "CRMG.hpp"
 #include "Worker.hpp"
+#include "profiling/counters/CPUCounters.hpp"
+#include "utils/Timer.hpp"
+
 #include <algorithm>
 
 namespace leanstore {

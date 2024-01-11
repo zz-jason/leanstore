@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BufferFrame.hpp"
+#include "Exceptions.hpp"
 #include "Units.hpp"
 
 #include <mutex>
@@ -42,15 +43,15 @@ inline void FreeList::PushFront(BufferFrame* head, BufferFrame* tail,
 
 inline BufferFrame& FreeList::PopFrontMayJump() {
   JumpScoped<std::unique_lock<std::mutex>> guard(mutex);
-  BufferFrame* free_bf = mHead;
+  BufferFrame* freeBf = mHead;
   if (mHead == nullptr) {
     jumpmu::jump();
   } else {
     mHead = mHead->header.mNextFreeBf;
     mSize--;
-    PARANOID(free_bf->header.state == STATE::FREE);
+    PARANOID(freeBf->header.state == STATE::FREE);
   }
-  return *free_bf;
+  return *freeBf;
 }
 
 } // namespace storage

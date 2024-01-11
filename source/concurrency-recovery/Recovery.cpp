@@ -1,5 +1,10 @@
 #include "Recovery.hpp"
 
+#include "concurrency-recovery/WALEntry.hpp"
+#include "storage/btree/BTreeVI.hpp"
+#include "storage/btree/core/BTreeNode.hpp"
+#include "storage/btree/core/BTreeWALPayload.hpp"
+
 namespace leanstore {
 namespace cr {
 

@@ -15,4 +15,15 @@ AllowShortCaseLabelsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: None
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
-...
+IncludeCategories:
+  - Regex:           '^".*.hpp'
+    Priority:        2
+  - Regex:           '^("|<)(benchmark)/'
+    Priority:        3
+  - Regex:           '^("|<)(gtest|gmock|gflags|glog|rapidjson|tbb|tabulate)/'
+    Priority:        4
+  - Regex:           '<[[:alnum:]_/]+>'
+    Priority:        5
+  - Regex:           '<[[:alnum:]_/.]+>'
+    Priority:        6
+IncludeBlocks: Regroup

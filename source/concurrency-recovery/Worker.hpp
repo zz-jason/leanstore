@@ -4,8 +4,6 @@
 #include "Transaction.hpp"
 #include "WALEntry.hpp"
 #include "profiling/counters/CRCounters.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
-
 #include "utils/Defer.hpp"
 #include "utils/OptimisticSpinStruct.hpp"
 
@@ -15,12 +13,9 @@
 
 #include <atomic>
 #include <functional>
-#include <list>
-#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <queue>
 #include <shared_mutex>
 #include <vector>
 

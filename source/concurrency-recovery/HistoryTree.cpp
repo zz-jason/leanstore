@@ -6,13 +6,7 @@
 #include "storage/btree/core/BTreeSharedIterator.hpp"
 #include "utils/Misc.hpp"
 
-#include <atomic>
-#include <condition_variable>
 #include <functional>
-#include <map>
-#include <thread>
-#include <unordered_map>
-#include <vector>
 
 namespace leanstore {
 namespace cr {

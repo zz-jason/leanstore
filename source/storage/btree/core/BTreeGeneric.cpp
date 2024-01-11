@@ -2,10 +2,10 @@
 
 #include "Config.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "storage/btree/core/BTreeWALPayload.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "storage/buffer-manager/GuardedBufferFrame.hpp"
 #include "utils/Misc.hpp"
-#include "utils/RandomGenerator.hpp"
 
 #include <glog/logging.h>
 

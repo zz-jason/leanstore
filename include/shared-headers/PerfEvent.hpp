@@ -27,11 +27,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #if defined(__linux__)
 
-#include <asm/unistd.h>
-#include <linux/perf_event.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
-
 #include <chrono>
 #include <cstring>
 #include <iomanip>
@@ -40,6 +35,11 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#include <asm/unistd.h>
+#include <linux/perf_event.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
 
 struct PerfEvent {
   struct event {
@@ -269,8 +269,8 @@ struct PerfEvent {
     extendedNames.push_back("GHz");
     return extendedNames;
   }
-  std::unordered_map<string, double> getCountersMap() {
-    std::unordered_map<string, double> res;
+  std::unordered_map<std::string, double> getCountersMap() {
+    std::unordered_map<std::string, double> res;
     // print all metrics
     for (unsigned i = 0; i < events.size(); i++) {
       res[names[i]] = events[i].readCounter();

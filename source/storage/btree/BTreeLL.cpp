@@ -1,14 +1,11 @@
 #include "BTreeLL.hpp"
 
-#include "concurrency-recovery/CRMG.hpp"
 #include "storage/btree/core/BTreeExclusiveIterator.hpp"
 #include "storage/btree/core/BTreeSharedIterator.hpp"
 #include "utils/Misc.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
-
-#include <signal.h>
 
 using namespace std;
 using namespace leanstore::storage;

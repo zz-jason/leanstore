@@ -1,14 +1,15 @@
 #pragma once
 
-#include <stddef.h>
-#include <stdint.h>
-
-#include <cassert>
+#include <atomic>
 #include <iostream>
 #include <memory>
+#include <ostream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+
+#include <stddef.h>
+#include <stdint.h>
 
 using std::atomic;
 using std::cerr;

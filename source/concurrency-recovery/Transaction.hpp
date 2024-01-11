@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Config.hpp"
 #include "Exceptions.hpp"
 #include "Units.hpp"
 

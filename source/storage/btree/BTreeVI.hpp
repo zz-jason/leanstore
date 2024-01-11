@@ -6,15 +6,10 @@
 #include "profiling/counters/WorkerCounters.hpp"
 #include "storage/btree/core/BTreeExclusiveIterator.hpp"
 #include "storage/btree/core/BTreeSharedIterator.hpp"
-#include "storage/buffer-manager/BufferManager.hpp"
 #include "storage/buffer-manager/GuardedBufferFrame.hpp"
 #include "utils/Defer.hpp"
-#include "utils/RandomGenerator.hpp"
 
 #include <glog/logging.h>
-
-#include <set>
-#include <variant>
 
 namespace leanstore {
 namespace storage {

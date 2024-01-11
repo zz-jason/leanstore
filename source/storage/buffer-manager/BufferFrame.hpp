@@ -2,8 +2,7 @@
 
 #include "Swip.hpp"
 #include "Units.hpp"
-#include "sync-primitives/HybridGuard.hpp"
-#include "utils/JsonUtil.hpp"
+#include "sync-primitives/HybridLatch.hpp"
 #include "utils/Misc.hpp"
 
 #include <glog/logging.h>
@@ -12,7 +11,6 @@
 #include <atomic>
 #include <cstring>
 #include <limits>
-#include <vector>
 
 namespace leanstore {
 namespace storage {

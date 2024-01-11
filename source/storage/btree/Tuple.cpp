@@ -1,16 +1,13 @@
+#include "Tuple.hpp"
+
 #include "BTreeVI.hpp"
-#include "concurrency-recovery/CRMG.hpp"
 #include "storage/btree/core/BTreeNode.hpp"
 #include "utils/Misc.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include <map>
-#include <set>
 #include <unordered_map>
-
-#include <signal.h>
 
 using namespace std;
 using namespace leanstore::storage;

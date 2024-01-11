@@ -3,6 +3,7 @@
 #include "BufferFrame.hpp"
 #include "Config.hpp"
 #include "Exceptions.hpp"
+#include "concurrency-recovery/CRMG.hpp"
 #include "concurrency-recovery/GroupCommitter.hpp"
 #include "concurrency-recovery/Recovery.hpp"
 #include "profiling/counters/WorkerCounters.hpp"

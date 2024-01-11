@@ -5,9 +5,8 @@
 #include "utils/Misc.hpp"
 
 #include <functional>
+
 #include <libaio.h>
-#include <list>
-#include <unordered_map>
 
 namespace leanstore {
 namespace storage {

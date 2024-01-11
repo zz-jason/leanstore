@@ -1,13 +1,9 @@
 #pragma once
 
-#include "Config.hpp"
 #include "KVInterface.hpp"
 #include "core/BTreeGeneric.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
-#include "storage/buffer-manager/BufferManager.hpp"
-#include "storage/buffer-manager/GuardedBufferFrame.hpp"
+#include "storage/btree/core/BTreeWALPayload.hpp"
 #include "utils/Error.hpp"
-#include "utils/RandomGenerator.hpp"
 
 #include <expected>
 

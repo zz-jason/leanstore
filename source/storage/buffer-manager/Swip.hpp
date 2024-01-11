@@ -5,12 +5,10 @@
 
 #include <glog/logging.h>
 
-#include <atomic>
-
 namespace leanstore {
 namespace storage {
 
-struct BufferFrame;
+class BufferFrame;
 
 /// Swip represents either the page id or the pointer to the buffer frame
 /// which contains the page. It can be the following 3 stats:
@@ -64,7 +62,7 @@ public:
   }
 
   u64 asPageID() {
-    assert(isEVICTED());
+    DCHECK(isEVICTED());
     return mPageId & evicted_mask;
   }
 
@@ -88,7 +86,7 @@ public:
   }
 
   void MarkHOT() {
-    assert(isCOOL());
+    DCHECK(isCOOL());
     this->mPageId = mPageId & ~cool_bit;
   }
 
