@@ -96,10 +96,6 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   // or OLTP) We have to acquire a transaction id and use it for locking in ANY
   // isolation level
   if (level >= IsolationLevel::kSnapshotIsolation) {
-    // implies multi-statement
-    if (prevTx.isReadCommitted() || prevTx.isReadUncommitted()) {
-      cc.switchToSnapshotIsolationMode();
-    }
     {
       utils::Timer timer(CRCounters::myCounters().cc_ms_snapshotting);
       auto& curWorkerSnapshot = sWorkersCurrentSnapshot[mWorkerId];

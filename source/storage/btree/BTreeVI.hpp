@@ -543,8 +543,8 @@ private:
     JUMPMU_RETURN OpCode::kOther;
   }
 
-  inline bool VisibleForMe(WORKERID workerId, TXID txId, bool toWrite = true) {
-    return cr::Worker::my().cc.VisibleForMe(workerId, txId, toWrite);
+  inline bool VisibleForMe(WORKERID workerId, TXID txId) {
+    return cr::Worker::my().cc.VisibleForMe(workerId, txId);
   }
 
   inline static bool triggerPageWiseGarbageCollection(

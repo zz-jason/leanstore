@@ -36,8 +36,8 @@ inline std::string ToString(TxMode txMode) {
 }
 
 enum class IsolationLevel : u8 {
-  kReadUnCommitted = 0,
-  kReadCommitted = 1,
+  // kReadUnCommitted = 0,
+  // kReadCommitted = 1,
   kSnapshotIsolation = 2,
   kSerializable = 3,
 };
@@ -45,16 +45,11 @@ enum class IsolationLevel : u8 {
 inline IsolationLevel parseIsolationLevel(std::string str) {
   if (str == "ser") {
     return leanstore::IsolationLevel::kSerializable;
-  } else if (str == "si") {
-    return leanstore::IsolationLevel::kSnapshotIsolation;
-  } else if (str == "rc") {
-    return leanstore::IsolationLevel::kReadCommitted;
-  } else if (str == "ru") {
-    return leanstore::IsolationLevel::kReadUnCommitted;
-  } else {
-    UNREACHABLE();
-    return leanstore::IsolationLevel::kReadUnCommitted;
   }
+  if (str == "si") {
+    return leanstore::IsolationLevel::kSnapshotIsolation;
+  }
+  return leanstore::IsolationLevel::kSnapshotIsolation;
 }
 
 namespace cr {
@@ -125,12 +120,6 @@ struct Transaction {
   }
   bool isSI() {
     return mTxIsolationLevel == IsolationLevel::kSnapshotIsolation;
-  }
-  bool isReadCommitted() {
-    return mTxIsolationLevel == IsolationLevel::kReadCommitted;
-  }
-  bool isReadUncommitted() {
-    return mTxIsolationLevel == IsolationLevel::kReadUnCommitted;
   }
 
   inline u64 startTS() {

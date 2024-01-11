@@ -214,16 +214,10 @@ TXID ConcurrencyControl::getCommitTimestamp(WORKERID workerId, TXID txTs) {
   return commitTs;
 }
 
-bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId,
-                                      bool toWrite) {
+bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId) {
   const bool isCommitTs = txId & MSB;
   const TXID commitTs = isCommitTs ? (txId & MSB_MASK) : 0;
   const TXID startTs = txId & MSB_MASK;
-
-  // visible for all the READ-UNCOMMITTED transactions
-  if (!toWrite && activeTX().isReadUncommitted()) {
-    return true;
-  }
 
   // visible if writtern by me
   if (Worker::my().mWorkerId == workerId) {
@@ -231,32 +225,6 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId,
   }
 
   switch (activeTX().mTxIsolationLevel) {
-  case IsolationLevel::kReadUnCommitted:
-  case IsolationLevel::kReadCommitted: {
-    if (isCommitTs) {
-      return true;
-    }
-
-    // use cache
-    if (mLocalSnapshotCache[workerId] >= startTs) {
-      return true;
-    }
-
-    utils::Timer timer(CRCounters::myCounters().cc_ms_snapshotting);
-
-    TXID curTs = cr::Worker::Worker::my().cc.sGlobalClock.load() + 1;
-    TXID lastCommitTs = other(workerId).commit_tree.LCB(curTs);
-    mLocalSnapshotCache[workerId] = lastCommitTs;
-    local_snapshot_cache_ts[workerId] = curTs;
-
-    bool isVisible = lastCommitTs >= startTs;
-
-    // If the worker starts a transaction after the last commit, the data might
-    // be invible, i.e. startTs > lastCommitTs.
-    RAISE_WHEN(!isVisible);
-
-    return isVisible;
-  }
   case IsolationLevel::kSnapshotIsolation:
   case IsolationLevel::kSerializable: {
     if (isCommitTs) {

@@ -85,7 +85,7 @@ OpCode BTreeVI::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
     while (true) {
       auto rawVal = xIter.MutableVal();
       auto& tuple = *Tuple::From(rawVal.data());
-      auto visibleForMe = VisibleForMe(tuple.mWorkerId, tuple.mTxId, true);
+      auto visibleForMe = VisibleForMe(tuple.mWorkerId, tuple.mTxId);
       if (tuple.IsWriteLocked() || !visibleForMe) {
         LOG(ERROR) << "Update failed, primary tuple is write locked or not "
                       "visible for me"
@@ -225,7 +225,7 @@ OpCode BTreeVI::remove(Slice key) {
     // TODO: removing fat tuple is not supported atm
     DCHECK(chainedTuple.mFormat == TupleFormat::CHAINED);
     if (chainedTuple.IsWriteLocked() ||
-        !VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId, true)) {
+        !VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId)) {
       JUMPMU_RETURN OpCode::kAbortTx;
     }
     ENSURE(!cr::activeTX().atLeastSI() || chainedTuple.mIsRemoved == false);

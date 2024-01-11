@@ -195,7 +195,8 @@ inline Session* LeanStoreMVCC::GetSession(WORKERID sessionId) {
 //------------------------------------------------------------------------------
 // LeanStoreMVCC
 //------------------------------------------------------------------------------
-inline void LeanStoreMVCCSession::SetIsolationLevel(IsolationLevel) {
+inline void LeanStoreMVCCSession::SetIsolationLevel(IsolationLevel level) {
+  mIsolationLevel = level;
 }
 
 inline void LeanStoreMVCCSession::StartTx() {

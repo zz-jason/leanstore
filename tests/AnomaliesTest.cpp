@@ -1,4 +1,5 @@
 #include "TxKV.hpp"
+#include "concurrency-recovery/Transaction.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <gtest/gtest.h>
@@ -21,17 +22,27 @@ protected:
   ~AnomaliesTest() = default;
 
   void SetUp() override {
-    mStore = StoreFactory::GetLeanStoreMVCC("/tmp/AnomaliesTest", 4);
+    std::string storeDir = "/tmp/AnomaliesTest";
+    u32 sessionLimit = 4;
+    mStore = StoreFactory::GetLeanStoreMVCC(storeDir, sessionLimit);
     ASSERT_NE(mStore, nullptr);
 
+    // Set transaction isolation to SI before transaction tests, get ride of
+    // tests running before which changed the isolation level.
+    for (u32 i = 0; i < sessionLimit; ++i) {
+      mStore->GetSession(i)->SetIsolationLevel(
+          IsolationLevel::kSnapshotIsolation);
+    }
+
+    // Create a table with random name.
     auto* s0 = mStore->GetSession(0);
     mTblName = RandomGenerator::RandomAlphString(10);
     auto res = s0->CreateTable(mTblName, true);
     ASSERT_TRUE(res);
-
     mTbl = res.value();
     ASSERT_NE(mTbl, nullptr);
 
+    // Insert 2 key-values as the test base.
     std::string key1("1"), val1("10");
     std::string key2("2"), val2("20");
     ASSERT_TRUE(s0->Put(mTbl, ToSlice(key1), ToSlice(val1), true));
@@ -39,14 +50,16 @@ protected:
   }
 
   void TearDown() override {
+    // Cleanup, remove the created table.
     auto* s0 = mStore->GetSession(0);
+    s0->SetIsolationLevel(IsolationLevel::kSnapshotIsolation);
     auto res = s0->DropTable(mTblName, true);
     ASSERT_TRUE(res);
   }
 };
 
 // G0: Write Cycles (dirty writes)
-TEST_F(AnomaliesTest, NoG0) {
+TEST_F(AnomaliesTest, G0) {
   auto* s1 = mStore->GetSession(1);
   auto* s2 = mStore->GetSession(2);
 
@@ -57,6 +70,9 @@ TEST_F(AnomaliesTest, NoG0) {
   std::string newVal21("21"), newVal22("22");
   std::string res;
 
+  // Snapshot isolation can prevent G0
+  s1->SetIsolationLevel(IsolationLevel::kSnapshotIsolation);
+  s2->SetIsolationLevel(IsolationLevel::kSnapshotIsolation);
   s1->StartTx();
   s2->StartTx();
   EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));

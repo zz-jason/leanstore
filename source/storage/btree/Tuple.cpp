@@ -490,7 +490,7 @@ void FatTuple::convertToChained(TREEID treeId) {
 // TODO: Implement inserts after remove cases
 std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
     Slice payload, ValCallback callback) const {
-  if (cr::Worker::my().cc.VisibleForMe(mWorkerId, mTxId, false)) {
+  if (cr::Worker::my().cc.VisibleForMe(mWorkerId, mTxId)) {
     if (mIsRemoved) {
       return {OpCode::kNotFound, 1};
     }
@@ -556,7 +556,7 @@ std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
       RAISE_WHEN(prevCommandId != INVALID_COMMANDID);
       return {OpCode::kNotFound, numVisitedVersions};
     }
-    if (cr::Worker::my().cc.VisibleForMe(prevWorkerId, prevTxId, false)) {
+    if (cr::Worker::my().cc.VisibleForMe(prevWorkerId, prevTxId)) {
       callback(Slice(valueBuf.get(), valueSize));
       return {OpCode::kOK, numVisitedVersions};
     }

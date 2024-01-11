@@ -271,9 +271,8 @@ public:
   bool isVisibleForAll(TXID txId);
 
   /// Visibility check. Whethe the current tuple is visible for the current
-  /// worker transaction. Also used to check whether the tuple is write-locked,
-  /// hence we need the toWrite intention flag
-  bool VisibleForMe(WORKERID workerId, u64 txId, bool toWrite = true);
+  /// worker transaction.
+  bool VisibleForMe(WORKERID workerId, u64 txId);
 
   VISIBILITY isVisibleForIt(WORKERID whomWorkerId, WORKERID whatWorkerId,
                             u64 tts);
