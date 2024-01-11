@@ -1,61 +1,46 @@
 #include "LeanStore.hpp"
-#include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
-#include "utils/DebugFlags.hpp"
 #include "utils/Defer.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <gtest/gtest.h>
 
 #include <filesystem>
-#include <iostream>
-#include <mutex>
-#include <shared_mutex>
+#include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
+
+using namespace leanstore::utils;
+using namespace leanstore::storage::btree;
 
 namespace leanstore {
-
-template <typename T = std::mt19937> auto RandomGenerator() -> T {
-  auto constexpr fixed_seed = 123456789; // Fixed seed for deterministic output
-  return T{fixed_seed};
-}
-
-static std::string RandomAlphString(std::size_t len) {
-  static constexpr auto chars = "0123456789"
-                                "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                                "abcdefghijklmnopqrstuvwxyz";
-  thread_local auto rng = RandomGenerator<>();
-  auto dist = std::uniform_int_distribution{{}, std::strlen(chars) - 1};
-  auto result = std::string(len, '\0');
-  std::generate_n(begin(result), len, [&]() { return chars[dist(rng)]; });
-  return result;
-}
-
-static auto InitLeanStore() {
-  FLAGS_enable_print_btree_stats_on_exit = true;
-  FLAGS_wal = true;
-  FLAGS_bulk_insert = false;
-  FLAGS_worker_threads = 2;
-  FLAGS_recover = false;
-  FLAGS_data_dir = "/tmp/BTreeVITest";
-
-  std::filesystem::path dirPath = FLAGS_data_dir;
-  std::filesystem::remove_all(dirPath);
-  std::filesystem::create_directories(dirPath);
-  return std::make_unique<leanstore::LeanStore>();
-}
-
-static leanstore::LeanStore* GetLeanStore() {
-  static auto leanStore = InitLeanStore();
-  return leanStore.get();
-}
 
 class BTreeVITest : public ::testing::Test {
 protected:
   BTreeVITest() = default;
 
   ~BTreeVITest() = default;
+
+public:
+  inline static auto CreateLeanStore() {
+    FLAGS_enable_print_btree_stats_on_exit = true;
+    FLAGS_wal = true;
+    FLAGS_bulk_insert = false;
+    FLAGS_worker_threads = 3;
+    FLAGS_recover = false;
+    FLAGS_data_dir = "/tmp/BTreeVITest";
+
+    std::filesystem::path dirPath = FLAGS_data_dir;
+    std::filesystem::remove_all(dirPath);
+    std::filesystem::create_directories(dirPath);
+    return std::make_unique<leanstore::LeanStore>();
+  }
+
+  inline static leanstore::LeanStore* GetLeanStore() {
+    static std::unique_ptr<LeanStore> store = CreateLeanStore();
+    return store.get();
+  }
 };
 
 TEST_F(BTreeVITest, Create) {
@@ -209,13 +194,13 @@ TEST_F(BTreeVITest, Insert1000KVs) {
     ssize_t numKVs(1000);
     cr::Worker::my().StartTx();
     for (ssize_t i = 0; i < numKVs; ++i) {
-      auto key = RandomAlphString(24);
+      auto key = RandomGenerator::RandomAlphString(24);
       if (uniqueKeys.find(key) != uniqueKeys.end()) {
         i--;
         continue;
       }
       uniqueKeys.insert(key);
-      auto val = RandomAlphString(128);
+      auto val = RandomGenerator::RandomAlphString(128);
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
@@ -249,13 +234,13 @@ TEST_F(BTreeVITest, InsertDuplicates) {
     std::set<std::string> uniqueKeys;
     ssize_t numKVs(100);
     for (ssize_t i = 0; i < numKVs; ++i) {
-      auto key = RandomAlphString(24);
+      auto key = RandomGenerator::RandomAlphString(24);
       if (uniqueKeys.find(key) != uniqueKeys.end()) {
         i--;
         continue;
       }
       uniqueKeys.insert(key);
-      auto val = RandomAlphString(128);
+      auto val = RandomGenerator::RandomAlphString(128);
       cr::Worker::my().StartTx();
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
@@ -265,7 +250,7 @@ TEST_F(BTreeVITest, InsertDuplicates) {
 
     // insert duplicated keys
     for (auto& key : uniqueKeys) {
-      auto val = RandomAlphString(128);
+      auto val = RandomGenerator::RandomAlphString(128);
       cr::Worker::my().StartTx();
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
@@ -300,13 +285,13 @@ TEST_F(BTreeVITest, Remove) {
     std::set<std::string> uniqueKeys;
     ssize_t numKVs(100);
     for (ssize_t i = 0; i < numKVs; ++i) {
-      auto key = RandomAlphString(24);
+      auto key = RandomGenerator::RandomAlphString(24);
       if (uniqueKeys.find(key) != uniqueKeys.end()) {
         i--;
         continue;
       }
       uniqueKeys.insert(key);
-      auto val = RandomAlphString(128);
+      auto val = RandomGenerator::RandomAlphString(128);
 
       cr::Worker::my().StartTx();
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
@@ -357,13 +342,13 @@ TEST_F(BTreeVITest, RemoveNotExisted) {
     std::set<std::string> uniqueKeys;
     ssize_t numKVs(100);
     for (ssize_t i = 0; i < numKVs; ++i) {
-      auto key = RandomAlphString(24);
+      auto key = RandomGenerator::RandomAlphString(24);
       if (uniqueKeys.find(key) != uniqueKeys.end()) {
         i--;
         continue;
       }
       uniqueKeys.insert(key);
-      auto val = RandomAlphString(128);
+      auto val = RandomGenerator::RandomAlphString(128);
 
       cr::Worker::my().StartTx();
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
@@ -374,7 +359,7 @@ TEST_F(BTreeVITest, RemoveNotExisted) {
 
     // remove keys not existed
     for (ssize_t i = 0; i < numKVs; ++i) {
-      auto key = RandomAlphString(24);
+      auto key = RandomGenerator::RandomAlphString(24);
       if (uniqueKeys.find(key) != uniqueKeys.end()) {
         i--;
         continue;
@@ -414,13 +399,13 @@ TEST_F(BTreeVITest, RemoveFromOthers) {
     // insert numKVs tuples
     ssize_t numKVs(100);
     for (ssize_t i = 0; i < numKVs; ++i) {
-      auto key = RandomAlphString(24);
+      auto key = RandomGenerator::RandomAlphString(24);
       if (uniqueKeys.find(key) != uniqueKeys.end()) {
         i--;
         continue;
       }
       uniqueKeys.insert(key);
-      auto val = RandomAlphString(128);
+      auto val = RandomGenerator::RandomAlphString(128);
 
       cr::Worker::my().StartTx();
       EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
@@ -521,8 +506,8 @@ TEST_F(BTreeVITest, Update) {
   const size_t valSize = 120;
   std::vector<std::tuple<std::string, std::string>> kvToTest;
   for (size_t i = 0; i < numKVs; ++i) {
-    auto key = RandomAlphString(24);
-    auto val = RandomAlphString(valSize);
+    auto key = RandomGenerator::RandomAlphString(24);
+    auto val = RandomGenerator::RandomAlphString(valSize);
     kvToTest.push_back(std::make_tuple(key, val));
   }
 
@@ -551,7 +536,7 @@ TEST_F(BTreeVITest, Update) {
     }
 
     // update all the values to this newVal
-    auto newVal = RandomAlphString(valSize);
+    auto newVal = RandomGenerator::RandomAlphString(valSize);
     auto updateCallBack = [&](MutableSlice val) {
       std::memcpy(val.data(), newVal.data(), val.length());
     };
@@ -605,8 +590,8 @@ TEST_F(BTreeVITest, ScanAsc) {
   std::string smallest;
   std::string bigest;
   for (size_t i = 0; i < numKVs; ++i) {
-    auto key = RandomAlphString(24);
-    auto val = RandomAlphString(valSize);
+    auto key = RandomGenerator::RandomAlphString(24);
+    auto val = RandomGenerator::RandomAlphString(valSize);
     if (kvToTest.find(key) != kvToTest.end()) {
       i--;
       continue;
@@ -691,8 +676,8 @@ TEST_F(BTreeVITest, ScanDesc) {
   std::string smallest;
   std::string bigest;
   for (size_t i = 0; i < numKVs; ++i) {
-    auto key = RandomAlphString(24);
-    auto val = RandomAlphString(valSize);
+    auto key = RandomGenerator::RandomAlphString(24);
+    auto val = RandomGenerator::RandomAlphString(valSize);
     if (kvToTest.find(key) != kvToTest.end()) {
       i--;
       continue;

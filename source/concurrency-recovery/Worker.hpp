@@ -271,9 +271,8 @@ public:
   bool isVisibleForAll(TXID txId);
 
   /// Visibility check. Whethe the current tuple is visible for the current
-  /// worker transaction. Also used to check whether the tuple is write-locked,
-  /// hence we need the toWrite intention flag
-  bool VisibleForMe(WORKERID workerId, u64 txId, bool toWrite = true);
+  /// worker transaction.
+  bool VisibleForMe(WORKERID workerId, u64 txId);
 
   VISIBILITY isVisibleForIt(WORKERID whomWorkerId, WORKERID whatWorkerId,
                             u64 tts);
@@ -336,10 +335,10 @@ public:
 
 public:
   bool IsTxStarted() {
-    return mActiveTx.state == TX_STATE::STARTED;
+    return mActiveTx.state == TxState::kStarted;
   }
 
-  void StartTx(TX_MODE mode = TX_MODE::OLTP,
+  void StartTx(TxMode mode = TxMode::kOLTP,
                IsolationLevel level = IsolationLevel::kSnapshotIsolation,
                bool isReadOnly = false);
 
@@ -444,7 +443,7 @@ inline void Logging::UpdateWalFlushReq() {
   auto current = mWalFlushReq.getNoSync();
   current.mWalBuffered = mWalBuffered;
   current.mCurrGSN = GetCurrentGsn();
-  current.mCurrTxId = Worker::my().mActiveTx.startTS();
+  current.mCurrTxId = Worker::my().mActiveTx.mStartTs;
   mWalFlushReq.SetSync(current);
 }
 
@@ -463,9 +462,9 @@ inline u64 ConcurrencyControl::insertVersion(
   auto& curWorker = Worker::my();
   const u64 commandId =
       (curWorker.mCommandId++) | ((isRemoveCommand) ? TYPE_MSB(COMMANDID) : 0);
-  mHistoryTree->insertVersion(curWorker.mWorkerId,
-                              curWorker.mActiveTx.startTS(), commandId, treeId,
-                              isRemoveCommand, versionSize, insertCallBack);
+  mHistoryTree->insertVersion(curWorker.mWorkerId, curWorker.mActiveTx.mStartTs,
+                              commandId, treeId, isRemoveCommand, versionSize,
+                              insertCallBack);
   return commandId;
 }
 

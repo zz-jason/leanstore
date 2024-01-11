@@ -10,69 +10,65 @@
 
 namespace leanstore {
 
-enum class TX_MODE : u8 {
-  OLAP = 0,
-  OLTP = 1,
-  DETERMINISTIC = 2,
-  INSTANTLY_VISIBLE_BULK_INSERT = 3,
+enum class TxMode : u8 {
+  kOLAP = 0,
+  kOLTP = 1,
+  kDeterministic = 2,
+  kInstantlyVisibleBulkInsert = 3,
 };
 
-inline std::string ToString(TX_MODE txMode) {
+inline std::string ToString(TxMode txMode) {
   switch (txMode) {
-  case TX_MODE::OLAP: {
+  case TxMode::kOLAP: {
     return "OLAP";
   }
-  case TX_MODE::OLTP: {
+  case TxMode::kOLTP: {
     return "OLTP";
   }
-  case TX_MODE::DETERMINISTIC: {
-    return "DETERMINISTIC";
+  case TxMode::kDeterministic: {
+    return "Deterministic";
   }
-  case TX_MODE::INSTANTLY_VISIBLE_BULK_INSERT: {
-    return "INSTANTLY_VISIBLE_BULK_INSERT";
+  case TxMode::kInstantlyVisibleBulkInsert: {
+    return "InstantlyVisibleBulkInsert";
   }
   }
-  return "Unknown TX_MODE";
+  return "Unknown TxMode";
 }
 
 enum class IsolationLevel : u8 {
-  SERIALIZABLE = 3,
+  // kReadUnCommitted = 0,
+  // kReadCommitted = 1,
   kSnapshotIsolation = 2,
-  READ_COMMITTED = 1,
-  READ_UNCOMMITTED = 0
+  kSerializable = 3,
 };
 
-inline IsolationLevel parseIsolationLevel(std::string str) {
+inline IsolationLevel ParseIsolationLevel(std::string str) {
   if (str == "ser") {
-    return leanstore::IsolationLevel::SERIALIZABLE;
-  } else if (str == "si") {
-    return leanstore::IsolationLevel::kSnapshotIsolation;
-  } else if (str == "rc") {
-    return leanstore::IsolationLevel::READ_COMMITTED;
-  } else if (str == "ru") {
-    return leanstore::IsolationLevel::READ_UNCOMMITTED;
-  } else {
-    UNREACHABLE();
-    return leanstore::IsolationLevel::READ_UNCOMMITTED;
+    return leanstore::IsolationLevel::kSerializable;
   }
+  if (str == "si") {
+    return leanstore::IsolationLevel::kSnapshotIsolation;
+  }
+  return leanstore::IsolationLevel::kSnapshotIsolation;
 }
 
 namespace cr {
 
-enum class TX_STATE { IDLE, STARTED, READY_TO_COMMIT, COMMITTED, ABORTED };
+enum class TxState { kIdle, kStarted, kReadyToCommit, kCommitted, kAborted };
 
 struct TxStats {
   std::chrono::high_resolution_clock::time_point start;
   std::chrono::high_resolution_clock::time_point precommit;
   std::chrono::high_resolution_clock::time_point commit;
-  u64 flushes_counter = 0;
 };
 
-struct Transaction {
-  TX_STATE state = TX_STATE::IDLE;
+class Transaction {
+public:
+  /// The state of the current transaction.
+  TxState state = TxState::kIdle;
 
   /// mStartTs is the start timestamp of the transaction. Also used as
-  /// teansaction ID
+  /// teansaction ID.
   TXID mStartTs = 0;
 
   /// mCommitTs is the commit timestamp of the transaction.
@@ -84,85 +80,58 @@ struct Transaction {
   LID mMaxObservedGSN = 0;
 
   /// mTxMode is the mode of the current transaction.
-  TX_MODE mTxMode = TX_MODE::OLTP;
+  TxMode mTxMode = TxMode::kOLTP;
 
   /// mTxIsolationLevel is the isolation level for the current transaction.
   IsolationLevel mTxIsolationLevel = IsolationLevel::kSnapshotIsolation;
 
-  bool mIsDurable = false;
-
+  /// Whether the transaction is assumed to be read-only. Read-only transactions
+  /// should not have any data writes during the transaction processing.
   bool mIsReadOnly = false;
 
+  /// Whether the transaction has any data writes. Transaction writes can be
+  /// detected once it generates a WAL entry.
   bool mHasWrote = false;
 
   bool mWalExceedBuffer = false;
 
   TxStats stats;
 
-  //---------------------------------------------------------------------------
-  // Object Utils
-  //---------------------------------------------------------------------------
-  bool isOLAP() {
-    return mTxMode == TX_MODE::OLAP;
+public:
+  bool IsOLAP() {
+    return mTxMode == TxMode::kOLAP;
   }
 
-  bool isOLTP() {
-    return mTxMode == TX_MODE::OLTP;
+  bool IsOLTP() {
+    return mTxMode == TxMode::kOLTP;
   }
 
-  bool isReadOnly() {
-    return mIsReadOnly;
-  }
-
-  bool hasWrote() {
-    return mHasWrote;
-  }
-  bool isDurable() {
-    return mIsDurable;
-  }
-  bool atLeastSI() {
+  bool AtLeastSI() {
     return mTxIsolationLevel >= IsolationLevel::kSnapshotIsolation;
   }
-  bool isSI() {
-    return mTxIsolationLevel == IsolationLevel::kSnapshotIsolation;
-  }
-  bool isReadCommitted() {
-    return mTxIsolationLevel == IsolationLevel::READ_COMMITTED;
-  }
-  bool isReadUncommitted() {
-    return mTxIsolationLevel == IsolationLevel::READ_UNCOMMITTED;
-  }
 
-  inline u64 startTS() {
-    return mStartTs;
-  }
-
-  inline u64 commitTS() {
-    return mCommitTs;
-  }
-
-  void markAsWrite() {
-    DCHECK(isReadOnly() == false);
+  void MarkAsWrite() {
+    DCHECK(mIsReadOnly == false);
     mHasWrote = true;
   }
 
   // Start a new transaction, reset all fields used by previous transaction
-  void Start(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
-    state = TX_STATE::STARTED;
+  void Start(TxMode mode, IsolationLevel level, bool isReadOnly) {
+    state = TxState::kStarted;
     mStartTs = 0;
     mCommitTs = 0;
     mMaxObservedGSN = 0;
     mTxMode = mode;
     mTxIsolationLevel = level;
-    mIsDurable = FLAGS_wal;
     mIsReadOnly = isReadOnly;
     mHasWrote = false;
     mWalExceedBuffer = false;
 
-    stats.start = std::chrono::high_resolution_clock::now();
-    stats.precommit = std::chrono::high_resolution_clock::time_point();
-    stats.commit = std::chrono::high_resolution_clock::time_point();
-    stats.flushes_counter = 0;
+    COUNTERS_BLOCK() {
+      stats.start = std::chrono::high_resolution_clock::now();
+      stats.precommit = std::chrono::high_resolution_clock::time_point();
+      stats.commit = std::chrono::high_resolution_clock::time_point();
+    }
   }
 
   bool CanCommit(u64 minFlushedGSN, TXID minFlushedTxId) {

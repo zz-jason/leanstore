@@ -349,11 +349,11 @@ public:
       /**
        * The major work is in traversing the tree:
        *
-       * if (tuple.mTxId == cr::activeTX().startTS() &&
+       * if (tuple.mTxId == cr::activeTX().mStartTs &&
        *     tuple.mWorkerId == cr::Worker::my().mWorkerId) {
        *   auto& chainedTuple =
        *       *reinterpret_cast<ChainedTuple*>(iterator.MutableVal().data());
-       *   chainedTuple.mCommitTs = cr::activeTX().commitTS() | MSB;
+       *   chainedTuple.mCommitTs = cr::activeTX().mCommitTs | MSB;
        * }
        */
     }
@@ -392,7 +392,7 @@ private:
         auto reconstruct = GetVisibleTuple(iterator.value(), [&](Slice value) {
           COUNTERS_BLOCK() {
             WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
-                cr::activeTX().isOLAP();
+                cr::activeTX().IsOLAP();
           }
           keep_scanning = callback(s_key, value);
           counter++;
@@ -469,7 +469,7 @@ private:
         GetVisibleTuple(iterator.value(), [&](Slice value) {
           COUNTERS_BLOCK() {
             WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
-                cr::activeTX().isOLAP();
+                cr::activeTX().IsOLAP();
           }
           keep_scanning = callback(iterator.key(), value);
         });
@@ -501,7 +501,7 @@ private:
           GetVisibleTuple(g_iterator.value(), [&](Slice value) {
             COUNTERS_BLOCK() {
               WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
-                  cr::activeTX().isOLAP();
+                  cr::activeTX().IsOLAP();
             }
             keep_scanning = callback(g_key, value);
           });
@@ -522,7 +522,7 @@ private:
             GetVisibleTuple(g_iterator.value(), [&](Slice value) {
               COUNTERS_BLOCK() {
                 WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
-                    cr::activeTX().isOLAP();
+                    cr::activeTX().IsOLAP();
               }
               keep_scanning = callback(g_key, value);
             });
@@ -543,8 +543,8 @@ private:
     JUMPMU_RETURN OpCode::kOther;
   }
 
-  inline bool VisibleForMe(WORKERID workerId, TXID txId, bool toWrite = true) {
-    return cr::Worker::my().cc.VisibleForMe(workerId, txId, toWrite);
+  inline bool VisibleForMe(WORKERID workerId, TXID txId) {
+    return cr::Worker::my().cc.VisibleForMe(workerId, txId);
   }
 
   inline static bool triggerPageWiseGarbageCollection(
@@ -605,12 +605,12 @@ public:
 
   static void InsertToNode(GuardedBufferFrame<BTreeNode>& guardedNode,
                            Slice key, Slice val, WORKERID workerId,
-                           TXID txStartTs, TX_MODE txMode, s32& slotId) {
+                           TXID txStartTs, TxMode txMode, s32& slotId) {
     auto totalValSize = sizeof(ChainedTuple) + val.size();
     slotId = guardedNode->insertDoNotCopyPayload(key, totalValSize, slotId);
     auto tupleAddr = guardedNode->ValData(slotId);
     auto tuple = new (tupleAddr) ChainedTuple(workerId, txStartTs, val);
-    if (txMode == TX_MODE::INSTANTLY_VISIBLE_BULK_INSERT) {
+    if (txMode == TxMode::kInstantlyVisibleBulkInsert) {
       tuple->mTxId = MSB | 0;
     }
     guardedNode.MarkAsDirty();

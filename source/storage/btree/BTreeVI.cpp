@@ -39,7 +39,7 @@ OpCode BTreeVI::Lookup(Slice key, ValCallback valCallback) {
         versionsRead;
   }
 
-  if (cr::activeTX().isOLAP() && ret == OpCode::kNotFound) {
+  if (cr::activeTX().IsOLAP() && ret == OpCode::kNotFound) {
     BTreeSharedIterator gIter(*static_cast<BTreeGeneric*>(mGraveyard));
     ret = gIter.seekExact(key);
     if (ret != OpCode::kOK) {
@@ -65,7 +65,7 @@ OpCode BTreeVI::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
     auto ret = xIter.seekExact(key);
     if (ret != OpCode::kOK) {
-      if (cr::activeTX().isOLAP() && ret == OpCode::kNotFound) {
+      if (cr::activeTX().IsOLAP() && ret == OpCode::kNotFound) {
         const bool foundRemovedTuple =
             mGraveyard->Lookup(key, [&](Slice) {}) == OpCode::kOK;
 
@@ -85,7 +85,7 @@ OpCode BTreeVI::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
     while (true) {
       auto rawVal = xIter.MutableVal();
       auto& tuple = *Tuple::From(rawVal.data());
-      auto visibleForMe = VisibleForMe(tuple.mWorkerId, tuple.mTxId, true);
+      auto visibleForMe = VisibleForMe(tuple.mWorkerId, tuple.mTxId);
       if (tuple.IsWriteLocked() || !visibleForMe) {
         LOG(ERROR) << "Update failed, primary tuple is write locked or not "
                       "visible for me"
@@ -194,7 +194,7 @@ OpCode BTreeVI::insert(Slice key, Slice val) {
 
     // insert
     BTreeVI::InsertToNode(xIter.mGuardedLeaf, key, val,
-                          cr::Worker::my().mWorkerId, cr::activeTX().startTS(),
+                          cr::Worker::my().mWorkerId, cr::activeTX().mStartTs,
                           cr::activeTX().mTxMode, xIter.mSlotId);
     return OpCode::kOK;
   }
@@ -209,7 +209,7 @@ OpCode BTreeVI::remove(Slice key) {
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
     OpCode ret = xIter.seekExact(key);
     if (ret != OpCode::kOK) {
-      if (cr::activeTX().isOLAP() && ret == OpCode::kNotFound) {
+      if (cr::activeTX().IsOLAP() && ret == OpCode::kNotFound) {
         auto foundRemovedTuple =
             mGraveyard->Lookup(key, [&](Slice) {}) == OpCode::kOK;
         if (foundRemovedTuple) {
@@ -225,10 +225,10 @@ OpCode BTreeVI::remove(Slice key) {
     // TODO: removing fat tuple is not supported atm
     DCHECK(chainedTuple.mFormat == TupleFormat::CHAINED);
     if (chainedTuple.IsWriteLocked() ||
-        !VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId, true)) {
+        !VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId)) {
       JUMPMU_RETURN OpCode::kAbortTx;
     }
-    ENSURE(!cr::activeTX().atLeastSI() || chainedTuple.mIsRemoved == false);
+    ENSURE(!cr::activeTX().AtLeastSI() || chainedTuple.mIsRemoved == false);
     if (chainedTuple.mIsRemoved) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
@@ -265,7 +265,7 @@ OpCode BTreeVI::remove(Slice key) {
     }
     chainedTuple.mIsRemoved = true;
     chainedTuple.mWorkerId = cr::Worker::my().mWorkerId;
-    chainedTuple.mTxId = cr::activeTX().startTS();
+    chainedTuple.mTxId = cr::activeTX().mStartTs;
     chainedTuple.mCommandId = commandId;
 
     chainedTuple.WriteUnlock();
@@ -282,7 +282,7 @@ OpCode BTreeVI::remove(Slice key) {
 OpCode BTreeVI::ScanDesc(Slice startKey, ScanCallback callback) {
   DCHECK(cr::Worker::my().IsTxStarted());
 
-  if (cr::activeTX().isOLAP()) {
+  if (cr::activeTX().IsOLAP()) {
     TODOException();
     return OpCode::kAbortTx;
   }
@@ -292,11 +292,10 @@ OpCode BTreeVI::ScanDesc(Slice startKey, ScanCallback callback) {
 OpCode BTreeVI::ScanAsc(Slice startKey, ScanCallback callback) {
   DCHECK(cr::Worker::my().IsTxStarted());
 
-  if (cr::activeTX().isOLAP()) {
+  if (cr::activeTX().IsOLAP()) {
     return scanOLAP(startKey, callback);
-  } else {
-    return scan<true>(startKey, callback);
   }
+  return scan<true>(startKey, callback);
 }
 
 } // namespace btree
