@@ -288,7 +288,7 @@ void LeanStore::startProfilingThread() {
       // using RowType = std::vector<variant<std::string, const char*, Table>>;
       if (FLAGS_print_tx_console) {
         tabulate::Table table;
-        table.add_row({"t", "kOLTP TX", "RF %", "Abort%", "kOLAP TX", "W MiB",
+        table.add_row({"t", "OLTP TX", "RF %", "Abort%", "OLAP TX", "W MiB",
                        "R MiB", "Instrs/TX", "Cycles/TX", "CPUs", "L1/TX",
                        "LLC/TX", "GHz", "WAL GiB/s", "GCT GiB/s", "Space G",
                        "GCT Rounds"});

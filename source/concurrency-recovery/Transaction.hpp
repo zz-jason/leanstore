@@ -20,16 +20,16 @@ enum class TxMode : u8 {
 inline std::string ToString(TxMode txMode) {
   switch (txMode) {
   case TxMode::kOLAP: {
-    return "kOLAP";
+    return "OLAP";
   }
   case TxMode::kOLTP: {
-    return "kOLTP";
+    return "OLTP";
   }
   case TxMode::kDeterministic: {
-    return "kDeterministic";
+    return "Deterministic";
   }
   case TxMode::kInstantlyVisibleBulkInsert: {
-    return "kInstantlyVisibleBulkInsert";
+    return "InstantlyVisibleBulkInsert";
   }
   }
   return "Unknown TxMode";

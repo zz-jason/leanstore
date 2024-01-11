@@ -92,9 +92,9 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   mLogging.mTxReadSnapshot = Logging::sGlobalMinFlushedGSN.load();
   mLogging.mHasRemoteDependency = false;
 
-  // Draw TXID from global counter and publish it with the TX type (i.e., kOLAP
-  // or kOLTP) We have to acquire a transaction id and use it for locking in
-  // ANY isolation level
+  // Draw TXID from global counter and publish it with the TX type (i.e., OLAP
+  // or OLTP) We have to acquire a transaction id and use it for locking in ANY
+  // isolation level
   if (level >= IsolationLevel::kSnapshotIsolation) {
     // implies multi-statement
     if (prevTx.isReadCommitted() || prevTx.isReadUncommitted()) {
