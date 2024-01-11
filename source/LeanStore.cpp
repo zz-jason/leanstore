@@ -206,7 +206,7 @@ LeanStore::~LeanStore() {
 
 void LeanStore::startProfilingThread() {
   std::thread profiling_thread([&]() {
-    utils::pinThisThread(
+    utils::PinThisThread(
         ((FLAGS_enable_pin_worker_threads) ? FLAGS_worker_threads : 0) +
         FLAGS_wal + FLAGS_pp_threads);
     if (FLAGS_root) {

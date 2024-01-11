@@ -11,11 +11,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
-#include <fstream>
 #include <mutex>
-#include <sstream>
-
-#include <stdio.h>
 
 namespace leanstore {
 namespace cr {
@@ -128,11 +124,11 @@ void Worker::CommitTx() {
     mActiveTx.stats.commit = std::chrono::high_resolution_clock::now();
   });
 
+  utils::Timer timer(CRCounters::myCounters().cc_ms_commit_tx);
   if (!FLAGS_wal) {
     return;
   }
 
-  utils::Timer timer(CRCounters::myCounters().cc_ms_commit_tx);
   mCommandId = 0; // Reset mCommandId only on commit and never on abort
 
   DCHECK(mActiveTx.state == TxState::kStarted);
@@ -210,14 +206,17 @@ void Worker::CommitTx() {
 // TODO(jian.z): revert changes made in-place on the btree
 void Worker::AbortTx() {
   utils::Timer timer(CRCounters::myCounters().cc_ms_abort_tx);
+  if (!FLAGS_wal) {
+    return;
+  }
 
-  ENSURE(FLAGS_wal);
-  ENSURE(!mActiveTx.mWalExceedBuffer);
-  ENSURE(mActiveTx.state == TxState::kStarted);
+  // TODO(jian.z): support reading from WAL file once
+  DCHECK(!mActiveTx.mWalExceedBuffer);
+  DCHECK(mActiveTx.state == TxState::kStarted);
 
   const u64 txId = mActiveTx.mStartTs;
   std::vector<const WALEntry*> entries;
-  mLogging.iterateOverCurrentTXEntries([&](const WALEntry& entry) {
+  mLogging.IterateCurrentTxWALs([&](const WALEntry& entry) {
     if (entry.type == WALEntry::TYPE::COMPLEX) {
       entries.push_back(&entry);
     }

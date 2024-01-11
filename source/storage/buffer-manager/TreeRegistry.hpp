@@ -43,7 +43,7 @@ public:
   }
 };
 
-enum class SpaceCheckResult : u8 { NOTHING, PICK_ANOTHER_BF, RESTART_SAME_BF };
+enum class SpaceCheckResult : u8 { kNothing, kPickAnotherBf, kRestartSameBf };
 
 using ChildSwipCallback = std::function<bool(Swip<BufferFrame>&)>;
 
@@ -296,7 +296,7 @@ public:
   }
 
 public:
-  static inline std::unique_ptr<TreeRegistry> sInstance = nullptr;
+  static std::unique_ptr<TreeRegistry> sInstance;
 };
 
 } // namespace storage

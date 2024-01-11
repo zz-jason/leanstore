@@ -230,9 +230,9 @@ inline void BufferFrameProvider::Run() {
 
 inline void BufferFrameProvider::InitThread() {
   if (FLAGS_enable_pin_worker_threads) {
-    utils::pinThisThread(FLAGS_worker_threads + FLAGS_wal + mId);
+    utils::PinThisThread(FLAGS_worker_threads + FLAGS_wal + mId);
   } else {
-    utils::pinThisThread(FLAGS_wal + mId);
+    utils::PinThisThread(FLAGS_wal + mId);
   }
 
   CPUCounters::registerThread(mThreadName);
@@ -431,12 +431,12 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         const auto space_check_res =
             TreeRegistry::sInstance->checkSpaceUtilization(
                 coolCandidate->page.mBTreeId, *coolCandidate);
-        if (space_check_res == SpaceCheckResult::RESTART_SAME_BF ||
-            space_check_res == SpaceCheckResult::PICK_ANOTHER_BF) {
+        if (space_check_res == SpaceCheckResult::kRestartSameBf ||
+            space_check_res == SpaceCheckResult::kPickAnotherBf) {
           DLOG(WARNING)
               << "Cool candidate discarded, space check failed"
               << ", pageId=" << coolCandidate->header.mPageId
-              << ", space_check_res is RESTART_SAME_BF || PICK_ANOTHER_BF";
+              << ", space_check_res is kRestartSameBf || kPickAnotherBf";
           JUMPMU_CONTINUE;
         }
         readGuard.JumpIfModifiedByOthers();

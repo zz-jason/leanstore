@@ -18,9 +18,7 @@
       printf("Throwing exception: %s(%s)\n", #name, msg.c_str());              \
     }                                                                          \
     ~name() = default;                                                         \
-    virtual const char* what() const noexcept override {                       \
-      return msg.c_str();                                                      \
-    }                                                                          \
+    virtual const char* what() const noexcept override { return msg.c_str(); } \
   };                                                                           \
 //--------------------------------------------------------------------------------------
 namespace leanstore {
@@ -64,16 +62,12 @@ Generic_Exception(TODO);
 #define TODOException()                                                        \
   throw leanstore::ex::TODO(std::string(__FILE__) + ":" +                      \
                             std::string(std::to_string(__LINE__)));
-#define SETUP_FAILED(msg)                                                       \
-  throw leanstore::ex::GenericException(                                       \
-      msg + std::string(__FILE__) + ":" +                                      \
-      std::string(std::to_string(__LINE__)));
 
 #define explainIfNot(e)                                                        \
   if (!(e)) {                                                                  \
     raise(SIGTRAP);                                                            \
   };
-#define RAISE_WHEN(e)                                                         \
+#define RAISE_WHEN(e)                                                          \
   if (e) {                                                                     \
     raise(SIGTRAP);                                                            \
   };

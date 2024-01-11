@@ -31,7 +31,7 @@ using YCSBKey = u64;
 using YCSBPayload = BytesPayload<8>;
 using KVTable = Relation<YCSBKey, YCSBPayload>;
 // -------------------------------------------------------------------------------------
-double calculateMTPS(chrono::high_resolution_clock::time_point begin,
+double CalculateMTPS(chrono::high_resolution_clock::time_point begin,
                      chrono::high_resolution_clock::time_point end,
                      u64 factor) {
   double tps =
@@ -120,7 +120,7 @@ int main(int argc, char** argv) {
          << (chrono::duration_cast<chrono::microseconds>(end - begin).count() /
              1000000.0)
          << endl;
-    cout << calculateMTPS(begin, end, n) << " M tps" << endl;
+    cout << CalculateMTPS(begin, end, n) << " M tps" << endl;
     // -------------------------------------------------------------------------------------
     const u64 written_pages = db.getBufferManager().consumedPages();
     const u64 mib = written_pages * FLAGS_page_size / 1024 / 1024;

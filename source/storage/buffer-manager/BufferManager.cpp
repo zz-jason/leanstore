@@ -1,16 +1,12 @@
 #include "BufferManager.hpp"
 
-#include "AsyncWriteBuffer.hpp"
 #include "BufferFrame.hpp"
 #include "Config.hpp"
 #include "Exceptions.hpp"
 #include "concurrency-recovery/GroupCommitter.hpp"
 #include "concurrency-recovery/Recovery.hpp"
-#include "profiling/counters/CPUCounters.hpp"
-#include "profiling/counters/PPCounters.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "utils/DebugFlags.hpp"
-#include "utils/FVector.hpp"
 #include "utils/Misc.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -22,11 +18,6 @@
 #include <sys/resource.h>
 #include <sys/time.h>
 #include <unistd.h>
-
-#include <chrono>
-#include <fstream>
-#include <iomanip>
-#include <set>
 
 namespace leanstore {
 namespace storage {
@@ -75,7 +66,7 @@ BufferManager::BufferManager(s32 fd) : mPageFd(fd) {
     u64 partitionId = 0;
     for (u64 i = begin; i < end; i++) {
       auto& partition = getPartition(partitionId);
-      auto bfAddr = &mBufferPool[i * BufferFrame::Size()];
+      auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
       partition.mFreeBfList.PushFront(*new (bfAddr) BufferFrame());
       partitionId = (partitionId + 1) % mNumPartitions;
     }
@@ -95,9 +86,9 @@ void BufferManager::StartBufferFrameProviders() {
     if (FLAGS_pp_threads > 1) {
       threadName = "bf_provider_" + std::to_string(i);
     }
-    mBfProviders.push_back(std::move(std::make_unique<BufferFrameProvider>(
+    mBfProviders.push_back(std::make_unique<BufferFrameProvider>(
         i, threadName, mNumBfs, mBufferPool, mNumPartitions, mPartitionsMask,
-        mPartitions, mPageFd)));
+        mPartitions, mPageFd));
   }
 
   for (auto i = 0u; i < mBfProviders.size(); ++i) {
@@ -133,9 +124,9 @@ void BufferManager::CheckpointAllBufferFrames() {
   StopBufferFrameProviders();
   utils::Parallelize::parallelRange(mNumBfs, [&](u64 begin, u64 end) {
     utils::AlignedBuffer<512> alignedBuffer(FLAGS_page_size);
-    auto buffer = alignedBuffer.Get();
+    auto* buffer = alignedBuffer.Get();
     for (u64 i = begin; i < end; i++) {
-      auto bfAddr = &mBufferPool[i * BufferFrame::Size()];
+      auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
       auto& bf = *reinterpret_cast<BufferFrame*>(bfAddr);
       bf.header.mLatch.LockExclusively();
       if (!bf.isFree()) {
@@ -151,7 +142,7 @@ void BufferManager::CheckpointAllBufferFrames() {
 
 void BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
   utils::AlignedBuffer<512> alignedBuffer(FLAGS_page_size);
-  auto buffer = alignedBuffer.Get();
+  auto* buffer = alignedBuffer.Get();
   bf.header.mLatch.LockExclusively();
   if (!bf.isFree()) {
     TreeRegistry::sInstance->Checkpoint(bf.page.mBTreeId, bf, buffer);
@@ -188,20 +179,20 @@ Partition& BufferManager::randomPartition() {
 
 BufferFrame& BufferManager::randomBufferFrame() {
   auto i = utils::RandomGenerator::getRand<u64>(0, mNumBfs);
-  auto bfAddr = &mBufferPool[i * BufferFrame::Size()];
+  auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
   return *reinterpret_cast<BufferFrame*>(bfAddr);
 }
 
 BufferFrame& BufferManager::AllocNewPage() {
   Partition& partition = randomPartition();
-  BufferFrame& free_bf = partition.mFreeBfList.PopFrontMayJump();
-  free_bf.Init(partition.NextPageId());
+  BufferFrame& freeBf = partition.mFreeBfList.PopFrontMayJump();
+  freeBf.Init(partition.NextPageId());
 
   COUNTERS_BLOCK() {
     WorkerCounters::myCounters().allocate_operations_counter++;
   }
 
-  return free_bf;
+  return freeBf;
 }
 
 // Pre: bf is exclusively locked
@@ -213,7 +204,7 @@ void BufferManager::reclaimPage(BufferFrame& bf) {
   }
 
   if (bf.header.mIsBeingWrittenBack) {
-    // DO NOTHING ! we have a garbage collector ;-)
+    // Do nothing ! we have a garbage collector ;-)
     bf.header.mLatch.UnlockExclusively();
   } else {
     bf.reset();
@@ -227,16 +218,17 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
                                                Swip<BufferFrame>& swipValue) {
   if (swipValue.isHOT()) {
     // Resolve swip from hot state
-    auto bf = &swipValue.AsBufferFrame();
+    auto* bf = &swipValue.AsBufferFrame();
     swipGuard.JumpIfModifiedByOthers();
     return bf;
-  } else if (swipValue.isCOOL()) {
+  }
+  if (swipValue.isCOOL()) {
     // Resolve swip from cool state
-    auto bf = &swipValue.asBufferFrameMasked();
+    auto* bf = &swipValue.asBufferFrameMasked();
     swipGuard.JumpIfModifiedByOthers();
-    BMOptimisticGuard bf_guard(bf->header.mLatch);
-    BMExclusiveUpgradeIfNeeded swip_x_guard(swipGuard); // parent
-    BMExclusiveGuard bf_x_guard(bf_guard);              // child
+    BMOptimisticGuard bfGuard(bf->header.mLatch);
+    BMExclusiveUpgradeIfNeeded swipXGuard(swipGuard); // parent
+    BMExclusiveGuard bfXGuard(bfGuard);               // child
     bf->header.state = STATE::HOT;
     swipValue.MarkHOT();
     return bf;
@@ -283,7 +275,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
           bf.page.mBTreeId == static_cast<TREEID>(FLAGS_trace_dt_id) &&
           utils::RandomGenerator::getRand<u64>(
               0, FLAGS_trace_trigger_probability) == 0) {
-        utils::printBackTrace();
+        utils::PrintBackTrace();
       }
     }
 
@@ -301,7 +293,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
       swipGuard.JumpIfModifiedByOthers();
       JumpScoped<std::unique_lock<std::mutex>> inflightIOGuard(
           partition.mInflightIOMutex);
-      BMExclusiveUpgradeIfNeeded swip_x_guard(swipGuard);
+      BMExclusiveUpgradeIfNeeded swipXGuard(swipGuard);
       ioFrameGuard->unlock();
 
       swipValue.MarkHOT(&bf);
@@ -351,9 +343,9 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
       // will try to evict them when its IO is done
       DCHECK(!bf->header.mLatch.IsLockedExclusively());
       DCHECK(bf->header.state == STATE::LOADED);
-      BMOptimisticGuard bf_guard(bf->header.mLatch);
-      BMExclusiveUpgradeIfNeeded swip_x_guard(swipGuard);
-      BMExclusiveGuard bf_x_guard(bf_guard);
+      BMOptimisticGuard bfGuard(bf->header.mLatch);
+      BMExclusiveUpgradeIfNeeded swipXGuard(swipGuard);
+      BMExclusiveGuard bfXGuard(bfGuard);
       ioFrame.bf = nullptr;
       swipValue.MarkHOT(bf);
       DCHECK(bf->header.mPageId == pageId);
@@ -470,7 +462,7 @@ void BufferManager::DoWithBufferFrameIf(
     DCHECK(condition != nullptr);
     DCHECK(action != nullptr);
     for (u64 i = begin; i < end; i++) {
-      auto bfAddr = &mBufferPool[i * BufferFrame::Size()];
+      auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
       auto& bf = *reinterpret_cast<BufferFrame*>(bfAddr);
       bf.header.mLatch.LockExclusively();
       if (condition(bf)) {

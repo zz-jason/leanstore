@@ -75,7 +75,7 @@ void CRManager::runWorker(u64 workerId) {
 
   // pin the worker thread by need
   if (FLAGS_enable_pin_worker_threads) {
-    utils::pinThisThread(workerId);
+    utils::PinThisThread(workerId);
   }
 
   if (FLAGS_cpu_counters) {

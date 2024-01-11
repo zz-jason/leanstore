@@ -76,7 +76,7 @@ public:
 
   virtual SpaceCheckResult checkSpaceUtilization(BufferFrame& bf) override {
     if (!FLAGS_xmerge) {
-      return SpaceCheckResult::NOTHING;
+      return SpaceCheckResult::kNothing;
     }
 
     HybridGuard bfGuard(&bf.header.mLatch);
@@ -109,10 +109,10 @@ public:
     guardedNode.unlock();
 
     const SpaceCheckResult result = BTreeGeneric::checkSpaceUtilization(bf);
-    if (result == SpaceCheckResult::PICK_ANOTHER_BF) {
-      return SpaceCheckResult::PICK_ANOTHER_BF;
+    if (result == SpaceCheckResult::kPickAnotherBf) {
+      return SpaceCheckResult::kPickAnotherBf;
     } else {
-      return SpaceCheckResult::RESTART_SAME_BF;
+      return SpaceCheckResult::kRestartSameBf;
     }
   }
 

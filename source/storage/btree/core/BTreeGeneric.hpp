@@ -31,7 +31,7 @@ public:
     bool mUseBulkInsert = false;
   };
 
-  enum class XMergeReturnCode : u8 { NOTHING, FULL_MERGE, PARTIAL_MERGE };
+  enum class XMergeReturnCode : u8 { kNothing, kFullMerge, kPartialMerge };
 
 public:
   //---------------------------------------------------------------------------
@@ -97,7 +97,7 @@ public:
       BufferFrame& bf,
       std::function<bool(Swip<BufferFrame>&)> callback) override;
 
-  virtual struct ParentSwipHandler findParent(BufferFrame& childBf) override {
+  virtual ParentSwipHandler findParent(BufferFrame& childBf) override {
     return BTreeGeneric::findParentJump(*this, childBf);
   }
 
@@ -141,7 +141,7 @@ public:
 
 public:
   /// @brief
-  /// @note Note on Synchronization: findParent is called by the page provide
+  /// @note Note on Synchronization: it is called by the page provide
   /// thread which are not allowed to block Therefore, we jump whenever we
   /// encounter a latched node on our way Moreover, we jump if any page on the
   /// path is already evicted or of the bf could not be found Pre: bfToFind is
@@ -150,8 +150,8 @@ public:
   /// @param btree the target tree which the parent is on
   /// @param bfToFind the target node to find parent for
   template <bool jumpIfEvicted = true>
-  static struct ParentSwipHandler findParent(BTreeGeneric& btree,
-                                             BufferFrame& bfToFind) {
+  static ParentSwipHandler findParent(BTreeGeneric& btree,
+                                      BufferFrame& bfToFind) {
     COUNTERS_BLOCK() {
       WorkerCounters::myCounters().dt_find_parent[btree.mTreeId]++;
     }
@@ -238,13 +238,13 @@ public:
     return parentHandler;
   }
 
-  static struct ParentSwipHandler findParentJump(BTreeGeneric& btree,
-                                                 BufferFrame& bfToFind) {
+  static ParentSwipHandler findParentJump(BTreeGeneric& btree,
+                                          BufferFrame& bfToFind) {
     return findParent<true>(btree, bfToFind);
   }
 
-  static struct ParentSwipHandler findParentEager(BTreeGeneric& btree,
-                                                  BufferFrame& bfToFind) {
+  static ParentSwipHandler findParentEager(BTreeGeneric& btree,
+                                           BufferFrame& bfToFind) {
     return findParent<false>(btree, bfToFind);
   }
 
@@ -370,7 +370,7 @@ inline void BTreeGeneric::IterateChildSwips(
 
 inline SpaceCheckResult BTreeGeneric::checkSpaceUtilization(BufferFrame& bf) {
   if (!FLAGS_xmerge) {
-    return SpaceCheckResult::NOTHING;
+    return SpaceCheckResult::kNothing;
   }
 
   ParentSwipHandler parentHandler = BTreeGeneric::findParentJump(*this, bf);
@@ -383,10 +383,10 @@ inline SpaceCheckResult BTreeGeneric::checkSpaceUtilization(BufferFrame& bf) {
   guardedParent.unlock();
   guardedChild.unlock();
 
-  if (mergeResult == XMergeReturnCode::NOTHING) {
-    return SpaceCheckResult::NOTHING;
+  if (mergeResult == XMergeReturnCode::kNothing) {
+    return SpaceCheckResult::kNothing;
   } else {
-    return SpaceCheckResult::PICK_ANOTHER_BF;
+    return SpaceCheckResult::kPickAnotherBf;
   }
 }
 

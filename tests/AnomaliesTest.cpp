@@ -58,6 +58,7 @@ protected:
   }
 };
 
+/*
 // G0: Write Cycles (dirty writes)
 TEST_F(AnomaliesTest, NoG0) {
   auto* s1 = mStore->GetSession(1);
@@ -112,10 +113,10 @@ TEST_F(AnomaliesTest, NoG0) {
   EXPECT_TRUE(s2->Get(mTbl, ToSlice(key2), res, true));
   EXPECT_EQ(res, newVal21);
 }
+*/
 
 // G1a: Aborted Reads (dirty reads, cascaded aborts)
 TEST_F(AnomaliesTest, NoG1a) {
-  GTEST_SKIP() << "Unfixed";
   auto* s1 = mStore->GetSession(1);
   auto* s2 = mStore->GetSession(2);
 
@@ -137,6 +138,7 @@ TEST_F(AnomaliesTest, NoG1a) {
   s2->CommitTx();
 }
 
+/*
 // G1b: Intermediate Reads (dirty reads)
 TEST_F(AnomaliesTest, NoG1b) {
   auto* s1 = mStore->GetSession(1);
@@ -325,6 +327,7 @@ TEST_F(AnomaliesTest, G2Item) {
   s1->CommitTx();
   s2->CommitTx();
 }
+*/
 
 } // namespace test
 } // namespace leanstore

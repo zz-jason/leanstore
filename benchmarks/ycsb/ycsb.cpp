@@ -34,7 +34,7 @@ using YCSBKey = u64;
 using YCSBPayload = BytesPayload<8>;
 using KVTable = Relation<YCSBKey, YCSBPayload>;
 
-double calculateMTPS(chrono::high_resolution_clock::time_point begin,
+double CalculateMTPS(chrono::high_resolution_clock::time_point begin,
                      chrono::high_resolution_clock::time_point end,
                      u64 factor) {
   double tps =
@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
           << (chrono::duration_cast<chrono::microseconds>(end - begin).count() /
               1000000.0)
           << " seconds";
-      LOG(INFO) << calculateMTPS(begin, end, n) << " M tps";
+      LOG(INFO) << CalculateMTPS(begin, end, n) << " M tps";
     }
   } else {
     LOG(INFO) << "Inserting " << ycsb_tuple_count << " values";
@@ -128,7 +128,7 @@ int main(int argc, char** argv) {
         << (chrono::duration_cast<chrono::microseconds>(end - begin).count() /
             1000000.0)
         << " seconds";
-    LOG(INFO) << calculateMTPS(begin, end, n) << " M tps";
+    LOG(INFO) << CalculateMTPS(begin, end, n) << " M tps";
 
     const u64 written_pages = BufferManager::sInstance->consumedPages();
     const u64 mib = written_pages * FLAGS_page_size / 1024 / 1024;

@@ -89,7 +89,7 @@ public:
   // Constructor and Destructors
   //---------------------------------------------------------------------------
   Partition(u64 firstPageId, u64 pageIdDistance, u64 freeBfsLimit)
-      : mInflightIOs(utils::getBitsNeeded(freeBfsLimit)),
+      : mInflightIOs(utils::GetBitsNeeded(freeBfsLimit)),
         mFreeBfsLimit(freeBfsLimit), mNextPageId(firstPageId),
         mPageIdDistance(pageIdDistance) {
   }

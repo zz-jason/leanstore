@@ -161,7 +161,7 @@ public:
   void walEnsureEnoughSpace(u32 requested_size);
 
   // Iterate over current TX entries
-  void iterateOverCurrentTXEntries(
+  void IterateCurrentTxWALs(
       std::function<void(const WALEntry& entry)> callback);
 
   WALEntrySimple& ReserveWALEntrySimple(WALEntry::TYPE type);

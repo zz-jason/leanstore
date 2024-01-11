@@ -176,7 +176,8 @@ public:
 ///
 /// | FatTuple meta |  newest value | FatTupleDelta O2N |
 ///
-struct __attribute__((packed)) FatTuple : Tuple {
+class __attribute__((packed)) FatTuple : public Tuple {
+public:
   /// Size of the newest value.
   u16 mValSize = 0;
 
@@ -390,7 +391,8 @@ public:
 /// History versions of chained tuple are stored in the history tree of the
 /// current worker thread.
 /// Chained: only scheduled gc todos.
-struct __attribute__((packed)) ChainedTuple : Tuple {
+class __attribute__((packed)) ChainedTuple : public Tuple {
+public:
   u16 mTotalUpdates = 0;
 
   u16 mOldestTx = 0;
