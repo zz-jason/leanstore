@@ -1,8 +1,9 @@
 #include "CRMG.hpp"
 #include "Worker.hpp"
+#include "profiling/counters/WorkerCounters.hpp"
 #include "storage/buffer-manager/TreeRegistry.hpp"
-
 #include "utils/Misc.hpp"
+#include "utils/RandomGenerator.hpp"
 
 #include <set>
 

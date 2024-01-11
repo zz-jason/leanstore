@@ -1,16 +1,11 @@
 #pragma once
 
-#include "Config.hpp"
-
-#include "concurrency-recovery/HistoryTree.hpp"
 #include "profiling/tables/ConfigsTable.hpp"
 #include "storage/btree/BTreeLL.hpp"
 #include "storage/btree/BTreeVI.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 
-#include "rapidjson/document.h"
-
-#include <unordered_map>
+#include <rapidjson/document.h>
 
 namespace leanstore {
 

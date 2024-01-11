@@ -1,19 +1,8 @@
 #pragma once
 
-#include "Config.hpp"
-#include "Exceptions.hpp"
-#include "KVInterface.hpp"
-#include "Units.hpp"
-#include "utils/Misc.hpp"
+#include "shared-headers/Units.hpp"
 
-#include <atomic>
-#include <condition_variable>
 #include <functional>
-#include <map>
-#include <shared_mutex>
-#include <thread>
-#include <unordered_map>
-#include <vector>
 
 namespace leanstore {
 namespace cr {

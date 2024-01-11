@@ -6,15 +6,10 @@
 #include "profiling/counters/WorkerCounters.hpp"
 #include "storage/btree/core/BTreeExclusiveIterator.hpp"
 #include "storage/btree/core/BTreeSharedIterator.hpp"
-#include "storage/buffer-manager/BufferManager.hpp"
 #include "storage/buffer-manager/GuardedBufferFrame.hpp"
 #include "utils/Defer.hpp"
-#include "utils/RandomGenerator.hpp"
 
 #include <glog/logging.h>
-
-#include <set>
-#include <variant>
 
 namespace leanstore {
 namespace storage {
@@ -76,7 +71,7 @@ public:
 
   virtual SpaceCheckResult checkSpaceUtilization(BufferFrame& bf) override {
     if (!FLAGS_xmerge) {
-      return SpaceCheckResult::NOTHING;
+      return SpaceCheckResult::kNothing;
     }
 
     HybridGuard bfGuard(&bf.header.mLatch);
@@ -109,10 +104,10 @@ public:
     guardedNode.unlock();
 
     const SpaceCheckResult result = BTreeGeneric::checkSpaceUtilization(bf);
-    if (result == SpaceCheckResult::PICK_ANOTHER_BF) {
-      return SpaceCheckResult::PICK_ANOTHER_BF;
+    if (result == SpaceCheckResult::kPickAnotherBf) {
+      return SpaceCheckResult::kPickAnotherBf;
     } else {
-      return SpaceCheckResult::RESTART_SAME_BF;
+      return SpaceCheckResult::kRestartSameBf;
     }
   }
 

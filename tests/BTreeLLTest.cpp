@@ -1,9 +1,7 @@
 #include "LeanStore.hpp"
-#include "storage/buffer-manager/BufferFrame.hpp"
+#include "concurrency-recovery/CRMG.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
-#include "utils/DebugFlags.hpp"
 #include "utils/Defer.hpp"
-#include "utils/RandomGenerator.hpp"
 
 #include <gtest/gtest.h>
 

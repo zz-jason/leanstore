@@ -1,14 +1,9 @@
 #include "BTreeVI.hpp"
 
-#include "Units.hpp"
-#include "concurrency-recovery/CRMG.hpp"
-#include "utils/Defer.hpp"
-#include "utils/JsonUtil.hpp"
+#include "shared-headers/Units.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
-
-#include <signal.h>
 
 using namespace std;
 using namespace leanstore::storage;

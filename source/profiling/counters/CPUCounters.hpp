@@ -1,12 +1,10 @@
 #pragma once
 
-#include "Units.hpp"
-
-#include "PerfEvent.hpp"
+#include "shared-headers/PerfEvent.hpp"
+#include "shared-headers/Units.hpp"
 
 #include <memory>
 #include <mutex>
-#include <string>
 #include <unordered_map>
 
 // Sadly, we can not use TBB enumerable thread specific here because it does not

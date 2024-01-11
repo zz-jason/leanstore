@@ -1,12 +1,13 @@
 #pragma once
 
-#include "Exceptions.hpp"
+#include "shared-headers/Units.hpp"
 
 #include <algorithm>
-#include <atomic>
 #include <cstring>
 #include <random>
 #include <string>
+
+#include <assert.h>
 
 namespace leanstore {
 namespace utils {

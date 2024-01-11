@@ -4,13 +4,10 @@
 #include "concurrency-recovery/HistoryTree.hpp"
 #include "profiling/counters/CPUCounters.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
-#include "utils/ThreadHolder.hpp"
 
-#include <cassert>
 #include <glog/logging.h>
 
 #include <mutex>
-#include <stdexcept>
 
 namespace leanstore {
 namespace cr {
@@ -75,7 +72,7 @@ void CRManager::runWorker(u64 workerId) {
 
   // pin the worker thread by need
   if (FLAGS_enable_pin_worker_threads) {
-    utils::pinThisThread(workerId);
+    utils::PinThisThread(workerId);
   }
 
   if (FLAGS_cpu_counters) {

@@ -70,7 +70,7 @@ protected:
 
     // pin the thread to a specific CPU
     if (mRunningCPU != -1) {
-      utils::pinThisThread(mRunningCPU);
+      utils::PinThisThread(mRunningCPU);
       LOG(INFO) << mThreadName << " pined to CPU " << mRunningCPU;
     }
 

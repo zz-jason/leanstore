@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Units.hpp"
-#include "Worker.hpp"
+#include "Transaction.hpp"
+#include "shared-headers/Units.hpp"
 #include "utils/Misc.hpp"
 
 #include "rapidjson/document.h"
@@ -10,7 +10,6 @@
 
 #include <glog/logging.h>
 
-#include <atomic>
 #include <cstddef>
 #include <iostream>
 #include <string>
@@ -107,6 +106,7 @@ public:
     }
   }
 };
+
 class WALEntrySimple : public WALEntry {
 public:
   WALEntrySimple(LID lsn, u64 size, TYPE type) : WALEntry(lsn, size, type) {

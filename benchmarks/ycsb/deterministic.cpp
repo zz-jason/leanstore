@@ -1,13 +1,12 @@
 #include "../shared/LeanStoreAdapter.hpp"
 #include "../shared/Schema.hpp"
-#include "Units.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/profiling/counters/WorkerCounters.hpp"
-#include "leanstore/utils/FVector.hpp"
 #include "leanstore/utils/Parallelize.hpp"
 #include "leanstore/utils/RandomGenerator.hpp"
 #include "leanstore/utils/ScrambledZipfGenerator.hpp"
+#include "shared-headers/Units.hpp"
 // -------------------------------------------------------------------------------------
 #include <gflags/gflags.h>
 #include <tbb/parallel_for.h>
@@ -31,7 +30,7 @@ using YCSBKey = u64;
 using YCSBPayload = BytesPayload<8>;
 using KVTable = Relation<YCSBKey, YCSBPayload>;
 // -------------------------------------------------------------------------------------
-double calculateMTPS(chrono::high_resolution_clock::time_point begin,
+double CalculateMTPS(chrono::high_resolution_clock::time_point begin,
                      chrono::high_resolution_clock::time_point end,
                      u64 factor) {
   double tps =
@@ -120,7 +119,7 @@ int main(int argc, char** argv) {
          << (chrono::duration_cast<chrono::microseconds>(end - begin).count() /
              1000000.0)
          << endl;
-    cout << calculateMTPS(begin, end, n) << " M tps" << endl;
+    cout << CalculateMTPS(begin, end, n) << " M tps" << endl;
     // -------------------------------------------------------------------------------------
     const u64 written_pages = db.getBufferManager().consumedPages();
     const u64 mib = written_pages * FLAGS_page_size / 1024 / 1024;

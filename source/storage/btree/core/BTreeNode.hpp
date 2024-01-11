@@ -1,11 +1,9 @@
 #pragma once
 
-#include "Exceptions.hpp"
-#include "Units.hpp"
+#include "shared-headers/Units.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/GuardedBufferFrame.hpp"
-#include "storage/buffer-manager/TreeRegistry.hpp"
 
 #include <glog/logging.h>
 #include <rapidjson/document.h>
@@ -13,9 +11,6 @@
 #include <algorithm>
 #include <cassert>
 #include <cstring>
-#include <fstream>
-#include <limits>
-#include <string>
 
 using namespace std;
 using namespace leanstore::storage;
@@ -24,7 +19,7 @@ namespace leanstore {
 namespace storage {
 namespace btree {
 
-struct BTreeNode;
+class BTreeNode;
 using SwipType = Swip<BTreeNode>;
 using HeadType = u32;
 

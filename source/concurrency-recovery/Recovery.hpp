@@ -1,16 +1,13 @@
 #pragma once
 
-#include "Units.hpp"
-#include "storage/btree/BTreeLL.hpp"
-#include "storage/btree/BTreeVI.hpp"
-#include "storage/btree/core/BTreeExclusiveIterator.hpp"
+#include "shared-headers/Units.hpp"
+#include "storage/buffer-manager/BufferFrame.hpp"
+#include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/Defer.hpp"
 
 #include <glog/logging.h>
 
-#include <memory>
-#include <string>
-#include <unordered_map>
+#include <map>
 
 namespace leanstore {
 namespace cr {
@@ -35,7 +32,7 @@ private:
   std::map<TXID, u64> mActiveTxTable;
 
   /// Stores all the pages read from disk during the recovery process.
-  std::map<PID, BufferFrame*> mResolvedPages;
+  std::map<PID, storage::BufferFrame*> mResolvedPages;
 
 public:
   Recovery(s32 fd, u64 offset, u64 size)
@@ -88,7 +85,7 @@ private:
   bool Undo();
 
   /// Return the buffer frame containing the required dirty page
-  BufferFrame& ResolvePage(PID pageId);
+  storage::BufferFrame& ResolvePage(PID pageId);
 
   ssize_t ReadWalEntry(s64 entryOffset, size_t entrySize, void* destination);
 };
@@ -111,13 +108,13 @@ inline bool Recovery::Undo() {
   return false;
 }
 
-inline BufferFrame& Recovery::ResolvePage(PID pageId) {
+inline storage::BufferFrame& Recovery::ResolvePage(PID pageId) {
   auto it = mResolvedPages.find(pageId);
   if (it != mResolvedPages.end()) {
     return *it->second;
   }
 
-  auto& bf = BufferManager::sInstance->ReadPageSync(pageId);
+  auto& bf = storage::BufferManager::sInstance->ReadPageSync(pageId);
   // prevent the buffer frame from being evicted by buffer frame providers
   bf.header.mKeepInMemory = true;
   mResolvedPages.emplace(pageId, &bf);
