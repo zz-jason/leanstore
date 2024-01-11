@@ -59,10 +59,3 @@ CheckOptions:
     value: 1
   - key:   modernize-use-default-member-init.UseAssignment
     value: 1
-  - key:   llvm-include-order.IncludeCategories
-    value: |
-           [{"Regex": "^<.*\\.h>", "Priority": 2},
-            {"Regex": "^<.*", "Priority": 3},
-            {"Regex": "^\".*\\.h\"", "Priority": 1},
-            {"Regex": "^\".*", "Priority": 4},
-            ]
