@@ -1,11 +1,8 @@
 #pragma once
 
-#include "Units.hpp"
+#include "shared-headers/Units.hpp"
 
 #include <tbb/enumerable_thread_specific.h>
-
-#include <atomic>
-#include <unordered_map>
 
 namespace leanstore {
 

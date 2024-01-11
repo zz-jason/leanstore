@@ -1,6 +1,10 @@
 #include "GroupCommitter.hpp"
+
 #include "CRMG.hpp"
 #include "Worker.hpp"
+#include "profiling/counters/CPUCounters.hpp"
+#include "utils/Timer.hpp"
+
 #include <algorithm>
 
 namespace leanstore {
@@ -108,7 +112,7 @@ void GroupCommitter::writeIOCBs(s32 numIOCBs) {
 
   // submit all log writes using a single system call.
   for (auto left = numIOCBs; left > 0;) {
-    auto iocbToSubmit = mIOCBPtrs.get() + numIOCBs - left;
+    auto* iocbToSubmit = mIOCBPtrs.get() + numIOCBs - left;
     s32 submitted = io_submit(mIOContext, left, iocbToSubmit);
     LOG_IF(ERROR, submitted < 0)
         << "io_submit failed, error=" << submitted << ", mWalFd=" << mWalFd;
@@ -224,11 +228,11 @@ void GroupCommitter::commitTXs(
 }
 
 void GroupCommitter::setUpIOCB(s32 ioSlot, u8* buf, u64 lower, u64 upper) {
-  auto lowerAligned = utils::downAlign(lower);
-  auto upperAligned = utils::upAlign(upper);
+  auto lowerAligned = utils::AlignDown(lower);
+  auto upperAligned = utils::AlignUp(upper);
   auto* bufAligned = buf + lowerAligned;
   auto countAligned = upperAligned - lowerAligned;
-  auto offsetAligned = utils::downAlign(mWalSize);
+  auto offsetAligned = utils::AlignDown(mWalSize);
 
   DCHECK(u64(bufAligned) % 512 == 0);
   DCHECK(countAligned % 512 == 0);

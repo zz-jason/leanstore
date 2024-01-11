@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Adapter.hpp"
-#include "Exceptions.hpp"
+#include "shared-headers/Exceptions.hpp"
 #include "LeanStore.hpp"
 
 #include <glog/logging.h>

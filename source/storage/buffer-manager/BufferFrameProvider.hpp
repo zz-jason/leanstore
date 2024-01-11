@@ -3,41 +3,33 @@
 #include "AsyncWriteBuffer.hpp"
 #include "BMPlainGuard.hpp"
 #include "BufferFrame.hpp"
-#include "BufferManager.hpp"
 #include "Config.hpp"
-#include "Exceptions.hpp"
+#include "shared-headers/Exceptions.hpp"
 #include "FreeList.hpp"
 #include "Partition.hpp"
-#include "PerfEvent.hpp"
 #include "Swip.hpp"
 #include "Tracing.hpp"
 #include "TreeRegistry.hpp"
-#include "Units.hpp"
-#include "concurrency-recovery/CRMG.hpp"
+#include "shared-headers/Units.hpp"
 #include "profiling/counters/CPUCounters.hpp"
 #include "profiling/counters/PPCounters.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
 #include "storage/buffer-manager/AsyncWriteBuffer.hpp"
 #include "storage/buffer-manager/BufferFrame.hpp"
 #include "utils/Defer.hpp"
-#include "utils/FVector.hpp"
 #include "utils/Misc.hpp"
-#include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include <cstring>
-#include <fcntl.h>
-#include <list>
 #include <mutex>
-#include <queue>
+#include <thread>
+#include <unordered_map>
+
+#include <fcntl.h>
 #include <sys/resource.h>
 #include <sys/time.h>
-#include <thread>
 #include <unistd.h>
-#include <unordered_map>
 
 namespace leanstore {
 
@@ -230,9 +222,9 @@ inline void BufferFrameProvider::Run() {
 
 inline void BufferFrameProvider::InitThread() {
   if (FLAGS_enable_pin_worker_threads) {
-    utils::pinThisThread(FLAGS_worker_threads + FLAGS_wal + mId);
+    utils::PinThisThread(FLAGS_worker_threads + FLAGS_wal + mId);
   } else {
-    utils::pinThisThread(FLAGS_wal + mId);
+    utils::PinThisThread(FLAGS_wal + mId);
   }
 
   CPUCounters::registerThread(mThreadName);
@@ -431,12 +423,12 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         const auto space_check_res =
             TreeRegistry::sInstance->checkSpaceUtilization(
                 coolCandidate->page.mBTreeId, *coolCandidate);
-        if (space_check_res == SpaceCheckResult::RESTART_SAME_BF ||
-            space_check_res == SpaceCheckResult::PICK_ANOTHER_BF) {
+        if (space_check_res == SpaceCheckResult::kRestartSameBf ||
+            space_check_res == SpaceCheckResult::kPickAnotherBf) {
           DLOG(WARNING)
               << "Cool candidate discarded, space check failed"
               << ", pageId=" << coolCandidate->header.mPageId
-              << ", space_check_res is RESTART_SAME_BF || PICK_ANOTHER_BF";
+              << ", space_check_res is kRestartSameBf || kPickAnotherBf";
           JUMPMU_CONTINUE;
         }
         readGuard.JumpIfModifiedByOthers();

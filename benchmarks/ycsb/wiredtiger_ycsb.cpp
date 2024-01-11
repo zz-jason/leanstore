@@ -1,16 +1,15 @@
-#include <gflags/gflags.h>
-
 #include "../shared/Schema.hpp"
 #include "../shared/WiredTigerAdapter.hpp"
-#include "Units.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/profiling/counters/WorkerCounters.hpp"
-#include "leanstore/utils/FVector.hpp"
 #include "leanstore/utils/Parallelize.hpp"
 #include "leanstore/utils/RandomGenerator.hpp"
 #include "leanstore/utils/ScrambledZipfGenerator.hpp"
-// -------------------------------------------------------------------------------------
+#include "shared-headers/Units.hpp"
+
+#include <gflags/gflags.h>
+
 #include <chrono>
 #include <iostream>
 #include <string>
@@ -35,7 +34,7 @@ using YCSBKey = u64;
 using YCSBPayload = BytesPayload<120>;
 using YCSBTable = Relation<YCSBKey, YCSBPayload>;
 // -------------------------------------------------------------------------------------
-double calculateMTPS(chrono::high_resolution_clock::time_point begin,
+double CalculateMTPS(chrono::high_resolution_clock::time_point begin,
                      chrono::high_resolution_clock::time_point end,
                      u64 factor) {
   double tps =
@@ -80,7 +79,7 @@ int main(int argc, char** argv) {
          << (chrono::duration_cast<chrono::microseconds>(end - begin).count() /
              1000000.0)
          << endl;
-    cout << calculateMTPS(begin, end, ycsb_tuple_count) << " M tps" << endl;
+    cout << CalculateMTPS(begin, end, ycsb_tuple_count) << " M tps" << endl;
   }
   // -------------------------------------------------------------------------------------
   std::vector<thread> threads;

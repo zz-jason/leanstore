@@ -2,10 +2,10 @@
 
 #include "Config.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "storage/btree/core/BTreeWALPayload.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "storage/buffer-manager/GuardedBufferFrame.hpp"
 #include "utils/Misc.hpp"
-#include "utils/RandomGenerator.hpp"
 
 #include <glog/logging.h>
 
@@ -464,18 +464,18 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
     ParentSwipHandler& parentHandler) {
   WorkerCounters::myCounters().dt_researchy[0][1]++;
   if (guardedChild->fillFactorAfterCompaction() >= 0.9) {
-    return XMergeReturnCode::NOTHING;
+    return XMergeReturnCode::kNothing;
   }
 
-  const u8 MAX_MERGE_PAGES = FLAGS_xmerge_k;
+  const u8 maxMergePages = FLAGS_xmerge_k;
   s16 pos = parentHandler.mPosInParent;
   u8 pages_count = 1;
   s16 max_right;
   auto guardedNodesBuf =
-      utils::JumpScopedArray<GuardedBufferFrame<BTreeNode>>(MAX_MERGE_PAGES);
+      utils::JumpScopedArray<GuardedBufferFrame<BTreeNode>>(maxMergePages);
   auto guardedNodes = guardedNodesBuf->get();
 
-  auto fullyMergedBuf = utils::JumpScopedArray<bool>(MAX_MERGE_PAGES);
+  auto fullyMergedBuf = utils::JumpScopedArray<bool>(maxMergePages);
   auto fullyMerged = fullyMergedBuf->get();
 
   guardedNodes[0] = std::move(guardedChild);
@@ -485,14 +485,14 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
   // Handle upper swip instead of avoiding guardedParent->mNumSeps -1 swip
   if (isMetaNode(guardedParent) || !guardedNodes[0]->mIsLeaf) {
     guardedChild = std::move(guardedNodes[0]);
-    return XMergeReturnCode::NOTHING;
+    return XMergeReturnCode::kNothing;
   }
-  for (max_right = pos + 1; (max_right - pos) < MAX_MERGE_PAGES &&
+  for (max_right = pos + 1; (max_right - pos) < maxMergePages &&
                             (max_right + 1) < guardedParent->mNumSeps;
        max_right++) {
     if (!guardedParent->getChild(max_right).isHOT()) {
       guardedChild = std::move(guardedNodes[0]);
-      return XMergeReturnCode::NOTHING;
+      return XMergeReturnCode::kNothing;
     }
 
     guardedNodes[max_right - pos] = GuardedBufferFrame<BTreeNode>(
@@ -509,14 +509,14 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
   }
   if (((pages_count - std::ceil(total_fill_factor))) < (1)) {
     guardedChild = std::move(guardedNodes[0]);
-    return XMergeReturnCode::NOTHING;
+    return XMergeReturnCode::kNothing;
   }
 
   ExclusiveGuardedBufferFrame<BTreeNode> xGuardedParent =
       std::move(guardedParent);
   xGuardedParent.SyncGSNBeforeWrite();
 
-  XMergeReturnCode ret_code = XMergeReturnCode::PARTIAL_MERGE;
+  XMergeReturnCode ret_code = XMergeReturnCode::kPartialMerge;
   s16 left_hand, right_hand, ret;
   while (true) {
     for (right_hand = max_right; right_hand > pos; right_hand--) {
@@ -545,7 +545,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
       if (ret == 1) {
         fullyMerged[left_hand - pos] = true;
         WorkerCounters::myCounters().xmerge_full_counter[mTreeId]++;
-        ret_code = XMergeReturnCode::FULL_MERGE;
+        ret_code = XMergeReturnCode::kFullMerge;
       } else if (ret == 2) {
         guardedNodes[left_hand - pos] = std::move(xGuardedLeft);
         WorkerCounters::myCounters().xmerge_partial_counter[mTreeId]++;

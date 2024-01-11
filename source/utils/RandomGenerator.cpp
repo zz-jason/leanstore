@@ -1,9 +1,10 @@
 #include "RandomGenerator.hpp"
 
-#include "Units.hpp"
+#include "shared-headers/Units.hpp"
 
 namespace leanstore {
 namespace utils {
+
 static atomic<u64> mt_counter = 0;
 
 MersenneTwister::MersenneTwister(uint64_t seed) : mti(NN + 1) {

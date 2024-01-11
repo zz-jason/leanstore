@@ -1,13 +1,12 @@
 #pragma once
+
 #include "BufferFrame.hpp"
 #include "Config.hpp"
 #include "FreeList.hpp"
-#include "Units.hpp"
+#include "shared-headers/Units.hpp"
 #include "utils/Misc.hpp"
 
-#include <list>
 #include <mutex>
-#include <unordered_set>
 #include <vector>
 
 namespace leanstore {
@@ -89,7 +88,7 @@ public:
   // Constructor and Destructors
   //---------------------------------------------------------------------------
   Partition(u64 firstPageId, u64 pageIdDistance, u64 freeBfsLimit)
-      : mInflightIOs(utils::getBitsNeeded(freeBfsLimit)),
+      : mInflightIOs(utils::GetBitsNeeded(freeBfsLimit)),
         mFreeBfsLimit(freeBfsLimit), mNextPageId(firstPageId),
         mPageIdDistance(pageIdDistance) {
   }

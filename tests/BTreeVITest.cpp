@@ -1,4 +1,5 @@
 #include "LeanStore.hpp"
+#include "concurrency-recovery/CRMG.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/Defer.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -544,7 +545,7 @@ TEST_F(BTreeVITest, Update) {
     // update in the same worker
     const u64 updateDescBufSize = UpdateDesc::Size(1);
     u8 updateDescBuf[updateDescBufSize];
-    auto updateDesc = UpdateDesc::CreateFrom(updateDescBuf);
+    auto* updateDesc = UpdateDesc::CreateFrom(updateDescBuf);
     updateDesc->mNumSlots = 1;
     updateDesc->mDiffSlots[0].offset = 0;
     updateDesc->mDiffSlots[0].length = valSize;

@@ -1,15 +1,10 @@
 #include "Worker.hpp"
-
-#include "profiling/counters/CPUCounters.hpp"
-#include "profiling/counters/CRCounters.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "utils/Defer.hpp"
-#include "utils/Misc.hpp"
-
-#include "rapidjson/stringbuffer.h"
-#include "rapidjson/writer.h"
 
 #include <glog/logging.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 
 #include <cstring>
 
@@ -91,7 +86,7 @@ WALEntrySimple& Logging::ReserveWALEntrySimple(WALEntry::TYPE type) {
   SCOPED_DEFER(mPrevLSN = mActiveWALEntrySimple->lsn;);
 
   walEnsureEnoughSpace(sizeof(WALEntrySimple));
-  auto entryPtr = mWalBuffer + mWalBuffered;
+  auto* entryPtr = mWalBuffer + mWalBuffered;
   auto entrySize = sizeof(WALEntrySimple);
   std::memset(entryPtr, 0, entrySize);
   mActiveWALEntrySimple =
@@ -154,7 +149,7 @@ void Logging::SubmitWALEntryComplex(u64 totalSize) {
 }
 
 // Called by worker, so concurrent writes on the buffer
-void Logging::iterateOverCurrentTXEntries(
+void Logging::IterateCurrentTxWALs(
     std::function<void(const WALEntry& entry)> callback) {
   u64 cursor = mTxWalBegin;
   while (cursor != mWalBuffered) {

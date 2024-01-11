@@ -1,11 +1,10 @@
 #include "Config.hpp"
 #include "LeanStore.hpp"
-#include "Units.hpp"
+#include "shared-headers/Units.hpp"
+#include "concurrency-recovery/CRMG.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "shared/LeanStoreAdapter.hpp"
 #include "shared/Schema.hpp"
-
-#include "utils/FVector.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
 #include "utils/ScrambledZipfGenerator.hpp"
@@ -15,7 +14,6 @@
 #include <tbb/parallel_for.h>
 
 #include <iostream>
-#include <set>
 
 DEFINE_uint32(ycsb_read_ratio, 100, "");
 DEFINE_uint64(ycsb_tuple_count, 0, "");
@@ -34,7 +32,7 @@ using YCSBKey = u64;
 using YCSBPayload = BytesPayload<8>;
 using KVTable = Relation<YCSBKey, YCSBPayload>;
 
-double calculateMTPS(chrono::high_resolution_clock::time_point begin,
+double CalculateMTPS(chrono::high_resolution_clock::time_point begin,
                      chrono::high_resolution_clock::time_point end,
                      u64 factor) {
   double tps =
@@ -99,7 +97,7 @@ int main(int argc, char** argv) {
           << (chrono::duration_cast<chrono::microseconds>(end - begin).count() /
               1000000.0)
           << " seconds";
-      LOG(INFO) << calculateMTPS(begin, end, n) << " M tps";
+      LOG(INFO) << CalculateMTPS(begin, end, n) << " M tps";
     }
   } else {
     LOG(INFO) << "Inserting " << ycsb_tuple_count << " values";
@@ -128,7 +126,7 @@ int main(int argc, char** argv) {
         << (chrono::duration_cast<chrono::microseconds>(end - begin).count() /
             1000000.0)
         << " seconds";
-    LOG(INFO) << calculateMTPS(begin, end, n) << " M tps";
+    LOG(INFO) << CalculateMTPS(begin, end, n) << " M tps";
 
     const u64 written_pages = BufferManager::sInstance->consumedPages();
     const u64 mib = written_pages * FLAGS_page_size / 1024 / 1024;

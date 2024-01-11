@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Config.hpp"
-#include "Exceptions.hpp"
+#include "shared-headers/Exceptions.hpp"
 #include "HistoryTreeInterface.hpp"
-#include "Units.hpp"
+#include "shared-headers/Units.hpp"
 #include "Worker.hpp"
 #include "utils/ThreadHolder.hpp"
 

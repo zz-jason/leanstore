@@ -1,9 +1,10 @@
 #pragma once
 
-#include "Units.hpp"
-#include "utils/JsonUtil.hpp"
+#include "KVInterface.hpp"
+#include "shared-headers/Units.hpp"
 
-#include <memory>
+#include <rapidjson/document.h>
+
 #include <string>
 
 namespace leanstore {

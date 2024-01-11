@@ -1,6 +1,5 @@
 #pragma once
 
-#include <memory>
 #include <thread>
 
 namespace leanstore {
@@ -12,8 +11,7 @@ private:
 
 public:
   template <class... Args>
-  explicit ThreadHolder(Args&&... args)
-      : mThread(std::forward<Args>(args)...) {
+  explicit ThreadHolder(Args&&... args) : mThread(std::forward<Args>(args)...) {
   }
 
   ThreadHolder(ThreadHolder&& other) = default;

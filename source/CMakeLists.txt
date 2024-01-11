@@ -14,7 +14,7 @@ add_library(leanstore STATIC ${LEANSTORE_SRC})
 target_link_libraries(leanstore aio onetbb tabulate rapidjson gflags glog)
 
 # include dirs
-target_include_directories(leanstore PUBLIC ${CMAKE_SOURCE_DIR}/include/shared-headers)
+target_include_directories(leanstore PUBLIC ${CMAKE_SOURCE_DIR}/include)
 target_include_directories(leanstore PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 
 # export header files for lib consumers

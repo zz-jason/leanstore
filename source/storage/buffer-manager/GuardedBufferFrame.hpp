@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Exceptions.hpp"
-#include "concurrency-recovery/CRMG.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
+#include "shared-headers/Exceptions.hpp"
+#include "concurrency-recovery/WALEntry.hpp"
+#include "concurrency-recovery/Worker.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "storage/buffer-manager/Tracing.hpp"
 #include "sync-primitives/HybridGuard.hpp"

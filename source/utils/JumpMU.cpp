@@ -1,7 +1,6 @@
 #include "JumpMU.hpp"
 
 #include <glog/logging.h>
-#include <signal.h>
 
 namespace jumpmu {
 

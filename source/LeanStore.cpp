@@ -1,41 +1,32 @@
 #include "LeanStore.hpp"
 
-#include "profiling/counters/CPUCounters.hpp"
-#include "profiling/counters/PPCounters.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
+#include "concurrency-recovery/CRMG.hpp"
 #include "profiling/tables/BMTable.hpp"
 #include "profiling/tables/CPUTable.hpp"
 #include "profiling/tables/CRTable.hpp"
 #include "profiling/tables/DTTable.hpp"
 #include "profiling/tables/LatencyTable.hpp"
-#include "utils/DebugFlags.hpp"
 #include "utils/Defer.hpp"
-#include "utils/FVector.hpp"
-#include "utils/ThreadLocalAggregator.hpp"
-
-#include "rapidjson/document.h"
-#include "rapidjson/istreamwrapper.h"
-#include "rapidjson/prettywriter.h"
-#include "rapidjson/stringbuffer.h"
-#include "tabulate/table.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
+#include <rapidjson/document.h>
+#include <rapidjson/istreamwrapper.h>
+#include <rapidjson/prettywriter.h>
+#include <rapidjson/stringbuffer.h>
+#include <tabulate/table.hpp>
+
+#include <fstream>
+#include <locale>
+#include <sstream>
 
 #include <linux/fs.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <sys/resource.h>
+#include <sys/stat.h>
 #include <termios.h>
 #include <unistd.h>
-
-#include <sys/stat.h>
-
-#include <locale>
-#include <sstream>
-
-using namespace tabulate;
-using leanstore::utils::threadlocal::sum;
 
 namespace leanstore {
 
@@ -206,7 +197,7 @@ LeanStore::~LeanStore() {
 
 void LeanStore::startProfilingThread() {
   std::thread profiling_thread([&]() {
-    utils::pinThisThread(
+    utils::PinThisThread(
         ((FLAGS_enable_pin_worker_threads) ? FLAGS_worker_threads : 0) +
         FLAGS_wal + FLAGS_pp_threads);
     if (FLAGS_root) {

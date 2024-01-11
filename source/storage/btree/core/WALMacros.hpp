@@ -1,9 +1,5 @@
 #pragma once
 
-#include "Units.hpp"
-
-#include <cstring>
-
 // TODO: Works only for update same size
 #define DELTA_COPY
 #ifdef DELTA_XOR
