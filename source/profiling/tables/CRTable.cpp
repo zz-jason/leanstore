@@ -4,15 +4,15 @@
 #include "profiling/counters/CRCounters.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "utils/ThreadLocalAggregator.hpp"
-// -------------------------------------------------------------------------------------
-// -------------------------------------------------------------------------------------
-// -------------------------------------------------------------------------------------
+
 using leanstore::utils::threadlocal::sum;
 namespace leanstore {
 namespace profiling {
-// -------------------------------------------------------------------------------------
-std::string CRTable::getName() { return "cr"; }
-// -------------------------------------------------------------------------------------
+
+std::string CRTable::getName() {
+  return "cr";
+}
+
 void CRTable::open() {
   columns.emplace("key", [&](Column& out) { out << 0; });
   columns.emplace("wal_reserve_blocked", [&](Column& col) {
@@ -78,7 +78,7 @@ void CRTable::open() {
   columns.emplace("wal_miss", [&](Column& col) { col << wal_miss; });
   columns.emplace("wal_hit", [&](Column& col) { col << wal_hits; });
   columns.emplace("wal_total", [&](Column& col) { col << wal_total; });
-  // -------------------------------------------------------------------------------------
+
   columns.emplace("cc_prepare_igc", [&](Column& col) {
     col << sum(CRCounters::cr_counters, &CRCounters::cc_prepare_igc);
   });
@@ -89,7 +89,7 @@ void CRTable::open() {
   columns.emplace("cc_versions_space_removed", [&](Column& col) {
     col << sum(CRCounters::cr_counters, &CRCounters::cc_versions_space_removed);
   });
-  // -------------------------------------------------------------------------------------
+
   columns.emplace("cc_ms_oltp_tx", [&](Column& col) {
     col << sum(CRCounters::cr_counters, &CRCounters::cc_ms_oltp_tx);
   });
@@ -132,7 +132,7 @@ void CRTable::open() {
     col << sum(CRCounters::cr_counters,
                &CRCounters::cc_ms_refresh_global_state);
   });
-  // -------------------------------------------------------------------------------------
+
   columns.emplace("cc_ms_start_tx", [&](Column& col) {
     col << sum(CRCounters::cr_counters, &CRCounters::cc_ms_start_tx);
   });
@@ -143,7 +143,7 @@ void CRTable::open() {
     col << sum(CRCounters::cr_counters, &CRCounters::cc_ms_abort_tx);
   });
 }
-// -------------------------------------------------------------------------------------
+
 void CRTable::next() {
   wal_hits =
       sum(WorkerCounters::worker_counters, &WorkerCounters::wal_buffer_hit);
@@ -152,7 +152,7 @@ void CRTable::next() {
   wal_total = wal_hits + wal_miss;
   wal_hit_pct = wal_hits * 1.0 / wal_total;
   wal_miss_pct = wal_miss * 1.0 / wal_total;
-  // -------------------------------------------------------------------------------------
+
   p1 = sum(CRCounters::cr_counters, &CRCounters::gct_phase_1_ms);
   p2 = sum(CRCounters::cr_counters, &CRCounters::gct_phase_2_ms);
   write = sum(CRCounters::cr_counters, &CRCounters::gct_write_ms);
@@ -162,6 +162,6 @@ void CRTable::next() {
     c.second.generator(c.second);
   }
 }
-// -------------------------------------------------------------------------------------
+
 } // namespace profiling
 } // namespace leanstore

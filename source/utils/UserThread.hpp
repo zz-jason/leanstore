@@ -64,13 +64,16 @@ public:
 
 protected:
   void Run() {
+    // set thread-local thread name at the very beging so that logs printed by
+    // the thread can get it.
+    tlsThreadName = mThreadName;
+
     // log info about thread start and stop events
     LOG(INFO) << mThreadName << " thread started";
     SCOPED_DEFER(LOG(INFO) << mThreadName << " thread stopped");
 
     // setup thread name
     pthread_setname_np(pthread_self(), mThreadName.c_str());
-    tlsThreadName = mThreadName;
 
     // pin the thread to a specific CPU
     if (mRunningCPU != -1) {

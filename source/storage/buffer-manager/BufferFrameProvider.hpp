@@ -16,14 +16,13 @@
 #include "storage/buffer-manager/AsyncWriteBuffer.hpp"
 #include "storage/buffer-manager/BufferFrame.hpp"
 #include "utils/Defer.hpp"
-#include "utils/Misc.hpp"
 #include "utils/RandomGenerator.hpp"
+#include "utils/UserThread.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include <mutex>
-#include <thread>
 #include <unordered_map>
 
 #include <fcntl.h>
@@ -35,45 +34,43 @@ namespace leanstore {
 
 namespace storage {
 
-struct FreedBfsBatch {
-  BufferFrame* freed_bfs_batch_head = nullptr;
-  BufferFrame* freed_bfs_batch_tail = nullptr;
-  u64 freed_bfs_counter = 0;
+class FreeBfList {
+private:
+  BufferFrame* mFirst = nullptr;
 
-  void reset() {
-    freed_bfs_batch_head = nullptr;
-    freed_bfs_batch_tail = nullptr;
-    freed_bfs_counter = 0;
+  BufferFrame* mLast = nullptr;
+
+  u64 mSize = 0;
+
+public:
+  void Reset() {
+    mFirst = nullptr;
+    mLast = nullptr;
+    mSize = 0;
   }
 
-  void push(Partition& partition) {
-    partition.mFreeBfList.PushFront(freed_bfs_batch_head, freed_bfs_batch_tail,
-                                    freed_bfs_counter);
-    reset();
+  void PopTo(Partition& partition) {
+    partition.mFreeBfList.PushFront(mFirst, mLast, mSize);
+    Reset();
   }
 
-  u64 size() {
-    return freed_bfs_counter;
+  u64 Size() {
+    return mSize;
   }
 
-  void add(BufferFrame& bf) {
-    bf.header.mNextFreeBf = freed_bfs_batch_head;
-    if (freed_bfs_batch_head == nullptr) {
-      freed_bfs_batch_tail = &bf;
+  void PushFront(BufferFrame& bf) {
+    bf.header.mNextFreeBf = mFirst;
+    mFirst = &bf;
+    mSize++;
+    if (mLast == nullptr) {
+      mLast = &bf;
     }
-    freed_bfs_batch_head = &bf;
-    freed_bfs_counter++;
   }
 };
 
 /// BufferFrameProvider provides free buffer frames for partitions.
-class BufferFrameProvider {
+class BufferFrameProvider : public utils::UserThread {
 public:
-  const u64 mId;
-  const std::string mThreadName;
-  std::unique_ptr<std::thread> mThread;
-  atomic<bool> mKeepRunning;
-
   const u64 mNumBfs;
   u8* mBufferPool;
 
@@ -83,29 +80,27 @@ public:
 
   const int mFD;
 
-  AsyncWriteBuffer mAsyncWriteBuffer; // output of phase 2
-
   std::vector<BufferFrame*> mCoolCandidateBfs;  // input of phase 1
   std::vector<BufferFrame*> mEvictCandidateBfs; // output of phase 1
-  // AsyncWriteBuffer mAsyncWriteBuffer;           // output of phase 2
-  FreedBfsBatch mFreedBfsBatch; // output of phase 3
+  AsyncWriteBuffer mAsyncWriteBuffer;           // output of phase 2
+  FreeBfList mFreeBfList;                       // output of phase 3
 
 public:
-  BufferFrameProvider(u64 id, const std::string& threadName, u64 numBfs,
+  BufferFrameProvider(const std::string& threadName, u64 runningCPU, u64 numBfs,
                       u8* bfs, u64 numPartitions, u64 partitionMask,
                       std::vector<std::unique_ptr<Partition>>& partitions,
                       int fd)
-      : mId(id),
-        mThreadName(threadName),
-        mThread(nullptr),
-        mKeepRunning(false),
+      : utils::UserThread(threadName, runningCPU),
         mNumBfs(numBfs),
         mBufferPool(bfs),
         mNumPartitions(numPartitions),
         mPartitionsMask(partitionMask),
         mPartitions(partitions),
         mFD(fd),
-        mAsyncWriteBuffer(fd, FLAGS_page_size, FLAGS_write_buffer_size) {
+        mCoolCandidateBfs(),
+        mEvictCandidateBfs(),
+        mAsyncWriteBuffer(fd, FLAGS_page_size, FLAGS_write_buffer_size),
+        mFreeBfList() {
     mCoolCandidateBfs.reserve(FLAGS_buffer_frame_recycle_batch_size);
     mEvictCandidateBfs.reserve(FLAGS_buffer_frame_recycle_batch_size);
   }
@@ -123,25 +118,6 @@ public:
   }
 
 public:
-  void Start() {
-    if (mThread == nullptr) {
-      mKeepRunning = true;
-      mThread = std::make_unique<std::thread>(&BufferFrameProvider::Run, this);
-    }
-  }
-
-  void Stop() {
-    mKeepRunning = false;
-    if (mThread && mThread->joinable()) {
-      mThread->join();
-    }
-    mThread = nullptr;
-  }
-
-  void Run();
-
-  void InitThread();
-
   /**
    * @brief PickBufferFramesToCool randomly picks a batch of buffer frames from
    * the whole memory, gather the COOL buffer frames for the next round to
@@ -166,19 +142,22 @@ public:
 
   void FlushAndRecycleBufferFrames(Partition& targetPartition);
 
+protected:
+  void RunImpl() override;
+
 private:
-  inline void RandomBufferFramesToCoolOrEvict() {
+  inline void randomBufferFramesToCoolOrEvict() {
     mCoolCandidateBfs.clear();
     for (u64 i = 0; i < FLAGS_buffer_frame_recycle_batch_size; i++) {
-      auto randomBf = RandomBufferFrame();
+      auto* randomBf = randomBufferFrame();
       DO_NOT_OPTIMIZE(randomBf->header.state);
       mCoolCandidateBfs.push_back(randomBf);
     }
   }
 
-  inline BufferFrame* RandomBufferFrame() {
+  inline BufferFrame* randomBufferFrame() {
     auto i = utils::RandomGenerator::getRand<u64>(0, mNumBfs);
-    auto bfAddr = &mBufferPool[i * BufferFrame::Size()];
+    auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
     return reinterpret_cast<BufferFrame*>(bfAddr);
   }
 
@@ -187,24 +166,22 @@ private:
     return *mPartitions[i];
   }
 
-  inline u64 GetPartitionId(PID pageId) {
+  inline u64 getPartitionId(PID pageId) {
     return pageId & mPartitionsMask;
   }
 
-  void EvictFlushedBf(BufferFrame& cooledBf, BMOptimisticGuard& optimisticGuard,
+  void evictFlushedBf(BufferFrame& cooledBf, BMOptimisticGuard& optimisticGuard,
                       Partition& targetPartition);
 };
 
 using Time = decltype(std::chrono::high_resolution_clock::now());
 
-inline void BufferFrameProvider::Run() {
-  LOG(INFO) << "BufferFrameProvider thread started"
-            << ", thread id=" << mId << ", threadName=" << mThreadName
-            << ", numBufferFrames=" << mNumBfs
-            << ", numPartitions=" << mNumPartitions;
-  SCOPED_DEFER(LOG(INFO) << "BufferFrameProvider thread stopped");
-
-  InitThread();
+inline void BufferFrameProvider::RunImpl() {
+  CPUCounters::registerThread(mThreadName);
+  if (FLAGS_root) {
+    // https://linux.die.net/man/2/setpriority
+    POSIX_CHECK(setpriority(PRIO_PROCESS, 0, -20) == 0);
+  }
 
   while (mKeepRunning) {
     auto& targetPartition = randomPartition();
@@ -227,24 +204,7 @@ inline void BufferFrameProvider::Run() {
   }
 }
 
-inline void BufferFrameProvider::InitThread() {
-  if (FLAGS_enable_pin_worker_threads) {
-    utils::PinThisThread(FLAGS_worker_threads + FLAGS_wal + mId);
-  } else {
-    utils::PinThisThread(FLAGS_wal + mId);
-  }
-
-  CPUCounters::registerThread(mThreadName);
-  if (FLAGS_root) {
-    // https://linux.die.net/man/2/setpriority
-    POSIX_CHECK(setpriority(PRIO_PROCESS, 0, -20) == 0);
-  }
-
-  DCHECK(mThreadName.size() < 16);
-  pthread_setname_np(pthread_self(), mThreadName.c_str());
-}
-
-inline void BufferFrameProvider::EvictFlushedBf(
+inline void BufferFrameProvider::evictFlushedBf(
     BufferFrame& cooledBf, BMOptimisticGuard& optimisticGuard,
     Partition& targetPartition) {
   TREEID btreeId = cooledBf.page.mBTreeId;
@@ -271,9 +231,9 @@ inline void BufferFrameProvider::EvictFlushedBf(
   cooledBf.reset();
   cooledBf.header.mLatch.UnlockExclusively();
 
-  mFreedBfsBatch.add(cooledBf);
-  if (mFreedBfsBatch.size() <= std::min<u64>(FLAGS_worker_threads, 128)) {
-    mFreedBfsBatch.push(targetPartition);
+  mFreeBfList.PushFront(cooledBf);
+  if (mFreeBfList.Size() <= std::min<u64>(FLAGS_worker_threads, 128)) {
+    mFreeBfList.PopTo(targetPartition);
   }
 
   if (FLAGS_pid_tracing) {
@@ -317,9 +277,9 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
   // the required level can not be achieved
   u64 failedAttempts = 0;
   if (targetPartition.NeedMoreFreeBfs() && failedAttempts < 10) {
-    RandomBufferFramesToCoolOrEvict();
+    randomBufferFramesToCoolOrEvict();
     while (mCoolCandidateBfs.size() > 0) {
-      auto coolCandidate = mCoolCandidateBfs.back();
+      auto* coolCandidate = mCoolCandidateBfs.back();
       mCoolCandidateBfs.pop_back();
       COUNTERS_BLOCK() {
         PPCounters::myCounters().phase_1_counter++;
@@ -427,15 +387,13 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
                    .count());
         }
         readGuard.JumpIfModifiedByOthers();
-        const auto space_check_res =
-            TreeRegistry::sInstance->checkSpaceUtilization(
-                coolCandidate->page.mBTreeId, *coolCandidate);
-        if (space_check_res == SpaceCheckResult::kRestartSameBf ||
-            space_check_res == SpaceCheckResult::kPickAnotherBf) {
-          DLOG(WARNING)
-              << "Cool candidate discarded, space check failed"
-              << ", pageId=" << coolCandidate->header.mPageId
-              << ", space_check_res is kRestartSameBf || kPickAnotherBf";
+        auto checkResult = TreeRegistry::sInstance->checkSpaceUtilization(
+            coolCandidate->page.mBTreeId, *coolCandidate);
+        if (checkResult == SpaceCheckResult::kRestartSameBf ||
+            checkResult == SpaceCheckResult::kPickAnotherBf) {
+          DLOG(WARNING) << "Cool candidate discarded, space check failed"
+                        << ", pageId=" << coolCandidate->header.mPageId
+                        << ", checkResult is kRestartSameBf || kPickAnotherBf";
           JUMPMU_CONTINUE;
         }
         readGuard.JumpIfModifiedByOthers();
@@ -486,7 +444,7 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
                           << ", mAsyncWriteBuffer.pending_requests="
                           << mAsyncWriteBuffer.pending_requests);
 
-  mFreedBfsBatch.reset();
+  mFreeBfList.Reset();
   for (const volatile auto& cooledBf : mEvictCandidateBfs) {
     JUMPMU_TRY() {
       BMOptimisticGuard optimisticGuard(cooledBf->header.mLatch);
@@ -502,12 +460,12 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
         JUMPMU_CONTINUE;
       }
       const PID cooledPageId = cooledBf->header.mPageId;
-      const u64 partitionId = GetPartitionId(cooledPageId);
+      const u64 partitionId = getPartitionId(cooledPageId);
 
       // Prevent evicting a page that already has an IO Frame with (possibly)
       // threads working on it.
       Partition& partition = *mPartitions[partitionId];
-      JumpScoped<std::unique_lock<std::mutex>> io_guard(
+      JumpScoped<std::unique_lock<std::mutex>> ioGuard(
           partition.mInflightIOMutex);
       if (partition.mInflightIOs.Lookup(cooledPageId)) {
         DLOG(WARNING) << "COOLed buffer frame discarded, already in IO stage"
@@ -519,7 +477,7 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
       // Evict clean pages. They can be safely cleared in memory without
       // writing any bytes back to the underlying disk.
       if (!cooledBf->isDirty()) {
-        EvictFlushedBf(*cooledBf, optimisticGuard, targetPartition);
+        evictFlushedBf(*cooledBf, optimisticGuard, targetPartition);
         DLOG(INFO) << "COOLed buffer frame is not dirty, reclaim directly"
                    << ", pageId=" << cooledBf->header.mPageId;
         JUMPMU_CONTINUE;
@@ -596,7 +554,7 @@ inline void BufferFrameProvider::FlushAndRecycleBufferFrames(
             BMOptimisticGuard optimisticGuard(writtenBf.header.mLatch);
             if (writtenBf.header.state == STATE::COOL &&
                 !writtenBf.header.mIsBeingWrittenBack && !writtenBf.isDirty()) {
-              EvictFlushedBf(writtenBf, optimisticGuard, targetPartition);
+              evictFlushedBf(writtenBf, optimisticGuard, targetPartition);
             }
           }
           JUMPMU_CATCH() {
@@ -604,8 +562,8 @@ inline void BufferFrameProvider::FlushAndRecycleBufferFrames(
         },
         numFlushedBfs);
   }
-  if (mFreedBfsBatch.size()) {
-    mFreedBfsBatch.push(targetPartition);
+  if (mFreeBfList.Size()) {
+    mFreeBfList.PopTo(targetPartition);
   }
 }
 

@@ -1,8 +1,8 @@
 #include "Config.hpp"
 #include "LeanStore.hpp"
-#include "shared-headers/Units.hpp"
 #include "concurrency-recovery/CRMG.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "shared-headers/Units.hpp"
 #include "shared/LeanStoreAdapter.hpp"
 #include "shared/Schema.hpp"
 #include "utils/Parallelize.hpp"
@@ -11,7 +11,6 @@
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
-#include <tbb/parallel_for.h>
 
 #include <iostream>
 

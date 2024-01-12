@@ -2,11 +2,11 @@
 
 #include "BufferFrame.hpp"
 #include "Config.hpp"
-#include "shared-headers/Exceptions.hpp"
 #include "concurrency-recovery/CRMG.hpp"
 #include "concurrency-recovery/GroupCommitter.hpp"
 #include "concurrency-recovery/Recovery.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "shared-headers/Exceptions.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Misc.hpp"
 #include "utils/Parallelize.hpp"
@@ -83,13 +83,21 @@ void BufferManager::StartBufferFrameProviders() {
   DCHECK(FLAGS_pp_threads <= mNumPartitions);
   mBfProviders.reserve(FLAGS_pp_threads);
   for (auto i = 0u; i < FLAGS_pp_threads; ++i) {
-    std::string threadName = "bf_provider";
+    std::string threadName = "BuffProvider";
     if (FLAGS_pp_threads > 1) {
-      threadName = "bf_provider_" + std::to_string(i);
+      threadName += std::to_string(i);
     }
+
+    int runningCPU = 0;
+    if (FLAGS_enable_pin_worker_threads) {
+      runningCPU = FLAGS_worker_threads + FLAGS_wal + i;
+    } else {
+      runningCPU = FLAGS_wal + i;
+    }
+
     mBfProviders.push_back(std::make_unique<BufferFrameProvider>(
-        i, threadName, mNumBfs, mBufferPool, mNumPartitions, mPartitionsMask,
-        mPartitions, mPageFd));
+        threadName, runningCPU, mNumBfs, mBufferPool, mNumPartitions,
+        mPartitionsMask, mPartitions, mPageFd));
   }
 
   for (auto i = 0u; i < mBfProviders.size(); ++i) {
