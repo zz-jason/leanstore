@@ -29,7 +29,9 @@ atomic<u64> Worker::sOltpLwm = 0;
 atomic<u64> Worker::sNewestOlapStartTx = 0;
 
 Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers)
-    : cc(numWorkers), mWorkerId(workerId), mAllWorkers(allWorkers),
+    : cc(numWorkers),
+      mWorkerId(workerId),
+      mAllWorkers(allWorkers),
       mNumAllWorkers(numWorkers) {
   CRCounters::myCounters().mWorkerId = workerId;
 

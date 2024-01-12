@@ -27,9 +27,12 @@ public:
 
     WALRemove(Slice key, Slice val, WORKERID prevWorkerId, u64 prevTxId,
               u64 prevCommandId)
-        : WALPayload(TYPE::WALRemove), mKeySize(key.size()),
-          mValSize(val.size()), mPrevWorkerId(prevWorkerId),
-          mPrevTxId(prevTxId), mPrevCommandId(prevCommandId) {
+        : WALPayload(TYPE::WALRemove),
+          mKeySize(key.size()),
+          mValSize(val.size()),
+          mPrevWorkerId(prevWorkerId),
+          mPrevTxId(prevTxId),
+          mPrevCommandId(prevCommandId) {
       std::memcpy(payload, key.data(), key.size());
       std::memcpy(payload + key.size(), val.data(), val.size());
     }

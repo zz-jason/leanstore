@@ -4,15 +4,15 @@
 #include "BMPlainGuard.hpp"
 #include "BufferFrame.hpp"
 #include "Config.hpp"
-#include "shared-headers/Exceptions.hpp"
 #include "FreeList.hpp"
 #include "Partition.hpp"
 #include "Swip.hpp"
 #include "Tracing.hpp"
 #include "TreeRegistry.hpp"
-#include "shared-headers/Units.hpp"
 #include "profiling/counters/CPUCounters.hpp"
 #include "profiling/counters/PPCounters.hpp"
+#include "shared-headers/Exceptions.hpp"
+#include "shared-headers/Units.hpp"
 #include "storage/buffer-manager/AsyncWriteBuffer.hpp"
 #include "storage/buffer-manager/BufferFrame.hpp"
 #include "utils/Defer.hpp"
@@ -95,9 +95,16 @@ public:
                       u8* bfs, u64 numPartitions, u64 partitionMask,
                       std::vector<std::unique_ptr<Partition>>& partitions,
                       int fd)
-      : mId(id), mThreadName(threadName), mThread(nullptr), mKeepRunning(false),
-        mNumBfs(numBfs), mBufferPool(bfs), mNumPartitions(numPartitions),
-        mPartitionsMask(partitionMask), mPartitions(partitions), mFD(fd),
+      : mId(id),
+        mThreadName(threadName),
+        mThread(nullptr),
+        mKeepRunning(false),
+        mNumBfs(numBfs),
+        mBufferPool(bfs),
+        mNumPartitions(numPartitions),
+        mPartitionsMask(partitionMask),
+        mPartitions(partitions),
+        mFD(fd),
         mAsyncWriteBuffer(fd, FLAGS_page_size, FLAGS_write_buffer_size) {
     mCoolCandidateBfs.reserve(FLAGS_buffer_frame_recycle_batch_size);
     mEvictCandidateBfs.reserve(FLAGS_buffer_frame_recycle_batch_size);
@@ -480,7 +487,7 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
                           << mAsyncWriteBuffer.pending_requests);
 
   mFreedBfsBatch.reset();
-  for (volatile const auto& cooledBf : mEvictCandidateBfs) {
+  for (const volatile auto& cooledBf : mEvictCandidateBfs) {
     JUMPMU_TRY() {
       BMOptimisticGuard optimisticGuard(cooledBf->header.mLatch);
       // Check if the BF got swizzled in or unswizzle another time in another

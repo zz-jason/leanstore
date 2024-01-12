@@ -10,7 +10,7 @@
 namespace leanstore {
 namespace cr {
 
-void GroupCommitter::runImpl() {
+void GroupCommitter::RunImpl() {
   CPUCounters::registerThread(mThreadName, false);
 
   s32 numIOCBs = 0;

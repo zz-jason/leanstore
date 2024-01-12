@@ -6,8 +6,6 @@ ColumnLimit: 80
 IndentWidth: 2
 PointerAlignment: Left
 
-AllowShortFunctionsOnASingleLine: None
-
 PenaltyReturnTypeOnItsOwnLine: 1000
 
 AllowShortBlocksOnASingleLine: false
@@ -15,6 +13,17 @@ AllowShortCaseLabelsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: None
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
+EmptyLineBeforeAccessModifier: Always
+
+# constructor initializers
+PackConstructorInitializers: CurrentLine
+
+# arguments
+AlignAfterOpenBracket: Align
+QualifierAlignment: Custom
+QualifierOrder: ['inline', 'static', 'const', 'volatile', 'type']
+
+# include headers
 IncludeCategories:
   - Regex:           '^".*.hpp'
     Priority:        2

@@ -146,7 +146,9 @@ bool Tuple::ToFat(BTreeExclusiveIterator& xIter) {
 FatTuple::FatTuple(u32 payloadSize, u32 valSize,
                    const ChainedTuple& chainedTuple)
     : Tuple(TupleFormat::FAT, chainedTuple.mWorkerId, chainedTuple.mTxId),
-      mValSize(valSize), mPayloadCapacity(payloadSize), mPayloadSize(valSize),
+      mValSize(valSize),
+      mPayloadCapacity(payloadSize),
+      mPayloadSize(valSize),
       mDataOffset(payloadSize) {
   std::memcpy(payload, chainedTuple.payload, mValSize);
   mCommandId = chainedTuple.mCommandId;
