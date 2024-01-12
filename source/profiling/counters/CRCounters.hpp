@@ -1,6 +1,7 @@
 #pragma once
 
 #include "shared-headers/Units.hpp"
+#include "utils/EnumerableThreadLocal.hpp"
 
 #include <tbb/enumerable_thread_specific.h>
 
@@ -13,22 +14,22 @@ struct CRCounters {
   atomic<u64> written_log_bytes = 0;
   atomic<u64> wal_reserve_blocked = 0;
   atomic<u64> wal_reserve_immediate = 0;
-  // -------------------------------------------------------------------------------------
+
   atomic<u64> gct_total_ms = 0;
   atomic<u64> gct_phase_1_ms = 0;
   atomic<u64> gct_phase_2_ms = 0;
   atomic<u64> gct_write_ms = 0;
   atomic<u64> gct_write_bytes = 0;
-  // -------------------------------------------------------------------------------------
+
   atomic<u64> gct_rounds = 0;
   atomic<u64> gct_committed_tx = 0;
   atomic<u64> rfa_committed_tx = 0;
-  // -------------------------------------------------------------------------------------
+
   atomic<u64> cc_prepare_igc = 0;
   atomic<u64> cc_cross_workers_visibility_check = 0;
   atomic<u64> cc_versions_space_removed = {0};
   atomic<u64> cc_snapshot_restart = 0;
-  // -------------------------------------------------------------------------------------
+
   // Time
   atomic<u64> cc_ms_snapshotting = 0; // Everything related to commit log
   atomic<u64> cc_ms_gc = 0;
@@ -48,11 +49,11 @@ struct CRCounters {
   atomic<u64> cc_ms_start_tx = 0;
   atomic<u64> cc_ms_commit_tx = 0;
   atomic<u64> cc_ms_abort_tx = 0;
-  // -------------------------------------------------------------------------------------
+
   // Latency
-  static constexpr u64 latency_tx_capacity =
-      1024; // ATTENTION: buffer overflow if more than max_dt_id in system are
-            // registered
+  // ATTENTION: buffer overflow if more than max_dt_id in system are
+  // registered
+  static constexpr u64 latency_tx_capacity = 1024;
   atomic<u64> cc_ms_precommit_latency[latency_tx_capacity] = {0};
   atomic<u64> cc_ms_commit_latency[latency_tx_capacity] = {0};
   atomic<u64> cc_flushes_counter[latency_tx_capacity] = {0};
@@ -60,13 +61,14 @@ struct CRCounters {
   atomic<u64> cc_rfa_ms_precommit_latency[latency_tx_capacity] = {0};
   atomic<u64> cc_rfa_ms_commit_latency[latency_tx_capacity] = {0};
   atomic<u64> cc_rfa_latency_cursor = {0};
-  // -------------------------------------------------------------------------------------
+
   CRCounters() {
   }
-  // -------------------------------------------------------------------------------------
-  static tbb::enumerable_thread_specific<CRCounters> cr_counters;
-  static tbb::enumerable_thread_specific<CRCounters>::reference MyCounters() {
-    return cr_counters.local();
+
+  static utils::EnumerableThreadLocal<CRCounters> sCounters;
+
+  static CRCounters& MyCounters() {
+    return *sCounters.Local();
   }
 };
 
