@@ -1,8 +1,8 @@
 #include "Config.hpp"
 #include "LeanStore.hpp"
-#include "shared-headers/Units.hpp"
 #include "concurrency-recovery/CRMG.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "shared-headers/Units.hpp"
 #include "shared/LeanStoreAdapter.hpp"
 #include "shared/Schema.hpp"
 #include "utils/Parallelize.hpp"
@@ -11,7 +11,6 @@
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
-#include <tbb/parallel_for.h>
 
 #include <iostream>
 
@@ -184,10 +183,10 @@ int main(int argc, char** argv) {
             }
           }
           cr::Worker::my().CommitTx();
-          WorkerCounters::myCounters().tx++;
+          WorkerCounters::MyCounters().tx++;
         }
         JUMPMU_CATCH() {
-          WorkerCounters::myCounters().tx_abort++;
+          WorkerCounters::MyCounters().tx_abort++;
         }
       }
       running_threads_counter--;

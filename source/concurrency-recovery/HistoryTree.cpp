@@ -55,7 +55,7 @@ void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
         insertCallBack(versionMeta.payload);
         xIter.MarkAsDirty();
         COUNTERS_BLOCK() {
-          WorkerCounters::myCounters().cc_versions_space_inserted_opt[treeId]++;
+          WorkerCounters::MyCounters().cc_versions_space_inserted_opt[treeId]++;
         }
         xIter.mGuardedLeaf.unlock();
         JUMPMU_RETURN;
@@ -96,7 +96,7 @@ void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
       }
 
       COUNTERS_BLOCK() {
-        WorkerCounters::myCounters().cc_versions_space_inserted[treeId]++;
+        WorkerCounters::MyCounters().cc_versions_space_inserted[treeId]++;
       }
       JUMPMU_RETURN;
     }
@@ -299,7 +299,7 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
     }
   }
   COUNTERS_BLOCK() {
-    CRCounters::myCounters().cc_versions_space_removed += removed_versions;
+    CRCounters::MyCounters().cc_versions_space_removed += removed_versions;
   }
 }
 

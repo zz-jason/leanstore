@@ -29,9 +29,11 @@ atomic<u64> Worker::sOltpLwm = 0;
 atomic<u64> Worker::sNewestOlapStartTx = 0;
 
 Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers)
-    : cc(numWorkers), mWorkerId(workerId), mAllWorkers(allWorkers),
+    : cc(numWorkers),
+      mWorkerId(workerId),
+      mAllWorkers(allWorkers),
       mNumAllWorkers(numWorkers) {
-  CRCounters::myCounters().mWorkerId = workerId;
+  CRCounters::MyCounters().mWorkerId = workerId;
 
   // init wal buffer
   mLogging.mWalBuffer = (u8*)(std::aligned_alloc(512, FLAGS_wal_buffer_size));
@@ -52,7 +54,7 @@ Worker::~Worker() {
 }
 
 void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
-  utils::Timer timer(CRCounters::myCounters().cc_ms_start_tx);
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_start_tx);
   Transaction prevTx = mActiveTx;
   DCHECK(prevTx.state != TxState::kStarted);
   SCOPED_DEFER({
@@ -95,7 +97,7 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   // isolation level
   if (level >= IsolationLevel::kSnapshotIsolation) {
     {
-      utils::Timer timer(CRCounters::myCounters().cc_ms_snapshotting);
+      utils::Timer timer(CRCounters::MyCounters().cc_ms_snapshotting);
       auto& curWorkerSnapshot = sWorkersCurrentSnapshot[mWorkerId];
       curWorkerSnapshot.store(mActiveTx.mStartTs | LATCH_BIT,
                               std::memory_order_release);
@@ -124,7 +126,7 @@ void Worker::CommitTx() {
     mActiveTx.stats.commit = std::chrono::high_resolution_clock::now();
   });
 
-  utils::Timer timer(CRCounters::myCounters().cc_ms_commit_tx);
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_commit_tx);
   if (!FLAGS_wal) {
     return;
   }
@@ -175,7 +177,7 @@ void Worker::CommitTx() {
                << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
   } else {
     std::unique_lock<std::mutex> g(mLogging.mRfaTxToCommitMutex);
-    CRCounters::myCounters().rfa_committed_tx++;
+    CRCounters::MyCounters().rfa_committed_tx++;
     mLogging.mRfaTxToCommit.push_back(mActiveTx);
     DLOG(INFO) << "Puting transaction (RFA) to mRfaTxToCommit"
                << ", workerId=" << mWorkerId
@@ -205,7 +207,7 @@ void Worker::CommitTx() {
 
 // TODO(jian.z): revert changes made in-place on the btree
 void Worker::AbortTx() {
-  utils::Timer timer(CRCounters::myCounters().cc_ms_abort_tx);
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_abort_tx);
   if (!FLAGS_wal) {
     return;
   }

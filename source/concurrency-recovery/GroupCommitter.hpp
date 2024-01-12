@@ -44,8 +44,11 @@ public:
 
 public:
   GroupCommitter(s32 walFd, std::vector<Worker*>& workers, int cpu)
-      : UserThread("GroupCommitter", cpu), mWalFd(walFd), mWalSize(0),
-        mWorkers(workers), mIOContext(nullptr),
+      : UserThread("GroupCommitter", cpu),
+        mWalFd(walFd),
+        mWalSize(0),
+        mWorkers(workers),
+        mIOContext(nullptr),
         mIOCBs(new iocb[FLAGS_worker_threads * 2 + 2]),
         mIOCBPtrs(new iocb*[FLAGS_worker_threads * 2 + 2]),
         mIOEvents(new io_event[FLAGS_worker_threads * 2 + 2]) {
@@ -57,8 +60,9 @@ public:
   virtual ~GroupCommitter() override = default;
 
 protected:
-  virtual void runImpl() override;
+  virtual void RunImpl() override;
 
+private:
   /// Phase 1: Prepare IOCBs
   ///
   /// libaio is used to batch all log writes, these log writes are then

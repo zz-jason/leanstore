@@ -78,8 +78,8 @@ void CRManager::runWorker(u64 workerId) {
   if (FLAGS_cpu_counters) {
     CPUCounters::registerThread(workerName, false);
   }
-  WorkerCounters::myCounters().mWorkerId = workerId;
-  CRCounters::myCounters().mWorkerId = workerId;
+  WorkerCounters::MyCounters().mWorkerId = workerId;
+  CRCounters::MyCounters().mWorkerId = workerId;
 
   Worker::sTlsWorker =
       std::make_unique<Worker>(workerId, mWorkers, FLAGS_worker_threads);

@@ -29,8 +29,8 @@ OpCode BTreeVI::Lookup(Slice key, ValCallback valCallback) {
 
   auto [ret, versionsRead] = GetVisibleTuple(iter.value(), valCallback);
   COUNTERS_BLOCK() {
-    WorkerCounters::myCounters().cc_read_chains[mTreeId]++;
-    WorkerCounters::myCounters().cc_read_versions_visited[mTreeId] +=
+    WorkerCounters::MyCounters().cc_read_chains[mTreeId]++;
+    WorkerCounters::MyCounters().cc_read_versions_visited[mTreeId] +=
         versionsRead;
   }
 
@@ -42,8 +42,8 @@ OpCode BTreeVI::Lookup(Slice key, ValCallback valCallback) {
     }
     std::tie(ret, versionsRead) = GetVisibleTuple(gIter.value(), valCallback);
     COUNTERS_BLOCK() {
-      WorkerCounters::myCounters().cc_read_chains[mTreeId]++;
-      WorkerCounters::myCounters().cc_read_versions_visited[mTreeId] +=
+      WorkerCounters::MyCounters().cc_read_chains[mTreeId]++;
+      WorkerCounters::MyCounters().cc_read_versions_visited[mTreeId] +=
           versionsRead;
     }
   }
@@ -91,7 +91,7 @@ OpCode BTreeVI::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
       }
 
       COUNTERS_BLOCK() {
-        WorkerCounters::myCounters().cc_update_chains[mTreeId]++;
+        WorkerCounters::MyCounters().cc_update_chains[mTreeId]++;
       }
 
       // write lock the tuple
@@ -117,14 +117,14 @@ OpCode BTreeVI::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
         // workers
         if (FLAGS_enable_fat_tuple && chainedTuple.ShouldConvertToFatTuple()) {
           COUNTERS_BLOCK() {
-            WorkerCounters::myCounters().cc_fat_tuple_triggered[mTreeId]++;
+            WorkerCounters::MyCounters().cc_fat_tuple_triggered[mTreeId]++;
           }
           chainedTuple.mTotalUpdates = 0;
           auto succeed = Tuple::ToFat(xIter);
           if (succeed) {
             xIter.mGuardedLeaf->mHasGarbage = true;
             COUNTERS_BLOCK() {
-              WorkerCounters::myCounters().cc_fat_tuple_convert[mTreeId]++;
+              WorkerCounters::MyCounters().cc_fat_tuple_convert[mTreeId]++;
             }
           }
           Tuple::From(rawVal.data())->WriteUnlock();

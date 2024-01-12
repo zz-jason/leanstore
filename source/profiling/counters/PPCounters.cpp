@@ -1,7 +1,9 @@
 #include "PPCounters.hpp"
 
+#include "utils/EnumerableThreadLocal.hpp"
+
 namespace leanstore {
 
-tbb::enumerable_thread_specific<PPCounters> PPCounters::pp_counters;
+utils::EnumerableThreadLocal<PPCounters> PPCounters::sCounters;
 
-}
+} // namespace leanstore

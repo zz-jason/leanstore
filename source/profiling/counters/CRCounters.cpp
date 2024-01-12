@@ -2,6 +2,6 @@
 
 namespace leanstore {
 
-tbb::enumerable_thread_specific<CRCounters> CRCounters::cr_counters;
+utils::EnumerableThreadLocal<CRCounters> CRCounters::sCounters;
 
 } // namespace leanstore

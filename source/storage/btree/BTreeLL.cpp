@@ -32,7 +32,7 @@ OpCode BTreeLL::Lookup(Slice key, ValCallback valCallback) {
     }
     JUMPMU_CATCH() {
       DLOG(WARNING) << "BTreeLL::Lookup retried";
-      WorkerCounters::myCounters().dt_restarts_read[mTreeId]++;
+      WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
     }
   }
   UNREACHABLE();
@@ -73,7 +73,7 @@ bool BTreeLL::isRangeSurelyEmpty(Slice startKey, Slice endKey) {
 
 OpCode BTreeLL::ScanAsc(Slice startKey, ScanCallback callback) {
   COUNTERS_BLOCK() {
-    WorkerCounters::myCounters().dt_scan_asc[mTreeId]++;
+    WorkerCounters::MyCounters().dt_scan_asc[mTreeId]++;
   }
 
   JUMPMU_TRY() {
@@ -98,7 +98,7 @@ OpCode BTreeLL::ScanAsc(Slice startKey, ScanCallback callback) {
 
 OpCode BTreeLL::ScanDesc(Slice scanKey, ScanCallback callback) {
   COUNTERS_BLOCK() {
-    WorkerCounters::myCounters().dt_scan_desc[mTreeId]++;
+    WorkerCounters::MyCounters().dt_scan_desc[mTreeId]++;
   }
   JUMPMU_TRY() {
     BTreeSharedIterator iterator(*static_cast<BTreeGeneric*>(this));
@@ -183,7 +183,7 @@ OpCode BTreeLL::prefixLookup(Slice key, PrefixLookupCallback callback) {
       }
     }
     JUMPMU_CATCH() {
-      WorkerCounters::myCounters().dt_restarts_read[mTreeId]++;
+      WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
     }
   }
 
@@ -224,7 +224,7 @@ OpCode BTreeLL::prefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
       }
     }
     JUMPMU_CATCH() {
-      WorkerCounters::myCounters().dt_restarts_read[mTreeId]++;
+      WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
     }
   }
 
@@ -267,7 +267,7 @@ OpCode BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
         o_value(iterator.MutableVal().data());
         iterator.MarkAsDirty();
         COUNTERS_BLOCK() {
-          WorkerCounters::myCounters().dt_append_opt[mTreeId]++;
+          WorkerCounters::MyCounters().dt_append_opt[mTreeId]++;
         }
         JUMPMU_RETURN OpCode::kOK;
       }
@@ -306,7 +306,7 @@ OpCode BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
       session->bf = iterator.mGuardedLeaf.mBf;
       // -------------------------------------------------------------------------------------
       COUNTERS_BLOCK() {
-        WorkerCounters::myCounters().dt_append[mTreeId]++;
+        WorkerCounters::MyCounters().dt_append[mTreeId]++;
       }
       JUMPMU_RETURN OpCode::kOK;
     }
@@ -416,7 +416,7 @@ OpCode BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
         auto c_key = iterator.key();
         if (c_key >= startKey && c_key <= endKey) {
           COUNTERS_BLOCK() {
-            WorkerCounters::myCounters().dt_range_removed[mTreeId]++;
+            WorkerCounters::MyCounters().dt_range_removed[mTreeId]++;
           }
           ret = iterator.removeCurrent();
           ENSURE(ret == OpCode::kOK);
@@ -453,7 +453,7 @@ OpCode BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
             if (pageStartKey >= startKey && pageEndKey <= endKey) {
               // Purge the whole page
               COUNTERS_BLOCK() {
-                WorkerCounters::myCounters().dt_range_removed[mTreeId] +=
+                WorkerCounters::MyCounters().dt_range_removed[mTreeId] +=
                     guardedLeaf->mNumSeps;
               }
               guardedLeaf->reset();
