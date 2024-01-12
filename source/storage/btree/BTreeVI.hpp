@@ -39,9 +39,8 @@ public:
   };
 
 public:
-  //---------------------------------------------------------------------------
-  // Member fields
-  //---------------------------------------------------------------------------
+  /// Graveyard to store removed tuples for long-running transactions, e.g. OLAP
+  /// transactions.
   BTreeLL* mGraveyard;
 
   BTreeVI() {

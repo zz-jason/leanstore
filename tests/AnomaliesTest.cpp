@@ -193,7 +193,6 @@ TEST_F(AnomaliesTest, NoG1c) {
 
 // OTV: Observed Transaction Vanishes
 TEST_F(AnomaliesTest, NoOTV) {
-  GTEST_SKIP() << "Unfixed";
   auto* s1 = mStore->GetSession(1);
   auto* s2 = mStore->GetSession(2);
   auto* s3 = mStore->GetSession(3);
@@ -210,11 +209,13 @@ TEST_F(AnomaliesTest, NoOTV) {
   s3->StartTx();
   EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
   EXPECT_TRUE(s1->Update(mTbl, ToSlice(key2), ToSlice(newVal21)));
-  EXPECT_TRUE(s2->Update(mTbl, ToSlice(key1), ToSlice(newVal12)));
+  // update conflict
+  EXPECT_FALSE(s2->Update(mTbl, ToSlice(key1), ToSlice(newVal12)));
   s1->CommitTx();
   EXPECT_TRUE(s3->Get(mTbl, ToSlice(key1), res));
   EXPECT_EQ(res, "10");
-  EXPECT_TRUE(s2->Update(mTbl, ToSlice(key2), ToSlice(newVal22)));
+  // update conflict
+  EXPECT_FALSE(s2->Update(mTbl, ToSlice(key2), ToSlice(newVal22)));
   EXPECT_TRUE(s3->Get(mTbl, ToSlice(key2), res));
   EXPECT_EQ(res, "20");
   s2->CommitTx();

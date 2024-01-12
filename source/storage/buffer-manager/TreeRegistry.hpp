@@ -10,6 +10,7 @@
 
 #include <expected>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <tuple>
 #include <unordered_map>
