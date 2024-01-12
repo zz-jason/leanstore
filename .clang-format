@@ -29,7 +29,7 @@ IncludeCategories:
     Priority:        2
   - Regex:           '^("|<)(benchmark)/'
     Priority:        3
-  - Regex:           '^("|<)(gtest|gmock|gflags|glog|rapidjson|tbb|tabulate)/'
+  - Regex:           '^("|<)(gtest|gmock|gflags|glog|rapidjson|tabulate)/'
     Priority:        4
   - Regex:           '<[[:alnum:]_/]+>'
     Priority:        5

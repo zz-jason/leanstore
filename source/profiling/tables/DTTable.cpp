@@ -1,10 +1,7 @@
 #include "DTTable.hpp"
 
-#include "Config.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
-#include "utils/ThreadLocalAggregator.hpp"
 
-using leanstore::utils::threadlocal::Sum;
 namespace leanstore {
 namespace profiling {
 

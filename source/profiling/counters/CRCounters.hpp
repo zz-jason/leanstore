@@ -3,8 +3,6 @@
 #include "shared-headers/Units.hpp"
 #include "utils/EnumerableThreadLocal.hpp"
 
-#include <atomic>
-
 namespace leanstore {
 
 struct CRCounters {

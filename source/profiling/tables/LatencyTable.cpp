@@ -1,9 +1,7 @@
 #include "LatencyTable.hpp"
 
-#include "Config.hpp"
 #include "profiling/counters/CRCounters.hpp"
 #include "utils/EnumerableThreadLocal.hpp"
-#include "utils/ThreadLocalAggregator.hpp"
 
 namespace leanstore {
 namespace profiling {

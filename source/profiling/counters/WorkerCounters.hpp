@@ -3,8 +3,6 @@
 #include "shared-headers/Units.hpp"
 #include "utils/EnumerableThreadLocal.hpp"
 
-#include <tbb/enumerable_thread_specific.h>
-
 namespace leanstore {
 
 struct WorkerCounters {
@@ -124,9 +122,7 @@ struct WorkerCounters {
 
   static utils::EnumerableThreadLocal<WorkerCounters> sCounters;
 
-  static tbb::enumerable_thread_specific<WorkerCounters>::reference
-
-  MyCounters() {
+  static WorkerCounters& MyCounters() {
     return *sCounters.Local();
   }
 };

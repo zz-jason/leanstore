@@ -4,9 +4,6 @@
 #include "profiling/counters/PPCounters.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "utils/EnumerableThreadLocal.hpp"
-#include "utils/ThreadLocalAggregator.hpp"
-
-using leanstore::utils::threadlocal::Sum;
 
 namespace leanstore {
 namespace profiling {
