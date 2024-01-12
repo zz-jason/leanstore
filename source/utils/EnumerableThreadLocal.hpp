@@ -42,6 +42,42 @@ inline static SumT Sum(EnumerableThreadLocal<CountersT>& counters,
   return result;
 }
 
+template <class CountersT, class CounterT, typename SumT = u64>
+inline static SumT Sum(EnumerableThreadLocal<CountersT>& counters,
+                       CounterT CountersT::*c, u64 row) {
+  std::shared_lock<std::shared_mutex> guard(
+      EnumerableThreadLocal<CountersT>::sMutex);
+  SumT result = 0;
+  for (auto& counter : counters.sAllThreadLocals) {
+    result += ((*counter.get()).*c)[row].exchange(0);
+  }
+  return result;
+}
+
+template <class CountersT, class CounterT, typename SumT = u64>
+inline static SumT Sum(EnumerableThreadLocal<CountersT>& counters,
+                       CounterT CountersT::*c, u64 row, u64 col) {
+  std::shared_lock<std::shared_mutex> guard(
+      EnumerableThreadLocal<CountersT>::sMutex);
+  SumT result = 0;
+  for (auto& counter : counters.sAllThreadLocals) {
+    result += ((*counter.get()).*c)[row][col].exchange(0);
+  }
+  return result;
+}
+
+template <class CountersT, class CounterT, typename SumT = u64>
+inline static SumT Max(EnumerableThreadLocal<CountersT>& counters,
+                       CounterT CountersT::*c, u64 row) {
+  std::shared_lock<std::shared_mutex> guard(
+      EnumerableThreadLocal<CountersT>::sMutex);
+  SumT result = 0;
+  for (auto& counter : counters.sAllThreadLocals) {
+    result = std::max<SumT>(result, ((*counter.get()).*c)[row].exchange(0));
+  }
+  return result;
+}
+
 template <typename T>
 inline static void ForEach(EnumerableThreadLocal<T>& tlsObjContainer,
                            std::function<void(T* tlsObj)> tlsObjCallBack) {

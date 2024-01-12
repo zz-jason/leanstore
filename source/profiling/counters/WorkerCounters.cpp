@@ -1,9 +1,11 @@
 #include "WorkerCounters.hpp"
 
+#include "utils/EnumerableThreadLocal.hpp"
+
 namespace leanstore {
 
-atomic<u64> WorkerCounters::workers_counter = 0;
+atomic<u64> WorkerCounters::sNumWorkers = 0;
 
-tbb::enumerable_thread_specific<WorkerCounters> WorkerCounters::worker_counters;
+utils::EnumerableThreadLocal<WorkerCounters> WorkerCounters::sCounters;
 
 } // namespace leanstore

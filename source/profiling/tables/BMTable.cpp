@@ -89,13 +89,13 @@ void BMTable::open() {
   });
 
   columns.emplace("allocate_ops", [&](Column& col) {
-    col << (Sum(WorkerCounters::worker_counters,
+    col << (Sum(WorkerCounters::sCounters,
                 &WorkerCounters::allocate_operations_counter));
   });
   columns.emplace("r_mib", [&](Column& col) {
-    col << (Sum(WorkerCounters::worker_counters,
-                &WorkerCounters::read_operations_counter) *
-            FLAGS_page_size / 1024.0 / 1024.0);
+    auto res = Sum(WorkerCounters::sCounters,
+                   &WorkerCounters::read_operations_counter);
+    col << (res * FLAGS_page_size / 1024.0 / 1024.0);
   });
 }
 

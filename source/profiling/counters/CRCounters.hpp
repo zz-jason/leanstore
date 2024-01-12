@@ -3,8 +3,6 @@
 #include "shared-headers/Units.hpp"
 #include "utils/EnumerableThreadLocal.hpp"
 
-#include <tbb/enumerable_thread_specific.h>
-
 #include <atomic>
 
 namespace leanstore {

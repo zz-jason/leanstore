@@ -1,6 +1,7 @@
 #pragma once
 
 #include "shared-headers/Units.hpp"
+#include "utils/EnumerableThreadLocal.hpp"
 
 #include <tbb/enumerable_thread_specific.h>
 
@@ -116,15 +117,17 @@ struct WorkerCounters {
 
   // -------------------------------------------------------------------------------------
   WorkerCounters() {
-    t_id = workers_counter++;
+    t_id = sNumWorkers++;
   }
 
-  static atomic<u64> workers_counter;
-  static tbb::enumerable_thread_specific<WorkerCounters> worker_counters;
+  static atomic<u64> sNumWorkers;
+
+  static utils::EnumerableThreadLocal<WorkerCounters> sCounters;
+
   static tbb::enumerable_thread_specific<WorkerCounters>::reference
 
   MyCounters() {
-    return worker_counters.local();
+    return *sCounters.Local();
   }
 };
 

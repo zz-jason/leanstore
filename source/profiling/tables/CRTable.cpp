@@ -34,20 +34,19 @@ void CRTable::open() {
     col << Sum(CRCounters::sCounters, &CRCounters::gct_rounds);
   });
   columns.emplace("tx", [](Column& col) {
-    col << Sum(WorkerCounters::worker_counters, &WorkerCounters::tx);
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::tx);
   });
   columns.emplace("tx_abort", [](Column& col) {
-    col << Sum(WorkerCounters::worker_counters, &WorkerCounters::tx_abort);
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::tx_abort);
   });
   columns.emplace("olap_tx", [](Column& col) {
-    col << Sum(WorkerCounters::worker_counters, &WorkerCounters::olap_tx);
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::olap_tx);
   });
   columns.emplace("olap_scanned_tuples", [](Column& col) {
-    col << Sum(WorkerCounters::worker_counters,
-               &WorkerCounters::olap_scanned_tuples);
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::olap_scanned_tuples);
   });
   columns.emplace("olap_tx_abort", [](Column& col) {
-    col << Sum(WorkerCounters::worker_counters, &WorkerCounters::olap_tx_abort);
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::olap_tx_abort);
   });
   columns.emplace("rfa_committed_tx", [&](Column& col) {
     col << Sum(CRCounters::sCounters, &CRCounters::rfa_committed_tx);
@@ -57,8 +56,7 @@ void CRTable::open() {
   });
 
   columns.emplace("wal_read_gib", [&](Column& col) {
-    col << (Sum(WorkerCounters::worker_counters,
-                &WorkerCounters::wal_read_bytes) *
+    col << (Sum(WorkerCounters::sCounters, &WorkerCounters::wal_read_bytes) *
             1.0) /
                1024.0 / 1024.0 / 1024.0;
   });
@@ -67,8 +65,7 @@ void CRTable::open() {
                1024.0 / 1024.0 / 1024.0;
   });
   columns.emplace("wal_write_gib", [&](Column& col) {
-    col << (Sum(WorkerCounters::worker_counters,
-                &WorkerCounters::wal_write_bytes) *
+    col << (Sum(WorkerCounters::sCounters, &WorkerCounters::wal_write_bytes) *
             1.0) /
                1024.0 / 1024.0 / 1024.0;
   });
@@ -141,10 +138,8 @@ void CRTable::open() {
 }
 
 void CRTable::next() {
-  wal_hits =
-      Sum(WorkerCounters::worker_counters, &WorkerCounters::wal_buffer_hit);
-  wal_miss =
-      Sum(WorkerCounters::worker_counters, &WorkerCounters::wal_buffer_miss);
+  wal_hits = Sum(WorkerCounters::sCounters, &WorkerCounters::wal_buffer_hit);
+  wal_miss = Sum(WorkerCounters::sCounters, &WorkerCounters::wal_buffer_miss);
   wal_total = wal_hits + wal_miss;
   wal_hit_pct = wal_hits * 1.0 / wal_total;
   wal_miss_pct = wal_miss * 1.0 / wal_total;
