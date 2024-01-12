@@ -4,7 +4,7 @@
 #include "profiling/counters/CRCounters.hpp"
 #include "utils/ThreadLocalAggregator.hpp"
 
-using leanstore::utils::threadlocal::sum;
+using leanstore::utils::threadlocal::Sum;
 namespace leanstore {
 namespace profiling {
 

@@ -266,7 +266,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
     auto phase1Begin = std::chrono::high_resolution_clock::now();
     SCOPED_DEFER({
       auto phase1End = std::chrono::high_resolution_clock::now();
-      PPCounters::myCounters().phase_1_ms +=
+      PPCounters::myCounters().mPhase1MS +=
           (std::chrono::duration_cast<std::chrono::microseconds>(phase1End -
                                                                  phase1Begin)
                .count());
@@ -351,7 +351,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
 
         COUNTERS_BLOCK() {
           iterateChildrenEnd = std::chrono::high_resolution_clock::now();
-          PPCounters::myCounters().iterate_children_ms +=
+          PPCounters::myCounters().mIterateChildrenMS +=
               (std::chrono::duration_cast<std::chrono::microseconds>(
                    iterateChildrenEnd - iterateChildrenBegin)
                    .count());
@@ -381,7 +381,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
                reinterpret_cast<HybridLatch*>(0x99));
         COUNTERS_BLOCK() {
           findParentEnd = std::chrono::high_resolution_clock::now();
-          PPCounters::myCounters().find_parent_ms +=
+          PPCounters::myCounters().mFindParentMS +=
               (std::chrono::duration_cast<std::chrono::microseconds>(
                    findParentEnd - findParentBegin)
                    .count());
