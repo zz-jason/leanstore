@@ -1,8 +1,7 @@
 #pragma once
 
 #include "shared-headers/Units.hpp"
-
-#include <tbb/enumerable_thread_specific.h>
+#include "utils/EnumerableThreadLocal.hpp"
 
 namespace leanstore {
 
@@ -116,15 +115,15 @@ struct WorkerCounters {
 
   // -------------------------------------------------------------------------------------
   WorkerCounters() {
-    t_id = workers_counter++;
+    t_id = sNumWorkers++;
   }
 
-  static atomic<u64> workers_counter;
-  static tbb::enumerable_thread_specific<WorkerCounters> worker_counters;
-  static tbb::enumerable_thread_specific<WorkerCounters>::reference
+  static atomic<u64> sNumWorkers;
 
-  myCounters() {
-    return worker_counters.local();
+  static utils::EnumerableThreadLocal<WorkerCounters> sCounters;
+
+  static WorkerCounters& MyCounters() {
+    return *sCounters.Local();
   }
 };
 

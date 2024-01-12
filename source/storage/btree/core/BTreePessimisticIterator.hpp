@@ -76,7 +76,7 @@ protected:
 
         for (u16 level = 0; !guardedChild->mIsLeaf; level++) {
           COUNTERS_BLOCK() {
-            WorkerCounters::myCounters().dt_inner_page[mBTree.mTreeId]++;
+            WorkerCounters::MyCounters().dt_inner_page[mBTree.mTreeId]++;
           }
           mLeafPosInParent = guardedChild->lowerBound<false>(key);
           auto* childSwip =
@@ -109,9 +109,9 @@ protected:
   void gotoPage(const Slice& key) {
     COUNTERS_BLOCK() {
       if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
-        WorkerCounters::myCounters().dt_goto_page_exec[mBTree.mTreeId]++;
+        WorkerCounters::MyCounters().dt_goto_page_exec[mBTree.mTreeId]++;
       } else {
-        WorkerCounters::myCounters().dt_goto_page_shared[mBTree.mTreeId]++;
+        WorkerCounters::MyCounters().dt_goto_page_shared[mBTree.mTreeId]++;
       }
     }
 
@@ -201,7 +201,7 @@ public:
 
   virtual OpCode next() override {
     COUNTERS_BLOCK() {
-      WorkerCounters::myCounters().dt_next_tuple[mBTree.mTreeId]++;
+      WorkerCounters::MyCounters().dt_next_tuple[mBTree.mTreeId]++;
     }
     while (true) {
       ENSURE(mGuardedLeaf.mGuard.mState != GUARD_STATE::OPTIMISTIC);
@@ -256,7 +256,7 @@ public:
             }
             ENSURE(mSlotId < mGuardedLeaf->mNumSeps);
             COUNTERS_BLOCK() {
-              WorkerCounters::myCounters().dt_next_tuple_opt[mBTree.mTreeId]++;
+              WorkerCounters::MyCounters().dt_next_tuple_opt[mBTree.mTreeId]++;
             }
             JUMPMU_RETURN OpCode::kOK;
           }
@@ -277,7 +277,7 @@ public:
           }
         });
         COUNTERS_BLOCK() {
-          WorkerCounters::myCounters().dt_empty_leaf[mBTree.mTreeId]++;
+          WorkerCounters::MyCounters().dt_empty_leaf[mBTree.mTreeId]++;
         }
         continue;
       }
@@ -291,7 +291,7 @@ public:
 
   virtual OpCode prev() override {
     COUNTERS_BLOCK() {
-      WorkerCounters::myCounters().dt_prev_tuple[mBTree.mTreeId]++;
+      WorkerCounters::MyCounters().dt_prev_tuple[mBTree.mTreeId]++;
     }
 
     while (true) {
@@ -348,7 +348,7 @@ public:
                 JUMPMU_CONTINUE;
               }
               COUNTERS_BLOCK() {
-                WorkerCounters::myCounters()
+                WorkerCounters::MyCounters()
                     .dt_prev_tuple_opt[mBTree.mTreeId]++;
               }
               JUMPMU_RETURN OpCode::kOK;
@@ -362,7 +362,7 @@ public:
 
         if (mGuardedLeaf->mNumSeps == 0) {
           COUNTERS_BLOCK() {
-            WorkerCounters::myCounters().dt_empty_leaf[mBTree.mTreeId]++;
+            WorkerCounters::MyCounters().dt_empty_leaf[mBTree.mTreeId]++;
           }
           continue;
         }

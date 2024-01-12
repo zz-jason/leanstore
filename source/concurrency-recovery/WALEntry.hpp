@@ -7,7 +7,6 @@
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
-
 #include <glog/logging.h>
 
 #include <cstddef>
@@ -69,7 +68,10 @@ public:
   WALEntry() = default;
 
   WALEntry(LID lsn, u64 size, TYPE type)
-      : mCRC32(99), lsn(lsn), size(size), type(type) {
+      : mCRC32(99),
+        lsn(lsn),
+        size(size),
+        type(type) {
   }
 
 public:
@@ -109,7 +111,8 @@ public:
 
 class WALEntrySimple : public WALEntry {
 public:
-  WALEntrySimple(LID lsn, u64 size, TYPE type) : WALEntry(lsn, size, type) {
+  WALEntrySimple(LID lsn, u64 size, TYPE type)
+      : WALEntry(lsn, size, type) {
   }
 };
 
@@ -135,7 +138,9 @@ public:
   WALEntryComplex() = default;
 
   WALEntryComplex(LID lsn, u64 size, LID psn, TREEID treeId, PID pageId)
-      : WALEntry(lsn, size, TYPE::COMPLEX), mPSN(psn), mTreeId(treeId),
+      : WALEntry(lsn, size, TYPE::COMPLEX),
+        mPSN(psn),
+        mTreeId(treeId),
         mPageId(pageId) {
   }
 
@@ -156,7 +161,9 @@ public:
   /// @param size the total size of the WALEntry
   /// @param lsn the log sequence number of the WALEntry
   WALPayloadHandler(T* entry, u64 size, u64 lsn)
-      : entry(entry), mTotalSize(size), lsn(lsn) {
+      : entry(entry),
+        mTotalSize(size),
+        lsn(lsn) {
   }
 
 public:

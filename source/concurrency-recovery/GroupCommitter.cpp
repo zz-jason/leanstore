@@ -10,7 +10,7 @@
 namespace leanstore {
 namespace cr {
 
-void GroupCommitter::runImpl() {
+void GroupCommitter::RunImpl() {
   CPUCounters::registerThread(mThreadName, false);
 
   s32 numIOCBs = 0;
@@ -45,12 +45,12 @@ void GroupCommitter::prepareIOCBs(s32& numIOCBs, u64& minFlushedGSN,
   /// counters
   leanstore::utils::SteadyTimer phase1Timer [[maybe_unused]];
   COUNTERS_BLOCK() {
-    CRCounters::myCounters().gct_rounds++;
+    CRCounters::MyCounters().gct_rounds++;
     phase1Timer.Start();
   }
   SCOPED_DEFER(COUNTERS_BLOCK() {
     phase1Timer.Stop();
-    CRCounters::myCounters().gct_phase_1_ms += phase1Timer.ElaspedUS();
+    CRCounters::MyCounters().gct_phase_1_ms += phase1Timer.ElaspedUS();
   });
 
   numIOCBs = 0;
@@ -107,7 +107,7 @@ void GroupCommitter::writeIOCBs(s32 numIOCBs) {
   }
   SCOPED_DEFER(COUNTERS_BLOCK() {
     writeTimer.Stop();
-    CRCounters::myCounters().gct_write_ms += writeTimer.ElaspedUS();
+    CRCounters::MyCounters().gct_write_ms += writeTimer.ElaspedUS();
   });
 
   // submit all log writes using a single system call.
@@ -142,9 +142,9 @@ void GroupCommitter::commitTXs(
     phase2Timer.Start();
   }
   SCOPED_DEFER(COUNTERS_BLOCK() {
-    CRCounters::myCounters().gct_committed_tx += numCommitted;
+    CRCounters::MyCounters().gct_committed_tx += numCommitted;
     phase2Timer.Stop();
-    CRCounters::myCounters().gct_phase_2_ms += phase2Timer.ElaspedUS();
+    CRCounters::MyCounters().gct_phase_2_ms += phase2Timer.ElaspedUS();
   });
 
   for (WORKERID workerId = 0; workerId < mWorkers.size(); workerId++) {
@@ -245,7 +245,7 @@ void GroupCommitter::setUpIOCB(s32 ioSlot, u8* buf, u64 lower, u64 upper) {
   mIOCBs[ioSlot].data = bufAligned;
   mIOCBPtrs[ioSlot] = &mIOCBs[ioSlot];
   COUNTERS_BLOCK() {
-    CRCounters::myCounters().gct_write_bytes += countAligned;
+    CRCounters::MyCounters().gct_write_bytes += countAligned;
   }
 };
 

@@ -284,7 +284,7 @@ public:
   inline bool retrieveVersion(
       WORKERID prevWorkerId, TXID prevTxId, COMMANDID prevCommandId,
       std::function<void(const u8*, u64 payload_length)> cb) {
-    utils::Timer timer(CRCounters::myCounters().cc_ms_history_tree_retrieve);
+    utils::Timer timer(CRCounters::MyCounters().cc_ms_history_tree_retrieve);
     const bool isRemoveCommand = prevCommandId & TYPE_MSB(COMMANDID);
     const bool found = mHistoryTree->retrieveVersion(
         prevWorkerId, prevTxId, prevCommandId, isRemoveCommand, cb);
@@ -453,7 +453,7 @@ inline ConcurrencyControl& ConcurrencyControl::other(WORKERID otherWorkerId) {
 inline u64 ConcurrencyControl::insertVersion(
     TREEID treeId, bool isRemoveCommand, u64 versionSize,
     std::function<void(u8*)> insertCallBack) {
-  utils::Timer timer(CRCounters::myCounters().cc_ms_history_tree_insert);
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_history_tree_insert);
   auto& curWorker = Worker::my();
   const u64 commandId =
       (curWorker.mCommandId++) | ((isRemoveCommand) ? TYPE_MSB(COMMANDID) : 0);

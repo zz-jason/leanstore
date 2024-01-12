@@ -25,14 +25,21 @@ CheckOptions:
     value: k
   - key:   readability-identifier-naming.FunctionCase
     value: CamelCase
+
   - key:   readability-identifier-naming.PublicMethodCase
     value: CamelCase
+  - key:   readability-identifier-naming.ProtectedMethodCase
+    value: CamelCase
+  - key:   readability-identifier-naming.PrivateMethodCase
+    value: camelBack
+
   - key:   readability-identifier-naming.PublicMemberCase
     value: camelBack
-  - key:   readability-identifier-naming.PrivateMethodCase
+  - key:   readability-identifier-naming.ProtectedMemberCase
     value: camelBack
   - key:   readability-identifier-naming.PrivateMemberCase
     value: camelBack
+
   - key:   readability-identifier-naming.ClassMemberCase
     value: CamelBack
   - key:   readability-identifier-naming.ClassMemberPrefix

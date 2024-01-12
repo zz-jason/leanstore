@@ -144,7 +144,7 @@ void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
                          sepInfo.length);
     mHeight++;
     COUNTERS_BLOCK() {
-      WorkerCounters::myCounters().dt_split[mTreeId]++;
+      WorkerCounters::MyCounters().dt_split[mTreeId]++;
     }
     return;
   } else {
@@ -211,7 +211,7 @@ void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
       xGuardedChild->split(xGuardedParent, xGuardedNewLeft, sepInfo.slot,
                            sepKey, sepInfo.length);
       COUNTERS_BLOCK() {
-        WorkerCounters::myCounters().dt_split[mTreeId]++;
+        WorkerCounters::MyCounters().dt_split[mTreeId]++;
       }
     } else {
       guardedParent.unlock();
@@ -339,21 +339,21 @@ bool BTreeGeneric::tryMerge(BufferFrame& to_merge, bool swizzleSibling) {
         guardedParent->freeSpaceAfterCompaction() >=
             BTreeNode::UnderFullSize()) {
       if (tryMerge(*guardedParent.mBf, true)) {
-        WorkerCounters::myCounters().dt_merge_parent_succ[mTreeId]++;
+        WorkerCounters::MyCounters().dt_merge_parent_succ[mTreeId]++;
       } else {
-        WorkerCounters::myCounters().dt_merge_parent_fail[mTreeId]++;
+        WorkerCounters::MyCounters().dt_merge_parent_fail[mTreeId]++;
       }
     }
   }
   JUMPMU_CATCH() {
-    WorkerCounters::myCounters().dt_merge_fail[mTreeId]++;
+    WorkerCounters::MyCounters().dt_merge_fail[mTreeId]++;
   }
   // -------------------------------------------------------------------------------------
   COUNTERS_BLOCK() {
     if (merged_successfully) {
-      WorkerCounters::myCounters().dt_merge_succ[mTreeId]++;
+      WorkerCounters::MyCounters().dt_merge_succ[mTreeId]++;
     } else {
-      WorkerCounters::myCounters().dt_merge_fail[mTreeId]++;
+      WorkerCounters::MyCounters().dt_merge_fail[mTreeId]++;
     }
   }
   return merged_successfully;
@@ -462,7 +462,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
     GuardedBufferFrame<BTreeNode>& guardedParent,
     GuardedBufferFrame<BTreeNode>& guardedChild,
     ParentSwipHandler& parentHandler) {
-  WorkerCounters::myCounters().dt_researchy[0][1]++;
+  WorkerCounters::MyCounters().dt_researchy[0][1]++;
   if (guardedChild->fillFactorAfterCompaction() >= 0.9) {
     return XMergeReturnCode::kNothing;
   }
@@ -544,11 +544,11 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
       // we unlock only the left page, the right one should not be touched again
       if (ret == 1) {
         fullyMerged[left_hand - pos] = true;
-        WorkerCounters::myCounters().xmerge_full_counter[mTreeId]++;
+        WorkerCounters::MyCounters().xmerge_full_counter[mTreeId]++;
         ret_code = XMergeReturnCode::kFullMerge;
       } else if (ret == 2) {
         guardedNodes[left_hand - pos] = std::move(xGuardedLeft);
-        WorkerCounters::myCounters().xmerge_partial_counter[mTreeId]++;
+        WorkerCounters::MyCounters().xmerge_partial_counter[mTreeId]++;
       } else if (ret == 0) {
         break;
       } else {

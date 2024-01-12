@@ -27,9 +27,12 @@ public:
 
     WALRemove(Slice key, Slice val, WORKERID prevWorkerId, u64 prevTxId,
               u64 prevCommandId)
-        : WALPayload(TYPE::WALRemove), mKeySize(key.size()),
-          mValSize(val.size()), mPrevWorkerId(prevWorkerId),
-          mPrevTxId(prevTxId), mPrevCommandId(prevCommandId) {
+        : WALPayload(TYPE::WALRemove),
+          mKeySize(key.size()),
+          mValSize(val.size()),
+          mPrevWorkerId(prevWorkerId),
+          mPrevTxId(prevTxId),
+          mPrevCommandId(prevCommandId) {
       std::memcpy(payload, key.data(), key.size());
       std::memcpy(payload + key.size(), val.data(), val.size());
     }
@@ -280,7 +283,7 @@ public:
             ENSURE(ret == OpCode::kOK);
             iterator.mergeIfNeeded();
             COUNTERS_BLOCK() {
-              WorkerCounters::myCounters().cc_todo_removed[mTreeId]++;
+              WorkerCounters::MyCounters().cc_todo_removed[mTreeId]++;
             }
           } else if (chainedTuple.mTxId < cr::Worker::my().cc.local_oltp_lwm) {
             // Move to mGraveyard
@@ -296,7 +299,7 @@ public:
             iterator.MarkAsDirty();
             iterator.mergeIfNeeded();
             COUNTERS_BLOCK() {
-              WorkerCounters::myCounters().cc_todo_moved_gy[mTreeId]++;
+              WorkerCounters::MyCounters().cc_todo_moved_gy[mTreeId]++;
             }
           } else {
             UNREACHABLE();
@@ -362,9 +365,9 @@ private:
     // TODO: index range lock for serializability
     COUNTERS_BLOCK() {
       if (asc) {
-        WorkerCounters::myCounters().dt_scan_asc[mTreeId]++;
+        WorkerCounters::MyCounters().dt_scan_asc[mTreeId]++;
       } else {
-        WorkerCounters::myCounters().dt_scan_desc[mTreeId]++;
+        WorkerCounters::MyCounters().dt_scan_desc[mTreeId]++;
       }
     }
     u64 counter = 0;
@@ -386,7 +389,7 @@ private:
         Slice s_key = iterator.key();
         auto reconstruct = GetVisibleTuple(iterator.value(), [&](Slice value) {
           COUNTERS_BLOCK() {
-            WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
+            WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
                 cr::activeTX().IsOLAP();
           }
           keep_scanning = callback(s_key, value);
@@ -394,12 +397,12 @@ private:
         });
         const u16 chain_length = std::get<1>(reconstruct);
         COUNTERS_BLOCK() {
-          WorkerCounters::myCounters().cc_read_chains[mTreeId]++;
-          WorkerCounters::myCounters().cc_read_versions_visited[mTreeId] +=
+          WorkerCounters::MyCounters().cc_read_chains[mTreeId]++;
+          WorkerCounters::MyCounters().cc_read_versions_visited[mTreeId] +=
               chain_length;
           if (std::get<0>(reconstruct) != OpCode::kOK) {
-            WorkerCounters::myCounters().cc_read_chains_not_found[mTreeId]++;
-            WorkerCounters::myCounters()
+            WorkerCounters::MyCounters().cc_read_chains_not_found[mTreeId]++;
+            WorkerCounters::MyCounters()
                 .cc_read_versions_visited_not_found[mTreeId] += chain_length;
           }
         }
@@ -463,7 +466,7 @@ private:
       auto take_from_oltp = [&]() {
         GetVisibleTuple(iterator.value(), [&](Slice value) {
           COUNTERS_BLOCK() {
-            WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
+            WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
                 cr::activeTX().IsOLAP();
           }
           keep_scanning = callback(iterator.key(), value);
@@ -495,7 +498,7 @@ private:
           Slice g_key = g_iterator.key();
           GetVisibleTuple(g_iterator.value(), [&](Slice value) {
             COUNTERS_BLOCK() {
-              WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
+              WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
                   cr::activeTX().IsOLAP();
             }
             keep_scanning = callback(g_key, value);
@@ -516,7 +519,7 @@ private:
           } else {
             GetVisibleTuple(g_iterator.value(), [&](Slice value) {
               COUNTERS_BLOCK() {
-                WorkerCounters::myCounters().dt_scan_callback[mTreeId] +=
+                WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
                     cr::activeTX().IsOLAP();
               }
               keep_scanning = callback(g_key, value);

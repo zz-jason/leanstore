@@ -1,10 +1,8 @@
 #include "LatencyTable.hpp"
 
-#include "Config.hpp"
 #include "profiling/counters/CRCounters.hpp"
-#include "utils/ThreadLocalAggregator.hpp"
+#include "utils/EnumerableThreadLocal.hpp"
 
-using leanstore::utils::threadlocal::sum;
 namespace leanstore {
 namespace profiling {
 
@@ -25,25 +23,24 @@ void LatencyTable::open() {
 void LatencyTable::next() {
   clear();
 
-  for (auto w_i = CRCounters::cr_counters.begin();
-       w_i != CRCounters::cr_counters.end(); ++w_i) {
-    if (w_i->mWorkerId.load() != -1) {
-      continue;
+  // utils::EnumerableThreadLocal<CRCounters> sCounters;
+  utils::ForEach<CRCounters>(CRCounters::sCounters, [&](CRCounters* tls) {
+    if (tls->mWorkerId.load() != -1) {
+      return;
     }
-    for (u64 tx_i = 0; tx_i < CRCounters::latency_tx_capacity; tx_i++) {
-      columns.at("key") << w_i->mWorkerId.load();
-      columns.at("tx_i") << tx_i;
+    for (u64 i = 0; i < CRCounters::latency_tx_capacity; i++) {
+      columns.at("key") << tls->mWorkerId.load();
+      columns.at("i") << i;
       columns.at("cc_ms_precommit_latency")
-          << w_i->cc_ms_precommit_latency[tx_i].load();
-      columns.at("cc_ms_commit_latency")
-          << w_i->cc_ms_commit_latency[tx_i].load();
-      columns.at("cc_flushes_counter") << w_i->cc_flushes_counter[tx_i].load();
+          << tls->cc_ms_precommit_latency[i].load();
+      columns.at("cc_ms_commit_latency") << tls->cc_ms_commit_latency[i].load();
+      columns.at("cc_flushes_counter") << tls->cc_flushes_counter[i].load();
       columns.at("cc_rfa_ms_precommit_latency")
-          << w_i->cc_rfa_ms_precommit_latency[tx_i].load();
+          << tls->cc_rfa_ms_precommit_latency[i].load();
       columns.at("cc_rfa_ms_commit_latency")
-          << w_i->cc_rfa_ms_commit_latency[tx_i].load();
+          << tls->cc_rfa_ms_commit_latency[i].load();
     }
-  }
+  });
 }
 
 } // namespace profiling

@@ -74,7 +74,9 @@ public:
 
 public:
   WALInitPage(TREEID treeId, bool isLeaf)
-      : WALPayload(TYPE::WALInitPage), mTreeId(treeId), mIsLeaf(isLeaf) {
+      : WALPayload(TYPE::WALInitPage),
+        mTreeId(treeId),
+        mIsLeaf(isLeaf) {
   }
 
 public:
@@ -101,7 +103,9 @@ struct WALLogicalSplit : WALPayload {
   }
 
   WALLogicalSplit(PID parent, PID lhs, PID rhs)
-      : WALPayload(TYPE::WALLogicalSplit), parent_pid(parent), left_pid(lhs),
+      : WALPayload(TYPE::WALLogicalSplit),
+        parent_pid(parent),
+        left_pid(lhs),
         right_pid(rhs) {
   }
 
@@ -149,7 +153,8 @@ struct WALInsert : WALPayload {
   u8 payload[];
 
   WALInsert(Slice key, Slice val)
-      : WALPayload(TYPE::WALInsert), mKeySize(key.size()),
+      : WALPayload(TYPE::WALInsert),
+        mKeySize(key.size()),
         mValSize(val.size()) {
     std::memcpy(payload, key.data(), mKeySize);
     std::memcpy(payload + mKeySize, val.data(), mValSize);
@@ -203,9 +208,12 @@ struct WALUpdateSSIP : WALPayload {
 
   WALUpdateSSIP(Slice key, UpdateDesc& updateDesc, u64 deltaSize,
                 WORKERID prevWorkerId, TXID prevTxId, COMMANDID prevCommandId)
-      : WALPayload(TYPE::WALUpdate), mKeySize(key.size()),
-        delta_length(deltaSize), mPrevWorkerId(prevWorkerId),
-        mPrevTxId(prevTxId), mPrevCommandId(prevCommandId) {
+      : WALPayload(TYPE::WALUpdate),
+        mKeySize(key.size()),
+        delta_length(deltaSize),
+        mPrevWorkerId(prevWorkerId),
+        mPrevTxId(prevTxId),
+        mPrevCommandId(prevCommandId) {
     std::memcpy(payload, key.data(), key.size());
     std::memcpy(payload + key.size(), &updateDesc, updateDesc.size());
   }

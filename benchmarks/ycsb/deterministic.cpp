@@ -7,13 +7,11 @@
 #include "leanstore/utils/RandomGenerator.hpp"
 #include "leanstore/utils/ScrambledZipfGenerator.hpp"
 #include "shared-headers/Units.hpp"
-// -------------------------------------------------------------------------------------
+
 #include <gflags/gflags.h>
-#include <tbb/parallel_for.h>
-// -------------------------------------------------------------------------------------
+
 #include <iostream>
-#include <set>
-// -------------------------------------------------------------------------------------
+
 DEFINE_uint32(ycsb_read_ratio, 100, "");
 DEFINE_uint64(ycsb_tuple_count, 0, "");
 DEFINE_uint32(ycsb_payload_size, 100, "tuple size in bytes");
@@ -188,7 +186,7 @@ int main(int argc, char** argv) {
                     tabular_update_descriptor);
                 d_iterators[op_i]->reset();
               }
-              WorkerCounters::myCounters().tx++;
+              WorkerCounters::MyCounters().tx++;
             } else {
               std::random_shuffle(keys.begin(), keys.end());
               cr::Worker::my().StartTx(tx_type, isolation_level);
@@ -201,12 +199,12 @@ int main(int argc, char** argv) {
                     tabular_update_descriptor);
               }
               cr::Worker::my().CommitTx();
-              WorkerCounters::myCounters().tx++;
+              WorkerCounters::MyCounters().tx++;
             }
           }
           jumpmuCatch() {
             ensure(!FLAGS_ycsb_deterministic);
-            WorkerCounters::myCounters().tx_abort++;
+            WorkerCounters::MyCounters().tx_abort++;
           }
         }
         running_threads_counter--;

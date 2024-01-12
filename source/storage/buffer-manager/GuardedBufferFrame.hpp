@@ -1,8 +1,8 @@
 #pragma once
 
-#include "shared-headers/Exceptions.hpp"
 #include "concurrency-recovery/WALEntry.hpp"
 #include "concurrency-recovery/Worker.hpp"
+#include "shared-headers/Exceptions.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "storage/buffer-manager/Tracing.hpp"
 #include "sync-primitives/HybridGuard.hpp"
@@ -36,7 +36,8 @@ public:
   /// @param hybridGuard the latch guard of the buffer frame
   /// @param bf the latch guarded buffer frame
   GuardedBufferFrame(HybridGuard&& hybridGuard, BufferFrame* bf)
-      : mBf(bf), mGuard(std::move(hybridGuard)) {
+      : mBf(bf),
+        mGuard(std::move(hybridGuard)) {
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
@@ -61,7 +62,8 @@ public:
   GuardedBufferFrame(
       Swip<BufferFrame> hotSwip,
       const LATCH_FALLBACK_MODE ifContended = LATCH_FALLBACK_MODE::SPIN)
-      : mBf(&hotSwip.AsBufferFrame()), mGuard(&mBf->header.mLatch) {
+      : mBf(&hotSwip.AsBufferFrame()),
+        mGuard(&mBf->header.mLatch) {
     latchMayJump(mGuard, ifContended);
     SyncGSNBeforeRead();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
@@ -152,7 +154,7 @@ public:
     MarkAsDirty();
     mBf->header.mLastWriterWorker = cr::Worker::my().mWorkerId;
 
-    const auto workerGSN = cr::Worker::my().mLogging.GetCurrentGsn();
+    auto const workerGSN = cr::Worker::my().mLogging.GetCurrentGsn();
     mBf->page.mGSN = workerGSN + 1;
     cr::Worker::my().mLogging.SetCurrentGsn(workerGSN + 1);
   }
@@ -171,8 +173,8 @@ public:
                  << ", pageGSN=" << mBf->page.mGSN;
     }
 
-    const auto workerGSN = cr::Worker::my().mLogging.GetCurrentGsn();
-    const auto pageGSN = mBf->page.mGSN;
+    auto const workerGSN = cr::Worker::my().mLogging.GetCurrentGsn();
+    auto const pageGSN = mBf->page.mGSN;
     if (workerGSN < pageGSN) {
       cr::Worker::my().mLogging.SetCurrentGsn(pageGSN);
     }
@@ -185,8 +187,8 @@ public:
 
     SyncGSNBeforeWrite();
 
-    const auto pageId = mBf->header.mPageId;
-    const auto treeId = mBf->page.mBTreeId;
+    auto const pageId = mBf->header.mPageId;
+    auto const treeId = mBf->page.mBTreeId;
     payloadSize = ((payloadSize - 1) / 8 + 1) * 8;
     // TODO: verify
     auto handler =
