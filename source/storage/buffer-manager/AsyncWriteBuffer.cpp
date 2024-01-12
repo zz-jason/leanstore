@@ -40,7 +40,7 @@ void AsyncWriteBuffer::AddToIOBatch(BufferFrame& bf, PID pageId) {
   DCHECK(u64(&bf.page) % 512 == 0);
   DCHECK(pending_requests <= batch_max_size);
   COUNTERS_BLOCK() {
-    WorkerCounters::myCounters().dt_page_writes[bf.page.mBTreeId]++;
+    WorkerCounters::MyCounters().dt_page_writes[bf.page.mBTreeId]++;
   }
 
   PARANOID_BLOCK() {

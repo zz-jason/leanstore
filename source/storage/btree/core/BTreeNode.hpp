@@ -398,12 +398,12 @@ public:
         }
 
         if (mIsLeaf) {
-          WorkerCounters::myCounters().dt_researchy[0][0]++;
-          WorkerCounters::myCounters().dt_researchy[0][1] +=
+          WorkerCounters::MyCounters().dt_researchy[0][0]++;
+          WorkerCounters::MyCounters().dt_researchy[0][1] +=
               pos > 0 || pos2 < sHintCount;
         } else {
-          WorkerCounters::myCounters().dt_researchy[0][2]++;
-          WorkerCounters::myCounters().dt_researchy[0][3] +=
+          WorkerCounters::MyCounters().dt_researchy[0][2]++;
+          WorkerCounters::MyCounters().dt_researchy[0][3] +=
               pos > 0 || pos2 < sHintCount;
         }
       } else {

@@ -123,7 +123,7 @@ struct WorkerCounters {
   static tbb::enumerable_thread_specific<WorkerCounters> worker_counters;
   static tbb::enumerable_thread_specific<WorkerCounters>::reference
 
-  myCounters() {
+  MyCounters() {
     return worker_counters.local();
   }
 };

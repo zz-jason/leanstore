@@ -19,7 +19,7 @@ void ConcurrencyControl::refreshGlobalState() {
     return;
   }
 
-  utils::Timer timer(CRCounters::myCounters().cc_ms_refresh_global_state);
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_refresh_global_state);
 
   if (utils::RandomGenerator::getRandU64(0, Worker::my().mNumAllWorkers) == 0 &&
       Worker::sGlobalMutex.try_lock()) {
@@ -130,7 +130,7 @@ void ConcurrencyControl::garbageCollection() {
 
   // TODO: smooth purge, we should not let the system hang on this, as a quick
   // fix, it should be enough if we purge in small batches
-  utils::Timer timer(CRCounters::myCounters().cc_ms_gc);
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_gc);
 synclwm : {
   u64 lwmVersion = local_lwm_latch.load();
   while ((lwmVersion = local_lwm_latch.load()) & 1) {
@@ -145,7 +145,7 @@ synclwm : {
 
   // ATTENTION: atm, with out extra sync, the two lwm can not
   if (local_all_lwm > cleaned_untill_oltp_lwm) {
-    utils::Timer timer(CRCounters::myCounters().cc_ms_gc_history_tree);
+    utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_history_tree);
     // PURGE!
     CRManager::sInstance->mHistoryTreePtr->purgeVersions(
         Worker::my().mWorkerId, 0, local_all_lwm - 1,
@@ -156,7 +156,7 @@ synclwm : {
               treeId, version_payload, Worker::my().mWorkerId, txId,
               called_before);
           COUNTERS_BLOCK() {
-            WorkerCounters::myCounters().cc_todo_olap_executed[treeId]++;
+            WorkerCounters::MyCounters().cc_todo_olap_executed[treeId]++;
           }
         },
         0);
@@ -164,7 +164,7 @@ synclwm : {
   }
   if (FLAGS_enable_olap_mode && local_all_lwm != local_oltp_lwm) {
     if (local_oltp_lwm > 0 && local_oltp_lwm > cleaned_untill_oltp_lwm) {
-      utils::Timer timer(CRCounters::myCounters().cc_ms_gc_graveyard);
+      utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_graveyard);
       // MOVE deletes to the graveyard
       const u64 fromTxId =
           cleaned_untill_oltp_lwm > 0 ? cleaned_untill_oltp_lwm : 0;
@@ -179,7 +179,7 @@ synclwm : {
                 treeId, version_payload, Worker::my().mWorkerId, txId,
                 called_before);
             COUNTERS_BLOCK() {
-              WorkerCounters::myCounters().cc_todo_oltp_executed[treeId]++;
+              WorkerCounters::MyCounters().cc_todo_oltp_executed[treeId]++;
             }
           });
     }
@@ -243,7 +243,7 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId) {
     if (mLocalSnapshotCache[workerId] >= startTs) {
       return true;
     }
-    utils::Timer timer(CRCounters::myCounters().cc_ms_snapshotting);
+    utils::Timer timer(CRCounters::MyCounters().cc_ms_snapshotting);
     TXID largestVisibleTxId =
         other(workerId).commit_tree.LCB(Worker::my().mActiveTx.mStartTs);
     if (largestVisibleTxId) {
@@ -270,7 +270,7 @@ bool ConcurrencyControl::isVisibleForAll(TXID ts) {
 }
 
 TXID ConcurrencyControl::CommitTree::commit(TXID startTs) {
-  utils::Timer timer(CRCounters::myCounters().cc_ms_committing);
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_committing);
   mutex.lock();
   assert(cursor < capacity);
   const TXID commitTs = sGlobalClock.fetch_add(1);
@@ -314,7 +314,7 @@ void ConcurrencyControl::CommitTree::cleanIfNecessary() {
     return;
   }
 
-  utils::Timer timer(CRCounters::myCounters().cc_ms_gc_cm);
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_cm);
   std::set<std::pair<TXID, TXID>> set; // TODO: unordered_set
 
   const WORKERID myWorkerId = cr::Worker::Worker::my().mWorkerId;

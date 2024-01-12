@@ -46,7 +46,7 @@ public:
 
   static utils::EnumerableThreadLocal<PPCounters> sCounters;
 
-  static PPCounters& myCounters() {
+  static PPCounters& MyCounters() {
     return *sCounters.Local();
   }
 };

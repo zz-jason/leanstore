@@ -65,7 +65,7 @@ struct CRCounters {
   }
   // -------------------------------------------------------------------------------------
   static tbb::enumerable_thread_specific<CRCounters> cr_counters;
-  static tbb::enumerable_thread_specific<CRCounters>::reference myCounters() {
+  static tbb::enumerable_thread_specific<CRCounters>::reference MyCounters() {
     return cr_counters.local();
   }
 };

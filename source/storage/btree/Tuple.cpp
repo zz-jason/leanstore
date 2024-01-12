@@ -36,7 +36,7 @@ static u64 maxFatTupleLength() {
 }
 
 bool Tuple::ToFat(BTreeExclusiveIterator& xIter) {
-  utils::Timer timer(CRCounters::myCounters().cc_ms_fat_tuple_conversion);
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_fat_tuple_conversion);
 
   // Process the chain tuple
   MutableSlice rawVal = xIter.MutableVal();
@@ -175,7 +175,7 @@ void FatTuple::garbageCollection() {
   if (mNumDeltas == 0) {
     return;
   }
-  utils::Timer timer(CRCounters::myCounters().cc_ms_gc);
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_gc);
 
   auto append_ll = [](FatTuple& fatTuple, u8* delta, u16 delta_length) {
     assert(fatTuple.mPayloadCapacity >=
@@ -354,7 +354,7 @@ void FatTuple::append(UpdateDesc& updateDesc) {
 
 bool FatTuple::update(BTreeExclusiveIterator& xIter, Slice key,
                       MutValCallback updateCallBack, UpdateDesc& updateDesc) {
-  utils::Timer timer(CRCounters::myCounters().cc_ms_fat_tuple);
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_fat_tuple);
   while (true) {
     auto fatTuple = reinterpret_cast<FatTuple*>(xIter.MutableVal().data());
     DCHECK(fatTuple->IsWriteLocked())
@@ -482,7 +482,7 @@ void FatTuple::convertToChained(TREEID treeId) {
   new (this) ChainedTuple(*this);
 
   COUNTERS_BLOCK() {
-    WorkerCounters::myCounters().cc_fat_tuple_decompose[treeId]++;
+    WorkerCounters::MyCounters().cc_fat_tuple_decompose[treeId]++;
   }
 }
 
@@ -582,7 +582,7 @@ void ChainedTuple::Update(BTreeExclusiveIterator& xIter, Slice key,
         updateDesc.CopySlots(dest, payload);
       });
   COUNTERS_BLOCK() {
-    WorkerCounters::myCounters().cc_update_versions_created[treeId]++;
+    WorkerCounters::MyCounters().cc_update_versions_created[treeId]++;
   }
 
   // WAL

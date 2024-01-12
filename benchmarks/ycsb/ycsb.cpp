@@ -183,10 +183,10 @@ int main(int argc, char** argv) {
             }
           }
           cr::Worker::my().CommitTx();
-          WorkerCounters::myCounters().tx++;
+          WorkerCounters::MyCounters().tx++;
         }
         JUMPMU_CATCH() {
-          WorkerCounters::myCounters().tx_abort++;
+          WorkerCounters::MyCounters().tx_abort++;
         }
       }
       running_threads_counter--;

@@ -198,7 +198,7 @@ BufferFrame& BufferManager::AllocNewPage() {
   freeBf.Init(partition.NextPageId());
 
   COUNTERS_BLOCK() {
-    WorkerCounters::myCounters().allocate_operations_counter++;
+    WorkerCounters::MyCounters().allocate_operations_counter++;
   }
 
   return freeBf;
@@ -279,7 +279,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
     // DLOG_IF(FATAL, bf.page.mMagicDebuging != pageId)
     //     << "Failed to read page, page corrupted";
     COUNTERS_BLOCK() {
-      WorkerCounters::myCounters().dt_page_reads[bf.page.mBTreeId]++;
+      WorkerCounters::MyCounters().dt_page_reads[bf.page.mBTreeId]++;
       if (FLAGS_trace_dt_id >= 0 &&
           bf.page.mBTreeId == static_cast<TREEID>(FLAGS_trace_dt_id) &&
           utils::RandomGenerator::getRand<u64>(
@@ -403,7 +403,7 @@ void BufferManager::ReadPageSync(PID pageId, void* destination) {
   } while (bytesLeft > 0);
 
   COUNTERS_BLOCK() {
-    WorkerCounters::myCounters().read_operations_counter++;
+    WorkerCounters::MyCounters().read_operations_counter++;
   }
 }
 

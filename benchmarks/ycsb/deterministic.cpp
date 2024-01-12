@@ -186,7 +186,7 @@ int main(int argc, char** argv) {
                     tabular_update_descriptor);
                 d_iterators[op_i]->reset();
               }
-              WorkerCounters::myCounters().tx++;
+              WorkerCounters::MyCounters().tx++;
             } else {
               std::random_shuffle(keys.begin(), keys.end());
               cr::Worker::my().StartTx(tx_type, isolation_level);
@@ -199,12 +199,12 @@ int main(int argc, char** argv) {
                     tabular_update_descriptor);
               }
               cr::Worker::my().CommitTx();
-              WorkerCounters::myCounters().tx++;
+              WorkerCounters::MyCounters().tx++;
             }
           }
           jumpmuCatch() {
             ensure(!FLAGS_ycsb_deterministic);
-            WorkerCounters::myCounters().tx_abort++;
+            WorkerCounters::MyCounters().tx_abort++;
           }
         }
         running_threads_counter--;
