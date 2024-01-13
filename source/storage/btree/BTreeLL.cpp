@@ -264,7 +264,7 @@ OpCode BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
         iterator.mGuardedLeaf->insertDoNotCopyPayload(
             Slice(keyBuffer->get(), o_key_length), o_value_length, pos);
         iterator.mSlotId = pos;
-        o_value(iterator.MutableVal().data());
+        o_value(iterator.MutableVal().Data());
         iterator.MarkAsDirty();
         COUNTERS_BLOCK() {
           WorkerCounters::MyCounters().dt_append_opt[mTreeId]++;
@@ -293,7 +293,7 @@ OpCode BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
       }
       o_key(keyBuffer->get());
       iterator.insertInCurrentNode(key, o_value_length);
-      o_value(iterator.MutableVal().data());
+      o_value(iterator.MutableVal().Data());
       iterator.MarkAsDirty();
       // -------------------------------------------------------------------------------------
       Session* session = nullptr;
@@ -330,26 +330,33 @@ OpCode BTreeLL::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
     }
     auto currentVal = xIter.MutableVal();
     if (config.mEnableWal) {
-      // if it is a secondary index, then we can not use updateSameSize
       DCHECK(updateDesc.mNumSlots > 0);
-      auto deltaPayloadSize = updateDesc.TotalSize();
+      auto deltaPayloadSize = updateDesc.NumBytes4WAL();
       auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WALUpdate>(
           key.length() + deltaPayloadSize);
       walHandler->type = WALPayload::TYPE::WALUpdate;
       walHandler->mKeySize = key.length();
-      walHandler->delta_length = deltaPayloadSize;
-      u8* walPtr = walHandler->payload;
+      walHandler->mDeltaLength = deltaPayloadSize;
+      auto* walPtr = walHandler->payload;
       std::memcpy(walPtr, key.data(), key.length());
       walPtr += key.length();
-      std::memcpy(walPtr, &updateDesc, updateDesc.size());
-      walPtr += updateDesc.size();
-      updateDesc.CopySlots(walPtr, currentVal.data());
-      updateDesc.XORSlots(walPtr, currentVal.data());
+      std::memcpy(walPtr, &updateDesc, updateDesc.Size());
+      walPtr += updateDesc.Size();
+
+      // 1. copy old value to wal buffer
+      BTreeLL::CopyToBuffer(updateDesc, currentVal.Data(), walPtr);
+
+      // 2. update with the new value
+      updateCallBack(currentVal);
+
+      // 3. xor with new value, store the result in wal buffer
+      BTreeLL::XorToBuffer(updateDesc, currentVal.Data(), walPtr);
       walHandler.SubmitWal();
+    } else {
+      // The actual update by the client
+      updateCallBack(currentVal);
     }
 
-    // The actual update by the client
-    updateCallBack(currentVal);
     xIter.MarkAsDirty();
     xIter.UpdateContentionStats();
     JUMPMU_RETURN OpCode::kOK;

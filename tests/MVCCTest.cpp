@@ -1,17 +1,12 @@
 #include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
-#include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
-#include "utils/DebugFlags.hpp"
 #include "utils/Defer.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <gtest/gtest.h>
 
 #include <filesystem>
-#include <iostream>
-#include <mutex>
-#include <shared_mutex>
 
 using namespace leanstore::utils;
 using namespace leanstore::storage::btree;

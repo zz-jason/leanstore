@@ -53,7 +53,29 @@ inline IsolationLevel ParseIsolationLevel(std::string str) {
 
 namespace cr {
 
-enum class TxState { kIdle, kStarted, kReadyToCommit, kCommitted, kAborted };
+enum class TxState { kIdle, kStarted, kCommitted, kAborted };
+
+struct TxStatUtil {
+  inline static std::string ToString(TxState state) {
+    switch (state) {
+    case TxState::kIdle: {
+      return "Idle";
+    }
+    case TxState::kStarted: {
+      return "Started";
+    }
+    case TxState::kCommitted: {
+      return "Committed";
+    }
+    case TxState::kAborted: {
+      return "Aborted";
+    }
+    default: {
+      return "Unknown TxState";
+    }
+    }
+  }
+};
 
 struct TxStats {
   std::chrono::high_resolution_clock::time_point start;

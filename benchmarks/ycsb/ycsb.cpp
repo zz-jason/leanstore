@@ -167,12 +167,12 @@ int main(int argc, char** argv) {
             } else {
               const auto updateDescBufSize =
                   sizeof(leanstore::UpdateDesc) +
-                  (sizeof(leanstore::UpdateDiffSlot) * 1);
+                  (sizeof(leanstore::UpdateSlotInfo) * 1);
               u8 updateDescBuf[updateDescBufSize];
               auto& updateDesc = *leanstore::UpdateDesc::From(updateDescBuf);
               updateDesc.mNumSlots = 1;
-              updateDesc.mDiffSlots[0].offset = offsetof(KVTable, mValue);
-              updateDesc.mDiffSlots[0].length = sizeof(KVTable::mValue);
+              updateDesc.mUpdateSlots[0].mOffset = offsetof(KVTable, mValue);
+              updateDesc.mUpdateSlots[0].mSize = sizeof(KVTable::mValue);
 
               utils::RandomGenerator::getRandString(
                   reinterpret_cast<u8*>(&result), sizeof(YCSBPayload));

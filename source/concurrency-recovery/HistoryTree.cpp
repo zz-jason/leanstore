@@ -1,7 +1,7 @@
 #include "HistoryTree.hpp"
 
-#include "shared-headers/Units.hpp"
 #include "profiling/counters/CRCounters.hpp"
+#include "shared-headers/Units.hpp"
 #include "storage/btree/core/BTreeExclusiveIterator.hpp"
 #include "storage/btree/core/BTreeSharedIterator.hpp"
 #include "utils/Misc.hpp"
@@ -50,7 +50,7 @@ void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
         } else {
           xIter.insertInCurrentNode(key, versionSize);
         }
-        auto& versionMeta = *new (xIter.MutableVal().data()) VersionMeta();
+        auto& versionMeta = *new (xIter.MutableVal().Data()) VersionMeta();
         versionMeta.mTreeId = treeId;
         insertCallBack(versionMeta.payload);
         xIter.MarkAsDirty();
@@ -82,7 +82,7 @@ void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
         JUMPMU_CONTINUE;
       }
       xIter.insertInCurrentNode(key, versionSize);
-      auto& versionMeta = *new (xIter.MutableVal().data()) VersionMeta();
+      auto& versionMeta = *new (xIter.MutableVal().Data()) VersionMeta();
       versionMeta.mTreeId = treeId;
       insertCallBack(versionMeta.payload);
       xIter.MarkAsDirty();
@@ -179,7 +179,7 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
         utils::unfold(iterator.key().data(), current_tx_id);
         if (current_tx_id >= from_tx_id && current_tx_id <= to_tx_id) {
           auto& versionContainer =
-              *reinterpret_cast<VersionMeta*>(iterator.MutableVal().data());
+              *reinterpret_cast<VersionMeta*>(iterator.MutableVal().Data());
           const TREEID treeId = versionContainer.mTreeId;
           const bool called_before = versionContainer.called_before;
           versionContainer.called_before = true;
@@ -330,7 +330,7 @@ void HistoryTree::visitRemoveVersions(
       utils::unfold(iterator.key().data(), current_tx_id);
       if (current_tx_id >= from_tx_id && current_tx_id <= to_tx_id) {
         auto& versionContainer =
-            *reinterpret_cast<VersionMeta*>(iterator.MutableVal().data());
+            *reinterpret_cast<VersionMeta*>(iterator.MutableVal().Data());
         const TREEID treeId = versionContainer.mTreeId;
         const bool called_before = versionContainer.called_before;
         ENSURE(called_before == false);
