@@ -2,7 +2,6 @@
 
 #include "shared-headers/Units.hpp"
 
-#include <cstring>
 #include <functional>
 
 namespace leanstore {
@@ -53,9 +52,9 @@ public:
 };
 
 /// Memory layout:
-/// ---------------------------------------
-/// | N | UpdateSlotInfo 0..N | diff 0..N |
-/// ---------------------------------------
+/// ---------------------------
+/// | N | UpdateSlotInfo 0..N |
+/// ---------------------------
 class UpdateDesc {
 public:
   u8 mNumSlots = 0;
@@ -69,30 +68,6 @@ public:
 
   u64 NumBytes4WAL() const {
     return Size() + numBytesToUpdate();
-  }
-
-  bool operator==(const UpdateDesc& other) {
-    if (mNumSlots != other.mNumSlots) {
-      return false;
-    }
-
-    for (u8 i = 0; i < mNumSlots; i++) {
-      if (mUpdateSlots[i].mOffset != other.mUpdateSlots[i].mOffset ||
-          mUpdateSlots[i].mSize != other.mUpdateSlots[i].mSize)
-        return false;
-    }
-    return true;
-  }
-
-  void ApplyXORDiff(u8* dst, const u8* src) const {
-    u64 srcOffset = 0;
-    for (u64 i = 0; i < mNumSlots; i++) {
-      const auto& slot = mUpdateSlots[i];
-      for (u64 j = 0; j < slot.mSize; j++) {
-        dst[slot.mOffset + j] ^= src[srcOffset + j];
-      }
-      srcOffset += slot.mSize;
-    }
   }
 
 private:
