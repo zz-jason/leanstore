@@ -20,10 +20,15 @@ class BTreeVI : public BTreeLL {
 public:
   struct WALRemove : WALPayload {
     u16 mKeySize;
+
     u16 mValSize;
+
     WORKERID mPrevWorkerId;
+
     TXID mPrevTxId;
+
     COMMANDID mPrevCommandId;
+
     u8 payload[];
 
     WALRemove(Slice key, Slice val, WORKERID prevWorkerId, u64 prevTxId,
@@ -36,6 +41,14 @@ public:
           mPrevCommandId(prevCommandId) {
       std::memcpy(payload, key.data(), key.size());
       std::memcpy(payload + key.size(), val.data(), val.size());
+    }
+
+    Slice RemovedKey() const {
+      return Slice(payload, mKeySize);
+    }
+
+    Slice RemovedVal() const {
+      return Slice(payload + mKeySize, mValSize);
     }
   };
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Config.hpp"
 #include "shared-headers/Exceptions.hpp"
 #include "shared-headers/Units.hpp"
 
@@ -114,30 +115,34 @@ public:
   /// detected once it generates a WAL entry.
   bool mHasWrote = false;
 
+  /// Whether the transaction is durable. A durable transaction can be committed
+  /// or aborted only after all the WAL entries are flushed to disk.
+  bool mIsDurable = FLAGS_wal;
+
   bool mWalExceedBuffer = false;
 
   TxStats stats;
 
 public:
-  bool IsOLAP() {
+  inline bool IsOLAP() {
     return mTxMode == TxMode::kOLAP;
   }
 
-  bool IsOLTP() {
+  inline bool IsOLTP() {
     return mTxMode == TxMode::kOLTP;
   }
 
-  bool AtLeastSI() {
+  inline bool AtLeastSI() {
     return mTxIsolationLevel >= IsolationLevel::kSnapshotIsolation;
   }
 
-  void MarkAsWrite() {
+  inline void MarkAsWrite() {
     DCHECK(mIsReadOnly == false);
     mHasWrote = true;
   }
 
   // Start a new transaction, reset all fields used by previous transaction
-  void Start(TxMode mode, IsolationLevel level, bool isReadOnly) {
+  inline void Start(TxMode mode, IsolationLevel level, bool isReadOnly) {
     state = TxState::kStarted;
     mStartTs = 0;
     mCommitTs = 0;
@@ -146,6 +151,7 @@ public:
     mTxIsolationLevel = level;
     mIsReadOnly = isReadOnly;
     mHasWrote = false;
+    mIsDurable = FLAGS_wal;
     mWalExceedBuffer = false;
 
     COUNTERS_BLOCK() {
@@ -155,7 +161,7 @@ public:
     }
   }
 
-  bool CanCommit(u64 minFlushedGSN, TXID minFlushedTxId) {
+  inline bool CanCommit(u64 minFlushedGSN, TXID minFlushedTxId) {
     return mMaxObservedGSN <= minFlushedGSN && mStartTs <= minFlushedTxId;
   }
 };

@@ -85,12 +85,13 @@ public:
   bool mWriteLocked;
 
 public:
-  Tuple(TupleFormat format, WORKERID workerId, TXID txId)
+  Tuple(TupleFormat format, WORKERID workerId, TXID txId,
+        COMMANDID commandId = INVALID_COMMANDID, bool writeLocked = false)
       : mFormat(format),
         mWorkerId(workerId),
         mTxId(txId),
-        mCommandId(INVALID_COMMANDID),
-        mWriteLocked(false) {
+        mCommandId(commandId),
+        mWriteLocked(writeLocked) {
   }
 
 public:
@@ -304,10 +305,17 @@ struct __attribute__((packed)) DanglingPointer {
 
 public:
   DanglingPointer() = default;
+
   DanglingPointer(BufferFrame* bf, u64 latchVersion, s32 headSlot)
       : bf(bf),
         latch_version_should_be(latchVersion),
         head_slot(headSlot) {
+  }
+
+  DanglingPointer(const BTreeExclusiveIterator& xIter)
+      : bf(xIter.mGuardedLeaf.mBf),
+        latch_version_should_be(xIter.mGuardedLeaf.mGuard.mVersion),
+        head_slot(xIter.mSlotId) {
   }
 };
 
@@ -389,6 +397,20 @@ public:
         mValSize(valSize) {
   }
 
+  RemoveVersion(WORKERID workerId, TXID txId, COMMANDID commandId, Slice key,
+                Slice val, const DanglingPointer& danglingPointer)
+      : Version(Version::TYPE::REMOVE, workerId, txId, commandId),
+        mKeySize(key.size()),
+        mValSize(val.size()),
+        dangling_pointer(danglingPointer) {
+    std::memcpy(payload, key.data(), key.size());
+    std::memcpy(payload + key.size(), val.data(), val.size());
+  }
+
+  Slice RemovedVal() const {
+    return Slice(payload + mKeySize, mValSize);
+  }
+
 public:
   inline static const RemoveVersion* From(const u8* buffer) {
     return reinterpret_cast<const RemoveVersion*>(buffer);
@@ -423,6 +445,12 @@ public:
     std::memcpy(payload, val.data(), val.size());
   }
 
+  ChainedTuple(WORKERID workerId, TXID txId, COMMANDID commandId, Slice val)
+      : Tuple(TupleFormat::CHAINED, workerId, txId, commandId),
+        mIsRemoved(false) {
+    std::memcpy(payload, val.data(), val.size());
+  }
+
   /// Construct a ChainedTuple from an existing FatTuple, the new ChainedTuple
   /// may share the same space with the input FatTuple, so std::memmove is
   /// used to handle the overlap bytes.
@@ -430,9 +458,9 @@ public:
   /// NOTE: This constructor is usually called by a placmenet new operator on
   /// the address of the FatTuple
   ChainedTuple(FatTuple& oldFatTuple)
-      : Tuple(TupleFormat::CHAINED, oldFatTuple.mWorkerId, oldFatTuple.mTxId),
+      : Tuple(TupleFormat::CHAINED, oldFatTuple.mWorkerId, oldFatTuple.mTxId,
+              oldFatTuple.mCommandId),
         mIsRemoved(false) {
-    mCommandId = oldFatTuple.mCommandId;
     std::memmove(payload, oldFatTuple.payload, oldFatTuple.mValSize);
   }
 
