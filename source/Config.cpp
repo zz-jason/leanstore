@@ -108,13 +108,6 @@ DEFINE_bool(reclaim_page_ids, true, "Whether to reclaim unused free page ids");
 // -------------------------------------------------------------------------------------
 DEFINE_bool(wal, true, "Whether wal is enabled");
 DEFINE_bool(wal_fsync, true, "Whether to explicitly flush wal to disk");
-
-// WAL variant 0:
-//   All workers submit their WAL entries to the the local ring buffer, the
-//   group committer flushes the buffer periodically with RFA.
-// WAL variant 1: ?
-// WAL variant 2: ?
-DEFINE_int64(wal_variant, 0, "Different WAL and group commit strategies");
 DEFINE_uint64(wal_log_writers, 1, "");
 DEFINE_uint64(wal_buffer_size, 1024 * 1024 * 10,
               "WAL buffer size for each worker (Bytes)");
