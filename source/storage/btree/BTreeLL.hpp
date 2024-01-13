@@ -60,14 +60,13 @@ public:
   virtual OpCode prefixLookup(Slice, PrefixLookupCallback callback) override;
   virtual OpCode prefixLookupForPrev(Slice key,
                                      PrefixLookupCallback callback) override;
-  virtual OpCode append(std::function<void(u8*)>, u16, std::function<void(u8*)>,
-                        u16, std::unique_ptr<u8[]>&) override;
+
   virtual OpCode rangeRemove(Slice staryKey, Slice endKey,
                              bool page_used) override;
 
-  virtual u64 countPages() override;
+  // virtual u64 countPages() override;
   virtual u64 countEntries() override;
-  virtual u64 getHeight() override;
+  // virtual u64 getHeight() override;
 
 public:
   //---------------------------------------------------------------------------

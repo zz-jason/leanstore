@@ -3,12 +3,13 @@
 #include "Config.hpp"
 #include "profiling/counters/PPCounters.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/EnumerableThreadLocal.hpp"
 
 namespace leanstore {
 namespace profiling {
 
-BMTable::BMTable(BufferManager& bm) : ProfilingTable(), bm(bm) {
+BMTable::BMTable(storage::BufferManager& bm) : ProfilingTable(), bm(bm) {
 }
 
 std::string BMTable::getName() {

@@ -4,6 +4,7 @@
 #include "BufferFrameProvider.hpp"
 #include "Partition.hpp"
 #include "Swip.hpp"
+#include "profiling/tables/BMTable.hpp"
 #include "shared-headers/Units.hpp"
 
 #include <libaio.h>

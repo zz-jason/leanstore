@@ -1,12 +1,9 @@
 #pragma once
 
 #include "Config.hpp"
-#include "shared-headers/Exceptions.hpp"
 #include "shared-headers/Units.hpp"
 
 #include <glog/logging.h>
-
-#include <chrono>
 
 namespace leanstore {
 
@@ -78,16 +75,10 @@ struct TxStatUtil {
   }
 };
 
-struct TxStats {
-  std::chrono::high_resolution_clock::time_point start;
-  std::chrono::high_resolution_clock::time_point precommit;
-  std::chrono::high_resolution_clock::time_point commit;
-};
-
 class Transaction {
 public:
   /// The state of the current transaction.
-  TxState state = TxState::kIdle;
+  TxState mState = TxState::kIdle;
 
   /// mStartTs is the start timestamp of the transaction. Also used as
   /// teansaction ID.
@@ -121,8 +112,6 @@ public:
 
   bool mWalExceedBuffer = false;
 
-  TxStats stats;
-
 public:
   inline bool IsOLAP() {
     return mTxMode == TxMode::kOLAP;
@@ -143,7 +132,7 @@ public:
 
   // Start a new transaction, reset all fields used by previous transaction
   inline void Start(TxMode mode, IsolationLevel level, bool isReadOnly) {
-    state = TxState::kStarted;
+    mState = TxState::kStarted;
     mStartTs = 0;
     mCommitTs = 0;
     mMaxObservedGSN = 0;
@@ -153,12 +142,6 @@ public:
     mHasWrote = false;
     mIsDurable = FLAGS_wal;
     mWalExceedBuffer = false;
-
-    COUNTERS_BLOCK() {
-      stats.start = std::chrono::high_resolution_clock::now();
-      stats.precommit = std::chrono::high_resolution_clock::time_point();
-      stats.commit = std::chrono::high_resolution_clock::time_point();
-    }
   }
 
   inline bool CanCommit(u64 minFlushedGSN, TXID minFlushedTxId) {

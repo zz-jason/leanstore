@@ -275,7 +275,7 @@ public:
        *     tuple.mWorkerId == cr::Worker::my().mWorkerId) {
        *   auto& chainedTuple =
        *       *reinterpret_cast<ChainedTuple*>(xIter.MutableVal().data());
-       *   chainedTuple.mCommitTs = cr::activeTX().mCommitTs | MSB;
+       *   chainedTuple.mCommitTs = cr::activeTX().mCommitTs | kMsb;
        * }
        */
     }
@@ -298,7 +298,7 @@ private:
     bool keepScanning = true;
     JUMPMU_TRY() {
       BTreeSharedIterator iter(*static_cast<BTreeGeneric*>(this),
-                               LATCH_FALLBACK_MODE::SHARED);
+                               LatchMode::kShared);
 
       OpCode ret;
       if (asc) {
@@ -517,14 +517,14 @@ public:
     auto [treePtr, treeId] =
         TreeRegistry::sInstance->CreateTree(treeName, [&]() {
           return std::unique_ptr<BufferManagedTree>(
-              static_cast<BufferManagedTree*>(new storage::btree::BTreeVI()));
+              static_cast<BufferManagedTree*>(new BTreeVI()));
         });
     if (treePtr == nullptr) {
       LOG(ERROR) << "Failed to create BTreeVI, treeName has been taken"
                  << ", treeName=" << treeName;
       return nullptr;
     }
-    auto tree = dynamic_cast<storage::btree::BTreeVI*>(treePtr);
+    auto* tree = dynamic_cast<BTreeVI*>(treePtr);
     tree->Init(treeId, config, graveyard);
 
     // TODO(jian.z): record WAL
@@ -539,7 +539,7 @@ public:
     auto* tupleAddr = guardedNode->ValData(slotId);
     auto* tuple = new (tupleAddr) ChainedTuple(workerId, txStartTs, val);
     if (txMode == TxMode::kInstantlyVisibleBulkInsert) {
-      tuple->mTxId = MSB | 0;
+      tuple->mTxId = kMsb | 0;
     }
     guardedNode.MarkAsDirty();
   }

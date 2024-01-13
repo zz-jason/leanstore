@@ -1,6 +1,7 @@
 #pragma once
 
 #include "HistoryTreeInterface.hpp"
+#include "concurrency-recovery/Worker.hpp"
 #include "shared-headers/Units.hpp"
 #include "storage/btree/BTreeLL.hpp"
 
@@ -34,8 +35,8 @@ private:
     bool rightmost_init = false;
     bool leftmost_init = false;
   };
-  Session update_sessions[leanstore::cr::STATIC_MAX_WORKERS];
-  Session remove_sessions[leanstore::cr::STATIC_MAX_WORKERS];
+  Session update_sessions[leanstore::cr::kWorkerLimit];
+  Session remove_sessions[leanstore::cr::kWorkerLimit];
 
 public:
   std::unique_ptr<BTreeLL*[]> update_btrees;

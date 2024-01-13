@@ -6,6 +6,7 @@
 #include "shared-headers/Units.hpp"
 #include "utils/Misc.hpp"
 
+#include <atomic>
 #include <mutex>
 #include <vector>
 
@@ -26,7 +27,7 @@ struct IOFrame {
   // Everything in CIOFrame is protected by partition lock
   // except the following counter which is decremented outside to determine
   // whether it is time to remove it
-  atomic<s64> readers_counter = 0;
+  std::atomic<s64> readers_counter = 0;
 };
 
 struct HashTable {
@@ -89,7 +90,8 @@ public:
   //---------------------------------------------------------------------------
   Partition(u64 firstPageId, u64 pageIdDistance, u64 freeBfsLimit)
       : mInflightIOs(utils::GetBitsNeeded(freeBfsLimit)),
-        mFreeBfsLimit(freeBfsLimit), mNextPageId(firstPageId),
+        mFreeBfsLimit(freeBfsLimit),
+        mNextPageId(firstPageId),
         mPageIdDistance(pageIdDistance) {
   }
 

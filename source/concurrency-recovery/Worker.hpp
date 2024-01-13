@@ -4,6 +4,7 @@
 #include "Transaction.hpp"
 #include "WALEntry.hpp"
 #include "profiling/counters/CRCounters.hpp"
+#include "shared-headers/Exceptions.hpp"
 #include "utils/Defer.hpp"
 #include "utils/OptimisticSpinStruct.hpp"
 
@@ -22,7 +23,7 @@
 namespace leanstore {
 namespace cr {
 
-static constexpr u16 STATIC_MAX_WORKERS = std::numeric_limits<WORKERID>::max();
+static constexpr u16 kWorkerLimit = std::numeric_limits<WORKERID>::max();
 
 /// Used to sync wal flush request to group commit thread for each worker
 /// thread.
@@ -45,13 +46,13 @@ class Logging {
 public:
   /// The minimum flushed GSN among all worker threads. Transactions whose max
   /// observed GSN not larger than sGlobalMinFlushedGSN can be committed safely.
-  static atomic<u64> sGlobalMinFlushedGSN;
+  static std::atomic<u64> sGlobalMinFlushedGSN;
 
   /// The maximum flushed GSN among all worker threads in each group commit
   /// round. It is updated by the group commit thread and used to update the GCN
   /// counter of the current worker thread to prevent GSN from skewing and
   /// undermining RFA.
-  static atomic<u64> sGlobalMaxFlushedGSN;
+  static std::atomic<u64> sGlobalMaxFlushedGSN;
 
 public:
   static void UpdateGlobalMinFlushedGSN(u64 toUpdate) {
@@ -118,7 +119,7 @@ public:
   /// Represents the flushed offset in the wal ring buffer.  The wal ring buffer
   /// is firstly written by the worker thread then flushed to disk file by the
   /// group commit thread.
-  atomic<u64> mWalFlushed = 0;
+  std::atomic<u64> mWalFlushed = 0;
 
   // The global min flushed GSN when transaction started. Pages whose GSN larger
   // than this value might be modified by other transactions running at the same
@@ -133,27 +134,15 @@ public:
   u64 mTxWalBegin;
 
 public:
-  //---------------------------------------------------------------------------
-  // Object utils
-  //---------------------------------------------------------------------------
-
-  void UpdateSignaledCommitTs(const LID signaledCommitTs) {
+  inline void UpdateSignaledCommitTs(const LID signaledCommitTs) {
     mSignaledCommitTs.store(signaledCommitTs, std::memory_order_release);
   }
 
-  bool TxUnCommitted(const TXID dependency) {
+  inline bool TxUnCommitted(const TXID dependency) {
     return mSignaledCommitTs.load() < dependency;
   }
 
-  void publishOffset() {
-    mWalFlushReq.updateAttribute(&WalFlushReq::mWalBuffered, mWalBuffered);
-  }
-
-  void UpdateWalFlushReq();
-
-  u32 walFreeSpace();
-  u32 walContiguousFreeSpace();
-  void walEnsureEnoughSpace(u32 requested_size);
+  void WalEnsureEnoughSpace(u32 requestedSize);
 
   // Iterate over current TX entries
   void IterateCurrentTxWALs(
@@ -178,7 +167,14 @@ public:
     mGSNClock = gsn;
   }
 
-  Logging& other(WORKERID otherWorkerId);
+private:
+  void publishWalBufferedOffset();
+
+  void publishWalFlushReq();
+
+  u32 walFreeSpace();
+
+  u32 walContiguousFreeSpace();
 };
 
 // LWM: start timestamp of the transaction that has its effect visible by all
@@ -211,28 +207,26 @@ public:
   // Constructor and Destructors
   //-------------------------------------------------------------------------
   ConcurrencyControl(const u64 numWorkers)
-      : mHistoryTree(nullptr), commit_tree(numWorkers) {
+      : mHistoryTree(nullptr),
+        commit_tree(numWorkers) {
   }
 
 public:
-  //-------------------------------------------------------------------------
-  // Static members
-  //-------------------------------------------------------------------------
-  static atomic<u64> sGlobalClock;
+  static std::atomic<u64> sGlobalClock;
 
 public:
   //-------------------------------------------------------------------------
   // Object members
   //-------------------------------------------------------------------------
-  atomic<TXID> local_lwm_latch = 0;
+  std::atomic<TXID> local_lwm_latch = 0;
 
-  atomic<TXID> oltp_lwm_receiver;
+  std::atomic<TXID> oltp_lwm_receiver;
 
-  atomic<TXID> all_lwm_receiver;
+  std::atomic<TXID> all_lwm_receiver;
 
-  atomic<TXID> mLatestWriteTx = 0;
+  std::atomic<TXID> mLatestWriteTx = 0;
 
-  atomic<TXID> mLatestLwm4Tx = 0;
+  std::atomic<TXID> mLatestLwm4Tx = 0;
 
   TXID local_all_lwm;
 
@@ -330,7 +324,7 @@ public:
 
 public:
   bool IsTxStarted() {
-    return mActiveTx.state == TxState::kStarted;
+    return mActiveTx.mState == TxState::kStarted;
   }
 
   void StartTx(TxMode mode = TxMode::kOLTP,
@@ -347,7 +341,7 @@ public:
   static thread_local std::unique_ptr<Worker> sTlsWorker;
 
   // Concurrency Control
-  static std::unique_ptr<atomic<u64>[]> sWorkersCurrentSnapshot;
+  static std::unique_ptr<std::atomic<u64>[]> sWorkersCurrentSnapshot;
   static std::atomic<TXID> sOldestOltpStartTx;
   static std::atomic<TXID> sOltpLwm;
   static std::atomic<TXID> sOldestAllStartTs;
@@ -355,21 +349,20 @@ public:
   static std::atomic<TXID> sNewestOlapStartTx;
   static std::shared_mutex sGlobalMutex;
 
-  static constexpr u64 WORKERS_BITS = 8;
-  static constexpr u64 WORKERS_INCREMENT = 1ull << WORKERS_BITS;
-  static constexpr u64 WORKERS_MASK = (1ull << WORKERS_BITS) - 1;
-  static constexpr u64 LATCH_BIT = (1ull << 63);
-  static constexpr u64 RC_BIT = (1ull << 62);
-  static constexpr u64 OLAP_BIT = (1ull << 61);
-  static constexpr u64 OLTP_OLAP_SAME_BIT = OLAP_BIT;
-  static constexpr u64 CLEAN_BITS_MASK = ~(LATCH_BIT | OLAP_BIT | RC_BIT);
+  static constexpr u64 kWorkersBits = 8;
+  static constexpr u64 kWorkersIncrement = 1ull << kWorkersBits;
+  static constexpr u64 kLatchBit = (1ull << 63);
+  static constexpr u64 kRcBit = (1ull << 62);
+  static constexpr u64 kOlapBit = (1ull << 61);
+  static constexpr u64 kOltpOlapSameBit = kOlapBit;
+  static constexpr u64 kCleanBitsMask = ~(kLatchBit | kOlapBit | kRcBit);
 
-  // TXID: [LATCH_BIT | RC_BIT | OLAP_BIT           | id];
-  // LWM:  [LATCH_BIT | RC_BIT | OLTP_OLAP_SAME_BIT | id];
-  static constexpr s64 CR_ENTRY_SIZE = sizeof(WALEntrySimple);
+  // TXID: [ kLatchBit | kRcBit | kOlapBit         | id];
+  // LWM:  [ kLatchBit | kRcBit | kOltpOlapSameBit | id];
+  static constexpr s64 kCrEntrySize = sizeof(WALEntrySimple);
 
 public:
-  static inline Worker& my() {
+  inline static Worker& my() {
     return *Worker::sTlsWorker.get();
   }
 };
@@ -407,15 +400,11 @@ template <typename T> inline void WALPayloadHandler<T>::SubmitWal() {
 // Logging
 //------------------------------------------------------------------------------
 
-inline Logging& Logging::other(WORKERID otherWorkerId) {
-  return Worker::my().mAllWorkers[otherWorkerId]->mLogging;
-}
-
 template <typename T, typename... Args>
-inline WALPayloadHandler<T> Logging::ReserveWALEntryComplex(u64 payloadSize,
-                                                            PID pageId, LID psn,
-                                                            TREEID treeId,
-                                                            Args&&... args) {
+WALPayloadHandler<T> Logging::ReserveWALEntryComplex(u64 payloadSize,
+                                                     PID pageId, LID psn,
+                                                     TREEID treeId,
+                                                     Args&&... args) {
   SCOPED_DEFER(mPrevLSN = mActiveWALEntryComplex->lsn);
 
   auto entryLSN = mLsnClock++;
@@ -432,14 +421,6 @@ inline WALPayloadHandler<T> Logging::ReserveWALEntryComplex(u64 payloadSize,
   auto* payloadPtr = mActiveWALEntryComplex->payload;
   auto walPayload = new (payloadPtr) T(std::forward<Args>(args)...);
   return {walPayload, entrySize, entryLSN};
-}
-
-inline void Logging::UpdateWalFlushReq() {
-  auto current = mWalFlushReq.getNoSync();
-  current.mWalBuffered = mWalBuffered;
-  current.mCurrGSN = GetCurrentGsn();
-  current.mCurrTxId = Worker::my().mActiveTx.mStartTs;
-  mWalFlushReq.SetSync(current);
 }
 
 //------------------------------------------------------------------------------

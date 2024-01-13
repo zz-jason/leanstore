@@ -21,8 +21,11 @@ inline thread_local std::string tlsThreadName = "";
 class UserThread {
 protected:
   std::string mThreadName = "";
+
   int mRunningCPU = -1;
+
   std::unique_ptr<std::thread> mThread = nullptr;
+
   std::atomic<bool> mKeepRunning = false;
 
 public:

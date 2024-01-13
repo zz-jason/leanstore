@@ -19,7 +19,7 @@ void BTreeGeneric::Init(TREEID btreeId, Config config) {
   mMetaNodeSwip = &BufferManager::sInstance->AllocNewPage();
 
   HybridGuard guard(mMetaNodeSwip.AsBufferFrame().header.mLatch,
-                    GUARD_STATE::EXCLUSIVE);
+                    GuardState::kExclusive);
   mMetaNodeSwip.AsBufferFrame().header.mKeepInMemory = true;
   mMetaNodeSwip.AsBufferFrame().page.mBTreeId = btreeId;
   guard.unlock();
@@ -50,7 +50,7 @@ void BTreeGeneric::Init(TREEID btreeId, Config config) {
 }
 
 void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
-  cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);
+  cr::Worker::my().mLogging.WalEnsureEnoughSpace(FLAGS_page_size);
   auto parentHandler = findParentEager(*this, toSplit);
   auto guardedParent = parentHandler.GetGuardedParent<BTreeNode>();
   auto guardedChild = GuardedBufferFrame(
@@ -222,31 +222,32 @@ void BTreeGeneric::trySplit(BufferFrame& toSplit, s16 favoredSplitPos) {
   }
 }
 
-bool BTreeGeneric::tryMerge(BufferFrame& to_merge, bool swizzleSibling) {
+bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
   // pos == guardedParent->mNumSeps means that the current node is the upper
   // swip in parent
-  auto parentHandler = findParentEager(*this, to_merge);
-  GuardedBufferFrame<BTreeNode> guardedParent =
-      parentHandler.GetGuardedParent<BTreeNode>();
-  GuardedBufferFrame<BTreeNode> guardedChild = GuardedBufferFrame(
-      guardedParent, parentHandler.mChildSwip.CastTo<BTreeNode>());
-  int posInParent = parentHandler.mPosInParent;
+  auto parentHandler = findParentEager(*this, toMerge);
+  auto guardedParent = parentHandler.GetGuardedParent<BTreeNode>();
+  GuardedBufferFrame guardedChild(guardedParent,
+                                  parentHandler.mChildSwip.CastTo<BTreeNode>());
+  auto posInParent = parentHandler.mPosInParent;
   if (isMetaNode(guardedParent) ||
       guardedChild->freeSpaceAfterCompaction() < BTreeNode::UnderFullSize()) {
     guardedParent.unlock();
     guardedChild.unlock();
     return false;
   }
-  // -------------------------------------------------------------------------------------
-  volatile bool merged_successfully = false;
+
+  bool succeed = false;
   if (guardedParent->mNumSeps > 1) {
-    assert(posInParent <= guardedParent->mNumSeps);
-    // -------------------------------------------------------------------------------------
+    DCHECK(posInParent <= guardedParent->mNumSeps)
+        << "Invalid position in parent"
+        << ", posInParent=" << posInParent
+        << ", childSizeOfParent=" << guardedParent->mNumSeps;
     guardedParent.JumpIfModifiedByOthers();
     guardedChild.JumpIfModifiedByOthers();
 
     // TODO: write WALs
-    auto merge_left = [&]() {
+    auto mergeAndReclaimLeft = [&]() {
       Swip<BTreeNode>& leftSwip = guardedParent->getChild(posInParent - 1);
       if (!swizzleSibling && leftSwip.isEVICTED()) {
         return false;
@@ -257,7 +258,7 @@ bool BTreeGeneric::tryMerge(BufferFrame& to_merge, bool swizzleSibling) {
       auto xGuardedChild = ExclusiveGuardedBufferFrame(std::move(guardedChild));
       auto xGuardedLeft = ExclusiveGuardedBufferFrame(std::move(guardedLeft));
 
-      ENSURE(xGuardedChild->mIsLeaf == xGuardedLeft->mIsLeaf);
+      DCHECK(xGuardedChild->mIsLeaf == xGuardedLeft->mIsLeaf);
 
       if (!xGuardedLeft->merge(posInParent - 1, xGuardedParent,
                                xGuardedChild)) {
@@ -278,12 +279,11 @@ bool BTreeGeneric::tryMerge(BufferFrame& to_merge, bool swizzleSibling) {
       }
 
       xGuardedLeft.reclaim();
-
       guardedParent = std::move(xGuardedParent);
       guardedChild = std::move(xGuardedChild);
       return true;
     };
-    auto merge_right = [&]() {
+    auto mergeAndReclaimRight = [&]() {
       Swip<BTreeNode>& rightSwip =
           ((posInParent + 1) == guardedParent->mNumSeps)
               ? guardedParent->mRightMostChildSwip
@@ -296,16 +296,16 @@ bool BTreeGeneric::tryMerge(BufferFrame& to_merge, bool swizzleSibling) {
           ExclusiveGuardedBufferFrame(std::move(guardedParent));
       auto xGuardedChild = ExclusiveGuardedBufferFrame(std::move(guardedChild));
       auto xGuardedRight = ExclusiveGuardedBufferFrame(std::move(guardedRight));
-      // -------------------------------------------------------------------------------------
-      ENSURE(xGuardedChild->mIsLeaf == xGuardedRight->mIsLeaf);
-      // -------------------------------------------------------------------------------------
+
+      DCHECK(xGuardedChild->mIsLeaf == xGuardedRight->mIsLeaf);
+
       if (!xGuardedChild->merge(posInParent, xGuardedParent, xGuardedRight)) {
         guardedParent = std::move(xGuardedParent);
         guardedChild = std::move(xGuardedChild);
         guardedRight = std::move(xGuardedRight);
         return false;
       }
-      // -------------------------------------------------------------------------------------
+
       if (config.mEnableWal) {
         guardedParent.SyncGSNBeforeWrite();
         guardedChild.SyncGSNBeforeWrite();
@@ -315,30 +315,30 @@ bool BTreeGeneric::tryMerge(BufferFrame& to_merge, bool swizzleSibling) {
         guardedChild.MarkAsDirty();
         guardedRight.MarkAsDirty();
       }
-      // -------------------------------------------------------------------------------------
+
       xGuardedChild.reclaim();
-      // -------------------------------------------------------------------------------------
       guardedParent = std::move(xGuardedParent);
       guardedRight = std::move(xGuardedRight);
       return true;
     };
+
     // ATTENTION: don't use guardedChild without making sure it was not
     // reclaimed
-    // -------------------------------------------------------------------------------------
     if (posInParent > 0) {
-      merged_successfully = merged_successfully | merge_left();
+      succeed = succeed | mergeAndReclaimLeft();
     }
-    if (!merged_successfully && posInParent < guardedParent->mNumSeps) {
-      merged_successfully = merged_successfully | merge_right();
+
+    if (!succeed && posInParent < guardedParent->mNumSeps) {
+      succeed = succeed | mergeAndReclaimRight();
     }
   }
-  // -------------------------------------------------------------------------------------
+
   JUMPMU_TRY() {
     GuardedBufferFrame<BTreeNode> guardedMeta(mMetaNodeSwip);
     if (!isMetaNode(guardedParent) &&
         guardedParent->freeSpaceAfterCompaction() >=
             BTreeNode::UnderFullSize()) {
-      if (tryMerge(*guardedParent.mBf, true)) {
+      if (TryMergeMayJump(*guardedParent.mBf, true)) {
         WorkerCounters::MyCounters().dt_merge_parent_succ[mTreeId]++;
       } else {
         WorkerCounters::MyCounters().dt_merge_parent_fail[mTreeId]++;
@@ -348,15 +348,15 @@ bool BTreeGeneric::tryMerge(BufferFrame& to_merge, bool swizzleSibling) {
   JUMPMU_CATCH() {
     WorkerCounters::MyCounters().dt_merge_fail[mTreeId]++;
   }
-  // -------------------------------------------------------------------------------------
+
   COUNTERS_BLOCK() {
-    if (merged_successfully) {
+    if (succeed) {
       WorkerCounters::MyCounters().dt_merge_succ[mTreeId]++;
     } else {
       WorkerCounters::MyCounters().dt_merge_fail[mTreeId]++;
     }
   }
-  return merged_successfully;
+  return succeed;
 }
 
 // ret: 0 did nothing, 1 full, 2 partial
@@ -457,7 +457,6 @@ s16 BTreeGeneric::mergeLeftIntoRight(
 }
 
 // returns true if it has exclusively locked anything
-
 BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
     GuardedBufferFrame<BTreeNode>& guardedParent,
     GuardedBufferFrame<BTreeNode>& guardedChild,
@@ -467,47 +466,44 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
     return XMergeReturnCode::kNothing;
   }
 
-  const u8 maxMergePages = FLAGS_xmerge_k;
-  s16 pos = parentHandler.mPosInParent;
-  u8 pages_count = 1;
-  s16 max_right;
-  auto guardedNodesBuf =
-      utils::JumpScopedArray<GuardedBufferFrame<BTreeNode>>(maxMergePages);
-  auto guardedNodes = guardedNodesBuf->get();
+  s64 maxMergePages = FLAGS_xmerge_k;
+  GuardedBufferFrame<BTreeNode> guardedNodes[maxMergePages];
+  bool fullyMerged[maxMergePages];
 
-  auto fullyMergedBuf = utils::JumpScopedArray<bool>(maxMergePages);
-  auto fullyMerged = fullyMergedBuf->get();
+  s64 pos = parentHandler.mPosInParent;
+  s64 pageCount = 1;
+  s64 maxRight;
 
   guardedNodes[0] = std::move(guardedChild);
   fullyMerged[0] = false;
-  double total_fill_factor = guardedNodes[0]->fillFactorAfterCompaction();
+  double totalFillFactor = guardedNodes[0]->fillFactorAfterCompaction();
 
   // Handle upper swip instead of avoiding guardedParent->mNumSeps -1 swip
   if (isMetaNode(guardedParent) || !guardedNodes[0]->mIsLeaf) {
     guardedChild = std::move(guardedNodes[0]);
     return XMergeReturnCode::kNothing;
   }
-  for (max_right = pos + 1; (max_right - pos) < maxMergePages &&
-                            (max_right + 1) < guardedParent->mNumSeps;
-       max_right++) {
-    if (!guardedParent->getChild(max_right).isHOT()) {
+  for (maxRight = pos + 1; (maxRight - pos) < maxMergePages &&
+                           (maxRight + 1) < guardedParent->mNumSeps;
+       maxRight++) {
+    if (!guardedParent->getChild(maxRight).isHOT()) {
       guardedChild = std::move(guardedNodes[0]);
       return XMergeReturnCode::kNothing;
     }
 
-    guardedNodes[max_right - pos] = GuardedBufferFrame<BTreeNode>(
-        guardedParent, guardedParent->getChild(max_right));
-    fullyMerged[max_right - pos] = false;
-    total_fill_factor +=
-        guardedNodes[max_right - pos]->fillFactorAfterCompaction();
-    pages_count++;
-    if ((pages_count - std::ceil(total_fill_factor)) >= (1)) {
+    guardedNodes[maxRight - pos] = GuardedBufferFrame<BTreeNode>(
+        guardedParent, guardedParent->getChild(maxRight));
+    fullyMerged[maxRight - pos] = false;
+    totalFillFactor +=
+        guardedNodes[maxRight - pos]->fillFactorAfterCompaction();
+    pageCount++;
+    if ((pageCount - std::ceil(totalFillFactor)) >= (1)) {
       // we can probably save a page by merging all together so there is no need
       // to look furhter
       break;
     }
   }
-  if (((pages_count - std::ceil(total_fill_factor))) < (1)) {
+  if (((pageCount - std::ceil(totalFillFactor))) < (1)) {
     guardedChild = std::move(guardedNodes[0]);
     return XMergeReturnCode::kNothing;
   }
@@ -519,7 +515,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
   XMergeReturnCode ret_code = XMergeReturnCode::kPartialMerge;
   s16 left_hand, right_hand, ret;
   while (true) {
-    for (right_hand = max_right; right_hand > pos; right_hand--) {
+    for (right_hand = maxRight; right_hand > pos; right_hand--) {
       if (fullyMerged[right_hand - pos]) {
         continue;
       } else {
@@ -538,7 +534,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
           std::move(guardedNodes[left_hand - pos]));
       xGuardedRight.SyncGSNBeforeWrite();
       xGuardedLeft.SyncGSNBeforeWrite();
-      max_right = left_hand;
+      maxRight = left_hand;
       ret = mergeLeftIntoRight(xGuardedParent, left_hand, xGuardedLeft,
                                xGuardedRight, left_hand == pos);
       // we unlock only the left page, the right one should not be touched again
@@ -556,7 +552,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
       }
     }
   }
-  if (guardedChild.mGuard.mState == GUARD_STATE::MOVED) {
+  if (guardedChild.mGuard.mState == GuardState::kMoved) {
     guardedChild = std::move(guardedNodes[0]);
   }
   guardedParent = std::move(xGuardedParent);
@@ -620,10 +616,6 @@ u64 BTreeGeneric::countPages() {
 u64 BTreeGeneric::countInner() {
   return iterateAllPages([](BTreeNode&) { return 1; },
                          [](BTreeNode&) { return 0; });
-}
-
-double BTreeGeneric::averageSpaceUsage() {
-  ENSURE(false); // TODO
 }
 
 u32 BTreeGeneric::bytesFree() {

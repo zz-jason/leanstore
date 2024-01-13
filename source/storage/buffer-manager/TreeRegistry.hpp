@@ -10,6 +10,7 @@
 
 #include <expected>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <tuple>
@@ -32,7 +33,7 @@ public:
   Swip<BufferFrame>& mChildSwip;
 
   /// @brief mPosInParent is the slot id in the parent buffer frame.
-  s64 mPosInParent = -2;
+  u32 mPosInParent = std::numeric_limits<u32>::max();
 
   /// @brief mIsChildBfUpdated records whether the child buffer frame is updated
   /// since this ParentSwipHandler was created.

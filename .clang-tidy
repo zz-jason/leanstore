@@ -15,15 +15,19 @@ Checks: >
 WarningsAsErrors: "*"
 
 CheckOptions:
-  - key:   readability-identifier-naming.ClassCase
-    value: CamelCase
-  - key:   readability-identifier-naming.EnumCase
-    value: CamelCase
-  - key:   readability-identifier-naming.EnumConstantCase
-    value: camelCase
-  - key:   readability-identifier-naming.EnumConstantPrefix
-    value: k
+
+  # function
   - key:   readability-identifier-naming.FunctionCase
+    value: CamelCase
+  - key:   readability-identifier-naming.IgnoreMainLikeFunctions
+    value: 1
+
+  # parameter
+  - key:   readability-identifier-naming.ParameterCase
+    value: camelBack
+
+  # class
+  - key:   readability-identifier-naming.ClassCase
     value: CamelCase
 
   # public method
@@ -32,7 +36,7 @@ CheckOptions:
 
   # protected method
   - key:   readability-identifier-naming.ProtectedMethodCase
-    value: CamelCase
+    value: camelBack
 
   # private method
   - key:   readability-identifier-naming.PrivateMethodCase
@@ -40,46 +44,64 @@ CheckOptions:
 
   # public member
   - key:   readability-identifier-naming.PublicMemberCase
-    value: CamelBack
+    value: CamelCase
   - key:   readability-identifier-naming.PublicMemberPrefix
     value: m
 
   # protected member
   - key:   readability-identifier-naming.ProtectedMemberCase
-    value: CamelBack
+    value: CamelCase
   - key:   readability-identifier-naming.ProtectedMemberPrefix
     value: m
 
   # private member
   - key:   readability-identifier-naming.PrivateMemberCase
-    value: CamelBack
+    value: CamelCase
   - key:   readability-identifier-naming.PrivateMemberPrefix
     value: m
 
-
+  # class member
   - key:   readability-identifier-naming.ClassMemberCase
-    value: CamelBack
+    value: CamelCase
   - key:   readability-identifier-naming.ClassMemberPrefix
     value: s
-  - key:   readability-identifier-naming.ParameterCase
-    value: camelBack
+
+  # enum
+  - key:   readability-identifier-naming.EnumCase
+    value: CamelCase
+  - key:   readability-identifier-naming.EnumConstantCase
+    value: CamelCase
+  - key:   readability-identifier-naming.EnumConstantPrefix
+    value: k
+
+  # union
   - key:   readability-identifier-naming.UnionCase
     value: CamelCase
+
+  # variable
   - key:   readability-identifier-naming.VariableCase
     value: camelBack
-  - key:   readability-identifier-naming.IgnoreMainLikeFunctions
-    value: 1
-  - key:   readability-identifier-naming.StaticConstantCase
-    value: UPPER_CASE
-  - key:   readability-identifier-naming.StaticConstantPrefix
-    value: S_
-  - key:   readability-identifier-naming.ConstexprVariableCase
-    value: UPPER_CASE
+
+  # static variable
   - key:   readability-identifier-naming.StaticVariableCase
-    value: camelBack
+    value: CamelCase
   - key:   readability-identifier-naming.StaticVariablePrefix
     value: s
+
+  # static const
+  - key:   readability-identifier-naming.StaticConstantCase
+    value: CamelCase
+  - key:   readability-identifier-naming.StaticConstantPrefix
+    value: k
+
+  # constexpr
+  - key:   readability-identifier-naming.ConstexprVariableCase
+    value: CamelCase
+  - key:   readability-identifier-naming.ConstexprVariablePrefix
+    value: k
+
   - key:   readability-redundant-member-init.IgnoreBaseInCopyConstructors
     value: 1
+
   - key:   modernize-use-default-member-init.UseAssignment
     value: 1

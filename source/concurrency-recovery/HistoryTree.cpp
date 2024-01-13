@@ -122,7 +122,7 @@ bool HistoryTree::retrieveVersion(WORKERID prevWorkerId, TXID prevTxId,
   JUMPMU_TRY() {
     BTreeSharedIterator iterator(
         *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)),
-        LATCH_FALLBACK_MODE::SHARED);
+        LatchMode::kShared);
     OpCode ret = iterator.seekExact(key);
     if (ret != OpCode::kOK) {
       JUMPMU_RETURN false;
@@ -164,7 +164,7 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
                 BTreeNode::UnderFullSize()) {
               iterator.cleanUpCallback([&, toMerge = guardedLeaf.mBf] {
                 JUMPMU_TRY() {
-                  btree->tryMerge(*toMerge);
+                  btree->TryMergeMayJump(*toMerge);
                 }
                 JUMPMU_CATCH() {
                 }
@@ -246,7 +246,7 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
                 BTreeNode::UnderFullSize()) {
               iterator.cleanUpCallback([&, toMerge = guardedLeaf.mBf] {
                 JUMPMU_TRY() {
-                  btree->tryMerge(*toMerge);
+                  btree->TryMergeMayJump(*toMerge);
                 }
                 JUMPMU_CATCH() {
                 }

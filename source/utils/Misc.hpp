@@ -167,7 +167,7 @@ struct Timer {
 
   std::chrono::high_resolution_clock::time_point mStartTimePoint;
 
-  Timer(atomic<u64>& timeCounterUS) : mTimeCounterUS(timeCounterUS) {
+  Timer(std::atomic<u64>& timeCounterUS) : mTimeCounterUS(timeCounterUS) {
     if (FLAGS_measure_time) {
       mStartTimePoint = std::chrono::high_resolution_clock::now();
     }
