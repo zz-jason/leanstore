@@ -2,9 +2,9 @@
 
 #include "KVInterface.hpp"
 #include "LeanStore.hpp"
-#include "shared-headers/Units.hpp"
 #include "concurrency-recovery/CRMG.hpp"
 #include "concurrency-recovery/Transaction.hpp"
+#include "shared-headers/Units.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
 
@@ -121,7 +121,8 @@ private:
 
 public:
   LeanStoreMVCCSession(WORKERID sessionId, LeanStoreMVCC* store)
-      : mWorkerId(sessionId), mStore(store),
+      : mWorkerId(sessionId),
+        mStore(store),
         mIsolationLevel(IsolationLevel::kSnapshotIsolation) {
   }
   ~LeanStoreMVCCSession() = default;
@@ -216,8 +217,8 @@ inline void LeanStoreMVCCSession::AbortTx() {
 }
 
 // DDL operations
-auto LeanStoreMVCCSession::CreateTable(const std::string& tblName,
-                                       bool implicitTx)
+inline auto LeanStoreMVCCSession::CreateTable(const std::string& tblName,
+                                              bool implicitTx)
     -> std::expected<TableRef*, utils::Error> {
   auto config = storage::btree::BTreeGeneric::Config{
       .mEnableWal = FLAGS_wal,
@@ -240,8 +241,8 @@ auto LeanStoreMVCCSession::CreateTable(const std::string& tblName,
   return reinterpret_cast<TableRef*>(btree);
 }
 
-auto LeanStoreMVCCSession::DropTable(const std::string& tblName,
-                                     bool implicitTx)
+inline auto LeanStoreMVCCSession::DropTable(const std::string& tblName,
+                                            bool implicitTx)
     -> std::expected<void, utils::Error> {
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
@@ -256,8 +257,8 @@ auto LeanStoreMVCCSession::DropTable(const std::string& tblName,
 }
 
 // DML operations
-auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
-                               bool implicitTx)
+inline auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
+                                      bool implicitTx)
     -> std::expected<void, utils::Error> {
   auto* btree = reinterpret_cast<storage::btree::BTreeVI*>(tbl);
   OpCode res;
@@ -283,8 +284,8 @@ auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
   return {};
 }
 
-auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key, std::string& val,
-                               bool implicitTx)
+inline auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key,
+                                      std::string& val, bool implicitTx)
     -> std::expected<u64, utils::Error> {
   auto* btree = reinterpret_cast<storage::btree::BTreeVI*>(tbl);
   OpCode res;
@@ -317,13 +318,13 @@ auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key, std::string& val,
       utils::Error::General("Get failed: " + ToString(res)));
 }
 
-auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
-                                  bool implicitTx)
+inline auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
+                                         bool implicitTx)
     -> std::expected<u64, utils::Error> {
   auto* btree = reinterpret_cast<storage::btree::BTreeVI*>(tbl);
   OpCode res;
   auto updateCallBack = [&](MutableSlice toUpdate) {
-    std::memcpy(toUpdate.data(), val.data(), val.length());
+    std::memcpy(toUpdate.Data(), val.data(), val.length());
   };
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
@@ -341,8 +342,8 @@ auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
     u8 updateDescBuf[updateDescBufSize];
     auto* updateDesc = UpdateDesc::CreateFrom(updateDescBuf);
     updateDesc->mNumSlots = 1;
-    updateDesc->mDiffSlots[0].offset = 0;
-    updateDesc->mDiffSlots[0].length = val.size();
+    updateDesc->mUpdateSlots[0].mOffset = 0;
+    updateDesc->mUpdateSlots[0].mSize = val.size();
     res = btree->updateSameSizeInPlace(Slice((const u8*)key.data(), key.size()),
                                        updateCallBack, *updateDesc);
   });
@@ -356,7 +357,8 @@ auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
       utils::Error::General("Update failed: " + ToString(res)));
 }
 
-auto LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key, bool implicitTx)
+inline auto LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key,
+                                         bool implicitTx)
     -> std::expected<u64, utils::Error> {
   auto* btree = reinterpret_cast<storage::btree::BTreeVI*>(tbl);
   OpCode res;

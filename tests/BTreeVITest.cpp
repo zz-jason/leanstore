@@ -538,8 +538,8 @@ TEST_F(BTreeVITest, Update) {
 
     // update all the values to this newVal
     auto newVal = RandomGenerator::RandomAlphString(valSize);
-    auto updateCallBack = [&](MutableSlice val) {
-      std::memcpy(val.data(), newVal.data(), val.length());
+    auto updateCallBack = [&](MutableSlice mutRawVal) {
+      std::memcpy(mutRawVal.Data(), newVal.data(), mutRawVal.Size());
     };
 
     // update in the same worker
@@ -547,8 +547,8 @@ TEST_F(BTreeVITest, Update) {
     u8 updateDescBuf[updateDescBufSize];
     auto* updateDesc = UpdateDesc::CreateFrom(updateDescBuf);
     updateDesc->mNumSlots = 1;
-    updateDesc->mDiffSlots[0].offset = 0;
-    updateDesc->mDiffSlots[0].length = valSize;
+    updateDesc->mUpdateSlots[0].mOffset = 0;
+    updateDesc->mUpdateSlots[0].mSize = valSize;
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       cr::Worker::my().StartTx();

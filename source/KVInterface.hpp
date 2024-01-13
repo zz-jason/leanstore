@@ -2,7 +2,6 @@
 
 #include "shared-headers/Units.hpp"
 
-#include <cstring>
 #include <functional>
 
 namespace leanstore {
@@ -40,95 +39,42 @@ inline std::string ToString(OpCode result) {
   return "Unknown OpCode";
 }
 
-class UpdateDiffSlot {
+class UpdateSlotInfo {
 public:
-  u16 offset = 0;
+  u16 mOffset = 0;
 
-  u16 length = 0;
+  u16 mSize = 0;
 
 public:
-  bool operator==(const UpdateDiffSlot& other) const {
-    return offset == other.offset && length == other.length;
+  bool operator==(const UpdateSlotInfo& other) const {
+    return mOffset == other.mOffset && mSize == other.mSize;
   }
 };
 
 /// Memory layout:
-/// ---------------------------------------
-/// | N | UpdateDiffSlot 0..N | diff 0..N |
-/// ---------------------------------------
+/// ---------------------------
+/// | N | UpdateSlotInfo 0..N |
+/// ---------------------------
 class UpdateDesc {
 public:
   u8 mNumSlots = 0;
 
-  UpdateDiffSlot mDiffSlots[];
+  UpdateSlotInfo mUpdateSlots[];
 
 public:
-  u64 size() const {
+  u64 Size() const {
     return UpdateDesc::Size(mNumSlots);
   }
 
-  u64 TotalSize() const {
-    return size() + diffSize();
-  }
-
-  bool operator==(const UpdateDesc& other) {
-    if (mNumSlots != other.mNumSlots) {
-      return false;
-    }
-
-    for (u8 i = 0; i < mNumSlots; i++) {
-      if (mDiffSlots[i].offset != other.mDiffSlots[i].offset ||
-          mDiffSlots[i].length != other.mDiffSlots[i].length)
-        return false;
-    }
-    return true;
-  }
-
-  void CopySlots(u8* dst, const u8* src) const {
-    u64 dstOffset = 0;
-    for (u64 i = 0; i < mNumSlots; i++) {
-      const auto& slot = mDiffSlots[i];
-      std::memcpy(dst + dstOffset, src + slot.offset, slot.length);
-      dstOffset += slot.length;
-    }
-  }
-
-  void XORSlots(u8* dst, const u8* src) const {
-    u64 dstOffset = 0;
-    for (u64 i = 0; i < mNumSlots; i++) {
-      const auto& slot = mDiffSlots[i];
-      for (u64 j = 0; j < slot.length; j++) {
-        dst[dstOffset + j] ^= src[slot.offset + j];
-      }
-      dstOffset += slot.length;
-    }
-  }
-
-  void ApplyDiff(u8* dst, const u8* src) const {
-    u64 srcOffset = 0;
-    for (u64 i = 0; i < mNumSlots; i++) {
-      const auto& slot = mDiffSlots[i];
-      std::memcpy(dst + slot.offset, src + srcOffset, slot.length);
-      srcOffset += slot.length;
-    }
-  }
-
-  void ApplyXORDiff(u8* dst, const u8* src) const {
-    u64 srcOffset = 0;
-    for (u64 i = 0; i < mNumSlots; i++) {
-      const auto& slot = mDiffSlots[i];
-      for (u64 j = 0; j < slot.length; j++) {
-        dst[slot.offset + j] ^= src[srcOffset + j];
-      }
-      srcOffset += slot.length;
-    }
+  u64 NumBytes4WAL() const {
+    return Size() + numBytesToUpdate();
   }
 
 private:
-  u64 diffSize() const {
+  u64 numBytesToUpdate() const {
     u64 length = 0;
     for (u8 i = 0; i < mNumSlots; i++) {
-      length += mDiffSlots[i].length;
+      length += mUpdateSlots[i].mSize;
     }
     return length;
   }
@@ -144,7 +90,7 @@ public:
 
   inline static u64 Size(u8 numSlots) {
     u64 selfSize = sizeof(UpdateDesc);
-    selfSize += (numSlots * sizeof(UpdateDiffSlot));
+    selfSize += (numSlots * sizeof(UpdateSlotInfo));
     return selfSize;
   }
 
@@ -164,6 +110,7 @@ using PrefixLookupCallback = std::function<void(Slice key, Slice val)>;
 class KVInterface {
 public:
   virtual OpCode Lookup(Slice key, ValCallback valCallback) = 0;
+
   virtual OpCode insert(Slice key, Slice val) = 0;
 
   /// Update the old value with a same sized new value.
@@ -172,50 +119,48 @@ public:
                                        UpdateDesc& updateDesc) = 0;
 
   virtual OpCode remove(Slice key) = 0;
+
   virtual OpCode ScanAsc(Slice startKey, ScanCallback callback) = 0;
+
   virtual OpCode ScanDesc(Slice startKey, ScanCallback callback) = 0;
-  virtual OpCode prefixLookup(Slice, PrefixLookupCallback) {
-    return OpCode::kOther;
-  }
-  virtual OpCode prefixLookupForPrev(Slice, PrefixLookupCallback) {
-    return OpCode::kOther;
-  }
+
+  virtual OpCode prefixLookup(Slice, PrefixLookupCallback) = 0;
+
+  virtual OpCode prefixLookupForPrev(Slice, PrefixLookupCallback) = 0;
+
   virtual OpCode append(std::function<void(u8*)>, u16, std::function<void(u8*)>,
-                        u16, std::unique_ptr<u8[]>&) {
-    return OpCode::kOther;
-  }
+                        u16, std::unique_ptr<u8[]>&) = 0;
+
   virtual OpCode rangeRemove(Slice startKey [[maybe_unused]],
                              Slice endKey [[maybe_unused]],
-                             bool page_wise [[maybe_unused]] = true) {
-    return OpCode::kOther;
-  }
+                             bool page_wise [[maybe_unused]] = true) = 0;
 
   virtual u64 countPages() = 0;
+
   virtual u64 countEntries() = 0;
+
   virtual u64 getHeight() = 0;
 };
 
-struct MutableSlice {
-  u8* ptr;
-  u64 len;
+class MutableSlice {
+private:
+  u8* mData;
+  u64 mSize;
 
-  MutableSlice(u8* ptr, u64 len) : ptr(ptr), len(len) {
+public:
+  MutableSlice(u8* ptr, u64 len) : mData(ptr), mSize(len) {
   }
 
-  u64 length() {
-    return len;
+  u8* Data() {
+    return mData;
   }
 
   u64 Size() {
-    return len;
-  }
-
-  u8* data() {
-    return ptr;
+    return mSize;
   }
 
   Slice Immutable() {
-    return Slice(ptr, len);
+    return Slice(mData, mSize);
   }
 };
 

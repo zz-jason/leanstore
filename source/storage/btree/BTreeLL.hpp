@@ -17,7 +17,7 @@ class BTreeLL : public KVInterface, public BTreeGeneric {
 public:
   struct WALUpdate : WALPayload {
     u16 mKeySize;
-    u16 delta_length;
+    u16 mDeltaLength;
     u8 payload[];
   };
 
@@ -27,7 +27,8 @@ public:
     u8 payload[];
 
     WALRemove(Slice key, Slice val)
-        : WALPayload(TYPE::WALRemove), mKeySize(key.size()),
+        : WALPayload(TYPE::WALRemove),
+          mKeySize(key.size()),
           mValSize(val.size()) {
       std::memcpy(payload, key.data(), key.size());
       std::memcpy(payload + key.size(), val.data(), val.size());
@@ -80,15 +81,71 @@ public:
     auto [treePtr, treeId] =
         TreeRegistry::sInstance->CreateTree(treeName, [&]() {
           return std::unique_ptr<BufferManagedTree>(
-              static_cast<BufferManagedTree*>(new storage::btree::BTreeLL()));
+              static_cast<BufferManagedTree*>(new BTreeLL()));
         });
     if (treePtr == nullptr) {
       return std::unexpected<utils::Error>(
           utils::Error::General("Tree name has been taken"));
     }
-    auto tree = dynamic_cast<storage::btree::BTreeLL*>(treePtr);
+    auto* tree = dynamic_cast<BTreeLL*>(treePtr);
     tree->Init(treeId, config);
     return tree;
+  }
+
+  /// Copy the slots from the value to the buffer.
+  ///
+  /// @param[in] updateDesc The update descriptor which contains the slots to
+  /// update.
+  /// @param[in] value The value to copy the slots from.
+  /// @param[out] buffer The buffer to copy the slots to.
+  inline static void CopyToBuffer(const UpdateDesc& updateDesc, const u8* value,
+                                  u8* buffer) {
+    u64 bufferOffset = 0;
+    for (u64 i = 0; i < updateDesc.mNumSlots; i++) {
+      const auto& slot = updateDesc.mUpdateSlots[i];
+      std::memcpy(buffer + bufferOffset, value + slot.mOffset, slot.mSize);
+      bufferOffset += slot.mSize;
+    }
+  }
+
+  /// Update the slots in the value with data in the buffer.
+  ///
+  /// @param[in] updateDesc The update descriptor which contains the slots to
+  /// update.
+  /// @param[in] buffer The buffer to copy the slots from.
+  /// @param[out] value The value to update the slots in.
+  inline static void CopyToValue(const UpdateDesc& updateDesc, const u8* buffer,
+                                 u8* value) {
+    u64 bufferOffset = 0;
+    for (u64 i = 0; i < updateDesc.mNumSlots; i++) {
+      const auto& slot = updateDesc.mUpdateSlots[i];
+      std::memcpy(value + slot.mOffset, buffer + bufferOffset, slot.mSize);
+      bufferOffset += slot.mSize;
+    }
+  }
+
+  inline static void XorToBuffer(const UpdateDesc& updateDesc, const u8* value,
+                                 u8* buffer) {
+    u64 bufferOffset = 0;
+    for (u64 i = 0; i < updateDesc.mNumSlots; i++) {
+      const auto& slot = updateDesc.mUpdateSlots[i];
+      for (u64 j = 0; j < slot.mSize; j++) {
+        buffer[bufferOffset + j] ^= value[slot.mOffset + j];
+      }
+      bufferOffset += slot.mSize;
+    }
+  }
+
+  inline static void XorToValue(const UpdateDesc& updateDesc, const u8* buffer,
+                                u8* value) {
+    u64 bufferOffset = 0;
+    for (u64 i = 0; i < updateDesc.mNumSlots; i++) {
+      const auto& slot = updateDesc.mUpdateSlots[i];
+      for (u64 j = 0; j < slot.mSize; j++) {
+        value[slot.mOffset + j] ^= buffer[bufferOffset + j];
+      }
+      bufferOffset += slot.mSize;
+    }
   }
 };
 

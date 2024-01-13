@@ -62,6 +62,10 @@ public:
       return "Unknown WAL log type";
     }
   }
+
+  inline static const WALPayload* From(const void* data) {
+    return reinterpret_cast<const WALPayload*>(const_cast<void*>(data));
+  }
 };
 
 #undef TYPE_NAME
@@ -200,22 +204,27 @@ struct WALInsert : WALPayload {
 // WAL for BTreeVI
 struct WALUpdateSSIP : WALPayload {
   u16 mKeySize;
-  u64 delta_length;
+
+  u64 mDeltaLength;
+
   WORKERID mPrevWorkerId;
+
   TXID mPrevTxId;
+
   COMMANDID mPrevCommandId;
+
   u8 payload[];
 
   WALUpdateSSIP(Slice key, UpdateDesc& updateDesc, u64 deltaSize,
                 WORKERID prevWorkerId, TXID prevTxId, COMMANDID prevCommandId)
       : WALPayload(TYPE::WALUpdate),
         mKeySize(key.size()),
-        delta_length(deltaSize),
+        mDeltaLength(deltaSize),
         mPrevWorkerId(prevWorkerId),
         mPrevTxId(prevTxId),
         mPrevCommandId(prevCommandId) {
     std::memcpy(payload, key.data(), key.size());
-    std::memcpy(payload + key.size(), &updateDesc, updateDesc.size());
+    std::memcpy(payload + key.size(), &updateDesc, updateDesc.Size());
   }
 };
 
