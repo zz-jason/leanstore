@@ -330,26 +330,33 @@ OpCode BTreeLL::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
     }
     auto currentVal = xIter.MutableVal();
     if (config.mEnableWal) {
-      // if it is a secondary index, then we can not use updateSameSize
       DCHECK(updateDesc.mNumSlots > 0);
-      auto deltaPayloadSize = updateDesc.TotalSize();
+      auto deltaPayloadSize = updateDesc.NumBytes4WAL();
       auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WALUpdate>(
           key.length() + deltaPayloadSize);
       walHandler->type = WALPayload::TYPE::WALUpdate;
       walHandler->mKeySize = key.length();
       walHandler->mDeltaLength = deltaPayloadSize;
-      u8* walPtr = walHandler->payload;
+      auto* walPtr = walHandler->payload;
       std::memcpy(walPtr, key.data(), key.length());
       walPtr += key.length();
       std::memcpy(walPtr, &updateDesc, updateDesc.Size());
       walPtr += updateDesc.Size();
-      updateDesc.CopySlots(walPtr, currentVal.Data());
-      updateDesc.XORSlots(walPtr, currentVal.Data());
+
+      // 1. copy old value to wal buffer
+      BTreeLL::CopyToBuffer(updateDesc, currentVal.Data(), walPtr);
+
+      // 2. update with the new value
+      updateCallBack(currentVal);
+
+      // 3. xor with new value, store the result in wal buffer
+      BTreeLL::XorToBuffer(updateDesc, currentVal.Data(), walPtr);
       walHandler.SubmitWal();
+    } else {
+      // The actual update by the client
+      updateCallBack(currentVal);
     }
 
-    // The actual update by the client
-    updateCallBack(currentVal);
     xIter.MarkAsDirty();
     xIter.UpdateContentionStats();
     JUMPMU_RETURN OpCode::kOK;

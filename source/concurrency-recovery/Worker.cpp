@@ -222,7 +222,6 @@ void Worker::CommitTx() {
 ///
 /// It may share the same code with the recovery process?
 void Worker::AbortTx() {
-  mActiveTx.state = TxState::kAborted;
   if (mActiveTx.state != TxState::kStarted || !FLAGS_wal) {
     return;
   }

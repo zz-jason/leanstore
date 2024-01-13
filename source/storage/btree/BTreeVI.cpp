@@ -1,6 +1,7 @@
 #include "BTreeVI.hpp"
 
 #include "shared-headers/Units.hpp"
+#include "storage/btree/BTreeLL.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
 
 #include <gflags/gflags.h>
@@ -380,10 +381,19 @@ void BTreeVI::undoLastUpdate(const WALUpdateSSIP* walUpdate) {
         chainedTuple.mCommandId = walUpdate->mPrevCommandId;
         auto& updateDesc =
             *UpdateDesc::From(walUpdate->payload + walUpdate->mKeySize);
-        auto* diffSrc =
+        auto* xorData =
             walUpdate->payload + walUpdate->mKeySize + updateDesc.Size();
-        updateDesc.ApplyDiff(chainedTuple.payload, diffSrc);
-        // updateDesc.ApplyXORDiff(chainedTuple.payload, diffSrc);
+
+        // 1. copy the new value to buffer
+        const auto buffSize = updateDesc.NumBytes4WAL() - updateDesc.Size();
+        u8 buff[buffSize];
+        std::memcpy(buff, xorData, buffSize);
+
+        // 2. calculate the old value based on xor result and old value
+        BTreeLL::XorToBuffer(updateDesc, chainedTuple.payload, buff);
+
+        // 3. replace new value with old value
+        BTreeLL::CopyToValue(updateDesc, buff, chainedTuple.payload);
       }
       xIter.MarkAsDirty();
       JUMPMU_RETURN;

@@ -115,7 +115,6 @@ TEST_F(AnomaliesTest, NoG0) {
 
 // G1a: Aborted Reads (dirty reads, cascaded aborts)
 TEST_F(AnomaliesTest, NoG1a) {
-  GTEST_SKIP() << "Unfixed";
   auto* s1 = mStore->GetSession(1);
   auto* s2 = mStore->GetSession(2);
 
@@ -252,7 +251,6 @@ TEST_F(AnomaliesTest, NoPMP) {
 
 // P4: Lost Update
 TEST_F(AnomaliesTest, NoP4) {
-  GTEST_SKIP() << "Unfixed";
   auto* s1 = mStore->GetSession(1);
   auto* s2 = mStore->GetSession(2);
 
@@ -267,7 +265,7 @@ TEST_F(AnomaliesTest, NoP4) {
   EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res));
   EXPECT_EQ(res, "10");
   EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
-  EXPECT_TRUE(s2->Update(mTbl, ToSlice(key1), ToSlice(newVal12)));
+  EXPECT_FALSE(s2->Update(mTbl, ToSlice(key1), ToSlice(newVal12)));
   s1->CommitTx();
   s2->AbortTx();
 }

@@ -67,7 +67,7 @@ public:
     return UpdateDesc::Size(mNumSlots);
   }
 
-  u64 TotalSize() const {
+  u64 NumBytes4WAL() const {
     return Size() + numBytesToUpdate();
   }
 
@@ -82,35 +82,6 @@ public:
         return false;
     }
     return true;
-  }
-
-  void CopySlots(u8* dst, const u8* src) const {
-    u64 dstOffset = 0;
-    for (u64 i = 0; i < mNumSlots; i++) {
-      const auto& slot = mUpdateSlots[i];
-      std::memcpy(dst + dstOffset, src + slot.mOffset, slot.mSize);
-      dstOffset += slot.mSize;
-    }
-  }
-
-  void XORSlots(u8* dst, const u8* src) const {
-    u64 dstOffset = 0;
-    for (u64 i = 0; i < mNumSlots; i++) {
-      const auto& slot = mUpdateSlots[i];
-      for (u64 j = 0; j < slot.mSize; j++) {
-        dst[dstOffset + j] ^= src[slot.mOffset + j];
-      }
-      dstOffset += slot.mSize;
-    }
-  }
-
-  void ApplyDiff(u8* dst, const u8* src) const {
-    u64 srcOffset = 0;
-    for (u64 i = 0; i < mNumSlots; i++) {
-      const auto& slot = mUpdateSlots[i];
-      std::memcpy(dst + slot.mOffset, src + srcOffset, slot.mSize);
-      srcOffset += slot.mSize;
-    }
   }
 
   void ApplyXORDiff(u8* dst, const u8* src) const {

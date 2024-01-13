@@ -167,8 +167,8 @@ public:
   }
 
   inline u32 TotalSize() {
-    const auto& desc = getDescriptor();
-    return sizeof(FatTupleDelta) + desc.TotalSize();
+    const auto& updateDesc = getDescriptor();
+    return sizeof(FatTupleDelta) + updateDesc.NumBytes4WAL();
   }
 };
 

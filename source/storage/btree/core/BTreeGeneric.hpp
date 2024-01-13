@@ -449,7 +449,7 @@ inline void BTreeGeneric::FindLeafCanJump(
   guardedTarget = GuardedBufferFrame<BTreeNode>(
       guardedParent, guardedParent->mRightMostChildSwip);
 
-  u16 volatile level = 0;
+  volatile u16 level = 0;
 
   while (!guardedTarget->mIsLeaf) {
     COUNTERS_BLOCK() {
