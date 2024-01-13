@@ -2,6 +2,7 @@
 
 #include "shared-headers/Units.hpp"
 #include "storage/btree/BTreeLL.hpp"
+#include "storage/btree/Tuple.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
 
 #include <gflags/gflags.h>
@@ -166,15 +167,15 @@ OpCode BTreeVI::insert(Slice key, Slice val) {
       auto mutRawVal = xIter.MutableVal();
       auto& chainedTuple = *ChainedTuple::From(mutRawVal.Data());
       auto writeLocked = chainedTuple.IsWriteLocked();
-      auto visibleForMe =
-          VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId);
-      if (writeLocked || !visibleForMe) {
+      if (writeLocked ||
+          !VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId)) {
         LOG(INFO) << "Conflict detected, please abort and retry"
                   << ", workerId=" << cr::Worker::my().mWorkerId
                   << ", startTs=" << cr::Worker::my().mActiveTx.mStartTs
                   << ", tupleLastWriter=" << chainedTuple.mWorkerId
                   << ", tupleLastStartTs=" << chainedTuple.mTxId
-                  << ", visibleForMe=" << visibleForMe;
+                  << ", visibleForMe="
+                  << VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId);
         return OpCode::kAbortTx;
       }
       LOG(INFO) << "Insert failed, key is duplicated";
@@ -221,34 +222,42 @@ OpCode BTreeVI::remove(Slice key) {
     }
 
     auto mutRawVal = xIter.MutableVal();
-    ChainedTuple& chainedTuple = *ChainedTuple::From(mutRawVal.Data());
-    // TODO: removing fat tuple is not supported atm
-    DCHECK(chainedTuple.mFormat == TupleFormat::CHAINED);
+    auto* tuple = Tuple::From(mutRawVal.Data());
+
+    // remove fat tuple is not supported yet
+    if (tuple->mFormat == TupleFormat::FAT) {
+      LOG(ERROR) << "Remove failed, fat tuple is not supported yet";
+      JUMPMU_RETURN OpCode::kNotFound;
+    }
+
+    // remove the chained tuple
+    auto& chainedTuple = *static_cast<ChainedTuple*>(tuple);
     if (chainedTuple.IsWriteLocked() ||
         !VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId)) {
+      LOG(INFO) << "Conflict detected, please abort and retry"
+                << ", workerId=" << cr::Worker::my().mWorkerId
+                << ", startTs=" << cr::Worker::my().mActiveTx.mStartTs
+                << ", tupleLastWriter=" << chainedTuple.mWorkerId
+                << ", tupleLastStartTs=" << chainedTuple.mTxId
+                << ", visibleForMe="
+                << VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId);
       JUMPMU_RETURN OpCode::kAbortTx;
     }
-    ENSURE(!cr::activeTX().AtLeastSI() || chainedTuple.mIsRemoved == false);
+
     if (chainedTuple.mIsRemoved) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
 
     chainedTuple.WriteLock();
-
-    DanglingPointer danglingPointer(xIter.mGuardedLeaf.mBf,
-                                    xIter.mGuardedLeaf.mGuard.mVersion,
-                                    xIter.mSlotId);
-    u16 valSize = xIter.value().length() - sizeof(ChainedTuple);
-    u16 versionSize = sizeof(RemoveVersion) + valSize + key.size();
-    COMMANDID commandId = cr::Worker::my().cc.insertVersion(
+    DanglingPointer danglingPointer(xIter);
+    auto valSize = xIter.value().size() - sizeof(ChainedTuple);
+    auto val = chainedTuple.GetValue(valSize);
+    auto versionSize = sizeof(RemoveVersion) + val.size() + key.size();
+    auto commandId = cr::Worker::my().cc.insertVersion(
         mTreeId, true, versionSize, [&](u8* versionBuf) {
-          auto& removeVersion = *new (versionBuf) RemoveVersion(
-              chainedTuple.mWorkerId, chainedTuple.mTxId,
-              chainedTuple.mCommandId, key.size(), valSize);
-          removeVersion.dangling_pointer = danglingPointer;
-          std::memcpy(removeVersion.payload, key.data(), key.size());
-          std::memcpy(removeVersion.payload + key.size(), chainedTuple.payload,
-                      valSize);
+          new (versionBuf)
+              RemoveVersion(chainedTuple.mWorkerId, chainedTuple.mTxId,
+                            chainedTuple.mCommandId, key, val, danglingPointer);
         });
 
     // WAL
@@ -256,13 +265,16 @@ OpCode BTreeVI::remove(Slice key) {
     auto prevTxId(chainedTuple.mTxId);
     auto prevCommandId(chainedTuple.mCommandId);
     auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WALRemove>(
-        key.size() + valSize, key, Slice(chainedTuple.payload, valSize),
-        prevWorkerId, prevTxId, prevCommandId);
+        key.size() + val.size(), key, val, prevWorkerId, prevTxId,
+        prevCommandId);
     walHandler.SubmitWal();
 
-    if (mutRawVal.Size() - sizeof(ChainedTuple) > 1) {
+    // remove the tuple in the btree
+    if (mutRawVal.Size() > sizeof(ChainedTuple)) {
       xIter.shorten(sizeof(ChainedTuple));
     }
+
+    // mark as removed
     chainedTuple.mIsRemoved = true;
     chainedTuple.mWorkerId = cr::Worker::my().mWorkerId;
     chainedTuple.mTxId = cr::activeTX().mStartTs;
@@ -409,39 +421,38 @@ void BTreeVI::undoLastUpdate(const WALUpdateSSIP* walUpdate) {
 }
 
 void BTreeVI::undoLastRemove(const WALRemove* walRemove) {
-  Slice key(walRemove->payload, walRemove->mKeySize);
+  Slice removedKey(walRemove->payload, walRemove->mKeySize);
   for (int retry = 0; true; retry++) {
-
     JUMPMU_TRY() {
       BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
-      OpCode ret = xIter.seekExact(key);
+      OpCode ret = xIter.seekExact(removedKey);
       DCHECK(ret == OpCode::kOK)
-          << "Cannot find the tombstone of removed key in btree"
+          << "Cannot find the tombstone of removed key"
           << ", workerId=" << cr::Worker::my().mWorkerId
           << ", startTs=" << cr::Worker::my().mActiveTx.mStartTs
-          << ", key=" << ToString(key) << ", ret=" << ToString(ret);
+          << ", removedKey=" << ToString(removedKey)
+          << ", ret=" << ToString(ret);
 
       // resize the current slot to store the removed tuple
-      auto removedValSize = walRemove->mValSize + sizeof(ChainedTuple);
+      auto chainedTupleSize = walRemove->mValSize + sizeof(ChainedTuple);
       auto curRawVal = xIter.value();
-      if (curRawVal.size() < removedValSize) {
-        auto succeed = xIter.extendPayload(removedValSize);
-        DCHECK(succeed)
-            << "Failed to extend btree node slot to store the removed tuple"
-            << ", workerId" << cr::Worker::my().mWorkerId
-            << ", startTs=" << cr::Worker::my().mActiveTx.mStartTs
-            << ", key=" << ToString(key)
-            << ", curRawValSize=" << curRawVal.size()
-            << ", removedValSize=" << removedValSize;
-      } else if (curRawVal.size() > removedValSize) {
-        xIter.shorten(removedValSize);
+      if (curRawVal.size() < chainedTupleSize) {
+        auto succeed = xIter.extendPayload(chainedTupleSize);
+        DCHECK(succeed) << "Failed to extend btree node slot to store the "
+                           "recovered chained tuple"
+                        << ", workerId" << cr::Worker::my().mWorkerId
+                        << ", startTs=" << cr::Worker::my().mActiveTx.mStartTs
+                        << ", removedKey=" << ToString(removedKey)
+                        << ", curRawValSize=" << curRawVal.size()
+                        << ", chainedTupleSize=" << chainedTupleSize;
+      } else if (curRawVal.size() > chainedTupleSize) {
+        xIter.shorten(chainedTupleSize);
       }
 
       auto curMutRawVal = xIter.MutableVal();
-      auto& chainedTuple = *new (curMutRawVal.Data()) ChainedTuple(
-          walRemove->mPrevWorkerId, walRemove->mPrevTxId,
-          Slice(walRemove->payload + walRemove->mKeySize, walRemove->mValSize));
-      chainedTuple.mCommandId = walRemove->mPrevCommandId;
+      new (curMutRawVal.Data())
+          ChainedTuple(walRemove->mPrevWorkerId, walRemove->mPrevTxId,
+                       walRemove->mPrevCommandId, walRemove->RemovedVal());
 
       xIter.MarkAsDirty();
       JUMPMU_RETURN;

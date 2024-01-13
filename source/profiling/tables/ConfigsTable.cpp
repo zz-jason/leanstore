@@ -1,4 +1,5 @@
 #include "ConfigsTable.hpp"
+
 #include "Config.hpp"
 
 namespace leanstore {
@@ -63,8 +64,6 @@ void ConfigsTable::open() {
   columns.emplace("c_wal", [&](Column& col) { col << FLAGS_wal; });
   columns.emplace("c_wal_io_hack", [&](Column& col) { col << 1; });
   columns.emplace("c_wal_fsync", [&](Column& col) { col << FLAGS_wal_fsync; });
-  columns.emplace("c_wal_variant",
-                  [&](Column& col) { col << FLAGS_wal_variant; });
   columns.emplace("c_wal_log_writers",
                   [&](Column& col) { col << FLAGS_wal_log_writers; });
   columns.emplace("c_todo", [&](Column& col) { col << FLAGS_todo; });

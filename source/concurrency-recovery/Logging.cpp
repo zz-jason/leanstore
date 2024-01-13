@@ -53,12 +53,7 @@ void Logging::walEnsureEnoughSpace(u32 requiredBytes) {
 
   // Spin until there is enough space. The wal ring buffer space is reclaimed
   // when the group commit thread commits the written wal entries.
-  {
-    if (FLAGS_wal_variant == 2 && walFreeSpace() < totalRequiredBytes) {
-      mWalFlushReq.mOptimisticLatch.notify_all();
-    }
-    while (walFreeSpace() < totalRequiredBytes) {
-    }
+  while (walFreeSpace() < totalRequiredBytes) {
   }
 
   // Carriage Return. Start a new round on the wal ring buffer.

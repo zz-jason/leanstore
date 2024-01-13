@@ -1,6 +1,7 @@
 #include "Tuple.hpp"
 
 #include "BTreeVI.hpp"
+#include "concurrency-recovery/Worker.hpp"
 #include "storage/btree/BTreeLL.hpp"
 #include "storage/btree/core/BTreeNode.hpp"
 #include "utils/Defer.hpp"
@@ -531,29 +532,30 @@ std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
   TXID prevTxId = mTxId;
   COMMANDID prevCommandId = mCommandId;
 
-  u16 numVisitedVersions = 1;
+  u16 versionsRead = 1;
   while (true) {
     bool found = cr::Worker::my().cc.retrieveVersion(
         prevWorkerId, prevTxId, prevCommandId,
         [&](const u8* versionBuf, u64 versionSize) {
-          const auto& version = *reinterpret_cast<const Version*>(versionBuf);
+          auto& version = *reinterpret_cast<const Version*>(versionBuf);
           if (version.type == Version::TYPE::UPDATE) {
-            const auto& updateVersion = *UpdateVersion::From(versionBuf);
+            auto& updateVersion = *UpdateVersion::From(versionBuf);
             if (updateVersion.mIsDelta) {
               // Apply delta
-              const auto& updateDesc = *UpdateDesc::From(updateVersion.payload);
-              auto* xorData = updateVersion.payload + updateDesc.Size();
-              BTreeLL::CopyToValue(updateDesc, xorData, valueBuf.get());
+              auto& updateDesc = *UpdateDesc::From(updateVersion.payload);
+              auto* oldValOfSlots = updateVersion.payload + updateDesc.Size();
+              BTreeLL::CopyToValue(updateDesc, oldValOfSlots, valueBuf.get());
             } else {
               valueSize = versionSize - sizeof(UpdateVersion);
               valueBuf = std::make_unique<u8[]>(valueSize);
               std::memcpy(valueBuf.get(), updateVersion.payload, valueSize);
             }
           } else if (version.type == Version::TYPE::REMOVE) {
-            const auto& removeVersion = *RemoveVersion::From(versionBuf);
+            auto& removeVersion = *RemoveVersion::From(versionBuf);
+            auto removedVal = removeVersion.RemovedVal();
             valueSize = removeVersion.mValSize;
-            valueBuf = std::make_unique<u8[]>(valueSize);
-            std::memcpy(valueBuf.get(), removeVersion.payload, valueSize);
+            valueBuf = std::make_unique<u8[]>(removedVal.size());
+            std::memcpy(valueBuf.get(), removedVal.data(), removedVal.size());
           } else {
             UNREACHABLE();
           }
@@ -563,24 +565,29 @@ std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
           prevCommandId = version.mCommandId;
         });
     if (!found) {
-      cerr << std::find(cr::Worker::my().cc.local_workers_start_ts.get(),
-                        cr::Worker::my().cc.local_workers_start_ts.get() +
-                            cr::Worker::my().mNumAllWorkers,
-                        prevTxId) -
-                  cr::Worker::my().cc.local_workers_start_ts.get()
-           << endl;
-      cerr << "tls = " << cr::Worker::my().mActiveTx.mStartTs << endl;
-      RAISE_WHEN(true);
-      RAISE_WHEN(prevCommandId != INVALID_COMMANDID);
-      return {OpCode::kNotFound, numVisitedVersions};
+      LOG(ERROR) << "Not found in the version tree"
+                 << ", workerId=" << cr::Worker::my().mWorkerId
+                 << ", startTs=" << cr::activeTX().mStartTs
+                 << ", versionsRead=" << versionsRead
+                 << ", prevWorkerId=" << prevWorkerId
+                 << ", prevTxId=" << prevTxId
+                 << ", prevCommandId=" << prevCommandId
+                 << ", prevTxId belongs to="
+                 << std::find(cr::Worker::my().cc.local_workers_start_ts.get(),
+                              cr::Worker::my().cc.local_workers_start_ts.get() +
+                                  cr::Worker::my().mNumAllWorkers,
+                              prevTxId) -
+                        cr::Worker::my().cc.local_workers_start_ts.get();
+      return {OpCode::kNotFound, versionsRead};
     }
+
     if (cr::Worker::my().cc.VisibleForMe(prevWorkerId, prevTxId)) {
       callback(Slice(valueBuf.get(), valueSize));
-      return {OpCode::kOK, numVisitedVersions};
+      return {OpCode::kOK, versionsRead};
     }
-    numVisitedVersions++;
+    versionsRead++;
   }
-  return {OpCode::kNotFound, numVisitedVersions};
+  return {OpCode::kNotFound, versionsRead};
 }
 
 void ChainedTuple::Update(BTreeExclusiveIterator& xIter, Slice key,

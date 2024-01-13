@@ -128,10 +128,16 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
 void Worker::CommitTx() {
   SCOPED_DEFER(COUNTERS_BLOCK() {
     mActiveTx.stats.commit = std::chrono::high_resolution_clock::now();
+    mActiveTx.state = TxState::kCommitted;
+    DLOG(INFO) << "Transaction committed"
+               << ", workerId=" << mWorkerId
+               << ", startTs=" << mActiveTx.mStartTs
+               << ", commitTs=" << mActiveTx.mCommitTs
+               << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
   });
 
   utils::Timer timer(CRCounters::MyCounters().cc_ms_commit_tx);
-  if (!FLAGS_wal) {
+  if (!mActiveTx.mIsDurable) {
     return;
   }
 
@@ -139,8 +145,8 @@ void Worker::CommitTx() {
 
   DCHECK(mActiveTx.state == TxState::kStarted);
 
-  if (activeTX().mHasWrote) {
-    TXID commitTs = cc.commit_tree.commit(mActiveTx.mStartTs);
+  if (mActiveTx.mHasWrote) {
+    auto commitTs = cc.commit_tree.commit(mActiveTx.mStartTs);
     cc.mLatestWriteTx.store(commitTs, std::memory_order_release);
     mActiveTx.mCommitTs = commitTs;
     DCHECK(mActiveTx.mStartTs < mActiveTx.mCommitTs)
@@ -156,20 +162,15 @@ void Worker::CommitTx() {
 
   mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
 
-  // TODO: commitTs in log
   mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_COMMIT);
   mLogging.SubmitWALEntrySimple();
-
   mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_FINISH);
   mLogging.SubmitWALEntrySimple();
-
-  if (FLAGS_wal_variant == 2) {
-    mLogging.mWalFlushReq.mOptimisticLatch.notify_all();
-  }
 
   COUNTERS_BLOCK() {
     mActiveTx.stats.precommit = std::chrono::high_resolution_clock::now();
   }
+
   if (mLogging.mHasRemoteDependency) {
     std::unique_lock<std::mutex> g(mLogging.mTxToCommitMutex);
     mLogging.mTxToCommit.push_back(mActiveTx);
@@ -190,22 +191,16 @@ void Worker::CommitTx() {
   }
 
   // Only committing snapshot/ changing between SI and lower modes
-  if (activeTX().AtLeastSI()) {
+  if (mActiveTx.AtLeastSI()) {
     cc.refreshGlobalState();
   }
 
   // All isolation level generate garbage
-  // cc.garbageCollection();
+  cc.garbageCollection();
 
   // wait transaction to be committed
   while (mLogging.TxUnCommitted(mActiveTx.mCommitTs)) {
   }
-
-  DLOG(INFO) << "Transaction committed"
-             << ", workerId=" << mWorkerId << ", startTs=" << mActiveTx.mStartTs
-             << ", commitTs=" << mActiveTx.mCommitTs
-             << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
-  mActiveTx.state = TxState::kCommitted;
 }
 
 /// TODO(jian.z): revert changes made in-place on the btree
@@ -222,22 +217,23 @@ void Worker::CommitTx() {
 ///
 /// It may share the same code with the recovery process?
 void Worker::AbortTx() {
-  if (mActiveTx.state != TxState::kStarted || !FLAGS_wal) {
+  SCOPED_DEFER({
+    mActiveTx.state = TxState::kAborted;
+    LOG(INFO) << "Transaction aborted"
+              << ", workerId=" << mWorkerId
+              << ", startTs=" << mActiveTx.mStartTs
+              << ", commitTs=" << mActiveTx.mCommitTs
+              << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
+  });
+
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_abort_tx);
+  if (!(mActiveTx.state == TxState::kStarted && mActiveTx.mIsDurable)) {
     return;
   }
 
   // TODO(jian.z): support reading from WAL file once
   DCHECK(!mActiveTx.mWalExceedBuffer)
       << "Aborting from WAL file is not supported yet";
-
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_abort_tx);
-  SCOPED_DEFER({
-    mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_ABORT);
-    mLogging.SubmitWALEntrySimple();
-    mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_FINISH);
-    mLogging.SubmitWALEntrySimple();
-    mActiveTx.state = TxState::kAborted;
-  });
 
   std::vector<const WALEntry*> entries;
   mLogging.IterateCurrentTxWALs([&](const WALEntry& entry) {
@@ -256,6 +252,11 @@ void Worker::AbortTx() {
   cc.mHistoryTree->purgeVersions(
       mWorkerId, mActiveTx.mStartTs, mActiveTx.mStartTs,
       [&](const TXID, const TREEID, const u8*, u64, const bool) {});
+
+  mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_ABORT);
+  mLogging.SubmitWALEntrySimple();
+  mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_FINISH);
+  mLogging.SubmitWALEntrySimple();
 }
 
 void Worker::shutdown() {
