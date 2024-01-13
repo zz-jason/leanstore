@@ -168,7 +168,7 @@ int main(int argc, char** argv) {
                 btree_vi->prepareDeterministicUpdate(folded_key, folded_key_len,
                                                      *d_iterators[op_i]);
                 ensure(d_iterators[op_i]->leaf.mGuard.state ==
-                       leanstore::storage::GUARD_STATE::EXCLUSIVE);
+                       leanstore::storage::GuardState::kExclusive);
               }
               // -------------------------------------------------------------------------------------
               cr::Worker::my().StartTx(tx_type, isolation_level);

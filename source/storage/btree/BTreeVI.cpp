@@ -61,7 +61,7 @@ OpCode BTreeVI::Lookup(Slice key, ValCallback valCallback) {
 OpCode BTreeVI::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
                                       UpdateDesc& updateDesc) {
   DCHECK(cr::Worker::my().IsTxStarted());
-  cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size);
+  cr::Worker::my().mLogging.WalEnsureEnoughSpace(FLAGS_page_size);
   JUMPMU_TRY() {
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
     auto ret = xIter.seekExact(key);
@@ -156,7 +156,7 @@ OpCode BTreeVI::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
 OpCode BTreeVI::insert(Slice key, Slice val) {
   DCHECK(cr::Worker::my().IsTxStarted());
 
-  cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);
+  cr::Worker::my().mLogging.WalEnsureEnoughSpace(FLAGS_page_size * 1);
   u16 payloadSize = val.size() + sizeof(ChainedTuple);
 
   while (true) {
@@ -204,7 +204,7 @@ OpCode BTreeVI::insert(Slice key, Slice val) {
 
 OpCode BTreeVI::remove(Slice key) {
   DCHECK(cr::Worker::my().IsTxStarted());
-  cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size);
+  cr::Worker::my().mLogging.WalEnsureEnoughSpace(FLAGS_page_size);
 
   JUMPMU_TRY() {
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));

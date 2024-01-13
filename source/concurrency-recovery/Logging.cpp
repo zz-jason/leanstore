@@ -1,5 +1,6 @@
 #include "Worker.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "shared-headers/Exceptions.hpp"
 #include "utils/Defer.hpp"
 
 #include <glog/logging.h>
@@ -11,8 +12,8 @@
 namespace leanstore {
 namespace cr {
 
-atomic<u64> Logging::sGlobalMinFlushedGSN = 0;
-atomic<u64> Logging::sGlobalMaxFlushedGSN = 0;
+std::atomic<u64> Logging::sGlobalMinFlushedGSN = 0;
+std::atomic<u64> Logging::sGlobalMaxFlushedGSN = 0;
 
 /// @brief Calculate the free space left in the wal ring buffer.
 /// @return Size of the free space
@@ -40,12 +41,12 @@ u32 Logging::walContiguousFreeSpace() {
   return flushed - mWalBuffered;
 }
 
-void Logging::walEnsureEnoughSpace(u32 requiredBytes) {
+void Logging::WalEnsureEnoughSpace(u32 requiredBytes) {
   if (!FLAGS_wal) {
     return;
   }
 
-  u32 walEntryBytes = requiredBytes + Worker::CR_ENTRY_SIZE;
+  u32 walEntryBytes = requiredBytes + Worker::kCrEntrySize;
   u32 totalRequiredBytes = walEntryBytes;
   if ((FLAGS_wal_buffer_size - mWalBuffered) < walEntryBytes) {
     totalRequiredBytes += FLAGS_wal_buffer_size - mWalBuffered;
@@ -68,10 +69,11 @@ void Logging::walEnsureEnoughSpace(u32 requiredBytes) {
 
     // start a new round
     mWalBuffered = 0;
-    publishOffset();
+    publishWalBufferedOffset();
   }
-  ENSURE(walContiguousFreeSpace() >= requiredBytes);
-  ENSURE(mWalBuffered + walEntryBytes <= FLAGS_wal_buffer_size);
+
+  DCHECK(walContiguousFreeSpace() >= requiredBytes);
+  DCHECK(mWalBuffered + walEntryBytes <= FLAGS_wal_buffer_size);
 }
 
 /// Reserve space and initialize a WALEntrySimple when a transaction is started,
@@ -80,7 +82,7 @@ void Logging::walEnsureEnoughSpace(u32 requiredBytes) {
 WALEntrySimple& Logging::ReserveWALEntrySimple(WALEntry::TYPE type) {
   SCOPED_DEFER(mPrevLSN = mActiveWALEntrySimple->lsn;);
 
-  walEnsureEnoughSpace(sizeof(WALEntrySimple));
+  WalEnsureEnoughSpace(sizeof(WALEntrySimple));
   auto* entryPtr = mWalBuffer + mWalBuffered;
   auto entrySize = sizeof(WALEntrySimple);
   std::memset(entryPtr, 0, entrySize);
@@ -122,7 +124,7 @@ void Logging::SubmitWALEntrySimple() {
   }
   mActiveWALEntrySimple->mCRC32 = mActiveWALEntrySimple->ComputeCRC32();
   mWalBuffered += sizeof(WALEntrySimple);
-  UpdateWalFlushReq();
+  publishWalFlushReq();
 }
 
 /// @brief SubmitWALEntryComplex submits the wal record to group committer when
@@ -135,12 +137,24 @@ void Logging::SubmitWALEntryComplex(u64 totalSize) {
   }
   mActiveWALEntryComplex->mCRC32 = mActiveWALEntryComplex->ComputeCRC32();
   mWalBuffered += totalSize;
-  UpdateWalFlushReq();
+  publishWalFlushReq();
   Worker::my().mActiveTx.MarkAsWrite();
 
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().wal_write_bytes += totalSize;
   }
+}
+
+void Logging::publishWalBufferedOffset() {
+  mWalFlushReq.updateAttribute(&WalFlushReq::mWalBuffered, mWalBuffered);
+}
+
+void Logging::publishWalFlushReq() {
+  auto current = mWalFlushReq.getNoSync();
+  current.mWalBuffered = mWalBuffered;
+  current.mCurrGSN = GetCurrentGsn();
+  current.mCurrTxId = Worker::my().mActiveTx.mStartTs;
+  mWalFlushReq.SetSync(current);
 }
 
 // Called by worker, so concurrent writes on the buffer

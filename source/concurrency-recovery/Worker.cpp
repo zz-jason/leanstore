@@ -21,13 +21,13 @@ thread_local std::unique_ptr<Worker> Worker::sTlsWorker = nullptr;
 std::shared_mutex Worker::sGlobalMutex;
 
 // All transactions < are committed
-std::unique_ptr<atomic<u64>[]> Worker::sWorkersCurrentSnapshot =
-    std::make_unique<atomic<u64>[]>(FLAGS_worker_threads);
-atomic<u64> Worker::sOldestAllStartTs = 0;
-atomic<u64> Worker::sOldestOltpStartTx = 0;
-atomic<u64> Worker::sAllLwm = 0;
-atomic<u64> Worker::sOltpLwm = 0;
-atomic<u64> Worker::sNewestOlapStartTx = 0;
+std::unique_ptr<std::atomic<u64>[]> Worker::sWorkersCurrentSnapshot =
+    std::make_unique<std::atomic<u64>[]>(FLAGS_worker_threads);
+std::atomic<u64> Worker::sOldestAllStartTs = 0;
+std::atomic<u64> Worker::sOldestOltpStartTx = 0;
+std::atomic<u64> Worker::sAllLwm = 0;
+std::atomic<u64> Worker::sOltpLwm = 0;
+std::atomic<u64> Worker::sNewestOlapStartTx = 0;
 
 Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers)
     : cc(numWorkers),
@@ -57,10 +57,10 @@ Worker::~Worker() {
 void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   utils::Timer timer(CRCounters::MyCounters().cc_ms_start_tx);
   Transaction prevTx = mActiveTx;
-  DCHECK(prevTx.state != TxState::kStarted)
+  DCHECK(prevTx.mState != TxState::kStarted)
       << "Previous transaction not ended"
       << ", workerId=" << mWorkerId << ", startTs=" << prevTx.mStartTs
-      << ", txState=" << TxStatUtil::ToString(prevTx.state);
+      << ", txState=" << TxStatUtil::ToString(prevTx.mState);
   SCOPED_DEFER({
     DLOG(INFO) << "Start transaction"
                << ", workerId=" << mWorkerId
@@ -103,13 +103,13 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
     {
       utils::Timer timer(CRCounters::MyCounters().cc_ms_snapshotting);
       auto& curWorkerSnapshot = sWorkersCurrentSnapshot[mWorkerId];
-      curWorkerSnapshot.store(mActiveTx.mStartTs | LATCH_BIT,
+      curWorkerSnapshot.store(mActiveTx.mStartTs | kLatchBit,
                               std::memory_order_release);
 
       mActiveTx.mStartTs = ConcurrencyControl::sGlobalClock.fetch_add(1);
       if (FLAGS_enable_olap_mode) {
         curWorkerSnapshot.store(mActiveTx.mStartTs |
-                                    ((mActiveTx.IsOLAP()) ? OLAP_BIT : 0),
+                                    ((mActiveTx.IsOLAP()) ? kOlapBit : 0),
                                 std::memory_order_release);
       } else {
         curWorkerSnapshot.store(mActiveTx.mStartTs, std::memory_order_release);
@@ -127,8 +127,7 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
 
 void Worker::CommitTx() {
   SCOPED_DEFER(COUNTERS_BLOCK() {
-    mActiveTx.stats.commit = std::chrono::high_resolution_clock::now();
-    mActiveTx.state = TxState::kCommitted;
+    mActiveTx.mState = TxState::kCommitted;
     DLOG(INFO) << "Transaction committed"
                << ", workerId=" << mWorkerId
                << ", startTs=" << mActiveTx.mStartTs
@@ -142,9 +141,6 @@ void Worker::CommitTx() {
   }
 
   mCommandId = 0; // Reset mCommandId only on commit and never on abort
-
-  DCHECK(mActiveTx.state == TxState::kStarted);
-
   if (mActiveTx.mHasWrote) {
     auto commitTs = cc.commit_tree.commit(mActiveTx.mStartTs);
     cc.mLatestWriteTx.store(commitTs, std::memory_order_release);
@@ -166,10 +162,6 @@ void Worker::CommitTx() {
   mLogging.SubmitWALEntrySimple();
   mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_FINISH);
   mLogging.SubmitWALEntrySimple();
-
-  COUNTERS_BLOCK() {
-    mActiveTx.stats.precommit = std::chrono::high_resolution_clock::now();
-  }
 
   if (mLogging.mHasRemoteDependency) {
     std::unique_lock<std::mutex> g(mLogging.mTxToCommitMutex);
@@ -218,7 +210,7 @@ void Worker::CommitTx() {
 /// It may share the same code with the recovery process?
 void Worker::AbortTx() {
   SCOPED_DEFER({
-    mActiveTx.state = TxState::kAborted;
+    mActiveTx.mState = TxState::kAborted;
     LOG(INFO) << "Transaction aborted"
               << ", workerId=" << mWorkerId
               << ", startTs=" << mActiveTx.mStartTs
@@ -227,7 +219,7 @@ void Worker::AbortTx() {
   });
 
   utils::Timer timer(CRCounters::MyCounters().cc_ms_abort_tx);
-  if (!(mActiveTx.state == TxState::kStarted && mActiveTx.mIsDurable)) {
+  if (!(mActiveTx.mState == TxState::kStarted && mActiveTx.mIsDurable)) {
     return;
   }
 

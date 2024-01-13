@@ -3,8 +3,14 @@
 #include "BTreeNode.hpp"
 #include "Config.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "shared-headers/Units.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "storage/buffer-manager/GuardedBufferFrame.hpp"
+
+#include "glog/logging.h"
+
+#include <atomic>
+#include <limits>
 
 using namespace leanstore::storage;
 
@@ -28,35 +34,31 @@ public:
   enum class XMergeReturnCode : u8 { kNothing, kFullMerge, kPartialMerge };
 
 public:
-  //---------------------------------------------------------------------------
-  // Member fields
-  //---------------------------------------------------------------------------
   TREEID mTreeId;
+
   BTREE_TYPE mTreeType = BTREE_TYPE::GENERIC;
+
   Config config;
 
   /// @brief mMetaNodeSwip owns the meta node of the tree. The right-most child
   /// of meta node is the root of the tree.
   Swip<BufferFrame> mMetaNodeSwip;
-  atomic<u64> mHeight = 1;
+
+  std::atomic<u64> mHeight = 1;
 
 public:
-  //---------------------------------------------------------------------------
-  // Constructors and Destructors
-  //---------------------------------------------------------------------------
   BTreeGeneric() = default;
 
   virtual ~BTreeGeneric() override = default;
 
 public:
-  //---------------------------------------------------------------------------
-  // Object Utils
-  //---------------------------------------------------------------------------
   void Init(TREEID treeId, Config config);
 
-  bool tryMerge(BufferFrame& to_split, bool swizzle_sibling = true);
+  /// Try to merge the current node with its left or right sibling, reclaim the
+  /// merged left or right sibling if successful.
+  bool TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling = true);
 
-  void trySplit(BufferFrame& to_split, s16 pos = -1);
+  void trySplit(BufferFrame& toSplit, s16 pos = -1);
 
   s16 mergeLeftIntoRight(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
                          s16 left_pos,
@@ -66,23 +68,30 @@ public:
 
   XMergeReturnCode XMerge(GuardedBufferFrame<BTreeNode>& guardedParent,
                           GuardedBufferFrame<BTreeNode>& guardedChild,
-                          ParentSwipHandler&);
+                          ParentSwipHandler& parentSwipHandler);
 
   inline bool isMetaNode(GuardedBufferFrame<BTreeNode>& guardedNode) {
     return mMetaNodeSwip == guardedNode.mBf;
   }
+
   inline bool isMetaNode(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedNode) {
     return mMetaNodeSwip == xGuardedNode.bf();
   }
+
   s64 iterateAllPages(BTreeNodeCallback inner, BTreeNodeCallback leaf);
+
   s64 iterateAllPagesRec(GuardedBufferFrame<BTreeNode>& guardedNode,
                          BTreeNodeCallback inner, BTreeNodeCallback leaf);
   u64 countInner();
+
   u64 countPages();
+
   u64 countEntries();
+
   u64 getHeight();
-  double averageSpaceUsage();
+
   u32 bytesFree();
+
   void printInfos(uint64_t totalSize);
 
 public:
@@ -125,11 +134,11 @@ public:
 
 public:
   // Helpers
-  template <LATCH_FALLBACK_MODE mode = LATCH_FALLBACK_MODE::SHARED>
+  template <LatchMode mode = LatchMode::kShared>
   inline void FindLeafCanJump(Slice key,
                               GuardedBufferFrame<BTreeNode>& guardedTarget);
 
-  template <LATCH_FALLBACK_MODE mode = LATCH_FALLBACK_MODE::SHARED>
+  template <LatchMode mode = LatchMode::kShared>
   void findLeafAndLatch(GuardedBufferFrame<BTreeNode>& guardedTarget,
                         Slice key);
 
@@ -179,8 +188,8 @@ public:
     const auto isInfinity = nodeToFind.mUpperFence.offset == 0;
     const auto keyToFind = nodeToFind.GetUpperFence();
 
-    s16 posInParent = -1;
-    auto search_condition = [&](GuardedBufferFrame<BTreeNode>& guardedNode) {
+    auto posInParent = std::numeric_limits<u32>::max();
+    auto searchCondition = [&](GuardedBufferFrame<BTreeNode>& guardedNode) {
       if (isInfinity) {
         childSwip = &(guardedNode->mRightMostChildSwip);
         posInParent = guardedNode->mNumSeps;
@@ -195,14 +204,14 @@ public:
       return (&childSwip->asBufferFrameMasked() != &bfToFind);
     };
 
-    // LATCH_FALLBACK_MODE latch_mode = (jumpIfEvicted) ?
-    // LATCH_FALLBACK_MODE::JUMP : LATCH_FALLBACK_MODE::EXCLUSIVE;
-    LATCH_FALLBACK_MODE latch_mode = LATCH_FALLBACK_MODE::JUMP;
+    // LatchMode latchMode = (jumpIfEvicted) ?
+    // LatchMode::kJump : LatchMode::kExclusive;
+    LatchMode latchMode = LatchMode::kJump;
     // The parent of the bf we are looking for (bfToFind)
     GuardedBufferFrame guardedChild(
-        guardedParent, guardedParent->mRightMostChildSwip, latch_mode);
+        guardedParent, guardedParent->mRightMostChildSwip, latchMode);
     u16 level = 0;
-    while (!guardedChild->mIsLeaf && search_condition(guardedChild)) {
+    while (!guardedChild->mIsLeaf && searchCondition(guardedChild)) {
       guardedParent = std::move(guardedChild);
       if constexpr (jumpIfEvicted) {
         if (childSwip->isEVICTED()) {
@@ -210,7 +219,7 @@ public:
         }
       }
       guardedChild = GuardedBufferFrame(
-          guardedParent, childSwip->CastTo<BTreeNode>(), latch_mode);
+          guardedParent, childSwip->CastTo<BTreeNode>(), latchMode);
       level = level + 1;
     }
     guardedParent.unlock();
@@ -221,6 +230,8 @@ public:
       jumpmu::jump();
     }
 
+    DCHECK(posInParent != std::numeric_limits<u32>::max())
+        << "Invalid posInParent=" << posInParent;
     ParentSwipHandler parentHandler = {
         .mParentGuard = std::move(guardedChild.mGuard),
         .mParentBf = guardedChild.mBf,
@@ -372,22 +383,21 @@ inline SpaceCheckResult BTreeGeneric::checkSpaceUtilization(BufferFrame& bf) {
       parentHandler.GetGuardedParent<BTreeNode>();
   GuardedBufferFrame<BTreeNode> guardedChild(
       guardedParent, parentHandler.mChildSwip.CastTo<BTreeNode>(),
-      LATCH_FALLBACK_MODE::JUMP);
+      LatchMode::kJump);
   auto mergeResult = XMerge(guardedParent, guardedChild, parentHandler);
   guardedParent.unlock();
   guardedChild.unlock();
 
   if (mergeResult == XMergeReturnCode::kNothing) {
     return SpaceCheckResult::kNothing;
-  } else {
-    return SpaceCheckResult::kPickAnotherBf;
   }
+  return SpaceCheckResult::kPickAnotherBf;
 }
 
 inline void BTreeGeneric::Checkpoint(BufferFrame& bf, void* dest) {
   std::memcpy(dest, &bf.page, FLAGS_page_size);
-  auto destPage = reinterpret_cast<Page*>(dest);
-  auto destNode = reinterpret_cast<BTreeNode*>(destPage->mPayload);
+  auto* destPage = reinterpret_cast<Page*>(dest);
+  auto* destNode = reinterpret_cast<BTreeNode*>(destPage->mPayload);
 
   if (!destNode->mIsLeaf) {
     // Replace all child swip to their page ID
@@ -441,7 +451,7 @@ inline void BTreeGeneric::deserialize(StringMap map) {
   DCHECK(mMetaNodeSwip.AsBufferFrame().page.mBTreeId == mTreeId);
 }
 
-template <LATCH_FALLBACK_MODE mode>
+template <LatchMode mode>
 inline void BTreeGeneric::FindLeafCanJump(
     Slice key, GuardedBufferFrame<BTreeNode>& guardedTarget) {
   guardedTarget.unlock();
@@ -450,7 +460,6 @@ inline void BTreeGeneric::FindLeafCanJump(
       guardedParent, guardedParent->mRightMostChildSwip);
 
   volatile u16 level = 0;
-
   while (!guardedTarget->mIsLeaf) {
     COUNTERS_BLOCK() {
       WorkerCounters::MyCounters().dt_inner_page[mTreeId]++;
@@ -470,13 +479,13 @@ inline void BTreeGeneric::FindLeafCanJump(
   guardedParent.unlock();
 }
 
-template <LATCH_FALLBACK_MODE mode>
+template <LatchMode mode>
 inline void BTreeGeneric::findLeafAndLatch(
     GuardedBufferFrame<BTreeNode>& guardedTarget, Slice key) {
   while (true) {
     JUMPMU_TRY() {
       FindLeafCanJump<mode>(key, guardedTarget);
-      if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
+      if (mode == LatchMode::kExclusive) {
         guardedTarget.ToExclusiveMayJump();
       } else {
         guardedTarget.ToSharedMayJump();

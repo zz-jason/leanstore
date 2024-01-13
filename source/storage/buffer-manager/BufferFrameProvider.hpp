@@ -212,7 +212,7 @@ inline void BufferFrameProvider::evictFlushedBf(
   ParentSwipHandler parentHandler =
       TreeRegistry::sInstance->findParent(btreeId, cooledBf);
 
-  DCHECK(parentHandler.mParentGuard.mState == GUARD_STATE::OPTIMISTIC);
+  DCHECK(parentHandler.mParentGuard.mState == GuardState::kOptimistic);
   BMExclusiveUpgradeIfNeeded parentWriteGuard(parentHandler.mParentGuard);
   optimisticGuard.mGuard.ToExclusiveMayJump();
 
@@ -376,7 +376,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         auto parentHandler =
             TreeRegistry::sInstance->findParent(btreeId, *coolCandidate);
 
-        DCHECK(parentHandler.mParentGuard.mState == GUARD_STATE::OPTIMISTIC);
+        DCHECK(parentHandler.mParentGuard.mState == GuardState::kOptimistic);
         DCHECK(parentHandler.mParentGuard.mLatch !=
                reinterpret_cast<HybridLatch*>(0x99));
         COUNTERS_BLOCK() {
