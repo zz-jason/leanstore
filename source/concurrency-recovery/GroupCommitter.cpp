@@ -165,7 +165,7 @@ void GroupCommitter::commitTXs(
           break;
         }
         maxCommitTs = std::max<TXID>(maxCommitTs, tx.mCommitTs);
-        tx.state = TxState::kCommitted;
+        tx.mState = TxState::kCommitted;
         DLOG(INFO) << "Transaction with remote dependency committed"
                    << ", workerId=" << workerId << ", startTs=" << tx.mStartTs
                    << ", commitTs=" << tx.mCommitTs
@@ -189,7 +189,7 @@ void GroupCommitter::commitTXs(
       for (; i < numRfaTxs[workerId]; ++i) {
         auto& tx = logging.mRfaTxToCommit[i];
         maxCommitTsRfa = std::max<TXID>(maxCommitTsRfa, tx.mCommitTs);
-        tx.state = TxState::kCommitted;
+        tx.mState = TxState::kCommitted;
         DLOG(INFO) << "Transaction (RFA) committed"
                    << ", workerId=" << workerId << ", startTs=" << tx.mStartTs
                    << ", commitTs=" << tx.mCommitTs

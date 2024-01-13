@@ -4,7 +4,7 @@
 
 namespace leanstore {
 
-atomic<u64> WorkerCounters::sNumWorkers = 0;
+std::atomic<u64> WorkerCounters::sNumWorkers = 0;
 
 utils::EnumerableThreadLocal<WorkerCounters> WorkerCounters::sCounters;
 

@@ -36,10 +36,6 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     }
   }
 
-  void printTreeHeight() {
-    cout << name << " height = " << btree->getHeight() << endl;
-  }
-
   void ScanDesc(
       const typename Record::Key& key,
       const std::function<bool(const typename Record::Key&, const Record&)>& cb,

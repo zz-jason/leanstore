@@ -7,6 +7,8 @@
 
 #include <rapidjson/document.h>
 
+#include <atomic>
+
 namespace leanstore {
 
 using FlagListString = std::list<std::tuple<string, fLS::clstring*>>;
@@ -24,9 +26,9 @@ public:
   /// The file descriptor for write-ahead log
   s32 mWalFd;
 
-  atomic<u64> mNumProfilingThreads = 0;
+  std::atomic<u64> mNumProfilingThreads = 0;
 
-  atomic<bool> mProfilingThreadKeepRunning = true;
+  std::atomic<bool> mProfilingThreadKeepRunning = true;
 
   profiling::ConfigsTable configs_table;
 

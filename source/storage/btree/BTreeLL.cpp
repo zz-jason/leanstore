@@ -25,10 +25,10 @@ OpCode BTreeLL::Lookup(Slice key, ValCallback valCallback) {
         valCallback(guardedLeaf->Value(slotId));
         guardedLeaf.JumpIfModifiedByOthers();
         JUMPMU_RETURN OpCode::kOK;
-      } else {
-        guardedLeaf.JumpIfModifiedByOthers();
-        JUMPMU_RETURN OpCode::kNotFound;
       }
+
+      guardedLeaf.JumpIfModifiedByOthers();
+      JUMPMU_RETURN OpCode::kNotFound;
     }
     JUMPMU_CATCH() {
       DLOG(WARNING) << "BTreeLL::Lookup retried";
@@ -128,7 +128,7 @@ OpCode BTreeLL::ScanDesc(Slice scanKey, ScanCallback callback) {
 OpCode BTreeLL::insert(Slice key, Slice val) {
   DCHECK(cr::Worker::my().IsTxStarted());
   if (config.mEnableWal) {
-    cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size * 1);
+    cr::Worker::my().mLogging.WalEnsureEnoughSpace(FLAGS_page_size * 1);
   }
 
   JUMPMU_TRY() {
@@ -163,7 +163,9 @@ OpCode BTreeLL::prefixLookup(Slice key, PrefixLookupCallback callback) {
         callback(key, guardedLeaf->Value(cur));
         guardedLeaf.JumpIfModifiedByOthers();
         JUMPMU_RETURN OpCode::kOK;
-      } else if (cur < guardedLeaf->mNumSeps) {
+      }
+
+      if (cur < guardedLeaf->mNumSeps) {
         auto fullKeySize = guardedLeaf->getFullKeyLen(cur);
         auto fullKeyBuf = utils::JumpScopedArray<u8>(fullKeySize);
         guardedLeaf->copyFullKey(cur, fullKeyBuf->get());
@@ -174,13 +176,13 @@ OpCode BTreeLL::prefixLookup(Slice key, PrefixLookupCallback callback) {
         guardedLeaf.JumpIfModifiedByOthers();
 
         JUMPMU_RETURN OpCode::kOK;
-      } else {
-        OpCode ret = ScanAsc(key, [&](Slice scannedKey, Slice scannedVal) {
-          callback(scannedKey, scannedVal);
-          return false;
-        });
-        JUMPMU_RETURN ret;
       }
+
+      OpCode ret = ScanAsc(key, [&](Slice scannedKey, Slice scannedVal) {
+        callback(scannedKey, scannedVal);
+        return false;
+      });
+      JUMPMU_RETURN ret;
     }
     JUMPMU_CATCH() {
       WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
@@ -203,7 +205,9 @@ OpCode BTreeLL::prefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
         callback(key, guardedLeaf->Value(cur));
         guardedLeaf.JumpIfModifiedByOthers();
         JUMPMU_RETURN OpCode::kOK;
-      } else if (cur > 0) {
+      }
+
+      if (cur > 0) {
         cur -= 1;
         auto fullKeySize = guardedLeaf->getFullKeyLen(cur);
         auto fullKeyBuf = utils::JumpScopedArray<u8>(fullKeySize);
@@ -215,13 +219,13 @@ OpCode BTreeLL::prefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
         guardedLeaf.JumpIfModifiedByOthers();
 
         JUMPMU_RETURN OpCode::kOK;
-      } else {
-        OpCode ret = ScanDesc(key, [&](Slice scannedKey, Slice scannedVal) {
-          callback(scannedKey, scannedVal);
-          return false;
-        });
-        JUMPMU_RETURN ret;
       }
+
+      OpCode ret = ScanDesc(key, [&](Slice scannedKey, Slice scannedVal) {
+        callback(scannedKey, scannedVal);
+        return false;
+      });
+      JUMPMU_RETURN ret;
     }
     JUMPMU_CATCH() {
       WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
@@ -232,94 +236,11 @@ OpCode BTreeLL::prefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
   return OpCode::kOther;
 }
 
-OpCode BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
-                       std::function<void(u8*)> o_value, u16 o_value_length,
-                       std::unique_ptr<u8[]>& session_ptr) {
-  struct alignas(64) Session {
-    BufferFrame* bf;
-  };
-
-  if (session_ptr.get()) {
-    auto session = reinterpret_cast<Session*>(session_ptr.get());
-    JUMPMU_TRY() {
-      HybridGuard opt_guard(&session->bf->header.mLatch);
-      opt_guard.toOptimisticOrJump();
-      {
-        BTreeNode& node =
-            *reinterpret_cast<BTreeNode*>(session->bf->page.mPayload);
-        if (session->bf->page.mBTreeId != mTreeId || !node.mIsLeaf ||
-            node.mUpperFence.length != 0 || node.mUpperFence.offset != 0) {
-          jumpmu::jump();
-        }
-      }
-      BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this),
-                                      session->bf, opt_guard.mVersion);
-      // -------------------------------------------------------------------------------------
-      OpCode ret =
-          iterator.enoughSpaceInCurrentNode(o_key_length, o_value_length);
-      if (ret == OpCode::kOK) {
-        auto keyBuffer = utils::JumpScopedArray<u8>(o_key_length);
-        o_key(keyBuffer->get());
-        const s32 pos = iterator.mGuardedLeaf->mNumSeps;
-        iterator.mGuardedLeaf->insertDoNotCopyPayload(
-            Slice(keyBuffer->get(), o_key_length), o_value_length, pos);
-        iterator.mSlotId = pos;
-        o_value(iterator.MutableVal().Data());
-        iterator.MarkAsDirty();
-        COUNTERS_BLOCK() {
-          WorkerCounters::MyCounters().dt_append_opt[mTreeId]++;
-        }
-        JUMPMU_RETURN OpCode::kOK;
-      }
-    }
-    JUMPMU_CATCH() {
-    }
-  }
-  // -------------------------------------------------------------------------------------
-  while (true) {
-    JUMPMU_TRY() {
-      BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
-      auto keyBuffer = utils::JumpScopedArray<u8>(o_key_length);
-      for (u64 i = 0; i < o_key_length; i++) {
-        keyBuffer->get()[i] = 255;
-      }
-      const Slice key(keyBuffer->get(), o_key_length);
-      OpCode ret = iterator.seekToInsert(key);
-      RAISE_WHEN(ret == OpCode::kDuplicated);
-      ret = iterator.enoughSpaceInCurrentNode(key, o_value_length);
-      if (ret == OpCode::kSpaceNotEnough) {
-        iterator.splitForKey(key);
-        JUMPMU_CONTINUE;
-      }
-      o_key(keyBuffer->get());
-      iterator.insertInCurrentNode(key, o_value_length);
-      o_value(iterator.MutableVal().Data());
-      iterator.MarkAsDirty();
-      // -------------------------------------------------------------------------------------
-      Session* session = nullptr;
-      if (session_ptr) {
-        session = reinterpret_cast<Session*>(session_ptr.get());
-      } else {
-        session_ptr = std::make_unique<u8[]>(sizeof(Session));
-        session = new (session_ptr.get()) Session();
-      }
-      session->bf = iterator.mGuardedLeaf.mBf;
-      // -------------------------------------------------------------------------------------
-      COUNTERS_BLOCK() {
-        WorkerCounters::MyCounters().dt_append[mTreeId]++;
-      }
-      JUMPMU_RETURN OpCode::kOK;
-    }
-    JUMPMU_CATCH() {
-    }
-  }
-}
-
 OpCode BTreeLL::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
                                       UpdateDesc& updateDesc) {
   DCHECK(cr::Worker::my().IsTxStarted());
   if (config.mEnableWal) {
-    cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size);
+    cr::Worker::my().mLogging.WalEnsureEnoughSpace(FLAGS_page_size);
   }
 
   JUMPMU_TRY() {
@@ -369,25 +290,25 @@ OpCode BTreeLL::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
 
 OpCode BTreeLL::remove(Slice key) {
   if (config.mEnableWal) {
-    cr::Worker::my().mLogging.walEnsureEnoughSpace(FLAGS_page_size);
+    cr::Worker::my().mLogging.WalEnsureEnoughSpace(FLAGS_page_size);
   }
   JUMPMU_TRY() {
-    BTreeExclusiveIterator iterator(*static_cast<BTreeGeneric*>(this));
-    auto ret = iterator.seekExact(key);
+    BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
+    auto ret = xIter.seekExact(key);
     if (ret != OpCode::kOK) {
       JUMPMU_RETURN ret;
     }
 
-    Slice value = iterator.value();
+    Slice value = xIter.value();
     if (config.mEnableWal) {
-      auto walHandler = iterator.mGuardedLeaf.ReserveWALPayload<WALRemove>(
+      auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WALRemove>(
           key.size() + value.size(), key, value);
       walHandler.SubmitWal();
     }
-    iterator.MarkAsDirty();
-    ret = iterator.removeCurrent();
+    xIter.MarkAsDirty();
+    ret = xIter.removeCurrent();
     ENSURE(ret == OpCode::kOK);
-    iterator.mergeIfNeeded();
+    xIter.mergeIfNeeded();
     JUMPMU_RETURN OpCode::kOK;
   }
   JUMPMU_CATCH() {
@@ -404,7 +325,7 @@ OpCode BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
           BTreeNode::UnderFullSize()) {
         iterator.cleanUpCallback([&, toMerge = guardedLeaf.mBf] {
           JUMPMU_TRY() {
-            this->tryMerge(*toMerge);
+            this->TryMergeMayJump(*toMerge);
           }
           JUMPMU_CATCH() {
           }
@@ -437,7 +358,7 @@ OpCode BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
       }
       JUMPMU_RETURN OpCode::kOK;
     } else {
-      bool did_purge_full_page = false;
+      bool didPurgeFullPage = false;
       iterator.enterLeafCallback(
           [&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
             if (guardedLeaf->mNumSeps == 0) {
@@ -465,18 +386,17 @@ OpCode BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
               }
               guardedLeaf->reset();
               iterator.MarkAsDirty();
-              did_purge_full_page = true;
+              didPurgeFullPage = true;
             }
           });
 
       while (true) {
         iterator.seek(startKey);
-        if (did_purge_full_page) {
-          did_purge_full_page = false;
+        if (didPurgeFullPage) {
+          didPurgeFullPage = false;
           continue;
-        } else {
-          break;
         }
+        break;
       }
     }
   }
@@ -487,14 +407,6 @@ OpCode BTreeLL::rangeRemove(Slice startKey, Slice endKey, bool page_wise) {
 
 u64 BTreeLL::countEntries() {
   return BTreeGeneric::countEntries();
-}
-
-u64 BTreeLL::countPages() {
-  return BTreeGeneric::countPages();
-}
-
-u64 BTreeLL::getHeight() {
-  return BTreeGeneric::getHeight();
 }
 
 } // namespace btree

@@ -128,18 +128,11 @@ public:
 
   virtual OpCode prefixLookupForPrev(Slice, PrefixLookupCallback) = 0;
 
-  virtual OpCode append(std::function<void(u8*)>, u16, std::function<void(u8*)>,
-                        u16, std::unique_ptr<u8[]>&) = 0;
-
   virtual OpCode rangeRemove(Slice startKey [[maybe_unused]],
                              Slice endKey [[maybe_unused]],
                              bool page_wise [[maybe_unused]] = true) = 0;
 
-  virtual u64 countPages() = 0;
-
   virtual u64 countEntries() = 0;
-
-  virtual u64 getHeight() = 0;
 };
 
 class MutableSlice {

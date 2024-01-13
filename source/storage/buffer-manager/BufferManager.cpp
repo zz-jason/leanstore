@@ -24,6 +24,7 @@ namespace leanstore {
 namespace storage {
 
 thread_local BufferFrame* BufferManager::sTlsLastReadBf = nullptr;
+
 std::unique_ptr<BufferManager> BufferManager::sInstance = nullptr;
 
 BufferManager::BufferManager(s32 fd) : mPageFd(fd) {

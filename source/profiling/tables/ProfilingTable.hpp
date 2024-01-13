@@ -12,9 +12,12 @@
 
 namespace leanstore {
 namespace profiling {
+
 struct Column {
   std::function<void(Column& col)> generator;
+
   std::vector<std::string> values;
+
   Column(std::function<void(Column& col)>&& g) : generator(g) {
   }
 

@@ -68,7 +68,7 @@ private:
 
 public:
   BMExclusiveUpgradeIfNeeded(HybridGuard& guard)
-      : mGuard(guard), was_exclusive(guard.mState == GUARD_STATE::EXCLUSIVE) {
+      : mGuard(guard), was_exclusive(guard.mState == GuardState::kExclusive) {
     mGuard.TryToExclusiveMayJump();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
