@@ -17,7 +17,7 @@ class BTreeLL : public KVInterface, public BTreeGeneric {
 public:
   struct WALUpdate : WALPayload {
     u16 mKeySize;
-    u16 delta_length;
+    u16 mDeltaLength;
     u8 payload[];
   };
 
@@ -27,7 +27,8 @@ public:
     u8 payload[];
 
     WALRemove(Slice key, Slice val)
-        : WALPayload(TYPE::WALRemove), mKeySize(key.size()),
+        : WALPayload(TYPE::WALRemove),
+          mKeySize(key.size()),
           mValSize(val.size()) {
       std::memcpy(payload, key.data(), key.size());
       std::memcpy(payload + key.size(), val.data(), val.size());
@@ -80,13 +81,13 @@ public:
     auto [treePtr, treeId] =
         TreeRegistry::sInstance->CreateTree(treeName, [&]() {
           return std::unique_ptr<BufferManagedTree>(
-              static_cast<BufferManagedTree*>(new storage::btree::BTreeLL()));
+              static_cast<BufferManagedTree*>(new BTreeLL()));
         });
     if (treePtr == nullptr) {
       return std::unexpected<utils::Error>(
           utils::Error::General("Tree name has been taken"));
     }
-    auto tree = dynamic_cast<storage::btree::BTreeLL*>(treePtr);
+    auto* tree = dynamic_cast<BTreeLL*>(treePtr);
     tree->Init(treeId, config);
     return tree;
   }

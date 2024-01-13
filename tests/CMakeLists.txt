@@ -43,6 +43,7 @@ leanstore_add_test(BufferFrameTest)
 leanstore_add_test_without_gtest_main(BTreeVITest)
 leanstore_add_test_without_gtest_main(MVCCTest)
 leanstore_add_test_without_gtest_main(AnomaliesTest)
+leanstore_add_test_without_gtest_main(AbortTest)
 
 # # for code coverages
 # if(BUILD_WITH_COVERAGE)

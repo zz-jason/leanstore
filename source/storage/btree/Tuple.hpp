@@ -82,13 +82,15 @@ public:
   COMMANDID mCommandId;
 
   /// Whether the tuple is locked for write.
-  bool mWriteLocked : true;
+  bool mWriteLocked;
 
 public:
   Tuple(TupleFormat format, WORKERID workerId, TXID txId)
-      : mFormat(format), mWorkerId(workerId), mTxId(txId),
-        mCommandId(INVALID_COMMANDID) {
-    mWriteLocked = false;
+      : mFormat(format),
+        mWorkerId(workerId),
+        mTxId(txId),
+        mCommandId(INVALID_COMMANDID),
+        mWriteLocked(false) {
   }
 
 public:
@@ -149,7 +151,9 @@ public:
 
   FatTupleDelta(WORKERID workerId, TXID txId, COMMANDID commandId,
                 const u8* buf, u32 size)
-      : mWorkerId(workerId), mTxId(txId), mCommandId(commandId) {
+      : mWorkerId(workerId),
+        mTxId(txId),
+        mCommandId(commandId) {
     std::memcpy(payload, buf, size);
   }
 
@@ -197,7 +201,8 @@ public:
 
 public:
   FatTuple(u32 payloadCapacity)
-      : Tuple(TupleFormat::FAT, 0, 0), mPayloadCapacity(payloadCapacity),
+      : Tuple(TupleFormat::FAT, 0, 0),
+        mPayloadCapacity(payloadCapacity),
         mDataOffset(payloadCapacity) {
   }
 
@@ -300,7 +305,9 @@ struct __attribute__((packed)) DanglingPointer {
 public:
   DanglingPointer() = default;
   DanglingPointer(BufferFrame* bf, u64 latchVersion, s32 headSlot)
-      : bf(bf), latch_version_should_be(latchVersion), head_slot(headSlot) {
+      : bf(bf),
+        latch_version_should_be(latchVersion),
+        head_slot(headSlot) {
   }
 };
 
@@ -320,7 +327,10 @@ struct __attribute__((packed)) Version {
   COMMANDID mCommandId;
 
   Version(TYPE type, WORKERID workerId, TXID txId, COMMANDID commandId)
-      : type(type), mWorkerId(workerId), mTxId(txId), mCommandId(commandId) {
+      : type(type),
+        mWorkerId(workerId),
+        mTxId(txId),
+        mCommandId(commandId) {
   }
 };
 
@@ -375,7 +385,8 @@ public:
   RemoveVersion(WORKERID workerId, TXID txId, COMMANDID commandId, u16 keySize,
                 u16 valSize)
       : Version(Version::TYPE::REMOVE, workerId, txId, commandId),
-        mKeySize(keySize), mValSize(valSize) {
+        mKeySize(keySize),
+        mValSize(valSize) {
   }
 
 public:
@@ -407,7 +418,8 @@ public:
   /// NOTE: Payload space should be allocated in advance. This constructor is
   /// usually called by a placmenet new operator.
   ChainedTuple(WORKERID workerId, TXID txId, Slice val)
-      : Tuple(TupleFormat::CHAINED, workerId, txId), mIsRemoved(false) {
+      : Tuple(TupleFormat::CHAINED, workerId, txId),
+        mIsRemoved(false) {
     std::memcpy(payload, val.data(), val.size());
   }
 

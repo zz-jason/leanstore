@@ -1,6 +1,7 @@
 #include "Worker.hpp"
 
 #include "Config.hpp"
+#include "concurrency-recovery/Transaction.hpp"
 #include "profiling/counters/CRCounters.hpp"
 #include "shared-headers/Exceptions.hpp"
 #include "storage/buffer-manager/TreeRegistry.hpp"
@@ -56,7 +57,10 @@ Worker::~Worker() {
 void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   utils::Timer timer(CRCounters::MyCounters().cc_ms_start_tx);
   Transaction prevTx = mActiveTx;
-  DCHECK(prevTx.state != TxState::kStarted);
+  DCHECK(prevTx.state != TxState::kStarted)
+      << "Previous transaction not ended"
+      << ", workerId=" << mWorkerId << ", startTs=" << prevTx.mStartTs
+      << ", txState=" << TxStatUtil::ToString(prevTx.state);
   SCOPED_DEFER({
     DLOG(INFO) << "Start transaction"
                << ", workerId=" << mWorkerId
@@ -151,7 +155,6 @@ void Worker::CommitTx() {
   }
 
   mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
-  mActiveTx.state = TxState::kReadyToCommit;
 
   // TODO: commitTs in log
   mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_COMMIT);
@@ -205,24 +208,46 @@ void Worker::CommitTx() {
   mActiveTx.state = TxState::kCommitted;
 }
 
-// TODO(jian.z): revert changes made in-place on the btree
+/// TODO(jian.z): revert changes made in-place on the btree
+/// process of a transaction abort:
+///
+/// 1. Read previous wal entries
+///
+/// 2. Undo the changes via btree operations
+///
+/// 3. Write compensation wal entries during the undo process
+///
+/// 4. Purge versions in history tree, clean garbages made by the aborted
+///    transaction
+///
+/// It may share the same code with the recovery process?
 void Worker::AbortTx() {
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_abort_tx);
-  if (!FLAGS_wal) {
+  mActiveTx.state = TxState::kAborted;
+  if (mActiveTx.state != TxState::kStarted || !FLAGS_wal) {
     return;
   }
 
   // TODO(jian.z): support reading from WAL file once
-  DCHECK(!mActiveTx.mWalExceedBuffer);
-  DCHECK(mActiveTx.state == TxState::kStarted);
+  DCHECK(!mActiveTx.mWalExceedBuffer)
+      << "Aborting from WAL file is not supported yet";
 
-  const u64 txId = mActiveTx.mStartTs;
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_abort_tx);
+  SCOPED_DEFER({
+    mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_ABORT);
+    mLogging.SubmitWALEntrySimple();
+    mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_FINISH);
+    mLogging.SubmitWALEntrySimple();
+    mActiveTx.state = TxState::kAborted;
+  });
+
   std::vector<const WALEntry*> entries;
   mLogging.IterateCurrentTxWALs([&](const WALEntry& entry) {
     if (entry.type == WALEntry::TYPE::COMPLEX) {
       entries.push_back(&entry);
     }
   });
+
+  const u64 txId = mActiveTx.mStartTs;
   std::for_each(entries.rbegin(), entries.rend(), [&](const WALEntry* entry) {
     const auto& complexEntry = *reinterpret_cast<const WALEntryComplex*>(entry);
     leanstore::storage::TreeRegistry::sInstance->undo(
@@ -232,15 +257,6 @@ void Worker::AbortTx() {
   cc.mHistoryTree->purgeVersions(
       mWorkerId, mActiveTx.mStartTs, mActiveTx.mStartTs,
       [&](const TXID, const TREEID, const u8*, u64, const bool) {});
-
-  mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_ABORT);
-  mLogging.SubmitWALEntrySimple();
-
-  // TODO(jian.z): add compensation WALEntry
-  mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_FINISH);
-  mLogging.SubmitWALEntrySimple();
-
-  mActiveTx.state = TxState::kAborted;
 }
 
 void Worker::shutdown() {

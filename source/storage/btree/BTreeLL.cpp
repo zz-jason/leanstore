@@ -264,7 +264,7 @@ OpCode BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
         iterator.mGuardedLeaf->insertDoNotCopyPayload(
             Slice(keyBuffer->get(), o_key_length), o_value_length, pos);
         iterator.mSlotId = pos;
-        o_value(iterator.MutableVal().data());
+        o_value(iterator.MutableVal().Data());
         iterator.MarkAsDirty();
         COUNTERS_BLOCK() {
           WorkerCounters::MyCounters().dt_append_opt[mTreeId]++;
@@ -293,7 +293,7 @@ OpCode BTreeLL::append(std::function<void(u8*)> o_key, u16 o_key_length,
       }
       o_key(keyBuffer->get());
       iterator.insertInCurrentNode(key, o_value_length);
-      o_value(iterator.MutableVal().data());
+      o_value(iterator.MutableVal().Data());
       iterator.MarkAsDirty();
       // -------------------------------------------------------------------------------------
       Session* session = nullptr;
@@ -337,14 +337,14 @@ OpCode BTreeLL::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
           key.length() + deltaPayloadSize);
       walHandler->type = WALPayload::TYPE::WALUpdate;
       walHandler->mKeySize = key.length();
-      walHandler->delta_length = deltaPayloadSize;
+      walHandler->mDeltaLength = deltaPayloadSize;
       u8* walPtr = walHandler->payload;
       std::memcpy(walPtr, key.data(), key.length());
       walPtr += key.length();
-      std::memcpy(walPtr, &updateDesc, updateDesc.size());
-      walPtr += updateDesc.size();
-      updateDesc.CopySlots(walPtr, currentVal.data());
-      updateDesc.XORSlots(walPtr, currentVal.data());
+      std::memcpy(walPtr, &updateDesc, updateDesc.Size());
+      walPtr += updateDesc.Size();
+      updateDesc.CopySlots(walPtr, currentVal.Data());
+      updateDesc.XORSlots(walPtr, currentVal.Data());
       walHandler.SubmitWal();
     }
 
