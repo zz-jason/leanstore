@@ -1,40 +1,33 @@
 #include "shared-headers/Units.hpp"
 
-#include <functional>
-#include <list>
-#include <memory>
-#include <vector>
+#include <atomic>
+#include <type_traits>
 
 namespace leanstore {
 namespace utils {
 
-/**
- * Makes sense for single-writer multiple-readers pattern for short write
- */
-template <typename T> class OptimisticSpinStruct {
+/// Makes sense for single-writer multiple-readers pattern for short write
+template <typename T>
+  requires std::is_trivially_copy_assignable_v<T>
+class OptimisticSpinStruct {
 public:
   T mValue;
   std::atomic<u64> mOptimisticLatch;
 
 public:
-  T getSync() {
-  retry : {
-    u64 version = mOptimisticLatch.load();
-    while (version & kLsb) {
-      version = mOptimisticLatch.load();
+  T GetSync() {
+    while (true) {
+      u64 version = mOptimisticLatch.load();
+      while (version & kLsb) {
+        version = mOptimisticLatch.load();
+      }
+      T copy = mValue;
+      if (version != mOptimisticLatch.load()) {
+        continue;
+      }
+      copy.mVersion = version;
+      return copy;
     }
-    T copy = mValue;
-    if (version != mOptimisticLatch.load()) {
-      goto retry;
-    }
-    copy.mVersion = version;
-    return copy;
-  }
-  }
-
-  // Only writer should call this
-  T getNoSync() {
-    return mValue;
   }
 
   void SetSync(const T& newValue) {
@@ -48,7 +41,7 @@ public:
   }
 
   template <class AttributeType>
-  void updateAttribute(AttributeType T::*a, const AttributeType& newValue) {
+  void UpdateAttribute(AttributeType T::*a, const AttributeType& newValue) {
     mOptimisticLatch.store(mOptimisticLatch.load() + kLsb,
                            std::memory_order_release);
     auto newVersion = mValue.mVersion + 1;

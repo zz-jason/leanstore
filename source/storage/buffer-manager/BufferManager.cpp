@@ -165,8 +165,8 @@ void BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
 
 void BufferManager::RecoveryFromDisk() {
   auto recovery = std::make_unique<leanstore::cr::Recovery>(
-      leanstore::cr::CRManager::sInstance->mGrouopCommitter->mWalFd, 0,
-      leanstore::cr::CRManager::sInstance->mGrouopCommitter->mWalSize);
+      leanstore::cr::CRManager::sInstance->mGroupCommitter->mWalFd, 0,
+      leanstore::cr::CRManager::sInstance->mGroupCommitter->mWalSize);
   recovery->Run();
 }
 
@@ -301,10 +301,10 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
     // 5. Publish the buffer frame
     JUMPMU_TRY() {
       swipGuard.JumpIfModifiedByOthers();
+      ioFrameGuard->unlock();
       JumpScoped<std::unique_lock<std::mutex>> inflightIOGuard(
           partition.mInflightIOMutex);
       BMExclusiveUpgradeIfNeeded swipXGuard(swipGuard);
-      ioFrameGuard->unlock();
 
       swipValue.MarkHOT(&bf);
       bf.header.state = STATE::HOT;

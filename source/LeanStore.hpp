@@ -8,6 +8,7 @@
 #include <rapidjson/document.h>
 
 #include <atomic>
+#include <list>
 
 namespace leanstore {
 

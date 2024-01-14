@@ -39,6 +39,13 @@ struct WalFlushReq {
 
   /// ID of the current transaction.
   TXID mCurrTxId = 0;
+
+  WalFlushReq(u64 walBuffered = 0, u64 currGSN = 0, TXID currTxId = 0)
+      : mVersion(0),
+        mWalBuffered(walBuffered),
+        mCurrGSN(currGSN),
+        mCurrTxId(currTxId) {
+  }
 };
 
 /// Helps to transaction concurrenct control and write-ahead logging.

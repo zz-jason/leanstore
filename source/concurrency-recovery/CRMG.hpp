@@ -35,7 +35,11 @@ public:
   ///
   /// NOTE: It should be created after all the worker threads are created and
   /// started.
-  std::unique_ptr<GroupCommitter> mGrouopCommitter;
+  std::unique_ptr<GroupCommitter> mGroupCommitter;
+
+  /// Whether the group committer thread is started. Worker threads can serve
+  /// user transactions only whent the group committer thread is started.
+  std::atomic<bool> mGroupCommitterStarted = false;
 
   std::unique_ptr<HistoryTreeInterface> mHistoryTreePtr;
 
@@ -104,6 +108,8 @@ public:
   StringMap serialize();
 
   void deserialize(StringMap map);
+
+  void stop();
 
 private:
   static std::atomic<u64> sFsyncCounter;
