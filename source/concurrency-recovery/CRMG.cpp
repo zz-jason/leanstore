@@ -22,7 +22,7 @@ std::atomic<u64> CRManager::sFsyncCounter = 0;
 std::atomic<u64> CRManager::sSsdOffset = 1 * 1024 * 1024 * 1024;
 
 CRManager::CRManager(s32 walFd)
-    : mGrouopCommitter(nullptr),
+    : mGroupCommitter(nullptr),
       mHistoryTreePtr(nullptr),
       mWorkerThreadsMeta(FLAGS_worker_threads) {
 
@@ -41,8 +41,9 @@ CRManager::CRManager(s32 walFd)
   // setup group commit worker if WAL is enabled
   if (FLAGS_wal) {
     const int cpu = FLAGS_enable_pin_worker_threads ? FLAGS_worker_threads : -1;
-    mGrouopCommitter = std::make_unique<GroupCommitter>(walFd, mWorkers, cpu);
-    mGrouopCommitter->Start();
+    mGroupCommitter = std::make_unique<GroupCommitter>(walFd, mWorkers, cpu);
+    mGroupCommitter->Start();
+    mGroupCommitterStarted = true;
   }
 
   // setup history tree
@@ -52,9 +53,9 @@ CRManager::CRManager(s32 walFd)
   }
 }
 
-CRManager::~CRManager() {
-  mGrouopCommitter = nullptr;
-
+void CRManager::stop() {
+  mGroupCommitter->Stop();
+  mGroupCommitterStarted = false;
   mWorkerKeepRunning = false;
   for (auto& meta : mWorkerThreadsMeta) {
     meta.cv.notify_one();
@@ -63,6 +64,10 @@ CRManager::~CRManager() {
   mWorkerThreads.clear();
   while (mRunningThreads > 1) {
   }
+}
+
+CRManager::~CRManager() {
+  stop();
 }
 
 void CRManager::runWorker(u64 workerId) {
@@ -92,8 +97,7 @@ void CRManager::runWorker(u64 workerId) {
   }
 
   // wait group committer thread to run
-  while (FLAGS_wal &&
-         (mGrouopCommitter == nullptr || !mGrouopCommitter->IsStarted())) {
+  while (FLAGS_wal && !mGroupCommitterStarted) {
   }
 
   auto& meta = mWorkerThreadsMeta[workerId];
@@ -206,7 +210,7 @@ constexpr char kKeyGlobalLogicalClock[] = "global_logical_clock";
 StringMap CRManager::serialize() {
   StringMap map;
   u64 val = ConcurrencyControl::sGlobalClock.load();
-  map[kKeyWalSize] = std::to_string(mGrouopCommitter->mWalSize);
+  map[kKeyWalSize] = std::to_string(mGroupCommitter->mWalSize);
   map[kKeyGlobalLogicalClock] = std::to_string(val);
   return map;
 }
@@ -215,7 +219,7 @@ void CRManager::deserialize(StringMap map) {
   u64 val = std::stoull(map[kKeyGlobalLogicalClock]);
   ConcurrencyControl::sGlobalClock = val;
   Worker::sAllLwm = val;
-  mGrouopCommitter->mWalSize = std::stoull(map[kKeyWalSize]);
+  mGroupCommitter->mWalSize = std::stoull(map[kKeyWalSize]);
 }
 
 } // namespace cr

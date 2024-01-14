@@ -66,7 +66,7 @@ void GroupCommitter::prepareIOCBs(s32& numIOCBs, u64& minFlushedGSN,
     guard.unlock();
 
     auto lastReqVersion = walFlushReqCopies[workerId].mVersion;
-    walFlushReqCopies[workerId] = logging.mWalFlushReq.getSync();
+    walFlushReqCopies[workerId] = logging.mWalFlushReq.GetSync();
     const auto& reqCopy = walFlushReqCopies[workerId];
     if (reqCopy.mVersion == lastReqVersion) {
       // no transaction log write since last round group commit, skip.

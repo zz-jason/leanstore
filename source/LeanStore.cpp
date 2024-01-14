@@ -179,6 +179,7 @@ LeanStore::~LeanStore() {
     }
   }
 
+  cr::CRManager::sInstance->stop();
   // persist all the metadata and pages on exit
   SerializeMeta();
   BufferManager::sInstance->CheckpointAllBufferFrames();

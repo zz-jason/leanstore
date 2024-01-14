@@ -146,14 +146,12 @@ void Logging::SubmitWALEntryComplex(u64 totalSize) {
 }
 
 void Logging::publishWalBufferedOffset() {
-  mWalFlushReq.updateAttribute(&WalFlushReq::mWalBuffered, mWalBuffered);
+  mWalFlushReq.UpdateAttribute(&WalFlushReq::mWalBuffered, mWalBuffered);
 }
 
 void Logging::publishWalFlushReq() {
-  auto current = mWalFlushReq.getNoSync();
-  current.mWalBuffered = mWalBuffered;
-  current.mCurrGSN = GetCurrentGsn();
-  current.mCurrTxId = Worker::my().mActiveTx.mStartTs;
+  WalFlushReq current(mWalBuffered, GetCurrentGsn(),
+                      Worker::my().mActiveTx.mStartTs);
   mWalFlushReq.SetSync(current);
 }
 

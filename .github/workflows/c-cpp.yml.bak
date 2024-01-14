@@ -7,9 +7,9 @@ on:
     branches: [ "master" ]
 
 jobs:
-  build:
+  ut_coverage:
     runs-on: ubuntu-latest
-    name: Debug Test
+    name: Unit Tests - Coverage 
     steps:
 
     - name: Check out repository
@@ -51,3 +51,42 @@ jobs:
       if: ${{ failure() }}
       with:
         limit-access-to-actor: true
+  
+  ut_matrix:
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
+        enable_asan: [0, 1]
+        enable_tsan: [0, 1]
+        exclude:
+          - enable_asn: 1
+          - enable_tsan: 1
+    runs-on: ubuntu-latest
+    name: Unit Test Matrix - ${{ matrix.build_type }} ENABLE_ASAN=${{ matrix.enable_asan }} ENABLE_TSAN=${{ matrix.enable_tsan }}
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v3
+
+    - name: Setup GCC
+      uses: Dup4/actions-setup-gcc@v1
+      with:
+        version: 12
+
+    - name: Install dependencies
+      run: sudo apt install -y libaio-dev gcovr
+
+    - name: Config project
+      run: cmake -B build -S . -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DENABLE_ASAN=${{ matrix.enable_asan }} -DENABLE_TSAN=${{ matrix.enable_tsan }}
+
+    - name: Build project
+      run: cmake --build build -j `nproc`
+
+    - name: Test
+      run: TSAN_OPTIONS="suppressions=$(pwd)/../tsan_suppression" ctest --test-dir build
+    
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+      if: ${{ failure() }}
+      with:
+        limit-access-to-actor: true
+
