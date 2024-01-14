@@ -27,9 +27,6 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     tid_value = &db.registerBTreeLL(name + "_tid_value", false);
   }
   // -------------------------------------------------------------------------------------
-  void printTreeHeight() {
-  }
-  // -------------------------------------------------------------------------------------
   void insert(const typename Record::Key& key, const Record& record) final {
     u8 folded_key[Record::maxFoldLength()];
     u16 folded_key_len = Record::foldKey(folded_key, key);

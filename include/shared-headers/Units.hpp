@@ -1,16 +1,15 @@
 #pragma once
 
-#include <stddef.h>
-#include <stdint.h>
-
-#include <cassert>
 #include <iostream>
 #include <memory>
+#include <ostream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 
-using std::atomic;
+#include <stddef.h>
+#include <stdint.h>
+
 using std::cerr;
 using std::cout;
 using std::endl;
@@ -42,26 +41,13 @@ using TXID = u64;
 using COMMANDID = u32;
 #define TYPE_MSB(TYPE) (1ull << ((sizeof(TYPE) * 8) - 1))
 
-using TINYINT = s8;
-using SMALLINT = s16;
-using INTEGER = s32;
-using UINTEGER = u32;
-using DOUBLE = double;
-using STRING = string;
-using BITMAP = u8;
-
 using StringMap = std::unordered_map<std::string, std::string>;
 using str = std::string_view;
-using BytesArray = std::unique_ptr<u8[]>;
 using Slice = std::basic_string_view<u8>;
 
-template <int s> struct getTheSizeOf;
-
-constexpr u64 LSB = u64(1);
-constexpr u64 MSB = u64(1) << 63;
-constexpr u64 MSB_MASK = ~(MSB);
-constexpr u64 MSB2 = u64(1) << 62;
-constexpr u64 MSB2_MASK = ~(MSB2);
+constexpr u64 kLsb = u64(1);
+constexpr u64 kMsb = u64(1) << 63;
+constexpr u64 kMsbMask = ~(kMsb);
 
 namespace leanstore {
 

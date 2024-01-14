@@ -1,11 +1,9 @@
 #pragma once
 
-#include "Exceptions.hpp"
-#include "Units.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "shared-headers/Units.hpp"
 #include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/GuardedBufferFrame.hpp"
-#include "storage/buffer-manager/TreeRegistry.hpp"
 
 #include <glog/logging.h>
 #include <rapidjson/document.h>
@@ -13,9 +11,6 @@
 #include <algorithm>
 #include <cassert>
 #include <cstring>
-#include <fstream>
-#include <limits>
-#include <string>
 
 using namespace std;
 using namespace leanstore::storage;
@@ -24,20 +19,20 @@ namespace leanstore {
 namespace storage {
 namespace btree {
 
-struct BTreeNode;
+class BTreeNode;
 using SwipType = Swip<BTreeNode>;
 using HeadType = u32;
 
-static inline u64 swap(u64 x) {
+inline static u64 swap(u64 x) {
   return __builtin_bswap64(x);
 }
-static inline u32 swap(u32 x) {
+inline static u32 swap(u32 x) {
   return __builtin_bswap32(x);
 }
-static inline u16 swap(u16 x) {
+inline static u16 swap(u16 x) {
   return __builtin_bswap16(x);
 }
-static inline u8 swap(u8 x) {
+inline static u8 swap(u8 x) {
   return x;
 }
 
@@ -308,7 +303,7 @@ public:
     memcpy(out + mPrefixSize, remaining.data(), remaining.size());
   }
 
-  static inline s32 CmpKeys(Slice lhs, Slice rhs) {
+  inline static s32 CmpKeys(Slice lhs, Slice rhs) {
     auto minLength = min(lhs.size(), rhs.size());
     if (minLength < 4) {
       for (size_t i = 0; i < minLength; ++i) {
@@ -326,7 +321,7 @@ public:
     return (lhs.size() - rhs.size());
   }
 
-  static inline HeadType head(Slice key) {
+  inline static HeadType head(Slice key) {
     switch (key.size()) {
     case 0: {
       return 0;
@@ -403,12 +398,12 @@ public:
         }
 
         if (mIsLeaf) {
-          WorkerCounters::myCounters().dt_researchy[0][0]++;
-          WorkerCounters::myCounters().dt_researchy[0][1] +=
+          WorkerCounters::MyCounters().dt_researchy[0][0]++;
+          WorkerCounters::MyCounters().dt_researchy[0][1] +=
               pos > 0 || pos2 < sHintCount;
         } else {
-          WorkerCounters::myCounters().dt_researchy[0][2]++;
-          WorkerCounters::myCounters().dt_researchy[0][3] +=
+          WorkerCounters::MyCounters().dt_researchy[0][2]++;
+          WorkerCounters::MyCounters().dt_researchy[0][3] +=
               pos > 0 || pos2 < sHintCount;
         }
       } else {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Units.hpp"
+#include "shared-headers/Units.hpp"
 #include "storage/btree/core/BTreeExclusiveIterator.hpp"
 
 #include <glog/logging.h>
@@ -82,13 +82,16 @@ public:
   COMMANDID mCommandId;
 
   /// Whether the tuple is locked for write.
-  bool mWriteLocked : true;
+  bool mWriteLocked;
 
 public:
-  Tuple(TupleFormat format, WORKERID workerId, TXID txId)
-      : mFormat(format), mWorkerId(workerId), mTxId(txId),
-        mCommandId(INVALID_COMMANDID) {
-    mWriteLocked = false;
+  Tuple(TupleFormat format, WORKERID workerId, TXID txId,
+        COMMANDID commandId = INVALID_COMMANDID, bool writeLocked = false)
+      : mFormat(format),
+        mWorkerId(workerId),
+        mTxId(txId),
+        mCommandId(commandId),
+        mWriteLocked(writeLocked) {
   }
 
 public:
@@ -149,7 +152,9 @@ public:
 
   FatTupleDelta(WORKERID workerId, TXID txId, COMMANDID commandId,
                 const u8* buf, u32 size)
-      : mWorkerId(workerId), mTxId(txId), mCommandId(commandId) {
+      : mWorkerId(workerId),
+        mTxId(txId),
+        mCommandId(commandId) {
     std::memcpy(payload, buf, size);
   }
 
@@ -163,8 +168,8 @@ public:
   }
 
   inline u32 TotalSize() {
-    const auto& desc = getDescriptor();
-    return sizeof(FatTupleDelta) + desc.TotalSize();
+    const auto& updateDesc = getDescriptor();
+    return sizeof(FatTupleDelta) + updateDesc.NumBytes4WAL();
   }
 };
 
@@ -176,7 +181,8 @@ public:
 ///
 /// | FatTuple meta |  newest value | FatTupleDelta O2N |
 ///
-struct __attribute__((packed)) FatTuple : Tuple {
+class __attribute__((packed)) FatTuple : public Tuple {
+public:
   /// Size of the newest value.
   u16 mValSize = 0;
 
@@ -196,7 +202,8 @@ struct __attribute__((packed)) FatTuple : Tuple {
 
 public:
   FatTuple(u32 payloadCapacity)
-      : Tuple(TupleFormat::FAT, 0, 0), mPayloadCapacity(payloadCapacity),
+      : Tuple(TupleFormat::FAT, 0, 0),
+        mPayloadCapacity(payloadCapacity),
         mDataOffset(payloadCapacity) {
   }
 
@@ -298,8 +305,17 @@ struct __attribute__((packed)) DanglingPointer {
 
 public:
   DanglingPointer() = default;
+
   DanglingPointer(BufferFrame* bf, u64 latchVersion, s32 headSlot)
-      : bf(bf), latch_version_should_be(latchVersion), head_slot(headSlot) {
+      : bf(bf),
+        latch_version_should_be(latchVersion),
+        head_slot(headSlot) {
+  }
+
+  DanglingPointer(const BTreeExclusiveIterator& xIter)
+      : bf(xIter.mGuardedLeaf.mBf),
+        latch_version_should_be(xIter.mGuardedLeaf.mGuard.mVersion),
+        head_slot(xIter.mSlotId) {
   }
 };
 
@@ -319,7 +335,10 @@ struct __attribute__((packed)) Version {
   COMMANDID mCommandId;
 
   Version(TYPE type, WORKERID workerId, TXID txId, COMMANDID commandId)
-      : type(type), mWorkerId(workerId), mTxId(txId), mCommandId(commandId) {
+      : type(type),
+        mWorkerId(workerId),
+        mTxId(txId),
+        mCommandId(commandId) {
   }
 };
 
@@ -374,7 +393,22 @@ public:
   RemoveVersion(WORKERID workerId, TXID txId, COMMANDID commandId, u16 keySize,
                 u16 valSize)
       : Version(Version::TYPE::REMOVE, workerId, txId, commandId),
-        mKeySize(keySize), mValSize(valSize) {
+        mKeySize(keySize),
+        mValSize(valSize) {
+  }
+
+  RemoveVersion(WORKERID workerId, TXID txId, COMMANDID commandId, Slice key,
+                Slice val, const DanglingPointer& danglingPointer)
+      : Version(Version::TYPE::REMOVE, workerId, txId, commandId),
+        mKeySize(key.size()),
+        mValSize(val.size()),
+        dangling_pointer(danglingPointer) {
+    std::memcpy(payload, key.data(), key.size());
+    std::memcpy(payload + key.size(), val.data(), val.size());
+  }
+
+  Slice RemovedVal() const {
+    return Slice(payload + mKeySize, mValSize);
   }
 
 public:
@@ -390,7 +424,8 @@ public:
 /// History versions of chained tuple are stored in the history tree of the
 /// current worker thread.
 /// Chained: only scheduled gc todos.
-struct __attribute__((packed)) ChainedTuple : Tuple {
+class __attribute__((packed)) ChainedTuple : public Tuple {
+public:
   u16 mTotalUpdates = 0;
 
   u16 mOldestTx = 0;
@@ -405,7 +440,14 @@ public:
   /// NOTE: Payload space should be allocated in advance. This constructor is
   /// usually called by a placmenet new operator.
   ChainedTuple(WORKERID workerId, TXID txId, Slice val)
-      : Tuple(TupleFormat::CHAINED, workerId, txId), mIsRemoved(false) {
+      : Tuple(TupleFormat::CHAINED, workerId, txId),
+        mIsRemoved(false) {
+    std::memcpy(payload, val.data(), val.size());
+  }
+
+  ChainedTuple(WORKERID workerId, TXID txId, COMMANDID commandId, Slice val)
+      : Tuple(TupleFormat::CHAINED, workerId, txId, commandId),
+        mIsRemoved(false) {
     std::memcpy(payload, val.data(), val.size());
   }
 
@@ -416,9 +458,9 @@ public:
   /// NOTE: This constructor is usually called by a placmenet new operator on
   /// the address of the FatTuple
   ChainedTuple(FatTuple& oldFatTuple)
-      : Tuple(TupleFormat::CHAINED, oldFatTuple.mWorkerId, oldFatTuple.mTxId),
+      : Tuple(TupleFormat::CHAINED, oldFatTuple.mWorkerId, oldFatTuple.mTxId,
+              oldFatTuple.mCommandId),
         mIsRemoved(false) {
-    mCommandId = oldFatTuple.mCommandId;
     std::memmove(payload, oldFatTuple.payload, oldFatTuple.mValSize);
   }
 
@@ -428,7 +470,7 @@ public:
   }
 
   std::tuple<OpCode, u16> GetVisibleTuple(Slice payload,
-                                             ValCallback callback) const;
+                                          ValCallback callback) const;
 
   void UpdateStats() {
     if (cr::Worker::my().cc.isVisibleForAll(mTxId) ||
@@ -446,7 +488,7 @@ public:
         cr::Worker::sOldestOltpStartTx != cr::Worker::sOldestAllStartTs;
     bool frequentlyUpdated = mTotalUpdates > FLAGS_worker_threads;
     bool recentUpdatedByOthers = mWorkerId != cr::Worker::my().mWorkerId ||
-                                 mTxId != cr::activeTX().startTS();
+                                 mTxId != cr::activeTX().mStartTs;
     return commandValid && hasLongRunningOLAP && recentUpdatedByOthers &&
            frequentlyUpdated;
   }

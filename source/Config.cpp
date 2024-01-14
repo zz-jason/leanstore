@@ -1,7 +1,20 @@
 #include <gflags/gflags.h>
+#include <gflags/gflags_declare.h>
+#include <glog/logging.h>
+
+static bool PageSizeValidator(const char* flagname, google::uint32 value) {
+  google::uint32 kMaxPageSize = 4096;
+  if (value > kMaxPageSize) {
+    return false;
+  }
+  LOG(FATAL) << "Invalid value for --" << flagname << ": " << value
+             << ". Must be <= " << kMaxPageSize << " Bytes";
+  return false;
+}
 
 // Buffer management
 DEFINE_uint32(page_size, 4096, "The page size (bytes)"); // 4 KiB
+DEFINE_validator(page_size, &PageSizeValidator);
 DEFINE_uint64(buffer_pool_size, 1073741824,
               "The buffer pool size (bytes)"); // 1 GiB
 DEFINE_string(data_dir, "~/.leanstore",
@@ -108,19 +121,12 @@ DEFINE_bool(reclaim_page_ids, true, "Whether to reclaim unused free page ids");
 // -------------------------------------------------------------------------------------
 DEFINE_bool(wal, true, "Whether wal is enabled");
 DEFINE_bool(wal_fsync, true, "Whether to explicitly flush wal to disk");
-
-// WAL variant 0:
-//   All workers submit their WAL entries to the the local ring buffer, the
-//   group committer flushes the buffer periodically with RFA.
-// WAL variant 1: ?
-// WAL variant 2: ?
-DEFINE_int64(wal_variant, 0, "Different WAL and group commit strategies");
 DEFINE_uint64(wal_log_writers, 1, "");
 DEFINE_uint64(wal_buffer_size, 1024 * 1024 * 10,
               "WAL buffer size for each worker (Bytes)");
 // -------------------------------------------------------------------------------------
 DEFINE_string(isolation_level, "si",
-              "options: si (Snapshot Isolation), ser (SERIALIZABLE)");
+              "options: si (Snapshot Isolation), ser (Serializable)");
 DEFINE_uint64(si_refresh_rate, 0, "");
 DEFINE_bool(todo, true, "");
 // -------------------------------------------------------------------------------------

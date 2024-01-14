@@ -1,13 +1,12 @@
 #include "AsyncWriteBuffer.hpp"
-#include "Exceptions.hpp"
+
+#include "shared-headers/Exceptions.hpp"
 #include "Tracing.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 
-#include "gflags/gflags.h"
 #include <glog/logging.h>
 
 #include <cstring>
-#include <signal.h>
 
 namespace leanstore {
 namespace storage {
@@ -41,7 +40,7 @@ void AsyncWriteBuffer::AddToIOBatch(BufferFrame& bf, PID pageId) {
   DCHECK(u64(&bf.page) % 512 == 0);
   DCHECK(pending_requests <= batch_max_size);
   COUNTERS_BLOCK() {
-    WorkerCounters::myCounters().dt_page_writes[bf.page.mBTreeId]++;
+    WorkerCounters::MyCounters().dt_page_writes[bf.page.mBTreeId]++;
   }
 
   PARANOID_BLOCK() {

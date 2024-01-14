@@ -1,19 +1,18 @@
 #include "Worker.hpp"
 
 #include "Config.hpp"
+#include "concurrency-recovery/Transaction.hpp"
 #include "profiling/counters/CRCounters.hpp"
+#include "shared-headers/Exceptions.hpp"
 #include "storage/buffer-manager/TreeRegistry.hpp"
+#include "utils/Defer.hpp"
 
 #include <glog/logging.h>
 
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
-#include <fstream>
 #include <mutex>
-#include <sstream>
-
-#include <stdio.h>
 
 namespace leanstore {
 namespace cr {
@@ -22,18 +21,20 @@ thread_local std::unique_ptr<Worker> Worker::sTlsWorker = nullptr;
 std::shared_mutex Worker::sGlobalMutex;
 
 // All transactions < are committed
-std::unique_ptr<atomic<u64>[]> Worker::sWorkersCurrentSnapshot =
-    std::make_unique<atomic<u64>[]>(FLAGS_worker_threads);
-atomic<u64> Worker::sOldestAllStartTs = 0;
-atomic<u64> Worker::sOldestOltpStartTx = 0;
-atomic<u64> Worker::sAllLwm = 0;
-atomic<u64> Worker::sOltpLwm = 0;
-atomic<u64> Worker::sNewestOlapStartTx = 0;
+std::unique_ptr<std::atomic<u64>[]> Worker::sWorkersCurrentSnapshot =
+    std::make_unique<std::atomic<u64>[]>(FLAGS_worker_threads);
+std::atomic<u64> Worker::sOldestAllStartTs = 0;
+std::atomic<u64> Worker::sOldestOltpStartTx = 0;
+std::atomic<u64> Worker::sAllLwm = 0;
+std::atomic<u64> Worker::sOltpLwm = 0;
+std::atomic<u64> Worker::sNewestOlapStartTx = 0;
 
 Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers)
-    : cc(numWorkers), mWorkerId(workerId), mAllWorkers(allWorkers),
+    : cc(numWorkers),
+      mWorkerId(workerId),
+      mAllWorkers(allWorkers),
       mNumAllWorkers(numWorkers) {
-  CRCounters::myCounters().mWorkerId = workerId;
+  CRCounters::MyCounters().mWorkerId = workerId;
 
   // init wal buffer
   mLogging.mWalBuffer = (u8*)(std::aligned_alloc(512, FLAGS_wal_buffer_size));
@@ -53,10 +54,13 @@ Worker::~Worker() {
   mLogging.mWalBuffer = nullptr;
 }
 
-void Worker::StartTx(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
-  utils::Timer timer(CRCounters::myCounters().cc_ms_start_tx);
+void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_start_tx);
   Transaction prevTx = mActiveTx;
-  DCHECK(prevTx.state != TX_STATE::STARTED);
+  DCHECK(prevTx.mState != TxState::kStarted)
+      << "Previous transaction not ended"
+      << ", workerId=" << mWorkerId << ", startTs=" << prevTx.mStartTs
+      << ", txState=" << TxStatUtil::ToString(prevTx.mState);
   SCOPED_DEFER({
     DLOG(INFO) << "Start transaction"
                << ", workerId=" << mWorkerId
@@ -93,23 +97,19 @@ void Worker::StartTx(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
   mLogging.mHasRemoteDependency = false;
 
   // Draw TXID from global counter and publish it with the TX type (i.e., OLAP
-  // or OLTP) We have to acquire a transaction id and use it for locking in
-  // ANY isolation level
+  // or OLTP) We have to acquire a transaction id and use it for locking in ANY
+  // isolation level
   if (level >= IsolationLevel::kSnapshotIsolation) {
-    // implies multi-statement
-    if (prevTx.isReadCommitted() || prevTx.isReadUncommitted()) {
-      cc.switchToSnapshotIsolationMode();
-    }
     {
-      utils::Timer timer(CRCounters::myCounters().cc_ms_snapshotting);
+      utils::Timer timer(CRCounters::MyCounters().cc_ms_snapshotting);
       auto& curWorkerSnapshot = sWorkersCurrentSnapshot[mWorkerId];
-      curWorkerSnapshot.store(mActiveTx.mStartTs | LATCH_BIT,
+      curWorkerSnapshot.store(mActiveTx.mStartTs | kLatchBit,
                               std::memory_order_release);
 
       mActiveTx.mStartTs = ConcurrencyControl::sGlobalClock.fetch_add(1);
       if (FLAGS_enable_olap_mode) {
         curWorkerSnapshot.store(mActiveTx.mStartTs |
-                                    ((mActiveTx.isOLAP()) ? OLAP_BIT : 0),
+                                    ((mActiveTx.IsOLAP()) ? kOlapBit : 0),
                                 std::memory_order_release);
       } else {
         curWorkerSnapshot.store(mActiveTx.mStartTs, std::memory_order_release);
@@ -118,7 +118,7 @@ void Worker::StartTx(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
     cc.commit_tree.cleanIfNecessary();
     cc.local_global_all_lwm_cache = sAllLwm.load();
   } else {
-    if (prevTx.atLeastSI()) {
+    if (prevTx.AtLeastSI()) {
       cc.switchToReadCommittedMode();
     }
     cc.commit_tree.cleanIfNecessary();
@@ -126,17 +126,23 @@ void Worker::StartTx(TX_MODE mode, IsolationLevel level, bool isReadOnly) {
 }
 
 void Worker::CommitTx() {
-  if (!activeTX().isDurable()) {
+  SCOPED_DEFER(COUNTERS_BLOCK() {
+    mActiveTx.mState = TxState::kCommitted;
+    DLOG(INFO) << "Transaction committed"
+               << ", workerId=" << mWorkerId
+               << ", startTs=" << mActiveTx.mStartTs
+               << ", commitTs=" << mActiveTx.mCommitTs
+               << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
+  });
+
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_commit_tx);
+  if (!mActiveTx.mIsDurable) {
     return;
   }
 
-  utils::Timer timer(CRCounters::myCounters().cc_ms_commit_tx);
   mCommandId = 0; // Reset mCommandId only on commit and never on abort
-
-  DCHECK(mActiveTx.state == TX_STATE::STARTED);
-
-  if (activeTX().hasWrote()) {
-    TXID commitTs = cc.commit_tree.commit(mActiveTx.startTS());
+  if (mActiveTx.mHasWrote) {
+    auto commitTs = cc.commit_tree.commit(mActiveTx.mStartTs);
     cc.mLatestWriteTx.store(commitTs, std::memory_order_release);
     mActiveTx.mCommitTs = commitTs;
     DCHECK(mActiveTx.mStartTs < mActiveTx.mCommitTs)
@@ -151,20 +157,11 @@ void Worker::CommitTx() {
   }
 
   mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
-  mActiveTx.state = TX_STATE::READY_TO_COMMIT;
 
-  // TODO: commitTs in log
   mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_COMMIT);
   mLogging.SubmitWALEntrySimple();
-
   mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_FINISH);
   mLogging.SubmitWALEntrySimple();
-
-  if (FLAGS_wal_variant == 2) {
-    mLogging.mWalFlushReq.mOptimisticLatch.notify_all();
-  }
-
-  mActiveTx.stats.precommit = std::chrono::high_resolution_clock::now();
 
   if (mLogging.mHasRemoteDependency) {
     std::unique_lock<std::mutex> g(mLogging.mTxToCommitMutex);
@@ -176,7 +173,7 @@ void Worker::CommitTx() {
                << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
   } else {
     std::unique_lock<std::mutex> g(mLogging.mRfaTxToCommitMutex);
-    CRCounters::myCounters().rfa_committed_tx++;
+    CRCounters::MyCounters().rfa_committed_tx++;
     mLogging.mRfaTxToCommit.push_back(mActiveTx);
     DLOG(INFO) << "Puting transaction (RFA) to mRfaTxToCommit"
                << ", workerId=" << mWorkerId
@@ -186,39 +183,58 @@ void Worker::CommitTx() {
   }
 
   // Only committing snapshot/ changing between SI and lower modes
-  if (activeTX().atLeastSI()) {
+  if (mActiveTx.AtLeastSI()) {
     cc.refreshGlobalState();
   }
 
   // All isolation level generate garbage
-  // cc.garbageCollection();
+  cc.garbageCollection();
 
   // wait transaction to be committed
   while (mLogging.TxUnCommitted(mActiveTx.mCommitTs)) {
   }
-
-  DLOG(INFO) << "Transaction committed"
-             << ", workerId=" << mWorkerId << ", startTs=" << mActiveTx.mStartTs
-             << ", commitTs=" << mActiveTx.mCommitTs
-             << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
-  mActiveTx.state = TX_STATE::COMMITTED;
 }
 
-// TODO(jian.z): revert changes made in-place on the btree
+/// TODO(jian.z): revert changes made in-place on the btree
+/// process of a transaction abort:
+///
+/// 1. Read previous wal entries
+///
+/// 2. Undo the changes via btree operations
+///
+/// 3. Write compensation wal entries during the undo process
+///
+/// 4. Purge versions in history tree, clean garbages made by the aborted
+///    transaction
+///
+/// It may share the same code with the recovery process?
 void Worker::AbortTx() {
-  utils::Timer timer(CRCounters::myCounters().cc_ms_abort_tx);
+  SCOPED_DEFER({
+    mActiveTx.mState = TxState::kAborted;
+    LOG(INFO) << "Transaction aborted"
+              << ", workerId=" << mWorkerId
+              << ", startTs=" << mActiveTx.mStartTs
+              << ", commitTs=" << mActiveTx.mCommitTs
+              << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
+  });
 
-  ENSURE(FLAGS_wal);
-  ENSURE(!mActiveTx.mWalExceedBuffer);
-  ENSURE(mActiveTx.state == TX_STATE::STARTED);
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_abort_tx);
+  if (!(mActiveTx.mState == TxState::kStarted && mActiveTx.mIsDurable)) {
+    return;
+  }
 
-  const u64 txId = mActiveTx.startTS();
+  // TODO(jian.z): support reading from WAL file once
+  DCHECK(!mActiveTx.mWalExceedBuffer)
+      << "Aborting from WAL file is not supported yet";
+
   std::vector<const WALEntry*> entries;
-  mLogging.iterateOverCurrentTXEntries([&](const WALEntry& entry) {
+  mLogging.IterateCurrentTxWALs([&](const WALEntry& entry) {
     if (entry.type == WALEntry::TYPE::COMPLEX) {
       entries.push_back(&entry);
     }
   });
+
+  const u64 txId = mActiveTx.mStartTs;
   std::for_each(entries.rbegin(), entries.rend(), [&](const WALEntry* entry) {
     const auto& complexEntry = *reinterpret_cast<const WALEntryComplex*>(entry);
     leanstore::storage::TreeRegistry::sInstance->undo(
@@ -226,17 +242,13 @@ void Worker::AbortTx() {
   });
 
   cc.mHistoryTree->purgeVersions(
-      mWorkerId, mActiveTx.startTS(), mActiveTx.startTS(),
+      mWorkerId, mActiveTx.mStartTs, mActiveTx.mStartTs,
       [&](const TXID, const TREEID, const u8*, u64, const bool) {});
 
   mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_ABORT);
   mLogging.SubmitWALEntrySimple();
-
-  // TODO(jian.z): add compensation WALEntry
   mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_FINISH);
   mLogging.SubmitWALEntrySimple();
-
-  mActiveTx.state = TX_STATE::ABORTED;
 }
 
 void Worker::shutdown() {

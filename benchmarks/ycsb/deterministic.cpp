@@ -1,20 +1,17 @@
 #include "../shared/LeanStoreAdapter.hpp"
 #include "../shared/Schema.hpp"
-#include "Units.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/profiling/counters/WorkerCounters.hpp"
-#include "leanstore/utils/FVector.hpp"
 #include "leanstore/utils/Parallelize.hpp"
 #include "leanstore/utils/RandomGenerator.hpp"
 #include "leanstore/utils/ScrambledZipfGenerator.hpp"
-// -------------------------------------------------------------------------------------
+#include "shared-headers/Units.hpp"
+
 #include <gflags/gflags.h>
-#include <tbb/parallel_for.h>
-// -------------------------------------------------------------------------------------
+
 #include <iostream>
-#include <set>
-// -------------------------------------------------------------------------------------
+
 DEFINE_uint32(ycsb_read_ratio, 100, "");
 DEFINE_uint64(ycsb_tuple_count, 0, "");
 DEFINE_uint32(ycsb_payload_size, 100, "tuple size in bytes");
@@ -31,7 +28,7 @@ using YCSBKey = u64;
 using YCSBPayload = BytesPayload<8>;
 using KVTable = Relation<YCSBKey, YCSBPayload>;
 // -------------------------------------------------------------------------------------
-double calculateMTPS(chrono::high_resolution_clock::time_point begin,
+double CalculateMTPS(chrono::high_resolution_clock::time_point begin,
                      chrono::high_resolution_clock::time_point end,
                      u64 factor) {
   double tps =
@@ -59,8 +56,8 @@ int main(int argc, char** argv) {
   db.registerConfigEntry("ycsb_ops_per_tx", FLAGS_ycsb_ops_per_tx);
   // -------------------------------------------------------------------------------------
   leanstore::IsolationLevel isolation_level =
-      leanstore::parseIsolationLevel(FLAGS_isolation_level);
-  const TX_MODE tx_type = TX_MODE::OLTP;
+      leanstore::ParseIsolationLevel(FLAGS_isolation_level);
+  const TxMode tx_type = TxMode::kOLTP;
   // -------------------------------------------------------------------------------------
   const u64 ycsb_tuple_count =
       (FLAGS_ycsb_tuple_count)
@@ -120,7 +117,7 @@ int main(int argc, char** argv) {
          << (chrono::duration_cast<chrono::microseconds>(end - begin).count() /
              1000000.0)
          << endl;
-    cout << calculateMTPS(begin, end, n) << " M tps" << endl;
+    cout << CalculateMTPS(begin, end, n) << " M tps" << endl;
     // -------------------------------------------------------------------------------------
     const u64 written_pages = db.getBufferManager().consumedPages();
     const u64 mib = written_pages * FLAGS_page_size / 1024 / 1024;
@@ -171,7 +168,7 @@ int main(int argc, char** argv) {
                 btree_vi->prepareDeterministicUpdate(folded_key, folded_key_len,
                                                      *d_iterators[op_i]);
                 ensure(d_iterators[op_i]->leaf.mGuard.state ==
-                       leanstore::storage::GUARD_STATE::EXCLUSIVE);
+                       leanstore::storage::GuardState::kExclusive);
               }
               // -------------------------------------------------------------------------------------
               cr::Worker::my().StartTx(tx_type, isolation_level);
@@ -189,7 +186,7 @@ int main(int argc, char** argv) {
                     tabular_update_descriptor);
                 d_iterators[op_i]->reset();
               }
-              WorkerCounters::myCounters().tx++;
+              WorkerCounters::MyCounters().tx++;
             } else {
               std::random_shuffle(keys.begin(), keys.end());
               cr::Worker::my().StartTx(tx_type, isolation_level);
@@ -202,12 +199,12 @@ int main(int argc, char** argv) {
                     tabular_update_descriptor);
               }
               cr::Worker::my().CommitTx();
-              WorkerCounters::myCounters().tx++;
+              WorkerCounters::MyCounters().tx++;
             }
           }
           jumpmuCatch() {
             ensure(!FLAGS_ycsb_deterministic);
-            WorkerCounters::myCounters().tx_abort++;
+            WorkerCounters::MyCounters().tx_abort++;
           }
         }
         running_threads_counter--;

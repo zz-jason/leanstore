@@ -1,36 +1,51 @@
 #pragma once
 
-#include "JumpMU.hpp"
-#include "Units.hpp"
-
 #include "Config.hpp"
+#include "JumpMU.hpp"
+#include "shared-headers/Units.hpp"
+
+#include <glog/logging.h>
 
 #include <atomic>
 #include <chrono>
 #include <cmath>
 
-#include <alloca.h>
-
 namespace leanstore {
 namespace utils {
 
-u32 getBitsNeeded(u64 input);
+inline u32 GetBitsNeeded(u64 input) {
+  return std::max(std::floor(std::log2(input)) + 1, 1.0);
+}
 
-double calculateMTPS(std::chrono::high_resolution_clock::time_point begin,
-                     std::chrono::high_resolution_clock::time_point end,
-                     u64 factor);
+inline double CalculateMTPS(
+    std::chrono::high_resolution_clock::time_point begin,
+    std::chrono::high_resolution_clock::time_point end, u64 factor) {
+  double tps =
+      ((factor * 1.0 /
+        (std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
+             .count() /
+         1000000.0)));
+  return (tps / 1000000.0);
+}
 
-void pinThisThreadRome();
-void pinThisThreadRome(const u64 t_i);
-void pinThisThread(const u64 t_i);
+inline void PinThisThread(const u64 workerId) {
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);
+  CPU_SET(workerId, &cpuset);
+  pthread_t currentThread = pthread_self();
+  if (pthread_setaffinity_np(currentThread, sizeof(cpu_set_t), &cpuset) != 0) {
+    DLOG(ERROR)
+        << "Could not pin a thread, maybe because of over subscription?";
+  }
+}
 
-void printBackTrace();
+void PrintBackTrace();
 
-inline u64 upAlign(u64 x) {
+inline u64 AlignUp(u64 x) {
   return (x + 511) & ~511ul;
 }
 
-inline u64 downAlign(u64 x) {
+inline u64 AlignDown(u64 x) {
   return x - (x & 511);
 }
 
@@ -152,7 +167,7 @@ struct Timer {
 
   std::chrono::high_resolution_clock::time_point mStartTimePoint;
 
-  Timer(atomic<u64>& timeCounterUS) : mTimeCounterUS(timeCounterUS) {
+  Timer(std::atomic<u64>& timeCounterUS) : mTimeCounterUS(timeCounterUS) {
     if (FLAGS_measure_time) {
       mStartTimePoint = std::chrono::high_resolution_clock::now();
     }

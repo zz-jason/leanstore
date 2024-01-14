@@ -15,19 +15,25 @@
 namespace leanstore {
 namespace utils {
 
+inline thread_local std::string tlsThreadName = "";
+
 /// User thread with custom thread name.
 class UserThread {
 protected:
   std::string mThreadName = "";
+
   int mRunningCPU = -1;
+
   std::unique_ptr<std::thread> mThread = nullptr;
+
   std::atomic<bool> mKeepRunning = false;
 
 public:
   UserThread() = default;
 
   UserThread(const std::string& name, int runningCPU = -1)
-      : mThreadName(name), mRunningCPU(runningCPU) {
+      : mThreadName(name),
+        mRunningCPU(runningCPU) {
     LOG_IF(ERROR, mThreadName.size() > 15)
         << "Thread name should be restricted to 15 characters"
         << ", name=" << name << ", size=" << name.size();
@@ -42,7 +48,7 @@ public:
   void Start() {
     if (mThread == nullptr) {
       mKeepRunning = true;
-      mThread = std::make_unique<std::thread>(&UserThread::run, this);
+      mThread = std::make_unique<std::thread>(&UserThread::Run, this);
     }
   }
 
@@ -60,7 +66,11 @@ public:
   }
 
 protected:
-  void run() {
+  void Run() {
+    // set thread-local thread name at the very beging so that logs printed by
+    // the thread can get it.
+    tlsThreadName = mThreadName;
+
     // log info about thread start and stop events
     LOG(INFO) << mThreadName << " thread started";
     SCOPED_DEFER(LOG(INFO) << mThreadName << " thread stopped");
@@ -70,16 +80,16 @@ protected:
 
     // pin the thread to a specific CPU
     if (mRunningCPU != -1) {
-      utils::pinThisThread(mRunningCPU);
+      utils::PinThisThread(mRunningCPU);
       LOG(INFO) << mThreadName << " pined to CPU " << mRunningCPU;
     }
 
     // run custom thread loop
-    runImpl();
+    RunImpl();
   }
 
   /// Custom thread loop
-  virtual void runImpl() = 0;
+  virtual void RunImpl() = 0;
 };
 
 } // namespace utils

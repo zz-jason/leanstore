@@ -1,12 +1,16 @@
 #include "GroupCommitter.hpp"
+
 #include "CRMG.hpp"
 #include "Worker.hpp"
+#include "profiling/counters/CPUCounters.hpp"
+#include "utils/Timer.hpp"
+
 #include <algorithm>
 
 namespace leanstore {
 namespace cr {
 
-void GroupCommitter::runImpl() {
+void GroupCommitter::RunImpl() {
   CPUCounters::registerThread(mThreadName, false);
 
   s32 numIOCBs = 0;
@@ -41,12 +45,12 @@ void GroupCommitter::prepareIOCBs(s32& numIOCBs, u64& minFlushedGSN,
   /// counters
   leanstore::utils::SteadyTimer phase1Timer [[maybe_unused]];
   COUNTERS_BLOCK() {
-    CRCounters::myCounters().gct_rounds++;
+    CRCounters::MyCounters().gct_rounds++;
     phase1Timer.Start();
   }
   SCOPED_DEFER(COUNTERS_BLOCK() {
     phase1Timer.Stop();
-    CRCounters::myCounters().gct_phase_1_ms += phase1Timer.ElaspedUS();
+    CRCounters::MyCounters().gct_phase_1_ms += phase1Timer.ElaspedUS();
   });
 
   numIOCBs = 0;
@@ -62,7 +66,7 @@ void GroupCommitter::prepareIOCBs(s32& numIOCBs, u64& minFlushedGSN,
     guard.unlock();
 
     auto lastReqVersion = walFlushReqCopies[workerId].mVersion;
-    walFlushReqCopies[workerId] = logging.mWalFlushReq.getSync();
+    walFlushReqCopies[workerId] = logging.mWalFlushReq.GetSync();
     const auto& reqCopy = walFlushReqCopies[workerId];
     if (reqCopy.mVersion == lastReqVersion) {
       // no transaction log write since last round group commit, skip.
@@ -103,12 +107,12 @@ void GroupCommitter::writeIOCBs(s32 numIOCBs) {
   }
   SCOPED_DEFER(COUNTERS_BLOCK() {
     writeTimer.Stop();
-    CRCounters::myCounters().gct_write_ms += writeTimer.ElaspedUS();
+    CRCounters::MyCounters().gct_write_ms += writeTimer.ElaspedUS();
   });
 
   // submit all log writes using a single system call.
   for (auto left = numIOCBs; left > 0;) {
-    auto iocbToSubmit = mIOCBPtrs.get() + numIOCBs - left;
+    auto* iocbToSubmit = mIOCBPtrs.get() + numIOCBs - left;
     s32 submitted = io_submit(mIOContext, left, iocbToSubmit);
     LOG_IF(ERROR, submitted < 0)
         << "io_submit failed, error=" << submitted << ", mWalFd=" << mWalFd;
@@ -138,9 +142,9 @@ void GroupCommitter::commitTXs(
     phase2Timer.Start();
   }
   SCOPED_DEFER(COUNTERS_BLOCK() {
-    CRCounters::myCounters().gct_committed_tx += numCommitted;
+    CRCounters::MyCounters().gct_committed_tx += numCommitted;
     phase2Timer.Stop();
-    CRCounters::myCounters().gct_phase_2_ms += phase2Timer.ElaspedUS();
+    CRCounters::MyCounters().gct_phase_2_ms += phase2Timer.ElaspedUS();
   });
 
   for (WORKERID workerId = 0; workerId < mWorkers.size(); workerId++) {
@@ -161,7 +165,7 @@ void GroupCommitter::commitTXs(
           break;
         }
         maxCommitTs = std::max<TXID>(maxCommitTs, tx.mCommitTs);
-        tx.state = TX_STATE::COMMITTED;
+        tx.mState = TxState::kCommitted;
         DLOG(INFO) << "Transaction with remote dependency committed"
                    << ", workerId=" << workerId << ", startTs=" << tx.mStartTs
                    << ", commitTs=" << tx.mCommitTs
@@ -185,7 +189,7 @@ void GroupCommitter::commitTXs(
       for (; i < numRfaTxs[workerId]; ++i) {
         auto& tx = logging.mRfaTxToCommit[i];
         maxCommitTsRfa = std::max<TXID>(maxCommitTsRfa, tx.mCommitTs);
-        tx.state = TX_STATE::COMMITTED;
+        tx.mState = TxState::kCommitted;
         DLOG(INFO) << "Transaction (RFA) committed"
                    << ", workerId=" << workerId << ", startTs=" << tx.mStartTs
                    << ", commitTs=" << tx.mCommitTs
@@ -224,11 +228,11 @@ void GroupCommitter::commitTXs(
 }
 
 void GroupCommitter::setUpIOCB(s32 ioSlot, u8* buf, u64 lower, u64 upper) {
-  auto lowerAligned = utils::downAlign(lower);
-  auto upperAligned = utils::upAlign(upper);
+  auto lowerAligned = utils::AlignDown(lower);
+  auto upperAligned = utils::AlignUp(upper);
   auto* bufAligned = buf + lowerAligned;
   auto countAligned = upperAligned - lowerAligned;
-  auto offsetAligned = utils::downAlign(mWalSize);
+  auto offsetAligned = utils::AlignDown(mWalSize);
 
   DCHECK(u64(bufAligned) % 512 == 0);
   DCHECK(countAligned % 512 == 0);
@@ -241,7 +245,7 @@ void GroupCommitter::setUpIOCB(s32 ioSlot, u8* buf, u64 lower, u64 upper) {
   mIOCBs[ioSlot].data = bufAligned;
   mIOCBPtrs[ioSlot] = &mIOCBs[ioSlot];
   COUNTERS_BLOCK() {
-    CRCounters::myCounters().gct_write_bytes += countAligned;
+    CRCounters::MyCounters().gct_write_bytes += countAligned;
   }
 };
 

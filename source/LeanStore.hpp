@@ -1,16 +1,14 @@
 #pragma once
 
-#include "Config.hpp"
-
-#include "concurrency-recovery/HistoryTree.hpp"
 #include "profiling/tables/ConfigsTable.hpp"
 #include "storage/btree/BTreeLL.hpp"
 #include "storage/btree/BTreeVI.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 
-#include "rapidjson/document.h"
+#include <rapidjson/document.h>
 
-#include <unordered_map>
+#include <atomic>
+#include <list>
 
 namespace leanstore {
 
@@ -29,9 +27,9 @@ public:
   /// The file descriptor for write-ahead log
   s32 mWalFd;
 
-  atomic<u64> mNumProfilingThreads = 0;
+  std::atomic<u64> mNumProfilingThreads = 0;
 
-  atomic<bool> mProfilingThreadKeepRunning = true;
+  std::atomic<bool> mProfilingThreadKeepRunning = true;
 
   profiling::ConfigsTable configs_table;
 

@@ -1,15 +1,17 @@
 #include "CRMG.hpp"
 #include "Worker.hpp"
+#include "profiling/counters/WorkerCounters.hpp"
 #include "storage/buffer-manager/TreeRegistry.hpp"
-
 #include "utils/Misc.hpp"
+#include "utils/RandomGenerator.hpp"
 
+#include <atomic>
 #include <set>
 
 namespace leanstore {
 namespace cr {
 
-atomic<u64> ConcurrencyControl::sGlobalClock = Worker::WORKERS_INCREMENT;
+std::atomic<u64> ConcurrencyControl::sGlobalClock = Worker::kWorkersIncrement;
 
 // Also for interval garbage collection
 void ConcurrencyControl::refreshGlobalState() {
@@ -18,7 +20,7 @@ void ConcurrencyControl::refreshGlobalState() {
     return;
   }
 
-  utils::Timer timer(CRCounters::myCounters().cc_ms_refresh_global_state);
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_refresh_global_state);
 
   if (utils::RandomGenerator::getRandU64(0, Worker::my().mNumAllWorkers) == 0 &&
       Worker::sGlobalMutex.try_lock()) {
@@ -26,18 +28,18 @@ void ConcurrencyControl::refreshGlobalState() {
     TXID localOldestOltp = std::numeric_limits<TXID>::max();
     TXID localOldestTx = std::numeric_limits<TXID>::max();
     for (WORKERID i = 0; i < Worker::my().mNumAllWorkers; i++) {
-      atomic<u64>& workerSnapshot = Worker::sWorkersCurrentSnapshot[i];
+      std::atomic<u64>& workerSnapshot = Worker::sWorkersCurrentSnapshot[i];
 
       u64 workerInFlightTxId = workerSnapshot.load();
-      while ((workerInFlightTxId & Worker::LATCH_BIT) &&
-             ((workerInFlightTxId & Worker::CLEAN_BITS_MASK) <
-              activeTX().startTS())) {
+      while ((workerInFlightTxId & Worker::kLatchBit) &&
+             ((workerInFlightTxId & Worker::kCleanBitsMask) <
+              activeTX().mStartTs)) {
         workerInFlightTxId = workerSnapshot.load();
       }
 
-      bool isRc = workerInFlightTxId & Worker::RC_BIT;
-      bool isOlap = workerInFlightTxId & Worker::OLAP_BIT;
-      workerInFlightTxId &= Worker::CLEAN_BITS_MASK;
+      bool isRc = workerInFlightTxId & Worker::kRcBit;
+      bool isOlap = workerInFlightTxId & Worker::kOlapBit;
+      workerInFlightTxId &= Worker::kCleanBitsMask;
 
       if (!isRc) {
         localOldestTx = std::min<TXID>(workerInFlightTxId, localOldestTx);
@@ -103,7 +105,8 @@ void ConcurrencyControl::switchToSnapshotIsolationMode() {
   u64 workerId = Worker::my().mWorkerId;
   {
     std::unique_lock guard(Worker::sGlobalMutex);
-    atomic<u64>& workerSnapshot = Worker::sWorkersCurrentSnapshot[workerId];
+    std::atomic<u64>& workerSnapshot =
+        Worker::sWorkersCurrentSnapshot[workerId];
     workerSnapshot.store(sGlobalClock.load(), std::memory_order_release);
   }
   refreshGlobalState();
@@ -115,8 +118,9 @@ void ConcurrencyControl::switchToReadCommittedMode() {
     // Latch-free work only when all counters increase monotone, we can not
     // simply go back
     std::unique_lock guard(Worker::sGlobalMutex);
-    atomic<u64>& workerSnapshot = Worker::sWorkersCurrentSnapshot[workerId];
-    u64 newSnapshot = workerSnapshot.load() | Worker::RC_BIT;
+    std::atomic<u64>& workerSnapshot =
+        Worker::sWorkersCurrentSnapshot[workerId];
+    u64 newSnapshot = workerSnapshot.load() | Worker::kRcBit;
     workerSnapshot.store(newSnapshot, std::memory_order_release);
   }
   refreshGlobalState();
@@ -129,7 +133,7 @@ void ConcurrencyControl::garbageCollection() {
 
   // TODO: smooth purge, we should not let the system hang on this, as a quick
   // fix, it should be enough if we purge in small batches
-  utils::Timer timer(CRCounters::myCounters().cc_ms_gc);
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_gc);
 synclwm : {
   u64 lwmVersion = local_lwm_latch.load();
   while ((lwmVersion = local_lwm_latch.load()) & 1) {
@@ -144,7 +148,7 @@ synclwm : {
 
   // ATTENTION: atm, with out extra sync, the two lwm can not
   if (local_all_lwm > cleaned_untill_oltp_lwm) {
-    utils::Timer timer(CRCounters::myCounters().cc_ms_gc_history_tree);
+    utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_history_tree);
     // PURGE!
     CRManager::sInstance->mHistoryTreePtr->purgeVersions(
         Worker::my().mWorkerId, 0, local_all_lwm - 1,
@@ -155,7 +159,7 @@ synclwm : {
               treeId, version_payload, Worker::my().mWorkerId, txId,
               called_before);
           COUNTERS_BLOCK() {
-            WorkerCounters::myCounters().cc_todo_olap_executed[treeId]++;
+            WorkerCounters::MyCounters().cc_todo_olap_executed[treeId]++;
           }
         },
         0);
@@ -163,7 +167,7 @@ synclwm : {
   }
   if (FLAGS_enable_olap_mode && local_all_lwm != local_oltp_lwm) {
     if (local_oltp_lwm > 0 && local_oltp_lwm > cleaned_untill_oltp_lwm) {
-      utils::Timer timer(CRCounters::myCounters().cc_ms_gc_graveyard);
+      utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_graveyard);
       // MOVE deletes to the graveyard
       const u64 fromTxId =
           cleaned_untill_oltp_lwm > 0 ? cleaned_untill_oltp_lwm : 0;
@@ -178,7 +182,7 @@ synclwm : {
                 treeId, version_payload, Worker::my().mWorkerId, txId,
                 called_before);
             COUNTERS_BLOCK() {
-              WorkerCounters::myCounters().cc_todo_oltp_executed[treeId]++;
+              WorkerCounters::MyCounters().cc_todo_oltp_executed[treeId]++;
             }
           });
     }
@@ -195,17 +199,17 @@ ConcurrencyControl::VISIBILITY ConcurrencyControl::isVisibleForIt(
 // UNDETERMINED is not possible atm because we spin on startTs
 ConcurrencyControl::VISIBILITY ConcurrencyControl::isVisibleForIt(
     WORKERID whomWorkerId, WORKERID whatWorkerId, TXID txTs) {
-  const bool is_commit_ts = txTs & MSB;
+  const bool isCommitTs = txTs & kMsb;
   const TXID commitTs =
-      is_commit_ts ? (txTs & MSB_MASK) : getCommitTimestamp(whatWorkerId, txTs);
+      isCommitTs ? (txTs & kMsbMask) : getCommitTimestamp(whatWorkerId, txTs);
   return isVisibleForIt(whomWorkerId, commitTs);
 }
 
 TXID ConcurrencyControl::getCommitTimestamp(WORKERID workerId, TXID txTs) {
-  if (txTs & MSB) {
-    return txTs & MSB_MASK;
+  if (txTs & kMsb) {
+    return txTs & kMsbMask;
   }
-  DCHECK((txTs & MSB) || VisibleForMe(workerId, txTs));
+  DCHECK((txTs & kMsb) || VisibleForMe(workerId, txTs));
   const TXID& startTs = txTs;
   TXID lcb = other(workerId).commit_tree.LCB(startTs);
   TXID commitTs =
@@ -214,16 +218,10 @@ TXID ConcurrencyControl::getCommitTimestamp(WORKERID workerId, TXID txTs) {
   return commitTs;
 }
 
-bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId,
-                                      bool toWrite) {
-  const bool isCommitTs = txId & MSB;
-  const TXID commitTs = isCommitTs ? (txId & MSB_MASK) : 0;
-  const TXID startTs = txId & MSB_MASK;
-
-  // visible for all the READ-UNCOMMITTED transactions
-  if (!toWrite && activeTX().isReadUncommitted()) {
-    return true;
-  }
+bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId) {
+  const bool isCommitTs = txId & kMsb;
+  const TXID commitTs = isCommitTs ? (txId & kMsbMask) : 0;
+  const TXID startTs = txId & kMsbMask;
 
   // visible if writtern by me
   if (Worker::my().mWorkerId == workerId) {
@@ -231,36 +229,10 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId,
   }
 
   switch (activeTX().mTxIsolationLevel) {
-  case IsolationLevel::READ_UNCOMMITTED:
-  case IsolationLevel::READ_COMMITTED: {
-    if (isCommitTs) {
-      return true;
-    }
-
-    // use cache
-    if (mLocalSnapshotCache[workerId] >= startTs) {
-      return true;
-    }
-
-    utils::Timer timer(CRCounters::myCounters().cc_ms_snapshotting);
-
-    TXID curTs = cr::Worker::Worker::my().cc.sGlobalClock.load() + 1;
-    TXID lastCommitTs = other(workerId).commit_tree.LCB(curTs);
-    mLocalSnapshotCache[workerId] = lastCommitTs;
-    local_snapshot_cache_ts[workerId] = curTs;
-
-    bool isVisible = lastCommitTs >= startTs;
-
-    // If the worker starts a transaction after the last commit, the data might
-    // be invible, i.e. startTs > lastCommitTs.
-    RAISE_WHEN(!isVisible);
-
-    return isVisible;
-  }
   case IsolationLevel::kSnapshotIsolation:
-  case IsolationLevel::SERIALIZABLE: {
+  case IsolationLevel::kSerializable: {
     if (isCommitTs) {
-      return Worker::my().mActiveTx.startTS() > commitTs;
+      return Worker::my().mActiveTx.mStartTs > commitTs;
     }
 
     if (startTs < local_global_all_lwm_cache) {
@@ -268,18 +240,18 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId,
     }
 
     // Use the cache
-    if (local_snapshot_cache_ts[workerId] == activeTX().startTS()) {
+    if (local_snapshot_cache_ts[workerId] == activeTX().mStartTs) {
       return mLocalSnapshotCache[workerId] >= startTs;
     }
     if (mLocalSnapshotCache[workerId] >= startTs) {
       return true;
     }
-    utils::Timer timer(CRCounters::myCounters().cc_ms_snapshotting);
+    utils::Timer timer(CRCounters::MyCounters().cc_ms_snapshotting);
     TXID largestVisibleTxId =
-        other(workerId).commit_tree.LCB(Worker::my().mActiveTx.startTS());
+        other(workerId).commit_tree.LCB(Worker::my().mActiveTx.mStartTs);
     if (largestVisibleTxId) {
       mLocalSnapshotCache[workerId] = largestVisibleTxId;
-      local_snapshot_cache_ts[workerId] = Worker::my().mActiveTx.startTS();
+      local_snapshot_cache_ts[workerId] = Worker::my().mActiveTx.mStartTs;
       return largestVisibleTxId >= startTs;
     }
     return false;
@@ -291,17 +263,16 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId,
 }
 
 bool ConcurrencyControl::isVisibleForAll(TXID ts) {
-  if (ts & MSB) {
+  if (ts & kMsb) {
     // Commit Timestamp
-    return (ts & MSB_MASK) < Worker::sOldestAllStartTs.load();
-  } else {
-    // Start Timestamp
-    return ts < Worker::sAllLwm.load();
+    return (ts & kMsbMask) < Worker::sOldestAllStartTs.load();
   }
+  // Start Timestamp
+  return ts < Worker::sAllLwm.load();
 }
 
 TXID ConcurrencyControl::CommitTree::commit(TXID startTs) {
-  utils::Timer timer(CRCounters::myCounters().cc_ms_committing);
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_committing);
   mutex.lock();
   assert(cursor < capacity);
   const TXID commitTs = sGlobalClock.fetch_add(1);
@@ -312,20 +283,19 @@ TXID ConcurrencyControl::CommitTree::commit(TXID startTs) {
 
 std::optional<std::pair<TXID, TXID>> ConcurrencyControl::CommitTree::LCBUnsafe(
     TXID startTs) {
-  const auto begin = array;
-  const auto end = array + cursor;
-  auto it =
+  auto* const begin = array;
+  auto* const end = array + cursor;
+  auto* it =
       std::lower_bound(begin, end, startTs, [&](const auto& pair, TXID ts) {
         return pair.first < ts;
       });
 
   if (it == begin) {
-    // raise(SIGTRAP);
     return {};
   }
 
   it--;
-  assert(it->second < startTs);
+  DCHECK(it->second < startTs);
   return *it;
 }
 
@@ -345,7 +315,7 @@ void ConcurrencyControl::CommitTree::cleanIfNecessary() {
     return;
   }
 
-  utils::Timer timer(CRCounters::myCounters().cc_ms_gc_cm);
+  utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_cm);
   std::set<std::pair<TXID, TXID>> set; // TODO: unordered_set
 
   const WORKERID myWorkerId = cr::Worker::Worker::my().mWorkerId;
@@ -354,10 +324,10 @@ void ConcurrencyControl::CommitTree::cleanIfNecessary() {
       continue;
     }
     u64 itsStartTs = Worker::sWorkersCurrentSnapshot[i].load();
-    while (itsStartTs & Worker::LATCH_BIT) {
+    while (itsStartTs & Worker::kLatchBit) {
       itsStartTs = Worker::sWorkersCurrentSnapshot[i].load();
     }
-    itsStartTs &= Worker::CLEAN_BITS_MASK;
+    itsStartTs &= Worker::kCleanBitsMask;
     set.insert(array[cursor - 1]); // for  the new TX
     if (itsStartTs == 0) {
       // to avoid race conditions when switching from RC to SI

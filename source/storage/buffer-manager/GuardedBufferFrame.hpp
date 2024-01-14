@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Exceptions.hpp"
-#include "concurrency-recovery/CRMG.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
+#include "concurrency-recovery/WALEntry.hpp"
+#include "concurrency-recovery/Worker.hpp"
+#include "shared-headers/Exceptions.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "storage/buffer-manager/Tracing.hpp"
 #include "sync-primitives/HybridGuard.hpp"
@@ -11,6 +11,13 @@
 
 namespace leanstore {
 namespace storage {
+
+enum class LatchMode : u8 {
+  kShared = 0,
+  kExclusive = 1,
+  kJump = 2,
+  kSpin = 3,
+};
 
 template <typename T> class ExclusiveGuardedBufferFrame;
 template <typename T> class SharedGuardedBufferFrame;
@@ -36,7 +43,8 @@ public:
   /// @param hybridGuard the latch guard of the buffer frame
   /// @param bf the latch guarded buffer frame
   GuardedBufferFrame(HybridGuard&& hybridGuard, BufferFrame* bf)
-      : mBf(bf), mGuard(std::move(hybridGuard)) {
+      : mBf(bf),
+        mGuard(std::move(hybridGuard)) {
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
@@ -49,7 +57,7 @@ public:
   /// @param keepAlive
   GuardedBufferFrame(TREEID treeId, bool keepAlive = true)
       : mBf(&BufferManager::sInstance->AllocNewPage()),
-        mGuard(mBf->header.mLatch, GUARD_STATE::EXCLUSIVE),
+        mGuard(mBf->header.mLatch, GuardState::kExclusive),
         mKeepAlive(keepAlive) {
     mBf->page.mBTreeId = treeId;
     MarkAsDirty();
@@ -58,10 +66,10 @@ public:
 
   /// Construct a GuardedBufferFrame from a HOT swip, usually used for latching
   /// the meta node of a BTree.
-  GuardedBufferFrame(
-      Swip<BufferFrame> hotSwip,
-      const LATCH_FALLBACK_MODE ifContended = LATCH_FALLBACK_MODE::SPIN)
-      : mBf(&hotSwip.AsBufferFrame()), mGuard(&mBf->header.mLatch) {
+  GuardedBufferFrame(Swip<BufferFrame> hotSwip,
+                     const LatchMode ifContended = LatchMode::kSpin)
+      : mBf(&hotSwip.AsBufferFrame()),
+        mGuard(&mBf->header.mLatch) {
     latchMayJump(mGuard, ifContended);
     SyncGSNBeforeRead();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
@@ -77,9 +85,8 @@ public:
   /// memory if it is evicted.
   /// @param ifContended Lock fall back mode if contention happens.
   template <typename T2>
-  GuardedBufferFrame(
-      GuardedBufferFrame<T2>& guardedParent, Swip<T>& childSwip,
-      const LATCH_FALLBACK_MODE ifContended = LATCH_FALLBACK_MODE::SPIN)
+  GuardedBufferFrame(GuardedBufferFrame<T2>& guardedParent, Swip<T>& childSwip,
+                     const LatchMode ifContended = LatchMode::kSpin)
       : mBf(BufferManager::sInstance->tryFastResolveSwip(
             guardedParent.mGuard, childSwip.template CastTo<BufferFrame>())),
         mGuard(&mBf->header.mLatch) {
@@ -119,7 +126,7 @@ public:
   JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP(GuardedBufferFrame)
 
   ~GuardedBufferFrame() {
-    if (mGuard.mState == GUARD_STATE::EXCLUSIVE) {
+    if (mGuard.mState == GuardState::kExclusive) {
       if (!mKeepAlive) {
         reclaim();
       }
@@ -181,7 +188,7 @@ public:
   template <typename WT, typename... Args>
   cr::WALPayloadHandler<WT> ReserveWALPayload(u64 payloadSize, Args&&... args) {
     DCHECK(FLAGS_wal);
-    DCHECK(mGuard.mState == GUARD_STATE::EXCLUSIVE);
+    DCHECK(mGuard.mState == GuardState::kExclusive);
 
     SyncGSNBeforeWrite();
 
@@ -246,30 +253,30 @@ public:
 
   void reclaim() {
     BufferManager::sInstance->reclaimPage(*(mBf));
-    mGuard.mState = GUARD_STATE::MOVED;
+    mGuard.mState = GuardState::kMoved;
   }
 
 protected:
-  void latchMayJump(HybridGuard& guard, const LATCH_FALLBACK_MODE ifContended) {
+  void latchMayJump(HybridGuard& guard, const LatchMode ifContended) {
     switch (ifContended) {
-    case LATCH_FALLBACK_MODE::SPIN: {
+    case LatchMode::kSpin: {
       guard.toOptimisticSpin();
       break;
     }
-    case LATCH_FALLBACK_MODE::EXCLUSIVE: {
+    case LatchMode::kExclusive: {
       guard.toOptimisticOrExclusive();
       break;
     }
-    case LATCH_FALLBACK_MODE::SHARED: {
+    case LatchMode::kShared: {
       guard.toOptimisticOrShared();
       break;
     }
-    case LATCH_FALLBACK_MODE::JUMP: {
+    case LatchMode::kJump: {
       guard.toOptimisticOrJump();
       break;
     }
     default: {
-      DCHECK(false) << "Unhandled LATCH_FALLBACK_MODE: "
+      DCHECK(false) << "Unhandled LatchMode: "
                     << std::to_string(static_cast<u64>(ifContended));
     }
     }
@@ -293,8 +300,8 @@ public:
         payloadSize, std::forward<Args>(args)...);
   }
 
-  inline void submitWALEntry(u64 total_size) {
-    mRefGuard.submitWALEntry(total_size);
+  inline void submitWALEntry(u64 totalSize) {
+    mRefGuard.submitWALEntry(totalSize);
   }
 
   void keepAlive() {
@@ -311,7 +318,7 @@ public:
 
   ~ExclusiveGuardedBufferFrame() {
     if (!mRefGuard.mKeepAlive &&
-        mRefGuard.mGuard.mState == GUARD_STATE::EXCLUSIVE) {
+        mRefGuard.mGuard.mState == GuardState::kExclusive) {
       mRefGuard.reclaim();
     } else {
       mRefGuard.unlock();

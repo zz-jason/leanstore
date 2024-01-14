@@ -1,21 +1,11 @@
 #pragma once
 
-#include "Config.hpp"
-#include "Exceptions.hpp"
 #include "HistoryTreeInterface.hpp"
-#include "KVInterface.hpp"
-#include "Units.hpp"
+#include "concurrency-recovery/Worker.hpp"
+#include "shared-headers/Units.hpp"
 #include "storage/btree/BTreeLL.hpp"
-#include "utils/Misc.hpp"
 
-#include <atomic>
-#include <condition_variable>
 #include <functional>
-#include <map>
-#include <shared_mutex>
-#include <thread>
-#include <unordered_map>
-#include <vector>
 
 namespace leanstore {
 namespace cr {
@@ -45,8 +35,8 @@ private:
     bool rightmost_init = false;
     bool leftmost_init = false;
   };
-  Session update_sessions[leanstore::cr::STATIC_MAX_WORKERS];
-  Session remove_sessions[leanstore::cr::STATIC_MAX_WORKERS];
+  Session update_sessions[leanstore::cr::kWorkerLimit];
+  Session remove_sessions[leanstore::cr::kWorkerLimit];
 
 public:
   std::unique_ptr<BTreeLL*[]> update_btrees;

@@ -2,7 +2,7 @@
 
 #include "BMPlainGuard.hpp"
 #include "BufferFrame.hpp"
-#include "Units.hpp"
+#include "shared-headers/Units.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
 
@@ -10,6 +10,8 @@
 
 #include <expected>
 #include <functional>
+#include <limits>
+#include <memory>
 #include <mutex>
 #include <tuple>
 #include <unordered_map>
@@ -31,7 +33,7 @@ public:
   Swip<BufferFrame>& mChildSwip;
 
   /// @brief mPosInParent is the slot id in the parent buffer frame.
-  s64 mPosInParent = -2;
+  u32 mPosInParent = std::numeric_limits<u32>::max();
 
   /// @brief mIsChildBfUpdated records whether the child buffer frame is updated
   /// since this ParentSwipHandler was created.
@@ -43,7 +45,7 @@ public:
   }
 };
 
-enum class SpaceCheckResult : u8 { NOTHING, PICK_ANOTHER_BF, RESTART_SAME_BF };
+enum class SpaceCheckResult : u8 { kNothing, kPickAnotherBf, kRestartSameBf };
 
 using ChildSwipCallback = std::function<bool(Swip<BufferFrame>&)>;
 
@@ -296,7 +298,7 @@ public:
   }
 
 public:
-  static inline std::unique_ptr<TreeRegistry> sInstance = nullptr;
+  static std::unique_ptr<TreeRegistry> sInstance;
 };
 
 } // namespace storage

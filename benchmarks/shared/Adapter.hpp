@@ -1,9 +1,8 @@
 #pragma once
 
-#include "Exceptions.hpp"
-#include "Types.hpp"
-
 #include "KVInterface.hpp"
+#include "Types.hpp"
+#include "shared-headers/Exceptions.hpp"
 #include "storage/btree/core/WALMacros.hpp"
 
 #include <cassert>
@@ -16,13 +15,13 @@
 // updating in a fixed-size value
 #define UpdateDescriptorInit(Name, Count)                                      \
   u8 Name##_buffer[sizeof(leanstore::UpdateDesc) +                             \
-                   (sizeof(leanstore::UpdateDiffSlot) * Count)];               \
+                   (sizeof(leanstore::UpdateSlotInfo) * Count)];               \
   auto& Name = *reinterpret_cast<leanstore::UpdateDesc*>(Name##_buffer);       \
   Name.count = Count;
 
 #define UpdateDescriptorFillSlot(Name, Index, Type, Attribute)                 \
-  Name.mDiffSlots[Index].offset = offsetof(Type, Attribute);                   \
-  Name.mDiffSlots[Index].length = sizeof(Type::Attribute);
+  Name.mUpdateSlots[Index].offset = offsetof(Type, Attribute);                 \
+  Name.mUpdateSlots[Index].length = sizeof(Type::Attribute);
 
 #define UpdateDescriptorGenerator1(Name, Type, A0)                             \
   UpdateDescriptorInit(Name, 1);                                               \

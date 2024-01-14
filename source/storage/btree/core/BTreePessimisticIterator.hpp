@@ -22,7 +22,7 @@ public:
   /// The working btree, all the seek operations are based on this tree.
   BTreeGeneric& mBTree;
 
-  const LATCH_FALLBACK_MODE mode;
+  const LatchMode mode;
 
   /// mFuncEnterLeaf is called when the target leaf node is found.
   LeafCallback mFuncEnterLeaf = nullptr;
@@ -61,7 +61,7 @@ public:
 
 protected:
   // We need a custom findLeafAndLatch to track the position in parent node
-  template <LATCH_FALLBACK_MODE mode = LATCH_FALLBACK_MODE::SHARED>
+  template <LatchMode mode = LatchMode::kShared>
   void findLeafAndLatch(GuardedBufferFrame<BTreeNode>& guardedChild,
                         Slice key) {
     while (true) {
@@ -76,7 +76,7 @@ protected:
 
         for (u16 level = 0; !guardedChild->mIsLeaf; level++) {
           COUNTERS_BLOCK() {
-            WorkerCounters::myCounters().dt_inner_page[mBTree.mTreeId]++;
+            WorkerCounters::MyCounters().dt_inner_page[mBTree.mTreeId]++;
           }
           mLeafPosInParent = guardedChild->lowerBound<false>(key);
           auto* childSwip =
@@ -90,7 +90,7 @@ protected:
         }
 
         mGuardedParent.unlock();
-        if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
+        if (mode == LatchMode::kExclusive) {
           guardedChild.ToExclusiveMayJump();
         } else {
           guardedChild.ToSharedMayJump();
@@ -108,27 +108,29 @@ protected:
 
   void gotoPage(const Slice& key) {
     COUNTERS_BLOCK() {
-      if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
-        WorkerCounters::myCounters().dt_goto_page_exec[mBTree.mTreeId]++;
+      if (mode == LatchMode::kExclusive) {
+        WorkerCounters::MyCounters().dt_goto_page_exec[mBTree.mTreeId]++;
       } else {
-        WorkerCounters::myCounters().dt_goto_page_shared[mBTree.mTreeId]++;
+        WorkerCounters::MyCounters().dt_goto_page_shared[mBTree.mTreeId]++;
       }
     }
 
     // TODO: refactor when we get ride of serializability tests
-    if (mode == LATCH_FALLBACK_MODE::SHARED) {
-      findLeafAndLatch<LATCH_FALLBACK_MODE::SHARED>(mGuardedLeaf, key);
-    } else if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
-      findLeafAndLatch<LATCH_FALLBACK_MODE::EXCLUSIVE>(mGuardedLeaf, key);
+    if (mode == LatchMode::kShared) {
+      findLeafAndLatch<LatchMode::kShared>(mGuardedLeaf, key);
+    } else if (mode == LatchMode::kExclusive) {
+      findLeafAndLatch<LatchMode::kExclusive>(mGuardedLeaf, key);
     } else {
       UNREACHABLE();
     }
   }
 
 public:
-  BTreePessimisticIterator(BTreeGeneric& tree, const LATCH_FALLBACK_MODE mode =
-                                                   LATCH_FALLBACK_MODE::SHARED)
-      : mBTree(tree), mode(mode), mBuffer(FLAGS_page_size, 0) {
+  BTreePessimisticIterator(BTreeGeneric& tree,
+                           const LatchMode mode = LatchMode::kShared)
+      : mBTree(tree),
+        mode(mode),
+        mBuffer(FLAGS_page_size, 0) {
   }
 
   void enterLeafCallback(LeafCallback cb) {
@@ -201,10 +203,10 @@ public:
 
   virtual OpCode next() override {
     COUNTERS_BLOCK() {
-      WorkerCounters::myCounters().dt_next_tuple[mBTree.mTreeId]++;
+      WorkerCounters::MyCounters().dt_next_tuple[mBTree.mTreeId]++;
     }
     while (true) {
-      ENSURE(mGuardedLeaf.mGuard.mState != GUARD_STATE::OPTIMISTIC);
+      ENSURE(mGuardedLeaf.mGuard.mState != GuardState::kOptimistic);
       if ((mSlotId + 1) < mGuardedLeaf->mNumSeps) {
         mSlotId += 1;
         return OpCode::kOK;
@@ -235,8 +237,8 @@ public:
             auto& nextLeafSwip =
                 mGuardedParent->GetChildIncludingRightMost(nextLeafPos);
             GuardedBufferFrame guardedNextLeaf(mGuardedParent, nextLeafSwip,
-                                               LATCH_FALLBACK_MODE::JUMP);
-            if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
+                                               LatchMode::kJump);
+            if (mode == LatchMode::kExclusive) {
               guardedNextLeaf.TryToExclusiveMayJump();
             } else {
               guardedNextLeaf.TryToSharedMayJump();
@@ -256,7 +258,7 @@ public:
             }
             ENSURE(mSlotId < mGuardedLeaf->mNumSeps);
             COUNTERS_BLOCK() {
-              WorkerCounters::myCounters().dt_next_tuple_opt[mBTree.mTreeId]++;
+              WorkerCounters::MyCounters().dt_next_tuple_opt[mBTree.mTreeId]++;
             }
             JUMPMU_RETURN OpCode::kOK;
           }
@@ -271,13 +273,13 @@ public:
       if (mGuardedLeaf->mNumSeps == 0) {
         cleanUpCallback([&, toMerge = mGuardedLeaf.mBf]() {
           JUMPMU_TRY() {
-            mBTree.tryMerge(*toMerge, true);
+            mBTree.TryMergeMayJump(*toMerge, true);
           }
           JUMPMU_CATCH() {
           }
         });
         COUNTERS_BLOCK() {
-          WorkerCounters::myCounters().dt_empty_leaf[mBTree.mTreeId]++;
+          WorkerCounters::MyCounters().dt_empty_leaf[mBTree.mTreeId]++;
         }
         continue;
       }
@@ -291,11 +293,11 @@ public:
 
   virtual OpCode prev() override {
     COUNTERS_BLOCK() {
-      WorkerCounters::myCounters().dt_prev_tuple[mBTree.mTreeId]++;
+      WorkerCounters::MyCounters().dt_prev_tuple[mBTree.mTreeId]++;
     }
 
     while (true) {
-      ENSURE(mGuardedLeaf.mGuard.mState != GUARD_STATE::OPTIMISTIC);
+      ENSURE(mGuardedLeaf.mGuard.mState != GuardState::kOptimistic);
       if ((mSlotId - 1) >= 0) {
         mSlotId -= 1;
         return OpCode::kOK;
@@ -328,8 +330,8 @@ public:
               s32 nextLeafPos = mLeafPosInParent - 1;
               auto& nextLeafSwip = mGuardedParent->getChild(nextLeafPos);
               GuardedBufferFrame guardedNextLeaf(mGuardedParent, nextLeafSwip,
-                                                 LATCH_FALLBACK_MODE::JUMP);
-              if (mode == LATCH_FALLBACK_MODE::EXCLUSIVE) {
+                                                 LatchMode::kJump);
+              if (mode == LatchMode::kExclusive) {
                 guardedNextLeaf.TryToExclusiveMayJump();
               } else {
                 guardedNextLeaf.TryToSharedMayJump();
@@ -348,7 +350,7 @@ public:
                 JUMPMU_CONTINUE;
               }
               COUNTERS_BLOCK() {
-                WorkerCounters::myCounters()
+                WorkerCounters::MyCounters()
                     .dt_prev_tuple_opt[mBTree.mTreeId]++;
               }
               JUMPMU_RETURN OpCode::kOK;
@@ -362,7 +364,7 @@ public:
 
         if (mGuardedLeaf->mNumSeps == 0) {
           COUNTERS_BLOCK() {
-            WorkerCounters::myCounters().dt_empty_leaf[mBTree.mTreeId]++;
+            WorkerCounters::MyCounters().dt_empty_leaf[mBTree.mTreeId]++;
           }
           continue;
         }

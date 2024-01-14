@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Adapter.hpp"
-#include "Exceptions.hpp"
 #include "LeanStore.hpp"
+#include "shared-headers/Exceptions.hpp"
 
 #include <glog/logging.h>
 
@@ -34,10 +34,6 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
       db.RegisterBTreeVI(name, config, &tree);
       btree = reinterpret_cast<leanstore::KVInterface*>(tree);
     }
-  }
-
-  void printTreeHeight() {
-    cout << name << " height = " << btree->getHeight() << endl;
   }
 
   void ScanDesc(
@@ -95,9 +91,9 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
 
     const OpCode res = btree->updateSameSizeInPlace(
         Slice(foldedKey, foldedKeySize),
-        [&](MutableSlice val) {
-          DCHECK(val.Size() == sizeof(Record));
-          auto& record = *reinterpret_cast<Record*>(val.data());
+        [&](MutableSlice mutRawVal) {
+          DCHECK(mutRawVal.Size() == sizeof(Record));
+          auto& record = *reinterpret_cast<Record*>(mutRawVal.Data());
           cb(record);
         },
         updateDesc);

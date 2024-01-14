@@ -1,21 +1,18 @@
 #include "Config.hpp"
 #include "LeanStore.hpp"
-#include "Units.hpp"
+#include "concurrency-recovery/CRMG.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "shared-headers/Units.hpp"
 #include "shared/LeanStoreAdapter.hpp"
 #include "shared/Schema.hpp"
-
-#include "utils/FVector.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
 #include "utils/ScrambledZipfGenerator.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
-#include <tbb/parallel_for.h>
 
 #include <iostream>
-#include <set>
 
 DEFINE_uint32(ycsb_read_ratio, 100, "");
 DEFINE_uint64(ycsb_tuple_count, 0, "");
@@ -34,7 +31,7 @@ using YCSBKey = u64;
 using YCSBPayload = BytesPayload<8>;
 using KVTable = Relation<YCSBKey, YCSBPayload>;
 
-double calculateMTPS(chrono::high_resolution_clock::time_point begin,
+double CalculateMTPS(chrono::high_resolution_clock::time_point begin,
                      chrono::high_resolution_clock::time_point end,
                      u64 factor) {
   double tps =
@@ -61,8 +58,8 @@ int main(int argc, char** argv) {
   // db.registerConfigEntry("ycsb_threads", FLAGS_ycsb_threads);
   // db.registerConfigEntry("ycsb_ops_per_tx", FLAGS_ycsb_ops_per_tx);
 
-  auto isolation_level = leanstore::parseIsolationLevel(FLAGS_isolation_level);
-  const TX_MODE tx_type = TX_MODE::OLTP;
+  auto isolationLevel = leanstore::ParseIsolationLevel(FLAGS_isolation_level);
+  const TxMode txType = TxMode::kOLTP;
 
   const u64 ycsb_tuple_count =
       (FLAGS_ycsb_tuple_count)
@@ -83,7 +80,7 @@ int main(int argc, char** argv) {
             crm.scheduleJobAsync(t_i, [&, begin, end]() {
               for (u64 i = begin; i < end; i++) {
                 YCSBPayload result;
-                cr::Worker::my().StartTx(tx_type, isolation_level);
+                cr::Worker::my().StartTx(txType, isolationLevel);
                 table.lookup1(
                     {static_cast<YCSBKey>(i)},
                     [&](const KVTable& record) { result = record.mValue; });
@@ -99,7 +96,7 @@ int main(int argc, char** argv) {
           << (chrono::duration_cast<chrono::microseconds>(end - begin).count() /
               1000000.0)
           << " seconds";
-      LOG(INFO) << calculateMTPS(begin, end, n) << " M tps";
+      LOG(INFO) << CalculateMTPS(begin, end, n) << " M tps";
     }
   } else {
     LOG(INFO) << "Inserting " << ycsb_tuple_count << " values";
@@ -115,7 +112,7 @@ int main(int argc, char** argv) {
                   reinterpret_cast<u8*>(&payload), sizeof(YCSBPayload));
               YCSBKey key = i;
               cr::Worker::my().StartTx(
-                  tx_type, leanstore::IsolationLevel::kSnapshotIsolation);
+                  txType, leanstore::IsolationLevel::kSnapshotIsolation);
               table.insert({key}, {payload});
               cr::Worker::my().CommitTx();
             }
@@ -128,7 +125,7 @@ int main(int argc, char** argv) {
         << (chrono::duration_cast<chrono::microseconds>(end - begin).count() /
             1000000.0)
         << " seconds";
-    LOG(INFO) << calculateMTPS(begin, end, n) << " M tps";
+    LOG(INFO) << CalculateMTPS(begin, end, n) << " M tps";
 
     const u64 written_pages = BufferManager::sInstance->consumedPages();
     const u64 mib = written_pages * FLAGS_page_size / 1024 / 1024;
@@ -160,7 +157,7 @@ int main(int argc, char** argv) {
           }
           DCHECK(key < ycsb_tuple_count);
           YCSBPayload result;
-          cr::Worker::my().StartTx(tx_type, isolation_level);
+          cr::Worker::my().StartTx(txType, isolationLevel);
           for (u64 op_i = 0; op_i < FLAGS_ycsb_ops_per_tx; op_i++) {
             if (FLAGS_ycsb_read_ratio == 100 ||
                 utils::RandomGenerator::getRandU64(0, 100) <
@@ -170,12 +167,12 @@ int main(int argc, char** argv) {
             } else {
               const auto updateDescBufSize =
                   sizeof(leanstore::UpdateDesc) +
-                  (sizeof(leanstore::UpdateDiffSlot) * 1);
+                  (sizeof(leanstore::UpdateSlotInfo) * 1);
               u8 updateDescBuf[updateDescBufSize];
               auto& updateDesc = *leanstore::UpdateDesc::From(updateDescBuf);
               updateDesc.mNumSlots = 1;
-              updateDesc.mDiffSlots[0].offset = offsetof(KVTable, mValue);
-              updateDesc.mDiffSlots[0].length = sizeof(KVTable::mValue);
+              updateDesc.mUpdateSlots[0].mOffset = offsetof(KVTable, mValue);
+              updateDesc.mUpdateSlots[0].mSize = sizeof(KVTable::mValue);
 
               utils::RandomGenerator::getRandString(
                   reinterpret_cast<u8*>(&result), sizeof(YCSBPayload));
@@ -186,10 +183,10 @@ int main(int argc, char** argv) {
             }
           }
           cr::Worker::my().CommitTx();
-          WorkerCounters::myCounters().tx++;
+          WorkerCounters::MyCounters().tx++;
         }
         JUMPMU_CATCH() {
-          WorkerCounters::myCounters().tx_abort++;
+          WorkerCounters::MyCounters().tx_abort++;
         }
       }
       running_threads_counter--;
@@ -197,9 +194,9 @@ int main(int argc, char** argv) {
   }
 
   if (FLAGS_ycsb_sleepy_thread) {
-    const leanstore::TX_MODE tx_type = FLAGS_enable_olap_mode
-                                           ? leanstore::TX_MODE::OLAP
-                                           : leanstore::TX_MODE::OLTP;
+    const leanstore::TxMode tx_type = FLAGS_enable_olap_mode
+                                          ? leanstore::TxMode::kOLAP
+                                          : leanstore::TxMode::kOLTP;
     crm.scheduleJobAsync(exec_threads - 1, [&]() {
       running_threads_counter++;
       while (keep_running) {

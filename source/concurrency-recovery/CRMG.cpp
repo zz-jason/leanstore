@@ -4,13 +4,10 @@
 #include "concurrency-recovery/HistoryTree.hpp"
 #include "profiling/counters/CPUCounters.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
-#include "utils/ThreadHolder.hpp"
 
-#include <cassert>
 #include <glog/logging.h>
 
 #include <mutex>
-#include <stdexcept>
 
 namespace leanstore {
 namespace cr {
@@ -25,7 +22,8 @@ std::atomic<u64> CRManager::sFsyncCounter = 0;
 std::atomic<u64> CRManager::sSsdOffset = 1 * 1024 * 1024 * 1024;
 
 CRManager::CRManager(s32 walFd)
-    : mGroupCommitter(nullptr), mHistoryTreePtr(nullptr),
+    : mGroupCommitter(nullptr),
+      mHistoryTreePtr(nullptr),
       mWorkerThreadsMeta(FLAGS_worker_threads) {
 
   // create worker threads to handle user transactions
@@ -80,14 +78,14 @@ void CRManager::runWorker(u64 workerId) {
 
   // pin the worker thread by need
   if (FLAGS_enable_pin_worker_threads) {
-    utils::pinThisThread(workerId);
+    utils::PinThisThread(workerId);
   }
 
   if (FLAGS_cpu_counters) {
     CPUCounters::registerThread(workerName, false);
   }
-  WorkerCounters::myCounters().mWorkerId = workerId;
-  CRCounters::myCounters().mWorkerId = workerId;
+  WorkerCounters::MyCounters().mWorkerId = workerId;
+  CRCounters::MyCounters().mWorkerId = workerId;
 
   Worker::sTlsWorker =
       std::make_unique<Worker>(workerId, mWorkers, FLAGS_worker_threads);
@@ -206,22 +204,22 @@ void CRManager::joinOne(u64 workerId,
   meta.cv.wait(guard, [&]() { return condition(meta); });
 }
 
-constexpr char KEY_WAL_SIZE[] = "wal_size";
-constexpr char KEY_GLOBAL_LOGICAL_CLOCK[] = "global_logical_clock";
+constexpr char kKeyWalSize[] = "wal_size";
+constexpr char kKeyGlobalLogicalClock[] = "global_logical_clock";
 
 StringMap CRManager::serialize() {
   StringMap map;
   u64 val = ConcurrencyControl::sGlobalClock.load();
-  map[KEY_WAL_SIZE] = std::to_string(mGroupCommitter->mWalSize);
-  map[KEY_GLOBAL_LOGICAL_CLOCK] = std::to_string(val);
+  map[kKeyWalSize] = std::to_string(mGroupCommitter->mWalSize);
+  map[kKeyGlobalLogicalClock] = std::to_string(val);
   return map;
 }
 
 void CRManager::deserialize(StringMap map) {
-  u64 val = std::stoull(map[KEY_GLOBAL_LOGICAL_CLOCK]);
+  u64 val = std::stoull(map[kKeyGlobalLogicalClock]);
   ConcurrencyControl::sGlobalClock = val;
   Worker::sAllLwm = val;
-  mGroupCommitter->mWalSize = std::stoull(map[KEY_WAL_SIZE]);
+  mGroupCommitter->mWalSize = std::stoull(map[kKeyWalSize]);
 }
 
 } // namespace cr

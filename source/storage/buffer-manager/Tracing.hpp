@@ -1,14 +1,9 @@
 #pragma once
 
-#include "BufferFrame.hpp"
-#include "Config.hpp"
-#include "FreeList.hpp"
-#include "Units.hpp"
+#include "shared-headers/Units.hpp"
 
-#include <list>
 #include <mutex>
 #include <unordered_map>
-#include <vector>
 
 namespace leanstore {
 namespace storage {

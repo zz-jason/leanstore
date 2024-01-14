@@ -2,13 +2,15 @@
 
 #include "KVInterface.hpp"
 #include "LeanStore.hpp"
-#include "Units.hpp"
+#include "concurrency-recovery/CRMG.hpp"
+#include "concurrency-recovery/Transaction.hpp"
+#include "shared-headers/Units.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
 
-#include <cstring>
 #include <glog/logging.h>
 
+#include <cstring>
 #include <expected>
 #include <filesystem>
 #include <memory>
@@ -47,6 +49,7 @@ class TableRef;
 class Session {
 public:
   // Transaction operations
+  virtual void SetIsolationLevel(IsolationLevel) = 0;
   virtual void StartTx() = 0;
   virtual void CommitTx() = 0;
   virtual void AbortTx() = 0;
@@ -113,15 +116,20 @@ class LeanStoreMVCCSession : public Session {
 private:
   WORKERID mWorkerId;
   LeanStoreMVCC* mStore;
+  TxMode mTxMode = TxMode::kOLTP;
+  IsolationLevel mIsolationLevel = IsolationLevel::kSnapshotIsolation;
 
 public:
   LeanStoreMVCCSession(WORKERID sessionId, LeanStoreMVCC* store)
-      : mWorkerId(sessionId), mStore(store) {
+      : mWorkerId(sessionId),
+        mStore(store),
+        mIsolationLevel(IsolationLevel::kSnapshotIsolation) {
   }
   ~LeanStoreMVCCSession() = default;
 
 public:
   // Transaction operations
+  void SetIsolationLevel(IsolationLevel) override;
   void StartTx() override;
   void CommitTx() override;
   void AbortTx() override;
@@ -189,9 +197,13 @@ inline Session* LeanStoreMVCC::GetSession(WORKERID sessionId) {
 //------------------------------------------------------------------------------
 // LeanStoreMVCC
 //------------------------------------------------------------------------------
+inline void LeanStoreMVCCSession::SetIsolationLevel(IsolationLevel level) {
+  mIsolationLevel = level;
+}
+
 inline void LeanStoreMVCCSession::StartTx() {
   cr::CRManager::sInstance->scheduleJobSync(
-      mWorkerId, [&]() { cr::Worker::my().StartTx(); });
+      mWorkerId, [&]() { cr::Worker::my().StartTx(mTxMode, mIsolationLevel); });
 }
 
 inline void LeanStoreMVCCSession::CommitTx() {
@@ -205,8 +217,8 @@ inline void LeanStoreMVCCSession::AbortTx() {
 }
 
 // DDL operations
-auto LeanStoreMVCCSession::CreateTable(const std::string& tblName,
-                                       bool implicitTx)
+inline auto LeanStoreMVCCSession::CreateTable(const std::string& tblName,
+                                              bool implicitTx)
     -> std::expected<TableRef*, utils::Error> {
   auto config = storage::btree::BTreeGeneric::Config{
       .mEnableWal = FLAGS_wal,
@@ -216,7 +228,7 @@ auto LeanStoreMVCCSession::CreateTable(const std::string& tblName,
   storage::btree::BTreeVI* btree;
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::my().StartTx();
+      cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
     }
     mStore->mLeanStore->RegisterBTreeVI(tblName, config, &btree);
     if (implicitTx) {
@@ -229,12 +241,12 @@ auto LeanStoreMVCCSession::CreateTable(const std::string& tblName,
   return reinterpret_cast<TableRef*>(btree);
 }
 
-auto LeanStoreMVCCSession::DropTable(const std::string& tblName,
-                                     bool implicitTx)
+inline auto LeanStoreMVCCSession::DropTable(const std::string& tblName,
+                                            bool implicitTx)
     -> std::expected<void, utils::Error> {
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::my().StartTx();
+      cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
     }
     mStore->mLeanStore->UnRegisterBTreeVI(tblName);
     if (implicitTx) {
@@ -245,14 +257,14 @@ auto LeanStoreMVCCSession::DropTable(const std::string& tblName,
 }
 
 // DML operations
-auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
-                               bool implicitTx)
+inline auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
+                                      bool implicitTx)
     -> std::expected<void, utils::Error> {
   auto* btree = reinterpret_cast<storage::btree::BTreeVI*>(tbl);
   OpCode res;
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::my().StartTx();
+      cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
     }
     SCOPED_DEFER(if (implicitTx) {
       if (res == OpCode::kOK) {
@@ -272,8 +284,8 @@ auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
   return {};
 }
 
-auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key, std::string& val,
-                               bool implicitTx)
+inline auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key,
+                                      std::string& val, bool implicitTx)
     -> std::expected<u64, utils::Error> {
   auto* btree = reinterpret_cast<storage::btree::BTreeVI*>(tbl);
   OpCode res;
@@ -284,8 +296,7 @@ auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key, std::string& val,
 
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::my().StartTx(TX_MODE::OLTP,
-                               IsolationLevel::kSnapshotIsolation, true);
+      cr::Worker::my().StartTx(mTxMode, mIsolationLevel, true);
     }
     SCOPED_DEFER(if (implicitTx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
@@ -307,17 +318,17 @@ auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key, std::string& val,
       utils::Error::General("Get failed: " + ToString(res)));
 }
 
-auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
-                                  bool implicitTx)
+inline auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
+                                         bool implicitTx)
     -> std::expected<u64, utils::Error> {
   auto* btree = reinterpret_cast<storage::btree::BTreeVI*>(tbl);
   OpCode res;
   auto updateCallBack = [&](MutableSlice toUpdate) {
-    std::memcpy(toUpdate.data(), val.data(), val.length());
+    std::memcpy(toUpdate.Data(), val.data(), val.length());
   };
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::my().StartTx();
+      cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
     }
     SCOPED_DEFER(if (implicitTx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
@@ -331,8 +342,8 @@ auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
     u8 updateDescBuf[updateDescBufSize];
     auto* updateDesc = UpdateDesc::CreateFrom(updateDescBuf);
     updateDesc->mNumSlots = 1;
-    updateDesc->mDiffSlots[0].offset = 0;
-    updateDesc->mDiffSlots[0].length = val.size();
+    updateDesc->mUpdateSlots[0].mOffset = 0;
+    updateDesc->mUpdateSlots[0].mSize = val.size();
     res = btree->updateSameSizeInPlace(Slice((const u8*)key.data(), key.size()),
                                        updateCallBack, *updateDesc);
   });
@@ -346,13 +357,14 @@ auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
       utils::Error::General("Update failed: " + ToString(res)));
 }
 
-auto LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key, bool implicitTx)
+inline auto LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key,
+                                         bool implicitTx)
     -> std::expected<u64, utils::Error> {
   auto* btree = reinterpret_cast<storage::btree::BTreeVI*>(tbl);
   OpCode res;
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::my().StartTx();
+      cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
     }
     SCOPED_DEFER(if (implicitTx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {

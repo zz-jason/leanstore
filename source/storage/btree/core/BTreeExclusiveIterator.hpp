@@ -13,12 +13,12 @@ namespace btree {
 class BTreeExclusiveIterator : public BTreePessimisticIterator {
 public:
   BTreeExclusiveIterator(BTreeGeneric& tree)
-      : BTreePessimisticIterator(tree, LATCH_FALLBACK_MODE::EXCLUSIVE) {
+      : BTreePessimisticIterator(tree, LatchMode::kExclusive) {
   }
 
   BTreeExclusiveIterator(BTreeGeneric& tree, BufferFrame* bf,
                          const u64 bfVersion)
-      : BTreePessimisticIterator(tree, LATCH_FALLBACK_MODE::EXCLUSIVE) {
+      : BTreePessimisticIterator(tree, LatchMode::kExclusive) {
     HybridGuard asItWasWitnessed(bf->header.mLatch, bfVersion);
     asItWasWitnessed.JumpIfModifiedByOthers();
     mGuardedLeaf =
@@ -82,7 +82,7 @@ public:
     while (true) {
       JUMPMU_TRY() {
         if (mSlotId == -1 || !keyInCurrentBoundaries(key)) {
-          mBTree.FindLeafCanJump<LATCH_FALLBACK_MODE::SHARED>(key,
+          mBTree.FindLeafCanJump<LatchMode::kShared>(key,
                                                               mGuardedLeaf);
         }
         BufferFrame* bf = mGuardedLeaf.mBf;
@@ -198,7 +198,7 @@ public:
       mSlotId = -1;
       JUMPMU_TRY() {
         mBTree.trySplit(*mGuardedLeaf.mBf, splitSlot);
-        WorkerCounters::myCounters()
+        WorkerCounters::MyCounters()
             .contention_split_succ_counter[mBTree.mTreeId]++;
         DLOG(INFO) << "[Contention Split] contention split succeed"
                    << ", pageId=" << mGuardedLeaf.mBf->header.mPageId
@@ -206,7 +206,7 @@ public:
                    << ", split slot=" << splitSlot;
       }
       JUMPMU_CATCH() {
-        WorkerCounters::myCounters()
+        WorkerCounters::MyCounters()
             .contention_split_fail_counter[mBTree.mTreeId]++;
         LOG(INFO) << "[Contention Split] contention split failed"
                   << ", pageId=" << mGuardedLeaf.mBf->header.mPageId
@@ -244,7 +244,7 @@ public:
       mGuardedLeaf.unlock();
       mSlotId = -1;
       JUMPMU_TRY() {
-        mBTree.tryMerge(*mGuardedLeaf.mBf);
+        mBTree.TryMergeMayJump(*mGuardedLeaf.mBf);
       }
       JUMPMU_CATCH() {
         // nothing, it is fine not to merge

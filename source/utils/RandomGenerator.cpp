@@ -1,13 +1,16 @@
 #include "RandomGenerator.hpp"
 
-#include "Units.hpp"
+#include "shared-headers/Units.hpp"
+
+#include <atomic>
 
 namespace leanstore {
 namespace utils {
-static atomic<u64> mt_counter = 0;
+
+static std::atomic<u64> sMtCounter = 0;
 
 MersenneTwister::MersenneTwister(uint64_t seed) : mti(NN + 1) {
-  init(seed + (mt_counter++));
+  init(seed + (sMtCounter++));
 }
 
 void MersenneTwister::init(uint64_t seed) {
@@ -19,20 +22,20 @@ void MersenneTwister::init(uint64_t seed) {
 
 uint64_t MersenneTwister::rnd() {
   uint64_t x;
-  static const uint64_t mag01[2] = {0ULL, MATRIX_A};
+  static const uint64_t kMag01[2] = {0ULL, MATRIX_A};
 
   if (mti >= NN) { /* generate NN words at one time */
     int i;
     for (i = 0; i < NN - MM; i++) {
       x = (mt[i] & UM) | (mt[i + 1] & LM);
-      mt[i] = mt[i + MM] ^ (x >> 1) ^ mag01[(int)(x & 1ULL)];
+      mt[i] = mt[i + MM] ^ (x >> 1) ^ kMag01[(int)(x & 1ULL)];
     }
     for (; i < NN - 1; i++) {
       x = (mt[i] & UM) | (mt[i + 1] & LM);
-      mt[i] = mt[i + (MM - NN)] ^ (x >> 1) ^ mag01[(int)(x & 1ULL)];
+      mt[i] = mt[i + (MM - NN)] ^ (x >> 1) ^ kMag01[(int)(x & 1ULL)];
     }
     x = (mt[NN - 1] & UM) | (mt[0] & LM);
-    mt[NN - 1] = mt[MM - 1] ^ (x >> 1) ^ mag01[(int)(x & 1ULL)];
+    mt[NN - 1] = mt[MM - 1] ^ (x >> 1) ^ kMag01[(int)(x & 1ULL)];
 
     mti = 0;
   }

@@ -1,41 +1,33 @@
 #include "LeanStore.hpp"
 
-#include "profiling/counters/CPUCounters.hpp"
-#include "profiling/counters/PPCounters.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
+#include "concurrency-recovery/CRMG.hpp"
 #include "profiling/tables/BMTable.hpp"
 #include "profiling/tables/CPUTable.hpp"
 #include "profiling/tables/CRTable.hpp"
 #include "profiling/tables/DTTable.hpp"
 #include "profiling/tables/LatencyTable.hpp"
-#include "utils/DebugFlags.hpp"
 #include "utils/Defer.hpp"
-#include "utils/FVector.hpp"
-#include "utils/ThreadLocalAggregator.hpp"
-
-#include "rapidjson/document.h"
-#include "rapidjson/istreamwrapper.h"
-#include "rapidjson/prettywriter.h"
-#include "rapidjson/stringbuffer.h"
-#include "tabulate/table.hpp"
+#include "utils/UserThread.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
+#include <rapidjson/document.h>
+#include <rapidjson/istreamwrapper.h>
+#include <rapidjson/prettywriter.h>
+#include <rapidjson/stringbuffer.h>
+#include <tabulate/table.hpp>
+
+#include <fstream>
+#include <locale>
+#include <sstream>
 
 #include <linux/fs.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <sys/resource.h>
+#include <sys/stat.h>
 #include <termios.h>
 #include <unistd.h>
-
-#include <sys/stat.h>
-
-#include <locale>
-#include <sstream>
-
-using namespace tabulate;
-using leanstore::utils::threadlocal::sum;
 
 namespace leanstore {
 
@@ -44,11 +36,34 @@ FlagListString LeanStore::sPersistedStringFlags = {};
 FlagListS64 LeanStore::sPersistedS64Flags = {};
 
 LeanStore::LeanStore() {
-  // init logging
+  // init glog
   if (!google::IsGoogleLoggingInitialized()) {
     FLAGS_logtostderr = 1;
     // FLAGS_log_dir = GetLogDir();
-    google::InitGoogleLogging("leanstore");
+    auto customPrefixCallback = [](std::ostream& s,
+                                   const google::LogMessageInfo& m, void*) {
+      // severity
+      s << "[" << std::string(m.severity) << "]";
+
+      // YYYY-MM-DD hh:mm::ss.xxxxxx
+      s << " [" << setw(4) << 1900 + m.time.year() << "-" << setw(2)
+        << 1 + m.time.month() << "-" << setw(2) << m.time.day() << ' '
+        << setw(2) << m.time.hour() << ':' << setw(2) << m.time.min() << ':'
+        << setw(2) << m.time.sec() << "." << setw(6) << m.time.usec() << ']';
+
+      // thread id and name
+      if (utils::tlsThreadName.size() > 0) {
+        s << " [" << setfill(' ') << setw(5) << m.thread_id << setfill('0')
+          << " " << utils::tlsThreadName << ']';
+      } else {
+        s << " [" << setfill(' ') << setw(5) << m.thread_id << setfill('0')
+          << ']';
+      }
+
+      // filename and line number
+      s << " [" << m.filename << ':' << m.line_number << "]";
+    };
+    google::InitGoogleLogging("leanstore", customPrefixCallback, nullptr);
     LOG(INFO) << "LeanStore starting ...";
   }
   SCOPED_DEFER(LOG(INFO) << "LeanStore started");
@@ -96,7 +111,7 @@ LeanStore::LeanStore() {
     // Write FLAGS_db_file_prealloc_gib data to the SSD file
     if (FLAGS_db_file_prealloc_gib > 0) {
       size_t gib = 1 << 30;
-      auto dummyData = (u8*)aligned_alloc(512, gib);
+      auto* dummyData = (u8*)aligned_alloc(512, gib);
       SCOPED_DEFER({
         free(dummyData);
         fsync(mPageFd);
@@ -152,7 +167,7 @@ LeanStore::~LeanStore() {
     for (auto& it : storage::TreeRegistry::sInstance->mTrees) {
       auto treeId = it.first;
       auto& [treePtr, treeName] = it.second;
-      auto btree = dynamic_cast<storage::btree::BTreeGeneric*>(treePtr.get());
+      auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(treePtr.get());
 
       u64 numEntries(0);
       cr::CRManager::sInstance->scheduleJobSync(
@@ -206,8 +221,8 @@ LeanStore::~LeanStore() {
 }
 
 void LeanStore::startProfilingThread() {
-  std::thread profiling_thread([&]() {
-    utils::pinThisThread(
+  std::thread profilingThread([&]() {
+    utils::PinThisThread(
         ((FLAGS_enable_pin_worker_threads) ? FLAGS_worker_threads : 0) +
         FLAGS_wal + FLAGS_pp_threads);
     if (FLAGS_root) {
@@ -341,7 +356,7 @@ void LeanStore::startProfilingThread() {
     mNumProfilingThreads--;
   });
   mNumProfilingThreads++;
-  profiling_thread.detach();
+  profilingThread.detach();
 }
 
 #define META_KEY_CR_MANAGER "cr_manager"
@@ -397,7 +412,7 @@ void LeanStore::SerializeMeta() {
         continue;
       }
 
-      auto btree = dynamic_cast<storage::btree::BTreeGeneric*>(treePtr.get());
+      auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(treePtr.get());
       rapidjson::Value btreeJsonObj(rapidjson::kObjectType);
       rapidjson::Value btreeJsonName;
       btreeJsonName.SetString(btreeName.data(), btreeName.size(), allocator);

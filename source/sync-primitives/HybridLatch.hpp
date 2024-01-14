@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Units.hpp"
+#include "shared-headers/Units.hpp"
 
 #include <glog/logging.h>
 
@@ -12,11 +12,10 @@
 namespace leanstore {
 namespace storage {
 
-constexpr static u64 LATCH_EXCLUSIVE_BIT = 1ull;
-constexpr static u64 LATCH_VERSION_MASK = ~(0ull);
+constexpr static u64 kLatchExclusiveBit = 1ull;
 
 inline bool HasExclusiveMark(u64 version) {
-  return (version & LATCH_EXCLUSIVE_BIT) == LATCH_EXCLUSIVE_BIT;
+  return (version & kLatchExclusiveBit) == kLatchExclusiveBit;
 }
 
 class HybridGuard;
@@ -29,7 +28,7 @@ class HybridGuard;
 ///   - latch pessimistically in exclusive mode: for high-contention scenarios.
 class alignas(64) HybridLatch {
 private:
-  atomic<u64> mVersion = 0;
+  std::atomic<u64> mVersion = 0;
 
   std::shared_mutex mMutex;
 
@@ -42,12 +41,12 @@ public:
   void LockExclusively() {
     DCHECK(!IsLockedExclusively());
     mMutex.lock();
-    mVersion.fetch_add(LATCH_EXCLUSIVE_BIT);
+    mVersion.fetch_add(kLatchExclusiveBit);
   }
 
   void UnlockExclusively() {
     DCHECK(IsLockedExclusively());
-    mVersion.fetch_add(LATCH_EXCLUSIVE_BIT, std::memory_order_release);
+    mVersion.fetch_add(kLatchExclusiveBit, std::memory_order_release);
     mMutex.unlock();
   }
 

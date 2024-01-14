@@ -1,23 +1,19 @@
 #include "Worker.hpp"
-
-#include "profiling/counters/CPUCounters.hpp"
-#include "profiling/counters/CRCounters.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "shared-headers/Exceptions.hpp"
 #include "utils/Defer.hpp"
-#include "utils/Misc.hpp"
-
-#include "rapidjson/stringbuffer.h"
-#include "rapidjson/writer.h"
 
 #include <glog/logging.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 
 #include <cstring>
 
 namespace leanstore {
 namespace cr {
 
-atomic<u64> Logging::sGlobalMinFlushedGSN = 0;
-atomic<u64> Logging::sGlobalMaxFlushedGSN = 0;
+std::atomic<u64> Logging::sGlobalMinFlushedGSN = 0;
+std::atomic<u64> Logging::sGlobalMaxFlushedGSN = 0;
 
 /// @brief Calculate the free space left in the wal ring buffer.
 /// @return Size of the free space
@@ -45,12 +41,12 @@ u32 Logging::walContiguousFreeSpace() {
   return flushed - mWalBuffered;
 }
 
-void Logging::walEnsureEnoughSpace(u32 requiredBytes) {
+void Logging::WalEnsureEnoughSpace(u32 requiredBytes) {
   if (!FLAGS_wal) {
     return;
   }
 
-  u32 walEntryBytes = requiredBytes + Worker::CR_ENTRY_SIZE;
+  u32 walEntryBytes = requiredBytes + Worker::kCrEntrySize;
   u32 totalRequiredBytes = walEntryBytes;
   if ((FLAGS_wal_buffer_size - mWalBuffered) < walEntryBytes) {
     totalRequiredBytes += FLAGS_wal_buffer_size - mWalBuffered;
@@ -58,12 +54,7 @@ void Logging::walEnsureEnoughSpace(u32 requiredBytes) {
 
   // Spin until there is enough space. The wal ring buffer space is reclaimed
   // when the group commit thread commits the written wal entries.
-  {
-    if (FLAGS_wal_variant == 2 && walFreeSpace() < totalRequiredBytes) {
-      mWalFlushReq.mOptimisticLatch.notify_all();
-    }
-    while (walFreeSpace() < totalRequiredBytes) {
-    }
+  while (walFreeSpace() < totalRequiredBytes) {
   }
 
   // Carriage Return. Start a new round on the wal ring buffer.
@@ -78,10 +69,11 @@ void Logging::walEnsureEnoughSpace(u32 requiredBytes) {
 
     // start a new round
     mWalBuffered = 0;
-    publishOffset();
+    publishWalBufferedOffset();
   }
-  ENSURE(walContiguousFreeSpace() >= requiredBytes);
-  ENSURE(mWalBuffered + walEntryBytes <= FLAGS_wal_buffer_size);
+
+  DCHECK(walContiguousFreeSpace() >= requiredBytes);
+  DCHECK(mWalBuffered + walEntryBytes <= FLAGS_wal_buffer_size);
 }
 
 /// Reserve space and initialize a WALEntrySimple when a transaction is started,
@@ -90,8 +82,8 @@ void Logging::walEnsureEnoughSpace(u32 requiredBytes) {
 WALEntrySimple& Logging::ReserveWALEntrySimple(WALEntry::TYPE type) {
   SCOPED_DEFER(mPrevLSN = mActiveWALEntrySimple->lsn;);
 
-  walEnsureEnoughSpace(sizeof(WALEntrySimple));
-  auto entryPtr = mWalBuffer + mWalBuffered;
+  WalEnsureEnoughSpace(sizeof(WALEntrySimple));
+  auto* entryPtr = mWalBuffer + mWalBuffered;
   auto entrySize = sizeof(WALEntrySimple);
   std::memset(entryPtr, 0, entrySize);
   mActiveWALEntrySimple =
@@ -132,7 +124,7 @@ void Logging::SubmitWALEntrySimple() {
   }
   mActiveWALEntrySimple->mCRC32 = mActiveWALEntrySimple->ComputeCRC32();
   mWalBuffered += sizeof(WALEntrySimple);
-  UpdateWalFlushReq();
+  publishWalFlushReq();
 }
 
 /// @brief SubmitWALEntryComplex submits the wal record to group committer when
@@ -145,16 +137,26 @@ void Logging::SubmitWALEntryComplex(u64 totalSize) {
   }
   mActiveWALEntryComplex->mCRC32 = mActiveWALEntryComplex->ComputeCRC32();
   mWalBuffered += totalSize;
-  UpdateWalFlushReq();
-  Worker::my().mActiveTx.markAsWrite();
+  publishWalFlushReq();
+  Worker::my().mActiveTx.MarkAsWrite();
 
   COUNTERS_BLOCK() {
-    WorkerCounters::myCounters().wal_write_bytes += totalSize;
+    WorkerCounters::MyCounters().wal_write_bytes += totalSize;
   }
 }
 
+void Logging::publishWalBufferedOffset() {
+  mWalFlushReq.UpdateAttribute(&WalFlushReq::mWalBuffered, mWalBuffered);
+}
+
+void Logging::publishWalFlushReq() {
+  WalFlushReq current(mWalBuffered, GetCurrentGsn(),
+                      Worker::my().mActiveTx.mStartTs);
+  mWalFlushReq.SetSync(current);
+}
+
 // Called by worker, so concurrent writes on the buffer
-void Logging::iterateOverCurrentTXEntries(
+void Logging::IterateCurrentTxWALs(
     std::function<void(const WALEntry& entry)> callback) {
   u64 cursor = mTxWalBegin;
   while (cursor != mWalBuffered) {

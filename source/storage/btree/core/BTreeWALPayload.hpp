@@ -1,9 +1,10 @@
 #pragma once
 
-#include "Units.hpp"
-#include "utils/JsonUtil.hpp"
+#include "KVInterface.hpp"
+#include "shared-headers/Units.hpp"
 
-#include <memory>
+#include <rapidjson/document.h>
+
 #include <string>
 
 namespace leanstore {
@@ -61,6 +62,10 @@ public:
       return "Unknown WAL log type";
     }
   }
+
+  inline static const WALPayload* From(const void* data) {
+    return reinterpret_cast<const WALPayload*>(const_cast<void*>(data));
+  }
 };
 
 #undef TYPE_NAME
@@ -73,7 +78,9 @@ public:
 
 public:
   WALInitPage(TREEID treeId, bool isLeaf)
-      : WALPayload(TYPE::WALInitPage), mTreeId(treeId), mIsLeaf(isLeaf) {
+      : WALPayload(TYPE::WALInitPage),
+        mTreeId(treeId),
+        mIsLeaf(isLeaf) {
   }
 
 public:
@@ -100,7 +107,9 @@ struct WALLogicalSplit : WALPayload {
   }
 
   WALLogicalSplit(PID parent, PID lhs, PID rhs)
-      : WALPayload(TYPE::WALLogicalSplit), parent_pid(parent), left_pid(lhs),
+      : WALPayload(TYPE::WALLogicalSplit),
+        parent_pid(parent),
+        left_pid(lhs),
         right_pid(rhs) {
   }
 
@@ -148,7 +157,8 @@ struct WALInsert : WALPayload {
   u8 payload[];
 
   WALInsert(Slice key, Slice val)
-      : WALPayload(TYPE::WALInsert), mKeySize(key.size()),
+      : WALPayload(TYPE::WALInsert),
+        mKeySize(key.size()),
         mValSize(val.size()) {
     std::memcpy(payload, key.data(), mKeySize);
     std::memcpy(payload + mKeySize, val.data(), mValSize);
@@ -194,19 +204,27 @@ struct WALInsert : WALPayload {
 // WAL for BTreeVI
 struct WALUpdateSSIP : WALPayload {
   u16 mKeySize;
-  u64 delta_length;
+
+  u64 mDeltaLength;
+
   WORKERID mPrevWorkerId;
+
   TXID mPrevTxId;
+
   COMMANDID mPrevCommandId;
+
   u8 payload[];
 
   WALUpdateSSIP(Slice key, UpdateDesc& updateDesc, u64 deltaSize,
                 WORKERID prevWorkerId, TXID prevTxId, COMMANDID prevCommandId)
-      : WALPayload(TYPE::WALUpdate), mKeySize(key.size()),
-        delta_length(deltaSize), mPrevWorkerId(prevWorkerId),
-        mPrevTxId(prevTxId), mPrevCommandId(prevCommandId) {
+      : WALPayload(TYPE::WALUpdate),
+        mKeySize(key.size()),
+        mDeltaLength(deltaSize),
+        mPrevWorkerId(prevWorkerId),
+        mPrevTxId(prevTxId),
+        mPrevCommandId(prevCommandId) {
     std::memcpy(payload, key.data(), key.size());
-    std::memcpy(payload + key.size(), &updateDesc, updateDesc.size());
+    std::memcpy(payload + key.size(), &updateDesc, updateDesc.Size());
   }
 };
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Exceptions.hpp"
-#include "Units.hpp"
+#include "shared-headers/Exceptions.hpp"
+#include "shared-headers/Units.hpp"
 
 #include <functional>
 #include <iomanip>
@@ -12,9 +12,12 @@
 
 namespace leanstore {
 namespace profiling {
+
 struct Column {
   std::function<void(Column& col)> generator;
+
   std::vector<std::string> values;
+
   Column(std::function<void(Column& col)>&& g) : generator(g) {
   }
 

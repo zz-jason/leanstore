@@ -1,13 +1,13 @@
 #pragma once
+
 #include "BufferFrame.hpp"
 #include "Config.hpp"
 #include "FreeList.hpp"
-#include "Units.hpp"
+#include "shared-headers/Units.hpp"
 #include "utils/Misc.hpp"
 
-#include <list>
+#include <atomic>
 #include <mutex>
-#include <unordered_set>
 #include <vector>
 
 namespace leanstore {
@@ -27,7 +27,7 @@ struct IOFrame {
   // Everything in CIOFrame is protected by partition lock
   // except the following counter which is decremented outside to determine
   // whether it is time to remove it
-  atomic<s64> readers_counter = 0;
+  std::atomic<s64> readers_counter = 0;
 };
 
 struct HashTable {
@@ -89,8 +89,9 @@ public:
   // Constructor and Destructors
   //---------------------------------------------------------------------------
   Partition(u64 firstPageId, u64 pageIdDistance, u64 freeBfsLimit)
-      : mInflightIOs(utils::getBitsNeeded(freeBfsLimit)),
-        mFreeBfsLimit(freeBfsLimit), mNextPageId(firstPageId),
+      : mInflightIOs(utils::GetBitsNeeded(freeBfsLimit)),
+        mFreeBfsLimit(freeBfsLimit),
+        mNextPageId(firstPageId),
         mPageIdDistance(pageIdDistance) {
   }
 

@@ -1,10 +1,9 @@
 #pragma once
 
-#include <setjmp.h>
-#include <signal.h>
-
 #include <cassert>
 #include <utility>
+
+#include <setjmp.h>
 
 #define JUMPMU_STACK_SIZE 100
 #define JUMPMU_STACK_OBJECTS_LIMIT 100
