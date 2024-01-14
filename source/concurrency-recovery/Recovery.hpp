@@ -1,12 +1,16 @@
 #pragma once
 
+#include "concurrency-recovery/WALEntry.hpp"
 #include "shared-headers/Units.hpp"
+#include "storage/btree/core/BTreeNode.hpp"
 #include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/Defer.hpp"
+#include "utils/Error.hpp"
 
 #include <glog/logging.h>
 
+#include <expected>
 #include <map>
 
 namespace leanstore {
@@ -36,7 +40,9 @@ private:
 
 public:
   Recovery(s32 fd, u64 offset, u64 size)
-      : mWalFd(fd), mWalStartOffset(offset), mWalSize(size) {
+      : mWalFd(fd),
+        mWalStartOffset(offset),
+        mWalSize(size) {
   }
 
   ~Recovery() = default;
@@ -71,31 +77,33 @@ private:
   /// last checkpoint, and all transactions for which we encounter Begin
   /// Transaction entries are added to the TT. Whenever an End Log entry is
   /// found, the corresponding transaction is removed.
-  void Analysis();
+  std::expected<void, utils::Error> analysis();
 
   /// During the redo phase, the DPT is used to find the set of pages in the
   /// buffer pool that were dirty at the time of the crash. All these pages are
   /// read from disk and redone from the first log record that makes them dirty.
-  void Redo();
+  std::expected<void, utils::Error> redo();
 
   /// During the undo phase, the TT is used to undo the transactions still
   /// active at crash time. In the case of an aborted transaction, it’s possible
   /// to traverse the log file in reverse order using the previous sequence
   /// numbers, undoing all actions taken within the specific transaction.
-  bool Undo();
+  bool undo();
 
   /// Return the buffer frame containing the required dirty page
-  storage::BufferFrame& ResolvePage(PID pageId);
+  storage::BufferFrame& resolvePage(PID pageId);
 
-  ssize_t ReadWalEntry(s64 entryOffset, size_t entrySize, void* destination);
+  std::expected<void, utils::Error> readWalEntry(s64 entryOffset,
+                                                 size_t entrySize,
+                                                 void* destination);
 };
 
 inline bool Recovery::Run() {
   bool error(false);
 
-  Analysis();
+  analysis();
 
-  Redo();
+  redo();
 
   // if (Undo()) {
   //   return true;
@@ -104,11 +112,11 @@ inline bool Recovery::Run() {
   return error;
 }
 
-inline bool Recovery::Undo() {
+inline bool Recovery::undo() {
   return false;
 }
 
-inline storage::BufferFrame& Recovery::ResolvePage(PID pageId) {
+inline storage::BufferFrame& Recovery::resolvePage(PID pageId) {
   auto it = mResolvedPages.find(pageId);
   if (it != mResolvedPages.end()) {
     return *it->second;
@@ -121,78 +129,28 @@ inline storage::BufferFrame& Recovery::ResolvePage(PID pageId) {
   return bf;
 }
 
-inline ssize_t Recovery::ReadWalEntry(s64 offset, size_t nbytes,
-                                      void* destination) {
-
-  FILE* fp = fopen(GetWALFilePath().c_str(), "rb");
+inline auto Recovery::readWalEntry(s64 offset, size_t nbytes, void* destination)
+    -> std::expected<void, utils::Error> {
+  auto fileName = GetWALFilePath();
+  FILE* fp = fopen(fileName.c_str(), "rb");
   if (fp == nullptr) {
-    perror("Error opening file");
-    return -1;
+    return std::unexpected(
+        utils::Error::FileOpen(fileName, errno, strerror(errno)));
   }
   SCOPED_DEFER(fclose(fp));
 
   if (fseek(fp, offset, SEEK_SET) != 0) {
-    perror("Error seeking file");
-    return -1;
+    return std::unexpected(
+        utils::Error::FileSeek(fileName, errno, strerror(errno)));
   }
 
   if (fread(destination, 1, nbytes, fp) != nbytes) {
-    perror("Error reading file");
-    DLOG(FATAL) << "WAL file name=" << GetWALFilePath() << ", offset=" << offset
-                << ", nbytes=" << nbytes;
-    return -1;
+    return std::unexpected(
+        utils::Error::FileRead(fileName, errno, strerror(errno)));
   }
 
-  return nbytes;
+  return {};
 }
-
-/*
-inline ssize_t Recovery::ReadWalEntry(s64 entryOffset, s64 entrySize,
-                                      void* destination) {
-  auto bytesLeft = entrySize;
-  do {
-    auto bytesRead = pread(mWalFd, destination, bytesLeft,
-                           entryOffset + (entrySize - bytesLeft));
-    // pread (int __fd, void *__buf, size_t __nbytes, __off64_t __offset)
-    if (bytesRead < 0) {
-      perror("ReadWalEntry read failed");
-
-      // whether the fd is valid
-      {
-        int flags = fcntl(mWalFd, F_GETFD);
-        if (flags == -1) {
-          perror("fcntl");
-          exit(EXIT_FAILURE);
-        }
-        if (flags & FD_CLOEXEC) {
-          LOG(INFO) << "mWalFd(" << mWalFd << ") is valid";
-        } else {
-          LOG(INFO) << "mWalFd(" << mWalFd << ") is invalid";
-        }
-      }
-
-      // whether the file offset+nbytes is valid
-      {
-        off_t size = lseek(mWalFd, 0, SEEK_END);
-        if (size == -1) {
-          perror("lseek");
-          exit(EXIT_FAILURE);
-        }
-        LOG(INFO) << "mWalFd(" << mWalFd << ") file size: " << size;
-      }
-
-      LOG(FATAL) << "pread failed"
-                 << ", error=" << errno << ", fd=" << mWalFd
-                 << ", buf=" << destination << ", nbytes=" << bytesLeft
-                 << ", offset=" << entryOffset + (entrySize - bytesLeft);
-      return bytesRead;
-    }
-    bytesLeft -= bytesRead;
-  } while (bytesLeft > 0);
-
-  return entrySize;
-}
-*/
 
 } // namespace cr
 } // namespace leanstore

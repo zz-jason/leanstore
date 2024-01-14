@@ -1,16 +1,13 @@
 #pragma once
 
-#include "Config.hpp"
-#include "shared-headers/Exceptions.hpp"
 #include "HistoryTreeInterface.hpp"
-#include "shared-headers/Units.hpp"
 #include "Worker.hpp"
+#include "shared-headers/Units.hpp"
 #include "utils/ThreadHolder.hpp"
 
 #include <atomic>
 #include <condition_variable>
 #include <functional>
-#include <thread>
 #include <vector>
 
 namespace leanstore {

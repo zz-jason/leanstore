@@ -54,7 +54,7 @@ public:
     auto res = storage::btree::BTreeLL::Create(name, config);
     if (!res) {
       LOG(ERROR) << "Failed to register BTreeLL"
-                 << ", name=" << name << ", error=" << res.error().mMessage;
+                 << ", name=" << name << ", error=" << res.error().ToString();
       *btree = nullptr;
       return;
     }
@@ -81,7 +81,7 @@ public:
     auto res = storage::TreeRegistry::sInstance->UnregisterTree(name);
     if (!res) {
       LOG(ERROR) << "UnRegister BTreeLL failed"
-                 << ", error=" << res.error().mMessage;
+                 << ", error=" << res.error().ToString();
     }
   }
 
@@ -104,7 +104,7 @@ public:
     if (!res) {
       LOG(ERROR) << "Failed to create BTreeVI graveyard"
                  << ", btreeVI=" << name << ", graveyardName=" << graveyardName
-                 << ", error=" << res.error().mMessage;
+                 << ", error=" << res.error().ToString();
       return;
     }
     auto* graveyard = res.value();
@@ -116,7 +116,7 @@ public:
       auto res = TreeRegistry::sInstance->UnRegisterTree(graveyard->mTreeId);
       if (!res) {
         LOG(ERROR) << "UnRegister graveyard failed"
-                   << ", error=" << res.error().mMessage;
+                   << ", error=" << res.error().ToString();
       }
     });
 
@@ -143,7 +143,7 @@ public:
     auto res = storage::TreeRegistry::sInstance->UnregisterTree(name);
     if (!res) {
       LOG(ERROR) << "UnRegister BTreeVI failed"
-                 << ", error=" << res.error().mMessage;
+                 << ", error=" << res.error().ToString();
     }
 
     auto graveyardName = "_" + name + "_graveyard";
@@ -154,7 +154,7 @@ public:
     res = storage::TreeRegistry::sInstance->UnregisterTree(graveyardName);
     if (!res) {
       LOG(ERROR) << "UnRegister BTreeVI graveyard failed"
-                 << ", error=" << res.error().mMessage;
+                 << ", error=" << res.error().ToString();
     }
   }
 

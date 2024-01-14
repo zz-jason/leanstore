@@ -312,12 +312,12 @@ OpCode BTreeVI::ScanAsc(Slice startKey, ScanCallback callback) {
 
 void BTreeVI::undo(const u8* walPayloadPtr, const u64 txId [[maybe_unused]]) {
   auto& walPayload = *reinterpret_cast<const WALPayload*>(walPayloadPtr);
-  switch (walPayload.type) {
+  switch (walPayload.mType) {
   case WALPayload::TYPE::WALInsert: {
     return undoLastInsert(static_cast<const WALInsert*>(&walPayload));
   }
-  case WALPayload::TYPE::WALUpdate: {
-    return undoLastUpdate(static_cast<const WALUpdateSSIP*>(&walPayload));
+  case WALPayload::TYPE::WALTxUpdate: {
+    return undoLastUpdate(static_cast<const WALTxUpdate*>(&walPayload));
   }
   case WALPayload::TYPE::WALRemove: {
     return undoLastRemove(static_cast<const WALRemove*>(&walPayload));
@@ -330,7 +330,7 @@ void BTreeVI::undo(const u8* walPayloadPtr, const u64 txId [[maybe_unused]]) {
 
 void BTreeVI::undoLastInsert(const WALInsert* walInsert) {
   // Assuming no insert after remove
-  Slice key(walInsert->payload, walInsert->mKeySize);
+  auto key = walInsert->GetKey();
   for (int retry = 0; true; retry++) {
     JUMPMU_TRY() {
       BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
@@ -364,8 +364,8 @@ void BTreeVI::undoLastInsert(const WALInsert* walInsert) {
   }
 }
 
-void BTreeVI::undoLastUpdate(const WALUpdateSSIP* walUpdate) {
-  Slice key(walUpdate->payload, walUpdate->mKeySize);
+void BTreeVI::undoLastUpdate(const WALTxUpdate* walUpdate) {
+  auto key = walUpdate->GetKey();
   for (int retry = 0; true; retry++) {
     JUMPMU_TRY() {
       BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
@@ -391,15 +391,13 @@ void BTreeVI::undoLastUpdate(const WALUpdateSSIP* walUpdate) {
         chainedTuple.mWorkerId = walUpdate->mPrevWorkerId;
         chainedTuple.mTxId = walUpdate->mPrevTxId;
         chainedTuple.mCommandId = walUpdate->mPrevCommandId;
-        auto& updateDesc =
-            *UpdateDesc::From(walUpdate->payload + walUpdate->mKeySize);
-        auto* xorData =
-            walUpdate->payload + walUpdate->mKeySize + updateDesc.Size();
+        auto& updateDesc = *walUpdate->GetUpdateDesc();
+        auto* xorData = walUpdate->GetDeltaPtr();
 
         // 1. copy the new value to buffer
-        const auto buffSize = updateDesc.NumBytes4WAL() - updateDesc.Size();
-        u8 buff[buffSize];
-        std::memcpy(buff, xorData, buffSize);
+        auto deltaSize = walUpdate->GetDeltaSize();
+        u8 buff[deltaSize];
+        std::memcpy(buff, xorData, deltaSize);
 
         // 2. calculate the old value based on xor result and old value
         BTreeLL::XorToBuffer(updateDesc, chainedTuple.payload, buff);

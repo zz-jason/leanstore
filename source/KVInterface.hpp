@@ -66,12 +66,12 @@ public:
     return UpdateDesc::Size(mNumSlots);
   }
 
-  u64 NumBytes4WAL() const {
-    return Size() + numBytesToUpdate();
+  u64 SizeWithDelta() const {
+    return Size() + deltaSize();
   }
 
 private:
-  u64 numBytesToUpdate() const {
+  u64 deltaSize() const {
     u64 length = 0;
     for (u8 i = 0; i < mNumSlots; i++) {
       length += mUpdateSlots[i].mSize;

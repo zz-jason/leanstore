@@ -170,15 +170,15 @@ public:
 //------------------------------------------------------------------------------
 inline Store* StoreFactory::GetLeanStoreMVCC(const std::string& storeDir,
                                              u32 sessionLimit) {
-  static std::unique_ptr<LeanStoreMVCC> store = nullptr;
-  static std::mutex storeMutex;
-  if (store == nullptr) {
-    std::unique_lock<std::mutex> guard(storeMutex);
-    if (store == nullptr) {
-      store = std::make_unique<LeanStoreMVCC>(storeDir, sessionLimit);
+  static std::unique_ptr<LeanStoreMVCC> sStore = nullptr;
+  static std::mutex sStoreMutex;
+  if (sStore == nullptr) {
+    std::unique_lock<std::mutex> guard(sStoreMutex);
+    if (sStore == nullptr) {
+      sStore = std::make_unique<LeanStoreMVCC>(storeDir, sessionLimit);
     }
   }
-  return store.get();
+  return sStore.get();
 }
 
 //------------------------------------------------------------------------------

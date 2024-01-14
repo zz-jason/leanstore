@@ -159,17 +159,17 @@ public:
   }
 
 public:
-  inline UpdateDesc& getDescriptor() {
+  inline UpdateDesc& GetUpdateDesc() {
     return *reinterpret_cast<UpdateDesc*>(payload);
   }
 
-  inline const UpdateDesc& getDescriptor() const {
+  inline const UpdateDesc& GetUpdateDesc() const {
     return *reinterpret_cast<const UpdateDesc*>(payload);
   }
 
   inline u32 TotalSize() {
-    const auto& updateDesc = getDescriptor();
-    return sizeof(FatTupleDelta) + updateDesc.NumBytes4WAL();
+    const auto& updateDesc = GetUpdateDesc();
+    return sizeof(FatTupleDelta) + updateDesc.SizeWithDelta();
   }
 };
 
@@ -198,7 +198,7 @@ public:
   u16 mNumDeltas = 0; // Attention: coupled with mPayloadSize
 
   // value, FatTupleDelta+Descriptor+Diff[] O2N
-  u8 payload[];
+  u8 mPayload[];
 
 public:
   FatTuple(u32 payloadCapacity)
@@ -236,11 +236,11 @@ public:
   }
 
   inline u8* GetValPtr() {
-    return payload;
+    return mPayload;
   }
 
   inline const u8* GetValPtr() const {
-    return payload;
+    return mPayload;
   }
 
   /// Get the newest visible version of the current tuple, and apply the
@@ -267,21 +267,21 @@ public:
 private:
   inline FatTupleDelta& getDelta(u16 i) {
     DCHECK(i < mNumDeltas);
-    return *reinterpret_cast<FatTupleDelta*>(payload + getDeltaOffsets()[i]);
+    return *reinterpret_cast<FatTupleDelta*>(mPayload + getDeltaOffsets()[i]);
   }
 
   inline const FatTupleDelta& getDelta(u16 i) const {
     DCHECK(i < mNumDeltas);
-    return *reinterpret_cast<const FatTupleDelta*>(payload +
+    return *reinterpret_cast<const FatTupleDelta*>(mPayload +
                                                    getDeltaOffsets()[i]);
   }
 
   inline u16* getDeltaOffsets() {
-    return reinterpret_cast<u16*>(payload + mValSize);
+    return reinterpret_cast<u16*>(mPayload + mValSize);
   }
 
   inline const u16* getDeltaOffsets() const {
-    return reinterpret_cast<const u16*>(payload + mValSize);
+    return reinterpret_cast<const u16*>(mPayload + mValSize);
   }
 
 public:
@@ -461,7 +461,7 @@ public:
       : Tuple(TupleFormat::CHAINED, oldFatTuple.mWorkerId, oldFatTuple.mTxId,
               oldFatTuple.mCommandId),
         mIsRemoved(false) {
-    std::memmove(payload, oldFatTuple.payload, oldFatTuple.mValSize);
+    std::memmove(payload, oldFatTuple.mPayload, oldFatTuple.mValSize);
   }
 
 public:

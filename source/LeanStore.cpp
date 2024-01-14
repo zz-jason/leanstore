@@ -542,7 +542,7 @@ void LeanStore::DeSerializeMeta() {
           LOG(ERROR) << "Failed to create BTreeVI graveyard"
                      << ", btreeVI=" << btreeName
                      << ", graveyardName=" << graveyardName
-                     << ", error=" << res.error().mMessage;
+                     << ", error=" << res.error().ToString();
           return;
         }
         btree->mGraveyard = res.value();

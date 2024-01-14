@@ -252,12 +252,12 @@ OpCode BTreeLL::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
     auto currentVal = xIter.MutableVal();
     if (config.mEnableWal) {
       DCHECK(updateDesc.mNumSlots > 0);
-      auto deltaPayloadSize = updateDesc.NumBytes4WAL();
+      auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
       auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WALUpdate>(
-          key.length() + deltaPayloadSize);
-      walHandler->type = WALPayload::TYPE::WALUpdate;
+          key.length() + sizeOfDescAndDelta);
+      walHandler->mType = WALPayload::TYPE::WALUpdate;
       walHandler->mKeySize = key.length();
-      walHandler->mDeltaLength = deltaPayloadSize;
+      walHandler->mDeltaLength = sizeOfDescAndDelta;
       auto* walPtr = walHandler->payload;
       std::memcpy(walPtr, key.data(), key.length());
       walPtr += key.length();

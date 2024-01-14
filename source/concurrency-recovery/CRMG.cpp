@@ -137,7 +137,7 @@ void CRManager::setupHistoryTree() {
       LOG(FATAL) << "Failed to set up _updates tree"
                  << ", treeName=" << name
                  << ", updateBTreeName=" << updateBtreeName
-                 << ", workerId=" << i << ", error=" << res.error().mMessage;
+                 << ", workerId=" << i << ", error=" << res.error().ToString();
     }
     historyTree->update_btrees[i] = res.value();
 
@@ -148,7 +148,7 @@ void CRManager::setupHistoryTree() {
       LOG(FATAL) << "Failed to set up _removes tree"
                  << ", treeName=" << name
                  << ", removeBtreeName=" << removeBtreeName
-                 << ", workerId=" << i << ", error=" << res.error().mMessage;
+                 << ", workerId=" << i << ", error=" << res.error().ToString();
     }
     historyTree->remove_btrees[i] = res.value();
   }

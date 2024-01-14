@@ -239,16 +239,16 @@ public:
   virtual void unlock(const u8* walEntryPtr) override {
     const WALPayload& entry = *reinterpret_cast<const WALPayload*>(walEntryPtr);
     Slice key;
-    switch (entry.type) {
+    switch (entry.mType) {
     case WALPayload::TYPE::WALInsert: {
       // Assuming no insert after remove
-      auto& insert_entry = *reinterpret_cast<const WALInsert*>(&entry);
-      key = Slice(insert_entry.payload, insert_entry.mKeySize);
+      auto& walInsert = *reinterpret_cast<const WALInsert*>(&entry);
+      key = walInsert.GetKey();
       break;
     }
-    case WALPayload::TYPE::WALUpdate: {
-      auto& update_entry = *reinterpret_cast<const WALUpdateSSIP*>(&entry);
-      key = Slice(update_entry.payload, update_entry.mKeySize);
+    case WALPayload::TYPE::WALTxUpdate: {
+      auto& walUpdate = *reinterpret_cast<const WALTxUpdate*>(&entry);
+      key = walUpdate.GetKey();
       break;
     }
     case WALPayload::TYPE::WALRemove: {
@@ -507,7 +507,7 @@ private:
 
   void undoLastInsert(const WALInsert* walInsert);
 
-  void undoLastUpdate(const WALUpdateSSIP* walUpdate);
+  void undoLastUpdate(const WALTxUpdate* walUpdate);
 
   void undoLastRemove(const WALRemove* walRemove);
 
