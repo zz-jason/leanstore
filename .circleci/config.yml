@@ -48,7 +48,7 @@ jobs:
 
       - run:
           name: "Config project"
-          command: cmake -B build/debug -S . -DCMAKE_BUILD_TYPE=Debug -DBUILD_WITH_COVERAGE=ON
+          command: cmake -B build/debug -S . -DCMAKE_BUILD_TYPE=Debug -DBUILD_WITH_COVERAGE=ON -DENABLE_TSAN=ON
 
       - run:
           name: "Cppcheck"
@@ -61,7 +61,7 @@ jobs:
 
       - run:
           name: "Test project"
-          command: ctest --test-dir build/debug --output-on-failure
+          command: TSAN_OPTIONS="suppressions=$(pwd)/tsan_suppression" ctest --test-dir build/debug --output-on-failure
           no_output_timeout: 5m
 
       - run:
