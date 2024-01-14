@@ -191,8 +191,8 @@ public:
   }
 
   inline bool ShouldRemainInMem() {
-    return header.mKeepInMemory || header.mIsBeingWrittenBack ||
-           header.mLatch.IsLockedExclusively();
+    return header.mKeepInMemory || header.mIsBeingWrittenBack
+           || header.mLatch.IsLockedExclusively();
   }
 
   inline void Init(PID pageId) {

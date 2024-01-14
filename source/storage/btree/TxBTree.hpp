@@ -2,8 +2,11 @@
 
 #include "BTreeLL.hpp"
 #include "Config.hpp"
-#include "Tuple.hpp"
+#include "KVInterface.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "storage/btree/BTreeLL.hpp"
+#include "storage/btree/ChainedTuple.hpp"
+#include "storage/btree/Tuple.hpp"
 #include "storage/btree/core/BTreeExclusiveIterator.hpp"
 #include "storage/btree/core/BTreeSharedIterator.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
@@ -12,52 +15,21 @@
 
 #include <glog/logging.h>
 
+#include <string>
+
 namespace leanstore {
 namespace storage {
 namespace btree {
 
-class BTreeVI : public BTreeLL {
+class TxBTree : public BTreeLL {
 public:
-  struct WALRemove : WALPayload {
-    u16 mKeySize;
-
-    u16 mValSize;
-
-    WORKERID mPrevWorkerId;
-
-    TXID mPrevTxId;
-
-    COMMANDID mPrevCommandId;
-
-    u8 payload[];
-
-    WALRemove(Slice key, Slice val, WORKERID prevWorkerId, u64 prevTxId,
-              u64 prevCommandId)
-        : WALPayload(TYPE::WALRemove),
-          mKeySize(key.size()),
-          mValSize(val.size()),
-          mPrevWorkerId(prevWorkerId),
-          mPrevTxId(prevTxId),
-          mPrevCommandId(prevCommandId) {
-      std::memcpy(payload, key.data(), key.size());
-      std::memcpy(payload + key.size(), val.data(), val.size());
-    }
-
-    Slice RemovedKey() const {
-      return Slice(payload, mKeySize);
-    }
-
-    Slice RemovedVal() const {
-      return Slice(payload + mKeySize, mValSize);
-    }
-  };
 
 public:
   /// Graveyard to store removed tuples for long-running transactions, e.g. OLAP
   /// transactions.
   BTreeLL* mGraveyard;
 
-  BTreeVI() {
+  TxBTree() {
     mTreeType = BTREE_TYPE::VI;
   }
 
@@ -73,7 +45,9 @@ public:
                                        UpdateDesc& updateDesc) override;
 
   virtual OpCode remove(Slice key) override;
+
   virtual OpCode ScanAsc(Slice startKey, ScanCallback) override;
+
   virtual OpCode ScanDesc(Slice startKey, ScanCallback) override;
 
 public:
@@ -107,13 +81,13 @@ public:
 
     for (u16 i = 0; i < guardedNode->mNumSeps; i++) {
       auto& tuple = *Tuple::From(guardedNode->ValData(i));
-      if (tuple.mFormat == TupleFormat::FAT) {
+      if (tuple.mFormat == TupleFormat::kFat) {
         auto& fatTuple = *FatTuple::From(guardedNode->ValData(i));
         const u32 newLength = fatTuple.mValSize + sizeof(ChainedTuple);
-        fatTuple.convertToChained(mTreeId);
+        fatTuple.ConvertToChained(mTreeId);
         DCHECK(newLength < guardedNode->ValSize(i));
         guardedNode->shortenPayload(i, newLength);
-        DCHECK(tuple.mFormat == TupleFormat::CHAINED);
+        DCHECK(tuple.mFormat == TupleFormat::kChained);
       }
     }
     guardedNode->mHasGarbage = false;
@@ -122,57 +96,53 @@ public:
     const SpaceCheckResult result = BTreeGeneric::checkSpaceUtilization(bf);
     if (result == SpaceCheckResult::kPickAnotherBf) {
       return SpaceCheckResult::kPickAnotherBf;
-    } else {
-      return SpaceCheckResult::kRestartSameBf;
     }
+    return SpaceCheckResult::kRestartSameBf;
   }
 
   // This undo implementation works only for rollback and not for undo
   // operations during recovery
   void undo(const u8* walEntryPtr, const u64) override;
 
-  virtual void todo(const u8* entry_ptr, const u64 version_worker_id,
-                    const u64 version_tx_id,
-                    const bool called_before) override {
+  virtual void todo(const u8* entryPtr, const u64 versionWorkerId,
+                    const u64 versionTxId, const bool calledBefore) override {
     // Only point-gc and for removed tuples
-    const auto& version = *reinterpret_cast<const RemoveVersion*>(entry_ptr);
+    const auto& version = *reinterpret_cast<const RemoveVersion*>(entryPtr);
     if (version.mTxId < cr::Worker::my().cc.local_all_lwm) {
-      DCHECK(version.dangling_pointer.bf != nullptr);
+      DCHECK(version.mDanglingPointer.mBf != nullptr);
       // Optimistic fast path
       JUMPMU_TRY() {
-        BTreeExclusiveIterator iterator(
-            *static_cast<BTreeGeneric*>(this), version.dangling_pointer.bf,
-            version.dangling_pointer.latch_version_should_be);
-        auto& node = iterator.mGuardedLeaf;
+        BTreeExclusiveIterator xIter(
+            *static_cast<BTreeGeneric*>(this), version.mDanglingPointer.mBf,
+            version.mDanglingPointer.mLatchVersionShouldBe);
+        auto& node = xIter.mGuardedLeaf;
         auto& chainedTuple = *ChainedTuple::From(
-            node->ValData(version.dangling_pointer.head_slot));
+            node->ValData(version.mDanglingPointer.mHeadSlot));
         // Being chained is implicit because we check for version, so the state
         // can not be changed after staging the todo
-        ENSURE(chainedTuple.mFormat == TupleFormat::CHAINED &&
+        ENSURE(chainedTuple.mFormat == TupleFormat::kChained &&
                !chainedTuple.IsWriteLocked() &&
-               chainedTuple.mWorkerId == version_worker_id &&
-               chainedTuple.mTxId == version_tx_id && chainedTuple.mIsRemoved);
-        node->removeSlot(version.dangling_pointer.head_slot);
-        iterator.MarkAsDirty();
-        iterator.mergeIfNeeded();
+               chainedTuple.mWorkerId == versionWorkerId &&
+               chainedTuple.mTxId == versionTxId && chainedTuple.mIsRemoved);
+        node->removeSlot(version.mDanglingPointer.mHeadSlot);
+        xIter.MarkAsDirty();
+        xIter.mergeIfNeeded();
         JUMPMU_RETURN;
       }
       JUMPMU_CATCH() {
       }
     }
-    Slice key(version.payload, version.mKeySize);
+    auto key = version.RemovedKey();
     OpCode ret;
-    if (called_before) {
+    if (calledBefore) {
       // Delete from mGraveyard
       // ENSURE(version_tx_id < cr::Worker::my().local_all_lwm);
       JUMPMU_TRY() {
-        BTreeExclusiveIterator g_iterator(
-            *static_cast<BTreeGeneric*>(mGraveyard));
-        ret = g_iterator.seekExact(key);
-        if (ret == OpCode::kOK) {
-          ret = g_iterator.removeCurrent();
+        BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(mGraveyard));
+        if (xIter.SeekExact(key)) {
+          ret = xIter.removeCurrent();
           ENSURE(ret == OpCode::kOK);
-          g_iterator.MarkAsDirty();
+          xIter.MarkAsDirty();
         } else {
           UNREACHABLE();
         }
@@ -184,23 +154,20 @@ public:
     // TODO: Corner cases if the tuple got inserted after a remove
     JUMPMU_TRY() {
       BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
-      ret = xIter.seekExact(key);
-      if (ret != OpCode::kOK) {
+      if (!xIter.SeekExact(key)) {
         JUMPMU_RETURN; // TODO:
       }
       // ENSURE(ret == OpCode::kOK);
       MutableSlice mutRawVal = xIter.MutableVal();
-      {
-        // Checks
-        auto& tuple = *Tuple::From(mutRawVal.Data());
-        if (tuple.mFormat == TupleFormat::FAT) {
-          JUMPMU_RETURN;
-        }
+      // Checks
+      auto& tuple = *Tuple::From(mutRawVal.Data());
+      if (tuple.mFormat == TupleFormat::kFat) {
+        JUMPMU_RETURN;
       }
       ChainedTuple& chainedTuple = *ChainedTuple::From(mutRawVal.Data());
       if (!chainedTuple.IsWriteLocked()) {
-        if (chainedTuple.mWorkerId == version_worker_id &&
-            chainedTuple.mTxId == version_tx_id && chainedTuple.mIsRemoved) {
+        if (chainedTuple.mWorkerId == versionWorkerId &&
+            chainedTuple.mTxId == versionTxId && chainedTuple.mIsRemoved) {
           if (chainedTuple.mTxId < cr::Worker::my().cc.local_all_lwm) {
             ret = xIter.removeCurrent();
             xIter.MarkAsDirty();
@@ -212,11 +179,11 @@ public:
           } else if (chainedTuple.mTxId < cr::Worker::my().cc.local_oltp_lwm) {
             // Move to mGraveyard
             {
-              BTreeExclusiveIterator g_iterator(
+              BTreeExclusiveIterator graveyardXIter(
                   *static_cast<BTreeGeneric*>(mGraveyard));
-              OpCode g_ret = g_iterator.insertKV(key, xIter.value());
+              OpCode g_ret = graveyardXIter.InsertKV(key, xIter.value());
               ENSURE(g_ret == OpCode::kOK);
-              g_iterator.MarkAsDirty();
+              graveyardXIter.MarkAsDirty();
             }
             ret = xIter.removeCurrent();
             ENSURE(ret == OpCode::kOK);
@@ -251,9 +218,9 @@ public:
       key = walUpdate.GetKey();
       break;
     }
-    case WALPayload::TYPE::WALRemove: {
-      auto& removeEntry = *reinterpret_cast<const WALRemove*>(&entry);
-      key = Slice(removeEntry.payload, removeEntry.mKeySize);
+    case WALPayload::TYPE::WALTxRemove: {
+      auto& removeEntry = *reinterpret_cast<const WALTxRemove*>(&entry);
+      key = removeEntry.RemovedKey();
       break;
     }
     default: {
@@ -264,18 +231,19 @@ public:
 
     JUMPMU_TRY() {
       BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
-      OpCode ret = xIter.seekExact(key);
-      ENSURE(ret == OpCode::kOK);
+      auto succeed = xIter.SeekExact(key);
+      DCHECK(succeed) << "Can not find key in the BTree"
+                      << ", key=" << std::string((char*)key.data(), key.size());
       auto& tuple = *Tuple::From(xIter.MutableVal().Data());
-      ENSURE(tuple.mFormat == TupleFormat::CHAINED);
+      ENSURE(tuple.mFormat == TupleFormat::kChained);
       /**
        * The major work is in traversing the tree:
        *
-       * if (tuple.mTxId == cr::activeTX().mStartTs &&
+       * if (tuple.mTxId == cr::ActiveTx().mStartTs &&
        *     tuple.mWorkerId == cr::Worker::my().mWorkerId) {
        *   auto& chainedTuple =
        *       *reinterpret_cast<ChainedTuple*>(xIter.MutableVal().data());
-       *   chainedTuple.mCommitTs = cr::activeTX().mCommitTs | kMsb;
+       *   chainedTuple.mCommitTs = cr::ActiveTx().mCommitTs | kMsb;
        * }
        */
     }
@@ -300,15 +268,9 @@ private:
       BTreeSharedIterator iter(*static_cast<BTreeGeneric*>(this),
                                LatchMode::kShared);
 
-      OpCode ret;
-      if (asc) {
-        ret = iter.seek(key);
-      } else {
-        ret = iter.seekForPrev(key);
-      }
-
-      while (ret == OpCode::kOK) {
-        iter.assembleKey();
+      bool succeed = asc ? iter.Seek(key) : iter.SeekForPrev(key);
+      while (succeed) {
+        iter.AssembleKey();
         Slice scannedKey = iter.key();
         // auto reconstruct = GetVisibleTuple(iter.value(), [&](Slice
         // scannedVal) {
@@ -316,7 +278,7 @@ private:
             GetVisibleTuple(iter.value(), [&](Slice scannedVal) {
               COUNTERS_BLOCK() {
                 WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
-                    cr::activeTX().IsOLAP();
+                    cr::ActiveTx().IsOLAP();
               }
               keepScanning = callback(scannedKey, scannedVal);
             });
@@ -334,11 +296,7 @@ private:
           JUMPMU_RETURN OpCode::kOK;
         }
 
-        if constexpr (asc) {
-          ret = iter.next();
-        } else {
-          ret = iter.prev();
-        }
+        succeed = asc ? iter.Next() : iter.Prev();
       }
       JUMPMU_RETURN OpCode::kOK;
     }
@@ -354,33 +312,36 @@ private:
     volatile bool keepScanning = true;
 
     JUMPMU_TRY() {
-      BTreeSharedIterator iterator(*static_cast<BTreeGeneric*>(this));
+      BTreeSharedIterator iter(*static_cast<BTreeGeneric*>(this));
       OpCode o_ret;
-      BTreeSharedIterator g_iterator(*static_cast<BTreeGeneric*>(mGraveyard));
+
+      BTreeSharedIterator graveyardIter(
+          *static_cast<BTreeGeneric*>(mGraveyard));
       OpCode g_ret;
       Slice g_lower_bound, g_upper_bound;
       g_lower_bound = key;
 
-      o_ret = iterator.seek(key);
-      if (o_ret != OpCode::kOK) {
+      if (!iter.Seek(key)) {
         JUMPMU_RETURN OpCode::kOK;
       }
-      iterator.assembleKey();
+      o_ret = OpCode::kOK;
+      iter.AssembleKey();
 
       // Now it begins
-      g_upper_bound = Slice(iterator.mGuardedLeaf->getUpperFenceKey(),
-                            iterator.mGuardedLeaf->mUpperFence.length);
+      g_upper_bound = Slice(iter.mGuardedLeaf->getUpperFenceKey(),
+                            iter.mGuardedLeaf->mUpperFence.length);
       auto g_range = [&]() {
-        g_iterator.reset();
+        graveyardIter.reset();
         if (mGraveyard->isRangeSurelyEmpty(g_lower_bound, g_upper_bound)) {
           g_ret = OpCode::kOther;
         } else {
-          g_ret = g_iterator.seek(g_lower_bound);
+          g_ret = graveyardIter.Seek(g_lower_bound) ? OpCode::kOK
+                                                    : OpCode::kNotFound;
           if (g_ret == OpCode::kOK) {
-            g_iterator.assembleKey();
-            if (g_iterator.key() > g_upper_bound) {
+            graveyardIter.AssembleKey();
+            if (graveyardIter.key() > g_upper_bound) {
               g_ret = OpCode::kOther;
-              g_iterator.reset();
+              graveyardIter.reset();
             }
           }
         }
@@ -388,70 +349,70 @@ private:
 
       g_range();
       auto take_from_oltp = [&]() {
-        GetVisibleTuple(iterator.value(), [&](Slice value) {
+        GetVisibleTuple(iter.value(), [&](Slice value) {
           COUNTERS_BLOCK() {
             WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
-                cr::activeTX().IsOLAP();
+                cr::ActiveTx().IsOLAP();
           }
-          keepScanning = callback(iterator.key(), value);
+          keepScanning = callback(iter.key(), value);
         });
         if (!keepScanning) {
           return false;
         }
-        const bool is_last_one = iterator.isLastOne();
+        const bool is_last_one = iter.isLastOne();
         if (is_last_one) {
-          g_iterator.reset();
+          graveyardIter.reset();
         }
-        o_ret = iterator.next();
+        o_ret = iter.Next() ? OpCode::kOK : OpCode::kNotFound;
         if (is_last_one) {
-          g_lower_bound = Slice(&iterator.mBuffer[0], iterator.mFenceSize + 1);
-          g_upper_bound = Slice(iterator.mGuardedLeaf->getUpperFenceKey(),
-                                iterator.mGuardedLeaf->mUpperFence.length);
+          g_lower_bound = Slice(&iter.mBuffer[0], iter.mFenceSize + 1);
+          g_upper_bound = Slice(iter.mGuardedLeaf->getUpperFenceKey(),
+                                iter.mGuardedLeaf->mUpperFence.length);
           g_range();
         }
         return true;
       };
       while (true) {
         if (g_ret != OpCode::kOK && o_ret == OpCode::kOK) {
-          iterator.assembleKey();
+          iter.AssembleKey();
           if (!take_from_oltp()) {
             JUMPMU_RETURN OpCode::kOK;
           }
         } else if (g_ret == OpCode::kOK && o_ret != OpCode::kOK) {
-          g_iterator.assembleKey();
-          Slice g_key = g_iterator.key();
-          GetVisibleTuple(g_iterator.value(), [&](Slice value) {
+          graveyardIter.AssembleKey();
+          Slice g_key = graveyardIter.key();
+          GetVisibleTuple(graveyardIter.value(), [&](Slice value) {
             COUNTERS_BLOCK() {
               WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
-                  cr::activeTX().IsOLAP();
+                  cr::ActiveTx().IsOLAP();
             }
             keepScanning = callback(g_key, value);
           });
           if (!keepScanning) {
             JUMPMU_RETURN OpCode::kOK;
           }
-          g_ret = g_iterator.next();
+          g_ret = graveyardIter.Next() ? OpCode::kOK : OpCode::kNotFound;
         } else if (g_ret == OpCode::kOK && o_ret == OpCode::kOK) {
-          iterator.assembleKey();
-          g_iterator.assembleKey();
-          Slice g_key = g_iterator.key();
-          Slice oltp_key = iterator.key();
+          iter.AssembleKey();
+          graveyardIter.AssembleKey();
+          Slice g_key = graveyardIter.key();
+          Slice oltp_key = iter.key();
           if (oltp_key <= g_key) {
             if (!take_from_oltp()) {
               JUMPMU_RETURN OpCode::kOK;
             }
           } else {
-            GetVisibleTuple(g_iterator.value(), [&](Slice value) {
+            GetVisibleTuple(graveyardIter.value(), [&](Slice value) {
               COUNTERS_BLOCK() {
                 WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
-                    cr::activeTX().IsOLAP();
+                    cr::ActiveTx().IsOLAP();
               }
               keepScanning = callback(g_key, value);
             });
             if (!keepScanning) {
               JUMPMU_RETURN OpCode::kOK;
             }
-            g_ret = g_iterator.next();
+            g_ret = graveyardIter.Next() ? OpCode::kOK : OpCode::kNotFound;
           }
         } else {
           JUMPMU_RETURN OpCode::kOK;
@@ -484,12 +445,12 @@ private:
       JUMPMU_TRY() {
         const auto* const tuple = Tuple::From(payload.data());
         switch (tuple->mFormat) {
-        case TupleFormat::CHAINED: {
+        case TupleFormat::kChained: {
           const auto* const chainedTuple = ChainedTuple::From(payload.data());
           ret = chainedTuple->GetVisibleTuple(payload, callback);
           JUMPMU_RETURN ret;
         }
-        case TupleFormat::FAT: {
+        case TupleFormat::kFat: {
           const auto* const fatTuple = FatTuple::From(payload.data());
           ret = fatTuple->GetVisibleTuple(callback);
           JUMPMU_RETURN ret;
@@ -509,22 +470,22 @@ private:
 
   void undoLastUpdate(const WALTxUpdate* walUpdate);
 
-  void undoLastRemove(const WALRemove* walRemove);
+  void undoLastRemove(const WALTxRemove* walRemove);
 
 public:
-  inline static BTreeVI* Create(const std::string& treeName, Config& config,
+  inline static TxBTree* Create(const std::string& treeName, Config& config,
                                 BTreeLL* graveyard) {
     auto [treePtr, treeId] =
         TreeRegistry::sInstance->CreateTree(treeName, [&]() {
           return std::unique_ptr<BufferManagedTree>(
-              static_cast<BufferManagedTree*>(new BTreeVI()));
+              static_cast<BufferManagedTree*>(new TxBTree()));
         });
     if (treePtr == nullptr) {
-      LOG(ERROR) << "Failed to create BTreeVI, treeName has been taken"
+      LOG(ERROR) << "Failed to create TxBTree, treeName has been taken"
                  << ", treeName=" << treeName;
       return nullptr;
     }
-    auto* tree = dynamic_cast<BTreeVI*>(treePtr);
+    auto* tree = dynamic_cast<TxBTree*>(treePtr);
     tree->Init(treeId, config, graveyard);
 
     // TODO(jian.z): record WAL
@@ -544,9 +505,16 @@ public:
     guardedNode.MarkAsDirty();
   }
 
-  inline static u64 convertToFatTupleThreshold() {
+  inline static u64 ConvertToFatTupleThreshold() {
     return FLAGS_worker_threads;
   }
+
+  /// Updates the value stored in FatTuple. The former newest version value is
+  /// moved to the tail of the delta array.
+  /// @return false to fallback to chained mode
+  static bool UpdateInFatTuple(BTreeExclusiveIterator& xIter, Slice key,
+                               MutValCallback updateCallBack,
+                               UpdateDesc& updateDesc);
 };
 
 } // namespace btree

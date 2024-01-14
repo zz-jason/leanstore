@@ -89,7 +89,7 @@ WALEntrySimple& Logging::ReserveWALEntrySimple(WALEntry::TYPE type) {
   mActiveWALEntrySimple =
       new (entryPtr) WALEntrySimple(mLsnClock++, entrySize, type);
 
-  // set prev LSN on demand.
+  // set previous LSN on demand.
   if (type != WALEntry::TYPE::TX_START) {
     mActiveWALEntrySimple->mPrevLSN = mPrevLSN;
   }

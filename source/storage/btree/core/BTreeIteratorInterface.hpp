@@ -10,21 +10,11 @@ namespace btree {
 
 class BTreeIteratorInterface {
 public:
-  virtual OpCode seek(Slice key) = 0;
-  virtual OpCode seekForPrev(Slice key) = 0;
-  virtual OpCode seekExact(Slice key) = 0;
-  virtual OpCode next() = 0;
-  virtual OpCode prev() = 0;
-  virtual bool isKeyEqualTo(Slice key) = 0;
-};
-
-// Can jump
-class BTreeOptimisticIteratorInterface : public BTreeIteratorInterface {
-public:
-  virtual void key(std::function<void(Slice key)> cb) = 0;
-  virtual void KeyWithoutPrefix(std::function<void(Slice key)> cb) = 0;
-  virtual void keyPrefix(std::function<void(Slice key)> cb) = 0;
-  virtual void value(std::function<void(Slice key)> cb) = 0;
+  virtual bool Seek(Slice key) = 0;
+  virtual bool SeekForPrev(Slice key) = 0;
+  virtual bool SeekExact(Slice key) = 0;
+  virtual bool Next() = 0;
+  virtual bool Prev() = 0;
 };
 
 class BTreePessimisticIteratorInterface : public BTreeIteratorInterface {

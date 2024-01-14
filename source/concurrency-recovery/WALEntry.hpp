@@ -111,8 +111,7 @@ public:
 
 class WALEntrySimple : public WALEntry {
 public:
-  WALEntrySimple(LID lsn, u64 size, TYPE type)
-      : WALEntry(lsn, size, type) {
+  WALEntrySimple(LID lsn, u64 size, TYPE type) : WALEntry(lsn, size, type) {
   }
 };
 
@@ -130,8 +129,8 @@ public:
   /// btree ID
   PID mPageId;
 
-  /// Payload of the operation on the btree node, for example, WALInsert,
-  /// WALRemove, etc.
+  /// Payload of the operation on the btree node, for example, insert,
+  /// remove, update, etc.
   u8 payload[];
 
 public:

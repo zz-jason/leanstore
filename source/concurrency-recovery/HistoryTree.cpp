@@ -40,15 +40,14 @@ void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
       BTreeExclusiveIterator xIter(
           *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)),
           session->rightmost_bf, session->rightmost_version);
-
-      OpCode ret = xIter.enoughSpaceInCurrentNode(key, versionSize);
-      if (ret == OpCode::kOK && xIter.keyInCurrentBoundaries(key)) {
+      if (xIter.HasEnoughSpaceFor(key.size(), versionSize) &&
+          xIter.KeyInCurrentNode(key)) {
         if (session->last_tx_id == txId) {
           xIter.mGuardedLeaf->insertDoNotCopyPayload(key, versionSize,
                                                      session->rightmost_pos);
           xIter.mSlotId = session->rightmost_pos;
         } else {
-          xIter.insertInCurrentNode(key, versionSize);
+          xIter.InsertToCurrentNode(key, versionSize);
         }
         auto& versionMeta = *new (xIter.MutableVal().Data()) VersionMeta();
         versionMeta.mTreeId = treeId;
@@ -76,12 +75,11 @@ void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
       } else {
         ENSURE(ret == OpCode::kOK);
       }
-      ret = xIter.enoughSpaceInCurrentNode(key, versionSize);
-      if (ret == OpCode::kSpaceNotEnough) {
-        xIter.splitForKey(key);
+      if (!xIter.HasEnoughSpaceFor(key.size(), versionSize)) {
+        xIter.SplitForKey(key);
         JUMPMU_CONTINUE;
       }
-      xIter.insertInCurrentNode(key, versionSize);
+      xIter.InsertToCurrentNode(key, versionSize);
       auto& versionMeta = *new (xIter.MutableVal().Data()) VersionMeta();
       versionMeta.mTreeId = treeId;
       insertCallBack(versionMeta.payload);
@@ -111,7 +109,6 @@ bool HistoryTree::retrieveVersion(WORKERID prevWorkerId, TXID prevTxId,
                                   std::function<void(const u8*, u64)> cb) {
   BTreeLL* btree = (isRemoveCommand) ? remove_btrees[prevWorkerId]
                                      : update_btrees[prevWorkerId];
-
   const u64 keySize = sizeof(prevTxId) + sizeof(prevCommandId);
   u8 keyBuffer[keySize];
   u64 offset = 0;
@@ -120,21 +117,23 @@ bool HistoryTree::retrieveVersion(WORKERID prevWorkerId, TXID prevTxId,
 
   Slice key(keyBuffer, keySize);
   JUMPMU_TRY() {
-    BTreeSharedIterator iterator(
+    BTreeSharedIterator iter(
         *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)),
         LatchMode::kShared);
-    OpCode ret = iterator.seekExact(key);
-    if (ret != OpCode::kOK) {
+    if (!iter.SeekExact(key)) {
       JUMPMU_RETURN false;
     }
-    Slice payload = iterator.value();
+    Slice payload = iter.value();
     const auto& versionContainer = *VersionMeta::From(payload.data());
     cb(versionContainer.payload, payload.length() - sizeof(VersionMeta));
     JUMPMU_RETURN true;
   }
   JUMPMU_CATCH() {
-    UNREACHABLE();
-    jumpmu::jump();
+    LOG(ERROR) << "Can not retrieve version"
+               << ", prevWorkerId: " << prevWorkerId
+               << ", prevTxId: " << prevTxId
+               << ", prevCommandId: " << prevCommandId
+               << ", isRemoveCommand: " << isRemoveCommand;
   }
   UNREACHABLE();
   return false;
@@ -172,9 +171,8 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
             }
           });
       // -------------------------------------------------------------------------------------
-      OpCode ret = iterator.seek(key);
-      while (ret == OpCode::kOK) {
-        iterator.assembleKey();
+      while (iterator.Seek(key)) {
+        iterator.AssembleKey();
         TXID current_tx_id;
         utils::unfold(iterator.key().data(), current_tx_id);
         if (current_tx_id >= from_tx_id && current_tx_id <= to_tx_id) {
@@ -283,7 +281,7 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
             }
           });
 
-      iterator.seek(key);
+      iterator.Seek(key);
       if (did_purge_full_page) {
         did_purge_full_page = false;
         JUMPMU_CONTINUE;
@@ -323,9 +321,8 @@ void HistoryTree::visitRemoveVersions(
   restart : {
     leanstore::storage::btree::BTreeExclusiveIterator iterator(
         *static_cast<BTreeGeneric*>(btree));
-    OpCode ret = iterator.seek(key);
-    while (ret == OpCode::kOK) {
-      iterator.assembleKey();
+    while (iterator.Seek(key)) {
+      iterator.AssembleKey();
       TXID current_tx_id;
       utils::unfold(iterator.key().data(), current_tx_id);
       if (current_tx_id >= from_tx_id && current_tx_id <= to_tx_id) {

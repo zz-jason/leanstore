@@ -188,7 +188,7 @@ void Worker::CommitTx() {
   }
 
   // All isolation level generate garbage
-  cc.garbageCollection();
+  cc.GarbageCollection();
 
   // wait transaction to be committed
   while (mLogging.TxUnCommitted(mActiveTx.mCommitTs)) {
@@ -252,7 +252,7 @@ void Worker::AbortTx() {
 }
 
 void Worker::shutdown() {
-  cc.garbageCollection();
+  cc.GarbageCollection();
   cc.switchToReadCommittedMode();
 }
 

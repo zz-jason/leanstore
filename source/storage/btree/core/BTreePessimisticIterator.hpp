@@ -2,6 +2,7 @@
 
 #include "BTreeGeneric.hpp"
 #include "BTreeIteratorInterface.hpp"
+#include "KVInterface.hpp"
 
 #include <glog/logging.h>
 
@@ -148,72 +149,74 @@ public:
   // EXP
   OpCode seekExactWithHint(Slice key, bool higher = true) {
     if (mSlotId == -1) {
-      return seekExact(key);
+      return SeekExact(key) ? OpCode::kOK : OpCode::kNotFound;
     }
     mSlotId = mGuardedLeaf->linearSearchWithBias<true>(key, mSlotId, higher);
     if (mSlotId == -1) {
-      return seekExact(key);
-    } else {
-      return OpCode::kOK;
+      return SeekExact(key) ? OpCode::kOK : OpCode::kNotFound;
     }
+    return OpCode::kOK;
   }
 
-  virtual OpCode seekExact(Slice key) override {
-    if (mSlotId == -1 || !keyInCurrentBoundaries(key)) {
+  virtual bool SeekExact(Slice key) override {
+    if (mSlotId == -1 || !KeyInCurrentNode(key)) {
       gotoPage(key);
     }
     mSlotId = mGuardedLeaf->lowerBound<true>(key);
-    if (mSlotId != -1) {
-      return OpCode::kOK;
-    }
-    return OpCode::kNotFound;
+    return mSlotId != -1;
   }
 
-  virtual OpCode seek(Slice key) override {
+  virtual bool Seek(Slice key) override {
     if (mSlotId == -1 || mGuardedLeaf->compareKeyWithBoundaries(key) != 0) {
       gotoPage(key);
     }
     mSlotId = mGuardedLeaf->lowerBound<false>(key);
     if (mSlotId < mGuardedLeaf->mNumSeps) {
-      return OpCode::kOK;
-    } else {
-      // TODO: Is there a better solution?
-      // In composed keys {K1, K2}, it can happen that when we look for {2, 0}
-      // we always land on {1,..} page because its upper bound is beyond {2,0}
-      // Example: TPC-C Neworder
-      return next();
+      return true;
     }
+
+    // TODO: Is there a better solution?
+    // In composed keys {K1, K2}, it can happen that when we look for {2, 0}
+    // we always land on {1,..} page because its upper bound is beyond {2,0}
+    // Example: TPC-C Neworder
+    return Next();
   }
 
-  virtual OpCode seekForPrev(Slice key) override {
+  virtual bool SeekForPrev(Slice key) override {
     if (mSlotId == -1 || mGuardedLeaf->compareKeyWithBoundaries(key) != 0) {
       gotoPage(key);
     }
-    bool is_equal = false;
-    mSlotId = mGuardedLeaf->lowerBound<false>(key, &is_equal);
-    if (is_equal == true) {
-      return OpCode::kOK;
-    } else if (mSlotId == 0) {
-      return prev();
-    } else {
-      mSlotId -= 1;
-      return OpCode::kOK;
+
+    bool isEqual = false;
+    mSlotId = mGuardedLeaf->lowerBound<false>(key, &isEqual);
+    if (isEqual == true) {
+      return true;
     }
+
+    if (mSlotId == 0) {
+      return Prev();
+    }
+
+    mSlotId -= 1;
+    return true;
   }
 
-  virtual OpCode next() override {
+  virtual bool Next() override {
     COUNTERS_BLOCK() {
       WorkerCounters::MyCounters().dt_next_tuple[mBTree.mTreeId]++;
     }
     while (true) {
       ENSURE(mGuardedLeaf.mGuard.mState != GuardState::kOptimistic);
+
+      // If we are not at the end of the leaf, return the next key in the leaf.
       if ((mSlotId + 1) < mGuardedLeaf->mNumSeps) {
         mSlotId += 1;
-        return OpCode::kOK;
+        return true;
       }
 
+      // No more keys in the BTree, return false
       if (mGuardedLeaf->mUpperFence.length == 0) {
-        return OpCode::kNotFound;
+        return false;
       }
 
       AssembleUpperFence();
@@ -260,7 +263,7 @@ public:
             COUNTERS_BLOCK() {
               WorkerCounters::MyCounters().dt_next_tuple_opt[mBTree.mTreeId]++;
             }
-            JUMPMU_RETURN OpCode::kOK;
+            JUMPMU_RETURN true;
           }
         }
         JUMPMU_CATCH() {
@@ -287,101 +290,109 @@ public:
       if (mSlotId == mGuardedLeaf->mNumSeps) {
         continue;
       }
-      return OpCode::kOK;
+      return true;
     }
   }
 
-  virtual OpCode prev() override {
+  virtual bool Prev() override {
     COUNTERS_BLOCK() {
       WorkerCounters::MyCounters().dt_prev_tuple[mBTree.mTreeId]++;
     }
 
     while (true) {
       ENSURE(mGuardedLeaf.mGuard.mState != GuardState::kOptimistic);
-      if ((mSlotId - 1) >= 0) {
+      // If we are not at the beginning of the leaf, return the previous key
+      // in the leaf.
+      if (mSlotId > 0) {
         mSlotId -= 1;
-        return OpCode::kOK;
-      } else if (mGuardedLeaf->mLowerFence.length == 0) {
-        return OpCode::kNotFound;
-      } else {
-        mFenceSize = mGuardedLeaf->mLowerFence.length;
-        mIsUsingUpperFence = false;
-        DCHECK(mBuffer.size() >= mFenceSize);
-        std::memcpy(&mBuffer[0], mGuardedLeaf->getLowerFenceKey(), mFenceSize);
+        return true;
+      }
 
-        // callback before exiting current leaf
-        if (mFuncExitLeaf != nullptr) {
-          mFuncExitLeaf(mGuardedLeaf);
-          mFuncExitLeaf = nullptr;
-        }
+      // No more keys in the BTree, return false
+      if (mGuardedLeaf->mLowerFence.length == 0) {
+        return false;
+      }
 
-        mGuardedParent.unlock();
-        mGuardedLeaf.unlock();
+      // Seek to the previous leaf
+      mFenceSize = mGuardedLeaf->mLowerFence.length;
+      mIsUsingUpperFence = false;
+      DCHECK(mBuffer.size() >= mFenceSize);
+      std::memcpy(&mBuffer[0], mGuardedLeaf->getLowerFenceKey(), mFenceSize);
 
-        // callback after exiting current leaf
-        if (mFuncCleanUp != nullptr) {
-          mFuncCleanUp();
-          mFuncCleanUp = nullptr;
-        }
+      // callback before exiting current leaf
+      if (mFuncExitLeaf != nullptr) {
+        mFuncExitLeaf(mGuardedLeaf);
+        mFuncExitLeaf = nullptr;
+      }
 
-        if (FLAGS_optimistic_scan && mLeafPosInParent != -1) {
-          JUMPMU_TRY() {
-            if ((mLeafPosInParent - 1) >= 0) {
-              s32 nextLeafPos = mLeafPosInParent - 1;
-              auto& nextLeafSwip = mGuardedParent->getChild(nextLeafPos);
-              GuardedBufferFrame guardedNextLeaf(mGuardedParent, nextLeafSwip,
-                                                 LatchMode::kJump);
-              if (mode == LatchMode::kExclusive) {
-                guardedNextLeaf.TryToExclusiveMayJump();
-              } else {
-                guardedNextLeaf.TryToSharedMayJump();
-              }
-              mGuardedLeaf.JumpIfModifiedByOthers();
-              mGuardedLeaf = std::move(guardedNextLeaf);
-              mLeafPosInParent = nextLeafPos;
-              mSlotId = mGuardedLeaf->mNumSeps - 1;
-              mIsPrefixCopied = false;
+      mGuardedParent.unlock();
+      mGuardedLeaf.unlock();
 
-              if (mFuncEnterLeaf != nullptr) {
-                mFuncEnterLeaf(mGuardedLeaf);
-              }
+      // callback after exiting current leaf
+      if (mFuncCleanUp != nullptr) {
+        mFuncCleanUp();
+        mFuncCleanUp = nullptr;
+      }
 
-              if (mGuardedLeaf->mNumSeps == 0) {
-                JUMPMU_CONTINUE;
-              }
-              COUNTERS_BLOCK() {
-                WorkerCounters::MyCounters()
-                    .dt_prev_tuple_opt[mBTree.mTreeId]++;
-              }
-              JUMPMU_RETURN OpCode::kOK;
+      if (FLAGS_optimistic_scan && mLeafPosInParent != -1) {
+        JUMPMU_TRY() {
+          if ((mLeafPosInParent - 1) >= 0) {
+            s32 nextLeafPos = mLeafPosInParent - 1;
+            auto& nextLeafSwip = mGuardedParent->getChild(nextLeafPos);
+            GuardedBufferFrame guardedNextLeaf(mGuardedParent, nextLeafSwip,
+                                               LatchMode::kJump);
+            if (mode == LatchMode::kExclusive) {
+              guardedNextLeaf.TryToExclusiveMayJump();
+            } else {
+              guardedNextLeaf.TryToSharedMayJump();
             }
-          }
-          JUMPMU_CATCH() {
-          }
-        }
-        // Construct the next key (lower bound)
-        gotoPage(AssembedFence());
+            mGuardedLeaf.JumpIfModifiedByOthers();
+            mGuardedLeaf = std::move(guardedNextLeaf);
+            mLeafPosInParent = nextLeafPos;
+            mSlotId = mGuardedLeaf->mNumSeps - 1;
+            mIsPrefixCopied = false;
 
-        if (mGuardedLeaf->mNumSeps == 0) {
-          COUNTERS_BLOCK() {
-            WorkerCounters::MyCounters().dt_empty_leaf[mBTree.mTreeId]++;
+            if (mFuncEnterLeaf != nullptr) {
+              mFuncEnterLeaf(mGuardedLeaf);
+            }
+
+            if (mGuardedLeaf->mNumSeps == 0) {
+              JUMPMU_CONTINUE;
+            }
+            COUNTERS_BLOCK() {
+              WorkerCounters::MyCounters().dt_prev_tuple_opt[mBTree.mTreeId]++;
+            }
+            JUMPMU_RETURN true;
           }
-          continue;
         }
-        bool is_equal = false;
-        mSlotId = mGuardedLeaf->lowerBound<false>(AssembedFence(), &is_equal);
-        if (is_equal) {
-          return OpCode::kOK;
-        } else if (mSlotId > 0) {
-          mSlotId -= 1;
-        } else {
-          continue;
+        JUMPMU_CATCH() {
         }
+      }
+
+      // Construct the next key (lower bound)
+      gotoPage(AssembedFence());
+
+      if (mGuardedLeaf->mNumSeps == 0) {
+        COUNTERS_BLOCK() {
+          WorkerCounters::MyCounters().dt_empty_leaf[mBTree.mTreeId]++;
+        }
+        continue;
+      }
+      bool isEqual = false;
+      mSlotId = mGuardedLeaf->lowerBound<false>(AssembedFence(), &isEqual);
+      if (isEqual) {
+        return true;
+      }
+
+      if (mSlotId > 0) {
+        mSlotId -= 1;
+      } else {
+        continue;
       }
     }
   }
 
-  virtual void assembleKey() {
+  virtual void AssembleKey() {
     if (!mIsPrefixCopied) {
       mGuardedLeaf->copyPrefix(&mBuffer[0]);
       mIsPrefixCopied = true;
@@ -395,21 +406,6 @@ public:
     return Slice(&mBuffer[0], mGuardedLeaf->getFullKeyLen(mSlotId));
   }
 
-  virtual MutableSlice mutableKeyInBuffer() {
-    DCHECK(mBuffer.size() >= mGuardedLeaf->getFullKeyLen(mSlotId));
-    return MutableSlice(&mBuffer[0], mGuardedLeaf->getFullKeyLen(mSlotId));
-  }
-
-  virtual MutableSlice mutableKeyInBuffer(u16 size) {
-    DCHECK(mBuffer.size() >= size);
-    return MutableSlice(&mBuffer[0], size);
-  }
-
-  virtual bool isKeyEqualTo(Slice other) override {
-    ENSURE(false);
-    return other == key();
-  }
-
   virtual Slice KeyWithoutPrefix() override {
     return mGuardedLeaf->KeyWithoutPrefix(mSlotId);
   }
@@ -418,7 +414,7 @@ public:
     return mGuardedLeaf->Value(mSlotId);
   }
 
-  virtual bool keyInCurrentBoundaries(Slice key) {
+  virtual bool KeyInCurrentNode(Slice key) {
     return mGuardedLeaf->compareKeyWithBoundaries(key) == 0;
   }
 

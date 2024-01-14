@@ -1,7 +1,7 @@
 #include "Recovery.hpp"
 
 #include "concurrency-recovery/WALEntry.hpp"
-#include "storage/btree/BTreeVI.hpp"
+#include "storage/btree/TxBTree.hpp"
 #include "storage/btree/core/BTreeNode.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
 
@@ -139,7 +139,7 @@ std::expected<void, utils::Error> Recovery::redo() {
       GuardedBufferFrame<BTreeNode> guardedNode(std::move(guard), &bf);
 
       s32 slotId = -1;
-      BTreeVI::InsertToNode(guardedNode, walInsert->GetKey(),
+      TxBTree::InsertToNode(guardedNode, walInsert->GetKey(),
                             walInsert->GetVal(), complexEntry->mWorkerId,
                             complexEntry->mTxId, complexEntry->mTxMode, slotId);
       break;
@@ -150,6 +150,11 @@ std::expected<void, utils::Error> Recovery::redo() {
       break;
     }
     case WALPayload::TYPE::WALRemove: {
+      DCHECK(false) << "Unhandled WALPayload::TYPE: "
+                    << std::to_string(static_cast<u64>(walPayload->mType));
+      break;
+    }
+    case WALPayload::TYPE::WALTxRemove: {
       DCHECK(false) << "Unhandled WALPayload::TYPE: "
                     << std::to_string(static_cast<u64>(walPayload->mType));
       break;

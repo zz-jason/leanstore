@@ -38,18 +38,18 @@ u16 BTreeNode::spaceNeeded(u16 keySize, u16 valSize) {
 
 bool BTreeNode::canInsert(u16 keySize, u16 valSize) {
   const u16 numSpaceNeeded = spaceNeeded(keySize, valSize);
-  if (!hasEnoughSpaceFor(numSpaceNeeded))
+  if (!hasEnoughSpaceFor(numSpaceNeeded)) {
     return false; // no space, insert fails
-  else
-    return true;
+  }
+  return true;
 }
 
 bool BTreeNode::prepareInsert(u16 keySize, u16 valSize) {
   const u16 numSpaceNeeded = spaceNeeded(keySize, valSize);
-  if (!requestSpaceFor(numSpaceNeeded))
+  if (!requestSpaceFor(numSpaceNeeded)) {
     return false;
-  else
-    return true;
+  }
+  return true;
 }
 
 s16 BTreeNode::insertDoNotCopyPayload(Slice key, u16 valSize, s32 pos) {

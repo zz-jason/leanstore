@@ -73,7 +73,7 @@ LeanStore::LeanStore() {
     DeSerializeFlags();
   }
   if (!FLAGS_wal) {
-    LOG(FATAL) << "BTreeVI is enabled without WAL, please enable FLAGS_wal";
+    LOG(FATAL) << "TxBTree is not enabled without WAL, please enable FLAGS_wal";
   }
 
   // open file
@@ -173,7 +173,7 @@ LeanStore::~LeanStore() {
       cr::CRManager::sInstance->scheduleJobSync(
           0, [&]() { numEntries = btree->countEntries(); });
 
-      LOG(INFO) << "[BTreeVI] name=" << treeName << ", btreeId=" << treeId
+      LOG(INFO) << "[TxBTree] name=" << treeName << ", btreeId=" << treeId
                 << ", height=" << btree->mHeight
                 << ", numEntries=" << numEntries;
     }
@@ -529,7 +529,7 @@ void LeanStore::DeSerializeMeta() {
       break;
     }
     case leanstore::storage::btree::BTREE_TYPE::VI: {
-      auto btree = std::make_unique<leanstore::storage::btree::BTreeVI>();
+      auto btree = std::make_unique<leanstore::storage::btree::TxBTree>();
 
       cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
         // create btree for graveyard
@@ -539,7 +539,7 @@ void LeanStore::DeSerializeMeta() {
         auto res =
             storage::btree::BTreeLL::Create(graveyardName, graveyardConfig);
         if (!res) {
-          LOG(ERROR) << "Failed to create BTreeVI graveyard"
+          LOG(ERROR) << "Failed to create TxBTree graveyard"
                      << ", btreeVI=" << btreeName
                      << ", graveyardName=" << graveyardName
                      << ", error=" << res.error().ToString();

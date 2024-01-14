@@ -58,13 +58,7 @@ public:
   /// merged left or right sibling if successful.
   bool TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling = true);
 
-  void trySplit(BufferFrame& toSplit, s16 pos = -1);
-
-  s16 mergeLeftIntoRight(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
-                         s16 left_pos,
-                         ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedLeft,
-                         ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedRight,
-                         bool full_merge_or_nothing);
+  void TrySplitMayJump(BufferFrame& toSplit, s16 pos = -1);
 
   XMergeReturnCode XMerge(GuardedBufferFrame<BTreeNode>& guardedParent,
                           GuardedBufferFrame<BTreeNode>& guardedChild,
@@ -94,7 +88,6 @@ public:
 
   void printInfos(uint64_t totalSize);
 
-public:
   // for buffer manager
   virtual void IterateChildSwips(
       BufferFrame& bf,
@@ -132,15 +125,18 @@ public:
 
   virtual void deserialize(StringMap map) override;
 
+private:
+  s16 mergeLeftIntoRight(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
+                         s16 leftPos,
+                         ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedLeft,
+                         ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedRight,
+                         bool fullMergeOrNothing);
+
 public:
   // Helpers
   template <LatchMode mode = LatchMode::kShared>
   inline void FindLeafCanJump(Slice key,
                               GuardedBufferFrame<BTreeNode>& guardedTarget);
-
-  template <LatchMode mode = LatchMode::kShared>
-  void findLeafAndLatch(GuardedBufferFrame<BTreeNode>& guardedTarget,
-                        Slice key);
 
 public:
   /// @brief
@@ -294,9 +290,9 @@ private:
                               rapidjson::Value::AllocatorType& allocator);
 
 public:
-  static constexpr std::string TREE_ID = "treeId";
-  static constexpr std::string HEIGHT = "height";
-  static constexpr std::string META_PAGE_ID = "metaPageId";
+  static constexpr std::string kTreeId = "treeId";
+  static constexpr std::string kHeight = "height";
+  static constexpr std::string kMetaPageId = "metaPageId";
 };
 
 inline void BTreeGeneric::freeBTreeNodesRecursive(
@@ -420,15 +416,15 @@ inline StringMap BTreeGeneric::serialize() {
   auto& metaBf = mMetaNodeSwip.AsBufferFrame();
   auto metaPageId = metaBf.header.mPageId;
   BufferManager::sInstance->CheckpointBufferFrame(metaBf);
-  return {{TREE_ID, std::to_string(mTreeId)},
-          {HEIGHT, std::to_string(mHeight.load())},
-          {META_PAGE_ID, std::to_string(metaPageId)}};
+  return {{kTreeId, std::to_string(mTreeId)},
+          {kHeight, std::to_string(mHeight.load())},
+          {kMetaPageId, std::to_string(metaPageId)}};
 }
 
 inline void BTreeGeneric::deserialize(StringMap map) {
-  mTreeId = std::stoull(map[TREE_ID]);
-  mHeight = std::stoull(map[HEIGHT]);
-  mMetaNodeSwip.evict(std::stoull(map[META_PAGE_ID]));
+  mTreeId = std::stoull(map[kTreeId]);
+  mHeight = std::stoull(map[kHeight]);
+  mMetaNodeSwip.evict(std::stoull(map[kMetaPageId]));
 
   // load meta node to memory
   HybridLatch dummyLatch;
@@ -477,24 +473,6 @@ inline void BTreeGeneric::FindLeafCanJump(
   }
 
   guardedParent.unlock();
-}
-
-template <LatchMode mode>
-inline void BTreeGeneric::findLeafAndLatch(
-    GuardedBufferFrame<BTreeNode>& guardedTarget, Slice key) {
-  while (true) {
-    JUMPMU_TRY() {
-      FindLeafCanJump<mode>(key, guardedTarget);
-      if (mode == LatchMode::kExclusive) {
-        guardedTarget.ToExclusiveMayJump();
-      } else {
-        guardedTarget.ToSharedMayJump();
-      }
-      JUMPMU_RETURN;
-    }
-    JUMPMU_CATCH() {
-    }
-  }
 }
 
 } // namespace btree

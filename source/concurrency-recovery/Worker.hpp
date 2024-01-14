@@ -259,7 +259,7 @@ public:
   //-------------------------------------------------------------------------
   // Object utils
   //-------------------------------------------------------------------------
-  void garbageCollection();
+  void GarbageCollection();
   void refreshGlobalState();
   void switchToReadCommittedMode();
   void switchToSnapshotIsolationMode();
@@ -375,7 +375,7 @@ public:
 };
 
 // Shortcuts
-inline Transaction& activeTX() {
+inline Transaction& ActiveTx() {
   return cr::Worker::my().mActiveTx;
 }
 

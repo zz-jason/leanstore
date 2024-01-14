@@ -33,7 +33,7 @@ void ConcurrencyControl::refreshGlobalState() {
       u64 workerInFlightTxId = workerSnapshot.load();
       while ((workerInFlightTxId & Worker::kLatchBit) &&
              ((workerInFlightTxId & Worker::kCleanBitsMask) <
-              activeTX().mStartTs)) {
+              ActiveTx().mStartTs)) {
         workerInFlightTxId = workerSnapshot.load();
       }
 
@@ -126,7 +126,7 @@ void ConcurrencyControl::switchToReadCommittedMode() {
   refreshGlobalState();
 }
 
-void ConcurrencyControl::garbageCollection() {
+void ConcurrencyControl::GarbageCollection() {
   if (!FLAGS_todo) {
     return;
   }
@@ -228,7 +228,7 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId) {
     return true;
   }
 
-  switch (activeTX().mTxIsolationLevel) {
+  switch (ActiveTx().mTxIsolationLevel) {
   case IsolationLevel::kSnapshotIsolation:
   case IsolationLevel::kSerializable: {
     if (isCommitTs) {
@@ -240,7 +240,7 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId) {
     }
 
     // Use the cache
-    if (local_snapshot_cache_ts[workerId] == activeTX().mStartTs) {
+    if (local_snapshot_cache_ts[workerId] == ActiveTx().mStartTs) {
       return mLocalSnapshotCache[workerId] >= startTs;
     }
     if (mLocalSnapshotCache[workerId] >= startTs) {

@@ -46,8 +46,8 @@ public:
 
 TEST_F(BTreeVITest, Create) {
   GetLeanStore();
-  storage::btree::BTreeVI* btree;
-  storage::btree::BTreeVI* another;
+  storage::btree::TxBTree* btree;
+  storage::btree::TxBTree* another;
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
@@ -98,7 +98,7 @@ TEST_F(BTreeVITest, Create) {
 
 TEST_F(BTreeVITest, InsertAndLookup) {
   GetLeanStore();
-  storage::btree::BTreeVI* btree;
+  storage::btree::TxBTree* btree;
 
   // prepare key-value pairs to insert
   size_t numKVs(10);
@@ -176,7 +176,7 @@ TEST_F(BTreeVITest, InsertAndLookup) {
 TEST_F(BTreeVITest, Insert1000KVs) {
   GetLeanStore();
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    storage::btree::BTreeVI* btree;
+    storage::btree::TxBTree* btree;
 
     // create leanstore btree for table records
     const auto* btreeName = "testTree1";
@@ -217,7 +217,7 @@ TEST_F(BTreeVITest, Insert1000KVs) {
 TEST_F(BTreeVITest, InsertDuplicates) {
   GetLeanStore();
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    storage::btree::BTreeVI* btree;
+    storage::btree::TxBTree* btree;
 
     // create leanstore btree for table records
     const auto* btreeName = "testTree1";
@@ -268,7 +268,7 @@ TEST_F(BTreeVITest, InsertDuplicates) {
 TEST_F(BTreeVITest, Remove) {
   GetLeanStore();
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    storage::btree::BTreeVI* btree;
+    storage::btree::TxBTree* btree;
 
     // create leanstore btree for table records
     const auto* btreeName = "testTree1";
@@ -325,7 +325,7 @@ TEST_F(BTreeVITest, Remove) {
 TEST_F(BTreeVITest, RemoveNotExisted) {
   GetLeanStore();
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    storage::btree::BTreeVI* btree;
+    storage::btree::TxBTree* btree;
 
     // create leanstore btree for table records
     const auto* btreeName = "testTree1";
@@ -383,7 +383,7 @@ TEST_F(BTreeVITest, RemoveFromOthers) {
   GetLeanStore();
   const auto* btreeName = "testTree1";
   std::set<std::string> uniqueKeys;
-  storage::btree::BTreeVI* btree;
+  storage::btree::TxBTree* btree;
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     // create leanstore btree for table records
@@ -457,7 +457,7 @@ TEST_F(BTreeVITest, RemoveFromOthers) {
 TEST_F(BTreeVITest, ToJSON) {
   GetLeanStore();
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    storage::btree::BTreeVI* btree;
+    storage::btree::TxBTree* btree;
 
     // prepare key-value pairs to insert
     size_t numKVs(10);
@@ -500,7 +500,7 @@ TEST_F(BTreeVITest, ToJSON) {
 
 TEST_F(BTreeVITest, Update) {
   GetLeanStore();
-  storage::btree::BTreeVI* btree;
+  storage::btree::TxBTree* btree;
 
   // prepare key-value pairs to insert
   const size_t numKVs(100);
@@ -582,7 +582,7 @@ TEST_F(BTreeVITest, Update) {
 
 TEST_F(BTreeVITest, ScanAsc) {
   GetLeanStore();
-  storage::btree::BTreeVI* btree;
+  storage::btree::TxBTree* btree;
 
   // prepare key-value pairs to insert
   const size_t numKVs(100);
@@ -668,7 +668,7 @@ TEST_F(BTreeVITest, ScanAsc) {
 
 TEST_F(BTreeVITest, ScanDesc) {
   GetLeanStore();
-  storage::btree::BTreeVI* btree;
+  storage::btree::TxBTree* btree;
 
   // prepare key-value pairs to insert
   const size_t numKVs(100);

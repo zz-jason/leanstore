@@ -17,6 +17,7 @@ namespace btree {
   ACTION(WALUpdate, 3, "WALUpdate", __VA_ARGS__)                               \
   ACTION(WALTxUpdate, 4, "WALTxUpdate", __VA_ARGS__)                           \
   ACTION(WALRemove, 5, "WALRemove", __VA_ARGS__)                               \
+  ACTION(WALTxRemove, 6, "WALTxRemove", __VA_ARGS__)                           \
   ACTION(WALLogicalSplit, 10, "WALLogicalSplit", __VA_ARGS__)                  \
   ACTION(WALInitPage, 11, "WALInitPage", __VA_ARGS__)                          \
   ACTION(WALUndefined, 100, "WALUndefined", __VA_ARGS__)
@@ -166,6 +167,40 @@ struct WALTxUpdate : WALPayload {
 
   u64 GetDeltaSize() const {
     return mDeltaSize;
+  }
+};
+
+struct WALTxRemove : WALPayload {
+  u16 mKeySize;
+
+  u16 mValSize;
+
+  WORKERID mPrevWorkerId;
+
+  TXID mPrevTxId;
+
+  COMMANDID mPrevCommandId;
+
+  u8 mPayload[];
+
+  WALTxRemove(Slice key, Slice val, WORKERID prevWorkerId, u64 prevTxId,
+              u64 prevCommandId)
+      : WALPayload(TYPE::WALTxRemove),
+        mKeySize(key.size()),
+        mValSize(val.size()),
+        mPrevWorkerId(prevWorkerId),
+        mPrevTxId(prevTxId),
+        mPrevCommandId(prevCommandId) {
+    std::memcpy(mPayload, key.data(), key.size());
+    std::memcpy(mPayload + key.size(), val.data(), val.size());
+  }
+
+  Slice RemovedKey() const {
+    return Slice(mPayload, mKeySize);
+  }
+
+  Slice RemovedVal() const {
+    return Slice(mPayload + mKeySize, mValSize);
   }
 };
 

@@ -24,11 +24,11 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
 
   LeanStoreAdapter(LeanStore& db, string name) : name(name) {
     if (FLAGS_recover) {
-      leanstore::storage::btree::BTreeVI* tree;
+      leanstore::storage::btree::TxBTree* tree;
       db.GetBTreeVI(name, &tree);
       btree = reinterpret_cast<leanstore::KVInterface*>(tree);
     } else {
-      leanstore::storage::btree::BTreeVI* tree;
+      leanstore::storage::btree::TxBTree* tree;
       storage::btree::BTreeGeneric::Config config{.mEnableWal = FLAGS_wal,
                                                   .mUseBulkInsert = false};
       db.RegisterBTreeVI(name, config, &tree);
