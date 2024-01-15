@@ -41,7 +41,7 @@ public:
   WALPayload(TYPE type) : mType(type) {
   }
 
-  virtual std::unique_ptr<rapidjson::Document> ToJSON();
+  virtual std::unique_ptr<rapidjson::Document> ToJson();
 
   inline std::string WalLogTypeName(TYPE type);
 
@@ -64,7 +64,7 @@ public:
   }
 
 public:
-  std::unique_ptr<rapidjson::Document> ToJSON() override;
+  std::unique_ptr<rapidjson::Document> ToJson() override;
 };
 
 struct WALLogicalSplit : WALPayload {
@@ -84,7 +84,7 @@ struct WALLogicalSplit : WALPayload {
         mRhsPageId(rhs) {
   }
 
-  std::unique_ptr<rapidjson::Document> ToJSON() override;
+  std::unique_ptr<rapidjson::Document> ToJson() override;
 };
 
 struct WALInsert : WALPayload {
@@ -110,7 +110,15 @@ struct WALInsert : WALPayload {
     return Slice(mPayload + mKeySize, mValSize);
   }
 
-  std::unique_ptr<rapidjson::Document> ToJSON() override;
+  std::unique_ptr<rapidjson::Document> ToJson() override;
+};
+
+struct WALUpdate : WALPayload {
+  u16 mKeySize;
+
+  u16 mDeltaLength;
+
+  u8 mPayload[];
 };
 
 struct WALTxUpdate : WALPayload {
@@ -170,6 +178,22 @@ struct WALTxUpdate : WALPayload {
   }
 };
 
+struct WALRemove : WALPayload {
+  u16 mKeySize;
+
+  u16 mValSize;
+
+  u8 mPayload[];
+
+  WALRemove(Slice key, Slice val)
+      : WALPayload(TYPE::WALRemove),
+        mKeySize(key.size()),
+        mValSize(val.size()) {
+    std::memcpy(mPayload, key.data(), key.size());
+    std::memcpy(mPayload + key.size(), val.data(), val.size());
+  }
+};
+
 struct WALTxRemove : WALPayload {
   u16 mKeySize;
 
@@ -207,7 +231,7 @@ struct WALTxRemove : WALPayload {
 //------------------------------------------------------------------------------
 // WALPayload
 //------------------------------------------------------------------------------
-inline std::unique_ptr<rapidjson::Document> WALPayload::ToJSON() {
+inline std::unique_ptr<rapidjson::Document> WALPayload::ToJson() {
   auto doc = std::make_unique<rapidjson::Document>();
   doc->SetObject();
 
@@ -233,8 +257,8 @@ inline std::string WALPayload::WalLogTypeName(TYPE type) {
 //------------------------------------------------------------------------------
 // WALInitPage
 //------------------------------------------------------------------------------
-inline std::unique_ptr<rapidjson::Document> WALInitPage::ToJSON() {
-  auto doc = WALPayload::ToJSON();
+inline std::unique_ptr<rapidjson::Document> WALInitPage::ToJson() {
+  auto doc = WALPayload::ToJson();
 
   // mTreeId
   {
@@ -256,8 +280,8 @@ inline std::unique_ptr<rapidjson::Document> WALInitPage::ToJSON() {
 //------------------------------------------------------------------------------
 // WALLogicalSplit
 //------------------------------------------------------------------------------
-inline std::unique_ptr<rapidjson::Document> WALLogicalSplit::ToJSON() {
-  auto doc = WALPayload::ToJSON();
+inline std::unique_ptr<rapidjson::Document> WALLogicalSplit::ToJson() {
+  auto doc = WALPayload::ToJson();
 
   // mParentPageId
   {
@@ -286,8 +310,8 @@ inline std::unique_ptr<rapidjson::Document> WALLogicalSplit::ToJSON() {
 //------------------------------------------------------------------------------
 // WALLogicalSplit
 //------------------------------------------------------------------------------
-inline std::unique_ptr<rapidjson::Document> WALInsert::ToJSON() {
-  auto doc = WALPayload::ToJSON();
+inline std::unique_ptr<rapidjson::Document> WALInsert::ToJson() {
+  auto doc = WALPayload::ToJson();
 
   // mKeySize
   {

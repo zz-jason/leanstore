@@ -1,8 +1,7 @@
 #pragma once
 
 #include "KVInterface.hpp"
-#include "core/BTreeGeneric.hpp"
-#include "storage/btree/core/BTreeWALPayload.hpp"
+#include "storage/btree/core/BTreeGeneric.hpp"
 #include "utils/Error.hpp"
 
 #include <expected>
@@ -13,48 +12,21 @@ namespace leanstore {
 namespace storage {
 namespace btree {
 
-class BTreeLL : public KVInterface, public BTreeGeneric {
+class BasicKV : public KVInterface, public BTreeGeneric {
 public:
-  struct WALUpdate : WALPayload {
-    u16 mKeySize;
-    u16 mDeltaLength;
-    u8 payload[];
-  };
-
-  struct WALRemove : WALPayload {
-    u16 mKeySize;
-    u16 mValSize;
-    u8 payload[];
-
-    WALRemove(Slice key, Slice val)
-        : WALPayload(TYPE::WALRemove),
-          mKeySize(key.size()),
-          mValSize(val.size()) {
-      std::memcpy(payload, key.data(), key.size());
-      std::memcpy(payload + key.size(), val.data(), val.size());
-    }
-  };
-
-public:
-  //---------------------------------------------------------------------------
-  // Constructor and Destructors
-  //---------------------------------------------------------------------------
-  BTreeLL() {
-    mTreeType = BTREE_TYPE::LL;
+  BasicKV() {
+    mTreeType = BTreeType::kBasicKV;
   }
 
 public:
-  //---------------------------------------------------------------------------
-  // KV Interfaces
-  //---------------------------------------------------------------------------
   virtual OpCode Lookup(Slice key, ValCallback valCallback) override;
 
-  virtual OpCode insert(Slice key, Slice val) override;
+  virtual OpCode Insert(Slice key, Slice val) override;
 
   virtual OpCode UpdateInPlace(Slice key, MutValCallback updateCallBack,
-                                       UpdateDesc& updateDesc) override;
+                               UpdateDesc& updateDesc) override;
 
-  virtual OpCode remove(Slice key) override;
+  virtual OpCode Remove(Slice key) override;
 
   virtual OpCode ScanAsc(Slice startKey, ScanCallback callback) override;
 
@@ -71,24 +43,21 @@ public:
   virtual u64 CountEntries() override;
 
 public:
-  //---------------------------------------------------------------------------
-  // Graveyard Interfaces
-  //---------------------------------------------------------------------------
   bool IsRangeEmpty(Slice startKey, Slice endKey);
 
 public:
   [[nodiscard]] static auto Create(const std::string& treeName, Config& config)
-      -> std::expected<BTreeLL*, utils::Error> {
+      -> std::expected<BasicKV*, utils::Error> {
     auto [treePtr, treeId] =
         TreeRegistry::sInstance->CreateTree(treeName, [&]() {
           return std::unique_ptr<BufferManagedTree>(
-              static_cast<BufferManagedTree*>(new BTreeLL()));
+              static_cast<BufferManagedTree*>(new BasicKV()));
         });
     if (treePtr == nullptr) {
       return std::unexpected<utils::Error>(
           utils::Error::General("Tree name has been taken"));
     }
-    auto* tree = dynamic_cast<BTreeLL*>(treePtr);
+    auto* tree = dynamic_cast<BasicKV*>(treePtr);
     tree->Init(treeId, config);
     return tree;
   }

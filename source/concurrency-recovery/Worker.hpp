@@ -390,10 +390,10 @@ inline Transaction& ActiveTx() {
 
 template <typename T> inline void WALPayloadHandler<T>::SubmitWal() {
   SCOPED_DEFER(DEBUG_BLOCK() {
-    auto walDoc = cr::Worker::my().mLogging.mActiveWALEntryComplex->ToJSON();
+    auto walDoc = cr::Worker::my().mLogging.mActiveWALEntryComplex->ToJson();
     auto entry = reinterpret_cast<T*>(
         cr::Worker::my().mLogging.mActiveWALEntryComplex->payload);
-    auto payloadDoc = entry->ToJSON();
+    auto payloadDoc = entry->ToJson();
     walDoc->AddMember("payload", *payloadDoc, walDoc->GetAllocator());
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);

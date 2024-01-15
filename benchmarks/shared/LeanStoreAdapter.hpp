@@ -25,13 +25,13 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
   LeanStoreAdapter(LeanStore& db, string name) : name(name) {
     if (FLAGS_recover) {
       leanstore::storage::btree::TransactionKV* tree;
-      db.GetBTreeVI(name, &tree);
+      db.GetTransactionKV(name, &tree);
       btree = reinterpret_cast<leanstore::KVInterface*>(tree);
     } else {
       leanstore::storage::btree::TransactionKV* tree;
       storage::btree::BTreeGeneric::Config config{.mEnableWal = FLAGS_wal,
                                                   .mUseBulkInsert = false};
-      db.RegisterBTreeVI(name, config, &tree);
+      db.RegisterTransactionKV(name, config, &tree);
       btree = reinterpret_cast<leanstore::KVInterface*>(tree);
     }
   }
@@ -60,7 +60,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
   void insert(const typename Record::Key& key, const Record& record) final {
     u8 foldedKey[Record::maxFoldLength()];
     u16 foldedKeySize = Record::foldKey(foldedKey, key);
-    const OpCode res = btree->insert(Slice(foldedKey, foldedKeySize),
+    const OpCode res = btree->Insert(Slice(foldedKey, foldedKeySize),
                                      Slice((u8*)(&record), sizeof(Record)));
     DCHECK(res == leanstore::OpCode::kOK || res == leanstore::OpCode::kAbortTx);
     if (res == leanstore::OpCode::kAbortTx) {
@@ -106,7 +106,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
   bool erase(const typename Record::Key& key) final {
     u8 foldedKey[Record::maxFoldLength()];
     u16 foldedKeySize = Record::foldKey(foldedKey, key);
-    const auto res = btree->remove(Slice(foldedKey, foldedKeySize));
+    const auto res = btree->Remove(Slice(foldedKey, foldedKeySize));
     if (res == leanstore::OpCode::kAbortTx) {
       cr::Worker::my().AbortTx();
     }

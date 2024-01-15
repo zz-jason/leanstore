@@ -269,7 +269,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
     DCHECK(bf.header.state == STATE::FREE);
 
     // 2. Create an IO frame in the current partition
-    IOFrame& ioFrame = partition.mInflightIOs.insert(pageId);
+    IOFrame& ioFrame = partition.mInflightIOs.Insert(pageId);
     ioFrame.state = IOFrame::STATE::READING;
     ioFrame.readers_counter = 1;
     JumpScoped<std::unique_lock<std::mutex>> ioFrameGuard(ioFrame.mutex);
@@ -310,7 +310,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
       bf.header.state = STATE::HOT;
 
       if (ioFrame.readers_counter.fetch_add(-1) == 1) {
-        partition.mInflightIOs.remove(pageId);
+        partition.mInflightIOs.Remove(pageId);
       }
 
       sTlsLastReadBf = &bf;
@@ -323,7 +323,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
       ioFrame.state = IOFrame::STATE::READY;
       inflightIOGuard->unlock();
       ioFrameGuard->unlock();
-      jumpmu::jump();
+      jumpmu::Jump();
     }
   }
 
@@ -339,11 +339,11 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
     if (ioFrame.readers_counter.fetch_add(-1) == 1) {
       inflightIOGuard->lock();
       if (ioFrame.readers_counter == 0) {
-        partition.mInflightIOs.remove(pageId);
+        partition.mInflightIOs.Remove(pageId);
       }
       inflightIOGuard->unlock();
     }
-    jumpmu::jump(); // why jump?
+    jumpmu::Jump(); // why jump?
     break;
   }
   case IOFrame::STATE::READY: {
@@ -364,7 +364,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
       bf->header.state = STATE::HOT;
 
       if (ioFrame.readers_counter.fetch_add(-1) == 1) {
-        partition.mInflightIOs.remove(pageId);
+        partition.mInflightIOs.Remove(pageId);
       } else {
         ioFrame.state = IOFrame::STATE::TO_DELETE;
       }
@@ -375,10 +375,10 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
   }
   case IOFrame::STATE::TO_DELETE: {
     if (ioFrame.readers_counter == 0) {
-      partition.mInflightIOs.remove(pageId);
+      partition.mInflightIOs.Remove(pageId);
     }
     inflightIOGuard->unlock();
-    jumpmu::jump();
+    jumpmu::Jump();
     break;
   }
   default: {

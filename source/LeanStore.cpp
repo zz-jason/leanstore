@@ -521,14 +521,14 @@ void LeanStore::DeSerializeMeta() {
     }
 
     // create and register btrees
-    switch (static_cast<leanstore::storage::btree::BTREE_TYPE>(btreeType)) {
-    case leanstore::storage::btree::BTREE_TYPE::LL: {
-      auto btree = std::make_unique<leanstore::storage::btree::BTreeLL>();
+    switch (static_cast<leanstore::storage::btree::BTreeType>(btreeType)) {
+    case leanstore::storage::btree::BTreeType::kBasicKV: {
+      auto btree = std::make_unique<leanstore::storage::btree::BasicKV>();
       TreeRegistry::sInstance->RegisterTree(btreeId, std::move(btree),
                                             btreeName);
       break;
     }
-    case leanstore::storage::btree::BTREE_TYPE::VI: {
+    case leanstore::storage::btree::BTreeType::kTransactionKV: {
       auto btree = std::make_unique<leanstore::storage::btree::TransactionKV>();
 
       cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
@@ -537,7 +537,7 @@ void LeanStore::DeSerializeMeta() {
         auto graveyardConfig = storage::btree::BTreeGeneric::Config{
             .mEnableWal = false, .mUseBulkInsert = false};
         auto res =
-            storage::btree::BTreeLL::Create(graveyardName, graveyardConfig);
+            storage::btree::BasicKV::Create(graveyardName, graveyardConfig);
         if (!res) {
           LOG(ERROR) << "Failed to create TransactionKV graveyard"
                      << ", btreeVI=" << btreeName

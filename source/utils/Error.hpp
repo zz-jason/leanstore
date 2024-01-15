@@ -19,13 +19,13 @@ enum class ErrorCode : u64 {
   kFileSeek,
   kFileRead,
 
-  // BTreeLL related error code
-  kBTreeLL = 200,
-  kBTreeLLCreate,
+  // BasicKV related error code
+  kBasicKV = 200,
+  kBasicKVCreate,
 
   // TransactionKV related error code
-  kBTreeVI = 300,
-  kBTreeVICreate,
+  kTransactionKV = 300,
+  kTransactionKVCreate,
 
 };
 
@@ -80,9 +80,9 @@ public:
 
   // TransactionKV
   template <typename... Args>
-  inline static Error BTreeLLCreation(Args&&... args) {
-    const std::string msg = "Fail to create BTreeLL, treeName={}";
-    return Error(ErrorCode::kBTreeLLCreate, msg, std::forward<Args>(args)...);
+  inline static Error BasicKVCreate(Args&&... args) {
+    const std::string msg = "Fail to create BasicKV, treeName={}";
+    return Error(ErrorCode::kBasicKVCreate, msg, std::forward<Args>(args)...);
   }
 
   // File

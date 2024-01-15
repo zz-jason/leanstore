@@ -120,10 +120,10 @@ void CRManager::runWorker(u64 workerId) {
 void CRManager::setupHistoryTree() {
   auto historyTree = std::make_unique<HistoryTree>();
   historyTree->mUpdateBTrees =
-      std::make_unique<leanstore::storage::btree::BTreeLL*[]>(
+      std::make_unique<leanstore::storage::btree::BasicKV*[]>(
           FLAGS_worker_threads);
   historyTree->mRemoveBTrees =
-      std::make_unique<leanstore::storage::btree::BTreeLL*[]>(
+      std::make_unique<leanstore::storage::btree::BasicKV*[]>(
           FLAGS_worker_threads);
 
   for (u64 i = 0; i < FLAGS_worker_threads; i++) {
@@ -132,7 +132,7 @@ void CRManager::setupHistoryTree() {
                                                    .mUseBulkInsert = true};
     // setup update tree
     std::string updateBtreeName = name + "_updates";
-    auto res = storage::btree::BTreeLL::Create(updateBtreeName, config);
+    auto res = storage::btree::BasicKV::Create(updateBtreeName, config);
     if (!res) {
       LOG(FATAL) << "Failed to set up _updates tree"
                  << ", treeName=" << name
@@ -143,7 +143,7 @@ void CRManager::setupHistoryTree() {
 
     // setup delete tree
     std::string removeBtreeName = name + "_removes";
-    res = storage::btree::BTreeLL::Create(removeBtreeName, config);
+    res = storage::btree::BasicKV::Create(removeBtreeName, config);
     if (!res) {
       LOG(FATAL) << "Failed to set up _removes tree"
                  << ", treeName=" << name

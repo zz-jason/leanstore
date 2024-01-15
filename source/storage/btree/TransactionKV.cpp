@@ -2,7 +2,7 @@
 
 #include "KVInterface.hpp"
 #include "shared-headers/Units.hpp"
-#include "storage/btree/BTreeLL.hpp"
+#include "storage/btree/BasicKV.hpp"
 #include "storage/btree/ChainedTuple.hpp"
 #include "storage/btree/Tuple.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
@@ -139,7 +139,7 @@ OpCode TransactionKV::UpdateInPlace(Slice key, MutValCallback updateCallBack,
   return OpCode::kOther;
 }
 
-OpCode TransactionKV::insert(Slice key, Slice val) {
+OpCode TransactionKV::Insert(Slice key, Slice val) {
   DCHECK(cr::Worker::my().IsTxStarted());
 
   cr::Worker::my().mLogging.WalEnsureEnoughSpace(FLAGS_page_size * 1);
@@ -187,7 +187,7 @@ OpCode TransactionKV::insert(Slice key, Slice val) {
   return OpCode::kOther;
 }
 
-OpCode TransactionKV::remove(Slice key) {
+OpCode TransactionKV::Remove(Slice key) {
   DCHECK(cr::Worker::my().IsTxStarted());
   cr::Worker::my().mLogging.WalEnsureEnoughSpace(FLAGS_page_size);
 
@@ -382,10 +382,10 @@ void TransactionKV::undoLastUpdate(const WALTxUpdate* walUpdate) {
         std::memcpy(buff, xorData, deltaSize);
 
         // 2. calculate the old value based on xor result and old value
-        BTreeLL::XorToBuffer(updateDesc, chainedTuple.mPayload, buff);
+        BasicKV::XorToBuffer(updateDesc, chainedTuple.mPayload, buff);
 
         // 3. replace new value with old value
-        BTreeLL::CopyToValue(updateDesc, buff, chainedTuple.mPayload);
+        BasicKV::CopyToValue(updateDesc, buff, chainedTuple.mPayload);
       }
       xIter.MarkAsDirty();
       JUMPMU_RETURN;
@@ -477,7 +477,7 @@ bool TransactionKV::UpdateInFatTuple(BTreeExclusiveIterator& xIter, Slice key,
       DCHECK(fatTuple->mPayloadCapacity >= fatTuple->mPayloadSize);
     };
 
-    if (!xIter.mBTree.config.mEnableWal) {
+    if (!xIter.mBTree.mConfig.mEnableWal) {
       performUpdate();
       return true;
     }
@@ -492,13 +492,13 @@ bool TransactionKV::UpdateInFatTuple(BTreeExclusiveIterator& xIter, Slice key,
     auto* walBuf = walHandler->GetDeltaPtr();
 
     // 1. copy old value to wal buffer
-    BTreeLL::CopyToBuffer(updateDesc, fatTuple->GetValPtr(), walBuf);
+    BasicKV::CopyToBuffer(updateDesc, fatTuple->GetValPtr(), walBuf);
 
     // 2. update the value in-place
     performUpdate();
 
     // 3. xor with the updated new value and store to wal buffer
-    BTreeLL::XorToBuffer(updateDesc, fatTuple->GetValPtr(), walBuf);
+    BasicKV::XorToBuffer(updateDesc, fatTuple->GetValPtr(), walBuf);
     walHandler.SubmitWal();
     return true;
   }

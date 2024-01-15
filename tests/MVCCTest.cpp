@@ -37,7 +37,7 @@ protected:
     cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
       cr::Worker::my().StartTx();
       SCOPED_DEFER(cr::Worker::my().CommitTx());
-      leanstore->RegisterBTreeVI(mTreeName, config, &mBTree);
+      leanstore->RegisterTransactionKV(mTreeName, config, &mBTree);
       ASSERT_NE(mBTree, nullptr);
     });
   }
@@ -46,7 +46,7 @@ protected:
     cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
       cr::Worker::my().StartTx();
       SCOPED_DEFER(cr::Worker::my().CommitTx());
-      GetLeanStore()->UnRegisterBTreeVI(mTreeName);
+      GetLeanStore()->UnRegisterTransactionKV(mTreeName);
     });
   }
 
@@ -77,7 +77,7 @@ TEST_F(MVCCTest, LookupWhileInsert) {
   auto val0 = RandomGenerator::RandomAlphString(151);
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
-    auto res = mBTree->insert(Slice((const u8*)key0.data(), key0.size()),
+    auto res = mBTree->Insert(Slice((const u8*)key0.data(), key0.size()),
                               Slice((const u8*)val0.data(), val0.size()));
     cr::Worker::my().CommitTx();
     EXPECT_EQ(res, OpCode::kOK);
@@ -88,7 +88,7 @@ TEST_F(MVCCTest, LookupWhileInsert) {
   auto val1 = RandomGenerator::RandomAlphString(131);
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
     cr::Worker::my().StartTx();
-    auto res = mBTree->insert(Slice((const u8*)key1.data(), key1.size()),
+    auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
                               Slice((const u8*)val1.data(), val1.size()));
     EXPECT_EQ(res, OpCode::kOK);
   });
@@ -145,7 +145,7 @@ TEST_F(MVCCTest, InsertConflict) {
   auto val0 = RandomGenerator::RandomAlphString(151);
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
-    auto res = mBTree->insert(Slice((const u8*)key0.data(), key0.size()),
+    auto res = mBTree->Insert(Slice((const u8*)key0.data(), key0.size()),
                               Slice((const u8*)val0.data(), val0.size()));
     cr::Worker::my().CommitTx();
     EXPECT_EQ(res, OpCode::kOK);
@@ -156,7 +156,7 @@ TEST_F(MVCCTest, InsertConflict) {
   auto val1 = val0;
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
     cr::Worker::my().StartTx();
-    auto res = mBTree->insert(Slice((const u8*)key1.data(), key1.size()),
+    auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
                               Slice((const u8*)val1.data(), val1.size()));
     EXPECT_EQ(res, OpCode::kOK);
   });
@@ -164,7 +164,7 @@ TEST_F(MVCCTest, InsertConflict) {
   // start another transaction to insert the same key
   cr::CRManager::sInstance->scheduleJobSync(2, [&]() {
     cr::Worker::my().StartTx();
-    auto res = mBTree->insert(Slice((const u8*)key1.data(), key1.size()),
+    auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
                               Slice((const u8*)val1.data(), val1.size()));
     EXPECT_EQ(res, OpCode::kAbortTx);
     cr::Worker::my().AbortTx();
@@ -175,7 +175,7 @@ TEST_F(MVCCTest, InsertConflict) {
   auto val2 = val0;
   cr::CRManager::sInstance->scheduleJobSync(2, [&]() {
     cr::Worker::my().StartTx();
-    auto res = mBTree->insert(Slice((const u8*)key1.data(), key1.size()),
+    auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
                               Slice((const u8*)val1.data(), val1.size()));
     EXPECT_EQ(res, OpCode::kAbortTx);
     cr::Worker::my().AbortTx();

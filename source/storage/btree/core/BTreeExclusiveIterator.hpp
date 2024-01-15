@@ -219,7 +219,7 @@ public:
 
   // Returns true if it tried to merge
   bool mergeIfNeeded() {
-    if (mGuardedLeaf->freeSpaceAfterCompaction() >=
+    if (mGuardedLeaf->FreeSpaceAfterCompaction() >=
         BTreeNode::UnderFullSize()) {
       mGuardedLeaf.unlock();
       mSlotId = -1;

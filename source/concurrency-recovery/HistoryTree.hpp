@@ -3,7 +3,7 @@
 #include "HistoryTreeInterface.hpp"
 #include "concurrency-recovery/Worker.hpp"
 #include "shared-headers/Units.hpp"
-#include "storage/btree/BTreeLL.hpp"
+#include "storage/btree/BasicKV.hpp"
 
 #include <functional>
 
@@ -21,7 +21,7 @@ public:
   }
 };
 
-using BTreeLL = leanstore::storage::btree::BTreeLL;
+using BasicKV = leanstore::storage::btree::BasicKV;
 
 class HistoryTree : public HistoryTreeInterface {
 private:
@@ -39,8 +39,8 @@ private:
   Session mRemoveSessions[leanstore::cr::kWorkerLimit];
 
 public:
-  std::unique_ptr<BTreeLL*[]> mUpdateBTrees;
-  std::unique_ptr<BTreeLL*[]> mRemoveBTrees;
+  std::unique_ptr<BasicKV*[]> mUpdateBTrees;
+  std::unique_ptr<BasicKV*[]> mRemoveBTrees;
 
   virtual ~HistoryTree() = default;
 

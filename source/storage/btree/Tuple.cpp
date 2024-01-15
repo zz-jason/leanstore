@@ -2,7 +2,7 @@
 
 #include "TransactionKV.hpp"
 #include "concurrency-recovery/Worker.hpp"
-#include "storage/btree/BTreeLL.hpp"
+#include "storage/btree/BasicKV.hpp"
 #include "storage/btree/ChainedTuple.hpp"
 #include "storage/btree/core/BTreeNode.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
@@ -172,7 +172,7 @@ void FatTuple::UndoLastUpdate() {
   mPayloadSize -= totalDeltaSize + sizeof(u16);
   auto& updateDesc = delta.GetUpdateDesc();
   auto* xorData = delta.GetDeltaPtr();
-  BTreeLL::CopyToValue(updateDesc, xorData, GetValPtr());
+  BasicKV::CopyToValue(updateDesc, xorData, GetValPtr());
 }
 
 // Attention: we have to disable garbage collection if the latest delta was from
@@ -358,7 +358,7 @@ void FatTuple::Append(UpdateDesc& updateDesc) {
   newDelta.mCommandId = this->mCommandId;
   std::memcpy(newDelta.mPayload, &updateDesc, updateDesc.Size());
   auto* deltaPtr = newDelta.mPayload + updateDesc.Size();
-  BTreeLL::CopyToBuffer(updateDesc, this->GetValPtr(), deltaPtr);
+  BasicKV::CopyToBuffer(updateDesc, this->GetValPtr(), deltaPtr);
 }
 
 std::tuple<OpCode, u16> FatTuple::GetVisibleTuple(
@@ -381,7 +381,7 @@ std::tuple<OpCode, u16> FatTuple::GetVisibleTuple(
       const auto& delta = getDelta(i);
       const auto& updateDesc = delta.GetUpdateDesc();
       auto* xorData = delta.GetDeltaPtr();
-      BTreeLL::CopyToValue(updateDesc, xorData, copiedVal->get());
+      BasicKV::CopyToValue(updateDesc, xorData, copiedVal->get());
       if (cr::Worker::my().cc.VisibleForMe(delta.mWorkerId, delta.mTxId)) {
         valCallback(Slice(copiedVal->get(), mValSize));
         return {OpCode::kOK, numVisitedVersions};

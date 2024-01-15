@@ -230,7 +230,7 @@ inline auto LeanStoreMVCCSession::CreateTable(const std::string& tblName,
     if (implicitTx) {
       cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
     }
-    mStore->mLeanStore->RegisterBTreeVI(tblName, config, &btree);
+    mStore->mLeanStore->RegisterTransactionKV(tblName, config, &btree);
     if (implicitTx) {
       cr::Worker::my().CommitTx();
     }
@@ -248,7 +248,7 @@ inline auto LeanStoreMVCCSession::DropTable(const std::string& tblName,
     if (implicitTx) {
       cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
     }
-    mStore->mLeanStore->UnRegisterBTreeVI(tblName);
+    mStore->mLeanStore->UnRegisterTransactionKV(tblName);
     if (implicitTx) {
       cr::Worker::my().CommitTx();
     }
@@ -274,7 +274,7 @@ inline auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
       }
     });
 
-    res = btree->insert(Slice((const u8*)key.data(), key.size()),
+    res = btree->Insert(Slice((const u8*)key.data(), key.size()),
                         Slice((const u8*)val.data(), val.size()));
   });
   if (res != OpCode::kOK) {
@@ -345,7 +345,7 @@ inline auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
     updateDesc->mUpdateSlots[0].mOffset = 0;
     updateDesc->mUpdateSlots[0].mSize = val.size();
     res = btree->UpdateInPlace(Slice((const u8*)key.data(), key.size()),
-                                       updateCallBack, *updateDesc);
+                               updateCallBack, *updateDesc);
   });
   if (res == OpCode::kOK) {
     return 1;
@@ -374,7 +374,7 @@ inline auto LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key,
       }
     });
 
-    res = btree->remove(Slice((const u8*)key.data(), key.size()));
+    res = btree->Remove(Slice((const u8*)key.data(), key.size()));
   });
   if (res == OpCode::kOK) {
     return 1;

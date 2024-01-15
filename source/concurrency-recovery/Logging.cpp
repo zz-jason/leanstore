@@ -107,7 +107,7 @@ WALEntrySimple& Logging::ReserveWALEntrySimple(WALEntry::TYPE type) {
 /// WALEntrySimple to be flushed in the wal ring buffer.
 void Logging::SubmitWALEntrySimple() {
   SCOPED_DEFER(DEBUG_BLOCK() {
-    auto doc = mActiveWALEntrySimple->ToJSON();
+    auto doc = mActiveWALEntrySimple->ToJson();
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
     doc->Accept(writer);

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "profiling/tables/ConfigsTable.hpp"
-#include "storage/btree/BTreeLL.hpp"
+#include "storage/btree/BasicKV.hpp"
 #include "storage/btree/TransactionKV.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 
@@ -42,18 +42,18 @@ public:
   ~LeanStore();
 
 public:
-  /// Register a BTreeLL
+  /// Register a BasicKV
   ///
   /// @param name The unique name of the btree
   /// @param config The config of the btree
   /// @param btree The pointer to store the registered btree
-  void RegisterBTreeLL(const std::string& name,
+  void RegisterBasicKV(const std::string& name,
                        storage::btree::BTreeGeneric::Config& config,
-                       storage::btree::BTreeLL** btree) {
+                       storage::btree::BasicKV** btree) {
     DCHECK(cr::Worker::my().IsTxStarted());
-    auto res = storage::btree::BTreeLL::Create(name, config);
+    auto res = storage::btree::BasicKV::Create(name, config);
     if (!res) {
-      LOG(ERROR) << "Failed to register BTreeLL"
+      LOG(ERROR) << "Failed to register BasicKV"
                  << ", name=" << name << ", error=" << res.error().ToString();
       *btree = nullptr;
       return;
@@ -62,25 +62,25 @@ public:
     *btree = res.value();
   }
 
-  /// Get a registered BTreeLL
+  /// Get a registered BasicKV
   ///
   /// @param name The unique name of the btree
   /// @param btree The pointer to store the found btree
-  void GetBTreeLL(const std::string& name, storage::btree::BTreeLL** btree) {
-    *btree = dynamic_cast<storage::btree::BTreeLL*>(
+  void GetBasicKV(const std::string& name, storage::btree::BasicKV** btree) {
+    *btree = dynamic_cast<storage::btree::BasicKV*>(
         storage::TreeRegistry::sInstance->GetTree(name));
   }
 
-  /// Unregister a BTreeLL
+  /// Unregister a BasicKV
   /// @param name The unique name of the btree
-  void UnRegisterBTreeLL(const std::string& name) {
+  void UnRegisterBasicKV(const std::string& name) {
     DCHECK(cr::Worker::my().IsTxStarted());
     auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(
         storage::TreeRegistry::sInstance->GetTree(name));
     leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
     auto res = storage::TreeRegistry::sInstance->UnregisterTree(name);
     if (!res) {
-      LOG(ERROR) << "UnRegister BTreeLL failed"
+      LOG(ERROR) << "UnRegister BasicKV failed"
                  << ", error=" << res.error().ToString();
     }
   }
@@ -90,9 +90,9 @@ public:
   /// @param name The unique name of the btree
   /// @param config The config of the btree
   /// @param btree The pointer to store the registered btree
-  void RegisterBTreeVI(const std::string& name,
-                       storage::btree::BTreeGeneric::Config& config,
-                       storage::btree::TransactionKV** btree) {
+  void RegisterTransactionKV(const std::string& name,
+                             storage::btree::BTreeGeneric::Config& config,
+                             storage::btree::TransactionKV** btree) {
     DCHECK(cr::Worker::my().IsTxStarted());
     *btree = nullptr;
 
@@ -100,7 +100,7 @@ public:
     auto graveyardName = "_" + name + "_graveyard";
     auto graveyardConfig = storage::btree::BTreeGeneric::Config{
         .mEnableWal = false, .mUseBulkInsert = false};
-    auto res = storage::btree::BTreeLL::Create(graveyardName, graveyardConfig);
+    auto res = storage::btree::BasicKV::Create(graveyardName, graveyardConfig);
     if (!res) {
       LOG(ERROR) << "Failed to create TransactionKV graveyard"
                  << ", btreeVI=" << name << ", graveyardName=" << graveyardName
@@ -128,14 +128,15 @@ public:
   ///
   /// @param name The unique name of the btree
   /// @param btree The pointer to store the found btree
-  void GetBTreeVI(const std::string& name, storage::btree::TransactionKV** btree) {
+  void GetTransactionKV(const std::string& name,
+                        storage::btree::TransactionKV** btree) {
     *btree = dynamic_cast<storage::btree::TransactionKV*>(
         storage::TreeRegistry::sInstance->GetTree(name));
   }
 
   /// Unregister a TransactionKV
   /// @param name The unique name of the btree
-  void UnRegisterBTreeVI(const std::string& name) {
+  void UnRegisterTransactionKV(const std::string& name) {
     DCHECK(cr::Worker::my().IsTxStarted());
     auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(
         storage::TreeRegistry::sInstance->GetTree(name));

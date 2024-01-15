@@ -215,7 +215,7 @@ public:
     header.Reset();
   }
 
-  void ToJSON(rapidjson::Value* resultObj,
+  void ToJson(rapidjson::Value* resultObj,
               rapidjson::Value::AllocatorType& allocator);
 
 public:
@@ -227,7 +227,7 @@ public:
 // -----------------------------------------------------------------------------
 // BufferFrame
 // -----------------------------------------------------------------------------
-inline void BufferFrame::ToJSON(rapidjson::Value* resultObj,
+inline void BufferFrame::ToJson(rapidjson::Value* resultObj,
                                 rapidjson::Value::AllocatorType& allocator) {
   DCHECK(resultObj->IsObject());
 

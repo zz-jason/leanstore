@@ -1,10 +1,10 @@
 #pragma once
 
-#include "BTreeLL.hpp"
+#include "BasicKV.hpp"
 #include "Config.hpp"
 #include "KVInterface.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
-#include "storage/btree/BTreeLL.hpp"
+#include "storage/btree/BasicKV.hpp"
 #include "storage/btree/ChainedTuple.hpp"
 #include "storage/btree/Tuple.hpp"
 #include "storage/btree/core/BTreeExclusiveIterator.hpp"
@@ -25,14 +25,14 @@ namespace leanstore::storage::btree {
 //
 // Keep in mind that garbage collection may leave pages completely empty
 // Missing points: FatTuple::remove, garbage leaves can escape from us
-class TransactionKV : public BTreeLL {
+class TransactionKV : public BasicKV {
 public:
   /// Graveyard to store removed tuples for long-running transactions, e.g. OLAP
   /// transactions.
-  BTreeLL* mGraveyard;
+  BasicKV* mGraveyard;
 
   TransactionKV() {
-    mTreeType = BTREE_TYPE::VI;
+    mTreeType = BTreeType::kTransactionKV;
   }
 
 public:
@@ -41,12 +41,12 @@ public:
   //---------------------------------------------------------------------------
   virtual OpCode Lookup(Slice key, ValCallback valCallback) override;
 
-  virtual OpCode insert(Slice key, Slice val) override;
+  virtual OpCode Insert(Slice key, Slice val) override;
 
   virtual OpCode UpdateInPlace(Slice key, MutValCallback updateCallBack,
                                UpdateDesc& updateDesc) override;
 
-  virtual OpCode remove(Slice key) override;
+  virtual OpCode Remove(Slice key) override;
 
   virtual OpCode ScanAsc(Slice startKey, ScanCallback) override;
 
@@ -56,9 +56,9 @@ public:
   //---------------------------------------------------------------------------
   // Object Utils
   //---------------------------------------------------------------------------
-  void Init(TREEID treeId, Config config, BTreeLL* graveyard) {
+  void Init(TREEID treeId, Config config, BasicKV* graveyard) {
     this->mGraveyard = graveyard;
-    BTreeLL::Init(treeId, config);
+    BasicKV::Init(treeId, config);
   }
 
   virtual SpaceCheckResult checkSpaceUtilization(BufferFrame& bf) override {
@@ -69,7 +69,7 @@ public:
     HybridGuard bfGuard(&bf.header.mLatch);
     bfGuard.toOptimisticOrJump();
     if (bf.page.mBTreeId != mTreeId) {
-      jumpmu::jump();
+      jumpmu::Jump();
     }
 
     GuardedBufferFrame<BTreeNode> guardedNode(std::move(bfGuard), &bf);
@@ -481,7 +481,7 @@ private:
 
 public:
   inline static TransactionKV* Create(const std::string& treeName,
-                                      Config& config, BTreeLL* graveyard) {
+                                      Config& config, BasicKV* graveyard) {
     auto [treePtr, treeId] =
         TreeRegistry::sInstance->CreateTree(treeName, [&]() {
           return std::unique_ptr<BufferManagedTree>(

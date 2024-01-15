@@ -1,4 +1,5 @@
 #include "LeanStore.hpp"
+
 #include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/DebugFlags.hpp"
@@ -57,13 +58,13 @@ TEST_F(LeanStoreTest, RecoverAfterInsert) {
   };
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree);
+    mLeanStore->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
 
     // insert some values
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
-      EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
+      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
     }
@@ -79,7 +80,7 @@ TEST_F(LeanStoreTest, RecoverAfterInsert) {
   // based on the WAL entries
   FLAGS_recover = true;
   mLeanStore = std::make_unique<leanstore::LeanStore>();
-  mLeanStore->GetBTreeVI(btreeName, &btree);
+  mLeanStore->GetTransactionKV(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
 
   // lookup the restored btree

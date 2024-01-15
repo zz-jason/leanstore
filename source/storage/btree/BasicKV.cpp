@@ -1,4 +1,4 @@
-#include "BTreeLL.hpp"
+#include "BasicKV.hpp"
 
 #include "KVInterface.hpp"
 #include "storage/btree/core/BTreeExclusiveIterator.hpp"
@@ -12,11 +12,9 @@
 using namespace std;
 using namespace leanstore::storage;
 
-namespace leanstore {
-namespace storage {
-namespace btree {
+namespace leanstore::storage::btree {
 
-OpCode BTreeLL::Lookup(Slice key, ValCallback valCallback) {
+OpCode BasicKV::Lookup(Slice key, ValCallback valCallback) {
   while (true) {
     JUMPMU_TRY() {
       GuardedBufferFrame<BTreeNode> guardedLeaf;
@@ -32,7 +30,7 @@ OpCode BTreeLL::Lookup(Slice key, ValCallback valCallback) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
     JUMPMU_CATCH() {
-      DLOG(WARNING) << "BTreeLL::Lookup retried";
+      DLOG(WARNING) << "BasicKV::Lookup retried";
       WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
     }
   }
@@ -40,7 +38,7 @@ OpCode BTreeLL::Lookup(Slice key, ValCallback valCallback) {
   return OpCode::kOther;
 }
 
-bool BTreeLL::IsRangeEmpty(Slice startKey, Slice endKey) {
+bool BasicKV::IsRangeEmpty(Slice startKey, Slice endKey) {
   while (true) {
     JUMPMU_TRY() {
       GuardedBufferFrame<BTreeNode> guardedLeaf;
@@ -72,7 +70,7 @@ bool BTreeLL::IsRangeEmpty(Slice startKey, Slice endKey) {
   return false;
 }
 
-OpCode BTreeLL::ScanAsc(Slice startKey, ScanCallback callback) {
+OpCode BasicKV::ScanAsc(Slice startKey, ScanCallback callback) {
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().dt_scan_asc[mTreeId]++;
   }
@@ -95,7 +93,7 @@ OpCode BTreeLL::ScanAsc(Slice startKey, ScanCallback callback) {
   return OpCode::kOther;
 }
 
-OpCode BTreeLL::ScanDesc(Slice scanKey, ScanCallback callback) {
+OpCode BasicKV::ScanDesc(Slice scanKey, ScanCallback callback) {
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().dt_scan_desc[mTreeId]++;
   }
@@ -122,8 +120,8 @@ OpCode BTreeLL::ScanDesc(Slice scanKey, ScanCallback callback) {
   return OpCode::kOther;
 }
 
-OpCode BTreeLL::insert(Slice key, Slice val) {
-  if (config.mEnableWal) {
+OpCode BasicKV::Insert(Slice key, Slice val) {
+  if (mConfig.mEnableWal) {
     cr::Worker::my().mLogging.WalEnsureEnoughSpace(FLAGS_page_size * 1);
   }
 
@@ -131,7 +129,7 @@ OpCode BTreeLL::insert(Slice key, Slice val) {
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
     OpCode ret = xIter.InsertKV(key, val);
     ENSURE(ret == OpCode::kOK);
-    if (config.mEnableWal) {
+    if (mConfig.mEnableWal) {
       auto walSize = key.length() + val.length();
       xIter.mGuardedLeaf.WriteWal<WALInsert>(walSize, key, val);
     } else {
@@ -145,7 +143,7 @@ OpCode BTreeLL::insert(Slice key, Slice val) {
   return OpCode::kOther;
 }
 
-OpCode BTreeLL::PrefixLookup(Slice key, PrefixLookupCallback callback) {
+OpCode BasicKV::PrefixLookup(Slice key, PrefixLookupCallback callback) {
   while (true) {
     JUMPMU_TRY() {
       GuardedBufferFrame<BTreeNode> guardedLeaf;
@@ -187,7 +185,7 @@ OpCode BTreeLL::PrefixLookup(Slice key, PrefixLookupCallback callback) {
   return OpCode::kOther;
 }
 
-OpCode BTreeLL::PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
+OpCode BasicKV::PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
   while (true) {
     JUMPMU_TRY() {
       GuardedBufferFrame<BTreeNode> guardedLeaf;
@@ -230,9 +228,9 @@ OpCode BTreeLL::PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
   return OpCode::kOther;
 }
 
-OpCode BTreeLL::UpdateInPlace(Slice key, MutValCallback updateCallBack,
+OpCode BasicKV::UpdateInPlace(Slice key, MutValCallback updateCallBack,
                               UpdateDesc& updateDesc) {
-  if (config.mEnableWal) {
+  if (mConfig.mEnableWal) {
     cr::Worker::my().mLogging.WalEnsureEnoughSpace(FLAGS_page_size);
   }
 
@@ -242,7 +240,7 @@ OpCode BTreeLL::UpdateInPlace(Slice key, MutValCallback updateCallBack,
       JUMPMU_RETURN OpCode::kNotFound;
     }
     auto currentVal = xIter.MutableVal();
-    if (config.mEnableWal) {
+    if (mConfig.mEnableWal) {
       DCHECK(updateDesc.mNumSlots > 0);
       auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
       auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WALUpdate>(
@@ -250,20 +248,20 @@ OpCode BTreeLL::UpdateInPlace(Slice key, MutValCallback updateCallBack,
       walHandler->mType = WALPayload::TYPE::WALUpdate;
       walHandler->mKeySize = key.length();
       walHandler->mDeltaLength = sizeOfDescAndDelta;
-      auto* walPtr = walHandler->payload;
+      auto* walPtr = walHandler->mPayload;
       std::memcpy(walPtr, key.data(), key.length());
       walPtr += key.length();
       std::memcpy(walPtr, &updateDesc, updateDesc.Size());
       walPtr += updateDesc.Size();
 
       // 1. copy old value to wal buffer
-      BTreeLL::CopyToBuffer(updateDesc, currentVal.Data(), walPtr);
+      BasicKV::CopyToBuffer(updateDesc, currentVal.Data(), walPtr);
 
       // 2. update with the new value
       updateCallBack(currentVal);
 
       // 3. xor with new value, store the result in wal buffer
-      BTreeLL::XorToBuffer(updateDesc, currentVal.Data(), walPtr);
+      BasicKV::XorToBuffer(updateDesc, currentVal.Data(), walPtr);
       walHandler.SubmitWal();
     } else {
       // The actual update by the client
@@ -280,8 +278,8 @@ OpCode BTreeLL::UpdateInPlace(Slice key, MutValCallback updateCallBack,
   return OpCode::kOther;
 }
 
-OpCode BTreeLL::remove(Slice key) {
-  if (config.mEnableWal) {
+OpCode BasicKV::Remove(Slice key) {
+  if (mConfig.mEnableWal) {
     cr::Worker::my().mLogging.WalEnsureEnoughSpace(FLAGS_page_size);
   }
   JUMPMU_TRY() {
@@ -291,7 +289,7 @@ OpCode BTreeLL::remove(Slice key) {
     }
 
     Slice value = xIter.value();
-    if (config.mEnableWal) {
+    if (mConfig.mEnableWal) {
       auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WALRemove>(
           key.size() + value.size(), key, value);
       walHandler.SubmitWal();
@@ -308,11 +306,11 @@ OpCode BTreeLL::remove(Slice key) {
   return OpCode::kOther;
 }
 
-OpCode BTreeLL::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
+OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
   JUMPMU_TRY() {
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
     xIter.SetExitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
-      if (guardedLeaf->freeSpaceAfterCompaction() >=
+      if (guardedLeaf->FreeSpaceAfterCompaction() >=
           BTreeNode::UnderFullSize()) {
         xIter.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
           JUMPMU_TRY() {
@@ -324,7 +322,7 @@ OpCode BTreeLL::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
       }
     });
 
-    ENSURE(config.mEnableWal == false);
+    ENSURE(mConfig.mEnableWal == false);
     if (!pageWise) {
       if (!xIter.Seek(startKey)) {
         JUMPMU_RETURN OpCode::kNotFound;
@@ -394,10 +392,8 @@ OpCode BTreeLL::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
   return OpCode::kOK;
 }
 
-u64 BTreeLL::CountEntries() {
+u64 BasicKV::CountEntries() {
   return BTreeGeneric::CountEntries();
 }
 
-} // namespace btree
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage::btree

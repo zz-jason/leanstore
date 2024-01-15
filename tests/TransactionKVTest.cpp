@@ -17,11 +17,11 @@ using namespace leanstore::storage::btree;
 
 namespace leanstore {
 
-class BTreeVITest : public ::testing::Test {
+class TransactionKVTest : public ::testing::Test {
 protected:
-  BTreeVITest() = default;
+  TransactionKVTest() = default;
 
-  ~BTreeVITest() = default;
+  ~TransactionKVTest() = default;
 
 public:
   inline static auto CreateLeanStore() {
@@ -30,7 +30,7 @@ public:
     FLAGS_bulk_insert = false;
     FLAGS_worker_threads = 3;
     FLAGS_recover = false;
-    FLAGS_data_dir = "/tmp/BTreeVITest";
+    FLAGS_data_dir = "/tmp/TransactionKVTest";
 
     std::filesystem::path dirPath = FLAGS_data_dir;
     std::filesystem::remove_all(dirPath);
@@ -39,12 +39,12 @@ public:
   }
 
   inline static leanstore::LeanStore* GetLeanStore() {
-    static std::unique_ptr<LeanStore> store = CreateLeanStore();
-    return store.get();
+    static std::unique_ptr<LeanStore> sTore = CreateLeanStore();
+    return sTore.get();
   }
 };
 
-TEST_F(BTreeVITest, Create) {
+TEST_F(TransactionKVTest, Create) {
   GetLeanStore();
   storage::btree::TransactionKV* btree;
   storage::btree::TransactionKV* another;
@@ -59,7 +59,7 @@ TEST_F(BTreeVITest, Create) {
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
-    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
+    GetLeanStore()->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
   });
 
@@ -67,7 +67,7 @@ TEST_F(BTreeVITest, Create) {
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
-    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &another);
+    GetLeanStore()->RegisterTransactionKV(btreeName, btreeConfig, &another);
     EXPECT_EQ(another, nullptr);
   });
 
@@ -75,7 +75,7 @@ TEST_F(BTreeVITest, Create) {
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
-    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &another);
+    GetLeanStore()->RegisterTransactionKV(btreeName, btreeConfig, &another);
     EXPECT_EQ(another, nullptr);
   });
 
@@ -84,19 +84,19 @@ TEST_F(BTreeVITest, Create) {
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
-    GetLeanStore()->RegisterBTreeVI(btreeName2, btreeConfig, &another);
+    GetLeanStore()->RegisterTransactionKV(btreeName2, btreeConfig, &another);
     EXPECT_NE(btree, nullptr);
   });
 
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
-    GetLeanStore()->UnRegisterBTreeVI(btreeName);
-    GetLeanStore()->UnRegisterBTreeVI(btreeName2);
+    GetLeanStore()->UnRegisterTransactionKV(btreeName);
+    GetLeanStore()->UnRegisterTransactionKV(btreeName2);
   });
 }
 
-TEST_F(BTreeVITest, InsertAndLookup) {
+TEST_F(TransactionKVTest, InsertAndLookup) {
   GetLeanStore();
   storage::btree::TransactionKV* btree;
 
@@ -117,7 +117,7 @@ TEST_F(BTreeVITest, InsertAndLookup) {
   };
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
-    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
+    GetLeanStore()->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().CommitTx();
 
@@ -125,7 +125,7 @@ TEST_F(BTreeVITest, InsertAndLookup) {
     cr::Worker::my().StartTx();
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
-      EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
+      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
     }
@@ -169,11 +169,11 @@ TEST_F(BTreeVITest, InsertAndLookup) {
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
-    GetLeanStore()->UnRegisterBTreeVI(btreeName);
+    GetLeanStore()->UnRegisterTransactionKV(btreeName);
   });
 }
 
-TEST_F(BTreeVITest, Insert1000KVs) {
+TEST_F(TransactionKVTest, Insert1000KVs) {
   GetLeanStore();
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     storage::btree::TransactionKV* btree;
@@ -186,7 +186,7 @@ TEST_F(BTreeVITest, Insert1000KVs) {
     };
 
     cr::Worker::my().StartTx();
-    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
+    GetLeanStore()->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().CommitTx();
 
@@ -202,19 +202,19 @@ TEST_F(BTreeVITest, Insert1000KVs) {
       }
       uniqueKeys.insert(key);
       auto val = RandomGenerator::RandomAlphString(128);
-      EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
+      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
     }
     cr::Worker::my().CommitTx();
 
     cr::Worker::my().StartTx();
-    GetLeanStore()->UnRegisterBTreeVI(btreeName);
+    GetLeanStore()->UnRegisterTransactionKV(btreeName);
     cr::Worker::my().CommitTx();
   });
 }
 
-TEST_F(BTreeVITest, InsertDuplicates) {
+TEST_F(TransactionKVTest, InsertDuplicates) {
   GetLeanStore();
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     storage::btree::TransactionKV* btree;
@@ -227,7 +227,7 @@ TEST_F(BTreeVITest, InsertDuplicates) {
     };
 
     cr::Worker::my().StartTx();
-    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
+    GetLeanStore()->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().CommitTx();
 
@@ -243,7 +243,7 @@ TEST_F(BTreeVITest, InsertDuplicates) {
       uniqueKeys.insert(key);
       auto val = RandomGenerator::RandomAlphString(128);
       cr::Worker::my().StartTx();
-      EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
+      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
       cr::Worker::my().CommitTx();
@@ -253,19 +253,19 @@ TEST_F(BTreeVITest, InsertDuplicates) {
     for (auto& key : uniqueKeys) {
       auto val = RandomGenerator::RandomAlphString(128);
       cr::Worker::my().StartTx();
-      EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
+      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kDuplicated);
       cr::Worker::my().CommitTx();
     }
 
     cr::Worker::my().StartTx();
-    GetLeanStore()->UnRegisterBTreeVI(btreeName);
+    GetLeanStore()->UnRegisterTransactionKV(btreeName);
     cr::Worker::my().CommitTx();
   });
 }
 
-TEST_F(BTreeVITest, Remove) {
+TEST_F(TransactionKVTest, Remove) {
   GetLeanStore();
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     storage::btree::TransactionKV* btree;
@@ -278,7 +278,7 @@ TEST_F(BTreeVITest, Remove) {
     };
 
     cr::Worker::my().StartTx();
-    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
+    GetLeanStore()->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().CommitTx();
 
@@ -295,7 +295,7 @@ TEST_F(BTreeVITest, Remove) {
       auto val = RandomGenerator::RandomAlphString(128);
 
       cr::Worker::my().StartTx();
-      EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
+      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
       cr::Worker::my().CommitTx();
@@ -303,7 +303,7 @@ TEST_F(BTreeVITest, Remove) {
 
     for (auto& key : uniqueKeys) {
       cr::Worker::my().StartTx();
-      EXPECT_EQ(btree->remove(Slice((const u8*)key.data(), key.size())),
+      EXPECT_EQ(btree->Remove(Slice((const u8*)key.data(), key.size())),
                 OpCode::kOK);
       cr::Worker::my().CommitTx();
     }
@@ -317,12 +317,12 @@ TEST_F(BTreeVITest, Remove) {
     }
 
     cr::Worker::my().StartTx();
-    GetLeanStore()->UnRegisterBTreeVI(btreeName);
+    GetLeanStore()->UnRegisterTransactionKV(btreeName);
     cr::Worker::my().CommitTx();
   });
 }
 
-TEST_F(BTreeVITest, RemoveNotExisted) {
+TEST_F(TransactionKVTest, RemoveNotExisted) {
   GetLeanStore();
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     storage::btree::TransactionKV* btree;
@@ -335,7 +335,7 @@ TEST_F(BTreeVITest, RemoveNotExisted) {
     };
 
     cr::Worker::my().StartTx();
-    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
+    GetLeanStore()->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().CommitTx();
 
@@ -352,7 +352,7 @@ TEST_F(BTreeVITest, RemoveNotExisted) {
       auto val = RandomGenerator::RandomAlphString(128);
 
       cr::Worker::my().StartTx();
-      EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
+      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
       cr::Worker::my().CommitTx();
@@ -368,18 +368,18 @@ TEST_F(BTreeVITest, RemoveNotExisted) {
       uniqueKeys.insert(key);
 
       cr::Worker::my().StartTx();
-      EXPECT_EQ(btree->remove(Slice((const u8*)key.data(), key.size())),
+      EXPECT_EQ(btree->Remove(Slice((const u8*)key.data(), key.size())),
                 OpCode::kNotFound);
       cr::Worker::my().CommitTx();
     }
 
     cr::Worker::my().StartTx();
-    GetLeanStore()->UnRegisterBTreeVI(btreeName);
+    GetLeanStore()->UnRegisterTransactionKV(btreeName);
     cr::Worker::my().CommitTx();
   });
 }
 
-TEST_F(BTreeVITest, RemoveFromOthers) {
+TEST_F(TransactionKVTest, RemoveFromOthers) {
   GetLeanStore();
   const auto* btreeName = "testTree1";
   std::set<std::string> uniqueKeys;
@@ -393,7 +393,7 @@ TEST_F(BTreeVITest, RemoveFromOthers) {
     };
 
     cr::Worker::my().StartTx();
-    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
+    GetLeanStore()->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().CommitTx();
 
@@ -409,7 +409,7 @@ TEST_F(BTreeVITest, RemoveFromOthers) {
       auto val = RandomGenerator::RandomAlphString(128);
 
       cr::Worker::my().StartTx();
-      EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
+      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
       cr::Worker::my().CommitTx();
@@ -420,7 +420,7 @@ TEST_F(BTreeVITest, RemoveFromOthers) {
     // remove from another worker
     for (auto& key : uniqueKeys) {
       cr::Worker::my().StartTx();
-      EXPECT_EQ(btree->remove(Slice((const u8*)key.data(), key.size())),
+      EXPECT_EQ(btree->Remove(Slice((const u8*)key.data(), key.size())),
                 OpCode::kOK);
       cr::Worker::my().CommitTx();
     }
@@ -449,12 +449,12 @@ TEST_F(BTreeVITest, RemoveFromOthers) {
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
     // unregister the tree from another worker
     cr::Worker::my().StartTx();
-    GetLeanStore()->UnRegisterBTreeVI(btreeName);
+    GetLeanStore()->UnRegisterTransactionKV(btreeName);
     cr::Worker::my().CommitTx();
   });
 }
 
-TEST_F(BTreeVITest, ToJSON) {
+TEST_F(TransactionKVTest, ToJson) {
   GetLeanStore();
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     storage::btree::TransactionKV* btree;
@@ -475,7 +475,7 @@ TEST_F(BTreeVITest, ToJSON) {
     };
 
     cr::Worker::my().StartTx();
-    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
+    GetLeanStore()->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().CommitTx();
 
@@ -483,22 +483,22 @@ TEST_F(BTreeVITest, ToJSON) {
     cr::Worker::my().StartTx();
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
-      EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
+      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
     }
     cr::Worker::my().CommitTx();
 
-    // auto doc = leanstore::storage::btree::BTreeGeneric::ToJSON(*btree);
+    // auto doc = leanstore::storage::btree::BTreeGeneric::ToJson(*btree);
     // std::cout << leanstore::utils::JsonToStr(&doc);
 
     cr::Worker::my().StartTx();
-    GetLeanStore()->UnRegisterBTreeVI(btreeName);
+    GetLeanStore()->UnRegisterTransactionKV(btreeName);
     cr::Worker::my().CommitTx();
   });
 }
 
-TEST_F(BTreeVITest, Update) {
+TEST_F(TransactionKVTest, Update) {
   GetLeanStore();
   storage::btree::TransactionKV* btree;
 
@@ -522,7 +522,7 @@ TEST_F(BTreeVITest, Update) {
 
     // create btree
     cr::Worker::my().StartTx();
-    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
+    GetLeanStore()->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     cr::Worker::my().CommitTx();
     EXPECT_NE(btree, nullptr);
 
@@ -530,7 +530,7 @@ TEST_F(BTreeVITest, Update) {
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       cr::Worker::my().StartTx();
-      auto res = btree->insert(Slice((const u8*)key.data(), key.size()),
+      auto res = btree->Insert(Slice((const u8*)key.data(), key.size()),
                                Slice((const u8*)val.data(), val.size()));
       cr::Worker::my().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
@@ -552,9 +552,8 @@ TEST_F(BTreeVITest, Update) {
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       cr::Worker::my().StartTx();
-      auto res =
-          btree->UpdateInPlace(Slice((const u8*)key.data(), key.size()),
-                                       updateCallBack, *updateDesc);
+      auto res = btree->UpdateInPlace(Slice((const u8*)key.data(), key.size()),
+                                      updateCallBack, *updateDesc);
       cr::Worker::my().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
     }
@@ -575,12 +574,12 @@ TEST_F(BTreeVITest, Update) {
     }
 
     cr::Worker::my().StartTx();
-    GetLeanStore()->UnRegisterBTreeVI(btreeName);
+    GetLeanStore()->UnRegisterTransactionKV(btreeName);
     cr::Worker::my().CommitTx();
   });
 }
 
-TEST_F(BTreeVITest, ScanAsc) {
+TEST_F(TransactionKVTest, ScanAsc) {
   GetLeanStore();
   storage::btree::TransactionKV* btree;
 
@@ -616,14 +615,14 @@ TEST_F(BTreeVITest, ScanAsc) {
 
     // create btree
     cr::Worker::my().StartTx();
-    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
+    GetLeanStore()->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     cr::Worker::my().CommitTx();
     EXPECT_NE(btree, nullptr);
 
     // insert values
     for (const auto& [key, val] : kvToTest) {
       cr::Worker::my().StartTx();
-      auto res = btree->insert(Slice((const u8*)key.data(), key.size()),
+      auto res = btree->Insert(Slice((const u8*)key.data(), key.size()),
                                Slice((const u8*)val.data(), val.size()));
       cr::Worker::my().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
@@ -661,12 +660,12 @@ TEST_F(BTreeVITest, ScanAsc) {
 
     // destroy the tree
     cr::Worker::my().StartTx();
-    GetLeanStore()->UnRegisterBTreeVI(btreeName);
+    GetLeanStore()->UnRegisterTransactionKV(btreeName);
     cr::Worker::my().CommitTx();
   });
 }
 
-TEST_F(BTreeVITest, ScanDesc) {
+TEST_F(TransactionKVTest, ScanDesc) {
   GetLeanStore();
   storage::btree::TransactionKV* btree;
 
@@ -702,14 +701,14 @@ TEST_F(BTreeVITest, ScanDesc) {
 
     // create btree
     cr::Worker::my().StartTx();
-    GetLeanStore()->RegisterBTreeVI(btreeName, btreeConfig, &btree);
+    GetLeanStore()->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     cr::Worker::my().CommitTx();
     EXPECT_NE(btree, nullptr);
 
     // insert values
     for (const auto& [key, val] : kvToTest) {
       cr::Worker::my().StartTx();
-      auto res = btree->insert(Slice((const u8*)key.data(), key.size()),
+      auto res = btree->Insert(Slice((const u8*)key.data(), key.size()),
                                Slice((const u8*)val.data(), val.size()));
       cr::Worker::my().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
@@ -748,7 +747,7 @@ TEST_F(BTreeVITest, ScanDesc) {
 
     // destroy the tree
     cr::Worker::my().StartTx();
-    GetLeanStore()->UnRegisterBTreeVI(btreeName);
+    GetLeanStore()->UnRegisterTransactionKV(btreeName);
     cr::Worker::my().CommitTx();
   });
 }

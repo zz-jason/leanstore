@@ -2,8 +2,9 @@
 
 #include "Tuple.hpp"
 #include "shared-headers/Units.hpp"
-#include "storage/btree/BTreeLL.hpp"
+#include "storage/btree/BasicKV.hpp"
 #include "storage/btree/core/BTreeExclusiveIterator.hpp"
+#include "storage/btree/core/BTreeWALPayload.hpp"
 
 #include <glog/logging.h>
 
@@ -134,7 +135,7 @@ inline std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
               // Apply delta
               auto& updateDesc = *UpdateDesc::From(updateVersion.mPayload);
               auto* oldValOfSlots = updateVersion.mPayload + updateDesc.Size();
-              BTreeLL::CopyToValue(updateDesc, oldValOfSlots, valueBuf.get());
+              BasicKV::CopyToValue(updateDesc, oldValOfSlots, valueBuf.get());
             } else {
               valueSize = versionSize - sizeof(UpdateVersion);
               valueBuf = std::make_unique<u8[]>(valueSize);
@@ -194,7 +195,7 @@ inline void ChainedTuple::Update(BTreeExclusiveIterator& xIter, Slice key,
             *new (versionBuf) UpdateVersion(mWorkerId, mTxId, mCommandId, true);
         std::memcpy(updateVersion.mPayload, &updateDesc, updateDesc.Size());
         auto* dest = updateVersion.mPayload + updateDesc.Size();
-        BTreeLL::CopyToBuffer(updateDesc, mPayload, dest);
+        BasicKV::CopyToBuffer(updateDesc, mPayload, dest);
       });
 
   auto performUpdate = [&]() {
@@ -215,7 +216,7 @@ inline void ChainedTuple::Update(BTreeExclusiveIterator& xIter, Slice key,
     }
   });
 
-  if (!xIter.mBTree.config.mEnableWal) {
+  if (!xIter.mBTree.mConfig.mEnableWal) {
     performUpdate();
     return;
   }
@@ -229,13 +230,13 @@ inline void ChainedTuple::Update(BTreeExclusiveIterator& xIter, Slice key,
   auto* walBuf = walHandler->GetDeltaPtr();
 
   // 1. copy old value to wal buffer
-  BTreeLL::CopyToBuffer(updateDesc, mPayload, walBuf);
+  BasicKV::CopyToBuffer(updateDesc, mPayload, walBuf);
 
   // 2. update the value in-place
   performUpdate();
 
   // 3. xor with the updated new value and store to wal buffer
-  BTreeLL::XorToBuffer(updateDesc, mPayload, walBuf);
+  BasicKV::XorToBuffer(updateDesc, mPayload, walBuf);
 
   walHandler.SubmitWal();
 }

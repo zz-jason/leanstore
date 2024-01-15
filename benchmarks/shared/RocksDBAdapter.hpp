@@ -6,6 +6,7 @@
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/storage/btree/core/WALMacros.hpp"
 #include "leanstore/utils/JumpMU.hpp"
+
 #include "rocksdb/db.h"
 #include "rocksdb/utilities/optimistic_transaction_db.h"
 #include "rocksdb/utilities/transaction_db.h"
@@ -107,7 +108,7 @@ template <class Record> struct RocksDBAdapter : public Adapter<Record> {
                        RSlice(&record, sizeof(record)));
       if (!s.ok()) {
         map.txn->Rollback();
-        jumpmu::jump();
+        jumpmu::Jump();
       }
     }
   }
@@ -159,7 +160,7 @@ template <class Record> struct RocksDBAdapter : public Adapter<Record> {
       s = map.txn->Delete(RSlice(folded_key, folded_key_len));
       if (!s.ok()) {
         map.txn->Rollback();
-        jumpmu::jump();
+        jumpmu::Jump();
       }
       return true;
     }

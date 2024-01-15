@@ -27,7 +27,7 @@ void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
   Slice key(keyBuffer, keySize);
   versionSize += sizeof(VersionMeta);
 
-  BTreeLL* btree =
+  BasicKV* btree =
       (isRemove) ? mRemoveBTrees[workerId] : mUpdateBTrees[workerId];
   Session* session = nullptr;
   if (sameThread) {
@@ -37,7 +37,7 @@ void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
   if (session != nullptr && session->rightmost_init) {
     JUMPMU_TRY() {
       BTreeExclusiveIterator xIter(
-          *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)),
+          *static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)),
           session->rightmost_bf, session->rightmost_version);
       if (xIter.HasEnoughSpaceFor(key.size(), versionSize) &&
           xIter.KeyInCurrentNode(key)) {
@@ -66,7 +66,7 @@ void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
   while (true) {
     JUMPMU_TRY() {
       BTreeExclusiveIterator xIter(
-          *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)));
+          *static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)));
 
       OpCode ret = xIter.seekToInsert(key);
       if (ret == OpCode::kDuplicated) {
@@ -106,7 +106,7 @@ bool HistoryTree::GetVersion(WORKERID prevWorkerId, TXID prevTxId,
                              COMMANDID prevCommandId,
                              const bool isRemoveCommand,
                              std::function<void(const u8*, u64)> cb) {
-  BTreeLL* btree = (isRemoveCommand) ? mRemoveBTrees[prevWorkerId]
+  BasicKV* btree = (isRemoveCommand) ? mRemoveBTrees[prevWorkerId]
                                      : mUpdateBTrees[prevWorkerId];
   const u64 keySize = sizeof(prevTxId) + sizeof(prevCommandId);
   u8 keyBuffer[keySize];
@@ -117,7 +117,7 @@ bool HistoryTree::GetVersion(WORKERID prevWorkerId, TXID prevTxId,
   Slice key(keyBuffer, keySize);
   JUMPMU_TRY() {
     BTreeSharedIterator iter(
-        *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)),
+        *static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)),
         LatchMode::kShared);
     if (!iter.SeekExact(key)) {
       JUMPMU_RETURN false;
@@ -149,16 +149,16 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID from_tx_id,
   auto payload = utils::JumpScopedArray<u8>(FLAGS_page_size);
   u16 payload_length;
   volatile u64 removed_versions = 0;
-  BTreeLL* volatile btree = mRemoveBTrees[workerId];
+  BasicKV* volatile btree = mRemoveBTrees[workerId];
 
   {
     JUMPMU_TRY() {
     restartrem : {
       leanstore::storage::btree::BTreeExclusiveIterator iterator(
-          *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)));
+          *static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)));
       iterator.SetExitLeafCallback(
           [&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
-            if (guardedLeaf->freeSpaceAfterCompaction() >=
+            if (guardedLeaf->FreeSpaceAfterCompaction() >=
                 BTreeNode::UnderFullSize()) {
               iterator.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
                 JUMPMU_TRY() {
@@ -236,10 +236,10 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID from_tx_id,
   while (should_try) {
     JUMPMU_TRY() {
       leanstore::storage::btree::BTreeExclusiveIterator iterator(
-          *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)));
+          *static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)));
       iterator.SetExitLeafCallback(
           [&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
-            if (guardedLeaf->freeSpaceAfterCompaction() >=
+            if (guardedLeaf->FreeSpaceAfterCompaction() >=
                 BTreeNode::UnderFullSize()) {
               iterator.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
                 JUMPMU_TRY() {
@@ -307,7 +307,7 @@ void HistoryTree::VisitRemovedVersions(
                        const bool visited_before)>
         cb) {
   // [from, to]
-  BTreeLL* btree = mRemoveBTrees[workerId];
+  BasicKV* btree = mRemoveBTrees[workerId];
   auto keySize = sizeof(to_tx_id);
   auto keyBuffer = utils::JumpScopedArray<u8>(FLAGS_page_size);
   u64 offset = 0;

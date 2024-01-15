@@ -151,25 +151,25 @@ public:
     return mDataOffset - (reinterpret_cast<u8*>(slot + mNumSeps) - RawPtr());
   }
 
-  u16 freeSpaceAfterCompaction() {
+  u16 FreeSpaceAfterCompaction() {
     return BTreeNode::Size() -
            (reinterpret_cast<u8*>(slot + mNumSeps) - RawPtr()) - mSpaceUsed;
   }
 
   double fillFactorAfterCompaction() {
-    return (1 - (freeSpaceAfterCompaction() * 1.0 / BTreeNode::Size()));
+    return (1 - (FreeSpaceAfterCompaction() * 1.0 / BTreeNode::Size()));
   }
 
   bool hasEnoughSpaceFor(u32 space_needed) {
     return (space_needed <= freeSpace() ||
-            space_needed <= freeSpaceAfterCompaction());
+            space_needed <= FreeSpaceAfterCompaction());
   }
 
   // ATTENTION: this method has side effects !
   bool requestSpaceFor(u16 space_needed) {
     if (space_needed <= freeSpace())
       return true;
-    if (space_needed <= freeSpaceAfterCompaction()) {
+    if (space_needed <= FreeSpaceAfterCompaction()) {
       compactify();
       return true;
     }
@@ -229,7 +229,7 @@ public:
   inline bool canExtendPayload(u16 slot_id, u16 new_length) {
     assert(new_length > ValSize(slot_id));
     const u16 extra_space_needed = new_length - ValSize(slot_id);
-    return freeSpaceAfterCompaction() >= extra_space_needed;
+    return FreeSpaceAfterCompaction() >= extra_space_needed;
   }
 
   void extendPayload(u16 slot_id, u16 new_payload_length) {
@@ -507,10 +507,14 @@ public:
 
   s16 insertDoNotCopyPayload(Slice key, u16 valSize, s32 pos = -1);
 
-  s32 insert(Slice key, Slice val);
+  s32 Insert(Slice key, Slice val);
+
   static u16 spaceNeeded(u16 keySize, u16 valSize, u16 prefixLength);
+
   u16 spaceNeeded(u16 keySize, u16 valSize);
+
   bool canInsert(u16 keySize, u16 valSize);
+
   bool prepareInsert(u16 keySize, u16 valSize);
 
   void compactify();
@@ -518,6 +522,7 @@ public:
   // merge right node into this node
   u32 mergeSpaceUpperBound(
       ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedRight);
+
   u32 spaceUsedBySlot(u16 slot_id);
 
   bool merge(u16 slotId, ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
@@ -541,10 +546,12 @@ public:
 
   // Not synchronized or todo section
   bool removeSlot(u16 slotId);
-  bool remove(Slice key);
+
+  bool Remove(Slice key);
+
   void Reset();
 
-  void ToJSON(rapidjson::Value* resultObj,
+  void ToJson(rapidjson::Value* resultObj,
               rapidjson::Value::AllocatorType& allocator);
 
 private:

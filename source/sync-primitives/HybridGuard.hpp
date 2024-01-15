@@ -82,7 +82,7 @@ public:
            mVersion == mLatch->mVersion.load());
     if (mState == GuardState::kOptimistic &&
         mVersion != mLatch->mVersion.load()) {
-      jumpmu::jump();
+      jumpmu::Jump();
     }
   }
 
@@ -113,7 +113,7 @@ public:
     mVersion = mLatch->mVersion.load();
     if (HasExclusiveMark(mVersion)) {
       mEncounteredContention = true;
-      jumpmu::jump();
+      jumpmu::Jump();
     }
     mState = GuardState::kOptimistic;
   }
@@ -157,7 +157,7 @@ public:
       mLatch->mMutex.lock();
       if (!mLatch->mVersion.compare_exchange_strong(expected, newVersion)) {
         mLatch->mMutex.unlock();
-        jumpmu::jump();
+        jumpmu::Jump();
       }
       mVersion = newVersion;
       mState = GuardState::kExclusive;
@@ -178,7 +178,7 @@ public:
       mLatch->mMutex.lock_shared();
       if (mLatch->mVersion.load() != mVersion) {
         mLatch->mMutex.unlock_shared();
-        jumpmu::jump();
+        jumpmu::Jump();
       }
       mState = GuardState::kShared;
     } else {
@@ -193,12 +193,12 @@ public:
     u64 expected = mVersion;
 
     if (!mLatch->mMutex.try_lock()) {
-      jumpmu::jump();
+      jumpmu::Jump();
     }
 
     if (!mLatch->mVersion.compare_exchange_strong(expected, newVersion)) {
       mLatch->mMutex.unlock();
-      jumpmu::jump();
+      jumpmu::Jump();
     }
 
     mVersion = newVersion;
@@ -208,11 +208,11 @@ public:
   inline void TryToSharedMayJump() {
     DCHECK(mState == GuardState::kOptimistic);
     if (!mLatch->mMutex.try_lock_shared()) {
-      jumpmu::jump();
+      jumpmu::Jump();
     }
     if (mLatch->mVersion.load() != mVersion) {
       mLatch->mMutex.unlock_shared();
-      jumpmu::jump();
+      jumpmu::Jump();
     }
     mState = GuardState::kShared;
   }

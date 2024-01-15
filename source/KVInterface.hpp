@@ -109,14 +109,14 @@ using PrefixLookupCallback = std::function<void(Slice key, Slice val)>;
 
 class KVInterface {
 public:
-  virtual OpCode insert(Slice key, Slice val) = 0;
+  virtual OpCode Insert(Slice key, Slice val) = 0;
 
   /// Update old value with a same sized new value.
   /// NOTE: The value is updated via user provided callback.
   virtual OpCode UpdateInPlace(Slice key, MutValCallback updateCallBack,
                                UpdateDesc& updateDesc) = 0;
 
-  virtual OpCode remove(Slice key) = 0;
+  virtual OpCode Remove(Slice key) = 0;
 
   virtual OpCode RangeRemove(Slice startKey, Slice endKey,
                              bool pageWise = true) = 0;
