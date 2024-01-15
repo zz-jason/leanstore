@@ -16,14 +16,14 @@ using LeafCallback =
     std::function<void(GuardedBufferFrame<BTreeNode>& guardedLeaf)>;
 
 // Iterator
-class BTreePessimisticIterator : public BTreePessimisticIteratorInterface {
+class BTreePessimisticIterator : public BTreeIteratorInterface {
   friend class BTreeGeneric;
 
 public:
   /// The working btree, all the seek operations are based on this tree.
   BTreeGeneric& mBTree;
 
-  const LatchMode mode;
+  const LatchMode mMode;
 
   /// mFuncEnterLeaf is called when the target leaf node is found.
   LeafCallback mFuncEnterLeaf = nullptr;
@@ -109,7 +109,7 @@ protected:
 
   void gotoPage(const Slice& key) {
     COUNTERS_BLOCK() {
-      if (mode == LatchMode::kExclusive) {
+      if (mMode == LatchMode::kExclusive) {
         WorkerCounters::MyCounters().dt_goto_page_exec[mBTree.mTreeId]++;
       } else {
         WorkerCounters::MyCounters().dt_goto_page_shared[mBTree.mTreeId]++;
@@ -117,9 +117,9 @@ protected:
     }
 
     // TODO: refactor when we get ride of serializability tests
-    if (mode == LatchMode::kShared) {
+    if (mMode == LatchMode::kShared) {
       findLeafAndLatch<LatchMode::kShared>(mGuardedLeaf, key);
-    } else if (mode == LatchMode::kExclusive) {
+    } else if (mMode == LatchMode::kExclusive) {
       findLeafAndLatch<LatchMode::kExclusive>(mGuardedLeaf, key);
     } else {
       UNREACHABLE();
@@ -130,7 +130,7 @@ public:
   BTreePessimisticIterator(BTreeGeneric& tree,
                            const LatchMode mode = LatchMode::kShared)
       : mBTree(tree),
-        mode(mode),
+        mMode(mode),
         mBuffer(FLAGS_page_size, 0) {
   }
 
@@ -241,7 +241,7 @@ public:
                 mGuardedParent->GetChildIncludingRightMost(nextLeafPos);
             GuardedBufferFrame guardedNextLeaf(mGuardedParent, nextLeafSwip,
                                                LatchMode::kJump);
-            if (mode == LatchMode::kExclusive) {
+            if (mMode == LatchMode::kExclusive) {
               guardedNextLeaf.TryToExclusiveMayJump();
             } else {
               guardedNextLeaf.TryToSharedMayJump();
@@ -341,7 +341,7 @@ public:
             auto& nextLeafSwip = mGuardedParent->getChild(nextLeafPos);
             GuardedBufferFrame guardedNextLeaf(mGuardedParent, nextLeafSwip,
                                                LatchMode::kJump);
-            if (mode == LatchMode::kExclusive) {
+            if (mMode == LatchMode::kExclusive) {
               guardedNextLeaf.TryToExclusiveMayJump();
             } else {
               guardedNextLeaf.TryToSharedMayJump();

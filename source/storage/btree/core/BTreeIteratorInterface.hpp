@@ -15,10 +15,6 @@ public:
   virtual bool SeekExact(Slice key) = 0;
   virtual bool Next() = 0;
   virtual bool Prev() = 0;
-};
-
-class BTreePessimisticIteratorInterface : public BTreeIteratorInterface {
-public:
   virtual Slice key() = 0;
   virtual Slice KeyWithoutPrefix() = 0;
   virtual Slice value() = 0;
