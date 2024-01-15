@@ -9,21 +9,21 @@
 
 namespace leanstore {
 
-class BTreeLLTest : public ::testing::Test {
+class BasicKVTest : public ::testing::Test {
 protected:
   std::unique_ptr<LeanStore> mLeanStore;
 
-  BTreeLLTest() {
+  BasicKVTest() {
     FLAGS_enable_print_btree_stats_on_exit = true;
     FLAGS_wal = true;
     FLAGS_bulk_insert = false;
   }
 
-  ~BTreeLLTest() = default;
+  ~BasicKVTest() = default;
 };
 
-TEST_F(BTreeLLTest, BTreeLLCreate) {
-  FLAGS_data_dir = "/tmp/BTreeLLTest/BTreeLLCreate";
+TEST_F(BasicKVTest, BasicKVCreate) {
+  FLAGS_data_dir = "/tmp/BasicKVTest/BasicKVCreate";
   std::filesystem::path dirPath = FLAGS_data_dir;
   std::filesystem::remove_all(dirPath);
   std::filesystem::create_directories(dirPath);
@@ -31,8 +31,8 @@ TEST_F(BTreeLLTest, BTreeLLCreate) {
   FLAGS_worker_threads = 2;
   FLAGS_recover = false;
   mLeanStore = std::make_unique<leanstore::LeanStore>();
-  storage::btree::BTreeLL* btree;
-  storage::btree::BTreeLL* another;
+  storage::btree::BasicKV* btree;
+  storage::btree::BasicKV* another;
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
@@ -44,7 +44,7 @@ TEST_F(BTreeLLTest, BTreeLLCreate) {
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
-    mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &btree);
+    mLeanStore->RegisterBasicKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
   });
 
@@ -52,7 +52,7 @@ TEST_F(BTreeLLTest, BTreeLLCreate) {
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
-    mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &another);
+    mLeanStore->RegisterBasicKV(btreeName, btreeConfig, &another);
     EXPECT_EQ(another, nullptr);
   });
 
@@ -60,7 +60,7 @@ TEST_F(BTreeLLTest, BTreeLLCreate) {
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
-    mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &another);
+    mLeanStore->RegisterBasicKV(btreeName, btreeConfig, &another);
     EXPECT_EQ(another, nullptr);
   });
 
@@ -69,20 +69,20 @@ TEST_F(BTreeLLTest, BTreeLLCreate) {
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
-    mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &another);
+    mLeanStore->RegisterBasicKV(btreeName, btreeConfig, &another);
     EXPECT_NE(btree, nullptr);
   });
 }
 
-TEST_F(BTreeLLTest, BTreeLLInsertAndLookup) {
-  FLAGS_data_dir = "/tmp/BTreeLLTest/BTreeLLInsertAndLookup";
+TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
+  FLAGS_data_dir = "/tmp/BasicKVTest/BasicKVInsertAndLookup";
   std::filesystem::path dirPath = FLAGS_data_dir;
   std::filesystem::remove_all(dirPath);
   std::filesystem::create_directories(dirPath);
   FLAGS_worker_threads = 2;
   FLAGS_recover = false;
   mLeanStore = std::make_unique<leanstore::LeanStore>();
-  storage::btree::BTreeLL* btree;
+  storage::btree::BasicKV* btree;
 
   // prepare key-value pairs to insert
   size_t numKVs(10);
@@ -101,7 +101,7 @@ TEST_F(BTreeLLTest, BTreeLLInsertAndLookup) {
   };
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
-    mLeanStore->RegisterBTreeLL(btreeName, btreeConfig, &btree);
+    mLeanStore->RegisterBasicKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().CommitTx();
 
@@ -109,7 +109,7 @@ TEST_F(BTreeLLTest, BTreeLLInsertAndLookup) {
     cr::Worker::my().StartTx();
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
-      EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
+      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
     }

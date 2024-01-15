@@ -1,10 +1,11 @@
 #include "Tuple.hpp"
 
-#include "BTreeVI.hpp"
+#include "TransactionKV.hpp"
 #include "concurrency-recovery/Worker.hpp"
-#include "storage/btree/BTreeLL.hpp"
+#include "storage/btree/BasicKV.hpp"
+#include "storage/btree/ChainedTuple.hpp"
 #include "storage/btree/core/BTreeNode.hpp"
-#include "utils/Defer.hpp"
+#include "storage/btree/core/BTreeWALPayload.hpp"
 #include "utils/Misc.hpp"
 
 #include <gflags/gflags.h>
@@ -30,11 +31,13 @@ public:
 
 namespace leanstore::storage::btree {
 
+static_assert(sizeof(FatTuple) >= sizeof(ChainedTuple));
+
 // -----------------------------------------------------------------------------
 // Tuple
 // -----------------------------------------------------------------------------
 
-static u64 maxFatTupleLength() {
+static u64 MaxFatTupleLength() {
   return BTreeNode::Size() - 1000;
 }
 
@@ -45,9 +48,9 @@ bool Tuple::ToFat(BTreeExclusiveIterator& xIter) {
   MutableSlice mutRawVal = xIter.MutableVal();
   auto& chainedTuple = *ChainedTuple::From(mutRawVal.Data());
   DCHECK(chainedTuple.IsWriteLocked());
-  DCHECK(chainedTuple.mFormat == TupleFormat::CHAINED);
+  DCHECK(chainedTuple.mFormat == TupleFormat::kChained);
 
-  auto tmpBufSize = maxFatTupleLength();
+  auto tmpBufSize = MaxFatTupleLength();
   auto tmpBuf = utils::JumpScopedArray<u8>(tmpBufSize);
   u32 payloadSize = tmpBufSize - sizeof(FatTuple);
   u32 valSize = mutRawVal.Size() - sizeof(ChainedTuple);
@@ -62,26 +65,26 @@ bool Tuple::ToFat(BTreeExclusiveIterator& xIter) {
   bool abortConversion = false;
   u16 numDeltasToReplace = 0;
   while (!abortConversion) {
-    if (cr::Worker::my().cc.isVisibleForAll(prevTxId)) {
+    if (cr::Worker::my().cc.VisibleForAll(prevTxId)) {
       // No need to convert versions that are visible for all to the FatTuple,
       // these old version can be GCed. Pruning versions space might get delayed
       break;
     }
 
-    if (!cr::Worker::my().cc.retrieveVersion(
+    if (!cr::Worker::my().cc.GetVersion(
             prevWorkerId, prevTxId, prevCommandId, [&](const u8* version, u64) {
               numDeltasToReplace++;
               const auto& chainedDelta = *UpdateVersion::From(version);
-              DCHECK(chainedDelta.type == Version::TYPE::UPDATE);
+              DCHECK(chainedDelta.mType == VersionType::kUpdate);
               DCHECK(chainedDelta.mIsDelta);
 
-              auto& updateDesc = *UpdateDesc::From(chainedDelta.payload);
-              auto deltaPayloadSize = updateDesc.NumBytes4WAL();
-              auto deltaSize = sizeof(FatTupleDelta) + deltaPayloadSize;
+              auto& updateDesc = *UpdateDesc::From(chainedDelta.mPayload);
+              auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
+              auto deltaSize = sizeof(FatTupleDelta) + sizeOfDescAndDelta;
 
-              if (!fatTuple->hasSpaceFor(updateDesc)) {
-                fatTuple->garbageCollection();
-                if (!fatTuple->hasSpaceFor(updateDesc)) {
+              if (!fatTuple->HasSpaceFor(updateDesc)) {
+                fatTuple->GarbageCollection();
+                if (!fatTuple->HasSpaceFor(updateDesc)) {
                   abortConversion = true;
                   return;
                 }
@@ -91,7 +94,7 @@ bool Tuple::ToFat(BTreeExclusiveIterator& xIter) {
               fatTuple->NewDelta(deltaSize, chainedDelta.mWorkerId,
                                  chainedDelta.mTxId, chainedDelta.mCommandId,
                                  reinterpret_cast<const u8*>(&updateDesc),
-                                 deltaPayloadSize);
+                                 sizeOfDescAndDelta);
               prevWorkerId = chainedDelta.mWorkerId;
               prevTxId = chainedDelta.mTxId;
               prevCommandId = chainedDelta.mCommandId;
@@ -106,7 +109,7 @@ bool Tuple::ToFat(BTreeExclusiveIterator& xIter) {
     return false;
   }
 
-  if (numDeltasToReplace <= BTreeVI::convertToFatTupleThreshold()) {
+  if (numDeltasToReplace <= TransactionKV::ConvertToFatTupleThreshold()) {
     chainedTuple.WriteUnlock();
     return false;
   }
@@ -114,9 +117,9 @@ bool Tuple::ToFat(BTreeExclusiveIterator& xIter) {
   // Reverse the deltas to make follow the O2N order.
   // NOTE: Deltas are added when visiting the chainedTuple in the N2O order.
   fatTuple->ReverseDeltas();
-  fatTuple->garbageCollection();
+  fatTuple->GarbageCollection();
 
-  if (fatTuple->mPayloadSize > maxFatTupleLength()) {
+  if (fatTuple->mPayloadSize > MaxFatTupleLength()) {
     chainedTuple.WriteUnlock();
     return false;
   }
@@ -148,16 +151,16 @@ bool Tuple::ToFat(BTreeExclusiveIterator& xIter) {
 
 FatTuple::FatTuple(u32 payloadSize, u32 valSize,
                    const ChainedTuple& chainedTuple)
-    : Tuple(TupleFormat::FAT, chainedTuple.mWorkerId, chainedTuple.mTxId),
+    : Tuple(TupleFormat::kFat, chainedTuple.mWorkerId, chainedTuple.mTxId),
       mValSize(valSize),
       mPayloadCapacity(payloadSize),
       mPayloadSize(valSize),
       mDataOffset(payloadSize) {
-  std::memcpy(payload, chainedTuple.payload, mValSize);
+  std::memcpy(mPayload, chainedTuple.mPayload, mValSize);
   mCommandId = chainedTuple.mCommandId;
 }
 
-void FatTuple::undoLastUpdate() {
+void FatTuple::UndoLastUpdate() {
   ENSURE(mNumDeltas >= 1);
   auto& delta = getDelta(mNumDeltas - 1);
   mWorkerId = delta.mWorkerId;
@@ -167,15 +170,15 @@ void FatTuple::undoLastUpdate() {
   const u32 totalDeltaSize = delta.TotalSize();
   mDataOffset += totalDeltaSize;
   mPayloadSize -= totalDeltaSize + sizeof(u16);
-  auto& updateDesc = delta.getDescriptor();
-  auto* xorData = delta.payload + updateDesc.Size();
-  BTreeLL::CopyToValue(updateDesc, xorData, GetValPtr());
+  auto& updateDesc = delta.GetUpdateDesc();
+  auto* xorData = delta.GetDeltaPtr();
+  BasicKV::CopyToValue(updateDesc, xorData, GetValPtr());
 }
 
 // Attention: we have to disable garbage collection if the latest delta was from
 // us and not committed yet! Otherwise we would crash during undo although the
 // end result is the same if the transaction would commit (overwrite)
-void FatTuple::garbageCollection() {
+void FatTuple::GarbageCollection() {
   if (mNumDeltas == 0) {
     return;
   }
@@ -188,35 +191,34 @@ void FatTuple::garbageCollection() {
     fatTuple.mPayloadSize += deltaSize + sizeof(u16);
     fatTuple.mDataOffset -= deltaSize;
     fatTuple.getDeltaOffsets()[i] = fatTuple.mDataOffset;
-    std::memcpy(fatTuple.payload + fatTuple.mDataOffset, delta, deltaSize);
+    std::memcpy(fatTuple.mPayload + fatTuple.mDataOffset, delta, deltaSize);
   };
 
   // Delete for all visible deltas, atm using cheap visibility check
-  if (cr::Worker::my().cc.isVisibleForAll(mTxId)) {
+  if (cr::Worker::my().cc.VisibleForAll(mTxId)) {
     mNumDeltas = 0;
     mDataOffset = mPayloadCapacity;
     mPayloadSize = mValSize;
     return; // Done
   }
 
-  u16 deltas_visible_by_all_counter = 0;
+  u16 deltasVisibleForAll = 0;
   for (s32 i = mNumDeltas - 1; i >= 1; i--) {
     auto& delta = getDelta(i);
-    if (cr::Worker::my().cc.isVisibleForAll(delta.mTxId)) {
-      deltas_visible_by_all_counter = i - 1;
+    if (cr::Worker::my().cc.VisibleForAll(delta.mTxId)) {
+      deltasVisibleForAll = i - 1;
       break;
     }
   }
 
   const TXID local_oldest_oltp = cr::Worker::my().sOldestOltpStartTx.load();
   const TXID local_newest_olap = cr::Worker::my().sNewestOlapStartTx.load();
-  if (deltas_visible_by_all_counter == 0 &&
-      local_newest_olap > local_oldest_oltp) {
+  if (deltasVisibleForAll == 0 && local_newest_olap > local_oldest_oltp) {
     return; // Nothing to do here
   }
 
   auto bin_search = [&](TXID upper_bound) {
-    s64 l = deltas_visible_by_all_counter;
+    s64 l = deltasVisibleForAll;
     s64 r = mNumDeltas - 1;
     s64 m = -1;
     while (l <= r) {
@@ -246,7 +248,7 @@ void FatTuple::garbageCollection() {
       deltas_to_merge_counter = zone_end - zone_begin;
     }
   }
-  if (deltas_visible_by_all_counter == 0 && deltas_to_merge_counter <= 0) {
+  if (deltasVisibleForAll == 0 && deltas_to_merge_counter <= 0) {
     return;
   }
 
@@ -258,16 +260,16 @@ void FatTuple::garbageCollection() {
   newFatTuple.mCommandId = mCommandId;
   newFatTuple.mPayloadSize += mValSize;
   newFatTuple.mValSize = mValSize;
-  std::memcpy(newFatTuple.payload, payload, mValSize); // Copy value
+  std::memcpy(newFatTuple.mPayload, mPayload, mValSize); // Copy value
 
   if (deltas_to_merge_counter <= 0) {
-    for (u32 i = deltas_visible_by_all_counter; i < mNumDeltas; i++) {
+    for (u32 i = deltasVisibleForAll; i < mNumDeltas; i++) {
       auto& delta = getDelta(i);
       appendDelta(newFatTuple, reinterpret_cast<u8*>(&delta),
                   delta.TotalSize());
     }
   } else {
-    for (s32 i = deltas_visible_by_all_counter; i < zone_begin; i++) {
+    for (s32 i = deltasVisibleForAll; i < zone_begin; i++) {
       auto& delta = getDelta(i);
       appendDelta(newFatTuple, reinterpret_cast<u8*>(&delta),
                   delta.TotalSize());
@@ -285,12 +287,12 @@ void FatTuple::garbageCollection() {
       std::unordered_map<Slot, std::basic_string<u8>> diffSlotsMap;
       for (s32 i = zone_end - 1; i >= zone_begin; i--) {
         auto& deltaId = getDelta(i);
-        auto& updateDesc = deltaId.getDescriptor();
-        auto* delta_diff_ptr = deltaId.payload + updateDesc.Size();
-        for (s16 s_i = 0; s_i < updateDesc.mNumSlots; s_i++) {
-          diffSlotsMap[updateDesc.mUpdateSlots[s_i]] = std::basic_string<u8>(
-              delta_diff_ptr, updateDesc.mUpdateSlots[s_i].mSize);
-          delta_diff_ptr += updateDesc.mUpdateSlots[s_i].mSize;
+        auto& updateDesc = deltaId.GetUpdateDesc();
+        auto* deltaPtr = deltaId.GetDeltaPtr();
+        for (s16 i = 0; i < updateDesc.mNumSlots; i++) {
+          diffSlotsMap[updateDesc.mUpdateSlots[i]] =
+              std::basic_string<u8>(deltaPtr, updateDesc.mUpdateSlots[i].mSize);
+          deltaPtr += updateDesc.mUpdateSlots[i].mSize;
         }
       }
       u32 totalNewDeltaSize = sizeof(FatTupleDelta) + sizeof(UpdateDesc) +
@@ -300,15 +302,15 @@ void FatTuple::garbageCollection() {
       }
       auto& mergeDelta = newFatTuple.NewDelta(totalNewDeltaSize);
       mergeDelta = getDelta(zone_begin);
-      auto& updateDesc = mergeDelta.getDescriptor();
+      auto& updateDesc = mergeDelta.GetUpdateDesc();
       updateDesc.mNumSlots = diffSlotsMap.size();
-      auto* merge_diff_ptr = mergeDelta.payload + updateDesc.Size();
+      auto* mergeDeltaPtr = mergeDelta.GetDeltaPtr();
       u32 s_i = 0;
       for (auto& slot_itr : diffSlotsMap) {
         updateDesc.mUpdateSlots[s_i++] = slot_itr.first;
-        std::memcpy(merge_diff_ptr, slot_itr.second.c_str(),
+        std::memcpy(mergeDeltaPtr, slot_itr.second.c_str(),
                     slot_itr.second.size());
-        merge_diff_ptr += slot_itr.second.size();
+        mergeDeltaPtr += slot_itr.second.size();
       }
     }
 
@@ -331,9 +333,9 @@ void FatTuple::garbageCollection() {
   }
 }
 
-bool FatTuple::hasSpaceFor(const UpdateDesc& updateDesc) {
+bool FatTuple::HasSpaceFor(const UpdateDesc& updateDesc) {
   const u32 spaceNeeded =
-      updateDesc.NumBytes4WAL() + sizeof(u16) + sizeof(FatTupleDelta);
+      updateDesc.SizeWithDelta() + sizeof(u16) + sizeof(FatTupleDelta);
   return (mDataOffset - (mValSize + (mNumDeltas * sizeof(u16)))) >= spaceNeeded;
 }
 
@@ -348,73 +350,15 @@ FatTupleDelta& FatTuple::NewDelta(u32 totalDeltaSize, Args&&... args) {
 }
 
 // Caller should take care of WAL
-void FatTuple::append(UpdateDesc& updateDesc) {
-  const u32 totalDeltaSize = updateDesc.NumBytes4WAL() + sizeof(FatTupleDelta);
+void FatTuple::Append(UpdateDesc& updateDesc) {
+  const u32 totalDeltaSize = updateDesc.SizeWithDelta() + sizeof(FatTupleDelta);
   auto& newDelta = NewDelta(totalDeltaSize);
   newDelta.mWorkerId = this->mWorkerId;
   newDelta.mTxId = this->mTxId;
   newDelta.mCommandId = this->mCommandId;
-  std::memcpy(newDelta.payload, &updateDesc, updateDesc.Size());
-  auto* diffDest = newDelta.payload + updateDesc.Size();
-  BTreeLL::CopyToBuffer(updateDesc, this->GetValPtr(), diffDest);
-}
-
-bool FatTuple::update(BTreeExclusiveIterator& xIter, Slice key,
-                      MutValCallback updateCallBack, UpdateDesc& updateDesc) {
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_fat_tuple);
-  while (true) {
-    auto* fatTuple = reinterpret_cast<FatTuple*>(xIter.MutableVal().Data());
-    DCHECK(fatTuple->IsWriteLocked())
-        << "Tuple should be write locked before update";
-
-    if (!fatTuple->hasSpaceFor(updateDesc)) {
-      fatTuple->garbageCollection();
-      if (fatTuple->hasSpaceFor(updateDesc)) {
-        continue;
-      }
-
-      // Not enough space to store the fat tuple, convert to chained
-      auto chainedTupleSize = fatTuple->mValSize + sizeof(ChainedTuple);
-      DCHECK(chainedTupleSize < xIter.value().length());
-      fatTuple->convertToChained(xIter.mBTree.mTreeId);
-      xIter.shorten(chainedTupleSize);
-      return false;
-    }
-
-    auto performUpdate = [&]() {
-      fatTuple->append(updateDesc);
-      fatTuple->mWorkerId = cr::Worker::my().mWorkerId;
-      fatTuple->mTxId = cr::activeTX().mStartTs;
-      fatTuple->mCommandId = cr::Worker::my().mCommandId++;
-      updateCallBack(fatTuple->GetMutableValue());
-      DCHECK(fatTuple->mPayloadCapacity >= fatTuple->mPayloadSize);
-    };
-
-    if (!xIter.mBTree.config.mEnableWal) {
-      performUpdate();
-      return true;
-    }
-
-    auto deltaSize = updateDesc.NumBytes4WAL();
-    auto prevWorkerId = fatTuple->mWorkerId;
-    auto prevTxId = fatTuple->mTxId;
-    auto prevCommandId = fatTuple->mCommandId;
-    auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WALUpdateSSIP>(
-        key.size() + deltaSize, key, updateDesc, deltaSize, prevWorkerId,
-        prevTxId, prevCommandId);
-    auto* walBuf = walHandler->payload + key.size() + updateDesc.Size();
-
-    // 1. copy old value to wal buffer
-    BTreeLL::CopyToBuffer(updateDesc, fatTuple->GetValPtr(), walBuf);
-
-    // 2. update the value in-place
-    performUpdate();
-
-    // 3. xor with the updated new value and store to wal buffer
-    BTreeLL::XorToBuffer(updateDesc, fatTuple->GetValPtr(), walBuf);
-    walHandler.SubmitWal();
-    return true;
-  }
+  std::memcpy(newDelta.mPayload, &updateDesc, updateDesc.Size());
+  auto* deltaPtr = newDelta.mPayload + updateDesc.Size();
+  BasicKV::CopyToBuffer(updateDesc, this->GetValPtr(), deltaPtr);
 }
 
 std::tuple<OpCode, u16> FatTuple::GetVisibleTuple(
@@ -426,7 +370,7 @@ std::tuple<OpCode, u16> FatTuple::GetVisibleTuple(
     return {OpCode::kOK, 1};
   }
 
-  DCHECK(!cr::activeTX().IsOLTP());
+  DCHECK(!cr::ActiveTx().IsOLTP());
 
   if (mNumDeltas > 0) {
     auto copiedVal = utils::JumpScopedArray<u8>(mValSize);
@@ -435,9 +379,9 @@ std::tuple<OpCode, u16> FatTuple::GetVisibleTuple(
     u16 numVisitedVersions = 2;
     for (int i = mNumDeltas - 1; i >= 0; i--) {
       const auto& delta = getDelta(i);
-      const auto& updateDesc = delta.getDescriptor();
-      auto* xorData = delta.payload + updateDesc.Size();
-      BTreeLL::CopyToValue(updateDesc, xorData, copiedVal->get());
+      const auto& updateDesc = delta.GetUpdateDesc();
+      auto* xorData = delta.GetDeltaPtr();
+      BasicKV::CopyToValue(updateDesc, xorData, copiedVal->get());
       if (cr::Worker::my().cc.VisibleForMe(delta.mWorkerId, delta.mTxId)) {
         valCallback(Slice(copiedVal->get(), mValSize));
         return {OpCode::kOK, numVisitedVersions};
@@ -452,16 +396,16 @@ std::tuple<OpCode, u16> FatTuple::GetVisibleTuple(
   return {OpCode::kNotFound, 1};
 }
 
-void FatTuple::resize(const u32 newLength) {
-  auto tmpPageSize = newLength + sizeof(FatTuple);
+void FatTuple::resize(const u32 newSize) {
+  auto tmpPageSize = newSize + sizeof(FatTuple);
   auto tmpPage = utils::JumpScopedArray<u8>(tmpPageSize);
-  auto& newFatTuple = *new (tmpPage->get()) FatTuple(newLength);
+  auto& newFatTuple = *new (tmpPage->get()) FatTuple(newSize);
   newFatTuple.mWorkerId = mWorkerId;
   newFatTuple.mTxId = mTxId;
   newFatTuple.mCommandId = mCommandId;
   newFatTuple.mPayloadSize += mValSize;
   newFatTuple.mValSize = mValSize;
-  std::memcpy(newFatTuple.payload, payload, mValSize); // Copy value
+  std::memcpy(newFatTuple.mPayload, mPayload, mValSize); // Copy value
   auto appendDelta = [](FatTuple& fatTuple, u8* delta, u16 deltaSize) {
     DCHECK(fatTuple.mPayloadCapacity >=
            (fatTuple.mPayloadSize + deltaSize + sizeof(u16)));
@@ -469,7 +413,7 @@ void FatTuple::resize(const u32 newLength) {
     fatTuple.mPayloadSize += deltaSize + sizeof(u16);
     fatTuple.mDataOffset -= deltaSize;
     fatTuple.getDeltaOffsets()[i] = fatTuple.mDataOffset;
-    std::memcpy(fatTuple.payload + fatTuple.mDataOffset, delta, deltaSize);
+    std::memcpy(fatTuple.mPayload + fatTuple.mDataOffset, delta, deltaSize);
   };
   for (u64 i = 0; i < mNumDeltas; i++) {
     appendDelta(newFatTuple, reinterpret_cast<u8*>(&getDelta(i)),
@@ -479,19 +423,19 @@ void FatTuple::resize(const u32 newLength) {
   DCHECK(mPayloadCapacity >= mPayloadSize);
 }
 
-void FatTuple::convertToChained(TREEID treeId) {
+void FatTuple::ConvertToChained(TREEID treeId) {
   auto prevWorkerId = mWorkerId;
   auto prevTxId = mTxId;
   auto prevCommandId = mCommandId;
   for (s64 i = mNumDeltas - 1; i >= 0; i--) {
     auto& delta = getDelta(i);
-    auto& updateDesc = delta.getDescriptor();
-    auto deltaPayloadSize = updateDesc.NumBytes4WAL();
-    auto versionSize = deltaPayloadSize + sizeof(UpdateVersion);
-    cr::Worker::my().cc.mHistoryTree->insertVersion(
+    auto& updateDesc = delta.GetUpdateDesc();
+    auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
+    auto versionSize = sizeOfDescAndDelta + sizeof(UpdateVersion);
+    cr::Worker::my().cc.mHistoryTree->PutVersion(
         prevWorkerId, prevTxId, prevCommandId, treeId, false, versionSize,
         [&](u8* versionBuf) {
-          new (versionBuf) UpdateVersion(delta, deltaPayloadSize);
+          new (versionBuf) UpdateVersion(delta, sizeOfDescAndDelta);
         },
         false);
     prevWorkerId = delta.mWorkerId;
@@ -507,147 +451,5 @@ void FatTuple::convertToChained(TREEID treeId) {
 }
 
 // TODO: Implement inserts after remove cases
-std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
-    Slice payload, ValCallback callback) const {
-  if (cr::Worker::my().cc.VisibleForMe(mWorkerId, mTxId)) {
-    if (mIsRemoved) {
-      return {OpCode::kNotFound, 1};
-    }
-
-    auto valSize = payload.length() - sizeof(ChainedTuple);
-    callback(GetValue(valSize));
-    return {OpCode::kOK, 1};
-  }
-
-  if (isFinal()) {
-    JUMPMU_RETURN{OpCode::kNotFound, 1};
-  }
-
-  // Head is not visible
-  u16 valueSize = payload.length() - sizeof(ChainedTuple);
-  auto valueBuf = std::make_unique<u8[]>(valueSize);
-  std::memcpy(valueBuf.get(), this->payload, valueSize);
-
-  WORKERID prevWorkerId = mWorkerId;
-  TXID prevTxId = mTxId;
-  COMMANDID prevCommandId = mCommandId;
-
-  u16 versionsRead = 1;
-  while (true) {
-    bool found = cr::Worker::my().cc.retrieveVersion(
-        prevWorkerId, prevTxId, prevCommandId,
-        [&](const u8* versionBuf, u64 versionSize) {
-          auto& version = *reinterpret_cast<const Version*>(versionBuf);
-          if (version.type == Version::TYPE::UPDATE) {
-            auto& updateVersion = *UpdateVersion::From(versionBuf);
-            if (updateVersion.mIsDelta) {
-              // Apply delta
-              auto& updateDesc = *UpdateDesc::From(updateVersion.payload);
-              auto* oldValOfSlots = updateVersion.payload + updateDesc.Size();
-              BTreeLL::CopyToValue(updateDesc, oldValOfSlots, valueBuf.get());
-            } else {
-              valueSize = versionSize - sizeof(UpdateVersion);
-              valueBuf = std::make_unique<u8[]>(valueSize);
-              std::memcpy(valueBuf.get(), updateVersion.payload, valueSize);
-            }
-          } else if (version.type == Version::TYPE::REMOVE) {
-            auto& removeVersion = *RemoveVersion::From(versionBuf);
-            auto removedVal = removeVersion.RemovedVal();
-            valueSize = removeVersion.mValSize;
-            valueBuf = std::make_unique<u8[]>(removedVal.size());
-            std::memcpy(valueBuf.get(), removedVal.data(), removedVal.size());
-          } else {
-            UNREACHABLE();
-          }
-
-          prevWorkerId = version.mWorkerId;
-          prevTxId = version.mTxId;
-          prevCommandId = version.mCommandId;
-        });
-    if (!found) {
-      LOG(ERROR) << "Not found in the version tree"
-                 << ", workerId=" << cr::Worker::my().mWorkerId
-                 << ", startTs=" << cr::activeTX().mStartTs
-                 << ", versionsRead=" << versionsRead
-                 << ", prevWorkerId=" << prevWorkerId
-                 << ", prevTxId=" << prevTxId
-                 << ", prevCommandId=" << prevCommandId
-                 << ", prevTxId belongs to="
-                 << std::find(cr::Worker::my().cc.local_workers_start_ts.get(),
-                              cr::Worker::my().cc.local_workers_start_ts.get() +
-                                  cr::Worker::my().mNumAllWorkers,
-                              prevTxId) -
-                        cr::Worker::my().cc.local_workers_start_ts.get();
-      return {OpCode::kNotFound, versionsRead};
-    }
-
-    if (cr::Worker::my().cc.VisibleForMe(prevWorkerId, prevTxId)) {
-      callback(Slice(valueBuf.get(), valueSize));
-      return {OpCode::kOK, versionsRead};
-    }
-    versionsRead++;
-  }
-  return {OpCode::kNotFound, versionsRead};
-}
-
-void ChainedTuple::Update(BTreeExclusiveIterator& xIter, Slice key,
-                          MutValCallback updateCallBack,
-                          UpdateDesc& updateDesc) {
-  auto versionPayloadSize = updateDesc.NumBytes4WAL();
-  auto versionSize = versionPayloadSize + sizeof(UpdateVersion);
-
-  // Move the newest tuple to the history version tree.
-  auto treeId = xIter.mBTree.mTreeId;
-  auto commandId = cr::Worker::my().cc.insertVersion(
-      treeId, false, versionSize, [&](u8* versionBuf) {
-        auto& updateVersion =
-            *new (versionBuf) UpdateVersion(mWorkerId, mTxId, mCommandId, true);
-        std::memcpy(updateVersion.payload, &updateDesc, updateDesc.Size());
-        auto* dest = updateVersion.payload + updateDesc.Size();
-        BTreeLL::CopyToBuffer(updateDesc, payload, dest);
-      });
-
-  auto performUpdate = [&]() {
-    auto mutRawVal = xIter.MutableVal();
-    auto userValSize = mutRawVal.Size() - sizeof(ChainedTuple);
-    updateCallBack(MutableSlice(payload, userValSize));
-    mWorkerId = cr::Worker::my().mWorkerId;
-    mTxId = cr::activeTX().mStartTs;
-    mCommandId = commandId;
-  };
-
-  SCOPED_DEFER({
-    WriteUnlock();
-    xIter.MarkAsDirty();
-    xIter.UpdateContentionStats();
-    COUNTERS_BLOCK() {
-      WorkerCounters::MyCounters().cc_update_versions_created[treeId]++;
-    }
-  });
-
-  if (!xIter.mBTree.config.mEnableWal) {
-    performUpdate();
-    return;
-  }
-
-  auto prevWorkerId = mWorkerId;
-  auto prevTxId = mTxId;
-  auto prevCommandId = mCommandId;
-  auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WALUpdateSSIP>(
-      key.size() + versionPayloadSize, key, updateDesc, versionPayloadSize,
-      prevWorkerId, prevTxId, prevCommandId);
-  auto* dest = walHandler->payload + key.size() + updateDesc.Size();
-
-  // 1. copy old value to wal buffer
-  BTreeLL::CopyToBuffer(updateDesc, payload, dest);
-
-  // 2. update the value in-place
-  performUpdate();
-
-  // 3. xor with the updated new value and store to wal buffer
-  BTreeLL::XorToBuffer(updateDesc, payload, dest);
-
-  walHandler.SubmitWal();
-}
 
 } // namespace leanstore::storage::btree

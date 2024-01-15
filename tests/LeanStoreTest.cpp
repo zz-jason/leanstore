@@ -1,4 +1,5 @@
 #include "LeanStore.hpp"
+
 #include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/DebugFlags.hpp"
@@ -38,7 +39,7 @@ TEST_F(LeanStoreTest, RecoverAfterInsert) {
   FLAGS_worker_threads = 2;
   FLAGS_recover = false;
   mLeanStore = std::make_unique<leanstore::LeanStore>();
-  storage::btree::BTreeVI* btree;
+  storage::btree::TransactionKV* btree;
 
   // prepare key-value pairs to insert
   size_t numKVs(10);
@@ -57,13 +58,13 @@ TEST_F(LeanStoreTest, RecoverAfterInsert) {
   };
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
-    mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree);
+    mLeanStore->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
 
     // insert some values
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
-      EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
+      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
     }
@@ -73,13 +74,13 @@ TEST_F(LeanStoreTest, RecoverAfterInsert) {
   LS_DEBUG_ENABLE("skip_CheckpointAllBufferFrames");
   SCOPED_DEFER(LS_DEBUG_DISABLE("skip_CheckpointAllBufferFrames"));
 
-  mLeanStore.reset(nullptr);
+  mLeanStore.Reset(nullptr);
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
   FLAGS_recover = true;
   mLeanStore = std::make_unique<leanstore::LeanStore>();
-  mLeanStore->GetBTreeVI(btreeName, &btree);
+  mLeanStore->GetTransactionKV(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
 
   // lookup the restored btree

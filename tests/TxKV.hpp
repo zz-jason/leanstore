@@ -162,7 +162,7 @@ public:
 
 class LeanStoreMVCCTableRef : public TableRef {
 public:
-  leanstore::storage::btree::BTreeVI* mTree;
+  leanstore::storage::btree::TransactionKV* mTree;
 };
 
 //------------------------------------------------------------------------------
@@ -170,15 +170,15 @@ public:
 //------------------------------------------------------------------------------
 inline Store* StoreFactory::GetLeanStoreMVCC(const std::string& storeDir,
                                              u32 sessionLimit) {
-  static std::unique_ptr<LeanStoreMVCC> store = nullptr;
-  static std::mutex storeMutex;
-  if (store == nullptr) {
-    std::unique_lock<std::mutex> guard(storeMutex);
-    if (store == nullptr) {
-      store = std::make_unique<LeanStoreMVCC>(storeDir, sessionLimit);
+  static std::unique_ptr<LeanStoreMVCC> sStore = nullptr;
+  static std::mutex sStoreMutex;
+  if (sStore == nullptr) {
+    std::unique_lock<std::mutex> guard(sStoreMutex);
+    if (sStore == nullptr) {
+      sStore = std::make_unique<LeanStoreMVCC>(storeDir, sessionLimit);
     }
   }
-  return store.get();
+  return sStore.get();
 }
 
 //------------------------------------------------------------------------------
@@ -225,12 +225,12 @@ inline auto LeanStoreMVCCSession::CreateTable(const std::string& tblName,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
 
-  storage::btree::BTreeVI* btree;
+  storage::btree::TransactionKV* btree;
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
       cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
     }
-    mStore->mLeanStore->RegisterBTreeVI(tblName, config, &btree);
+    mStore->mLeanStore->RegisterTransactionKV(tblName, config, &btree);
     if (implicitTx) {
       cr::Worker::my().CommitTx();
     }
@@ -248,7 +248,7 @@ inline auto LeanStoreMVCCSession::DropTable(const std::string& tblName,
     if (implicitTx) {
       cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
     }
-    mStore->mLeanStore->UnRegisterBTreeVI(tblName);
+    mStore->mLeanStore->UnRegisterTransactionKV(tblName);
     if (implicitTx) {
       cr::Worker::my().CommitTx();
     }
@@ -260,7 +260,7 @@ inline auto LeanStoreMVCCSession::DropTable(const std::string& tblName,
 inline auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
                                       bool implicitTx)
     -> std::expected<void, utils::Error> {
-  auto* btree = reinterpret_cast<storage::btree::BTreeVI*>(tbl);
+  auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
   OpCode res;
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
@@ -274,7 +274,7 @@ inline auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
       }
     });
 
-    res = btree->insert(Slice((const u8*)key.data(), key.size()),
+    res = btree->Insert(Slice((const u8*)key.data(), key.size()),
                         Slice((const u8*)val.data(), val.size()));
   });
   if (res != OpCode::kOK) {
@@ -287,7 +287,7 @@ inline auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
 inline auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key,
                                       std::string& val, bool implicitTx)
     -> std::expected<u64, utils::Error> {
-  auto* btree = reinterpret_cast<storage::btree::BTreeVI*>(tbl);
+  auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
   OpCode res;
   auto copyValueOut = [&](Slice res) {
     val.resize(res.size());
@@ -321,7 +321,7 @@ inline auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key,
 inline auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
                                          bool implicitTx)
     -> std::expected<u64, utils::Error> {
-  auto* btree = reinterpret_cast<storage::btree::BTreeVI*>(tbl);
+  auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
   OpCode res;
   auto updateCallBack = [&](MutableSlice toUpdate) {
     std::memcpy(toUpdate.Data(), val.data(), val.length());
@@ -344,8 +344,8 @@ inline auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
     updateDesc->mNumSlots = 1;
     updateDesc->mUpdateSlots[0].mOffset = 0;
     updateDesc->mUpdateSlots[0].mSize = val.size();
-    res = btree->updateSameSizeInPlace(Slice((const u8*)key.data(), key.size()),
-                                       updateCallBack, *updateDesc);
+    res = btree->UpdateInPlace(Slice((const u8*)key.data(), key.size()),
+                               updateCallBack, *updateDesc);
   });
   if (res == OpCode::kOK) {
     return 1;
@@ -360,7 +360,7 @@ inline auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
 inline auto LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key,
                                          bool implicitTx)
     -> std::expected<u64, utils::Error> {
-  auto* btree = reinterpret_cast<storage::btree::BTreeVI*>(tbl);
+  auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
   OpCode res;
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
@@ -374,7 +374,7 @@ inline auto LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key,
       }
     });
 
-    res = btree->remove(Slice((const u8*)key.data(), key.size()));
+    res = btree->Remove(Slice((const u8*)key.data(), key.size()));
   });
   if (res == OpCode::kOK) {
     return 1;

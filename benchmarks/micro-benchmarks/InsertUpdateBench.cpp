@@ -29,7 +29,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
   std::filesystem::create_directories(dirPath);
   auto sLeanStore = std::make_unique<leanstore::LeanStore>();
 
-  storage::btree::BTreeVI* btree;
+  storage::btree::TransactionKV* btree;
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
@@ -39,7 +39,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
   };
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
-    sLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree);
+    sLeanStore->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().CommitTx();
   });
@@ -53,7 +53,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
       for (size_t i = 0; i < 16; i++) {
         key = utils::RandomGenerator::RandomAlphString(24);
         val = utils::RandomGenerator::RandomAlphString(128);
-        btree->insert(Slice((const u8*)key.data(), key.size()),
+        btree->Insert(Slice((const u8*)key.data(), key.size()),
                       Slice((const u8*)val.data(), val.size()));
       }
       cr::Worker::my().CommitTx();
@@ -63,7 +63,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
-    sLeanStore->UnRegisterBTreeVI(btreeName);
+    sLeanStore->UnRegisterTransactionKV(btreeName);
   });
 }
 

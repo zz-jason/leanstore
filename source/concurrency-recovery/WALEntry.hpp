@@ -83,7 +83,7 @@ public:
     mWorkerId = workerId;
   }
 
-  virtual std::unique_ptr<rapidjson::Document> ToJSON();
+  virtual std::unique_ptr<rapidjson::Document> ToJson();
 
   u32 ComputeCRC32() const {
     // auto startOffset = offsetof(WALEntry, lsn);
@@ -97,7 +97,7 @@ public:
   void CheckCRC() const {
     auto actualCRC = ComputeCRC32();
     if (mCRC32 != actualCRC) {
-      auto doc = const_cast<WALEntry*>(this)->ToJSON();
+      auto doc = const_cast<WALEntry*>(this)->ToJson();
       rapidjson::StringBuffer buffer;
       rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
       doc->Accept(writer);
@@ -111,8 +111,7 @@ public:
 
 class WALEntrySimple : public WALEntry {
 public:
-  WALEntrySimple(LID lsn, u64 size, TYPE type)
-      : WALEntry(lsn, size, type) {
+  WALEntrySimple(LID lsn, u64 size, TYPE type) : WALEntry(lsn, size, type) {
   }
 };
 
@@ -130,8 +129,8 @@ public:
   /// btree ID
   PID mPageId;
 
-  /// Payload of the operation on the btree node, for example, WALInsert,
-  /// WALRemove, etc.
+  /// Payload of the operation on the btree node, for example, insert,
+  /// remove, update, etc.
   u8 payload[];
 
 public:
@@ -144,7 +143,7 @@ public:
         mPageId(pageId) {
   }
 
-  virtual std::unique_ptr<rapidjson::Document> ToJSON() override;
+  virtual std::unique_ptr<rapidjson::Document> ToJson() override;
 };
 
 template <typename T> class WALPayloadHandler {
@@ -190,7 +189,7 @@ inline std::string WALEntry::TypeName() {
   }
 }
 
-inline std::unique_ptr<rapidjson::Document> WALEntry::ToJSON() {
+inline std::unique_ptr<rapidjson::Document> WALEntry::ToJson() {
   auto doc = std::make_unique<rapidjson::Document>();
   doc->SetObject();
 
@@ -262,8 +261,8 @@ inline std::unique_ptr<rapidjson::Document> WALEntry::ToJSON() {
 // WALEntryComplex
 // -----------------------------------------------------------------------------
 
-inline std::unique_ptr<rapidjson::Document> WALEntryComplex::ToJSON() {
-  auto doc = WALEntry::ToJSON();
+inline std::unique_ptr<rapidjson::Document> WALEntryComplex::ToJson() {
+  auto doc = WALEntry::ToJson();
 
   // psn
   {

@@ -130,7 +130,7 @@ public:
     mHasWrote = true;
   }
 
-  // Start a new transaction, reset all fields used by previous transaction
+  // Start a new transaction, initialize all fields
   inline void Start(TxMode mode, IsolationLevel level, bool isReadOnly) {
     mState = TxState::kStarted;
     mStartTs = 0;

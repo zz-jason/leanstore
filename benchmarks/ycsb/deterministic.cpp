@@ -140,7 +140,7 @@ int main(int argc, char** argv) {
       FLAGS_ycsb_threads ? FLAGS_ycsb_threads : FLAGS_worker_threads;
   UpdateDescriptorGenerator1(tabular_update_descriptor, KVTable, mValue);
   auto btree_vi =
-      reinterpret_cast<leanstore::storage::btree::BTreeVI*>(table.btree);
+      reinterpret_cast<leanstore::storage::btree::TransactionKV*>(table.btree);
   for (u64 t_i = 0; t_i < exec_threads; t_i++) {
     crm.scheduleJobAsync(t_i, [&]() {
       jumpmuTry() {
@@ -184,7 +184,7 @@ int main(int argc, char** argv) {
                       *reinterpret_cast<YCSBPayload*>(payload) = result;
                     },
                     tabular_update_descriptor);
-                d_iterators[op_i]->reset();
+                d_iterators[op_i]->Reset();
               }
               WorkerCounters::MyCounters().tx++;
             } else {

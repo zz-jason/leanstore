@@ -33,7 +33,7 @@ void ConcurrencyControl::refreshGlobalState() {
       u64 workerInFlightTxId = workerSnapshot.load();
       while ((workerInFlightTxId & Worker::kLatchBit) &&
              ((workerInFlightTxId & Worker::kCleanBitsMask) <
-              activeTX().mStartTs)) {
+              ActiveTx().mStartTs)) {
         workerInFlightTxId = workerSnapshot.load();
       }
 
@@ -62,16 +62,16 @@ void ConcurrencyControl::refreshGlobalState() {
     bool skippedAWorker = false;
     for (WORKERID i = 0; i < Worker::my().mNumAllWorkers; i++) {
       ConcurrencyControl& workerState = other(i);
-      if (workerState.mLatestLwm4Tx == workerState.mLatestWriteTx) {
+      if (workerState.mLatestLwm4Tx == workerState.mLatestCommitTs) {
         skippedAWorker = true;
         continue;
       }
-      workerState.mLatestLwm4Tx.store(workerState.mLatestWriteTx,
+      workerState.mLatestLwm4Tx.store(workerState.mLatestCommitTs,
                                       std::memory_order_release);
       TXID itsAllLwmBuffer =
-          workerState.commit_tree.LCB(Worker::sOldestAllStartTs);
+          workerState.mCommitTree.LCB(Worker::sOldestAllStartTs);
       TXID itsOltpLwmBuffer =
-          workerState.commit_tree.LCB(Worker::sOldestOltpStartTx);
+          workerState.mCommitTree.LCB(Worker::sOldestOltpStartTx);
 
       if (FLAGS_enable_olap_mode &&
           Worker::sOldestAllStartTs != Worker::sOldestOltpStartTx) {
@@ -126,7 +126,7 @@ void ConcurrencyControl::switchToReadCommittedMode() {
   refreshGlobalState();
 }
 
-void ConcurrencyControl::garbageCollection() {
+void ConcurrencyControl::GarbageCollection() {
   if (!FLAGS_todo) {
     return;
   }
@@ -150,7 +150,7 @@ synclwm : {
   if (local_all_lwm > cleaned_untill_oltp_lwm) {
     utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_history_tree);
     // PURGE!
-    CRManager::sInstance->mHistoryTreePtr->purgeVersions(
+    CRManager::sInstance->mHistoryTreePtr->PurgeVersions(
         Worker::my().mWorkerId, 0, local_all_lwm - 1,
         [&](const TXID txId, const TREEID treeId, const u8* version_payload,
             [[maybe_unused]] u64 version_payload_length,
@@ -171,7 +171,7 @@ synclwm : {
       // MOVE deletes to the graveyard
       const u64 fromTxId =
           cleaned_untill_oltp_lwm > 0 ? cleaned_untill_oltp_lwm : 0;
-      CRManager::sInstance->mHistoryTreePtr->visitRemoveVersions(
+      CRManager::sInstance->mHistoryTreePtr->VisitRemovedVersions(
           Worker::my().mWorkerId, fromTxId, local_oltp_lwm - 1,
           [&](const TXID txId, const TREEID treeId, const u8* version_payload,
               [[maybe_unused]] u64 version_payload_length,
@@ -211,9 +211,9 @@ TXID ConcurrencyControl::getCommitTimestamp(WORKERID workerId, TXID txTs) {
   }
   DCHECK((txTs & kMsb) || VisibleForMe(workerId, txTs));
   const TXID& startTs = txTs;
-  TXID lcb = other(workerId).commit_tree.LCB(startTs);
-  TXID commitTs =
-      lcb ? lcb : std::numeric_limits<TXID>::max(); // TODO: align with GC
+  TXID lcb = other(workerId).mCommitTree.LCB(startTs);
+  // TODO: align with GC
+  TXID commitTs = lcb ? lcb : std::numeric_limits<TXID>::max();
   ENSURE(commitTs > startTs);
   return commitTs;
 }
@@ -228,7 +228,7 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId) {
     return true;
   }
 
-  switch (activeTX().mTxIsolationLevel) {
+  switch (ActiveTx().mTxIsolationLevel) {
   case IsolationLevel::kSnapshotIsolation:
   case IsolationLevel::kSerializable: {
     if (isCommitTs) {
@@ -240,7 +240,7 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId) {
     }
 
     // Use the cache
-    if (local_snapshot_cache_ts[workerId] == activeTX().mStartTs) {
+    if (local_snapshot_cache_ts[workerId] == ActiveTx().mStartTs) {
       return mLocalSnapshotCache[workerId] >= startTs;
     }
     if (mLocalSnapshotCache[workerId] >= startTs) {
@@ -248,7 +248,7 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId) {
     }
     utils::Timer timer(CRCounters::MyCounters().cc_ms_snapshotting);
     TXID largestVisibleTxId =
-        other(workerId).commit_tree.LCB(Worker::my().mActiveTx.mStartTs);
+        other(workerId).mCommitTree.LCB(Worker::my().mActiveTx.mStartTs);
     if (largestVisibleTxId) {
       mLocalSnapshotCache[workerId] = largestVisibleTxId;
       local_snapshot_cache_ts[workerId] = Worker::my().mActiveTx.mStartTs;
@@ -262,7 +262,7 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId) {
   }
 }
 
-bool ConcurrencyControl::isVisibleForAll(TXID ts) {
+bool ConcurrencyControl::VisibleForAll(TXID ts) {
   if (ts & kMsb) {
     // Commit Timestamp
     return (ts & kMsbMask) < Worker::sOldestAllStartTs.load();

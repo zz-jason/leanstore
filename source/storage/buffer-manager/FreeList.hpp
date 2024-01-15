@@ -11,7 +11,7 @@ namespace storage {
 
 class FreeList {
 public:
-  std::mutex mutex;
+  std::mutex mMutex;
   BufferFrame* mHead = nullptr;
   std::atomic<u64> mSize = 0;
 
@@ -27,7 +27,7 @@ inline void FreeList::PushFront(BufferFrame& bf) {
   PARANOID(bf.header.state == STATE::FREE);
   assert(!bf.header.mLatch.IsLockedExclusively());
 
-  JumpScoped<std::unique_lock<std::mutex>> guard(mutex);
+  JumpScoped<std::unique_lock<std::mutex>> guard(mMutex);
   bf.header.mNextFreeBf = mHead;
   mHead = &bf;
   mSize++;
@@ -35,17 +35,17 @@ inline void FreeList::PushFront(BufferFrame& bf) {
 
 inline void FreeList::PushFront(BufferFrame* head, BufferFrame* tail,
                                 u64 size) {
-  JumpScoped<std::unique_lock<std::mutex>> guard(mutex);
+  JumpScoped<std::unique_lock<std::mutex>> guard(mMutex);
   tail->header.mNextFreeBf = mHead;
   mHead = head;
   mSize += size;
 }
 
 inline BufferFrame& FreeList::PopFrontMayJump() {
-  JumpScoped<std::unique_lock<std::mutex>> guard(mutex);
+  JumpScoped<std::unique_lock<std::mutex>> guard(mMutex);
   BufferFrame* freeBf = mHead;
   if (mHead == nullptr) {
-    jumpmu::jump();
+    jumpmu::Jump();
   } else {
     mHead = mHead->header.mNextFreeBf;
     mSize--;

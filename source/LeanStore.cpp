@@ -73,7 +73,7 @@ LeanStore::LeanStore() {
     DeSerializeFlags();
   }
   if (!FLAGS_wal) {
-    LOG(FATAL) << "BTreeVI is enabled without WAL, please enable FLAGS_wal";
+    LOG(FATAL) << "TransactionKV is not enabled without WAL, please enable FLAGS_wal";
   }
 
   // open file
@@ -171,9 +171,9 @@ LeanStore::~LeanStore() {
 
       u64 numEntries(0);
       cr::CRManager::sInstance->scheduleJobSync(
-          0, [&]() { numEntries = btree->countEntries(); });
+          0, [&]() { numEntries = btree->CountEntries(); });
 
-      LOG(INFO) << "[BTreeVI] name=" << treeName << ", btreeId=" << treeId
+      LOG(INFO) << "[TransactionKV] name=" << treeName << ", btreeId=" << treeId
                 << ", height=" << btree->mHeight
                 << ", numEntries=" << numEntries;
     }
@@ -521,15 +521,15 @@ void LeanStore::DeSerializeMeta() {
     }
 
     // create and register btrees
-    switch (static_cast<leanstore::storage::btree::BTREE_TYPE>(btreeType)) {
-    case leanstore::storage::btree::BTREE_TYPE::LL: {
-      auto btree = std::make_unique<leanstore::storage::btree::BTreeLL>();
+    switch (static_cast<leanstore::storage::btree::BTreeType>(btreeType)) {
+    case leanstore::storage::btree::BTreeType::kBasicKV: {
+      auto btree = std::make_unique<leanstore::storage::btree::BasicKV>();
       TreeRegistry::sInstance->RegisterTree(btreeId, std::move(btree),
                                             btreeName);
       break;
     }
-    case leanstore::storage::btree::BTREE_TYPE::VI: {
-      auto btree = std::make_unique<leanstore::storage::btree::BTreeVI>();
+    case leanstore::storage::btree::BTreeType::kTransactionKV: {
+      auto btree = std::make_unique<leanstore::storage::btree::TransactionKV>();
 
       cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
         // create btree for graveyard
@@ -537,12 +537,12 @@ void LeanStore::DeSerializeMeta() {
         auto graveyardConfig = storage::btree::BTreeGeneric::Config{
             .mEnableWal = false, .mUseBulkInsert = false};
         auto res =
-            storage::btree::BTreeLL::Create(graveyardName, graveyardConfig);
+            storage::btree::BasicKV::Create(graveyardName, graveyardConfig);
         if (!res) {
-          LOG(ERROR) << "Failed to create BTreeVI graveyard"
+          LOG(ERROR) << "Failed to create TransactionKV graveyard"
                      << ", btreeVI=" << btreeName
                      << ", graveyardName=" << graveyardName
-                     << ", error=" << res.error().mMessage;
+                     << ", error=" << res.error().ToString();
           return;
         }
         btree->mGraveyard = res.value();

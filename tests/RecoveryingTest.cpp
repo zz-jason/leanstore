@@ -14,17 +14,17 @@ namespace leanstore {
 
 using namespace leanstore::storage::btree;
 
-class BTreeVILoggingAndRecoveryTest : public ::testing::Test {
+class RecoveringTest : public ::testing::Test {
 protected:
   std::unique_ptr<LeanStore> mLeanStore;
 
-  BTreeVILoggingAndRecoveryTest() {
+  RecoveringTest() {
     FLAGS_enable_print_btree_stats_on_exit = true;
     FLAGS_wal = true;
     FLAGS_bulk_insert = false;
   }
 
-  ~BTreeVILoggingAndRecoveryTest() = default;
+  ~RecoveringTest() = default;
 
   static u64 RandomWorkerId() {
     auto numWorkers = FLAGS_worker_threads;
@@ -32,8 +32,8 @@ protected:
   }
 };
 
-TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
-  FLAGS_data_dir = "/tmp/BTreeVILoggingAndRecoveryTest/SerializeAndDeserialize";
+TEST_F(RecoveringTest, SerializeAndDeserialize) {
+  FLAGS_data_dir = "/tmp/RecoveringTest/SerializeAndDeserialize";
   std::filesystem::path dirPath = FLAGS_data_dir;
   std::filesystem::remove_all(dirPath);
   std::filesystem::create_directories(dirPath);
@@ -45,7 +45,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
   FLAGS_worker_threads = 2;
   FLAGS_recover = false;
   mLeanStore = std::make_unique<LeanStore>();
-  BTreeVI* btree;
+  TransactionKV* btree;
 
   // prepare key-value pairs to insert
   size_t numKVs(10);
@@ -68,7 +68,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
-    mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree);
+    mLeanStore->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
   });
 
@@ -78,7 +78,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
     SCOPED_DEFER(cr::Worker::my().CommitTx());
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
-      EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
+      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
     }
@@ -86,7 +86,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     rapidjson::Document doc(rapidjson::kObjectType);
-    BTreeGeneric::ToJSON(*btree, &doc);
+    BTreeGeneric::ToJson(*btree, &doc);
     LOG(INFO) << "btree before destroy: " << utils::JsonToStr(&doc);
   });
 
@@ -96,12 +96,12 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
 
   // recreate the store, it's expected that all the meta and pages are rebult.
   mLeanStore = std::make_unique<LeanStore>();
-  mLeanStore->GetBTreeVI(btreeName, &btree);
+  mLeanStore->GetTransactionKV(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     rapidjson::Document doc(rapidjson::kObjectType);
-    BTreeGeneric::ToJSON(*btree, &doc);
+    BTreeGeneric::ToJson(*btree, &doc);
     LOG(INFO) << "btree after recovery: " << utils::JsonToStr(&doc);
   });
 
@@ -125,12 +125,12 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
-    mLeanStore->UnRegisterBTreeVI(btreeName);
+    mLeanStore->UnRegisterTransactionKV(btreeName);
   });
 }
 
-TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
-  FLAGS_data_dir = "/tmp/BTreeVILoggingAndRecoveryTest/RecoverAfterInsert";
+TEST_F(RecoveringTest, RecoverAfterInsert) {
+  FLAGS_data_dir = "/tmp/RecoveringTest/RecoverAfterInsert";
   std::filesystem::path dirPath = FLAGS_data_dir;
   std::filesystem::remove_all(dirPath);
   std::filesystem::create_directories(dirPath);
@@ -142,7 +142,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
   FLAGS_worker_threads = 2;
   FLAGS_recover = false;
   mLeanStore = std::make_unique<LeanStore>();
-  BTreeVI* btree;
+  TransactionKV* btree;
 
   // prepare key-value pairs to insert
   size_t numKVs(10);
@@ -162,7 +162,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
 
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
-    mLeanStore->RegisterBTreeVI(btreeName, btreeConfig, &btree);
+    mLeanStore->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::my().CommitTx();
 
@@ -170,7 +170,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
     cr::Worker::my().StartTx();
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
-      EXPECT_EQ(btree->insert(Slice((const u8*)key.data(), key.size()),
+      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
     }
@@ -186,14 +186,14 @@ TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
   mLeanStore = std::make_unique<LeanStore>();
-  mLeanStore->GetBTreeVI(btreeName, &btree);
+  mLeanStore->GetTransactionKV(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
     rapidjson::Document doc(rapidjson::kObjectType);
-    BTreeGeneric::ToJSON(*static_cast<BTreeGeneric*>(btree), &doc);
-    DLOG(INFO) << "BTreeVI after recovery: " << utils::JsonToStr(&doc);
+    BTreeGeneric::ToJson(*static_cast<BTreeGeneric*>(btree), &doc);
+    DLOG(INFO) << "TransactionKV after recovery: " << utils::JsonToStr(&doc);
   });
 
   // lookup the restored btree
