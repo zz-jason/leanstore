@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BTreePessimisticIterator.hpp"
+#include "KVInterface.hpp"
 
 #include <glog/logging.h>
 
@@ -40,7 +41,7 @@ public:
   }
 
   virtual OpCode seekToInsert(Slice key) {
-    if (mSlotId == -1 || !keyInCurrentBoundaries(key)) {
+    if (mSlotId == -1 || !KeyInCurrentNode(key)) {
       gotoPage(key);
     }
     bool isEqual = false;
@@ -51,78 +52,60 @@ public:
     return OpCode::kOK;
   }
 
-  virtual OpCode enoughSpaceInCurrentNode(const u16 keySize,
-                                          const u16 valSize) {
-    return (mGuardedLeaf->canInsert(keySize, valSize))
-               ? OpCode::kOK
-               : OpCode::kSpaceNotEnough;
-  }
-  virtual OpCode enoughSpaceInCurrentNode(Slice key, const u16 valSize) {
-    return (mGuardedLeaf->canInsert(key.size(), valSize))
-               ? OpCode::kOK
-               : OpCode::kSpaceNotEnough;
+  virtual bool HasEnoughSpaceFor(const u16 keySize, const u16 valSize) {
+    return mGuardedLeaf->canInsert(keySize, valSize);
   }
 
-  virtual void insertInCurrentNode(Slice key, u16 valSize) {
-    DCHECK(keyInCurrentBoundaries(key));
-    DCHECK(enoughSpaceInCurrentNode(key, valSize) == OpCode::kOK);
+  virtual void InsertToCurrentNode(Slice key, u16 valSize) {
+    DCHECK(KeyInCurrentNode(key));
+    DCHECK(HasEnoughSpaceFor(key.size(), valSize));
     mSlotId = mGuardedLeaf->insertDoNotCopyPayload(key, valSize, mSlotId);
   }
 
-  virtual void insertInCurrentNode(Slice key, Slice val) {
-    DCHECK(keyInCurrentBoundaries(key));
-    DCHECK(enoughSpaceInCurrentNode(key, val.size()) == OpCode::kOK);
+  virtual void InsertToCurrentNode(Slice key, Slice val) {
+    DCHECK(KeyInCurrentNode(key));
+    DCHECK(HasEnoughSpaceFor(key.size(), val.size()));
     DCHECK(mSlotId != -1);
     mSlotId = mGuardedLeaf->insertDoNotCopyPayload(key, val.size(), mSlotId);
     std::memcpy(mGuardedLeaf->ValData(mSlotId), val.data(), val.size());
   }
 
-  virtual void splitForKey(Slice key) {
+  virtual void SplitForKey(Slice key) {
     u64 numAttempts(0);
     while (true) {
       JUMPMU_TRY() {
-        if (mSlotId == -1 || !keyInCurrentBoundaries(key)) {
-          mBTree.FindLeafCanJump<LatchMode::kShared>(key,
-                                                              mGuardedLeaf);
+        if (mSlotId == -1 || !KeyInCurrentNode(key)) {
+          mBTree.FindLeafCanJump<LatchMode::kShared>(key, mGuardedLeaf);
         }
         BufferFrame* bf = mGuardedLeaf.mBf;
         mGuardedLeaf.unlock();
         mSlotId = -1;
 
-        mBTree.trySplit(*bf);
+        mBTree.TrySplitMayJump(*bf);
         JUMPMU_BREAK;
       }
       JUMPMU_CATCH() {
         LOG_IF(WARNING, (++numAttempts) % 5 == 0)
-            << "splitForKey failed for " << numAttempts << " times";
+            << "SplitForKey failed for " << numAttempts << " times";
       }
     }
   }
 
-  virtual OpCode insertKV(Slice key, Slice val) {
-  restart : {
-    OpCode ret = seekToInsert(key);
-    if (ret != OpCode::kOK) {
-      return ret;
-    }
+  virtual OpCode InsertKV(Slice key, Slice val) {
+    while (true) {
+      OpCode ret = seekToInsert(key);
+      if (ret != OpCode::kOK) {
+        return ret;
+      }
+      DCHECK(KeyInCurrentNode(key));
+      if (!HasEnoughSpaceFor(key.size(), val.length())) {
+        SplitForKey(key);
+        continue;
+      }
 
-    assert(keyInCurrentBoundaries(key));
-
-    ret = enoughSpaceInCurrentNode(key, val.length());
-    switch (ret) {
-    case OpCode::kSpaceNotEnough: {
-      splitForKey(key);
-      goto restart;
-    }
-    case OpCode::kOK: {
-      insertInCurrentNode(key, val);
+      InsertToCurrentNode(key, val);
       return OpCode::kOK;
     }
-    default: {
-      return ret;
-    }
-    }
-  }
   }
 
   virtual OpCode replaceKV(Slice, Slice) {
@@ -141,16 +124,15 @@ public:
       return false;
     }
     DCHECK(mSlotId != -1 && targetSize > mGuardedLeaf->ValSize(mSlotId));
-    OpCode ret;
     while (!mGuardedLeaf->canExtendPayload(mSlotId, targetSize)) {
       if (mGuardedLeaf->mNumSeps == 1) {
         return false;
       }
-      assembleKey();
+      AssembleKey();
       Slice key = this->key();
-      splitForKey(key);
-      ret = seekExact(key);
-      DCHECK(ret == OpCode::kOK);
+      SplitForKey(key);
+      auto succeed = SeekExact(key);
+      DCHECK(succeed);
     }
     DCHECK(mSlotId != -1);
     mGuardedLeaf->extendPayload(mSlotId, targetSize);
@@ -197,7 +179,7 @@ public:
 
       mSlotId = -1;
       JUMPMU_TRY() {
-        mBTree.trySplit(*mGuardedLeaf.mBf, splitSlot);
+        mBTree.TrySplitMayJump(*mGuardedLeaf.mBf, splitSlot);
         WorkerCounters::MyCounters()
             .contention_split_succ_counter[mBTree.mTreeId]++;
         DLOG(INFO) << "[Contention Split] contention split succeed"
@@ -228,18 +210,16 @@ public:
   }
 
   virtual OpCode removeKV(Slice key) {
-    auto ret = seekExact(key);
-    if (ret == OpCode::kOK) {
+    if (SeekExact(key)) {
       mGuardedLeaf->removeSlot(mSlotId);
       return OpCode::kOK;
-    } else {
-      return ret;
     }
+    return OpCode::kNotFound;
   }
 
   // Returns true if it tried to merge
   bool mergeIfNeeded() {
-    if (mGuardedLeaf->freeSpaceAfterCompaction() >=
+    if (mGuardedLeaf->FreeSpaceAfterCompaction() >=
         BTreeNode::UnderFullSize()) {
       mGuardedLeaf.unlock();
       mSlotId = -1;

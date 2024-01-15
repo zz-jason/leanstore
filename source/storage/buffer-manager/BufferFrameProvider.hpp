@@ -228,7 +228,7 @@ inline void BufferFrameProvider::evictFlushedBf(
   PID evictedPageId = cooledBf.header.mPageId;
 
   // Reclaim buffer frame
-  cooledBf.reset();
+  cooledBf.Reset();
   cooledBf.header.mLatch.UnlockExclusively();
 
   mFreeBfList.PushFront(cooledBf);

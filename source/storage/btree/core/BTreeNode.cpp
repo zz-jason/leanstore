@@ -38,18 +38,18 @@ u16 BTreeNode::spaceNeeded(u16 keySize, u16 valSize) {
 
 bool BTreeNode::canInsert(u16 keySize, u16 valSize) {
   const u16 numSpaceNeeded = spaceNeeded(keySize, valSize);
-  if (!hasEnoughSpaceFor(numSpaceNeeded))
+  if (!hasEnoughSpaceFor(numSpaceNeeded)) {
     return false; // no space, insert fails
-  else
-    return true;
+  }
+  return true;
 }
 
 bool BTreeNode::prepareInsert(u16 keySize, u16 valSize) {
   const u16 numSpaceNeeded = spaceNeeded(keySize, valSize);
-  if (!requestSpaceFor(numSpaceNeeded))
+  if (!requestSpaceFor(numSpaceNeeded)) {
     return false;
-  else
-    return true;
+  }
+  return true;
 }
 
 s16 BTreeNode::insertDoNotCopyPayload(Slice key, u16 valSize, s32 pos) {
@@ -76,7 +76,7 @@ s16 BTreeNode::insertDoNotCopyPayload(Slice key, u16 valSize, s32 pos) {
   return slotId;
 }
 
-s32 BTreeNode::insert(Slice key, Slice val) {
+s32 BTreeNode::Insert(Slice key, Slice val) {
   DEBUG_BLOCK() {
     assert(canInsert(key.size(), val.size()));
     s32 exact_pos = lowerBound<true>(key);
@@ -101,7 +101,7 @@ s32 BTreeNode::insert(Slice key, Slice val) {
 }
 
 void BTreeNode::compactify() {
-  u16 should = freeSpaceAfterCompaction();
+  u16 should = FreeSpaceAfterCompaction();
   static_cast<void>(should);
 
   auto tmpNodeBuf = utils::JumpScopedArray<u8>(BTreeNode::Size());
@@ -415,7 +415,7 @@ void BTreeNode::split(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
 
   nodeRight->setFences(Slice(sepKey, sepLength), GetUpperFence());
   auto swip = xGuardedLeft.swip();
-  xGuardedParent->insert(Slice(sepKey, sepLength),
+  xGuardedParent->Insert(Slice(sepKey, sepLength),
                          Slice(reinterpret_cast<u8*>(&swip), sizeof(SwipType)));
   if (mIsLeaf) {
     copyKeyValueRange(xGuardedLeft.GetPagePayload(), 0, 0, sepSlot + 1);
@@ -444,7 +444,7 @@ bool BTreeNode::removeSlot(u16 slotId) {
   return true;
 }
 
-bool BTreeNode::remove(Slice key) {
+bool BTreeNode::Remove(Slice key) {
   int slotId = lowerBound<true>(key);
   if (slotId == -1) {
     // key not found
@@ -453,7 +453,7 @@ bool BTreeNode::remove(Slice key) {
   return removeSlot(slotId);
 }
 
-void BTreeNode::reset() {
+void BTreeNode::Reset() {
   mSpaceUsed = mUpperFence.length + mLowerFence.length;
   mDataOffset = BTreeNode::Size() - mSpaceUsed;
   mNumSeps = 0;
@@ -461,7 +461,7 @@ void BTreeNode::reset() {
 
 using leanstore::utils::AddMemberToJson;
 
-void BTreeNode::ToJSON(rapidjson::Value* resultObj,
+void BTreeNode::ToJson(rapidjson::Value* resultObj,
                        rapidjson::Value::AllocatorType& allocator) {
   DCHECK(resultObj->IsObject());
 

@@ -15,16 +15,16 @@ using TID = u64;
 std::atomic<TID> global_tid[1024] = {0};
 // -------------------------------------------------------------------------------------
 template <class Record> struct LeanStoreAdapter : Adapter<Record> {
-  leanstore::storage::btree::BTreeLL* key_tid;
-  leanstore::storage::btree::BTreeLL* tid_value;
+  leanstore::storage::btree::BasicKV* key_tid;
+  leanstore::storage::btree::BasicKV* tid_value;
   string name;
   // -------------------------------------------------------------------------------------
   LeanStoreAdapter() {
     // hack
   }
   LeanStoreAdapter(LeanStore& db, string name) : name(name) {
-    key_tid = &db.registerBTreeLL(name + "_key_tid", false);
-    tid_value = &db.registerBTreeLL(name + "_tid_value", false);
+    key_tid = &db.registerBasicKV(name + "_key_tid", false);
+    tid_value = &db.registerBasicKV(name + "_tid_value", false);
   }
   // -------------------------------------------------------------------------------------
   void insert(const typename Record::Key& key, const Record& record) final {
@@ -33,9 +33,9 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     // -------------------------------------------------------------------------------------
     TID tid = global_tid[Record::id * 8].fetch_add(1);
     OpCode res;
-    res = key_tid->insert(folded_key, folded_key_len, (u8*)(&tid), sizeof(TID));
+    res = key_tid->Insert(folded_key, folded_key_len, (u8*)(&tid), sizeof(TID));
     ensure(res == leanstore::OpCode::kOK);
-    res = tid_value->insert((u8*)&tid, sizeof(TID), (u8*)(&record),
+    res = tid_value->Insert((u8*)&tid, sizeof(TID), (u8*)(&record),
                             sizeof(Record));
     ensure(res == leanstore::OpCode::kOK);
   }
@@ -81,13 +81,13 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     tmp.count = 0;
     OpCode ret;
     TID tid;
-    ret = key_tid->updateSameSizeInPlace(
+    ret = key_tid->UpdateInPlace(
         folded_key, folded_key_len,
         [&](u8* tid_payload, u16 tid_payload_length) {
           ensure(tid_payload_length == sizeof(TID));
           tid = *reinterpret_cast<const TID*>(tid_payload);
           // -------------------------------------------------------------------------------------
-          OpCode ret2 = tid_value->updateSameSizeInPlace(
+          OpCode ret2 = tid_value->UpdateInPlace(
               (u8*)&tid, sizeof(TID),
               [&](u8* payload, u16 payload_length) {
                 static_cast<void>(payload_length);
@@ -118,11 +118,11 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
       return false;
     }
     // -------------------------------------------------------------------------------------
-    ret = tid_value->remove((u8*)&tid, sizeof(TID));
+    ret = tid_value->Remove((u8*)&tid, sizeof(TID));
     if (ret != OpCode::kOK) {
       return false;
     }
-    ret = key_tid->remove(folded_key, folded_key_len);
+    ret = key_tid->Remove(folded_key, folded_key_len);
     if (ret != OpCode::kOK) {
       return false;
     }

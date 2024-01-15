@@ -3,6 +3,7 @@
 #include "KVInterface.hpp"
 #include "shared-headers/Units.hpp"
 
+#include "glog/logging.h"
 #include <rapidjson/document.h>
 
 #include <string>
@@ -13,10 +14,10 @@ namespace btree {
 
 #define DO_WITH_TYPES(ACTION, ...)                                             \
   ACTION(WALInsert, 1, "WALInsert", __VA_ARGS__)                               \
-  ACTION(WALUpdate, 2, "WALUpdate", __VA_ARGS__)                               \
-  ACTION(WALRemove, 3, "WALRemove", __VA_ARGS__)                               \
-  ACTION(WALAfterBeforeImage, 4, "WALAfterBeforeImage", __VA_ARGS__)           \
-  ACTION(WALAfterImage, 5, "WALAfterImage", __VA_ARGS__)                       \
+  ACTION(WALUpdate, 3, "WALUpdate", __VA_ARGS__)                               \
+  ACTION(WALTxUpdate, 4, "WALTxUpdate", __VA_ARGS__)                           \
+  ACTION(WALRemove, 5, "WALRemove", __VA_ARGS__)                               \
+  ACTION(WALTxRemove, 6, "WALTxRemove", __VA_ARGS__)                           \
   ACTION(WALLogicalSplit, 10, "WALLogicalSplit", __VA_ARGS__)                  \
   ACTION(WALInitPage, 11, "WALInitPage", __VA_ARGS__)                          \
   ACTION(WALUndefined, 100, "WALUndefined", __VA_ARGS__)
@@ -32,48 +33,27 @@ public:
 
 public:
   /// Type of WALPayload
-  TYPE type = TYPE::WALUndefined;
+  TYPE mType = TYPE::WALUndefined;
 
 public:
   WALPayload() = default;
 
-  WALPayload(TYPE type) : type(type) {
+  WALPayload(TYPE type) : mType(type) {
   }
 
-  virtual std::unique_ptr<rapidjson::Document> ToJSON() {
-    auto doc = std::make_unique<rapidjson::Document>();
-    doc->SetObject();
+  virtual std::unique_ptr<rapidjson::Document> ToJson();
 
-    // type
-    {
-      auto typeName = WalLogTypeName(type);
-      rapidjson::Value member;
-      member.SetString(typeName.data(), typeName.size(), doc->GetAllocator());
-      doc->AddMember("type", member, doc->GetAllocator());
-    }
-
-    return doc;
-  }
-
-  inline std::string WalLogTypeName(TYPE type) {
-    switch (type) {
-      DO_WITH_TYPES(TYPE_NAME);
-    default:
-      return "Unknown WAL log type";
-    }
-  }
+  inline std::string WalLogTypeName(TYPE type);
 
   inline static const WALPayload* From(const void* data) {
     return reinterpret_cast<const WALPayload*>(const_cast<void*>(data));
   }
 };
 
-#undef TYPE_NAME
-#undef DECR_TYPE
-
 class WALInitPage : WALPayload {
 public:
   TREEID mTreeId;
+
   bool mIsLeaf;
 
 public:
@@ -84,128 +64,69 @@ public:
   }
 
 public:
-  virtual std::unique_ptr<rapidjson::Document> ToJSON() override {
-    auto doc = WALPayload::ToJSON();
-
-    // mTreeId
-    {
-      rapidjson::Value member;
-      member.SetInt64(mTreeId);
-      doc->AddMember("treeId", member, doc->GetAllocator());
-    }
-
-    return doc;
-  }
+  std::unique_ptr<rapidjson::Document> ToJson() override;
 };
 
 struct WALLogicalSplit : WALPayload {
-  PID parent_pid = -1;
-  PID left_pid = -1;
-  PID right_pid = -1;
+  PID mParentPageId = -1;
+
+  PID mLhsPageId = -1;
+
+  PID mRhsPageId = -1;
 
   WALLogicalSplit() : WALPayload(TYPE::WALLogicalSplit) {
   }
 
   WALLogicalSplit(PID parent, PID lhs, PID rhs)
       : WALPayload(TYPE::WALLogicalSplit),
-        parent_pid(parent),
-        left_pid(lhs),
-        right_pid(rhs) {
+        mParentPageId(parent),
+        mLhsPageId(lhs),
+        mRhsPageId(rhs) {
   }
 
-  virtual std::unique_ptr<rapidjson::Document> ToJSON() override {
-    auto doc = WALPayload::ToJSON();
-
-    // parent_pid
-    {
-      rapidjson::Value member;
-      member.SetUint64(parent_pid);
-      doc->AddMember("parent_pid", member, doc->GetAllocator());
-    }
-
-    // left_pid
-    {
-      rapidjson::Value member;
-      member.SetUint64(left_pid);
-      doc->AddMember("left_pid", member, doc->GetAllocator());
-    }
-
-    // right_pid
-    {
-      rapidjson::Value member;
-      member.SetUint64(right_pid);
-      doc->AddMember("right_pid", member, doc->GetAllocator());
-    }
-
-    return doc;
-  }
-};
-
-struct WALBeforeAfterImage : WALPayload {
-  u16 image_size;
-  u8 payload[];
-};
-
-struct WALAfterImage : WALPayload {
-  u16 image_size;
-  u8 payload[];
+  std::unique_ptr<rapidjson::Document> ToJson() override;
 };
 
 struct WALInsert : WALPayload {
   u16 mKeySize;
+
   u16 mValSize;
-  u8 payload[];
+
+  u8 mPayload[];
 
   WALInsert(Slice key, Slice val)
       : WALPayload(TYPE::WALInsert),
         mKeySize(key.size()),
         mValSize(val.size()) {
-    std::memcpy(payload, key.data(), mKeySize);
-    std::memcpy(payload + mKeySize, val.data(), mValSize);
+    std::memcpy(mPayload, key.data(), mKeySize);
+    std::memcpy(mPayload + mKeySize, val.data(), mValSize);
   }
 
-  Slice GetKey() {
-    return Slice(payload, mKeySize);
+  inline Slice GetKey() const {
+    return Slice(mPayload, mKeySize);
   }
 
-  Slice GetVal() {
-    return Slice(payload + mKeySize, mValSize);
+  inline Slice GetVal() const {
+    return Slice(mPayload + mKeySize, mValSize);
   }
 
-  virtual std::unique_ptr<rapidjson::Document> ToJSON() override {
-    auto doc = WALPayload::ToJSON();
-
-    // mKeySize
-    {
-      rapidjson::Value member;
-      member.SetUint64(mKeySize);
-      doc->AddMember("mKeySize", member, doc->GetAllocator());
-    }
-
-    // mValSize
-    {
-      rapidjson::Value member;
-      member.SetUint64(mValSize);
-      doc->AddMember("mValSize", member, doc->GetAllocator());
-    }
-
-    // payload
-    {
-      rapidjson::Value member;
-      member.SetString(reinterpret_cast<const char*>(payload),
-                       mKeySize + mValSize, doc->GetAllocator());
-      doc->AddMember("payload", member, doc->GetAllocator());
-    }
-
-    return doc;
-  }
+  std::unique_ptr<rapidjson::Document> ToJson() override;
 };
 
-// WAL for BTreeVI
-struct WALUpdateSSIP : WALPayload {
+struct WALUpdate : WALPayload {
   u16 mKeySize;
 
-  u64 mDeltaLength;
+  u16 mDeltaLength;
+
+  u8 mPayload[];
+};
+
+struct WALTxUpdate : WALPayload {
+  u16 mKeySize;
+
+  u64 mUpdateDescSize;
+
+  u64 mDeltaSize;
 
   WORKERID mPrevWorkerId;
 
@@ -213,20 +134,221 @@ struct WALUpdateSSIP : WALPayload {
 
   COMMANDID mPrevCommandId;
 
-  u8 payload[];
+  // Stores key, UpdateDesc, and Delta in order
+  u8 mPayload[];
 
-  WALUpdateSSIP(Slice key, UpdateDesc& updateDesc, u64 deltaSize,
-                WORKERID prevWorkerId, TXID prevTxId, COMMANDID prevCommandId)
-      : WALPayload(TYPE::WALUpdate),
+  WALTxUpdate(Slice key, UpdateDesc& updateDesc, u64 sizeOfUpdateDescAndDelta,
+              WORKERID prevWorkerId, TXID prevTxId, COMMANDID prevCommandId)
+      : WALPayload(TYPE::WALTxUpdate),
         mKeySize(key.size()),
-        mDeltaLength(deltaSize),
+        mUpdateDescSize(updateDesc.Size()),
+        mDeltaSize(sizeOfUpdateDescAndDelta - updateDesc.Size()),
         mPrevWorkerId(prevWorkerId),
         mPrevTxId(prevTxId),
         mPrevCommandId(prevCommandId) {
-    std::memcpy(payload, key.data(), key.size());
-    std::memcpy(payload + key.size(), &updateDesc, updateDesc.Size());
+    // key
+    std::memcpy(mPayload, key.data(), key.size());
+    // updateDesc
+    std::memcpy(mPayload + key.size(), &updateDesc, updateDesc.Size());
+  }
+
+  inline Slice GetKey() const {
+    return Slice(mPayload, mKeySize);
+  }
+
+  inline const UpdateDesc* GetUpdateDesc() const {
+    auto* updateDesc = UpdateDesc::From(mPayload + mKeySize);
+    DCHECK(updateDesc->Size() == mUpdateDescSize)
+        << "Malformed WALTxUpdate: updateDesc->Size() != mUpdateDescSize"
+        << ", updateDesc->Size() = " << updateDesc->Size()
+        << ", mUpdateDescSize = " << mUpdateDescSize;
+    return updateDesc;
+  }
+
+  inline u8* GetDeltaPtr() {
+    return mPayload + mKeySize + mUpdateDescSize;
+  }
+
+  inline const u8* GetDeltaPtr() const {
+    return mPayload + mKeySize + mUpdateDescSize;
+  }
+
+  u64 GetDeltaSize() const {
+    return mDeltaSize;
   }
 };
+
+struct WALRemove : WALPayload {
+  u16 mKeySize;
+
+  u16 mValSize;
+
+  u8 mPayload[];
+
+  WALRemove(Slice key, Slice val)
+      : WALPayload(TYPE::WALRemove),
+        mKeySize(key.size()),
+        mValSize(val.size()) {
+    std::memcpy(mPayload, key.data(), key.size());
+    std::memcpy(mPayload + key.size(), val.data(), val.size());
+  }
+};
+
+struct WALTxRemove : WALPayload {
+  u16 mKeySize;
+
+  u16 mValSize;
+
+  WORKERID mPrevWorkerId;
+
+  TXID mPrevTxId;
+
+  COMMANDID mPrevCommandId;
+
+  u8 mPayload[];
+
+  WALTxRemove(Slice key, Slice val, WORKERID prevWorkerId, u64 prevTxId,
+              u64 prevCommandId)
+      : WALPayload(TYPE::WALTxRemove),
+        mKeySize(key.size()),
+        mValSize(val.size()),
+        mPrevWorkerId(prevWorkerId),
+        mPrevTxId(prevTxId),
+        mPrevCommandId(prevCommandId) {
+    std::memcpy(mPayload, key.data(), key.size());
+    std::memcpy(mPayload + key.size(), val.data(), val.size());
+  }
+
+  Slice RemovedKey() const {
+    return Slice(mPayload, mKeySize);
+  }
+
+  Slice RemovedVal() const {
+    return Slice(mPayload + mKeySize, mValSize);
+  }
+};
+
+//------------------------------------------------------------------------------
+// WALPayload
+//------------------------------------------------------------------------------
+inline std::unique_ptr<rapidjson::Document> WALPayload::ToJson() {
+  auto doc = std::make_unique<rapidjson::Document>();
+  doc->SetObject();
+
+  // type
+  {
+    auto typeName = WalLogTypeName(mType);
+    rapidjson::Value member;
+    member.SetString(typeName.data(), typeName.size(), doc->GetAllocator());
+    doc->AddMember("mType", member, doc->GetAllocator());
+  }
+
+  return doc;
+}
+
+inline std::string WALPayload::WalLogTypeName(TYPE type) {
+  switch (type) {
+    DO_WITH_TYPES(TYPE_NAME);
+  default:
+    return "Unknown WAL log type";
+  }
+}
+
+//------------------------------------------------------------------------------
+// WALInitPage
+//------------------------------------------------------------------------------
+inline std::unique_ptr<rapidjson::Document> WALInitPage::ToJson() {
+  auto doc = WALPayload::ToJson();
+
+  // mTreeId
+  {
+    rapidjson::Value member;
+    member.SetInt64(mTreeId);
+    doc->AddMember("mTreeId", member, doc->GetAllocator());
+  }
+
+  // mIsLeaf
+  {
+    rapidjson::Value member;
+    member.SetBool(mIsLeaf);
+    doc->AddMember("mIsLeaf", member, doc->GetAllocator());
+  }
+
+  return doc;
+}
+
+//------------------------------------------------------------------------------
+// WALLogicalSplit
+//------------------------------------------------------------------------------
+inline std::unique_ptr<rapidjson::Document> WALLogicalSplit::ToJson() {
+  auto doc = WALPayload::ToJson();
+
+  // mParentPageId
+  {
+    rapidjson::Value member;
+    member.SetUint64(mParentPageId);
+    doc->AddMember("mParentPageId", member, doc->GetAllocator());
+  }
+
+  // mLhsPageId
+  {
+    rapidjson::Value member;
+    member.SetUint64(mLhsPageId);
+    doc->AddMember("mLhsPageId", member, doc->GetAllocator());
+  }
+
+  // mRhsPageId
+  {
+    rapidjson::Value member;
+    member.SetUint64(mRhsPageId);
+    doc->AddMember("mRhsPageId", member, doc->GetAllocator());
+  }
+
+  return doc;
+}
+
+//------------------------------------------------------------------------------
+// WALLogicalSplit
+//------------------------------------------------------------------------------
+inline std::unique_ptr<rapidjson::Document> WALInsert::ToJson() {
+  auto doc = WALPayload::ToJson();
+
+  // mKeySize
+  {
+    rapidjson::Value member;
+    member.SetUint64(mKeySize);
+    doc->AddMember("mKeySize", member, doc->GetAllocator());
+  }
+
+  // mValSize
+  {
+    rapidjson::Value member;
+    member.SetUint64(mValSize);
+    doc->AddMember("mValSize", member, doc->GetAllocator());
+  }
+
+  // key in payload
+  {
+    rapidjson::Value member;
+    auto key = GetKey();
+    member.SetString((char*)key.data(), key.size(), doc->GetAllocator());
+    doc->AddMember("mKey", member, doc->GetAllocator());
+  }
+
+  // val in payload
+  {
+    rapidjson::Value member;
+    auto val = GetVal();
+    member.SetString((char*)val.data(), val.size(), doc->GetAllocator());
+    doc->AddMember("mKey", member, doc->GetAllocator());
+  }
+
+  return doc;
+}
+
+#undef TYPE_NAME
+#undef DECR_TYPE
+#undef DO_WITH_TYPES
 
 } // namespace btree
 } // namespace storage

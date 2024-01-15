@@ -89,7 +89,7 @@ WALEntrySimple& Logging::ReserveWALEntrySimple(WALEntry::TYPE type) {
   mActiveWALEntrySimple =
       new (entryPtr) WALEntrySimple(mLsnClock++, entrySize, type);
 
-  // set prev LSN on demand.
+  // set previous LSN on demand.
   if (type != WALEntry::TYPE::TX_START) {
     mActiveWALEntrySimple->mPrevLSN = mPrevLSN;
   }
@@ -107,7 +107,7 @@ WALEntrySimple& Logging::ReserveWALEntrySimple(WALEntry::TYPE type) {
 /// WALEntrySimple to be flushed in the wal ring buffer.
 void Logging::SubmitWALEntrySimple() {
   SCOPED_DEFER(DEBUG_BLOCK() {
-    auto doc = mActiveWALEntrySimple->ToJSON();
+    auto doc = mActiveWALEntrySimple->ToJson();
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
     doc->Accept(writer);
@@ -125,6 +125,11 @@ void Logging::SubmitWALEntrySimple() {
   mActiveWALEntrySimple->mCRC32 = mActiveWALEntrySimple->ComputeCRC32();
   mWalBuffered += sizeof(WALEntrySimple);
   publishWalFlushReq();
+}
+
+void Logging::WriteSimpleWal(WALEntry::TYPE type) {
+  ReserveWALEntrySimple(type);
+  SubmitWALEntrySimple();
 }
 
 /// @brief SubmitWALEntryComplex submits the wal record to group committer when

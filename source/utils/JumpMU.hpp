@@ -18,7 +18,7 @@ extern __thread int tlsNumStackObjs;
 extern __thread void* tlsObjs[JUMPMU_STACK_OBJECTS_LIMIT];
 extern __thread void (*tlsObjDtors[JUMPMU_STACK_OBJECTS_LIMIT])(void*);
 
-void jump();
+void Jump();
 
 inline void PopBackDestructor() {
   assert(tlsNumStackObjs > 0);
@@ -42,10 +42,10 @@ inline void PushBackDesctructor(void* obj, void (*dtor)(void*)) {
 
 template <typename T> class JumpScoped {
 public:
-  T obj;
+  T mObj;
 
   template <typename... Args>
-  JumpScoped(Args&&... args) : obj(std::forward<Args>(args)...) {
+  JumpScoped(Args&&... args) : mObj(std::forward<Args>(args)...) {
     jumpmu::PushBackDesctructor(this, &DestructBeforeJump);
   }
 
@@ -54,7 +54,7 @@ public:
   }
 
   T* operator->() {
-    return reinterpret_cast<T*>(&obj);
+    return reinterpret_cast<T*>(&mObj);
   }
 
   /// @brief DestructBeforeJump destructs the object, releases all the resources

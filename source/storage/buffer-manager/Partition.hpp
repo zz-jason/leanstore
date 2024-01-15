@@ -50,14 +50,21 @@ struct HashTable {
   };
 
   u64 mask;
+
   Entry** entries;
 
   u64 hashKey(u64 k);
-  IOFrame& insert(u64 key);
+
+  IOFrame& Insert(u64 key);
+
   Handler Lookup(u64 key);
-  void remove(Handler& handler);
-  void remove(u64 key);
+
+  void Remove(Handler& handler);
+
+  void Remove(u64 key);
+
   bool has(u64 key); // for debugging
+
   HashTable(u64 size_in_bits);
 };
 

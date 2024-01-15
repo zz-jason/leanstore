@@ -12,7 +12,7 @@ __thread int tlsNumStackObjs = 0;
 __thread void* tlsObjs[JUMPMU_STACK_OBJECTS_LIMIT];
 __thread void (*tlsObjDtors[JUMPMU_STACK_OBJECTS_LIMIT])(void*);
 
-void jump() {
+void Jump() {
   DCHECK(tlsNumJumpPoints > 0) << "tlsNumJumpPoints=" << tlsNumJumpPoints;
   DCHECK(tlsNumStackObjs >= 0) << "tlsNumStackObjs=" << tlsNumStackObjs;
 

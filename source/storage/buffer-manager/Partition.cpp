@@ -40,7 +40,7 @@ u64 HashTable::hashKey(PID k) {
   return h;
 }
 
-IOFrame& HashTable::insert(PID key) {
+IOFrame& HashTable::Insert(PID key) {
   auto* e = new Entry(key);
   uint64_t pos = hashKey(key) & mask;
   e->next = entries[pos];
@@ -61,16 +61,16 @@ HashTable::Handler HashTable::Lookup(PID key) {
   return {nullptr};
 }
 
-void HashTable::remove(HashTable::Handler& handler) {
+void HashTable::Remove(HashTable::Handler& handler) {
   Entry* toDelete = *handler.holder;
   *handler.holder = (*handler.holder)->next;
   delete toDelete;
 }
 
-void HashTable::remove(u64 key) {
+void HashTable::Remove(u64 key) {
   auto handler = Lookup(key);
   assert(handler);
-  remove(handler);
+  Remove(handler);
 }
 
 bool HashTable::has(u64 key) {

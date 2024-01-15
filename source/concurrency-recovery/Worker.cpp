@@ -47,8 +47,8 @@ Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers)
 }
 
 Worker::~Worker() {
-  delete[] cc.commit_tree.array;
-  cc.commit_tree.array = nullptr;
+  delete[] cc.mCommitTree.array;
+  cc.mCommitTree.array = nullptr;
 
   free(mLogging.mWalBuffer);
   mLogging.mWalBuffer = nullptr;
@@ -115,13 +115,13 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
         curWorkerSnapshot.store(mActiveTx.mStartTs, std::memory_order_release);
       }
     }
-    cc.commit_tree.cleanIfNecessary();
+    cc.mCommitTree.cleanIfNecessary();
     cc.local_global_all_lwm_cache = sAllLwm.load();
   } else {
     if (prevTx.AtLeastSI()) {
       cc.switchToReadCommittedMode();
     }
-    cc.commit_tree.cleanIfNecessary();
+    cc.mCommitTree.cleanIfNecessary();
   }
 }
 
@@ -142,8 +142,8 @@ void Worker::CommitTx() {
 
   mCommandId = 0; // Reset mCommandId only on commit and never on abort
   if (mActiveTx.mHasWrote) {
-    auto commitTs = cc.commit_tree.commit(mActiveTx.mStartTs);
-    cc.mLatestWriteTx.store(commitTs, std::memory_order_release);
+    auto commitTs = cc.mCommitTree.commit(mActiveTx.mStartTs);
+    cc.mLatestCommitTs.store(commitTs, std::memory_order_release);
     mActiveTx.mCommitTs = commitTs;
     DCHECK(mActiveTx.mStartTs < mActiveTx.mCommitTs)
         << "startTs should be smaller than commitTs"
@@ -158,10 +158,8 @@ void Worker::CommitTx() {
 
   mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
 
-  mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_COMMIT);
-  mLogging.SubmitWALEntrySimple();
-  mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_FINISH);
-  mLogging.SubmitWALEntrySimple();
+  mLogging.WriteSimpleWal(WALEntry::TYPE::TX_COMMIT);
+  mLogging.WriteSimpleWal(WALEntry::TYPE::TX_FINISH);
 
   if (mLogging.mHasRemoteDependency) {
     std::unique_lock<std::mutex> g(mLogging.mTxToCommitMutex);
@@ -188,7 +186,7 @@ void Worker::CommitTx() {
   }
 
   // All isolation level generate garbage
-  cc.garbageCollection();
+  cc.GarbageCollection();
 
   // wait transaction to be committed
   while (mLogging.TxUnCommitted(mActiveTx.mCommitTs)) {
@@ -241,18 +239,17 @@ void Worker::AbortTx() {
         complexEntry.mTreeId, complexEntry.payload, txId);
   });
 
-  cc.mHistoryTree->purgeVersions(
+  cc.mHistoryTree->PurgeVersions(
       mWorkerId, mActiveTx.mStartTs, mActiveTx.mStartTs,
       [&](const TXID, const TREEID, const u8*, u64, const bool) {});
 
-  mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_ABORT);
-  mLogging.SubmitWALEntrySimple();
-  mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_FINISH);
-  mLogging.SubmitWALEntrySimple();
+  mLogging.WriteSimpleWal(WALEntry::TYPE::TX_ABORT);
+  // TODO: write compensation wal records between abort and finish
+  mLogging.WriteSimpleWal(WALEntry::TYPE::TX_FINISH);
 }
 
 void Worker::shutdown() {
-  cc.garbageCollection();
+  cc.GarbageCollection();
   cc.switchToReadCommittedMode();
 }
 

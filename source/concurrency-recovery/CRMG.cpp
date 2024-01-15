@@ -119,11 +119,11 @@ void CRManager::runWorker(u64 workerId) {
 
 void CRManager::setupHistoryTree() {
   auto historyTree = std::make_unique<HistoryTree>();
-  historyTree->update_btrees =
-      std::make_unique<leanstore::storage::btree::BTreeLL*[]>(
+  historyTree->mUpdateBTrees =
+      std::make_unique<leanstore::storage::btree::BasicKV*[]>(
           FLAGS_worker_threads);
-  historyTree->remove_btrees =
-      std::make_unique<leanstore::storage::btree::BTreeLL*[]>(
+  historyTree->mRemoveBTrees =
+      std::make_unique<leanstore::storage::btree::BasicKV*[]>(
           FLAGS_worker_threads);
 
   for (u64 i = 0; i < FLAGS_worker_threads; i++) {
@@ -132,25 +132,25 @@ void CRManager::setupHistoryTree() {
                                                    .mUseBulkInsert = true};
     // setup update tree
     std::string updateBtreeName = name + "_updates";
-    auto res = storage::btree::BTreeLL::Create(updateBtreeName, config);
+    auto res = storage::btree::BasicKV::Create(updateBtreeName, config);
     if (!res) {
       LOG(FATAL) << "Failed to set up _updates tree"
                  << ", treeName=" << name
                  << ", updateBTreeName=" << updateBtreeName
-                 << ", workerId=" << i << ", error=" << res.error().mMessage;
+                 << ", workerId=" << i << ", error=" << res.error().ToString();
     }
-    historyTree->update_btrees[i] = res.value();
+    historyTree->mUpdateBTrees[i] = res.value();
 
     // setup delete tree
     std::string removeBtreeName = name + "_removes";
-    res = storage::btree::BTreeLL::Create(removeBtreeName, config);
+    res = storage::btree::BasicKV::Create(removeBtreeName, config);
     if (!res) {
       LOG(FATAL) << "Failed to set up _removes tree"
                  << ", treeName=" << name
                  << ", removeBtreeName=" << removeBtreeName
-                 << ", workerId=" << i << ", error=" << res.error().mMessage;
+                 << ", workerId=" << i << ", error=" << res.error().ToString();
     }
-    historyTree->remove_btrees[i] = res.value();
+    historyTree->mRemoveBTrees[i] = res.value();
   }
 
   mHistoryTreePtr = std::move(historyTree);

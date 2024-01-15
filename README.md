@@ -19,24 +19,22 @@ hope to make it usable in production in the future.
 
 ## Getting started
 
-> NOTE: Ubuntu 22.04 or newer and GCC 12 is required.
+It's recommanded to develop the project inside the docker container, which can
+be built from the Dockerfile defined in
+[docker/Dockerfile](./docker/Dockerfile).
 
 ```sh
-# install dependencies
-sudo apt update
-sudo apt install -y libaio-dev gcovr lcov
-
-# build
-cmake -DCMAKE_BUILD_TYPE=Debug -B build -S .
-cmake --build build -j `nproc`
-ctest --test-dir build -j `nproc`
+# build and test
+cmake --preset debug
+cmake --build build/debug -j `nproc`
+ctest --test-dir build/debug -j `nproc`
 ```
 
 ## Contributing
 
 Contributions are welcomed and greatly appreciated! "good-first-issue" is a good
-start point, see the [Contributing](./Contributing.md) file for details about the contributing
-workflow, develop guide, and contributor communication etc.
+start point, see the [Contributing](./Contributing.md) file for details about
+the contributing workflow, develop guide, and contributor communication etc.
 
 ## License
 
