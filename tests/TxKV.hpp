@@ -162,7 +162,7 @@ public:
 
 class LeanStoreMVCCTableRef : public TableRef {
 public:
-  leanstore::storage::btree::TxBTree* mTree;
+  leanstore::storage::btree::TransactionKV* mTree;
 };
 
 //------------------------------------------------------------------------------
@@ -225,7 +225,7 @@ inline auto LeanStoreMVCCSession::CreateTable(const std::string& tblName,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
 
-  storage::btree::TxBTree* btree;
+  storage::btree::TransactionKV* btree;
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
       cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
@@ -260,7 +260,7 @@ inline auto LeanStoreMVCCSession::DropTable(const std::string& tblName,
 inline auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
                                       bool implicitTx)
     -> std::expected<void, utils::Error> {
-  auto* btree = reinterpret_cast<storage::btree::TxBTree*>(tbl);
+  auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
   OpCode res;
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
@@ -287,7 +287,7 @@ inline auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
 inline auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key,
                                       std::string& val, bool implicitTx)
     -> std::expected<u64, utils::Error> {
-  auto* btree = reinterpret_cast<storage::btree::TxBTree*>(tbl);
+  auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
   OpCode res;
   auto copyValueOut = [&](Slice res) {
     val.resize(res.size());
@@ -321,7 +321,7 @@ inline auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key,
 inline auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
                                          bool implicitTx)
     -> std::expected<u64, utils::Error> {
-  auto* btree = reinterpret_cast<storage::btree::TxBTree*>(tbl);
+  auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
   OpCode res;
   auto updateCallBack = [&](MutableSlice toUpdate) {
     std::memcpy(toUpdate.Data(), val.data(), val.length());
@@ -344,7 +344,7 @@ inline auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
     updateDesc->mNumSlots = 1;
     updateDesc->mUpdateSlots[0].mOffset = 0;
     updateDesc->mUpdateSlots[0].mSize = val.size();
-    res = btree->updateSameSizeInPlace(Slice((const u8*)key.data(), key.size()),
+    res = btree->UpdateInPlace(Slice((const u8*)key.data(), key.size()),
                                        updateCallBack, *updateDesc);
   });
   if (res == OpCode::kOK) {
@@ -360,7 +360,7 @@ inline auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
 inline auto LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key,
                                          bool implicitTx)
     -> std::expected<u64, utils::Error> {
-  auto* btree = reinterpret_cast<storage::btree::TxBTree*>(tbl);
+  auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
   OpCode res;
   cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {

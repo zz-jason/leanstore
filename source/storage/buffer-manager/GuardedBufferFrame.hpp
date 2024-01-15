@@ -9,6 +9,8 @@
 
 #include <glog/logging.h>
 
+#include <utility>
+
 namespace leanstore {
 namespace storage {
 
@@ -203,8 +205,10 @@ public:
     return handler;
   }
 
-  inline void submitWALEntry(u64 total_size) {
-    cr::Worker::my().mLogging.SubmitWALEntryComplex(total_size);
+  template <typename WT, typename... Args>
+  inline void WriteWal(u64 walSize, Args&&... args) {
+    auto handle = ReserveWALPayload<WT>(walSize, std::forward<Args>(args)...);
+    handle.SubmitWal();
   }
 
   inline bool EncounteredContention() {
@@ -298,10 +302,6 @@ public:
   cr::WALPayloadHandler<WT> ReserveWALPayload(u64 payloadSize, Args&&... args) {
     return mRefGuard.template ReserveWALPayload<WT>(
         payloadSize, std::forward<Args>(args)...);
-  }
-
-  inline void submitWALEntry(u64 totalSize) {
-    mRefGuard.submitWALEntry(totalSize);
   }
 
   void keepAlive() {

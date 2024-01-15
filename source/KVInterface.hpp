@@ -109,30 +109,29 @@ using PrefixLookupCallback = std::function<void(Slice key, Slice val)>;
 
 class KVInterface {
 public:
-  virtual OpCode Lookup(Slice key, ValCallback valCallback) = 0;
-
   virtual OpCode insert(Slice key, Slice val) = 0;
 
-  /// Update the old value with a same sized new value.
+  /// Update old value with a same sized new value.
   /// NOTE: The value is updated via user provided callback.
-  virtual OpCode updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
-                                       UpdateDesc& updateDesc) = 0;
+  virtual OpCode UpdateInPlace(Slice key, MutValCallback updateCallBack,
+                               UpdateDesc& updateDesc) = 0;
 
   virtual OpCode remove(Slice key) = 0;
+
+  virtual OpCode RangeRemove(Slice startKey, Slice endKey,
+                             bool pageWise = true) = 0;
 
   virtual OpCode ScanAsc(Slice startKey, ScanCallback callback) = 0;
 
   virtual OpCode ScanDesc(Slice startKey, ScanCallback callback) = 0;
 
-  virtual OpCode prefixLookup(Slice, PrefixLookupCallback) = 0;
+  virtual OpCode Lookup(Slice key, ValCallback valCallback) = 0;
 
-  virtual OpCode prefixLookupForPrev(Slice, PrefixLookupCallback) = 0;
+  virtual OpCode PrefixLookup(Slice, PrefixLookupCallback) = 0;
 
-  virtual OpCode rangeRemove(Slice startKey [[maybe_unused]],
-                             Slice endKey [[maybe_unused]],
-                             bool page_wise [[maybe_unused]] = true) = 0;
+  virtual OpCode PrefixLookupForPrev(Slice, PrefixLookupCallback) = 0;
 
-  virtual u64 countEntries() = 0;
+  virtual u64 CountEntries() = 0;
 };
 
 class MutableSlice {

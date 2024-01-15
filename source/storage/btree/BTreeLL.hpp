@@ -51,28 +51,30 @@ public:
 
   virtual OpCode insert(Slice key, Slice val) override;
 
-  virtual OpCode updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
+  virtual OpCode UpdateInPlace(Slice key, MutValCallback updateCallBack,
                                        UpdateDesc& updateDesc) override;
 
   virtual OpCode remove(Slice key) override;
+
   virtual OpCode ScanAsc(Slice startKey, ScanCallback callback) override;
+
   virtual OpCode ScanDesc(Slice startKey, ScanCallback callback) override;
-  virtual OpCode prefixLookup(Slice, PrefixLookupCallback callback) override;
-  virtual OpCode prefixLookupForPrev(Slice key,
+
+  virtual OpCode PrefixLookup(Slice, PrefixLookupCallback callback) override;
+
+  virtual OpCode PrefixLookupForPrev(Slice key,
                                      PrefixLookupCallback callback) override;
 
-  virtual OpCode rangeRemove(Slice staryKey, Slice endKey,
-                             bool page_used) override;
+  virtual OpCode RangeRemove(Slice staryKey, Slice endKey,
+                             bool pageUsed) override;
 
-  // virtual u64 countPages() override;
-  virtual u64 countEntries() override;
-  // virtual u64 getHeight() override;
+  virtual u64 CountEntries() override;
 
 public:
   //---------------------------------------------------------------------------
   // Graveyard Interfaces
   //---------------------------------------------------------------------------
-  bool isRangeSurelyEmpty(Slice start_key, Slice end_key);
+  bool IsRangeEmpty(Slice startKey, Slice endKey);
 
 public:
   [[nodiscard]] static auto Create(const std::string& treeName, Config& config)

@@ -1,7 +1,7 @@
 #include "Recovery.hpp"
 
 #include "concurrency-recovery/WALEntry.hpp"
-#include "storage/btree/TxBTree.hpp"
+#include "storage/btree/TransactionKV.hpp"
 #include "storage/btree/core/BTreeNode.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
 
@@ -139,7 +139,7 @@ std::expected<void, utils::Error> Recovery::redo() {
       GuardedBufferFrame<BTreeNode> guardedNode(std::move(guard), &bf);
 
       s32 slotId = -1;
-      TxBTree::InsertToNode(guardedNode, walInsert->GetKey(),
+      TransactionKV::InsertToNode(guardedNode, walInsert->GetKey(),
                             walInsert->GetVal(), complexEntry->mWorkerId,
                             complexEntry->mTxId, complexEntry->mTxMode, slotId);
       break;

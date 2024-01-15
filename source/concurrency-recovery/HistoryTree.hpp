@@ -35,30 +35,30 @@ private:
     bool rightmost_init = false;
     bool leftmost_init = false;
   };
-  Session update_sessions[leanstore::cr::kWorkerLimit];
-  Session remove_sessions[leanstore::cr::kWorkerLimit];
+  Session mUpdateSessions[leanstore::cr::kWorkerLimit];
+  Session mRemoveSessions[leanstore::cr::kWorkerLimit];
 
 public:
-  std::unique_ptr<BTreeLL*[]> update_btrees;
-  std::unique_ptr<BTreeLL*[]> remove_btrees;
+  std::unique_ptr<BTreeLL*[]> mUpdateBTrees;
+  std::unique_ptr<BTreeLL*[]> mRemoveBTrees;
 
   virtual ~HistoryTree() = default;
 
-  virtual void insertVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
-                             TREEID treeId, bool isRemove, u64 payload_length,
-                             std::function<void(u8*)> cb,
-                             bool same_thread) override;
+  virtual void PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
+                          TREEID treeId, bool isRemove, u64 payloadLength,
+                          std::function<void(u8*)> cb,
+                          bool sameThread) override;
 
-  virtual bool retrieveVersion(
+  virtual bool GetVersion(
       WORKERID workerId, TXID txId, COMMANDID commandId, const bool isRemove,
-      std::function<void(const u8*, u64 payload_length)> cb) override;
+      std::function<void(const u8*, u64 payloadLength)> cb) override;
 
-  virtual void purgeVersions(WORKERID workerId, TXID from_tx_id, TXID to_tx_id,
+  virtual void PurgeVersions(WORKERID workerId, TXID from_tx_id, TXID to_tx_id,
                              RemoveVersionCallback cb,
                              const u64 limit) override;
 
   // [from, to]
-  virtual void visitRemoveVersions(WORKERID workerId, TXID from_tx_id,
+  virtual void VisitRemovedVersions(WORKERID workerId, TXID from_tx_id,
                                    TXID to_tx_id,
                                    RemoveVersionCallback cb) override;
 };

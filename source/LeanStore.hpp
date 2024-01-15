@@ -2,7 +2,7 @@
 
 #include "profiling/tables/ConfigsTable.hpp"
 #include "storage/btree/BTreeLL.hpp"
-#include "storage/btree/TxBTree.hpp"
+#include "storage/btree/TransactionKV.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 
 #include <rapidjson/document.h>
@@ -85,14 +85,14 @@ public:
     }
   }
 
-  /// Register a TxBTree
+  /// Register a TransactionKV
   ///
   /// @param name The unique name of the btree
   /// @param config The config of the btree
   /// @param btree The pointer to store the registered btree
   void RegisterBTreeVI(const std::string& name,
                        storage::btree::BTreeGeneric::Config& config,
-                       storage::btree::TxBTree** btree) {
+                       storage::btree::TransactionKV** btree) {
     DCHECK(cr::Worker::my().IsTxStarted());
     *btree = nullptr;
 
@@ -102,7 +102,7 @@ public:
         .mEnableWal = false, .mUseBulkInsert = false};
     auto res = storage::btree::BTreeLL::Create(graveyardName, graveyardConfig);
     if (!res) {
-      LOG(ERROR) << "Failed to create TxBTree graveyard"
+      LOG(ERROR) << "Failed to create TransactionKV graveyard"
                  << ", btreeVI=" << name << ", graveyardName=" << graveyardName
                  << ", error=" << res.error().ToString();
       return;
@@ -121,19 +121,19 @@ public:
     });
 
     // create btree for main data
-    *btree = storage::btree::TxBTree::Create(name, config, graveyard);
+    *btree = storage::btree::TransactionKV::Create(name, config, graveyard);
   }
 
-  /// Get a registered TxBTree
+  /// Get a registered TransactionKV
   ///
   /// @param name The unique name of the btree
   /// @param btree The pointer to store the found btree
-  void GetBTreeVI(const std::string& name, storage::btree::TxBTree** btree) {
-    *btree = dynamic_cast<storage::btree::TxBTree*>(
+  void GetBTreeVI(const std::string& name, storage::btree::TransactionKV** btree) {
+    *btree = dynamic_cast<storage::btree::TransactionKV*>(
         storage::TreeRegistry::sInstance->GetTree(name));
   }
 
-  /// Unregister a TxBTree
+  /// Unregister a TransactionKV
   /// @param name The unique name of the btree
   void UnRegisterBTreeVI(const std::string& name) {
     DCHECK(cr::Worker::my().IsTxStarted());
@@ -142,7 +142,7 @@ public:
     leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
     auto res = storage::TreeRegistry::sInstance->UnregisterTree(name);
     if (!res) {
-      LOG(ERROR) << "UnRegister TxBTree failed"
+      LOG(ERROR) << "UnRegister TransactionKV failed"
                  << ", error=" << res.error().ToString();
     }
 
@@ -153,7 +153,7 @@ public:
     leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
     res = storage::TreeRegistry::sInstance->UnregisterTree(graveyardName);
     if (!res) {
-      LOG(ERROR) << "UnRegister TxBTree graveyard failed"
+      LOG(ERROR) << "UnRegister TransactionKV graveyard failed"
                  << ", error=" << res.error().ToString();
     }
   }

@@ -45,7 +45,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, SerializeAndDeserialize) {
   FLAGS_worker_threads = 2;
   FLAGS_recover = false;
   mLeanStore = std::make_unique<LeanStore>();
-  TxBTree* btree;
+  TransactionKV* btree;
 
   // prepare key-value pairs to insert
   size_t numKVs(10);
@@ -142,7 +142,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
   FLAGS_worker_threads = 2;
   FLAGS_recover = false;
   mLeanStore = std::make_unique<LeanStore>();
-  TxBTree* btree;
+  TransactionKV* btree;
 
   // prepare key-value pairs to insert
   size_t numKVs(10);
@@ -193,7 +193,7 @@ TEST_F(BTreeVILoggingAndRecoveryTest, RecoverAfterInsert) {
     SCOPED_DEFER(cr::Worker::my().CommitTx());
     rapidjson::Document doc(rapidjson::kObjectType);
     BTreeGeneric::ToJSON(*static_cast<BTreeGeneric*>(btree), &doc);
-    DLOG(INFO) << "TxBTree after recovery: " << utils::JsonToStr(&doc);
+    DLOG(INFO) << "TransactionKV after recovery: " << utils::JsonToStr(&doc);
   });
 
   // lookup the restored btree

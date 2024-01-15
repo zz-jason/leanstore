@@ -81,13 +81,13 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     tmp.count = 0;
     OpCode ret;
     TID tid;
-    ret = key_tid->updateSameSizeInPlace(
+    ret = key_tid->UpdateInPlace(
         folded_key, folded_key_len,
         [&](u8* tid_payload, u16 tid_payload_length) {
           ensure(tid_payload_length == sizeof(TID));
           tid = *reinterpret_cast<const TID*>(tid_payload);
           // -------------------------------------------------------------------------------------
-          OpCode ret2 = tid_value->updateSameSizeInPlace(
+          OpCode ret2 = tid_value->UpdateInPlace(
               (u8*)&tid, sizeof(TID),
               [&](u8* payload, u16 payload_length) {
                 static_cast<void>(payload_length);

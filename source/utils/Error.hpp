@@ -23,7 +23,7 @@ enum class ErrorCode : u64 {
   kBTreeLL = 200,
   kBTreeLLCreate,
 
-  // TxBTree related error code
+  // TransactionKV related error code
   kBTreeVI = 300,
   kBTreeVICreate,
 
@@ -78,7 +78,7 @@ public:
     return Error(ErrorCode::kGeneral, msg, std::forward<Args>(args)...);
   }
 
-  // TxBTree
+  // TransactionKV
   template <typename... Args>
   inline static Error BTreeLLCreation(Args&&... args) {
     const std::string msg = "Fail to create BTreeLL, treeName={}";

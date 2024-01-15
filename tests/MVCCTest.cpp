@@ -16,7 +16,7 @@ namespace leanstore {
 class MVCCTest : public ::testing::Test {
 protected:
   std::string mTreeName;
-  TxBTree* mBTree;
+  TransactionKV* mBTree;
 
 protected:
   MVCCTest() = default;
