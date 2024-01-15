@@ -23,19 +23,6 @@ class BTreeNode;
 using SwipType = Swip<BTreeNode>;
 using HeadType = u32;
 
-inline static u64 swap(u64 x) {
-  return __builtin_bswap64(x);
-}
-inline static u32 swap(u32 x) {
-  return __builtin_bswap32(x);
-}
-inline static u16 swap(u16 x) {
-  return __builtin_bswap16(x);
-}
-inline static u8 swap(u8 x) {
-  return x;
-}
-
 class BTreeNodeHeader {
 public:
   static const u16 sHintCount = 16;
@@ -555,7 +542,7 @@ public:
   // Not synchronized or todo section
   bool removeSlot(u16 slotId);
   bool remove(Slice key);
-  void reset();
+  void Reset();
 
   void ToJSON(rapidjson::Value* resultObj,
               rapidjson::Value::AllocatorType& allocator);

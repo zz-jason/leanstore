@@ -156,11 +156,11 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID from_tx_id,
     restartrem : {
       leanstore::storage::btree::BTreeExclusiveIterator iterator(
           *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)));
-      iterator.exitLeafCallback(
+      iterator.SetExitLeafCallback(
           [&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
             if (guardedLeaf->freeSpaceAfterCompaction() >=
                 BTreeNode::UnderFullSize()) {
-              iterator.cleanUpCallback([&, toMerge = guardedLeaf.mBf] {
+              iterator.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
                 JUMPMU_TRY() {
                   btree->TryMergeMayJump(*toMerge);
                 }
@@ -188,7 +188,7 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID from_tx_id,
           iterator.removeCurrent();
           removed_versions = removed_versions + 1;
           iterator.MarkAsDirty();
-          iterator.reset();
+          iterator.Reset();
           cb(current_tx_id, treeId, payload->get(), payload_length,
              called_before);
           goto restartrem;
@@ -237,11 +237,11 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID from_tx_id,
     JUMPMU_TRY() {
       leanstore::storage::btree::BTreeExclusiveIterator iterator(
           *static_cast<BTreeGeneric*>(const_cast<BTreeLL*>(btree)));
-      iterator.exitLeafCallback(
+      iterator.SetExitLeafCallback(
           [&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
             if (guardedLeaf->freeSpaceAfterCompaction() >=
                 BTreeNode::UnderFullSize()) {
-              iterator.cleanUpCallback([&, toMerge = guardedLeaf.mBf] {
+              iterator.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
                 JUMPMU_TRY() {
                   btree->TryMergeMayJump(*toMerge);
                 }
@@ -254,7 +254,7 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID from_tx_id,
       // ATTENTION: we use this also for purging the current aborted tx so we
       // can not simply assume from_tx_id = 0
       bool did_purge_full_page = false;
-      iterator.enterLeafCallback(
+      iterator.SetEnterLeafCallback(
           [&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
             if (guardedLeaf->mNumSeps == 0) {
               return;
@@ -275,7 +275,7 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID from_tx_id,
             if (first_key_tx_id >= from_tx_id && to_tx_id >= last_key_tx_id) {
               // Purge the whole page
               removed_versions = removed_versions + guardedLeaf->mNumSeps;
-              guardedLeaf->reset();
+              guardedLeaf->Reset();
               did_purge_full_page = true;
             }
           });
@@ -339,7 +339,7 @@ void HistoryTree::VisitRemovedVersions(
         if (!called_before) {
           iterator.MarkAsDirty();
         }
-        iterator.reset();
+        iterator.Reset();
         cb(current_tx_id, treeId, payload->get(), payload_length,
            called_before);
         goto restart;

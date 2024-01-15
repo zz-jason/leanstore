@@ -217,7 +217,7 @@ void BufferManager::reclaimPage(BufferFrame& bf) {
     // Do nothing ! we have a garbage collector ;-)
     bf.header.mLatch.UnlockExclusively();
   } else {
-    bf.reset();
+    bf.Reset();
     bf.header.mLatch.UnlockExclusively();
     partition.mFreeBfList.PushFront(bf);
   }
@@ -434,7 +434,7 @@ void BufferManager::WritePageSync(BufferFrame& bf) {
   auto pageId = bf.header.mPageId;
   auto& partition = getPartition(pageId);
   pwrite(mPageFd, &bf.page, FLAGS_page_size, pageId * FLAGS_page_size);
-  bf.reset();
+  bf.Reset();
   guardedBf.unlock();
   partition.mFreeBfList.PushFront(bf);
 }

@@ -184,7 +184,7 @@ int main(int argc, char** argv) {
                       *reinterpret_cast<YCSBPayload*>(payload) = result;
                     },
                     tabular_update_descriptor);
-                d_iterators[op_i]->reset();
+                d_iterators[op_i]->Reset();
               }
               WorkerCounters::MyCounters().tx++;
             } else {

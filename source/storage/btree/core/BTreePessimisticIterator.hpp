@@ -134,20 +134,20 @@ public:
         mBuffer(FLAGS_page_size, 0) {
   }
 
-  void enterLeafCallback(LeafCallback cb) {
+  void SetEnterLeafCallback(LeafCallback cb) {
     mFuncEnterLeaf = cb;
   }
 
-  void exitLeafCallback(LeafCallback cb) {
+  void SetExitLeafCallback(LeafCallback cb) {
     mFuncExitLeaf = cb;
   }
 
-  void cleanUpCallback(std::function<void()> cb) {
+  void SetCleanUpCallback(std::function<void()> cb) {
     mFuncCleanUp = cb;
   }
 
   // EXP
-  OpCode seekExactWithHint(Slice key, bool higher = true) {
+  OpCode SeekExactWithHint(Slice key, bool higher = true) {
     if (mSlotId == -1) {
       return SeekExact(key) ? OpCode::kOK : OpCode::kNotFound;
     }
@@ -219,7 +219,7 @@ public:
         return false;
       }
 
-      AssembleUpperFence();
+      assembleUpperFence();
 
       if (mFuncExitLeaf != nullptr) {
         mFuncExitLeaf(mGuardedLeaf);
@@ -271,10 +271,10 @@ public:
       }
 
       mGuardedParent.unlock();
-      gotoPage(AssembedFence());
+      gotoPage(assembedFence());
 
       if (mGuardedLeaf->mNumSeps == 0) {
-        cleanUpCallback([&, toMerge = mGuardedLeaf.mBf]() {
+        SetCleanUpCallback([&, toMerge = mGuardedLeaf.mBf]() {
           JUMPMU_TRY() {
             mBTree.TryMergeMayJump(*toMerge, true);
           }
@@ -286,7 +286,7 @@ public:
         }
         continue;
       }
-      mSlotId = mGuardedLeaf->lowerBound<false>(AssembedFence());
+      mSlotId = mGuardedLeaf->lowerBound<false>(assembedFence());
       if (mSlotId == mGuardedLeaf->mNumSeps) {
         continue;
       }
@@ -370,7 +370,7 @@ public:
       }
 
       // Construct the next key (lower bound)
-      gotoPage(AssembedFence());
+      gotoPage(assembedFence());
 
       if (mGuardedLeaf->mNumSeps == 0) {
         COUNTERS_BLOCK() {
@@ -379,7 +379,7 @@ public:
         continue;
       }
       bool isEqual = false;
-      mSlotId = mGuardedLeaf->lowerBound<false>(AssembedFence(), &isEqual);
+      mSlotId = mGuardedLeaf->lowerBound<false>(assembedFence(), &isEqual);
       if (isEqual) {
         return true;
       }
@@ -418,17 +418,13 @@ public:
     return mGuardedLeaf->compareKeyWithBoundaries(key) == 0;
   }
 
-  bool isValid() {
-    return mSlotId != -1;
-  }
-
-  bool isLastOne() {
-    DCHECK(isValid());
+  bool IsLastOne() {
+    DCHECK(mSlotId != -1);
     DCHECK(mSlotId != mGuardedLeaf->mNumSeps);
     return (mSlotId + 1) == mGuardedLeaf->mNumSeps;
   }
 
-  void reset() {
+  void Reset() {
     mGuardedLeaf.unlock();
     mSlotId = -1;
     mLeafPosInParent = -1;
@@ -440,7 +436,7 @@ public:
   }
 
 private:
-  void AssembleUpperFence() {
+  void assembleUpperFence() {
     mFenceSize = mGuardedLeaf->mUpperFence.length + 1;
     mIsUsingUpperFence = true;
     DCHECK(mBuffer.size() >= mFenceSize);
@@ -449,7 +445,7 @@ private:
     mBuffer[mFenceSize - 1] = 0;
   }
 
-  inline Slice AssembedFence() {
+  inline Slice assembedFence() {
     return Slice(&mBuffer[0], mFenceSize);
   }
 };

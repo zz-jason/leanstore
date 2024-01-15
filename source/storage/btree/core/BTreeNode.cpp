@@ -453,7 +453,7 @@ bool BTreeNode::remove(Slice key) {
   return removeSlot(slotId);
 }
 
-void BTreeNode::reset() {
+void BTreeNode::Reset() {
   mSpaceUsed = mUpperFence.length + mLowerFence.length;
   mDataOffset = BTreeNode::Size() - mSpaceUsed;
   mNumSeps = 0;

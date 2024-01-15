@@ -211,7 +211,7 @@ public:
   }
 
   // Pre: bf is exclusively locked
-  void reset() {
+  void Reset() {
     header.Reset();
   }
 

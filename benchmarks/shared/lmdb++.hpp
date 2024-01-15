@@ -1356,7 +1356,7 @@ public:
   /**
    * Resets this read-only transaction.
    */
-  void reset() noexcept {
+  void Reset() noexcept {
     lmdb::txn_reset(_handle);
   }
 

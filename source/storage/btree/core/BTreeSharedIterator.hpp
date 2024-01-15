@@ -8,8 +8,8 @@ namespace btree {
 
 class BTreeSharedIterator : public BTreePessimisticIterator {
 public:
-  BTreeSharedIterator(BTreeGeneric& btree, const LatchMode mode =
-                                               LatchMode::kShared)
+  BTreeSharedIterator(BTreeGeneric& btree,
+                      const LatchMode mode = LatchMode::kShared)
       : BTreePessimisticIterator(btree, mode) {
   }
 };

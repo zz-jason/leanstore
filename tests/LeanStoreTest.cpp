@@ -73,7 +73,7 @@ TEST_F(LeanStoreTest, RecoverAfterInsert) {
   LS_DEBUG_ENABLE("skip_CheckpointAllBufferFrames");
   SCOPED_DEFER(LS_DEBUG_DISABLE("skip_CheckpointAllBufferFrames"));
 
-  mLeanStore.reset(nullptr);
+  mLeanStore.Reset(nullptr);
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries

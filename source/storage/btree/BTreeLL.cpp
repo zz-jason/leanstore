@@ -311,10 +311,10 @@ OpCode BTreeLL::remove(Slice key) {
 OpCode BTreeLL::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
   JUMPMU_TRY() {
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
-    xIter.exitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
+    xIter.SetExitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
       if (guardedLeaf->freeSpaceAfterCompaction() >=
           BTreeNode::UnderFullSize()) {
-        xIter.cleanUpCallback([&, toMerge = guardedLeaf.mBf] {
+        xIter.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
           JUMPMU_TRY() {
             this->TryMergeMayJump(*toMerge);
           }
@@ -350,7 +350,7 @@ OpCode BTreeLL::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
     }
 
     bool didPurgeFullPage = false;
-    xIter.enterLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
+    xIter.SetEnterLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
       if (guardedLeaf->mNumSeps == 0) {
         return;
       }
@@ -373,7 +373,7 @@ OpCode BTreeLL::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
           WorkerCounters::MyCounters().dt_range_removed[mTreeId] +=
               guardedLeaf->mNumSeps;
         }
-        guardedLeaf->reset();
+        guardedLeaf->Reset();
         xIter.MarkAsDirty();
         didPurgeFullPage = true;
       }

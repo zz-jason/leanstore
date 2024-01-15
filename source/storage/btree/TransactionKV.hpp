@@ -333,7 +333,7 @@ private:
       graveyardUpperBound = Slice(iter.mGuardedLeaf->getUpperFenceKey(),
                                   iter.mGuardedLeaf->mUpperFence.length);
       auto g_range = [&]() {
-        graveyardIter.reset();
+        graveyardIter.Reset();
         if (mGraveyard->IsRangeEmpty(graveyardLowerBound,
                                      graveyardUpperBound)) {
           g_ret = OpCode::kOther;
@@ -347,7 +347,7 @@ private:
         graveyardIter.AssembleKey();
         if (graveyardIter.key() > graveyardUpperBound) {
           g_ret = OpCode::kOther;
-          graveyardIter.reset();
+          graveyardIter.Reset();
           return;
         }
 
@@ -366,9 +366,9 @@ private:
         if (!keepScanning) {
           return false;
         }
-        const bool is_last_one = iter.isLastOne();
+        const bool is_last_one = iter.IsLastOne();
         if (is_last_one) {
-          graveyardIter.reset();
+          graveyardIter.Reset();
         }
         o_ret = iter.Next() ? OpCode::kOK : OpCode::kNotFound;
         if (is_last_one) {
