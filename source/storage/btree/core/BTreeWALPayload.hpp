@@ -207,8 +207,8 @@ struct WALTxRemove : WALPayload {
 
   u8 mPayload[];
 
-  WALTxRemove(Slice key, Slice val, WORKERID prevWorkerId, u64 prevTxId,
-              u64 prevCommandId)
+  WALTxRemove(Slice key, Slice val, WORKERID prevWorkerId, TXID prevTxId,
+              COMMANDID prevCommandId)
       : WALPayload(TYPE::WALTxRemove),
         mKeySize(key.size()),
         mValSize(val.size()),

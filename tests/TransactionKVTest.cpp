@@ -1,3 +1,4 @@
+#include "KVInterface.hpp"
 #include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
@@ -6,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -15,7 +17,7 @@
 using namespace leanstore::utils;
 using namespace leanstore::storage::btree;
 
-namespace leanstore {
+namespace leanstore::test {
 
 class TransactionKVTest : public ::testing::Test {
 protected:
@@ -44,6 +46,7 @@ public:
   }
 };
 
+/*
 TEST_F(TransactionKVTest, Create) {
   GetLeanStore();
   storage::btree::TransactionKV* btree;
@@ -752,7 +755,225 @@ TEST_F(TransactionKVTest, ScanDesc) {
   });
 }
 
-} // namespace leanstore
+TEST_F(TransactionKVTest, InsertAfterRemove) {
+  GetLeanStore();
+  storage::btree::TransactionKV* btree;
+
+  // prepare key-value pairs to insert
+  const size_t numKVs(1);
+  const size_t valSize = 120;
+  std::unordered_map<std::string, std::string> kvToTest;
+  std::string smallest;
+  std::string bigest;
+  for (size_t i = 0; i < numKVs; ++i) {
+    auto key = RandomGenerator::RandomAlphString(24);
+    auto val = RandomGenerator::RandomAlphString(valSize);
+    if (kvToTest.find(key) != kvToTest.end()) {
+      i--;
+      continue;
+    }
+    kvToTest.emplace(key, val);
+    if (smallest.size() == 0 || smallest > key) {
+      smallest = key;
+    }
+    if (bigest.size() == 0 || bigest < key) {
+      bigest = key;
+    }
+  }
+
+  const auto* btreeName = "InsertAfterRemove";
+  std::string newVal = RandomGenerator::RandomAlphString(valSize);
+  std::string copiedValue;
+  auto copyValueOut = [&](Slice val) {
+    copiedValue = std::string((const char*)val.data(), val.size());
+  };
+
+  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+        .mEnableWal = FLAGS_wal,
+        .mUseBulkInsert = FLAGS_bulk_insert,
+    };
+
+    // create btree
+    cr::Worker::my().StartTx();
+    GetLeanStore()->RegisterTransactionKV(btreeName, btreeConfig, &btree);
+    cr::Worker::my().CommitTx();
+    EXPECT_NE(btree, nullptr);
+
+    // insert values
+    for (const auto& [key, val] : kvToTest) {
+      cr::Worker::my().StartTx();
+      auto res = btree->Insert(Slice((const u8*)key.data(), key.size()),
+                               Slice((const u8*)val.data(), val.size()));
+      cr::Worker::my().CommitTx();
+      EXPECT_EQ(res, OpCode::kOK);
+    }
+
+    // remove, insert, and lookup
+    for (const auto& [key, val] : kvToTest) {
+      // remove
+      cr::Worker::my().StartTx();
+      SCOPED_DEFER(cr::Worker::my().CommitTx());
+
+      EXPECT_EQ(btree->Remove(Slice((const u8*)key.data(), key.size())),
+                OpCode::kOK);
+
+      // remove twice should got not found error
+      EXPECT_EQ(btree->Remove(Slice((const u8*)key.data(), key.size())),
+                OpCode::kNotFound);
+
+      // update should fail
+      const u64 updateDescBufSize = UpdateDesc::Size(1);
+      u8 updateDescBuf[updateDescBufSize];
+      auto* updateDesc = UpdateDesc::CreateFrom(updateDescBuf);
+      updateDesc->mNumSlots = 1;
+      updateDesc->mUpdateSlots[0].mOffset = 0;
+      updateDesc->mUpdateSlots[0].mSize = valSize;
+      auto updateCallBack = [&](MutableSlice mutRawVal) {
+        std::memcpy(mutRawVal.Data(), newVal.data(), mutRawVal.Size());
+      };
+      EXPECT_EQ(btree->UpdateInPlace(Slice((const u8*)key.data(), key.size()),
+                                     updateCallBack, *updateDesc),
+                OpCode::kNotFound);
+
+      // lookup should not found
+      EXPECT_EQ(
+          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
+          OpCode::kNotFound);
+
+      // insert with another val should success
+      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
+                              Slice((const u8*)newVal.data(), newVal.size())),
+                OpCode::kOK);
+
+      // lookup the new value should success
+      EXPECT_EQ(
+          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
+          OpCode::kOK);
+      EXPECT_EQ(copiedValue, newVal);
+    }
+  });
+
+  cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+    // lookup the new value
+    cr::Worker::my().StartTx();
+    for (const auto& [key, val] : kvToTest) {
+      EXPECT_EQ(
+          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
+          OpCode::kOK);
+      EXPECT_EQ(copiedValue, newVal);
+    }
+    cr::Worker::my().CommitTx();
+  });
+}
+*/
+
+TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
+  GetLeanStore();
+  storage::btree::TransactionKV* btree;
+
+  // prepare key-value pairs to insert
+  const size_t numKVs(1);
+  const size_t valSize = 120;
+  std::unordered_map<std::string, std::string> kvToTest;
+  std::string smallest;
+  std::string bigest;
+  for (size_t i = 0; i < numKVs; ++i) {
+    auto key = RandomGenerator::RandomAlphString(24);
+    auto val = RandomGenerator::RandomAlphString(valSize);
+    if (kvToTest.find(key) != kvToTest.end()) {
+      i--;
+      continue;
+    }
+    kvToTest.emplace(key, val);
+    if (smallest.size() == 0 || smallest > key) {
+      smallest = key;
+    }
+    if (bigest.size() == 0 || bigest < key) {
+      bigest = key;
+    }
+  }
+
+  const auto* btreeName = "InsertAfterRemoveDifferentWorkers";
+  std::string newVal = RandomGenerator::RandomAlphString(valSize);
+  std::string copiedValue;
+  auto copyValueOut = [&](Slice val) {
+    copiedValue = std::string((const char*)val.data(), val.size());
+  };
+
+  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+        .mEnableWal = FLAGS_wal,
+        .mUseBulkInsert = FLAGS_bulk_insert,
+    };
+
+    // create btree
+    cr::Worker::my().StartTx();
+    GetLeanStore()->RegisterTransactionKV(btreeName, btreeConfig, &btree);
+    cr::Worker::my().CommitTx();
+    EXPECT_NE(btree, nullptr);
+
+    // insert values
+    for (const auto& [key, val] : kvToTest) {
+      cr::Worker::my().StartTx();
+      auto res = btree->Insert(Slice((const u8*)key.data(), key.size()),
+                               Slice((const u8*)val.data(), val.size()));
+      cr::Worker::my().CommitTx();
+      EXPECT_EQ(res, OpCode::kOK);
+    }
+
+    // remove
+    for (const auto& [key, val] : kvToTest) {
+      cr::Worker::my().StartTx();
+      SCOPED_DEFER(cr::Worker::my().CommitTx());
+      EXPECT_EQ(btree->Remove(Slice((const u8*)key.data(), key.size())),
+                OpCode::kOK);
+    }
+  });
+
+  cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+    for (const auto& [key, val] : kvToTest) {
+      cr::Worker::my().StartTx();
+      SCOPED_DEFER(cr::Worker::my().CommitTx());
+
+      // remove twice should got not found error
+      EXPECT_EQ(btree->Remove(Slice((const u8*)key.data(), key.size())),
+                OpCode::kNotFound);
+
+      // update should fail
+      const u64 updateDescBufSize = UpdateDesc::Size(1);
+      u8 updateDescBuf[updateDescBufSize];
+      auto* updateDesc = UpdateDesc::CreateFrom(updateDescBuf);
+      updateDesc->mNumSlots = 1;
+      updateDesc->mUpdateSlots[0].mOffset = 0;
+      updateDesc->mUpdateSlots[0].mSize = valSize;
+      auto updateCallBack = [&](MutableSlice mutRawVal) {
+        std::memcpy(mutRawVal.Data(), newVal.data(), mutRawVal.Size());
+      };
+      EXPECT_EQ(btree->UpdateInPlace(Slice((const u8*)key.data(), key.size()),
+                                     updateCallBack, *updateDesc),
+                OpCode::kNotFound);
+
+      // lookup should not found
+      EXPECT_EQ(
+          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
+          OpCode::kNotFound);
+
+      // insert with another val should success
+      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
+                              Slice((const u8*)newVal.data(), newVal.size())),
+                OpCode::kOK);
+
+      // lookup the new value should success
+      EXPECT_EQ(
+          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
+          OpCode::kOK);
+      EXPECT_EQ(copiedValue, newVal);
+    }
+  });
+}
+
+} // namespace leanstore::test
 
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);

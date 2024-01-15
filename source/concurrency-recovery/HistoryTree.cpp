@@ -68,7 +68,7 @@ void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
       BTreeExclusiveIterator xIter(
           *static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)));
 
-      OpCode ret = xIter.seekToInsert(key);
+      OpCode ret = xIter.SeekToInsert(key);
       if (ret == OpCode::kDuplicated) {
         xIter.removeCurrent();
       } else {

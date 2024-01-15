@@ -31,16 +31,16 @@ public:
     mGuardedLeaf.MarkAsDirty();
   }
 
-  virtual OpCode seekToInsertWithHint(Slice key, bool higher = true) {
+  virtual OpCode SeekToInsertWithHint(Slice key, bool higher = true) {
     ENSURE(mSlotId != -1);
     mSlotId = mGuardedLeaf->linearSearchWithBias(key, mSlotId, higher);
     if (mSlotId == -1) {
-      return seekToInsert(key);
+      return SeekToInsert(key);
     }
     return OpCode::kOK;
   }
 
-  virtual OpCode seekToInsert(Slice key) {
+  virtual OpCode SeekToInsert(Slice key) {
     if (mSlotId == -1 || !KeyInCurrentNode(key)) {
       gotoPage(key);
     }
@@ -93,7 +93,7 @@ public:
 
   virtual OpCode InsertKV(Slice key, Slice val) {
     while (true) {
-      OpCode ret = seekToInsert(key);
+      OpCode ret = SeekToInsert(key);
       if (ret != OpCode::kOK) {
         return ret;
       }
