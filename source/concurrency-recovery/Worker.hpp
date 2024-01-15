@@ -159,6 +159,8 @@ public:
 
   void SubmitWALEntrySimple();
 
+  void WriteSimpleWal(WALEntry::TYPE type);
+
   template <typename T, typename... Args>
   WALPayloadHandler<T> ReserveWALEntryComplex(u64 payloadSize, PID pageId,
                                               LID gsn, TREEID treeId,
@@ -215,7 +217,7 @@ public:
   //-------------------------------------------------------------------------
   ConcurrencyControl(const u64 numWorkers)
       : mHistoryTree(nullptr),
-        commit_tree(numWorkers) {
+        mCommitTree(numWorkers) {
   }
 
 public:
@@ -231,7 +233,7 @@ public:
 
   std::atomic<TXID> all_lwm_receiver;
 
-  std::atomic<TXID> mLatestWriteTx = 0;
+  std::atomic<TXID> mLatestCommitTs = 0;
 
   std::atomic<TXID> mLatestLwm4Tx = 0;
 
@@ -250,7 +252,7 @@ public:
   // LeanStore NoSteal, Nothing for now
   HistoryTreeInterface* mHistoryTree;
 
-  CommitTree commit_tree;
+  CommitTree mCommitTree;
 
   // Clean up state
   u64 cleaned_untill_oltp_lwm = 0;
@@ -260,37 +262,40 @@ public:
   // Object utils
   //-------------------------------------------------------------------------
   void GarbageCollection();
+
   void refreshGlobalState();
+
   void switchToReadCommittedMode();
+
   void switchToSnapshotIsolationMode();
 
-  bool isVisibleForAll(TXID txId);
+  bool VisibleForAll(TXID txId);
 
   /// Visibility check. Whethe the current tuple is visible for the current
   /// worker transaction.
   bool VisibleForMe(WORKERID workerId, u64 txId);
 
+  ConcurrencyControl& other(WORKERID otherWorkerId);
+
+  u64 PutVersion(TREEID treeId, bool isRemoveCommand, u64 versionSize,
+                 std::function<void(u8*)> putCallBack);
+
+  inline bool GetVersion(WORKERID prevWorkerId, TXID prevTxId,
+                         COMMANDID prevCommandId,
+                         std::function<void(const u8*, u64 versionSize)> cb) {
+    utils::Timer timer(CRCounters::MyCounters().cc_ms_history_tree_retrieve);
+    const bool isRemoveCommand = prevCommandId & TYPE_MSB(COMMANDID);
+    return mHistoryTree->GetVersion(prevWorkerId, prevTxId, prevCommandId,
+                                    isRemoveCommand, cb);
+  }
+
+private:
   VISIBILITY isVisibleForIt(WORKERID whomWorkerId, WORKERID whatWorkerId,
                             u64 tts);
 
   VISIBILITY isVisibleForIt(WORKERID whomWorkerId, TXID commitTs);
 
   TXID getCommitTimestamp(WORKERID workerId, TXID startTs);
-
-  ConcurrencyControl& other(WORKERID otherWorkerId);
-
-  u64 insertVersion(TREEID treeId, bool isRemoveCommand, u64 payload_length,
-                    std::function<void(u8*)> cb);
-
-  inline bool retrieveVersion(
-      WORKERID prevWorkerId, TXID prevTxId, COMMANDID prevCommandId,
-      std::function<void(const u8*, u64 payload_length)> cb) {
-    utils::Timer timer(CRCounters::MyCounters().cc_ms_history_tree_retrieve);
-    const bool isRemoveCommand = prevCommandId & TYPE_MSB(COMMANDID);
-    const bool found = mHistoryTree->retrieveVersion(
-        prevWorkerId, prevTxId, prevCommandId, isRemoveCommand, cb);
-    return found;
-  }
 };
 
 /**
@@ -438,16 +443,16 @@ inline ConcurrencyControl& ConcurrencyControl::other(WORKERID otherWorkerId) {
   return Worker::my().mAllWorkers[otherWorkerId]->cc;
 }
 
-inline u64 ConcurrencyControl::insertVersion(
+inline u64 ConcurrencyControl::PutVersion(
     TREEID treeId, bool isRemoveCommand, u64 versionSize,
-    std::function<void(u8*)> insertCallBack) {
+    std::function<void(u8*)> putCallBack) {
   utils::Timer timer(CRCounters::MyCounters().cc_ms_history_tree_insert);
   auto& curWorker = Worker::my();
   const u64 commandId =
       (curWorker.mCommandId++) | ((isRemoveCommand) ? TYPE_MSB(COMMANDID) : 0);
-  mHistoryTree->insertVersion(curWorker.mWorkerId, curWorker.mActiveTx.mStartTs,
-                              commandId, treeId, isRemoveCommand, versionSize,
-                              insertCallBack);
+  mHistoryTree->PutVersion(curWorker.mWorkerId, curWorker.mActiveTx.mStartTs,
+                           commandId, treeId, isRemoveCommand, versionSize,
+                           putCallBack);
   return commandId;
 }
 

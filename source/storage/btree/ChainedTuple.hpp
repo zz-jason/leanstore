@@ -64,7 +64,7 @@ public:
                                           ValCallback callback) const;
 
   void UpdateStats() {
-    if (cr::Worker::my().cc.isVisibleForAll(mTxId) ||
+    if (cr::Worker::my().cc.VisibleForAll(mTxId) ||
         mOldestTx != static_cast<u16>(cr::Worker::sOldestAllStartTs & 0xFFFF)) {
       mOldestTx = 0;
       mTotalUpdates = 0;
@@ -124,7 +124,7 @@ inline std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
 
   u16 versionsRead = 1;
   while (true) {
-    bool found = cr::Worker::my().cc.retrieveVersion(
+    bool found = cr::Worker::my().cc.GetVersion(
         prevWorkerId, prevTxId, prevCommandId,
         [&](const u8* versionBuf, u64 versionSize) {
           auto& version = *reinterpret_cast<const Version*>(versionBuf);
@@ -188,7 +188,7 @@ inline void ChainedTuple::Update(BTreeExclusiveIterator& xIter, Slice key,
 
   // Move the newest tuple to the history version tree.
   auto treeId = xIter.mBTree.mTreeId;
-  auto commandId = cr::Worker::my().cc.insertVersion(
+  auto commandId = cr::Worker::my().cc.PutVersion(
       treeId, false, versionSize, [&](u8* versionBuf) {
         auto& updateVersion =
             *new (versionBuf) UpdateVersion(mWorkerId, mTxId, mCommandId, true);

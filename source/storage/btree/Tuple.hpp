@@ -62,7 +62,7 @@ struct TupleFormatUtil {
 // Tuple
 // -----------------------------------------------------------------------------
 
-/// The internal value format in TxBTree.
+/// The internal value format in TransactionKV.
 ///
 /// NOTE: __attribute__((packed)) is used to avoid padding between field members
 /// to avoid using space more than given.

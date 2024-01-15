@@ -1,6 +1,6 @@
 #include "Tuple.hpp"
 
-#include "TxBTree.hpp"
+#include "TransactionKV.hpp"
 #include "concurrency-recovery/Worker.hpp"
 #include "storage/btree/BTreeLL.hpp"
 #include "storage/btree/ChainedTuple.hpp"
@@ -65,13 +65,13 @@ bool Tuple::ToFat(BTreeExclusiveIterator& xIter) {
   bool abortConversion = false;
   u16 numDeltasToReplace = 0;
   while (!abortConversion) {
-    if (cr::Worker::my().cc.isVisibleForAll(prevTxId)) {
+    if (cr::Worker::my().cc.VisibleForAll(prevTxId)) {
       // No need to convert versions that are visible for all to the FatTuple,
       // these old version can be GCed. Pruning versions space might get delayed
       break;
     }
 
-    if (!cr::Worker::my().cc.retrieveVersion(
+    if (!cr::Worker::my().cc.GetVersion(
             prevWorkerId, prevTxId, prevCommandId, [&](const u8* version, u64) {
               numDeltasToReplace++;
               const auto& chainedDelta = *UpdateVersion::From(version);
@@ -109,7 +109,7 @@ bool Tuple::ToFat(BTreeExclusiveIterator& xIter) {
     return false;
   }
 
-  if (numDeltasToReplace <= TxBTree::ConvertToFatTupleThreshold()) {
+  if (numDeltasToReplace <= TransactionKV::ConvertToFatTupleThreshold()) {
     chainedTuple.WriteUnlock();
     return false;
   }
@@ -195,7 +195,7 @@ void FatTuple::GarbageCollection() {
   };
 
   // Delete for all visible deltas, atm using cheap visibility check
-  if (cr::Worker::my().cc.isVisibleForAll(mTxId)) {
+  if (cr::Worker::my().cc.VisibleForAll(mTxId)) {
     mNumDeltas = 0;
     mDataOffset = mPayloadCapacity;
     mPayloadSize = mValSize;
@@ -205,7 +205,7 @@ void FatTuple::GarbageCollection() {
   u16 deltasVisibleForAll = 0;
   for (s32 i = mNumDeltas - 1; i >= 1; i--) {
     auto& delta = getDelta(i);
-    if (cr::Worker::my().cc.isVisibleForAll(delta.mTxId)) {
+    if (cr::Worker::my().cc.VisibleForAll(delta.mTxId)) {
       deltasVisibleForAll = i - 1;
       break;
     }
@@ -432,7 +432,7 @@ void FatTuple::ConvertToChained(TREEID treeId) {
     auto& updateDesc = delta.GetUpdateDesc();
     auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
     auto versionSize = sizeOfDescAndDelta + sizeof(UpdateVersion);
-    cr::Worker::my().cc.mHistoryTree->insertVersion(
+    cr::Worker::my().cc.mHistoryTree->PutVersion(
         prevWorkerId, prevTxId, prevCommandId, treeId, false, versionSize,
         [&](u8* versionBuf) {
           new (versionBuf) UpdateVersion(delta, sizeOfDescAndDelta);

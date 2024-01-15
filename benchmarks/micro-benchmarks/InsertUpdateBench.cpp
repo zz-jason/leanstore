@@ -29,7 +29,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
   std::filesystem::create_directories(dirPath);
   auto sLeanStore = std::make_unique<leanstore::LeanStore>();
 
-  storage::btree::TxBTree* btree;
+  storage::btree::TransactionKV* btree;
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";

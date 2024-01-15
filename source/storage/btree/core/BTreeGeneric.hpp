@@ -80,7 +80,7 @@ public:
 
   u64 countPages();
 
-  u64 countEntries();
+  u64 CountEntries();
 
   u64 getHeight();
 

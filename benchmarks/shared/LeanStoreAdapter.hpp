@@ -24,11 +24,11 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
 
   LeanStoreAdapter(LeanStore& db, string name) : name(name) {
     if (FLAGS_recover) {
-      leanstore::storage::btree::TxBTree* tree;
+      leanstore::storage::btree::TransactionKV* tree;
       db.GetBTreeVI(name, &tree);
       btree = reinterpret_cast<leanstore::KVInterface*>(tree);
     } else {
-      leanstore::storage::btree::TxBTree* tree;
+      leanstore::storage::btree::TransactionKV* tree;
       storage::btree::BTreeGeneric::Config config{.mEnableWal = FLAGS_wal,
                                                   .mUseBulkInsert = false};
       db.RegisterBTreeVI(name, config, &tree);
@@ -89,7 +89,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     u8 foldedKey[Record::maxFoldLength()];
     u16 foldedKeySize = Record::foldKey(foldedKey, key);
 
-    const OpCode res = btree->updateSameSizeInPlace(
+    const OpCode res = btree->UpdateInPlace(
         Slice(foldedKey, foldedKeySize),
         [&](MutableSlice mutRawVal) {
           DCHECK(mutRawVal.Size() == sizeof(Record));
@@ -154,6 +154,6 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
   }
 
   u64 count() {
-    return btree->countEntries();
+    return btree->CountEntries();
   }
 };

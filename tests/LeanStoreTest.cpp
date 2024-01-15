@@ -38,7 +38,7 @@ TEST_F(LeanStoreTest, RecoverAfterInsert) {
   FLAGS_worker_threads = 2;
   FLAGS_recover = false;
   mLeanStore = std::make_unique<leanstore::LeanStore>();
-  storage::btree::TxBTree* btree;
+  storage::btree::TransactionKV* btree;
 
   // prepare key-value pairs to insert
   size_t numKVs(10);

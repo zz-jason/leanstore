@@ -1,4 +1,4 @@
-#include "TxBTree.hpp"
+#include "TransactionKV.hpp"
 
 #include "KVInterface.hpp"
 #include "shared-headers/Units.hpp"
@@ -14,18 +14,9 @@ using namespace std;
 using namespace leanstore::storage;
 using OpCode = leanstore::OpCode;
 
-// Assumptions made in this implementation:
-// 1. We don't insert an already removed key
-// 2. Secondary Versions contain delta
-//
-// Keep in mind that garbage collection may leave pages completely empty
-// Missing points: FatTuple::remove, garbage leaves can escape from us
+namespace leanstore::storage::btree {
 
-namespace leanstore {
-namespace storage {
-namespace btree {
-
-OpCode TxBTree::Lookup(Slice key, ValCallback valCallback) {
+OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
   DCHECK(cr::Worker::my().IsTxStarted())
       << "Worker is not in a transaction"
       << ", workerId=" << cr::Worker::my().mWorkerId
@@ -59,8 +50,8 @@ OpCode TxBTree::Lookup(Slice key, ValCallback valCallback) {
   return ret;
 }
 
-OpCode TxBTree::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
-                                      UpdateDesc& updateDesc) {
+OpCode TransactionKV::UpdateInPlace(Slice key, MutValCallback updateCallBack,
+                                    UpdateDesc& updateDesc) {
   DCHECK(cr::Worker::my().IsTxStarted());
   cr::Worker::my().mLogging.WalEnsureEnoughSpace(FLAGS_page_size);
   JUMPMU_TRY() {
@@ -148,7 +139,7 @@ OpCode TxBTree::updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
   return OpCode::kOther;
 }
 
-OpCode TxBTree::insert(Slice key, Slice val) {
+OpCode TransactionKV::insert(Slice key, Slice val) {
   DCHECK(cr::Worker::my().IsTxStarted());
 
   cr::Worker::my().mLogging.WalEnsureEnoughSpace(FLAGS_page_size * 1);
@@ -188,15 +179,15 @@ OpCode TxBTree::insert(Slice key, Slice val) {
     walHandler.SubmitWal();
 
     // insert
-    TxBTree::InsertToNode(xIter.mGuardedLeaf, key, val,
-                          cr::Worker::my().mWorkerId, cr::ActiveTx().mStartTs,
-                          cr::ActiveTx().mTxMode, xIter.mSlotId);
+    TransactionKV::InsertToNode(
+        xIter.mGuardedLeaf, key, val, cr::Worker::my().mWorkerId,
+        cr::ActiveTx().mStartTs, cr::ActiveTx().mTxMode, xIter.mSlotId);
     return OpCode::kOK;
   }
   return OpCode::kOther;
 }
 
-OpCode TxBTree::remove(Slice key) {
+OpCode TransactionKV::remove(Slice key) {
   DCHECK(cr::Worker::my().IsTxStarted());
   cr::Worker::my().mLogging.WalEnsureEnoughSpace(FLAGS_page_size);
 
@@ -245,7 +236,7 @@ OpCode TxBTree::remove(Slice key) {
     auto valSize = xIter.value().size() - sizeof(ChainedTuple);
     auto val = chainedTuple.GetValue(valSize);
     auto versionSize = sizeof(RemoveVersion) + val.size() + key.size();
-    auto commandId = cr::Worker::my().cc.insertVersion(
+    auto commandId = cr::Worker::my().cc.PutVersion(
         mTreeId, true, versionSize, [&](u8* versionBuf) {
           new (versionBuf)
               RemoveVersion(chainedTuple.mWorkerId, chainedTuple.mTxId,
@@ -283,7 +274,7 @@ OpCode TxBTree::remove(Slice key) {
   return OpCode::kOther;
 }
 
-OpCode TxBTree::ScanDesc(Slice startKey, ScanCallback callback) {
+OpCode TransactionKV::ScanDesc(Slice startKey, ScanCallback callback) {
   DCHECK(cr::Worker::my().IsTxStarted());
 
   if (cr::ActiveTx().IsOLAP()) {
@@ -293,7 +284,7 @@ OpCode TxBTree::ScanDesc(Slice startKey, ScanCallback callback) {
   return scan<false>(startKey, callback);
 }
 
-OpCode TxBTree::ScanAsc(Slice startKey, ScanCallback callback) {
+OpCode TransactionKV::ScanAsc(Slice startKey, ScanCallback callback) {
   DCHECK(cr::Worker::my().IsTxStarted());
 
   if (cr::ActiveTx().IsOLAP()) {
@@ -302,7 +293,8 @@ OpCode TxBTree::ScanAsc(Slice startKey, ScanCallback callback) {
   return scan<true>(startKey, callback);
 }
 
-void TxBTree::undo(const u8* walPayloadPtr, const u64 txId [[maybe_unused]]) {
+void TransactionKV::undo(const u8* walPayloadPtr,
+                         const u64 txId [[maybe_unused]]) {
   auto& walPayload = *reinterpret_cast<const WALPayload*>(walPayloadPtr);
   switch (walPayload.mType) {
   case WALPayload::TYPE::WALInsert: {
@@ -320,7 +312,7 @@ void TxBTree::undo(const u8* walPayloadPtr, const u64 txId [[maybe_unused]]) {
   }
 }
 
-void TxBTree::undoLastInsert(const WALInsert* walInsert) {
+void TransactionKV::undoLastInsert(const WALInsert* walInsert) {
   // Assuming no insert after remove
   auto key = walInsert->GetKey();
   for (int retry = 0; true; retry++) {
@@ -355,7 +347,7 @@ void TxBTree::undoLastInsert(const WALInsert* walInsert) {
   }
 }
 
-void TxBTree::undoLastUpdate(const WALTxUpdate* walUpdate) {
+void TransactionKV::undoLastUpdate(const WALTxUpdate* walUpdate) {
   auto key = walUpdate->GetKey();
   for (int retry = 0; true; retry++) {
     JUMPMU_TRY() {
@@ -408,7 +400,7 @@ void TxBTree::undoLastUpdate(const WALTxUpdate* walUpdate) {
   }
 }
 
-void TxBTree::undoLastRemove(const WALTxRemove* walRemove) {
+void TransactionKV::undoLastRemove(const WALTxRemove* walRemove) {
   Slice removedKey = walRemove->RemovedKey();
   for (int retry = 0; true; retry++) {
     JUMPMU_TRY() {
@@ -453,9 +445,9 @@ void TxBTree::undoLastRemove(const WALTxRemove* walRemove) {
   }
 }
 
-bool TxBTree::UpdateInFatTuple(BTreeExclusiveIterator& xIter, Slice key,
-                               MutValCallback updateCallBack,
-                               UpdateDesc& updateDesc) {
+bool TransactionKV::UpdateInFatTuple(BTreeExclusiveIterator& xIter, Slice key,
+                                     MutValCallback updateCallBack,
+                                     UpdateDesc& updateDesc) {
   utils::Timer timer(CRCounters::MyCounters().cc_ms_fat_tuple);
   while (true) {
     auto* fatTuple = reinterpret_cast<FatTuple*>(xIter.MutableVal().Data());
@@ -512,6 +504,4 @@ bool TxBTree::UpdateInFatTuple(BTreeExclusiveIterator& xIter, Slice key,
   }
 }
 
-} // namespace btree
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage::btree

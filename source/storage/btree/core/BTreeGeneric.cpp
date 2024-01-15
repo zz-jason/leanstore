@@ -600,7 +600,7 @@ u64 BTreeGeneric::getHeight() {
   return mHeight.load();
 }
 
-u64 BTreeGeneric::countEntries() {
+u64 BTreeGeneric::CountEntries() {
   return iterateAllPages([](BTreeNode&) { return 0; },
                          [](BTreeNode& node) { return node.mNumSeps; });
 }

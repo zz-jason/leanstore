@@ -127,6 +127,11 @@ void Logging::SubmitWALEntrySimple() {
   publishWalFlushReq();
 }
 
+void Logging::WriteSimpleWal(WALEntry::TYPE type) {
+  ReserveWALEntrySimple(type);
+  SubmitWALEntrySimple();
+}
+
 /// @brief SubmitWALEntryComplex submits the wal record to group committer when
 /// it is ready to flush to disk.
 /// @param totalSize is the size of the wal record to be flush.

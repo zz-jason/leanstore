@@ -17,19 +17,21 @@
 
 #include <string>
 
-namespace leanstore {
-namespace storage {
-namespace btree {
+namespace leanstore::storage::btree {
 
-class TxBTree : public BTreeLL {
-public:
-
+// Assumptions made in this implementation:
+// 1. We don't insert an already removed key
+// 2. Secondary Versions contain delta
+//
+// Keep in mind that garbage collection may leave pages completely empty
+// Missing points: FatTuple::remove, garbage leaves can escape from us
+class TransactionKV : public BTreeLL {
 public:
   /// Graveyard to store removed tuples for long-running transactions, e.g. OLAP
   /// transactions.
   BTreeLL* mGraveyard;
 
-  TxBTree() {
+  TransactionKV() {
     mTreeType = BTREE_TYPE::VI;
   }
 
@@ -41,8 +43,8 @@ public:
 
   virtual OpCode insert(Slice key, Slice val) override;
 
-  virtual OpCode updateSameSizeInPlace(Slice key, MutValCallback updateCallBack,
-                                       UpdateDesc& updateDesc) override;
+  virtual OpCode UpdateInPlace(Slice key, MutValCallback updateCallBack,
+                               UpdateDesc& updateDesc) override;
 
   virtual OpCode remove(Slice key) override;
 
@@ -318,8 +320,8 @@ private:
       BTreeSharedIterator graveyardIter(
           *static_cast<BTreeGeneric*>(mGraveyard));
       OpCode g_ret;
-      Slice g_lower_bound, g_upper_bound;
-      g_lower_bound = key;
+      Slice graveyardLowerBound, graveyardUpperBound;
+      graveyardLowerBound = key;
 
       if (!iter.Seek(key)) {
         JUMPMU_RETURN OpCode::kOK;
@@ -328,23 +330,28 @@ private:
       iter.AssembleKey();
 
       // Now it begins
-      g_upper_bound = Slice(iter.mGuardedLeaf->getUpperFenceKey(),
-                            iter.mGuardedLeaf->mUpperFence.length);
+      graveyardUpperBound = Slice(iter.mGuardedLeaf->getUpperFenceKey(),
+                                  iter.mGuardedLeaf->mUpperFence.length);
       auto g_range = [&]() {
         graveyardIter.reset();
-        if (mGraveyard->isRangeSurelyEmpty(g_lower_bound, g_upper_bound)) {
+        if (mGraveyard->IsRangeEmpty(graveyardLowerBound,
+                                     graveyardUpperBound)) {
           g_ret = OpCode::kOther;
-        } else {
-          g_ret = graveyardIter.Seek(g_lower_bound) ? OpCode::kOK
-                                                    : OpCode::kNotFound;
-          if (g_ret == OpCode::kOK) {
-            graveyardIter.AssembleKey();
-            if (graveyardIter.key() > g_upper_bound) {
-              g_ret = OpCode::kOther;
-              graveyardIter.reset();
-            }
-          }
+          return;
         }
+        if (!graveyardIter.Seek(graveyardLowerBound)) {
+          g_ret = OpCode::kNotFound;
+          return;
+        }
+
+        graveyardIter.AssembleKey();
+        if (graveyardIter.key() > graveyardUpperBound) {
+          g_ret = OpCode::kOther;
+          graveyardIter.reset();
+          return;
+        }
+
+        g_ret = OpCode::kOK;
       };
 
       g_range();
@@ -365,9 +372,9 @@ private:
         }
         o_ret = iter.Next() ? OpCode::kOK : OpCode::kNotFound;
         if (is_last_one) {
-          g_lower_bound = Slice(&iter.mBuffer[0], iter.mFenceSize + 1);
-          g_upper_bound = Slice(iter.mGuardedLeaf->getUpperFenceKey(),
-                                iter.mGuardedLeaf->mUpperFence.length);
+          graveyardLowerBound = Slice(&iter.mBuffer[0], iter.mFenceSize + 1);
+          graveyardUpperBound = Slice(iter.mGuardedLeaf->getUpperFenceKey(),
+                                      iter.mGuardedLeaf->mUpperFence.length);
           g_range();
         }
         return true;
@@ -473,19 +480,19 @@ private:
   void undoLastRemove(const WALTxRemove* walRemove);
 
 public:
-  inline static TxBTree* Create(const std::string& treeName, Config& config,
-                                BTreeLL* graveyard) {
+  inline static TransactionKV* Create(const std::string& treeName,
+                                      Config& config, BTreeLL* graveyard) {
     auto [treePtr, treeId] =
         TreeRegistry::sInstance->CreateTree(treeName, [&]() {
           return std::unique_ptr<BufferManagedTree>(
-              static_cast<BufferManagedTree*>(new TxBTree()));
+              static_cast<BufferManagedTree*>(new TransactionKV()));
         });
     if (treePtr == nullptr) {
-      LOG(ERROR) << "Failed to create TxBTree, treeName has been taken"
+      LOG(ERROR) << "Failed to create TransactionKV, treeName has been taken"
                  << ", treeName=" << treeName;
       return nullptr;
     }
-    auto* tree = dynamic_cast<TxBTree*>(treePtr);
+    auto* tree = dynamic_cast<TransactionKV*>(treePtr);
     tree->Init(treeId, config, graveyard);
 
     // TODO(jian.z): record WAL
@@ -517,6 +524,4 @@ public:
                                UpdateDesc& updateDesc);
 };
 
-} // namespace btree
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage::btree

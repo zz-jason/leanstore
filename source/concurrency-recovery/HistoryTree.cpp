@@ -12,11 +12,10 @@ namespace leanstore {
 namespace cr {
 using namespace leanstore::storage::btree;
 
-void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
-                                COMMANDID commandId, TREEID treeId,
-                                bool isRemove, u64 versionSize,
-                                std::function<void(u8*)> insertCallBack,
-                                bool sameThread) {
+void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
+                             TREEID treeId, bool isRemove, u64 versionSize,
+                             std::function<void(u8*)> insertCallBack,
+                             bool sameThread) {
   if (!FLAGS_history_tree_inserts) {
     return;
   }
@@ -29,11 +28,11 @@ void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
   versionSize += sizeof(VersionMeta);
 
   BTreeLL* btree =
-      (isRemove) ? remove_btrees[workerId] : update_btrees[workerId];
+      (isRemove) ? mRemoveBTrees[workerId] : mUpdateBTrees[workerId];
   Session* session = nullptr;
   if (sameThread) {
     session =
-        (isRemove) ? &remove_sessions[workerId] : &update_sessions[workerId];
+        (isRemove) ? &mRemoveSessions[workerId] : &mUpdateSessions[workerId];
   }
   if (session != nullptr && session->rightmost_init) {
     JUMPMU_TRY() {
@@ -103,12 +102,12 @@ void HistoryTree::insertVersion(WORKERID workerId, TXID txId,
   }
 }
 
-bool HistoryTree::retrieveVersion(WORKERID prevWorkerId, TXID prevTxId,
-                                  COMMANDID prevCommandId,
-                                  const bool isRemoveCommand,
-                                  std::function<void(const u8*, u64)> cb) {
-  BTreeLL* btree = (isRemoveCommand) ? remove_btrees[prevWorkerId]
-                                     : update_btrees[prevWorkerId];
+bool HistoryTree::GetVersion(WORKERID prevWorkerId, TXID prevTxId,
+                             COMMANDID prevCommandId,
+                             const bool isRemoveCommand,
+                             std::function<void(const u8*, u64)> cb) {
+  BTreeLL* btree = (isRemoveCommand) ? mRemoveBTrees[prevWorkerId]
+                                     : mUpdateBTrees[prevWorkerId];
   const u64 keySize = sizeof(prevTxId) + sizeof(prevCommandId);
   u8 keyBuffer[keySize];
   u64 offset = 0;
@@ -140,7 +139,7 @@ bool HistoryTree::retrieveVersion(WORKERID prevWorkerId, TXID prevTxId,
 }
 
 // [from, to]
-void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
+void HistoryTree::PurgeVersions(WORKERID workerId, TXID from_tx_id,
                                 TXID to_tx_id, RemoveVersionCallback cb,
                                 [[maybe_unused]] const u64 limit) {
   auto keySize = sizeof(to_tx_id);
@@ -150,7 +149,7 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
   auto payload = utils::JumpScopedArray<u8>(FLAGS_page_size);
   u16 payload_length;
   volatile u64 removed_versions = 0;
-  BTreeLL* volatile btree = remove_btrees[workerId];
+  BTreeLL* volatile btree = mRemoveBTrees[workerId];
 
   {
     JUMPMU_TRY() {
@@ -204,11 +203,11 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
     }
   }
 
-  btree = update_btrees[workerId];
+  btree = mUpdateBTrees[workerId];
   utils::fold(keyBuffer->get(), from_tx_id);
 
   // Attention: no cross worker gc in sync
-  Session* volatile session = &update_sessions[workerId];
+  Session* volatile session = &mUpdateSessions[workerId];
   volatile bool should_try = true;
   if (from_tx_id == 0) {
     JUMPMU_TRY() {
@@ -302,13 +301,13 @@ void HistoryTree::purgeVersions(WORKERID workerId, TXID from_tx_id,
 }
 
 // Pre: TXID is unsigned integer
-void HistoryTree::visitRemoveVersions(
+void HistoryTree::VisitRemovedVersions(
     WORKERID workerId, TXID from_tx_id, TXID to_tx_id,
     std::function<void(const TXID, const TREEID, const u8*, u64,
                        const bool visited_before)>
         cb) {
   // [from, to]
-  BTreeLL* btree = remove_btrees[workerId];
+  BTreeLL* btree = mRemoveBTrees[workerId];
   auto keySize = sizeof(to_tx_id);
   auto keyBuffer = utils::JumpScopedArray<u8>(FLAGS_page_size);
   u64 offset = 0;
