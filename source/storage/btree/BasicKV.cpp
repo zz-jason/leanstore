@@ -228,7 +228,7 @@ OpCode BasicKV::PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
   return OpCode::kOther;
 }
 
-OpCode BasicKV::UpdateInPlace(Slice key, MutValCallback updateCallBack,
+OpCode BasicKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
                               UpdateDesc& updateDesc) {
   if (mConfig.mEnableWal) {
     cr::Worker::my().mLogging.WalEnsureEnoughSpace(FLAGS_page_size);

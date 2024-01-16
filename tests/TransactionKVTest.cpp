@@ -555,7 +555,7 @@ TEST_F(TransactionKVTest, Update) {
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       cr::Worker::my().StartTx();
-      auto res = btree->UpdateInPlace(Slice((const u8*)key.data(), key.size()),
+      auto res = btree->UpdatePartial(Slice((const u8*)key.data(), key.size()),
                                       updateCallBack, *updateDesc);
       cr::Worker::my().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
@@ -832,7 +832,7 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
       auto updateCallBack = [&](MutableSlice mutRawVal) {
         std::memcpy(mutRawVal.Data(), newVal.data(), mutRawVal.Size());
       };
-      EXPECT_EQ(btree->UpdateInPlace(Slice((const u8*)key.data(), key.size()),
+      EXPECT_EQ(btree->UpdatePartial(Slice((const u8*)key.data(), key.size()),
                                      updateCallBack, *updateDesc),
                 OpCode::kNotFound);
 
@@ -950,7 +950,7 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
       auto updateCallBack = [&](MutableSlice mutRawVal) {
         std::memcpy(mutRawVal.Data(), newVal.data(), mutRawVal.Size());
       };
-      EXPECT_EQ(btree->UpdateInPlace(Slice((const u8*)key.data(), key.size()),
+      EXPECT_EQ(btree->UpdatePartial(Slice((const u8*)key.data(), key.size()),
                                      updateCallBack, *updateDesc),
                 OpCode::kNotFound);
 

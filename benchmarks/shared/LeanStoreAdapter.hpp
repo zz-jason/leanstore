@@ -89,7 +89,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     u8 foldedKey[Record::maxFoldLength()];
     u16 foldedKeySize = Record::foldKey(foldedKey, key);
 
-    const OpCode res = btree->UpdateInPlace(
+    const OpCode res = btree->UpdatePartial(
         Slice(foldedKey, foldedKeySize),
         [&](MutableSlice mutRawVal) {
           DCHECK(mutRawVal.Size() == sizeof(Record));

@@ -51,7 +51,7 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
   return ret;
 }
 
-OpCode TransactionKV::UpdateInPlace(Slice key, MutValCallback updateCallBack,
+OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
                                     UpdateDesc& updateDesc) {
   DCHECK(cr::Worker::my().IsTxStarted());
   cr::Worker::my().mLogging.WalEnsureEnoughSpace(FLAGS_page_size);
@@ -165,19 +165,24 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
 
       if (writeLocked &&
           VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId)) {
-        LOG(INFO) << "Insert after remove is unsupported now";
+        // TODO(jian.z): support insert after remove in the same transaction
+        LOG(INFO) << "InsertAfterRemove in the same transaction is unsupported";
         return OpCode::kDuplicated;
       }
 
-      LOG(INFO) << "Conflict detected, please abort and retry"
-                << ", workerId=" << cr::Worker::my().mWorkerId
-                << ", startTs=" << cr::Worker::my().mActiveTx.mStartTs
-                << ", tupleLastWriter=" << chainedTuple.mWorkerId
-                << ", tupleLastStartTs=" << chainedTuple.mTxId
-                << ", tupleWriteLocked=" << writeLocked
-                << ", tupleVisibleForMe="
-                << VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId);
-      return OpCode::kAbortTx;
+      if (writeLocked) {
+        LOG(INFO) << "Conflict detected, please abort and retry"
+                  << ", workerId=" << cr::Worker::my().mWorkerId
+                  << ", startTs=" << cr::Worker::my().mActiveTx.mStartTs
+                  << ", tupleLastWriter=" << chainedTuple.mWorkerId
+                  << ", tupleLastStartTs=" << chainedTuple.mTxId
+                  << ", tupleWriteLocked=" << writeLocked;
+        return OpCode::kAbortTx;
+      }
+
+      // TODO(jian.z): support insert after remove in other transaction
+      LOG(INFO) << "InsertAfterRemove in other transaction is unsupported";
+      return OpCode::kDuplicated;
     }
 
     if (!xIter.HasEnoughSpaceFor(key.size(), payloadSize)) {
