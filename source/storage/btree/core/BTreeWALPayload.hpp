@@ -14,6 +14,7 @@ namespace btree {
 
 #define DO_WITH_TYPES(ACTION, ...)                                             \
   ACTION(WALInsert, 1, "WALInsert", __VA_ARGS__)                               \
+  ACTION(WALTxInsert, 2, "WALTxInsert", __VA_ARGS__)                           \
   ACTION(WALUpdate, 3, "WALUpdate", __VA_ARGS__)                               \
   ACTION(WALTxUpdate, 4, "WALTxUpdate", __VA_ARGS__)                           \
   ACTION(WALRemove, 5, "WALRemove", __VA_ARGS__)                               \
@@ -98,6 +99,42 @@ struct WALInsert : WALPayload {
       : WALPayload(TYPE::WALInsert),
         mKeySize(key.size()),
         mValSize(val.size()) {
+    std::memcpy(mPayload, key.data(), mKeySize);
+    std::memcpy(mPayload + mKeySize, val.data(), mValSize);
+  }
+
+  inline Slice GetKey() const {
+    return Slice(mPayload, mKeySize);
+  }
+
+  inline Slice GetVal() const {
+    return Slice(mPayload + mKeySize, mValSize);
+  }
+
+  std::unique_ptr<rapidjson::Document> ToJson() override;
+};
+
+struct WALTxInsert : WALPayload {
+  u16 mKeySize;
+
+  u16 mValSize;
+
+  WORKERID mPrevWorkerId;
+
+  TXID mPrevTxId;
+
+  COMMANDID mPrevCommandId;
+
+  u8 mPayload[];
+
+  WALTxInsert(Slice key, Slice val, WORKERID prevWorkerId, TXID prevTxId,
+              COMMANDID prevCommandId)
+      : WALPayload(TYPE::WALTxInsert),
+        mKeySize(key.size()),
+        mValSize(val.size()),
+        mPrevWorkerId(prevWorkerId),
+        mPrevTxId(prevTxId),
+        mPrevCommandId(prevCommandId) {
     std::memcpy(mPayload, key.data(), mKeySize);
     std::memcpy(mPayload + mKeySize, val.data(), mValSize);
   }
@@ -207,8 +244,8 @@ struct WALTxRemove : WALPayload {
 
   u8 mPayload[];
 
-  WALTxRemove(Slice key, Slice val, WORKERID prevWorkerId, u64 prevTxId,
-              u64 prevCommandId)
+  WALTxRemove(Slice key, Slice val, WORKERID prevWorkerId, TXID prevTxId,
+              COMMANDID prevCommandId)
       : WALPayload(TYPE::WALTxRemove),
         mKeySize(key.size()),
         mValSize(val.size()),
@@ -308,7 +345,7 @@ inline std::unique_ptr<rapidjson::Document> WALLogicalSplit::ToJson() {
 }
 
 //------------------------------------------------------------------------------
-// WALLogicalSplit
+// WALInsert
 //------------------------------------------------------------------------------
 inline std::unique_ptr<rapidjson::Document> WALInsert::ToJson() {
   auto doc = WALPayload::ToJson();
@@ -340,7 +377,46 @@ inline std::unique_ptr<rapidjson::Document> WALInsert::ToJson() {
     rapidjson::Value member;
     auto val = GetVal();
     member.SetString((char*)val.data(), val.size(), doc->GetAllocator());
+    doc->AddMember("mVal", member, doc->GetAllocator());
+  }
+
+  return doc;
+}
+
+//------------------------------------------------------------------------------
+// WALTxInsert
+//------------------------------------------------------------------------------
+inline std::unique_ptr<rapidjson::Document> WALTxInsert::ToJson() {
+  auto doc = WALPayload::ToJson();
+
+  // mKeySize
+  {
+    rapidjson::Value member;
+    member.SetUint64(mKeySize);
+    doc->AddMember("mKeySize", member, doc->GetAllocator());
+  }
+
+  // mValSize
+  {
+    rapidjson::Value member;
+    member.SetUint64(mValSize);
+    doc->AddMember("mValSize", member, doc->GetAllocator());
+  }
+
+  // key in payload
+  {
+    rapidjson::Value member;
+    auto key = GetKey();
+    member.SetString((char*)key.data(), key.size(), doc->GetAllocator());
     doc->AddMember("mKey", member, doc->GetAllocator());
+  }
+
+  // val in payload
+  {
+    rapidjson::Value member;
+    auto val = GetVal();
+    member.SetString((char*)val.data(), val.size(), doc->GetAllocator());
+    doc->AddMember("mVal", member, doc->GetAllocator());
   }
 
   return doc;

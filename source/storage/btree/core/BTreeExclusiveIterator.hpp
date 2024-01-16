@@ -7,9 +7,7 @@
 
 using namespace leanstore::storage;
 
-namespace leanstore {
-namespace storage {
-namespace btree {
+namespace leanstore::storage::btree {
 
 class BTreeExclusiveIterator : public BTreePessimisticIterator {
 public:
@@ -31,16 +29,16 @@ public:
     mGuardedLeaf.MarkAsDirty();
   }
 
-  virtual OpCode seekToInsertWithHint(Slice key, bool higher = true) {
+  virtual OpCode SeekToInsertWithHint(Slice key, bool higher = true) {
     ENSURE(mSlotId != -1);
     mSlotId = mGuardedLeaf->linearSearchWithBias(key, mSlotId, higher);
     if (mSlotId == -1) {
-      return seekToInsert(key);
+      return SeekToInsert(key);
     }
     return OpCode::kOK;
   }
 
-  virtual OpCode seekToInsert(Slice key) {
+  virtual OpCode SeekToInsert(Slice key) {
     if (mSlotId == -1 || !KeyInCurrentNode(key)) {
       gotoPage(key);
     }
@@ -93,7 +91,7 @@ public:
 
   virtual OpCode InsertKV(Slice key, Slice val) {
     while (true) {
-      OpCode ret = seekToInsert(key);
+      OpCode ret = SeekToInsert(key);
       if (ret != OpCode::kOK) {
         return ret;
       }
@@ -108,23 +106,18 @@ public:
     }
   }
 
-  virtual OpCode replaceKV(Slice, Slice) {
-    ENSURE(false);
-    return OpCode::kNotFound;
-  }
-
   // The caller must retain the payload when using any of the following payload
   // resize functions
-  virtual void shorten(const u16 targetSize) {
+  virtual void ShortenWithoutCompaction(const u16 targetSize) {
     mGuardedLeaf->shortenPayload(mSlotId, targetSize);
   }
 
-  bool extendPayload(const u16 targetSize) {
+  bool ExtendPayload(const u16 targetSize) {
     if (targetSize >= BTreeNode::Size()) {
       return false;
     }
     DCHECK(mSlotId != -1 && targetSize > mGuardedLeaf->ValSize(mSlotId));
-    while (!mGuardedLeaf->canExtendPayload(mSlotId, targetSize)) {
+    while (!mGuardedLeaf->CanExtendPayload(mSlotId, targetSize)) {
       if (mGuardedLeaf->mNumSeps == 1) {
         return false;
       }
@@ -135,7 +128,7 @@ public:
       DCHECK(succeed);
     }
     DCHECK(mSlotId != -1);
-    mGuardedLeaf->extendPayload(mSlotId, targetSize);
+    mGuardedLeaf->ExtendPayload(mSlotId, targetSize);
     return true;
   }
 
@@ -198,27 +191,20 @@ public:
     }
   }
 
-  virtual OpCode removeCurrent() {
+  virtual OpCode RemoveCurrent() {
     if (!(mGuardedLeaf.mBf != nullptr && mSlotId >= 0 &&
           mSlotId < mGuardedLeaf->mNumSeps)) {
-      ENSURE(false);
+      DCHECK(false) << "RemoveCurrent failed"
+                    << ", pageId=" << mGuardedLeaf.mBf->header.mPageId
+                    << ", slotId=" << mSlotId;
       return OpCode::kOther;
-    } else {
-      mGuardedLeaf->removeSlot(mSlotId);
-      return OpCode::kOK;
     }
-  }
-
-  virtual OpCode removeKV(Slice key) {
-    if (SeekExact(key)) {
-      mGuardedLeaf->removeSlot(mSlotId);
-      return OpCode::kOK;
-    }
-    return OpCode::kNotFound;
+    mGuardedLeaf->removeSlot(mSlotId);
+    return OpCode::kOK;
   }
 
   // Returns true if it tried to merge
-  bool mergeIfNeeded() {
+  bool TryMergeIfNeeded() {
     if (mGuardedLeaf->FreeSpaceAfterCompaction() >=
         BTreeNode::UnderFullSize()) {
       mGuardedLeaf.unlock();
@@ -227,15 +213,13 @@ public:
         mBTree.TryMergeMayJump(*mGuardedLeaf.mBf);
       }
       JUMPMU_CATCH() {
-        // nothing, it is fine not to merge
+        DLOG(INFO) << "TryMergeIfNeeded failed"
+                   << ", pageId=" << mGuardedLeaf.mBf->header.mPageId;
       }
       return true;
-    } else {
-      return false;
     }
+    return false;
   }
 };
 
-} // namespace btree
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage::btree

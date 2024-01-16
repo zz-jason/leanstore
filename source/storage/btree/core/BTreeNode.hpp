@@ -166,10 +166,10 @@ public:
   }
 
   // ATTENTION: this method has side effects !
-  bool requestSpaceFor(u16 space_needed) {
-    if (space_needed <= freeSpace())
+  bool requestSpaceFor(u16 spaceNeeded) {
+    if (spaceNeeded <= freeSpace())
       return true;
-    if (space_needed <= FreeSpaceAfterCompaction()) {
+    if (spaceNeeded <= FreeSpaceAfterCompaction()) {
       compactify();
       return true;
     }
@@ -226,41 +226,49 @@ public:
     slot[slotId].mValSize = targetSize;
   }
 
-  inline bool canExtendPayload(u16 slot_id, u16 new_length) {
-    assert(new_length > ValSize(slot_id));
-    const u16 extra_space_needed = new_length - ValSize(slot_id);
-    return FreeSpaceAfterCompaction() >= extra_space_needed;
+  inline bool CanExtendPayload(u16 slotId, u16 targetSize) {
+    DCHECK(targetSize > ValSize(slotId))
+        << "Target size must be larger than current size"
+        << ", targetSize=" << targetSize << ", currentSize=" << ValSize(slotId);
+
+    const u16 extraSpaceNeeded = targetSize - ValSize(slotId);
+    return FreeSpaceAfterCompaction() >= extraSpaceNeeded;
   }
 
-  void extendPayload(u16 slot_id, u16 new_payload_length) {
-    // Move key | payload to a new location
-    assert(canExtendPayload(slot_id, new_payload_length));
-    const u16 extra_space_needed = new_payload_length - ValSize(slot_id);
-    requestSpaceFor(extra_space_needed);
-    // -------------------------------------------------------------------------------------
-    auto keySizeWithoutPrefix = KeySizeWithoutPrefix(slot_id);
-    const u16 old_total_length = keySizeWithoutPrefix + ValSize(slot_id);
-    const u16 new_total_length = keySizeWithoutPrefix + new_payload_length;
-    // Allocate a block that will be freed when the calling function exits.
-    auto keyBuf = utils::JumpScopedArray<u8>(keySizeWithoutPrefix);
-    auto key = keyBuf->get();
-    std::memcpy(key, KeyDataWithoutPrefix(slot_id), keySizeWithoutPrefix);
-    mSpaceUsed -= old_total_length;
-    if (mDataOffset == slot[slot_id].offset && 0) {
-      mDataOffset += old_total_length;
-    }
-    slot[slot_id].mValSize = 0;
-    slot[slot_id].mKeySizeWithoutPrefix = 0;
-    if (freeSpace() < new_total_length) {
+  // Move key | payload to a new location
+  void ExtendPayload(u16 slotId, u16 targetSize) {
+    DCHECK(CanExtendPayload(slotId, targetSize))
+        << "ExtendPayload failed, not enough space in the current node"
+        << ", slotId=" << slotId << ", targetSize=" << targetSize
+        << ", freeSpace=" << FreeSpaceAfterCompaction()
+        << ", currentSize=" << ValSize(slotId);
+    // const u16 extraSpaceNeeded = targetSize - ValSize(slotId);
+    // requestSpaceFor(extraSpaceNeeded);
+
+    auto keySizeWithoutPrefix = KeySizeWithoutPrefix(slotId);
+    const u16 oldTotalSize = keySizeWithoutPrefix + ValSize(slotId);
+    const u16 newTotalSize = keySizeWithoutPrefix + targetSize;
+
+    // store the keyWithoutPrefix temporarily before moving the payload
+    u8 copiedKey[keySizeWithoutPrefix];
+    std::memcpy(copiedKey, KeyDataWithoutPrefix(slotId), keySizeWithoutPrefix);
+
+    // release the old space occupied by the payload (keyWithoutPrefix + value)
+    mSpaceUsed -= oldTotalSize;
+    mDataOffset += oldTotalSize;
+
+    slot[slotId].mValSize = 0;
+    slot[slotId].mKeySizeWithoutPrefix = 0;
+    if (freeSpace() < newTotalSize) {
       compactify();
     }
-    assert(freeSpace() >= new_total_length);
-    mSpaceUsed += new_total_length;
-    mDataOffset -= new_total_length;
-    slot[slot_id].offset = mDataOffset;
-    slot[slot_id].mKeySizeWithoutPrefix = keySizeWithoutPrefix;
-    slot[slot_id].mValSize = new_payload_length;
-    std::memcpy(KeyDataWithoutPrefix(slot_id), key, keySizeWithoutPrefix);
+    DCHECK(freeSpace() >= newTotalSize);
+    mSpaceUsed += newTotalSize;
+    mDataOffset -= newTotalSize;
+    slot[slotId].offset = mDataOffset;
+    slot[slotId].mKeySizeWithoutPrefix = keySizeWithoutPrefix;
+    slot[slotId].mValSize = targetSize;
+    std::memcpy(KeyDataWithoutPrefix(slotId), copiedKey, keySizeWithoutPrefix);
   }
 
   inline Slice KeyPrefix() {

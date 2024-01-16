@@ -344,7 +344,7 @@ inline auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
     updateDesc->mNumSlots = 1;
     updateDesc->mUpdateSlots[0].mOffset = 0;
     updateDesc->mUpdateSlots[0].mSize = val.size();
-    res = btree->UpdateInPlace(Slice((const u8*)key.data(), key.size()),
+    res = btree->UpdatePartial(Slice((const u8*)key.data(), key.size()),
                                updateCallBack, *updateDesc);
   });
   if (res == OpCode::kOK) {

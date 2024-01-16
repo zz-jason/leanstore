@@ -113,7 +113,7 @@ public:
 
   /// Update old value with a same sized new value.
   /// NOTE: The value is updated via user provided callback.
-  virtual OpCode UpdateInPlace(Slice key, MutValCallback updateCallBack,
+  virtual OpCode UpdatePartial(Slice key, MutValCallback updateCallBack,
                                UpdateDesc& updateDesc) = 0;
 
   virtual OpCode Remove(Slice key) = 0;

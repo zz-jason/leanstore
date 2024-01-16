@@ -68,9 +68,9 @@ void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
       BTreeExclusiveIterator xIter(
           *static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)));
 
-      OpCode ret = xIter.seekToInsert(key);
+      OpCode ret = xIter.SeekToInsert(key);
       if (ret == OpCode::kDuplicated) {
-        xIter.removeCurrent();
+        xIter.RemoveCurrent();
       } else {
         ENSURE(ret == OpCode::kOK);
       }
@@ -185,7 +185,7 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID from_tx_id,
           payload_length = iterator.value().length() - sizeof(VersionMeta);
           std::memcpy(payload->get(), versionContainer.payload, payload_length);
           key = Slice(keyBuffer->get(), keySize + 1);
-          iterator.removeCurrent();
+          iterator.RemoveCurrent();
           removed_versions = removed_versions + 1;
           iterator.MarkAsDirty();
           iterator.Reset();
