@@ -44,12 +44,4 @@ leanstore_add_test_without_gtest_main(TransactionKVTest)
 leanstore_add_test_without_gtest_main(MVCCTest)
 leanstore_add_test_without_gtest_main(AnomaliesTest)
 leanstore_add_test_without_gtest_main(AbortTest)
-
-# # for code coverages
-# if(BUILD_WITH_COVERAGE)
-#   add_custom_target(coverage
-#       COMMAND gcovr -r . --json-pretty -json coverage.json --xml-pretty -xml coverage.xml --exclude 'build/*' --exclude 'tests/*'
-#       COMMENT "Generating code coverage reports"
-#       DEPENDS ${TEST_EXECUTABLES}
-#   )
-# endif()
+leanstore_add_test_without_gtest_main(LongRunningTxTest)

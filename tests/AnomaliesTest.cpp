@@ -7,8 +7,7 @@
 using namespace leanstore::utils;
 using namespace leanstore::storage::btree;
 
-namespace leanstore {
-namespace test {
+namespace leanstore::test {
 
 class AnomaliesTest : public ::testing::Test {
 protected:
@@ -325,8 +324,7 @@ TEST_F(AnomaliesTest, G2Item) {
   s2->CommitTx();
 }
 
-} // namespace test
-} // namespace leanstore
+} // namespace leanstore::test
 
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);

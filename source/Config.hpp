@@ -10,9 +10,9 @@ DECLARE_uint64(buffer_pool_size);
 DECLARE_string(data_dir);
 DECLARE_uint64(db_file_capacity);
 
-// Config for multi-version, OLAP-isolated BTree
+// Config for TransactionKV
 DECLARE_bool(enable_fat_tuple);
-DECLARE_bool(enable_olap_mode);
+DECLARE_bool(enable_long_running_transaction);
 
 DECLARE_uint32(worker_threads);
 DECLARE_bool(cpu_counters);

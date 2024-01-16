@@ -53,14 +53,14 @@ public:
       WORKERID workerId, TXID txId, COMMANDID commandId, const bool isRemove,
       std::function<void(const u8*, u64 payloadLength)> cb) override;
 
-  virtual void PurgeVersions(WORKERID workerId, TXID from_tx_id, TXID to_tx_id,
+  virtual void PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
                              RemoveVersionCallback cb,
                              const u64 limit) override;
 
   // [from, to]
-  virtual void VisitRemovedVersions(WORKERID workerId, TXID from_tx_id,
-                                   TXID to_tx_id,
-                                   RemoveVersionCallback cb) override;
+  virtual void VisitRemovedVersions(WORKERID workerId, TXID fromTxId,
+                                    TXID toTxId,
+                                    RemoveVersionCallback cb) override;
 };
 
 } // namespace cr

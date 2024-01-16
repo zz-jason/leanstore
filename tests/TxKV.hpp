@@ -50,6 +50,7 @@ class Session {
 public:
   // Transaction operations
   virtual void SetIsolationLevel(IsolationLevel) = 0;
+  virtual void SetTxMode(TxMode) = 0;
   virtual void StartTx() = 0;
   virtual void CommitTx() = 0;
   virtual void AbortTx() = 0;
@@ -116,7 +117,7 @@ class LeanStoreMVCCSession : public Session {
 private:
   WORKERID mWorkerId;
   LeanStoreMVCC* mStore;
-  TxMode mTxMode = TxMode::kOLTP;
+  TxMode mTxMode = TxMode::kShortRunning;
   IsolationLevel mIsolationLevel = IsolationLevel::kSnapshotIsolation;
 
 public:
@@ -130,6 +131,7 @@ public:
 public:
   // Transaction operations
   void SetIsolationLevel(IsolationLevel) override;
+  void SetTxMode(TxMode) override;
   void StartTx() override;
   void CommitTx() override;
   void AbortTx() override;
@@ -199,6 +201,10 @@ inline Session* LeanStoreMVCC::GetSession(WORKERID sessionId) {
 //------------------------------------------------------------------------------
 inline void LeanStoreMVCCSession::SetIsolationLevel(IsolationLevel level) {
   mIsolationLevel = level;
+}
+
+inline void LeanStoreMVCCSession::SetTxMode(TxMode txMode) {
+  mTxMode = txMode;
 }
 
 inline void LeanStoreMVCCSession::StartTx() {

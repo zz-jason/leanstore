@@ -19,7 +19,7 @@ public:
 
   u16 mOldestTx = 0;
 
-  u8 mIsRemoved = 1;
+  u8 mIsTombstone = 1;
 
   // latest version in-place
   u8 mPayload[];
@@ -31,13 +31,13 @@ public:
   /// usually called by a placmenet new operator.
   ChainedTuple(WORKERID workerId, TXID txId, Slice val)
       : Tuple(TupleFormat::kChained, workerId, txId),
-        mIsRemoved(false) {
+        mIsTombstone(false) {
     std::memcpy(mPayload, val.data(), val.size());
   }
 
   ChainedTuple(WORKERID workerId, TXID txId, COMMANDID commandId, Slice val)
       : Tuple(TupleFormat::kChained, workerId, txId, commandId),
-        mIsRemoved(false) {
+        mIsTombstone(false) {
     std::memcpy(mPayload, val.data(), val.size());
   }
 
@@ -50,7 +50,7 @@ public:
   ChainedTuple(FatTuple& oldFatTuple)
       : Tuple(TupleFormat::kChained, oldFatTuple.mWorkerId, oldFatTuple.mTxId,
               oldFatTuple.mCommandId),
-        mIsRemoved(false) {
+        mIsTombstone(false) {
     std::memmove(mPayload, oldFatTuple.mPayload, oldFatTuple.mValSize);
   }
 
@@ -99,7 +99,7 @@ public:
 inline std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
     Slice payload, ValCallback callback) const {
   if (cr::Worker::my().cc.VisibleForMe(mWorkerId, mTxId)) {
-    if (mIsRemoved) {
+    if (mIsTombstone) {
       return {OpCode::kNotFound, 1};
     }
 

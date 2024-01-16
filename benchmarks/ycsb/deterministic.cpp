@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
   // -------------------------------------------------------------------------------------
   leanstore::IsolationLevel isolation_level =
       leanstore::ParseIsolationLevel(FLAGS_isolation_level);
-  const TxMode tx_type = TxMode::kOLTP;
+  const TxMode tx_type = TxMode::kShortRunning;
   // -------------------------------------------------------------------------------------
   const u64 ycsb_tuple_count =
       (FLAGS_ycsb_tuple_count)

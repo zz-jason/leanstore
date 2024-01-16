@@ -339,7 +339,7 @@ public:
     return mActiveTx.mState == TxState::kStarted;
   }
 
-  void StartTx(TxMode mode = TxMode::kOLTP,
+  void StartTx(TxMode mode = TxMode::kShortRunning,
                IsolationLevel level = IsolationLevel::kSnapshotIsolation,
                bool isReadOnly = false);
 

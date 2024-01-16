@@ -36,8 +36,8 @@ void CRTable::open() {
   columns.emplace("tx_abort", [](Column& col) {
     col << Sum(WorkerCounters::sCounters, &WorkerCounters::tx_abort);
   });
-  columns.emplace("olap_tx", [](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::olap_tx);
+  columns.emplace("long_running_tx", [](Column& col) {
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::long_running_tx);
   });
   columns.emplace("olap_scanned_tuples", [](Column& col) {
     col << Sum(WorkerCounters::sCounters, &WorkerCounters::olap_scanned_tuples);

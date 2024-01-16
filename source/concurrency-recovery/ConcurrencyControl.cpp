@@ -73,7 +73,7 @@ void ConcurrencyControl::refreshGlobalState() {
       TXID itsOltpLwmBuffer =
           workerState.mCommitTree.LCB(Worker::sOldestOltpStartTx);
 
-      if (FLAGS_enable_olap_mode &&
+      if (FLAGS_enable_long_running_transaction &&
           Worker::sOldestAllStartTs != Worker::sOldestOltpStartTx) {
         globalOltpLwmBuffer =
             std::min<TXID>(itsOltpLwmBuffer, globalOltpLwmBuffer);
@@ -143,7 +143,8 @@ synclwm : {
   if (lwmVersion != local_lwm_latch.load()) {
     goto synclwm;
   }
-  ENSURE(!FLAGS_enable_olap_mode || local_all_lwm <= local_oltp_lwm);
+  ENSURE(!FLAGS_enable_long_running_transaction ||
+         local_all_lwm <= local_oltp_lwm);
 }
 
   // ATTENTION: atm, with out extra sync, the two lwm can not
@@ -165,7 +166,8 @@ synclwm : {
         0);
     cleaned_untill_oltp_lwm = std::max(local_all_lwm, cleaned_untill_oltp_lwm);
   }
-  if (FLAGS_enable_olap_mode && local_all_lwm != local_oltp_lwm) {
+  if (FLAGS_enable_long_running_transaction &&
+      local_all_lwm != local_oltp_lwm) {
     if (local_oltp_lwm > 0 && local_oltp_lwm > cleaned_untill_oltp_lwm) {
       utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_graveyard);
       // MOVE deletes to the graveyard
