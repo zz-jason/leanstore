@@ -320,10 +320,10 @@ public:
 // Version
 // -----------------------------------------------------------------------------
 
-enum class VersionType : u8 { kUpdate, kRemove };
+enum class VersionType : u8 { kUpdate, kInsert, kRemove };
 
 struct __attribute__((packed)) Version {
-
+public:
   VersionType mType;
 
   WORKERID mWorkerId;
@@ -365,6 +365,46 @@ public:
 public:
   inline static const UpdateVersion* From(const u8* buffer) {
     return reinterpret_cast<const UpdateVersion*>(buffer);
+  }
+};
+
+struct __attribute__((packed)) InsertVersion : Version {
+public:
+  u16 mKeySize;
+
+  u16 mValSize;
+
+  // Key + Value
+  u8 mPayload[];
+
+public:
+  InsertVersion(WORKERID workerId, TXID txId, COMMANDID commandId, u16 keySize,
+                u16 valSize)
+      : Version(VersionType::kInsert, workerId, txId, commandId),
+        mKeySize(keySize),
+        mValSize(valSize) {
+  }
+
+  InsertVersion(WORKERID workerId, TXID txId, COMMANDID commandId, Slice key,
+                Slice val)
+      : Version(VersionType::kInsert, workerId, txId, commandId),
+        mKeySize(key.size()),
+        mValSize(val.size()) {
+    std::memcpy(mPayload, key.data(), key.size());
+    std::memcpy(mPayload + key.size(), val.data(), val.size());
+  }
+
+  Slice InsertedKey() const {
+    return Slice(mPayload, mKeySize);
+  }
+
+  Slice InsertedVal() const {
+    return Slice(mPayload + mKeySize, mValSize);
+  }
+
+public:
+  inline static const InsertVersion* From(const u8* buffer) {
+    return reinterpret_cast<const InsertVersion*>(buffer);
   }
 };
 

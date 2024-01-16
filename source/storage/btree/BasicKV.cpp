@@ -228,7 +228,7 @@ OpCode BasicKV::PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
   return OpCode::kOther;
 }
 
-OpCode BasicKV::UpdateInPlace(Slice key, MutValCallback updateCallBack,
+OpCode BasicKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
                               UpdateDesc& updateDesc) {
   if (mConfig.mEnableWal) {
     cr::Worker::my().mLogging.WalEnsureEnoughSpace(FLAGS_page_size);
@@ -295,9 +295,9 @@ OpCode BasicKV::Remove(Slice key) {
       walHandler.SubmitWal();
     }
     xIter.MarkAsDirty();
-    auto ret = xIter.removeCurrent();
+    auto ret = xIter.RemoveCurrent();
     ENSURE(ret == OpCode::kOK);
-    xIter.mergeIfNeeded();
+    xIter.TryMergeIfNeeded();
     JUMPMU_RETURN OpCode::kOK;
   }
   JUMPMU_CATCH() {
@@ -334,7 +334,7 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
           COUNTERS_BLOCK() {
             WorkerCounters::MyCounters().dt_range_removed[mTreeId]++;
           }
-          auto ret = xIter.removeCurrent();
+          auto ret = xIter.RemoveCurrent();
           ENSURE(ret == OpCode::kOK);
           xIter.MarkAsDirty();
           if (xIter.mSlotId == xIter.mGuardedLeaf->mNumSeps) {

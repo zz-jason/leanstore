@@ -8,9 +8,7 @@
 
 #include <glog/logging.h>
 
-namespace leanstore {
-namespace storage {
-namespace btree {
+namespace leanstore::storage::btree {
 
 /// History versions of chained tuple are stored in the history tree of the
 /// current worker thread.
@@ -129,7 +127,8 @@ inline std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
         prevWorkerId, prevTxId, prevCommandId,
         [&](const u8* versionBuf, u64 versionSize) {
           auto& version = *reinterpret_cast<const Version*>(versionBuf);
-          if (version.mType == VersionType::kUpdate) {
+          switch (version.mType) {
+          case VersionType::kUpdate: {
             auto& updateVersion = *UpdateVersion::From(versionBuf);
             if (updateVersion.mIsDelta) {
               // Apply delta
@@ -141,14 +140,23 @@ inline std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
               valueBuf = std::make_unique<u8[]>(valueSize);
               std::memcpy(valueBuf.get(), updateVersion.mPayload, valueSize);
             }
-          } else if (version.mType == VersionType::kRemove) {
+            break;
+          }
+          case VersionType::kRemove: {
             auto& removeVersion = *RemoveVersion::From(versionBuf);
             auto removedVal = removeVersion.RemovedVal();
             valueSize = removeVersion.mValSize;
             valueBuf = std::make_unique<u8[]>(removedVal.size());
             std::memcpy(valueBuf.get(), removedVal.data(), removedVal.size());
-          } else {
-            UNREACHABLE();
+            break;
+          }
+          case VersionType::kInsert: {
+            auto& insertVersion = *InsertVersion::From(versionBuf);
+            valueSize = insertVersion.mValSize;
+            valueBuf = std::make_unique<u8[]>(valueSize);
+            std::memcpy(valueBuf.get(), insertVersion.mPayload, valueSize);
+            break;
+          }
           }
 
           prevWorkerId = version.mWorkerId;
@@ -241,6 +249,4 @@ inline void ChainedTuple::Update(BTreeExclusiveIterator& xIter, Slice key,
   walHandler.SubmitWal();
 }
 
-} // namespace btree
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage::btree

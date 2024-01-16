@@ -23,7 +23,7 @@ public:
 
   virtual OpCode Insert(Slice key, Slice val) override;
 
-  virtual OpCode UpdateInPlace(Slice key, MutValCallback updateCallBack,
+  virtual OpCode UpdatePartial(Slice key, MutValCallback updateCallBack,
                                UpdateDesc& updateDesc) override;
 
   virtual OpCode Remove(Slice key) override;

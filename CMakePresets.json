@@ -2,7 +2,7 @@
     "version": 3,
     "configurePresets": [
         {
-            "name": "debug",
+            "name": "default",
             "binaryDir": "${sourceDir}/build/debug",
             "cacheVariables": {
                 "BUILD_WITH_COVERAGE": "ON",

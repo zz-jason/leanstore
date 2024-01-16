@@ -140,8 +140,21 @@ std::expected<void, utils::Error> Recovery::redo() {
 
       s32 slotId = -1;
       TransactionKV::InsertToNode(guardedNode, walInsert->GetKey(),
-                            walInsert->GetVal(), complexEntry->mWorkerId,
-                            complexEntry->mTxId, complexEntry->mTxMode, slotId);
+                                  walInsert->GetVal(), complexEntry->mWorkerId,
+                                  complexEntry->mTxId, complexEntry->mTxMode,
+                                  slotId);
+      break;
+    }
+    case WALPayload::TYPE::WALTxInsert: {
+      auto* walInsert = reinterpret_cast<WALTxInsert*>(complexEntry->payload);
+      HybridGuard guard(&bf.header.mLatch);
+      GuardedBufferFrame<BTreeNode> guardedNode(std::move(guard), &bf);
+
+      s32 slotId = -1;
+      TransactionKV::InsertToNode(guardedNode, walInsert->GetKey(),
+                                  walInsert->GetVal(), complexEntry->mWorkerId,
+                                  complexEntry->mTxId, complexEntry->mTxMode,
+                                  slotId);
       break;
     }
     case WALPayload::TYPE::WALTxUpdate: {

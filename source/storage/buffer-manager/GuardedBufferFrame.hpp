@@ -188,7 +188,7 @@ public:
   }
 
   template <typename WT, typename... Args>
-  cr::WALPayloadHandler<WT> ReserveWALPayload(u64 payloadSize, Args&&... args) {
+  cr::WALPayloadHandler<WT> ReserveWALPayload(u64 walSize, Args&&... args) {
     DCHECK(FLAGS_wal);
     DCHECK(mGuard.mState == GuardState::kExclusive);
 
@@ -196,11 +196,11 @@ public:
 
     const auto pageId = mBf->header.mPageId;
     const auto treeId = mBf->page.mBTreeId;
-    payloadSize = ((payloadSize - 1) / 8 + 1) * 8;
+    walSize = ((walSize - 1) / 8 + 1) * 8;
     // TODO: verify
     auto handler =
         cr::Worker::my().mLogging.ReserveWALEntryComplex<WT, Args...>(
-            sizeof(WT) + payloadSize, pageId, mBf->page.mPSN, treeId,
+            sizeof(WT) + walSize, pageId, mBf->page.mPSN, treeId,
             std::forward<Args>(args)...);
     return handler;
   }
