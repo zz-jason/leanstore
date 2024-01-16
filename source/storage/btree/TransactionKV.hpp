@@ -128,7 +128,7 @@ public:
                chainedTuple.mTxId == versionTxId && chainedTuple.mIsRemoved);
         node->removeSlot(version.mDanglingPointer.mHeadSlot);
         xIter.MarkAsDirty();
-        xIter.mergeIfNeeded();
+        xIter.TryMergeIfNeeded();
         JUMPMU_RETURN;
       }
       JUMPMU_CATCH() {
@@ -142,7 +142,7 @@ public:
       JUMPMU_TRY() {
         BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(mGraveyard));
         if (xIter.SeekExact(key)) {
-          ret = xIter.removeCurrent();
+          ret = xIter.RemoveCurrent();
           ENSURE(ret == OpCode::kOK);
           xIter.MarkAsDirty();
         } else {
@@ -171,10 +171,10 @@ public:
         if (chainedTuple.mWorkerId == versionWorkerId &&
             chainedTuple.mTxId == versionTxId && chainedTuple.mIsRemoved) {
           if (chainedTuple.mTxId < cr::Worker::my().cc.local_all_lwm) {
-            ret = xIter.removeCurrent();
+            ret = xIter.RemoveCurrent();
             xIter.MarkAsDirty();
             ENSURE(ret == OpCode::kOK);
-            xIter.mergeIfNeeded();
+            xIter.TryMergeIfNeeded();
             COUNTERS_BLOCK() {
               WorkerCounters::MyCounters().cc_todo_removed[mTreeId]++;
             }
@@ -187,10 +187,10 @@ public:
               ENSURE(g_ret == OpCode::kOK);
               graveyardXIter.MarkAsDirty();
             }
-            ret = xIter.removeCurrent();
+            ret = xIter.RemoveCurrent();
             ENSURE(ret == OpCode::kOK);
             xIter.MarkAsDirty();
-            xIter.mergeIfNeeded();
+            xIter.TryMergeIfNeeded();
             COUNTERS_BLOCK() {
               WorkerCounters::MyCounters().cc_todo_moved_gy[mTreeId]++;
             }
@@ -209,9 +209,9 @@ public:
     const WALPayload& entry = *reinterpret_cast<const WALPayload*>(walEntryPtr);
     Slice key;
     switch (entry.mType) {
-    case WALPayload::TYPE::WALInsert: {
+    case WALPayload::TYPE::WALTxInsert: {
       // Assuming no insert after remove
-      auto& walInsert = *reinterpret_cast<const WALInsert*>(&entry);
+      auto& walInsert = *reinterpret_cast<const WALTxInsert*>(&entry);
       key = walInsert.GetKey();
       break;
     }
@@ -473,7 +473,9 @@ private:
     }
   }
 
-  void undoLastInsert(const WALInsert* walInsert);
+  void insertAfterRemove(BTreeExclusiveIterator& xIter, Slice key, Slice val);
+
+  void undoLastInsert(const WALTxInsert* walInsert);
 
   void undoLastUpdate(const WALTxUpdate* walUpdate);
 

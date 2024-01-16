@@ -5,7 +5,6 @@
 #include "storage/btree/BasicKV.hpp"
 #include "storage/btree/ChainedTuple.hpp"
 #include "storage/btree/core/BTreeNode.hpp"
-#include "storage/btree/core/BTreeWALPayload.hpp"
 #include "utils/Misc.hpp"
 
 #include <gflags/gflags.h>
@@ -130,13 +129,13 @@ bool Tuple::ToFat(BTreeExclusiveIterator& xIter) {
   // TODO: corner cases, more careful about space usage
   const u16 fatTupleSize = sizeof(FatTuple) + fatTuple->mPayloadCapacity;
   if (xIter.value().size() < fatTupleSize) {
-    auto succeed = xIter.extendPayload(fatTupleSize);
+    auto succeed = xIter.ExtendPayload(fatTupleSize);
     LOG_IF(FATAL, !succeed)
         << "Failed to extend current value buffer to fit the FatTuple"
         << ", fatTupleSize=" << fatTupleSize
         << ", current value buffer size=" << xIter.value().size();
   } else {
-    xIter.shorten(fatTupleSize);
+    xIter.ShortenWithoutCompaction(fatTupleSize);
   }
 
   // Copy the FatTuple back to the underlying value buffer.
@@ -283,8 +282,7 @@ void FatTuple::GarbageCollection() {
       appendDelta(newFatTuple, reinterpret_cast<u8*>(&delta),
                   delta.TotalSize());
     } else {
-      using Slot = UpdateSlotInfo;
-      std::unordered_map<Slot, std::basic_string<u8>> diffSlotsMap;
+      std::unordered_map<UpdateSlotInfo, std::basic_string<u8>> diffSlotsMap;
       for (s32 i = zone_end - 1; i >= zone_begin; i--) {
         auto& deltaId = getDelta(i);
         auto& updateDesc = deltaId.GetUpdateDesc();

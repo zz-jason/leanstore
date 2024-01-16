@@ -46,7 +46,6 @@ public:
   }
 };
 
-/*
 TEST_F(TransactionKVTest, Create) {
   GetLeanStore();
   storage::btree::TransactionKV* btree;
@@ -854,6 +853,8 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
     }
   });
 
+  LOG(INFO) << "key=" << kvToTest.begin()->first
+            << ", val=" << kvToTest.begin()->second << ", newVal=" << newVal;
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
     // lookup the new value
     cr::Worker::my().StartTx();
@@ -866,7 +867,6 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
     cr::Worker::my().CommitTx();
   });
 }
-*/
 
 TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
   GetLeanStore();
