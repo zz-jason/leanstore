@@ -72,8 +72,9 @@ void ConfigsTable::open() {
   columns.emplace("c_pgc", [&](Column& col) { col << FLAGS_pgc; });
   columns.emplace("c_isolation_level",
                   [&](Column& col) { col << FLAGS_isolation_level; });
-  columns.emplace("c_olap_mode",
-                  [&](Column& col) { col << FLAGS_enable_olap_mode; });
+  columns.emplace("c_enable_long_running_transaction", [&](Column& col) {
+    col << FLAGS_enable_long_running_transaction;
+  });
   columns.emplace("c_history_tree_inserts",
                   [&](Column& col) { col << FLAGS_history_tree_inserts; });
 

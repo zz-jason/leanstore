@@ -66,8 +66,8 @@ public:
   }
 
   inline static leanstore::LeanStore* GetLeanStore() {
-    static auto sleanStore = MVCCTest::CreateLeanStore();
-    return sleanStore.get();
+    static auto sLeanStore = MVCCTest::CreateLeanStore();
+    return sLeanStore.get();
   }
 };
 
@@ -100,8 +100,8 @@ TEST_F(MVCCTest, LookupWhileInsert) {
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
-    cr::Worker::my().StartTx(TxMode::kOLTP, IsolationLevel::kSnapshotIsolation,
-                             true);
+    cr::Worker::my().StartTx(TxMode::kShortRunning,
+                             IsolationLevel::kSnapshotIsolation, true);
     EXPECT_EQ(mBTree->Lookup(Slice((const u8*)key0.data(), key0.size()),
                              copyValueOut),
               OpCode::kOK);
@@ -129,8 +129,8 @@ TEST_F(MVCCTest, LookupWhileInsert) {
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
-    cr::Worker::my().StartTx(TxMode::kOLTP, IsolationLevel::kSnapshotIsolation,
-                             true);
+    cr::Worker::my().StartTx(TxMode::kShortRunning,
+                             IsolationLevel::kSnapshotIsolation, true);
     EXPECT_EQ(mBTree->Lookup(Slice((const u8*)key1.data(), key1.size()),
                              copyValueOut),
               OpCode::kOK);
@@ -201,8 +201,8 @@ TEST_F(MVCCTest, InsertConflict) {
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
-    cr::Worker::my().StartTx(TxMode::kOLTP, IsolationLevel::kSnapshotIsolation,
-                             true);
+    cr::Worker::my().StartTx(TxMode::kShortRunning,
+                             IsolationLevel::kSnapshotIsolation, true);
     EXPECT_EQ(mBTree->Lookup(Slice((const u8*)key1.data(), key1.size()),
                              copyValueOut),
               OpCode::kOK);

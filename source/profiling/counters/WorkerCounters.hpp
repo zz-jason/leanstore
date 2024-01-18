@@ -24,7 +24,7 @@ struct WorkerCounters {
   std::atomic<u64> allocate_operations_counter = 0;
   std::atomic<u64> mNumContentions = 0;
   std::atomic<u64> tx = 0;
-  std::atomic<u64> olap_tx = 0;
+  std::atomic<u64> long_running_tx = 0;
   std::atomic<u64> olap_scanned_tuples = 0;
   std::atomic<u64> tx_abort = 0;
   std::atomic<u64> olap_tx_abort = 0;

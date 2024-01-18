@@ -96,9 +96,9 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   mLogging.mTxReadSnapshot = Logging::sGlobalMinFlushedGSN.load();
   mLogging.mHasRemoteDependency = false;
 
-  // Draw TXID from global counter and publish it with the TX type (i.e., OLAP
-  // or OLTP) We have to acquire a transaction id and use it for locking in ANY
-  // isolation level
+  // Draw TXID from global counter and publish it with the TX type (i.e.
+  // long-running or short-running) We have to acquire a transaction id and use
+  // it for locking in ANY isolation level
   if (level >= IsolationLevel::kSnapshotIsolation) {
     {
       utils::Timer timer(CRCounters::MyCounters().cc_ms_snapshotting);
@@ -107,9 +107,9 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
                               std::memory_order_release);
 
       mActiveTx.mStartTs = ConcurrencyControl::sGlobalClock.fetch_add(1);
-      if (FLAGS_enable_olap_mode) {
+      if (FLAGS_enable_long_running_transaction) {
         curWorkerSnapshot.store(mActiveTx.mStartTs |
-                                    ((mActiveTx.IsOLAP()) ? kOlapBit : 0),
+                                    ((mActiveTx.IsLongRunning()) ? kOlapBit : 0),
                                 std::memory_order_release);
       } else {
         curWorkerSnapshot.store(mActiveTx.mStartTs, std::memory_order_release);

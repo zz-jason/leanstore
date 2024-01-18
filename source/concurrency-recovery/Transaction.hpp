@@ -8,19 +8,19 @@
 namespace leanstore {
 
 enum class TxMode : u8 {
-  kOLAP = 0,
-  kOLTP = 1,
+  kLongRunning = 0,
+  kShortRunning = 1,
   kDeterministic = 2,
   kInstantlyVisibleBulkInsert = 3,
 };
 
 inline std::string ToString(TxMode txMode) {
   switch (txMode) {
-  case TxMode::kOLAP: {
-    return "OLAP";
+  case TxMode::kLongRunning: {
+    return "LongRunning";
   }
-  case TxMode::kOLTP: {
-    return "OLTP";
+  case TxMode::kShortRunning: {
+    return "ShortRunning";
   }
   case TxMode::kDeterministic: {
     return "Deterministic";
@@ -93,7 +93,7 @@ public:
   LID mMaxObservedGSN = 0;
 
   /// mTxMode is the mode of the current transaction.
-  TxMode mTxMode = TxMode::kOLTP;
+  TxMode mTxMode = TxMode::kShortRunning;
 
   /// mTxIsolationLevel is the isolation level for the current transaction.
   IsolationLevel mTxIsolationLevel = IsolationLevel::kSnapshotIsolation;
@@ -113,12 +113,12 @@ public:
   bool mWalExceedBuffer = false;
 
 public:
-  inline bool IsOLAP() {
-    return mTxMode == TxMode::kOLAP;
+  inline bool IsLongRunning() {
+    return mTxMode == TxMode::kLongRunning;
   }
 
   inline bool IsOLTP() {
-    return mTxMode == TxMode::kOLTP;
+    return mTxMode == TxMode::kShortRunning;
   }
 
   inline bool AtLeastSI() {

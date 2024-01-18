@@ -139,77 +139,72 @@ bool HistoryTree::GetVersion(WORKERID prevWorkerId, TXID prevTxId,
 }
 
 // [from, to]
-void HistoryTree::PurgeVersions(WORKERID workerId, TXID from_tx_id,
-                                TXID to_tx_id, RemoveVersionCallback cb,
+void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
+                                RemoveVersionCallback cb,
                                 [[maybe_unused]] const u64 limit) {
-  auto keySize = sizeof(to_tx_id);
+  auto keySize = sizeof(toTxId);
   auto keyBuffer = utils::JumpScopedArray<u8>(FLAGS_page_size);
-  utils::fold(keyBuffer->get(), from_tx_id);
+  utils::fold(keyBuffer->get(), fromTxId);
   Slice key(keyBuffer->get(), keySize);
   auto payload = utils::JumpScopedArray<u8>(FLAGS_page_size);
-  u16 payload_length;
-  volatile u64 removed_versions = 0;
+  u16 payloadSize;
+  volatile u64 versionsRemoved = 0;
   BasicKV* volatile btree = mRemoveBTrees[workerId];
 
-  {
-    JUMPMU_TRY() {
-    restartrem : {
-      leanstore::storage::btree::BTreeExclusiveIterator iterator(
-          *static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)));
-      iterator.SetExitLeafCallback(
-          [&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
-            if (guardedLeaf->FreeSpaceAfterCompaction() >=
-                BTreeNode::UnderFullSize()) {
-              iterator.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
-                JUMPMU_TRY() {
-                  btree->TryMergeMayJump(*toMerge);
-                }
-                JUMPMU_CATCH() {
-                }
-              });
-            }
-          });
-      // -------------------------------------------------------------------------------------
-      while (iterator.Seek(key)) {
-        iterator.AssembleKey();
-        TXID current_tx_id;
-        utils::unfold(iterator.key().data(), current_tx_id);
-        if (current_tx_id >= from_tx_id && current_tx_id <= to_tx_id) {
-          auto& versionContainer =
-              *reinterpret_cast<VersionMeta*>(iterator.MutableVal().Data());
-          const TREEID treeId = versionContainer.mTreeId;
-          const bool called_before = versionContainer.called_before;
-          versionContainer.called_before = true;
-          keySize = iterator.key().length();
-          std::memcpy(keyBuffer->get(), iterator.key().data(), keySize);
-          payload_length = iterator.value().length() - sizeof(VersionMeta);
-          std::memcpy(payload->get(), versionContainer.payload, payload_length);
-          key = Slice(keyBuffer->get(), keySize + 1);
-          iterator.RemoveCurrent();
-          removed_versions = removed_versions + 1;
-          iterator.MarkAsDirty();
-          iterator.Reset();
-          cb(current_tx_id, treeId, payload->get(), payload_length,
-             called_before);
-          goto restartrem;
-        } else {
-          break;
-        }
+  JUMPMU_TRY() {
+  restartrem : {
+    leanstore::storage::btree::BTreeExclusiveIterator xIter(
+        *static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)));
+    xIter.SetExitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
+      if (guardedLeaf->FreeSpaceAfterCompaction() >=
+          BTreeNode::UnderFullSize()) {
+        xIter.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
+          JUMPMU_TRY() {
+            btree->TryMergeMayJump(*toMerge);
+          }
+          JUMPMU_CATCH() {
+          }
+        });
       }
+    });
+    while (xIter.Seek(key)) {
+      xIter.AssembleKey();
+      TXID curTxId;
+      utils::unfold(xIter.key().data(), curTxId);
+      if (curTxId < fromTxId || curTxId > toTxId) {
+        break;
+      }
+
+      auto& versionContainer =
+          *reinterpret_cast<VersionMeta*>(xIter.MutableVal().Data());
+      const TREEID treeId = versionContainer.mTreeId;
+      const bool calledBefore = versionContainer.called_before;
+      versionContainer.called_before = true;
+      keySize = xIter.key().size();
+      std::memcpy(keyBuffer->get(), xIter.key().data(), keySize);
+      payloadSize = xIter.value().size() - sizeof(VersionMeta);
+      std::memcpy(payload->get(), versionContainer.payload, payloadSize);
+      key = Slice(keyBuffer->get(), keySize + 1);
+      xIter.RemoveCurrent();
+      versionsRemoved = versionsRemoved + 1;
+      xIter.MarkAsDirty();
+      xIter.Reset();
+      cb(curTxId, treeId, payload->get(), payloadSize, calledBefore);
+      goto restartrem;
     }
-    }
-    JUMPMU_CATCH() {
-      UNREACHABLE();
-    }
+  }
+  }
+  JUMPMU_CATCH() {
+    UNREACHABLE();
   }
 
   btree = mUpdateBTrees[workerId];
-  utils::fold(keyBuffer->get(), from_tx_id);
+  utils::fold(keyBuffer->get(), fromTxId);
 
   // Attention: no cross worker gc in sync
   Session* volatile session = &mUpdateSessions[workerId];
   volatile bool should_try = true;
-  if (from_tx_id == 0) {
+  if (fromTxId == 0) {
     JUMPMU_TRY() {
       if (session->leftmost_init) {
         BufferFrame* bf = session->leftmost_bf;
@@ -224,7 +219,7 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID from_tx_id,
           guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, lastKey->get());
           TXID last_key_tx_id;
           utils::unfold(lastKey->get(), last_key_tx_id);
-          if (last_key_tx_id > to_tx_id) {
+          if (last_key_tx_id > toTxId) {
             should_try = false;
           }
         }
@@ -252,7 +247,7 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID from_tx_id,
           });
 
       // ATTENTION: we use this also for purging the current aborted tx so we
-      // can not simply assume from_tx_id = 0
+      // can not simply assume fromTxId = 0
       bool did_purge_full_page = false;
       iterator.SetEnterLeafCallback(
           [&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
@@ -272,9 +267,9 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID from_tx_id,
             guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, lastKey->get());
             TXID last_key_tx_id;
             utils::unfold(lastKey->get(), last_key_tx_id);
-            if (first_key_tx_id >= from_tx_id && to_tx_id >= last_key_tx_id) {
+            if (first_key_tx_id >= fromTxId && toTxId >= last_key_tx_id) {
               // Purge the whole page
-              removed_versions = removed_versions + guardedLeaf->mNumSeps;
+              versionsRemoved = versionsRemoved + guardedLeaf->mNumSeps;
               guardedLeaf->Reset();
               did_purge_full_page = true;
             }
@@ -296,25 +291,25 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID from_tx_id,
     }
   }
   COUNTERS_BLOCK() {
-    CRCounters::MyCounters().cc_versions_space_removed += removed_versions;
+    CRCounters::MyCounters().cc_versions_space_removed += versionsRemoved;
   }
 }
 
 // Pre: TXID is unsigned integer
 void HistoryTree::VisitRemovedVersions(
-    WORKERID workerId, TXID from_tx_id, TXID to_tx_id,
+    WORKERID workerId, TXID fromTxId, TXID toTxId,
     std::function<void(const TXID, const TREEID, const u8*, u64,
                        const bool visited_before)>
         cb) {
   // [from, to]
   BasicKV* btree = mRemoveBTrees[workerId];
-  auto keySize = sizeof(to_tx_id);
+  auto keySize = sizeof(toTxId);
   auto keyBuffer = utils::JumpScopedArray<u8>(FLAGS_page_size);
   u64 offset = 0;
-  offset += utils::fold(keyBuffer->get() + offset, from_tx_id);
+  offset += utils::fold(keyBuffer->get() + offset, fromTxId);
   Slice key(keyBuffer->get(), keySize);
   auto payload = utils::JumpScopedArray<u8>(FLAGS_page_size);
-  u16 payload_length;
+  u16 payloadSize;
 
   JUMPMU_TRY() {
   restart : {
@@ -322,9 +317,9 @@ void HistoryTree::VisitRemovedVersions(
         *static_cast<BTreeGeneric*>(btree));
     while (iterator.Seek(key)) {
       iterator.AssembleKey();
-      TXID current_tx_id;
-      utils::unfold(iterator.key().data(), current_tx_id);
-      if (current_tx_id >= from_tx_id && current_tx_id <= to_tx_id) {
+      TXID curTxId;
+      utils::unfold(iterator.key().data(), curTxId);
+      if (curTxId >= fromTxId && curTxId <= toTxId) {
         auto& versionContainer =
             *reinterpret_cast<VersionMeta*>(iterator.MutableVal().Data());
         const TREEID treeId = versionContainer.mTreeId;
@@ -333,15 +328,14 @@ void HistoryTree::VisitRemovedVersions(
         versionContainer.called_before = true;
         keySize = iterator.key().length();
         std::memcpy(keyBuffer->get(), iterator.key().data(), keySize);
-        payload_length = iterator.value().length() - sizeof(VersionMeta);
-        std::memcpy(payload->get(), versionContainer.payload, payload_length);
+        payloadSize = iterator.value().length() - sizeof(VersionMeta);
+        std::memcpy(payload->get(), versionContainer.payload, payloadSize);
         key = Slice(keyBuffer->get(), keySize + 1);
         if (!called_before) {
           iterator.MarkAsDirty();
         }
         iterator.Reset();
-        cb(current_tx_id, treeId, payload->get(), payload_length,
-           called_before);
+        cb(curTxId, treeId, payload->get(), payloadSize, called_before);
         goto restart;
       } else {
         break;
