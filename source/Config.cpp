@@ -22,10 +22,10 @@ DEFINE_string(data_dir, "~/.leanstore",
 DEFINE_uint64(db_file_capacity, 1825361100800,
               "DB file capacity (bytes)"); // 1700 GB
 
-// Config for multi-version, OLAP-isolated BTree
+// Config for TransactionKV
 DEFINE_bool(enable_fat_tuple, false, "");
-DEFINE_bool(enable_olap_mode, true,
-            "Use OLAP mode for long running transactions");
+DEFINE_bool(enable_long_running_transaction, true,
+            "For long running transactions");
 
 DEFINE_uint32(db_file_prealloc_gib, 0, "Disk size to pre-allocate on DB file");
 DEFINE_bool(recover, false, "");

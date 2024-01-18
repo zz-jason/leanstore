@@ -59,7 +59,7 @@ int main(int argc, char** argv) {
   // db.registerConfigEntry("ycsb_ops_per_tx", FLAGS_ycsb_ops_per_tx);
 
   auto isolationLevel = leanstore::ParseIsolationLevel(FLAGS_isolation_level);
-  const TxMode txType = TxMode::kOLTP;
+  const TxMode txType = TxMode::kShortRunning;
 
   const u64 ycsb_tuple_count =
       (FLAGS_ycsb_tuple_count)
@@ -194,9 +194,9 @@ int main(int argc, char** argv) {
   }
 
   if (FLAGS_ycsb_sleepy_thread) {
-    const leanstore::TxMode tx_type = FLAGS_enable_olap_mode
-                                          ? leanstore::TxMode::kOLAP
-                                          : leanstore::TxMode::kOLTP;
+    const leanstore::TxMode tx_type = FLAGS_enable_long_running_transaction
+                                          ? leanstore::TxMode::kLongRunning
+                                          : leanstore::TxMode::kShortRunning;
     crm.scheduleJobAsync(exec_threads - 1, [&]() {
       running_threads_counter++;
       while (keep_running) {

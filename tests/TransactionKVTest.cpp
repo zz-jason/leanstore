@@ -7,7 +7,6 @@
 
 #include <gtest/gtest.h>
 
-#include <cmath>
 #include <filesystem>
 #include <memory>
 #include <string>

@@ -73,7 +73,8 @@ LeanStore::LeanStore() {
     DeSerializeFlags();
   }
   if (!FLAGS_wal) {
-    LOG(FATAL) << "TransactionKV is not enabled without WAL, please enable FLAGS_wal";
+    LOG(FATAL)
+        << "TransactionKV is not enabled without WAL, please enable FLAGS_wal";
   }
 
   // open file
@@ -288,7 +289,8 @@ void LeanStore::startProfilingThread() {
       }
 
       const u64 tx = std::stoull(cr_table.get("0", "tx"));
-      const u64 olap_tx = std::stoull(cr_table.get("0", "olap_tx"));
+      const u64 long_running_tx =
+          std::stoull(cr_table.get("0", "long_running_tx"));
       const double tx_abort = std::stod(cr_table.get("0", "tx_abort"));
       const double tx_abort_pct = tx_abort * 100.0 / (tx_abort + tx);
       const double rfa_pct =
@@ -304,23 +306,23 @@ void LeanStore::startProfilingThread() {
       // using RowType = std::vector<variant<std::string, const char*, Table>>;
       if (FLAGS_print_tx_console) {
         tabulate::Table table;
-        table.add_row({"t", "OLTP TX", "RF %", "Abort%", "OLAP TX", "W MiB",
-                       "R MiB", "Instrs/TX", "Cycles/TX", "CPUs", "L1/TX",
-                       "LLC/TX", "GHz", "WAL GiB/s", "GCT GiB/s", "Space G",
-                       "GCT Rounds"});
-        table.add_row({std::to_string(seconds), std::to_string(tx),
-                       std::to_string(remote_flushes_pct),
-                       std::to_string(tx_abort_pct), std::to_string(olap_tx),
-                       bm_table.get("0", "w_mib"), bm_table.get("0", "r_mib"),
-                       std::to_string(instr_per_tx),
-                       std::to_string(cycles_per_tx),
-                       std::to_string(cpu_table.workers_agg_events["CPU"]),
-                       std::to_string(l1_per_tx), std::to_string(llc_per_tx),
-                       std::to_string(cpu_table.workers_agg_events["GHz"]),
-                       cr_table.get("0", "wal_write_gib"),
-                       cr_table.get("0", "gct_write_gib"),
-                       bm_table.get("0", "space_usage_gib"),
-                       cr_table.get("0", "gct_rounds")});
+        table.add_row({"t", "ShortRunning TX", "RF %", "Abort%",
+                       "LongRunning TX", "W MiB", "R MiB", "Instrs/TX",
+                       "Cycles/TX", "CPUs", "L1/TX", "LLC/TX", "GHz",
+                       "WAL GiB/s", "GCT GiB/s", "Space G", "GCT Rounds"});
+        table.add_row(
+            {std::to_string(seconds), std::to_string(tx),
+             std::to_string(remote_flushes_pct), std::to_string(tx_abort_pct),
+             std::to_string(long_running_tx), bm_table.get("0", "w_mib"),
+             bm_table.get("0", "r_mib"), std::to_string(instr_per_tx),
+             std::to_string(cycles_per_tx),
+             std::to_string(cpu_table.workers_agg_events["CPU"]),
+             std::to_string(l1_per_tx), std::to_string(llc_per_tx),
+             std::to_string(cpu_table.workers_agg_events["GHz"]),
+             cr_table.get("0", "wal_write_gib"),
+             cr_table.get("0", "gct_write_gib"),
+             bm_table.get("0", "space_usage_gib"),
+             cr_table.get("0", "gct_rounds")});
 
         table.format().width(10);
         table.column(0).format().width(5);

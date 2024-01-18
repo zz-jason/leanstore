@@ -23,12 +23,13 @@ public:
       WORKERID workerId, TXID txId, COMMANDID commandId, const bool isRemove,
       std::function<void(const u8*, u64 payloadSize)> cb) = 0;
 
-  virtual void PurgeVersions(WORKERID workerId, TXID from_tx_id, TXID to_tx_id,
+  // represents the range of [from, to], both inclusive
+  virtual void PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
                              RemoveVersionCallback cb, const u64 limit = 0) = 0;
 
-  virtual void VisitRemovedVersions(WORKERID workerId, TXID from_tx_id,
-                                   TXID to_tx_id,
-                                   RemoveVersionCallback cb) = 0; // [from, to]
+  // represents the range of [from, to], both inclusive
+  virtual void VisitRemovedVersions(WORKERID workerId, TXID fromTxId,
+                                    TXID toTxId, RemoveVersionCallback cb) = 0;
 };
 
 } // namespace cr

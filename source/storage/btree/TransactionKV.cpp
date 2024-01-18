@@ -35,7 +35,7 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
         versionsRead;
   }
 
-  if (cr::ActiveTx().IsOLAP() && ret == OpCode::kNotFound) {
+  if (cr::ActiveTx().IsLongRunning() && ret == OpCode::kNotFound) {
     BTreeSharedIterator gIter(*static_cast<BTreeGeneric*>(mGraveyard));
     if (!gIter.SeekExact(key)) {
       return OpCode::kNotFound;
@@ -58,9 +58,9 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
   JUMPMU_TRY() {
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
     if (!xIter.SeekExact(key)) {
-      // Conflict detected, the tuple to be updated by the long-running OLAP
+      // Conflict detected, the tuple to be updated by the long-running
       // transaction is removed by newer transactions, abort it.
-      if (cr::ActiveTx().IsOLAP() &&
+      if (cr::ActiveTx().IsLongRunning() &&
           mGraveyard->Lookup(key, [&](Slice) {}) == OpCode::kOK) {
         JUMPMU_RETURN OpCode::kAbortTx;
       }
@@ -108,7 +108,7 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
       }
       case TupleFormat::kChained: {
         auto& chainedTuple = *ChainedTuple::From(mutRawVal.Data());
-        if (chainedTuple.mIsRemoved) {
+        if (chainedTuple.mIsTombstone) {
           chainedTuple.WriteUnlock();
           JUMPMU_RETURN OpCode::kNotFound;
         }
@@ -168,13 +168,13 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
           << ", key=" << ToString(key)
           << ", tupleLastWriter=" << chainedTuple->mWorkerId
           << ", tupleLastStartTs=" << chainedTuple->mTxId
-          << ", tupleIsRemoved=" << chainedTuple->mIsRemoved
+          << ", tupleIsRemoved=" << chainedTuple->mIsTombstone
           << ", tupleWriteLocked=" << chainedTuple->IsWriteLocked();
 
       auto visibleForMe =
           VisibleForMe(chainedTuple->mWorkerId, chainedTuple->mTxId);
 
-      if (chainedTuple->mIsRemoved && visibleForMe) {
+      if (chainedTuple->mIsTombstone && visibleForMe) {
         insertAfterRemove(xIter, key, val);
         return OpCode::kOK;
       }
@@ -188,7 +188,7 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
                   << ", tupleLastWriter=" << chainedTuple->mWorkerId
                   << ", tupleLastTxId=" << chainedTuple->mTxId
                   << ", tupleIsWriteLocked=" << chainedTuple->IsWriteLocked()
-                  << ", tupleIsRemoved=" << chainedTuple->mIsRemoved
+                  << ", tupleIsRemoved=" << chainedTuple->mIsTombstone
                   << ", tupleVisibleForMe=" << visibleForMe;
         return OpCode::kAbortTx;
       }
@@ -201,7 +201,7 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
                 << ", tupleLastWriter=" << chainedTuple->mWorkerId
                 << ", tupleLastTxId=" << chainedTuple->mTxId
                 << ", tupleIsWriteLocked=" << chainedTuple->IsWriteLocked()
-                << ", tupleIsRemoved=" << chainedTuple->mIsRemoved
+                << ", tupleIsRemoved=" << chainedTuple->mIsTombstone
                 << ", tupleVisibleForMe=" << visibleForMe;
       return OpCode::kDuplicated;
     }
@@ -227,7 +227,7 @@ void TransactionKV::insertAfterRemove(BTreeExclusiveIterator& xIter, Slice key,
                                       Slice val) {
   auto mutRawVal = xIter.MutableVal();
   auto* chainedTuple = ChainedTuple::From(mutRawVal.Data());
-  DCHECK(chainedTuple->mIsRemoved)
+  DCHECK(chainedTuple->mIsTombstone)
       << "Tuple should be removed before insert"
       << ", workerId=" << cr::Worker::my().mWorkerId
       << ", startTs=" << cr::Worker::my().mActiveTx.mStartTs
@@ -288,9 +288,9 @@ OpCode TransactionKV::Remove(Slice key) {
   JUMPMU_TRY() {
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
     if (!xIter.SeekExact(key)) {
-      // Conflict detected, the tuple to be removed by the long-running OLAP
+      // Conflict detected, the tuple to be removed by the long-running
       // transaction is removed by newer transactions, abort it.
-      if (cr::ActiveTx().IsOLAP() &&
+      if (cr::ActiveTx().IsLongRunning() &&
           mGraveyard->Lookup(key, [&](Slice) {}) == OpCode::kOK) {
         JUMPMU_RETURN OpCode::kAbortTx;
       }
@@ -321,7 +321,7 @@ OpCode TransactionKV::Remove(Slice key) {
       JUMPMU_RETURN OpCode::kAbortTx;
     }
 
-    if (chainedTuple.mIsRemoved) {
+    if (chainedTuple.mIsTombstone) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
 
@@ -357,7 +357,7 @@ OpCode TransactionKV::Remove(Slice key) {
     }
 
     // mark as removed
-    chainedTuple.mIsRemoved = true;
+    chainedTuple.mIsTombstone = true;
     chainedTuple.mWorkerId = cr::Worker::my().mWorkerId;
     chainedTuple.mTxId = cr::ActiveTx().mStartTs;
     chainedTuple.mCommandId = commandId;
@@ -376,20 +376,20 @@ OpCode TransactionKV::Remove(Slice key) {
 OpCode TransactionKV::ScanDesc(Slice startKey, ScanCallback callback) {
   DCHECK(cr::Worker::my().IsTxStarted());
 
-  if (cr::ActiveTx().IsOLAP()) {
+  if (cr::ActiveTx().IsLongRunning()) {
     TODOException();
     return OpCode::kAbortTx;
   }
-  return scan<false>(startKey, callback);
+  return scan4ShortRunningTx<false>(startKey, callback);
 }
 
 OpCode TransactionKV::ScanAsc(Slice startKey, ScanCallback callback) {
   DCHECK(cr::Worker::my().IsTxStarted());
 
-  if (cr::ActiveTx().IsOLAP()) {
-    return scanOLAP(startKey, callback);
+  if (cr::ActiveTx().IsLongRunning()) {
+    return scan4LongRunningTx(startKey, callback);
   }
-  return scan<true>(startKey, callback);
+  return scan4ShortRunningTx<true>(startKey, callback);
 }
 
 void TransactionKV::undo(const u8* walPayloadPtr,
@@ -434,7 +434,7 @@ void TransactionKV::undoLastInsert(const WALTxInsert* walInsert) {
         }
 
         // mark as removed
-        chainedTuple->mIsRemoved = true;
+        chainedTuple->mIsTombstone = true;
         chainedTuple->mWorkerId = walInsert->mPrevWorkerId;
         chainedTuple->mTxId = walInsert->mPrevTxId;
         chainedTuple->mCommandId = walInsert->mPrevCommandId;
@@ -618,6 +618,375 @@ bool TransactionKV::UpdateInFatTuple(BTreeExclusiveIterator& xIter, Slice key,
     walHandler.SubmitWal();
     return true;
   }
+}
+
+SpaceCheckResult TransactionKV::checkSpaceUtilization(BufferFrame& bf) {
+  if (!FLAGS_xmerge) {
+    return SpaceCheckResult::kNothing;
+  }
+
+  HybridGuard bfGuard(&bf.header.mLatch);
+  bfGuard.toOptimisticOrJump();
+  if (bf.page.mBTreeId != mTreeId) {
+    jumpmu::Jump();
+  }
+
+  GuardedBufferFrame<BTreeNode> guardedNode(std::move(bfGuard), &bf);
+  if (!guardedNode->mIsLeaf || !triggerPageWiseGarbageCollection(guardedNode)) {
+    return BTreeGeneric::checkSpaceUtilization(bf);
+  }
+
+  guardedNode.ToExclusiveMayJump();
+  guardedNode.SyncGSNBeforeWrite();
+
+  for (u16 i = 0; i < guardedNode->mNumSeps; i++) {
+    auto& tuple = *Tuple::From(guardedNode->ValData(i));
+    if (tuple.mFormat == TupleFormat::kFat) {
+      auto& fatTuple = *FatTuple::From(guardedNode->ValData(i));
+      const u32 newLength = fatTuple.mValSize + sizeof(ChainedTuple);
+      fatTuple.ConvertToChained(mTreeId);
+      DCHECK(newLength < guardedNode->ValSize(i));
+      guardedNode->shortenPayload(i, newLength);
+      DCHECK(tuple.mFormat == TupleFormat::kChained);
+    }
+  }
+  guardedNode->mHasGarbage = false;
+  guardedNode.unlock();
+
+  const SpaceCheckResult result = BTreeGeneric::checkSpaceUtilization(bf);
+  if (result == SpaceCheckResult::kPickAnotherBf) {
+    return SpaceCheckResult::kPickAnotherBf;
+  }
+  return SpaceCheckResult::kRestartSameBf;
+}
+
+void TransactionKV::todo(const u8* entryPtr, const u64 versionWorkerId,
+                         const u64 versionTxId, const bool calledBefore) {
+  // Only point-gc and for removed tuples
+  const auto& version = *reinterpret_cast<const RemoveVersion*>(entryPtr);
+  if (version.mTxId < cr::Worker::my().cc.local_all_lwm) {
+    DCHECK(version.mDanglingPointer.mBf != nullptr);
+    // Optimistic fast path
+    JUMPMU_TRY() {
+      BTreeExclusiveIterator xIter(
+          *static_cast<BTreeGeneric*>(this), version.mDanglingPointer.mBf,
+          version.mDanglingPointer.mLatchVersionShouldBe);
+      auto& node = xIter.mGuardedLeaf;
+      auto& chainedTuple = *ChainedTuple::From(
+          node->ValData(version.mDanglingPointer.mHeadSlot));
+      // Being chained is implicit because we check for version, so the state
+      // can not be changed after staging the todo
+      ENSURE(chainedTuple.mFormat == TupleFormat::kChained &&
+             !chainedTuple.IsWriteLocked() &&
+             chainedTuple.mWorkerId == versionWorkerId &&
+             chainedTuple.mTxId == versionTxId && chainedTuple.mIsTombstone);
+      node->removeSlot(version.mDanglingPointer.mHeadSlot);
+      xIter.MarkAsDirty();
+      xIter.TryMergeIfNeeded();
+      JUMPMU_RETURN;
+    }
+    JUMPMU_CATCH() {
+    }
+  }
+  auto key = version.RemovedKey();
+  OpCode ret;
+  if (calledBefore) {
+    // Delete from mGraveyard
+    // ENSURE(version_tx_id < cr::Worker::my().local_all_lwm);
+    JUMPMU_TRY() {
+      BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(mGraveyard));
+      if (xIter.SeekExact(key)) {
+        ret = xIter.RemoveCurrent();
+        ENSURE(ret == OpCode::kOK);
+        xIter.MarkAsDirty();
+      } else {
+        UNREACHABLE();
+      }
+    }
+    JUMPMU_CATCH() {
+    }
+    return;
+  }
+  // TODO: Corner cases if the tuple got inserted after a remove
+  JUMPMU_TRY() {
+    BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
+    if (!xIter.SeekExact(key)) {
+      JUMPMU_RETURN; // TODO:
+    }
+    // ENSURE(ret == OpCode::kOK);
+    MutableSlice mutRawVal = xIter.MutableVal();
+    // Checks
+    auto& tuple = *Tuple::From(mutRawVal.Data());
+    if (tuple.mFormat == TupleFormat::kFat) {
+      JUMPMU_RETURN;
+    }
+    ChainedTuple& chainedTuple = *ChainedTuple::From(mutRawVal.Data());
+    if (!chainedTuple.IsWriteLocked()) {
+      if (chainedTuple.mWorkerId == versionWorkerId &&
+          chainedTuple.mTxId == versionTxId && chainedTuple.mIsTombstone) {
+        if (chainedTuple.mTxId < cr::Worker::my().cc.local_all_lwm) {
+          ret = xIter.RemoveCurrent();
+          xIter.MarkAsDirty();
+          ENSURE(ret == OpCode::kOK);
+          xIter.TryMergeIfNeeded();
+          COUNTERS_BLOCK() {
+            WorkerCounters::MyCounters().cc_todo_removed[mTreeId]++;
+          }
+        } else if (chainedTuple.mTxId < cr::Worker::my().cc.local_oltp_lwm) {
+          // Move to mGraveyard
+          {
+            BTreeExclusiveIterator graveyardXIter(
+                *static_cast<BTreeGeneric*>(mGraveyard));
+            OpCode gRet = graveyardXIter.InsertKV(key, xIter.value());
+            ENSURE(gRet == OpCode::kOK);
+            graveyardXIter.MarkAsDirty();
+          }
+          ret = xIter.RemoveCurrent();
+          ENSURE(ret == OpCode::kOK);
+          xIter.MarkAsDirty();
+          xIter.TryMergeIfNeeded();
+          COUNTERS_BLOCK() {
+            WorkerCounters::MyCounters().cc_todo_moved_gy[mTreeId]++;
+          }
+        } else {
+          UNREACHABLE();
+        }
+      }
+    }
+  }
+  JUMPMU_CATCH() {
+    UNREACHABLE();
+  }
+}
+
+void TransactionKV::unlock(const u8* walEntryPtr) {
+  const WALPayload& entry = *reinterpret_cast<const WALPayload*>(walEntryPtr);
+  Slice key;
+  switch (entry.mType) {
+  case WALPayload::TYPE::WALTxInsert: {
+    // Assuming no insert after remove
+    auto& walInsert = *reinterpret_cast<const WALTxInsert*>(&entry);
+    key = walInsert.GetKey();
+    break;
+  }
+  case WALPayload::TYPE::WALTxUpdate: {
+    auto& walUpdate = *reinterpret_cast<const WALTxUpdate*>(&entry);
+    key = walUpdate.GetKey();
+    break;
+  }
+  case WALPayload::TYPE::WALTxRemove: {
+    auto& removeEntry = *reinterpret_cast<const WALTxRemove*>(&entry);
+    key = removeEntry.RemovedKey();
+    break;
+  }
+  default: {
+    return;
+    break;
+  }
+  }
+
+  JUMPMU_TRY() {
+    BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
+    auto succeed = xIter.SeekExact(key);
+    DCHECK(succeed) << "Can not find key in the BTree"
+                    << ", key=" << std::string((char*)key.data(), key.size());
+    auto& tuple = *Tuple::From(xIter.MutableVal().Data());
+    ENSURE(tuple.mFormat == TupleFormat::kChained);
+    /**
+     * The major work is in traversing the tree:
+     *
+     * if (tuple.mTxId == cr::ActiveTx().mStartTs &&
+     *     tuple.mWorkerId == cr::Worker::my().mWorkerId) {
+     *   auto& chainedTuple =
+     *       *reinterpret_cast<ChainedTuple*>(xIter.MutableVal().data());
+     *   chainedTuple.mCommitTs = cr::ActiveTx().mCommitTs | kMsb;
+     * }
+     */
+  }
+  JUMPMU_CATCH() {
+    UNREACHABLE();
+  }
+}
+
+// TODO: index range lock for serializability
+template <bool asc>
+OpCode TransactionKV::scan4ShortRunningTx(Slice key, ScanCallback callback) {
+  COUNTERS_BLOCK() {
+    if constexpr (asc) {
+      WorkerCounters::MyCounters().dt_scan_asc[mTreeId]++;
+    } else {
+      WorkerCounters::MyCounters().dt_scan_desc[mTreeId]++;
+    }
+  }
+
+  bool keepScanning = true;
+  JUMPMU_TRY() {
+    BTreeSharedIterator iter(*static_cast<BTreeGeneric*>(this));
+
+    bool succeed = asc ? iter.Seek(key) : iter.SeekForPrev(key);
+    while (succeed) {
+      iter.AssembleKey();
+      Slice scannedKey = iter.key();
+      auto [opCode, versionsRead] =
+          GetVisibleTuple(iter.value(), [&](Slice scannedVal) {
+            COUNTERS_BLOCK() {
+              WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
+                  cr::ActiveTx().IsLongRunning();
+            }
+            keepScanning = callback(scannedKey, scannedVal);
+          });
+      COUNTERS_BLOCK() {
+        WorkerCounters::MyCounters().cc_read_chains[mTreeId]++;
+        WorkerCounters::MyCounters().cc_read_versions_visited[mTreeId] +=
+            versionsRead;
+        if (opCode != OpCode::kOK) {
+          WorkerCounters::MyCounters().cc_read_chains_not_found[mTreeId]++;
+          WorkerCounters::MyCounters()
+              .cc_read_versions_visited_not_found[mTreeId] += versionsRead;
+        }
+      }
+      if (!keepScanning) {
+        JUMPMU_RETURN OpCode::kOK;
+      }
+
+      succeed = asc ? iter.Next() : iter.Prev();
+    }
+    JUMPMU_RETURN OpCode::kOK;
+  }
+  JUMPMU_CATCH() {
+    DCHECK(false) << "Scan failed, key=" << ToString(key);
+  }
+  JUMPMU_RETURN OpCode::kOther;
+}
+
+// TODO: support scanning desc
+template <bool asc>
+OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
+  COUNTERS_BLOCK() {
+    if constexpr (asc) {
+      WorkerCounters::MyCounters().dt_scan_asc[mTreeId]++;
+    } else {
+      WorkerCounters::MyCounters().dt_scan_desc[mTreeId]++;
+    }
+  }
+
+  bool keepScanning = true;
+  JUMPMU_TRY() {
+    BTreeSharedIterator iter(*static_cast<BTreeGeneric*>(this));
+    OpCode oRet;
+
+    BTreeSharedIterator gIter(*static_cast<BTreeGeneric*>(mGraveyard));
+    OpCode gRet;
+
+    Slice graveyardLowerBound, graveyardUpperBound;
+    graveyardLowerBound = key;
+
+    if (!iter.Seek(key)) {
+      JUMPMU_RETURN OpCode::kOK;
+    }
+    oRet = OpCode::kOK;
+    iter.AssembleKey();
+
+    // Now it begins
+    graveyardUpperBound = Slice(iter.mGuardedLeaf->getUpperFenceKey(),
+                                iter.mGuardedLeaf->mUpperFence.length);
+    auto gRange = [&]() {
+      gIter.Reset();
+      if (mGraveyard->IsRangeEmpty(graveyardLowerBound, graveyardUpperBound)) {
+        gRet = OpCode::kOther;
+        return;
+      }
+      if (!gIter.Seek(graveyardLowerBound)) {
+        gRet = OpCode::kNotFound;
+        return;
+      }
+
+      gIter.AssembleKey();
+      if (gIter.key() > graveyardUpperBound) {
+        gRet = OpCode::kOther;
+        gIter.Reset();
+        return;
+      }
+
+      gRet = OpCode::kOK;
+    };
+
+    gRange();
+    auto takeFromOltp = [&]() {
+      GetVisibleTuple(iter.value(), [&](Slice value) {
+        COUNTERS_BLOCK() {
+          WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
+              cr::ActiveTx().IsLongRunning();
+        }
+        keepScanning = callback(iter.key(), value);
+      });
+      if (!keepScanning) {
+        return false;
+      }
+      const bool isLastOne = iter.IsLastOne();
+      if (isLastOne) {
+        gIter.Reset();
+      }
+      oRet = iter.Next() ? OpCode::kOK : OpCode::kNotFound;
+      if (isLastOne) {
+        graveyardLowerBound = Slice(&iter.mBuffer[0], iter.mFenceSize + 1);
+        graveyardUpperBound = Slice(iter.mGuardedLeaf->getUpperFenceKey(),
+                                    iter.mGuardedLeaf->mUpperFence.length);
+        gRange();
+      }
+      return true;
+    };
+    while (true) {
+      if (gRet != OpCode::kOK && oRet == OpCode::kOK) {
+        iter.AssembleKey();
+        if (!takeFromOltp()) {
+          JUMPMU_RETURN OpCode::kOK;
+        }
+      } else if (gRet == OpCode::kOK && oRet != OpCode::kOK) {
+        gIter.AssembleKey();
+        Slice gKey = gIter.key();
+        GetVisibleTuple(gIter.value(), [&](Slice value) {
+          COUNTERS_BLOCK() {
+            WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
+                cr::ActiveTx().IsLongRunning();
+          }
+          keepScanning = callback(gKey, value);
+        });
+        if (!keepScanning) {
+          JUMPMU_RETURN OpCode::kOK;
+        }
+        gRet = gIter.Next() ? OpCode::kOK : OpCode::kNotFound;
+      } else if (gRet == OpCode::kOK && oRet == OpCode::kOK) {
+        iter.AssembleKey();
+        gIter.AssembleKey();
+        Slice gKey = gIter.key();
+        Slice oltpKey = iter.key();
+        if (oltpKey <= gKey) {
+          if (!takeFromOltp()) {
+            JUMPMU_RETURN OpCode::kOK;
+          }
+        } else {
+          GetVisibleTuple(gIter.value(), [&](Slice value) {
+            COUNTERS_BLOCK() {
+              WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
+                  cr::ActiveTx().IsLongRunning();
+            }
+            keepScanning = callback(gKey, value);
+          });
+          if (!keepScanning) {
+            JUMPMU_RETURN OpCode::kOK;
+          }
+          gRet = gIter.Next() ? OpCode::kOK : OpCode::kNotFound;
+        }
+      } else {
+        JUMPMU_RETURN OpCode::kOK;
+      }
+    }
+  }
+  JUMPMU_CATCH() {
+    DCHECK(false);
+  }
+  JUMPMU_RETURN OpCode::kOther;
 }
 
 } // namespace leanstore::storage::btree
