@@ -234,28 +234,28 @@ public:
   static std::atomic<u64> sGlobalClock;
 
 public:
-  /// The optismistic latch to guard mWmk4ShortTx and mWmk4AllTx.
+  /// The optismistic latch to guard mWmkOfShortTx and mWmkOfAllTx.
   std::atomic<TXID> mWmkVersion = 0;
 
   /// The smallest commit timestamp (lower watermark) for short-running
   /// transactions. Tombstones produced by transactions whose start timestamp
   /// are smaller than it can be moved to the graveyard, so that newer
   /// transactions can not see them when traversing the main btree.
-  std::atomic<TXID> mWmk4ShortTx;
+  std::atomic<TXID> mWmkOfShortTx;
 
   /// The smallest commit timestamp (lower watermark) for all transactions. All
   /// transactions whose start timestamp is smaller than it can be garbage
   /// collected.
-  std::atomic<TXID> mWmk4AllTx;
+  std::atomic<TXID> mWmkOfAllTx;
 
   std::atomic<TXID> mLatestCommitTs = 0;
 
   std::atomic<TXID> mLatestLwm4Tx = 0;
 
-  /// A copy of mWmk4AllTx
+  /// A copy of mWmkOfAllTx
   TXID mLocalWmk4AllTx;
 
-  /// A copy of mWmk4ShortTx
+  /// A copy of mWmkOfShortTx
   TXID mLocalWmk4ShortTx;
 
   TXID local_global_all_lwm_cache = 0;
@@ -280,7 +280,7 @@ public:
   //-------------------------------------------------------------------------
   void GarbageCollection();
 
-  void refreshGlobalState();
+  void UpdateGlobalTxWatermarks();
 
   void switchToReadCommittedMode();
 
@@ -372,23 +372,23 @@ public:
   static thread_local std::unique_ptr<Worker> sTlsWorker;
 
   // Concurrency Control
-  static std::unique_ptr<std::atomic<u64>[]> sWorkersCurrentSnapshot;
-  static std::atomic<TXID> sOldestOltpStartTx;
-  static std::atomic<TXID> sOltpLwm;
-  static std::atomic<TXID> sOldestAllStartTs;
-  static std::atomic<TXID> sAllLwm;
-  static std::atomic<TXID> sNewestOlapStartTx;
+  static std::unique_ptr<std::atomic<u64>[]> sLatestStartTs;
+  static std::atomic<TXID> sGlobalOldestShortTxId;
+  static std::atomic<TXID> sGlobalWmkOfShortTx;
+  static std::atomic<TXID> sGlobalOldestTxId;
+  static std::atomic<TXID> sGlobalWmkOfAllTx;
+  static std::atomic<TXID> sGlobalNewestLongTxId;
   static std::shared_mutex sGlobalMutex;
 
   static constexpr u64 kWorkersBits = 8;
   static constexpr u64 kWorkersIncrement = 1ull << kWorkersBits;
   static constexpr u64 kLatchBit = (1ull << 63);
   static constexpr u64 kRcBit = (1ull << 62);
-  static constexpr u64 kOlapBit = (1ull << 61);
-  static constexpr u64 kOltpOlapSameBit = kOlapBit;
-  static constexpr u64 kCleanBitsMask = ~(kLatchBit | kOlapBit | kRcBit);
+  static constexpr u64 kLongRunningBit = (1ull << 61);
+  static constexpr u64 kOltpOlapSameBit = kLongRunningBit;
+  static constexpr u64 kCleanBitsMask = ~(kLatchBit | kLongRunningBit | kRcBit);
 
-  // TXID: [ kLatchBit | kRcBit | kOlapBit         | id];
+  // TXID: [ kLatchBit | kRcBit | kLongRunningBit         | id];
   // LWM:  [ kLatchBit | kRcBit | kOltpOlapSameBit | id];
   static constexpr s64 kCrEntrySize = sizeof(WALEntrySimple);
 

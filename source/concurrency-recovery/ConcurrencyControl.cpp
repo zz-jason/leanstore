@@ -3,6 +3,7 @@
 #include "Worker.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "storage/buffer-manager/TreeRegistry.hpp"
+#include "utils/Defer.hpp"
 #include "utils/Misc.hpp"
 #include "utils/RandomGenerator.hpp"
 
@@ -11,90 +12,97 @@
 #include <atomic>
 #include <set>
 
-namespace leanstore {
-namespace cr {
+namespace leanstore::cr {
 
 std::atomic<u64> ConcurrencyControl::sGlobalClock = Worker::kWorkersIncrement;
 
 // Also for interval garbage collection
-void ConcurrencyControl::refreshGlobalState() {
+void ConcurrencyControl::UpdateGlobalTxWatermarks() {
   if (!FLAGS_enable_garbage_collection) {
     return;
   }
 
   utils::Timer timer(CRCounters::MyCounters().cc_ms_refresh_global_state);
 
-  if (utils::RandomGenerator::getRandU64(0, Worker::my().mNumAllWorkers) == 0 &&
-      Worker::sGlobalMutex.try_lock()) {
-    TXID localNewestOlap = std::numeric_limits<TXID>::min();
-    TXID localOldestOltp = std::numeric_limits<TXID>::max();
-    TXID localOldestTx = std::numeric_limits<TXID>::max();
-    for (WORKERID i = 0; i < Worker::my().mNumAllWorkers; i++) {
-      std::atomic<u64>& workerSnapshot = Worker::sWorkersCurrentSnapshot[i];
+  auto performRefresh =
+      utils::RandomGenerator::getRandU64(0, Worker::my().mNumAllWorkers) == 0 &&
+      Worker::sGlobalMutex.try_lock();
+  if (!performRefresh) {
+    return;
+  }
+  SCOPED_DEFER(Worker::sGlobalMutex.unlock()); // release the lock on exit
 
-      u64 workerInFlightTxId = workerSnapshot.load();
-      while ((workerInFlightTxId & Worker::kLatchBit) &&
-             ((workerInFlightTxId & Worker::kCleanBitsMask) <
-              ActiveTx().mStartTs)) {
-        workerInFlightTxId = workerSnapshot.load();
-      }
+  TXID localOldestTxId = std::numeric_limits<TXID>::max();
+  TXID localNewestLongTxId = std::numeric_limits<TXID>::min();
+  TXID localOldestShortTxId = std::numeric_limits<TXID>::max();
+  for (WORKERID i = 0; i < Worker::my().mNumAllWorkers; i++) {
+    std::atomic<u64>& latestStartTs = Worker::sLatestStartTs[i];
 
-      bool isRc = workerInFlightTxId & Worker::kRcBit;
-      bool isOlap = workerInFlightTxId & Worker::kOlapBit;
-      workerInFlightTxId &= Worker::kCleanBitsMask;
-
-      if (!isRc) {
-        localOldestTx = std::min<TXID>(workerInFlightTxId, localOldestTx);
-        if (isOlap) {
-          localNewestOlap = std::max<TXID>(workerInFlightTxId, localNewestOlap);
-        } else {
-          localOldestOltp = std::min<TXID>(workerInFlightTxId, localOldestOltp);
-        }
-      }
+    u64 runningTxId = latestStartTs.load();
+    while ((runningTxId & Worker::kLatchBit) &&
+           ((runningTxId & Worker::kCleanBitsMask) < ActiveTx().mStartTs)) {
+      // can only happen when the worker just finished a transaction whose
+      // startTs is smaller than the current transaction's startTs and the
+      // worker is about to start a new transaction.
+      runningTxId = latestStartTs.load();
     }
 
-    Worker::sOldestAllStartTs.store(localOldestTx, std::memory_order_release);
-    Worker::sOldestOltpStartTx.store(localOldestOltp,
-                                     std::memory_order_release);
-    Worker::sNewestOlapStartTx.store(localNewestOlap,
-                                     std::memory_order_release);
-
-    TXID globalAllLwmBuffer = std::numeric_limits<TXID>::max();
-    TXID globalOltpLwmBuffer = std::numeric_limits<TXID>::max();
-    bool skippedAWorker = false;
-    for (WORKERID i = 0; i < Worker::my().mNumAllWorkers; i++) {
-      ConcurrencyControl& cc = other(i);
-      if (cc.mLatestLwm4Tx == cc.mLatestCommitTs) {
-        skippedAWorker = true;
-        continue;
-      }
-      cc.mLatestLwm4Tx.store(cc.mLatestCommitTs, std::memory_order_release);
-      TXID curWmk4AllTx = cc.mCommitTree.LCB(Worker::sOldestAllStartTs);
-      TXID curWmk4ShortTx = cc.mCommitTree.LCB(Worker::sOldestOltpStartTx);
-
-      if (FLAGS_enable_long_running_transaction &&
-          Worker::sOldestAllStartTs != Worker::sOldestOltpStartTx) {
-        globalOltpLwmBuffer =
-            std::min<TXID>(curWmk4ShortTx, globalOltpLwmBuffer);
-      } else {
-        curWmk4ShortTx = curWmk4AllTx;
-      }
-
-      globalAllLwmBuffer = std::min<TXID>(curWmk4AllTx, globalAllLwmBuffer);
-
-      cc.mWmkVersion.store(cc.mWmkVersion.load() + 1,
-                           std::memory_order_release);
-      cc.mWmk4AllTx.store(curWmk4AllTx, std::memory_order_release);
-      cc.mWmk4ShortTx.store(curWmk4ShortTx, std::memory_order_release);
-      cc.mWmkVersion.store(cc.mWmkVersion.load() + 1,
-                           std::memory_order_release);
-    }
-    if (!skippedAWorker) {
-      Worker::sAllLwm.store(globalAllLwmBuffer, std::memory_order_release);
-      Worker::sOltpLwm.store(globalOltpLwmBuffer, std::memory_order_release);
+    // Skip transactions running in read-committed mode.
+    if (runningTxId & Worker::kRcBit) {
+      continue;
     }
 
-    Worker::sGlobalMutex.unlock();
+    bool isLongRunningTx = runningTxId & Worker::kLongRunningBit;
+    runningTxId &= Worker::kCleanBitsMask;
+    localOldestTxId = std::min<TXID>(runningTxId, localOldestTxId);
+    if (isLongRunningTx) {
+      localNewestLongTxId = std::max<TXID>(runningTxId, localNewestLongTxId);
+    } else {
+      localOldestShortTxId = std::min<TXID>(runningTxId, localOldestShortTxId);
+    }
+  }
+
+  // Update the three transaction ids
+  Worker::sGlobalOldestTxId.store(localOldestTxId, std::memory_order_release);
+  Worker::sGlobalNewestLongTxId.store(localNewestLongTxId,
+                                      std::memory_order_release);
+  Worker::sGlobalOldestShortTxId.store(localOldestShortTxId,
+                                       std::memory_order_release);
+
+  // Update global lower watermarks based on the three transaction ids
+  TXID globalWmkOfAllTx = std::numeric_limits<TXID>::max();
+  TXID globalWmkOfShortTx = std::numeric_limits<TXID>::max();
+  bool skippedAWorker = false;
+  for (WORKERID i = 0; i < Worker::my().mNumAllWorkers; i++) {
+    ConcurrencyControl& cc = other(i);
+    if (cc.mLatestLwm4Tx == cc.mLatestCommitTs) {
+      skippedAWorker = true;
+      continue;
+    }
+    cc.mLatestLwm4Tx.store(cc.mLatestCommitTs, std::memory_order_release);
+    TXID wmkOfAllTx = cc.mCommitTree.LCB(Worker::sGlobalOldestTxId);
+    TXID wmkOfShortTx = cc.mCommitTree.LCB(Worker::sGlobalOldestShortTxId);
+
+    if (FLAGS_enable_long_running_transaction &&
+        Worker::sGlobalOldestTxId != Worker::sGlobalOldestShortTxId) {
+      globalWmkOfShortTx = std::min<TXID>(wmkOfShortTx, globalWmkOfShortTx);
+    } else {
+      wmkOfShortTx = wmkOfAllTx;
+    }
+
+    globalWmkOfAllTx = std::min<TXID>(wmkOfAllTx, globalWmkOfAllTx);
+
+    cc.mWmkVersion.store(cc.mWmkVersion.load() + 1, std::memory_order_release);
+    cc.mWmkOfAllTx.store(wmkOfAllTx, std::memory_order_release);
+    cc.mWmkOfShortTx.store(wmkOfShortTx, std::memory_order_release);
+    cc.mWmkVersion.store(cc.mWmkVersion.load() + 1, std::memory_order_release);
+  }
+
+  if (!skippedAWorker) {
+    Worker::sGlobalWmkOfAllTx.store(globalWmkOfAllTx,
+                                    std::memory_order_release);
+    Worker::sGlobalWmkOfShortTx.store(globalWmkOfShortTx,
+                                      std::memory_order_release);
   }
 }
 
@@ -102,11 +110,10 @@ void ConcurrencyControl::switchToSnapshotIsolationMode() {
   u64 workerId = Worker::my().mWorkerId;
   {
     std::unique_lock guard(Worker::sGlobalMutex);
-    std::atomic<u64>& workerSnapshot =
-        Worker::sWorkersCurrentSnapshot[workerId];
+    std::atomic<u64>& workerSnapshot = Worker::sLatestStartTs[workerId];
     workerSnapshot.store(sGlobalClock.load(), std::memory_order_release);
   }
-  refreshGlobalState();
+  UpdateGlobalTxWatermarks();
 }
 
 void ConcurrencyControl::switchToReadCommittedMode() {
@@ -115,12 +122,11 @@ void ConcurrencyControl::switchToReadCommittedMode() {
     // Latch-free work only when all counters increase monotone, we can not
     // simply go back
     std::unique_lock guard(Worker::sGlobalMutex);
-    std::atomic<u64>& workerSnapshot =
-        Worker::sWorkersCurrentSnapshot[workerId];
+    std::atomic<u64>& workerSnapshot = Worker::sLatestStartTs[workerId];
     u64 newSnapshot = workerSnapshot.load() | Worker::kRcBit;
     workerSnapshot.store(newSnapshot, std::memory_order_release);
   }
-  refreshGlobalState();
+  UpdateGlobalTxWatermarks();
 }
 
 void ConcurrencyControl::updateLocalWatermarks() {
@@ -132,8 +138,8 @@ void ConcurrencyControl::updateLocalWatermarks() {
     };
 
     // update the two local watermarks
-    mLocalWmk4AllTx = mWmk4AllTx.load();
-    mLocalWmk4ShortTx = mWmk4ShortTx.load();
+    mLocalWmk4AllTx = mWmkOfAllTx.load();
+    mLocalWmk4ShortTx = mWmkOfShortTx.load();
 
     // restart if the latch was taken
     if (version != mWmkVersion.load()) {
@@ -275,10 +281,10 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId) {
 bool ConcurrencyControl::VisibleForAll(TXID ts) {
   if (ts & kMsb) {
     // Commit Timestamp
-    return (ts & kMsbMask) < Worker::sOldestAllStartTs.load();
+    return (ts & kMsbMask) < Worker::sGlobalOldestTxId.load();
   }
   // Start Timestamp
-  return ts < Worker::sAllLwm.load();
+  return ts < Worker::sGlobalWmkOfAllTx.load();
 }
 
 TXID ConcurrencyControl::CommitTree::commit(TXID startTs) {
@@ -333,9 +339,9 @@ void ConcurrencyControl::CommitTree::cleanIfNecessary() {
     if (i == myWorkerId) {
       continue;
     }
-    u64 itsStartTs = Worker::sWorkersCurrentSnapshot[i].load();
+    u64 itsStartTs = Worker::sLatestStartTs[i].load();
     while (itsStartTs & Worker::kLatchBit) {
-      itsStartTs = Worker::sWorkersCurrentSnapshot[i].load();
+      itsStartTs = Worker::sLatestStartTs[i].load();
     }
     itsStartTs &= Worker::kCleanBitsMask;
     set.insert(array[cursor - 1]); // for  the new TX
@@ -358,5 +364,4 @@ void ConcurrencyControl::CommitTree::cleanIfNecessary() {
   mutex.unlock();
 }
 
-} // namespace cr
-} // namespace leanstore
+} // namespace leanstore::cr

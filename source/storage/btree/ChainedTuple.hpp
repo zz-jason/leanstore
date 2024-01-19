@@ -12,7 +12,7 @@ namespace leanstore::storage::btree {
 
 /// History versions of chained tuple are stored in the history tree of the
 /// current worker thread.
-/// Chained: only scheduled gc todos.
+/// Chained: only scheduled gc.
 class __attribute__((packed)) ChainedTuple : public Tuple {
 public:
   u16 mTotalUpdates = 0;
@@ -64,7 +64,7 @@ public:
 
   void UpdateStats() {
     if (cr::Worker::my().cc.VisibleForAll(mTxId) ||
-        mOldestTx != static_cast<u16>(cr::Worker::sOldestAllStartTs & 0xFFFF)) {
+        mOldestTx != static_cast<u16>(cr::Worker::sGlobalOldestTxId & 0xFFFF)) {
       mOldestTx = 0;
       mTotalUpdates = 0;
       return;
@@ -75,7 +75,7 @@ public:
   bool ShouldConvertToFatTuple() {
     bool commandValid = mCommandId != kInvalidCommandid;
     bool hasLongRunningOLAP =
-        cr::Worker::sOldestOltpStartTx != cr::Worker::sOldestAllStartTs;
+        cr::Worker::sGlobalOldestShortTxId != cr::Worker::sGlobalOldestTxId;
     bool frequentlyUpdated = mTotalUpdates > FLAGS_worker_threads;
     bool recentUpdatedByOthers = mWorkerId != cr::Worker::my().mWorkerId ||
                                  mTxId != cr::ActiveTx().mStartTs;

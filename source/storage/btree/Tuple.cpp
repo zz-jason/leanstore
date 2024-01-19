@@ -210,8 +210,8 @@ void FatTuple::GarbageCollection() {
     }
   }
 
-  const TXID local_oldest_oltp = cr::Worker::my().sOldestOltpStartTx.load();
-  const TXID local_newest_olap = cr::Worker::my().sNewestOlapStartTx.load();
+  const TXID local_oldest_oltp = cr::Worker::my().sGlobalOldestShortTxId.load();
+  const TXID local_newest_olap = cr::Worker::my().sGlobalNewestLongTxId.load();
   if (deltasVisibleForAll == 0 && local_newest_olap > local_oldest_oltp) {
     return; // Nothing to do here
   }

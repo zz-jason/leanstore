@@ -218,7 +218,7 @@ StringMap CRManager::serialize() {
 void CRManager::deserialize(StringMap map) {
   u64 val = std::stoull(map[kKeyGlobalLogicalClock]);
   ConcurrencyControl::sGlobalClock = val;
-  Worker::sAllLwm = val;
+  Worker::sGlobalWmkOfAllTx = val;
   mGroupCommitter->mWalSize = std::stoull(map[kKeyWalSize]);
 }
 
