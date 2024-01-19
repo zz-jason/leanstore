@@ -81,7 +81,7 @@ DECLARE_uint64(wal_buffer_size);
 // -------------------------------------------------------------------------------------
 DECLARE_string(isolation_level);
 DECLARE_uint64(si_refresh_rate);
-DECLARE_bool(todo);
+DECLARE_bool(enable_garbage_collection);
 
 // Config for MVCC GC
 DECLARE_bool(pgc);

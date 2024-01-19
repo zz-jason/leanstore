@@ -8,9 +8,9 @@
 
 #include <functional>
 
-namespace leanstore {
-namespace cr {
 using namespace leanstore::storage::btree;
+
+namespace leanstore::cr {
 
 void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
                              TREEID treeId, bool isRemove, u64 versionSize,
@@ -148,8 +148,8 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
   Slice key(keyBuffer->get(), keySize);
   auto payload = utils::JumpScopedArray<u8>(FLAGS_page_size);
   u16 payloadSize;
-  volatile u64 versionsRemoved = 0;
-  BasicKV* volatile btree = mRemoveBTrees[workerId];
+  u64 versionsRemoved = 0;
+  auto* btree = mRemoveBTrees[workerId];
 
   JUMPMU_TRY() {
   restartrem : {
@@ -279,12 +279,11 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
       if (did_purge_full_page) {
         did_purge_full_page = false;
         JUMPMU_CONTINUE;
-      } else {
-        session->leftmost_bf = iterator.mGuardedLeaf.mBf;
-        session->leftmost_version = iterator.mGuardedLeaf.mGuard.mVersion + 1;
-        session->leftmost_init = true;
-        JUMPMU_BREAK;
       }
+      session->leftmost_bf = iterator.mGuardedLeaf.mBf;
+      session->leftmost_version = iterator.mGuardedLeaf.mGuard.mVersion + 1;
+      session->leftmost_init = true;
+      JUMPMU_BREAK;
     }
     JUMPMU_CATCH() {
       UNREACHABLE();
@@ -295,14 +294,9 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
   }
 }
 
-// Pre: TXID is unsigned integer
-void HistoryTree::VisitRemovedVersions(
-    WORKERID workerId, TXID fromTxId, TXID toTxId,
-    std::function<void(const TXID, const TREEID, const u8*, u64,
-                       const bool visited_before)>
-        cb) {
-  // [from, to]
-  BasicKV* btree = mRemoveBTrees[workerId];
+void HistoryTree::VisitRemovedVersions(WORKERID workerId, TXID fromTxId,
+                                       TXID toTxId, RemoveVersionCallback cb) {
+  auto* removeTree = mRemoveBTrees[workerId];
   auto keySize = sizeof(toTxId);
   auto keyBuffer = utils::JumpScopedArray<u8>(FLAGS_page_size);
   u64 offset = 0;
@@ -314,7 +308,7 @@ void HistoryTree::VisitRemovedVersions(
   JUMPMU_TRY() {
   restart : {
     leanstore::storage::btree::BTreeExclusiveIterator iterator(
-        *static_cast<BTreeGeneric*>(btree));
+        *static_cast<BTreeGeneric*>(removeTree));
     while (iterator.Seek(key)) {
       iterator.AssembleKey();
       TXID curTxId;
@@ -323,19 +317,19 @@ void HistoryTree::VisitRemovedVersions(
         auto& versionContainer =
             *reinterpret_cast<VersionMeta*>(iterator.MutableVal().Data());
         const TREEID treeId = versionContainer.mTreeId;
-        const bool called_before = versionContainer.called_before;
-        ENSURE(called_before == false);
+        const bool calledBefore = versionContainer.called_before;
+        ENSURE(calledBefore == false);
         versionContainer.called_before = true;
         keySize = iterator.key().length();
         std::memcpy(keyBuffer->get(), iterator.key().data(), keySize);
         payloadSize = iterator.value().length() - sizeof(VersionMeta);
         std::memcpy(payload->get(), versionContainer.payload, payloadSize);
         key = Slice(keyBuffer->get(), keySize + 1);
-        if (!called_before) {
+        if (!calledBefore) {
           iterator.MarkAsDirty();
         }
         iterator.Reset();
-        cb(curTxId, treeId, payload->get(), payloadSize, called_before);
+        cb(curTxId, treeId, payload->get(), payloadSize, calledBefore);
         goto restart;
       } else {
         break;
@@ -347,5 +341,4 @@ void HistoryTree::VisitRemovedVersions(
   }
 }
 
-} // namespace cr
-} // namespace leanstore
+} // namespace leanstore::cr

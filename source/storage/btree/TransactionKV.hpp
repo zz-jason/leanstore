@@ -4,6 +4,7 @@
 #include "Config.hpp"
 #include "KVInterface.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "shared-headers/Units.hpp"
 #include "storage/btree/BasicKV.hpp"
 #include "storage/btree/ChainedTuple.hpp"
 #include "storage/btree/Tuple.hpp"
@@ -59,8 +60,8 @@ public:
   // operations during recovery
   void undo(const u8* walEntryPtr, const u64) override;
 
-  void todo(const u8* entryPtr, const u64 versionWorkerId,
-            const u64 versionTxId, const bool calledBefore) override;
+  void GarbageCollect(const u8* entryPtr, WORKERID versionWorkerId,
+                      TXID versionTxId, bool calledBefore) override;
 
   void unlock(const u8* walEntryPtr) override;
 

@@ -1,9 +1,12 @@
 #include "CRMG.hpp"
+#include "Config.hpp"
 #include "Worker.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "storage/buffer-manager/TreeRegistry.hpp"
 #include "utils/Misc.hpp"
 #include "utils/RandomGenerator.hpp"
+
+#include "glog/logging.h"
 
 #include <atomic>
 #include <set>
@@ -15,8 +18,7 @@ std::atomic<u64> ConcurrencyControl::sGlobalClock = Worker::kWorkersIncrement;
 
 // Also for interval garbage collection
 void ConcurrencyControl::refreshGlobalState() {
-  if (!FLAGS_todo) {
-    // Why bother
+  if (!FLAGS_enable_garbage_collection) {
     return;
   }
 
@@ -61,36 +63,31 @@ void ConcurrencyControl::refreshGlobalState() {
     TXID globalOltpLwmBuffer = std::numeric_limits<TXID>::max();
     bool skippedAWorker = false;
     for (WORKERID i = 0; i < Worker::my().mNumAllWorkers; i++) {
-      ConcurrencyControl& workerState = other(i);
-      if (workerState.mLatestLwm4Tx == workerState.mLatestCommitTs) {
+      ConcurrencyControl& cc = other(i);
+      if (cc.mLatestLwm4Tx == cc.mLatestCommitTs) {
         skippedAWorker = true;
         continue;
       }
-      workerState.mLatestLwm4Tx.store(workerState.mLatestCommitTs,
-                                      std::memory_order_release);
-      TXID itsAllLwmBuffer =
-          workerState.mCommitTree.LCB(Worker::sOldestAllStartTs);
-      TXID itsOltpLwmBuffer =
-          workerState.mCommitTree.LCB(Worker::sOldestOltpStartTx);
+      cc.mLatestLwm4Tx.store(cc.mLatestCommitTs, std::memory_order_release);
+      TXID curWmk4AllTx = cc.mCommitTree.LCB(Worker::sOldestAllStartTs);
+      TXID curWmk4ShortTx = cc.mCommitTree.LCB(Worker::sOldestOltpStartTx);
 
       if (FLAGS_enable_long_running_transaction &&
           Worker::sOldestAllStartTs != Worker::sOldestOltpStartTx) {
         globalOltpLwmBuffer =
-            std::min<TXID>(itsOltpLwmBuffer, globalOltpLwmBuffer);
+            std::min<TXID>(curWmk4ShortTx, globalOltpLwmBuffer);
       } else {
-        itsOltpLwmBuffer = itsAllLwmBuffer;
+        curWmk4ShortTx = curWmk4AllTx;
       }
 
-      globalAllLwmBuffer = std::min<TXID>(itsAllLwmBuffer, globalAllLwmBuffer);
+      globalAllLwmBuffer = std::min<TXID>(curWmk4AllTx, globalAllLwmBuffer);
 
-      workerState.local_lwm_latch.store(workerState.local_lwm_latch.load() + 1,
-                                        std::memory_order_release); // Latch
-      workerState.all_lwm_receiver.store(itsAllLwmBuffer,
-                                         std::memory_order_release);
-      workerState.oltp_lwm_receiver.store(itsOltpLwmBuffer,
-                                          std::memory_order_release);
-      workerState.local_lwm_latch.store(workerState.local_lwm_latch.load() + 1,
-                                        std::memory_order_release); // Release
+      cc.mWmkVersion.store(cc.mWmkVersion.load() + 1,
+                           std::memory_order_release);
+      cc.mWmk4AllTx.store(curWmk4AllTx, std::memory_order_release);
+      cc.mWmk4ShortTx.store(curWmk4ShortTx, std::memory_order_release);
+      cc.mWmkVersion.store(cc.mWmkVersion.load() + 1,
+                           std::memory_order_release);
     }
     if (!skippedAWorker) {
       Worker::sAllLwm.store(globalAllLwmBuffer, std::memory_order_release);
@@ -126,68 +123,79 @@ void ConcurrencyControl::switchToReadCommittedMode() {
   refreshGlobalState();
 }
 
+void ConcurrencyControl::updateLocalWatermarks() {
+  while (true) {
+    u64 version = mWmkVersion.load();
+
+    // spin until the latch is free
+    while ((version = mWmkVersion.load()) & 1) {
+    };
+
+    // update the two local watermarks
+    mLocalWmk4AllTx = mWmk4AllTx.load();
+    mLocalWmk4ShortTx = mWmk4ShortTx.load();
+
+    // restart if the latch was taken
+    if (version != mWmkVersion.load()) {
+      continue;
+    }
+  }
+
+  DCHECK(!FLAGS_enable_long_running_transaction ||
+         mLocalWmk4AllTx <= mLocalWmk4ShortTx)
+      << "Lower watermark of all transactions should be no higher than the "
+         "lower watermark of short-running transactions"
+      << ", workerId=" << Worker::my().mWorkerId
+      << ", mLocalWmk4AllTx=" << mLocalWmk4AllTx
+      << ", mLocalWmk4ShortTx=" << mLocalWmk4ShortTx;
+}
+
+// TODO: smooth purge, we should not let the system hang on this, as a quick
+// fix, it should be enough if we purge in small batches
 void ConcurrencyControl::GarbageCollection() {
-  if (!FLAGS_todo) {
+  if (!FLAGS_enable_garbage_collection) {
     return;
   }
 
-  // TODO: smooth purge, we should not let the system hang on this, as a quick
-  // fix, it should be enough if we purge in small batches
   utils::Timer timer(CRCounters::MyCounters().cc_ms_gc);
-synclwm : {
-  u64 lwmVersion = local_lwm_latch.load();
-  while ((lwmVersion = local_lwm_latch.load()) & 1) {
-  };
-  local_all_lwm = all_lwm_receiver.load();
-  local_oltp_lwm = oltp_lwm_receiver.load();
-  if (lwmVersion != local_lwm_latch.load()) {
-    goto synclwm;
-  }
-  ENSURE(!FLAGS_enable_long_running_transaction ||
-         local_all_lwm <= local_oltp_lwm);
-}
+  updateLocalWatermarks();
 
-  // ATTENTION: atm, with out extra sync, the two lwm can not
-  if (local_all_lwm > cleaned_untill_oltp_lwm) {
+  // remove versions that are nolonger needed by any long-running transaction
+  if (cleaned_untill_oltp_lwm < mLocalWmk4AllTx) {
     utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_history_tree);
-    // PURGE!
     CRManager::sInstance->mHistoryTreePtr->PurgeVersions(
-        Worker::my().mWorkerId, 0, local_all_lwm - 1,
-        [&](const TXID txId, const TREEID treeId, const u8* version_payload,
-            [[maybe_unused]] u64 version_payload_length,
-            const bool called_before) {
-          leanstore::storage::TreeRegistry::sInstance->todo(
-              treeId, version_payload, Worker::my().mWorkerId, txId,
-              called_before);
+        Worker::my().mWorkerId, 0, mLocalWmk4AllTx - 1,
+        [&](const TXID versionTxId, const TREEID treeId, const u8* versionData,
+            u64, const bool calledBefore) {
+          leanstore::storage::TreeRegistry::sInstance->GarbageCollect(
+              treeId, versionData, Worker::my().mWorkerId, versionTxId,
+              calledBefore);
           COUNTERS_BLOCK() {
             WorkerCounters::MyCounters().cc_todo_olap_executed[treeId]++;
           }
         },
         0);
-    cleaned_untill_oltp_lwm = std::max(local_all_lwm, cleaned_untill_oltp_lwm);
+
+    // advance the cleaned_untill_oltp_lwm
+    cleaned_untill_oltp_lwm = mLocalWmk4AllTx;
   }
+
+  // MOVE deletes to the graveyard
   if (FLAGS_enable_long_running_transaction &&
-      local_all_lwm != local_oltp_lwm) {
-    if (local_oltp_lwm > 0 && local_oltp_lwm > cleaned_untill_oltp_lwm) {
-      utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_graveyard);
-      // MOVE deletes to the graveyard
-      const u64 fromTxId =
-          cleaned_untill_oltp_lwm > 0 ? cleaned_untill_oltp_lwm : 0;
-      CRManager::sInstance->mHistoryTreePtr->VisitRemovedVersions(
-          Worker::my().mWorkerId, fromTxId, local_oltp_lwm - 1,
-          [&](const TXID txId, const TREEID treeId, const u8* version_payload,
-              [[maybe_unused]] u64 version_payload_length,
-              const bool called_before) {
-            cleaned_untill_oltp_lwm =
-                std::max(cleaned_untill_oltp_lwm, txId + 1);
-            leanstore::storage::TreeRegistry::sInstance->todo(
-                treeId, version_payload, Worker::my().mWorkerId, txId,
-                called_before);
-            COUNTERS_BLOCK() {
-              WorkerCounters::MyCounters().cc_todo_oltp_executed[treeId]++;
-            }
-          });
-    }
+      mLocalWmk4AllTx < mLocalWmk4ShortTx &&
+      cleaned_untill_oltp_lwm < mLocalWmk4ShortTx) {
+    utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_graveyard);
+    CRManager::sInstance->mHistoryTreePtr->VisitRemovedVersions(
+        Worker::my().mWorkerId, cleaned_untill_oltp_lwm, mLocalWmk4ShortTx - 1,
+        [&](const TXID txId, const TREEID treeId, const u8* versionData, u64,
+            const bool calledBefore) {
+          cleaned_untill_oltp_lwm = std::max(cleaned_untill_oltp_lwm, txId + 1);
+          leanstore::storage::TreeRegistry::sInstance->GarbageCollect(
+              treeId, versionData, Worker::my().mWorkerId, txId, calledBefore);
+          COUNTERS_BLOCK() {
+            WorkerCounters::MyCounters().cc_todo_oltp_executed[treeId]++;
+          }
+        });
   }
 }
 

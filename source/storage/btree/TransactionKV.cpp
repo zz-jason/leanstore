@@ -660,11 +660,11 @@ SpaceCheckResult TransactionKV::checkSpaceUtilization(BufferFrame& bf) {
   return SpaceCheckResult::kRestartSameBf;
 }
 
-void TransactionKV::todo(const u8* entryPtr, const u64 versionWorkerId,
-                         const u64 versionTxId, const bool calledBefore) {
+void TransactionKV::GarbageCollect(const u8* entryPtr, WORKERID versionWorkerId,
+                                   TXID versionTxId, bool calledBefore) {
   // Only point-gc and for removed tuples
   const auto& version = *reinterpret_cast<const RemoveVersion*>(entryPtr);
-  if (version.mTxId < cr::Worker::my().cc.local_all_lwm) {
+  if (version.mTxId < cr::Worker::my().cc.mLocalWmk4AllTx) {
     DCHECK(version.mDanglingPointer.mBf != nullptr);
     // Optimistic fast path
     JUMPMU_TRY() {
@@ -692,7 +692,7 @@ void TransactionKV::todo(const u8* entryPtr, const u64 versionWorkerId,
   OpCode ret;
   if (calledBefore) {
     // Delete from mGraveyard
-    // ENSURE(version_tx_id < cr::Worker::my().local_all_lwm);
+    // ENSURE(version_tx_id < cr::Worker::my().mLocalWmk4AllTx);
     JUMPMU_TRY() {
       BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(mGraveyard));
       if (xIter.SeekExact(key)) {
@@ -724,7 +724,7 @@ void TransactionKV::todo(const u8* entryPtr, const u64 versionWorkerId,
     if (!chainedTuple.IsWriteLocked()) {
       if (chainedTuple.mWorkerId == versionWorkerId &&
           chainedTuple.mTxId == versionTxId && chainedTuple.mIsTombstone) {
-        if (chainedTuple.mTxId < cr::Worker::my().cc.local_all_lwm) {
+        if (chainedTuple.mTxId < cr::Worker::my().cc.mLocalWmk4AllTx) {
           ret = xIter.RemoveCurrent();
           xIter.MarkAsDirty();
           ENSURE(ret == OpCode::kOK);
@@ -732,7 +732,7 @@ void TransactionKV::todo(const u8* entryPtr, const u64 versionWorkerId,
           COUNTERS_BLOCK() {
             WorkerCounters::MyCounters().cc_todo_removed[mTreeId]++;
           }
-        } else if (chainedTuple.mTxId < cr::Worker::my().cc.local_oltp_lwm) {
+        } else if (chainedTuple.mTxId < cr::Worker::my().cc.mLocalWmk4ShortTx) {
           // Move to mGraveyard
           {
             BTreeExclusiveIterator graveyardXIter(

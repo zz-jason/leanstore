@@ -192,14 +192,24 @@ class ConcurrencyControl {
 public:
   // Commmit Tree (single-writer multiple-reader)
   struct CommitTree {
+  public:
     u64 capacity;
+
     std::pair<TXID, TXID>* array;
+
     std::shared_mutex mutex;
+
     u64 cursor = 0;
+
+  public:
     void cleanIfNecessary();
+
     TXID commit(TXID startTs);
+
     std::optional<std::pair<TXID, TXID>> LCBUnsafe(TXID startTs);
+
     TXID LCB(TXID startTs);
+
     CommitTree(const u64 numWorkers) : capacity(numWorkers + 1) {
       array = new std::pair<TXID, TXID>[capacity];
     }
@@ -224,22 +234,29 @@ public:
   static std::atomic<u64> sGlobalClock;
 
 public:
-  //-------------------------------------------------------------------------
-  // Object members
-  //-------------------------------------------------------------------------
-  std::atomic<TXID> local_lwm_latch = 0;
+  /// The optismistic latch to guard mWmk4ShortTx and mWmk4AllTx.
+  std::atomic<TXID> mWmkVersion = 0;
 
-  std::atomic<TXID> oltp_lwm_receiver;
+  /// The smallest commit timestamp (lower watermark) for short-running
+  /// transactions. Tombstones produced by transactions whose start timestamp
+  /// are smaller than it can be moved to the graveyard, so that newer
+  /// transactions can not see them when traversing the main btree.
+  std::atomic<TXID> mWmk4ShortTx;
 
-  std::atomic<TXID> all_lwm_receiver;
+  /// The smallest commit timestamp (lower watermark) for all transactions. All
+  /// transactions whose start timestamp is smaller than it can be garbage
+  /// collected.
+  std::atomic<TXID> mWmk4AllTx;
 
   std::atomic<TXID> mLatestCommitTs = 0;
 
   std::atomic<TXID> mLatestLwm4Tx = 0;
 
-  TXID local_all_lwm;
+  /// A copy of mWmk4AllTx
+  TXID mLocalWmk4AllTx;
 
-  TXID local_oltp_lwm;
+  /// A copy of mWmk4ShortTx
+  TXID mLocalWmk4ShortTx;
 
   TXID local_global_all_lwm_cache = 0;
 
@@ -296,6 +313,8 @@ private:
   VISIBILITY isVisibleForIt(WORKERID whomWorkerId, TXID commitTs);
 
   TXID getCommitTimestamp(WORKERID workerId, TXID startTs);
+
+  void updateLocalWatermarks();
 };
 
 /**
