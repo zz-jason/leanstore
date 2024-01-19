@@ -142,8 +142,8 @@ void ConcurrencyControl::updateLocalWatermarks() {
     mLocalWmk4ShortTx = mWmkOfShortTx.load();
 
     // restart if the latch was taken
-    if (version != mWmkVersion.load()) {
-      continue;
+    if (version == mWmkVersion.load()) {
+      return;
     }
   }
 
