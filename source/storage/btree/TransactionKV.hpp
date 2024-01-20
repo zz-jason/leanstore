@@ -158,7 +158,7 @@ public:
   }
 
   /// Updates the value stored in FatTuple. The former newest version value is
-  /// moved to the tail of the delta array.
+  /// moved to the tail.
   /// @return false to fallback to chained mode
   static bool UpdateInFatTuple(BTreeExclusiveIterator& xIter, Slice key,
                                MutValCallback updateCallBack,

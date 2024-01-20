@@ -275,7 +275,7 @@ void FatTuple::GarbageCollection() {
     }
 
     // TODO: Optimize
-    // Merge from newest to oldest, i.e., from end of array into beginning
+    // Merge from newest to oldest, i.e., from end to beginning
     if (FLAGS_tmp5 && 0) {
       // Hack
       auto& delta = getDelta(zone_begin);

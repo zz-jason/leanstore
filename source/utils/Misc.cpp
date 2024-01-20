@@ -8,13 +8,13 @@ namespace leanstore {
 namespace utils {
 
 void PrintBackTrace() {
-  void* array[10];
+  void* buffer[10];
   size_t size;
   char** strings;
   size_t i;
 
-  size = backtrace(array, 10);
-  strings = backtrace_symbols(array, size);
+  size = backtrace(buffer, 10);
+  strings = backtrace_symbols(buffer, size);
 
   for (i = 0; i < size; i++)
     printf("%s\n", strings[i]);

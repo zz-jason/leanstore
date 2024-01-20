@@ -46,8 +46,8 @@ Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers)
 }
 
 Worker::~Worker() {
-  delete[] cc.mCommitTree.array;
-  cc.mCommitTree.array = nullptr;
+  delete[] cc.mCommitTree.mCommitLog;
+  cc.mCommitTree.mCommitLog = nullptr;
 
   free(mLogging.mWalBuffer);
   mLogging.mWalBuffer = nullptr;
@@ -105,7 +105,7 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
       curWorkerSnapshot.store(mActiveTx.mStartTs | kLatchBit,
                               std::memory_order_release);
 
-      mActiveTx.mStartTs = ConcurrencyControl::sGlobalClock.fetch_add(1);
+      mActiveTx.mStartTs = ConcurrencyControl::sTimeStampOracle.fetch_add(1);
       auto curTxId = mActiveTx.mStartTs;
       if (FLAGS_enable_long_running_transaction && mActiveTx.IsLongRunning()) {
         // mark as long-running transaction
@@ -114,13 +114,13 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
       // publish the transaction id
       curWorkerSnapshot.store(curTxId, std::memory_order_release);
     }
-    cc.mCommitTree.cleanIfNecessary();
-    cc.local_global_all_lwm_cache = sGlobalWmkOfAllTx.load();
+    cc.mCommitTree.CleanUpCommitLog();
+    cc.mGlobalWmkOfAllTxSnapshot = sGlobalWmkOfAllTx.load();
   } else {
     if (prevTx.AtLeastSI()) {
-      cc.switchToReadCommittedMode();
+      cc.SwitchToReadCommitted();
     }
-    cc.mCommitTree.cleanIfNecessary();
+    cc.mCommitTree.CleanUpCommitLog();
   }
 }
 
@@ -141,7 +141,7 @@ void Worker::CommitTx() {
 
   mCommandId = 0; // Reset mCommandId only on commit and never on abort
   if (mActiveTx.mHasWrote) {
-    auto commitTs = cc.mCommitTree.commit(mActiveTx.mStartTs);
+    auto commitTs = cc.mCommitTree.AppendCommitLog(mActiveTx.mStartTs);
     cc.mLatestCommitTs.store(commitTs, std::memory_order_release);
     mActiveTx.mCommitTs = commitTs;
     DCHECK(mActiveTx.mStartTs < mActiveTx.mCommitTs)
@@ -249,7 +249,7 @@ void Worker::AbortTx() {
 
 void Worker::shutdown() {
   cc.GarbageCollection();
-  cc.switchToReadCommittedMode();
+  cc.SwitchToReadCommitted();
 }
 
 } // namespace cr

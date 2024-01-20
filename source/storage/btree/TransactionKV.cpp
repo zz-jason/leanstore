@@ -660,11 +660,12 @@ SpaceCheckResult TransactionKV::checkSpaceUtilization(BufferFrame& bf) {
   return SpaceCheckResult::kRestartSameBf;
 }
 
-void TransactionKV::GarbageCollect(const u8* entryPtr, WORKERID versionWorkerId,
-                                   TXID versionTxId, bool calledBefore) {
-  // Only point-gc and for removed tuples
-  const auto& version = *reinterpret_cast<const RemoveVersion*>(entryPtr);
-  if (version.mTxId < cr::Worker::my().cc.mLocalWmk4AllTx) {
+// Only point-gc and for removed tuples
+void TransactionKV::GarbageCollect(const u8* versionData,
+                                   WORKERID versionWorkerId, TXID versionTxId,
+                                   bool calledBefore) {
+  const auto& version = *reinterpret_cast<const RemoveVersion*>(versionData);
+  if (version.mTxId < cr::Worker::my().cc.mLocalWmkOfAllTx) {
     DCHECK(version.mDanglingPointer.mBf != nullptr);
     // Optimistic fast path
     JUMPMU_TRY() {
@@ -692,7 +693,7 @@ void TransactionKV::GarbageCollect(const u8* entryPtr, WORKERID versionWorkerId,
   OpCode ret;
   if (calledBefore) {
     // Delete from mGraveyard
-    // ENSURE(version_tx_id < cr::Worker::my().mLocalWmk4AllTx);
+    // ENSURE(version_tx_id < cr::Worker::my().mLocalWmkOfAllTx);
     JUMPMU_TRY() {
       BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(mGraveyard));
       if (xIter.SeekExact(key)) {
@@ -721,36 +722,38 @@ void TransactionKV::GarbageCollect(const u8* entryPtr, WORKERID versionWorkerId,
       JUMPMU_RETURN;
     }
     ChainedTuple& chainedTuple = *ChainedTuple::From(mutRawVal.Data());
-    if (!chainedTuple.IsWriteLocked()) {
-      if (chainedTuple.mWorkerId == versionWorkerId &&
-          chainedTuple.mTxId == versionTxId && chainedTuple.mIsTombstone) {
-        if (chainedTuple.mTxId < cr::Worker::my().cc.mLocalWmk4AllTx) {
-          ret = xIter.RemoveCurrent();
-          xIter.MarkAsDirty();
-          ENSURE(ret == OpCode::kOK);
-          xIter.TryMergeIfNeeded();
-          COUNTERS_BLOCK() {
-            WorkerCounters::MyCounters().cc_todo_removed[mTreeId]++;
-          }
-        } else if (chainedTuple.mTxId < cr::Worker::my().cc.mLocalWmk4ShortTx) {
-          // Move to mGraveyard
-          {
-            BTreeExclusiveIterator graveyardXIter(
-                *static_cast<BTreeGeneric*>(mGraveyard));
-            OpCode gRet = graveyardXIter.InsertKV(key, xIter.value());
-            ENSURE(gRet == OpCode::kOK);
-            graveyardXIter.MarkAsDirty();
-          }
-          ret = xIter.RemoveCurrent();
-          ENSURE(ret == OpCode::kOK);
-          xIter.MarkAsDirty();
-          xIter.TryMergeIfNeeded();
-          COUNTERS_BLOCK() {
-            WorkerCounters::MyCounters().cc_todo_moved_gy[mTreeId]++;
-          }
-        } else {
-          UNREACHABLE();
+    if (chainedTuple.IsWriteLocked()) {
+      JUMPMU_RETURN;
+    }
+    if (chainedTuple.mWorkerId == versionWorkerId &&
+        chainedTuple.mTxId == versionTxId && chainedTuple.mIsTombstone) {
+      if (chainedTuple.mTxId < cr::Worker::my().cc.mLocalWmkOfAllTx) {
+        // remove the tombsone completely
+        ret = xIter.RemoveCurrent();
+        xIter.MarkAsDirty();
+        ENSURE(ret == OpCode::kOK);
+        xIter.TryMergeIfNeeded();
+        COUNTERS_BLOCK() {
+          WorkerCounters::MyCounters().cc_todo_removed[mTreeId]++;
         }
+      } else if (chainedTuple.mTxId < cr::Worker::my().cc.mLocalWmkOfShortTx) {
+        // move it to graveyard for long-running transactions
+        BTreeExclusiveIterator graveyardXIter(
+            *static_cast<BTreeGeneric*>(mGraveyard));
+        OpCode gRet = graveyardXIter.InsertKV(key, xIter.value());
+        ENSURE(gRet == OpCode::kOK);
+        graveyardXIter.MarkAsDirty();
+
+        // remove it from the main tree
+        ret = xIter.RemoveCurrent();
+        ENSURE(ret == OpCode::kOK);
+        xIter.MarkAsDirty();
+        xIter.TryMergeIfNeeded();
+        COUNTERS_BLOCK() {
+          WorkerCounters::MyCounters().cc_todo_moved_gy[mTreeId]++;
+        }
+      } else {
+        UNREACHABLE();
       }
     }
   }
