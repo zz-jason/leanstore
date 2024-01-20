@@ -66,7 +66,8 @@ void ConfigsTable::open() {
   columns.emplace("c_wal_fsync", [&](Column& col) { col << FLAGS_wal_fsync; });
   columns.emplace("c_wal_log_writers",
                   [&](Column& col) { col << FLAGS_wal_log_writers; });
-  columns.emplace("c_todo", [&](Column& col) { col << FLAGS_todo; });
+  columns.emplace("c_enable_garbage_collection",
+                  [&](Column& col) { col << FLAGS_enable_garbage_collection; });
   columns.emplace("c_vi_fat_tuple",
                   [&](Column& col) { col << FLAGS_enable_fat_tuple; });
   columns.emplace("c_pgc", [&](Column& col) { col << FLAGS_pgc; });
@@ -84,11 +85,11 @@ void ConfigsTable::open() {
 }
 
 u64 ConfigsTable::hash() {
-  std::stringstream config_concatenation;
+  std::stringstream configConcatenation;
   for (const auto& c : columns) {
-    config_concatenation << c.second.values[0];
+    configConcatenation << c.second.values[0];
   }
-  return std::hash<std::string>{}(config_concatenation.str());
+  return std::hash<std::string>{}(configConcatenation.str());
 }
 
 void ConfigsTable::next() {

@@ -248,9 +248,9 @@ void DTTable::open() {
     col << Sum(WorkerCounters::sCounters,
                &WorkerCounters::cc_todo_oltp_executed, mTreeId);
   });
-  columns.emplace("cc_todo_olap_executed", [&](Column& col) {
+  columns.emplace("cc_gc_long_tx_executed", [&](Column& col) {
     col << Sum(WorkerCounters::sCounters,
-               &WorkerCounters::cc_todo_olap_executed, mTreeId);
+               &WorkerCounters::cc_gc_long_tx_executed, mTreeId);
   });
 
   columns.emplace("cc_fat_tuple_triggered", [&](Column& col) {

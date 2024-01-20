@@ -194,13 +194,12 @@ public:
   /// Size of the newest value.
   u16 mValSize = 0;
 
-  /// Capacity of the payload bytes array
+  /// Capacity of the payload
   u32 mPayloadCapacity = 0;
 
-  /// Size of used space in the payload bytes array
+  /// Space used of the payload
   u32 mPayloadSize = 0;
 
-  ///
   u32 mDataOffset = 0;
 
   u16 mNumDeltas = 0; // Attention: coupled with mPayloadSize

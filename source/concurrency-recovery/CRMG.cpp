@@ -209,7 +209,7 @@ constexpr char kKeyGlobalLogicalClock[] = "global_logical_clock";
 
 StringMap CRManager::serialize() {
   StringMap map;
-  u64 val = ConcurrencyControl::sGlobalClock.load();
+  u64 val = ConcurrencyControl::sTimeStampOracle.load();
   map[kKeyWalSize] = std::to_string(mGroupCommitter->mWalSize);
   map[kKeyGlobalLogicalClock] = std::to_string(val);
   return map;
@@ -217,8 +217,8 @@ StringMap CRManager::serialize() {
 
 void CRManager::deserialize(StringMap map) {
   u64 val = std::stoull(map[kKeyGlobalLogicalClock]);
-  ConcurrencyControl::sGlobalClock = val;
-  Worker::sAllLwm = val;
+  ConcurrencyControl::sTimeStampOracle = val;
+  Worker::sGlobalWmkOfAllTx = val;
   mGroupCommitter->mWalSize = std::stoull(map[kKeyWalSize]);
 }
 

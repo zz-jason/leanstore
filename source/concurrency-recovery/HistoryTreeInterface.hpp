@@ -8,7 +8,8 @@ namespace leanstore {
 namespace cr {
 
 using RemoveVersionCallback = std::function<void(
-    const TXID, const TREEID, const u8*, u64, const bool visitedBefore)>;
+    const TXID versionTxId, const TREEID treeId, const u8* versionData,
+    u64 versionSize, const bool visitedBefore)>;
 
 class HistoryTreeInterface {
 public:
