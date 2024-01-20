@@ -71,8 +71,8 @@ public:
     LOG(FATAL) << "BufferManagedTree::undo is unimplemented";
   }
 
-  virtual void todo(const u8*, const u64, const u64, const bool) {
-    LOG(FATAL) << "BufferManagedTree::todo is unimplemented";
+  virtual void GarbageCollect(const u8*, WORKERID, TXID, bool) {
+    LOG(FATAL) << "BufferManagedTree::GarbageCollect is unimplemented";
   }
 
   virtual void unlock(const u8*) {
@@ -259,14 +259,16 @@ public:
     return tree->undo(walEntry, tts);
   }
 
-  inline void todo(TREEID treeId, const u8* entry, const u64 version_worker_id,
-                   u64 version_tx_id, const bool called_before) {
+  inline void GarbageCollect(TREEID treeId, const u8* versionData,
+                             WORKERID versionWorkerId, TXID versionTxId,
+                             bool calledBefore) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
-    DLOG_IF(FATAL, it == mTrees.end())
+    DCHECK(it != mTrees.end())
         << "BufferManagedTree not find, treeId=" << treeId;
     auto& [tree, treeName] = it->second;
-    return tree->todo(entry, version_worker_id, version_tx_id, called_before);
+    return tree->GarbageCollect(versionData, versionWorkerId, versionTxId,
+                                calledBefore);
   }
 
   inline void unlock(TREEID treeId, const u8* entry) {

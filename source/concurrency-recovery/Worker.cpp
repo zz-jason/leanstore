@@ -10,7 +10,6 @@
 #include <glog/logging.h>
 
 #include <algorithm>
-#include <chrono>
 #include <cstdlib>
 #include <mutex>
 
@@ -21,13 +20,13 @@ thread_local std::unique_ptr<Worker> Worker::sTlsWorker = nullptr;
 std::shared_mutex Worker::sGlobalMutex;
 
 // All transactions < are committed
-std::unique_ptr<std::atomic<u64>[]> Worker::sWorkersCurrentSnapshot =
+std::unique_ptr<std::atomic<u64>[]> Worker::sLatestStartTs =
     std::make_unique<std::atomic<u64>[]>(FLAGS_worker_threads);
-std::atomic<u64> Worker::sOldestAllStartTs = 0;
-std::atomic<u64> Worker::sOldestOltpStartTx = 0;
-std::atomic<u64> Worker::sAllLwm = 0;
-std::atomic<u64> Worker::sOltpLwm = 0;
-std::atomic<u64> Worker::sNewestOlapStartTx = 0;
+std::atomic<u64> Worker::sGlobalOldestTxId = 0;
+std::atomic<u64> Worker::sGlobalOldestShortTxId = 0;
+std::atomic<u64> Worker::sGlobalWmkOfAllTx = 0;
+std::atomic<u64> Worker::sGlobalWmkOfShortTx = 0;
+std::atomic<u64> Worker::sGlobalNewestLongTxId = 0;
 
 Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers)
     : cc(numWorkers),
@@ -43,12 +42,12 @@ Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers)
   cc.mLocalSnapshotCache = make_unique<u64[]>(numWorkers);
   cc.local_snapshot_cache_ts = make_unique<u64[]>(numWorkers);
   cc.local_workers_start_ts = make_unique<u64[]>(numWorkers + 1);
-  sWorkersCurrentSnapshot[mWorkerId] = 0;
+  sLatestStartTs[mWorkerId] = 0;
 }
 
 Worker::~Worker() {
-  delete[] cc.mCommitTree.array;
-  cc.mCommitTree.array = nullptr;
+  delete[] cc.mCommitTree.mCommitLog;
+  cc.mCommitTree.mCommitLog = nullptr;
 
   free(mLogging.mWalBuffer);
   mLogging.mWalBuffer = nullptr;
@@ -102,26 +101,26 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   if (level >= IsolationLevel::kSnapshotIsolation) {
     {
       utils::Timer timer(CRCounters::MyCounters().cc_ms_snapshotting);
-      auto& curWorkerSnapshot = sWorkersCurrentSnapshot[mWorkerId];
+      auto& curWorkerSnapshot = sLatestStartTs[mWorkerId];
       curWorkerSnapshot.store(mActiveTx.mStartTs | kLatchBit,
                               std::memory_order_release);
 
-      mActiveTx.mStartTs = ConcurrencyControl::sGlobalClock.fetch_add(1);
-      if (FLAGS_enable_long_running_transaction) {
-        curWorkerSnapshot.store(mActiveTx.mStartTs |
-                                    ((mActiveTx.IsLongRunning()) ? kOlapBit : 0),
-                                std::memory_order_release);
-      } else {
-        curWorkerSnapshot.store(mActiveTx.mStartTs, std::memory_order_release);
+      mActiveTx.mStartTs = ConcurrencyControl::sTimeStampOracle.fetch_add(1);
+      auto curTxId = mActiveTx.mStartTs;
+      if (FLAGS_enable_long_running_transaction && mActiveTx.IsLongRunning()) {
+        // mark as long-running transaction
+        curTxId |= kLongRunningBit;
       }
+      // publish the transaction id
+      curWorkerSnapshot.store(curTxId, std::memory_order_release);
     }
-    cc.mCommitTree.cleanIfNecessary();
-    cc.local_global_all_lwm_cache = sAllLwm.load();
+    cc.mCommitTree.CleanUpCommitLog();
+    cc.mGlobalWmkOfAllTxSnapshot = sGlobalWmkOfAllTx.load();
   } else {
     if (prevTx.AtLeastSI()) {
-      cc.switchToReadCommittedMode();
+      cc.SwitchToReadCommitted();
     }
-    cc.mCommitTree.cleanIfNecessary();
+    cc.mCommitTree.CleanUpCommitLog();
   }
 }
 
@@ -142,7 +141,7 @@ void Worker::CommitTx() {
 
   mCommandId = 0; // Reset mCommandId only on commit and never on abort
   if (mActiveTx.mHasWrote) {
-    auto commitTs = cc.mCommitTree.commit(mActiveTx.mStartTs);
+    auto commitTs = cc.mCommitTree.AppendCommitLog(mActiveTx.mStartTs);
     cc.mLatestCommitTs.store(commitTs, std::memory_order_release);
     mActiveTx.mCommitTs = commitTs;
     DCHECK(mActiveTx.mStartTs < mActiveTx.mCommitTs)
@@ -182,7 +181,7 @@ void Worker::CommitTx() {
 
   // Only committing snapshot/ changing between SI and lower modes
   if (mActiveTx.AtLeastSI()) {
-    cc.refreshGlobalState();
+    cc.UpdateGlobalTxWatermarks();
   }
 
   // All isolation level generate garbage
@@ -250,7 +249,7 @@ void Worker::AbortTx() {
 
 void Worker::shutdown() {
   cc.GarbageCollection();
-  cc.switchToReadCommittedMode();
+  cc.SwitchToReadCommitted();
 }
 
 } // namespace cr

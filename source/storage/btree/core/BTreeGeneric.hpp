@@ -99,8 +99,8 @@ public:
     LOG(FATAL) << "undo is unsupported";
   }
 
-  virtual void todo(const u8*, const u64, const u64, const bool) override {
-    LOG(FATAL) << "todo is unsupported";
+  virtual void GarbageCollect(const u8*, WORKERID, TXID, bool) override {
+    LOG(FATAL) << "GarbageCollect is unsupported";
   }
 
   virtual void unlock(const u8*) override {

@@ -124,20 +124,19 @@ DEFINE_bool(wal_fsync, true, "Whether to explicitly flush wal to disk");
 DEFINE_uint64(wal_log_writers, 1, "");
 DEFINE_uint64(wal_buffer_size, 1024 * 1024 * 10,
               "WAL buffer size for each worker (Bytes)");
-// -------------------------------------------------------------------------------------
+
+// MVCC and transaction
 DEFINE_string(isolation_level, "si",
               "options: si (Snapshot Isolation), ser (Serializable)");
 DEFINE_uint64(si_refresh_rate, 0, "");
-DEFINE_bool(todo, true, "");
-// -------------------------------------------------------------------------------------
-// -------------------------------------------------------------------------------------
+DEFINE_bool(enable_garbage_collection, true, "");
+
 DEFINE_bool(pgc, true, "Precise garbage collection/recycling");
 DEFINE_uint64(pgc_variant, 0, "0 naive, 1 bit faster, 2 ...");
 DEFINE_double(garbage_in_page_pct, 15,
               "Threshold to trigger page-wise garbage collection (%)");
 DEFINE_uint64(todo_batch_size, 1024, "");
 DEFINE_bool(history_tree_inserts, true, "");
-// -------------------------------------------------------------------------------------
 
 namespace leanstore {
 

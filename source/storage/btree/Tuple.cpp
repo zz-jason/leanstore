@@ -210,8 +210,8 @@ void FatTuple::GarbageCollection() {
     }
   }
 
-  const TXID local_oldest_oltp = cr::Worker::my().sOldestOltpStartTx.load();
-  const TXID local_newest_olap = cr::Worker::my().sNewestOlapStartTx.load();
+  const TXID local_oldest_oltp = cr::Worker::my().sGlobalOldestShortTxId.load();
+  const TXID local_newest_olap = cr::Worker::my().sGlobalNewestLongTxId.load();
   if (deltasVisibleForAll == 0 && local_newest_olap > local_oldest_oltp) {
     return; // Nothing to do here
   }
@@ -275,7 +275,7 @@ void FatTuple::GarbageCollection() {
     }
 
     // TODO: Optimize
-    // Merge from newest to oldest, i.e., from end of array into beginning
+    // Merge from newest to oldest, i.e., from end to beginning
     if (FLAGS_tmp5 && 0) {
       // Hack
       auto& delta = getDelta(zone_begin);
