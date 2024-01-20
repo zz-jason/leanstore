@@ -196,13 +196,13 @@ TEST_F(TransactionKVTest, Insert1000KVs) {
     ssize_t numKVs(1000);
     cr::Worker::my().StartTx();
     for (ssize_t i = 0; i < numKVs; ++i) {
-      auto key = RandomGenerator::RandomAlphString(24);
+      auto key = RandomGenerator::RandAlphString(24);
       if (uniqueKeys.find(key) != uniqueKeys.end()) {
         i--;
         continue;
       }
       uniqueKeys.insert(key);
-      auto val = RandomGenerator::RandomAlphString(128);
+      auto val = RandomGenerator::RandAlphString(128);
       EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
@@ -236,13 +236,13 @@ TEST_F(TransactionKVTest, InsertDuplicates) {
     std::set<std::string> uniqueKeys;
     ssize_t numKVs(100);
     for (ssize_t i = 0; i < numKVs; ++i) {
-      auto key = RandomGenerator::RandomAlphString(24);
+      auto key = RandomGenerator::RandAlphString(24);
       if (uniqueKeys.find(key) != uniqueKeys.end()) {
         i--;
         continue;
       }
       uniqueKeys.insert(key);
-      auto val = RandomGenerator::RandomAlphString(128);
+      auto val = RandomGenerator::RandAlphString(128);
       cr::Worker::my().StartTx();
       EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
@@ -252,7 +252,7 @@ TEST_F(TransactionKVTest, InsertDuplicates) {
 
     // insert duplicated keys
     for (auto& key : uniqueKeys) {
-      auto val = RandomGenerator::RandomAlphString(128);
+      auto val = RandomGenerator::RandAlphString(128);
       cr::Worker::my().StartTx();
       EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
@@ -287,13 +287,13 @@ TEST_F(TransactionKVTest, Remove) {
     std::set<std::string> uniqueKeys;
     ssize_t numKVs(100);
     for (ssize_t i = 0; i < numKVs; ++i) {
-      auto key = RandomGenerator::RandomAlphString(24);
+      auto key = RandomGenerator::RandAlphString(24);
       if (uniqueKeys.find(key) != uniqueKeys.end()) {
         i--;
         continue;
       }
       uniqueKeys.insert(key);
-      auto val = RandomGenerator::RandomAlphString(128);
+      auto val = RandomGenerator::RandAlphString(128);
 
       cr::Worker::my().StartTx();
       EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
@@ -344,13 +344,13 @@ TEST_F(TransactionKVTest, RemoveNotExisted) {
     std::set<std::string> uniqueKeys;
     ssize_t numKVs(100);
     for (ssize_t i = 0; i < numKVs; ++i) {
-      auto key = RandomGenerator::RandomAlphString(24);
+      auto key = RandomGenerator::RandAlphString(24);
       if (uniqueKeys.find(key) != uniqueKeys.end()) {
         i--;
         continue;
       }
       uniqueKeys.insert(key);
-      auto val = RandomGenerator::RandomAlphString(128);
+      auto val = RandomGenerator::RandAlphString(128);
 
       cr::Worker::my().StartTx();
       EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
@@ -361,7 +361,7 @@ TEST_F(TransactionKVTest, RemoveNotExisted) {
 
     // remove keys not existed
     for (ssize_t i = 0; i < numKVs; ++i) {
-      auto key = RandomGenerator::RandomAlphString(24);
+      auto key = RandomGenerator::RandAlphString(24);
       if (uniqueKeys.find(key) != uniqueKeys.end()) {
         i--;
         continue;
@@ -401,13 +401,13 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
     // insert numKVs tuples
     ssize_t numKVs(100);
     for (ssize_t i = 0; i < numKVs; ++i) {
-      auto key = RandomGenerator::RandomAlphString(24);
+      auto key = RandomGenerator::RandAlphString(24);
       if (uniqueKeys.find(key) != uniqueKeys.end()) {
         i--;
         continue;
       }
       uniqueKeys.insert(key);
-      auto val = RandomGenerator::RandomAlphString(128);
+      auto val = RandomGenerator::RandAlphString(128);
 
       cr::Worker::my().StartTx();
       EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
@@ -508,8 +508,8 @@ TEST_F(TransactionKVTest, Update) {
   const size_t valSize = 120;
   std::vector<std::tuple<std::string, std::string>> kvToTest;
   for (size_t i = 0; i < numKVs; ++i) {
-    auto key = RandomGenerator::RandomAlphString(24);
-    auto val = RandomGenerator::RandomAlphString(valSize);
+    auto key = RandomGenerator::RandAlphString(24);
+    auto val = RandomGenerator::RandAlphString(valSize);
     kvToTest.push_back(std::make_tuple(key, val));
   }
 
@@ -538,7 +538,7 @@ TEST_F(TransactionKVTest, Update) {
     }
 
     // update all the values to this newVal
-    auto newVal = RandomGenerator::RandomAlphString(valSize);
+    auto newVal = RandomGenerator::RandAlphString(valSize);
     auto updateCallBack = [&](MutableSlice mutRawVal) {
       std::memcpy(mutRawVal.Data(), newVal.data(), mutRawVal.Size());
     };
@@ -591,8 +591,8 @@ TEST_F(TransactionKVTest, ScanAsc) {
   std::string smallest;
   std::string bigest;
   for (size_t i = 0; i < numKVs; ++i) {
-    auto key = RandomGenerator::RandomAlphString(24);
-    auto val = RandomGenerator::RandomAlphString(valSize);
+    auto key = RandomGenerator::RandAlphString(24);
+    auto val = RandomGenerator::RandAlphString(valSize);
     if (kvToTest.find(key) != kvToTest.end()) {
       i--;
       continue;
@@ -677,8 +677,8 @@ TEST_F(TransactionKVTest, ScanDesc) {
   std::string smallest;
   std::string bigest;
   for (size_t i = 0; i < numKVs; ++i) {
-    auto key = RandomGenerator::RandomAlphString(24);
-    auto val = RandomGenerator::RandomAlphString(valSize);
+    auto key = RandomGenerator::RandAlphString(24);
+    auto val = RandomGenerator::RandAlphString(valSize);
     if (kvToTest.find(key) != kvToTest.end()) {
       i--;
       continue;
@@ -764,8 +764,8 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
   std::string smallest;
   std::string bigest;
   for (size_t i = 0; i < numKVs; ++i) {
-    auto key = RandomGenerator::RandomAlphString(24);
-    auto val = RandomGenerator::RandomAlphString(valSize);
+    auto key = RandomGenerator::RandAlphString(24);
+    auto val = RandomGenerator::RandAlphString(valSize);
     if (kvToTest.find(key) != kvToTest.end()) {
       i--;
       continue;
@@ -780,7 +780,7 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
   }
 
   const auto* btreeName = "InsertAfterRemove";
-  std::string newVal = RandomGenerator::RandomAlphString(valSize);
+  std::string newVal = RandomGenerator::RandAlphString(valSize);
   std::string copiedValue;
   auto copyValueOut = [&](Slice val) {
     copiedValue = std::string((const char*)val.data(), val.size());
@@ -878,8 +878,8 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
   std::string smallest;
   std::string bigest;
   for (size_t i = 0; i < numKVs; ++i) {
-    auto key = RandomGenerator::RandomAlphString(24);
-    auto val = RandomGenerator::RandomAlphString(valSize);
+    auto key = RandomGenerator::RandAlphString(24);
+    auto val = RandomGenerator::RandAlphString(valSize);
     if (kvToTest.find(key) != kvToTest.end()) {
       i--;
       continue;
@@ -894,7 +894,7 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
   }
 
   const auto* btreeName = "InsertAfterRemoveDifferentWorkers";
-  std::string newVal = RandomGenerator::RandomAlphString(valSize);
+  std::string newVal = RandomGenerator::RandAlphString(valSize);
   std::string copiedValue;
   auto copyValueOut = [&](Slice val) {
     copiedValue = std::string((const char*)val.data(), val.size());

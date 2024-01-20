@@ -108,7 +108,7 @@ int main(int argc, char** argv) {
           crm.scheduleJobAsync(t_i, [&, begin, end]() {
             for (u64 i = begin; i < end; i++) {
               YCSBPayload payload;
-              utils::RandomGenerator::getRandString(
+              utils::RandomGenerator::RandString(
                   reinterpret_cast<u8*>(&payload), sizeof(YCSBPayload));
               YCSBKey key = i;
               cr::Worker::my().StartTx(
@@ -151,7 +151,7 @@ int main(int argc, char** argv) {
         JUMPMU_TRY() {
           YCSBKey key;
           if (FLAGS_zipf_factor == 0) {
-            key = utils::RandomGenerator::getRandU64(0, ycsb_tuple_count);
+            key = utils::RandomGenerator::RandU64(0, ycsb_tuple_count);
           } else {
             key = zipf_random->rand();
           }
@@ -160,7 +160,7 @@ int main(int argc, char** argv) {
           cr::Worker::my().StartTx(txType, isolationLevel);
           for (u64 op_i = 0; op_i < FLAGS_ycsb_ops_per_tx; op_i++) {
             if (FLAGS_ycsb_read_ratio == 100 ||
-                utils::RandomGenerator::getRandU64(0, 100) <
+                utils::RandomGenerator::RandU64(0, 100) <
                     FLAGS_ycsb_read_ratio) {
               table.lookup1({key},
                             [&](const KVTable&) {}); // result = record.mValue;
@@ -174,7 +174,7 @@ int main(int argc, char** argv) {
               updateDesc.mUpdateSlots[0].mOffset = offsetof(KVTable, mValue);
               updateDesc.mUpdateSlots[0].mSize = sizeof(KVTable::mValue);
 
-              utils::RandomGenerator::getRandString(
+              utils::RandomGenerator::RandString(
                   reinterpret_cast<u8*>(&result), sizeof(YCSBPayload));
 
               table.update1(

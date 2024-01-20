@@ -36,7 +36,7 @@ protected:
 
     // Create a table with random name.
     auto* s0 = mStore->GetSession(0);
-    mTblName = RandomGenerator::RandomAlphString(10);
+    mTblName = RandomGenerator::RandAlphString(10);
     auto res = s0->CreateTable(mTblName, true);
     ASSERT_TRUE(res);
     mTbl = res.value();

@@ -124,7 +124,8 @@ public:
 
 public:
   inline TREEID AllocTreeId() {
-    return mTreeIdAllocator++;
+    auto allocatedTreeId = mTreeIdAllocator++;
+    return allocatedTreeId;
   }
 
   /**
@@ -145,12 +146,12 @@ public:
     auto tree = ctor();
 
     // register the tree
-    auto emplaceResult = mTrees.emplace(std::make_pair(
-        treeId, std::move(std::make_tuple(std::move(tree), treeName))));
+    auto emplaceResult = mTrees.emplace(
+        std::make_pair(treeId, std::make_tuple(std::move(tree), treeName)));
     mTreeIndexByName.emplace(std::make_pair(treeName, emplaceResult.first));
 
     auto it = emplaceResult.first;
-    auto treePtr = std::get<0>(it->second).get();
+    auto* treePtr = std::get<0>(it->second).get();
 
     // return pointer and tree id
     return std::make_tuple(treePtr, treeId);
@@ -165,8 +166,8 @@ public:
       return false;
     }
 
-    auto emplaceResult = mTrees.emplace(std::make_pair(
-        treeId, std::move(std::make_tuple(std::move(tree), treeName))));
+    auto emplaceResult = mTrees.emplace(
+        std::make_pair(treeId, std::make_tuple(std::move(tree), treeName)));
     mTreeIndexByName.emplace(std::make_pair(treeName, emplaceResult.first));
     return true;
   }

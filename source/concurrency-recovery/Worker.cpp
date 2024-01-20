@@ -139,7 +139,8 @@ void Worker::CommitTx() {
     return;
   }
 
-  mCommandId = 0; // Reset mCommandId only on commit and never on abort
+  // Reset mCommandId on commit
+  mCommandId = 0;
   if (mActiveTx.mHasWrote) {
     auto commitTs = cc.mCommitTree.AppendCommitLog(mActiveTx.mStartTs);
     cc.mLatestCommitTs.store(commitTs, std::memory_order_release);
@@ -179,12 +180,11 @@ void Worker::CommitTx() {
                << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
   }
 
-  // Only committing snapshot/ changing between SI and lower modes
   if (mActiveTx.AtLeastSI()) {
     cc.UpdateGlobalTxWatermarks();
   }
 
-  // All isolation level generate garbage
+  // All isolation level generate garbage, cleanup in the end transaction
   cc.GarbageCollection();
 
   // wait transaction to be committed

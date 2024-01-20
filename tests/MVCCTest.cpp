@@ -13,21 +13,21 @@ using namespace leanstore::storage::btree;
 
 namespace leanstore {
 
-class MVCCTest : public ::testing::Test {
+class MvccTest : public ::testing::Test {
 protected:
   std::string mTreeName;
   TransactionKV* mBTree;
 
 protected:
-  MVCCTest() = default;
+  MvccTest() = default;
 
-  ~MVCCTest() = default;
+  ~MvccTest() = default;
 
   void SetUp() override {
     // init the leanstore
     auto* leanstore = GetLeanStore();
 
-    mTreeName = RandomGenerator::RandomAlphString(10);
+    mTreeName = RandomGenerator::RandAlphString(10);
     auto config = BTreeGeneric::Config{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
@@ -57,7 +57,7 @@ public:
     FLAGS_bulk_insert = false;
     FLAGS_worker_threads = 3;
     FLAGS_recover = false;
-    FLAGS_data_dir = "/tmp/MVCCTest";
+    FLAGS_data_dir = "/tmp/MvccTest";
 
     std::filesystem::path dirPath = FLAGS_data_dir;
     std::filesystem::remove_all(dirPath);
@@ -66,15 +66,15 @@ public:
   }
 
   inline static leanstore::LeanStore* GetLeanStore() {
-    static auto sLeanStore = MVCCTest::CreateLeanStore();
+    static auto sLeanStore = MvccTest::CreateLeanStore();
     return sLeanStore.get();
   }
 };
 
-TEST_F(MVCCTest, LookupWhileInsert) {
+TEST_F(MvccTest, LookupWhileInsert) {
   // insert a base record
-  auto key0 = RandomGenerator::RandomAlphString(42);
-  auto val0 = RandomGenerator::RandomAlphString(151);
+  auto key0 = RandomGenerator::RandAlphString(42);
+  auto val0 = RandomGenerator::RandAlphString(151);
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key0.data(), key0.size()),
@@ -84,8 +84,8 @@ TEST_F(MVCCTest, LookupWhileInsert) {
   });
 
   // start a transaction to insert another record, don't commit
-  auto key1 = RandomGenerator::RandomAlphString(17);
-  auto val1 = RandomGenerator::RandomAlphString(131);
+  auto key1 = RandomGenerator::RandAlphString(17);
+  auto val1 = RandomGenerator::RandAlphString(131);
   cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
     cr::Worker::my().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
@@ -139,10 +139,10 @@ TEST_F(MVCCTest, LookupWhileInsert) {
   });
 }
 
-TEST_F(MVCCTest, InsertConflict) {
+TEST_F(MvccTest, InsertConflict) {
   // insert a base record
-  auto key0 = RandomGenerator::RandomAlphString(42);
-  auto val0 = RandomGenerator::RandomAlphString(151);
+  auto key0 = RandomGenerator::RandAlphString(42);
+  auto val0 = RandomGenerator::RandAlphString(151);
   cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key0.data(), key0.size()),

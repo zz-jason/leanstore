@@ -20,22 +20,27 @@ std::atomic<u64> ConcurrencyControl::sTimeStampOracle =
 // Also for interval garbage collection
 void ConcurrencyControl::UpdateGlobalTxWatermarks() {
   if (!FLAGS_enable_garbage_collection) {
+    DLOG(INFO) << "Skip updating global watermarks, GC is disabled";
     return;
   }
 
   utils::Timer timer(CRCounters::MyCounters().cc_ms_refresh_global_state);
-
-  auto performRefresh =
-      utils::RandomGenerator::getRandU64(0, Worker::my().mNumAllWorkers) == 0 &&
-      Worker::sGlobalMutex.try_lock();
-  if (!performRefresh) {
+  auto meetGcProbability =
+      utils::RandomGenerator::RandU64(0, Worker::my().mNumAllWorkers) == 0;
+  auto performGc = meetGcProbability && Worker::sGlobalMutex.try_lock();
+  if (!performGc) {
+    DLOG(INFO) << "Skip updating global watermarks"
+               << ", meetGcProbability=" << meetGcProbability
+               << ", performGc=" << performGc;
     return;
   }
-  SCOPED_DEFER(Worker::sGlobalMutex.unlock()); // release the lock on exit
 
-  TXID localOldestTxId = std::numeric_limits<TXID>::max();
-  TXID localNewestLongTxId = std::numeric_limits<TXID>::min();
-  TXID localOldestShortTxId = std::numeric_limits<TXID>::max();
+  // release the lock on exit
+  SCOPED_DEFER(Worker::sGlobalMutex.unlock());
+
+  TXID oldestTxId = std::numeric_limits<TXID>::max();
+  TXID newestLongTxId = std::numeric_limits<TXID>::min();
+  TXID oldestShortTxId = std::numeric_limits<TXID>::max();
   for (WORKERID i = 0; i < Worker::my().mNumAllWorkers; i++) {
     std::atomic<u64>& latestStartTs = Worker::sLatestStartTs[i];
 
@@ -55,20 +60,30 @@ void ConcurrencyControl::UpdateGlobalTxWatermarks() {
 
     bool isLongRunningTx = runningTxId & Worker::kLongRunningBit;
     runningTxId &= Worker::kCleanBitsMask;
-    localOldestTxId = std::min<TXID>(runningTxId, localOldestTxId);
+    oldestTxId = std::min(runningTxId, oldestTxId);
     if (isLongRunningTx) {
-      localNewestLongTxId = std::max<TXID>(runningTxId, localNewestLongTxId);
+      newestLongTxId = std::max(runningTxId, newestLongTxId);
     } else {
-      localOldestShortTxId = std::min<TXID>(runningTxId, localOldestShortTxId);
+      oldestShortTxId = std::min(runningTxId, oldestShortTxId);
     }
   }
 
   // Update the three transaction ids
-  Worker::sGlobalOldestTxId.store(localOldestTxId, std::memory_order_release);
-  Worker::sGlobalNewestLongTxId.store(localNewestLongTxId,
+  Worker::sGlobalOldestTxId.store(oldestTxId, std::memory_order_release);
+  Worker::sGlobalNewestLongTxId.store(newestLongTxId,
                                       std::memory_order_release);
-  Worker::sGlobalOldestShortTxId.store(localOldestShortTxId,
+  Worker::sGlobalOldestShortTxId.store(oldestShortTxId,
                                        std::memory_order_release);
+
+  DLOG(INFO) << "Global watermark updated"
+             << ", sGlobalOldestTxId=" << Worker::sGlobalOldestTxId
+             << ", sGlobalNewestLongTxId=" << Worker::sGlobalNewestLongTxId
+             << ", sGlobalOldestShortTxId=" << Worker::sGlobalOldestShortTxId;
+
+  LOG_IF(FATAL, !FLAGS_enable_long_running_transaction &&
+                    Worker::sGlobalOldestTxId != Worker::sGlobalOldestShortTxId)
+      << "Oldest transaction id should be equal to the oldest short-running "
+         "transaction id when long-running transaction is disabled";
 
   // Update global lower watermarks based on the three transaction ids
   TXID globalWmkOfAllTx = std::numeric_limits<TXID>::max();
@@ -78,34 +93,42 @@ void ConcurrencyControl::UpdateGlobalTxWatermarks() {
     ConcurrencyControl& cc = other(i);
     if (cc.mUpdatedLatestCommitTs == cc.mLatestCommitTs) {
       skippedAWorker = true;
+      DLOG(INFO) << "Skip updating watermarks for worker " << i
+                 << ", no transaction committed since last round"
+                 << ", mLatestCommitTs=" << cc.mLatestCommitTs;
       continue;
     }
     cc.mUpdatedLatestCommitTs.store(cc.mLatestCommitTs,
                                     std::memory_order_release);
+
     TXID wmkOfAllTx = cc.mCommitTree.Lcb(Worker::sGlobalOldestTxId);
     TXID wmkOfShortTx = cc.mCommitTree.Lcb(Worker::sGlobalOldestShortTxId);
-
-    if (FLAGS_enable_long_running_transaction &&
-        Worker::sGlobalOldestTxId != Worker::sGlobalOldestShortTxId) {
-      globalWmkOfShortTx = std::min<TXID>(wmkOfShortTx, globalWmkOfShortTx);
-    } else {
-      wmkOfShortTx = wmkOfAllTx;
-    }
-
-    globalWmkOfAllTx = std::min<TXID>(wmkOfAllTx, globalWmkOfAllTx);
 
     cc.mWmkVersion.store(cc.mWmkVersion.load() + 1, std::memory_order_release);
     cc.mWmkOfAllTx.store(wmkOfAllTx, std::memory_order_release);
     cc.mWmkOfShortTx.store(wmkOfShortTx, std::memory_order_release);
     cc.mWmkVersion.store(cc.mWmkVersion.load() + 1, std::memory_order_release);
+
+    globalWmkOfShortTx = std::min(wmkOfShortTx, globalWmkOfShortTx);
+    globalWmkOfAllTx = std::min(wmkOfAllTx, globalWmkOfAllTx);
+
+    DLOG(INFO) << "Watermarks updated for worker " << i
+               << ", mWmkOfAllTx=" << cc.mWmkOfAllTx
+               << ", mWmkOfShortTx=" << cc.mWmkOfShortTx;
   }
 
   if (!skippedAWorker) {
-    Worker::sGlobalWmkOfAllTx.store(globalWmkOfAllTx,
-                                    std::memory_order_release);
-    Worker::sGlobalWmkOfShortTx.store(globalWmkOfShortTx,
-                                      std::memory_order_release);
+    DLOG(INFO) << "Skip updating global watermarks, some worker hasn't "
+                  "committed any new transaction since last round";
+    return;
   }
+
+  Worker::sGlobalWmkOfAllTx.store(globalWmkOfAllTx, std::memory_order_release);
+  Worker::sGlobalWmkOfShortTx.store(globalWmkOfShortTx,
+                                    std::memory_order_release);
+  DLOG(INFO) << "Global watermarks updated"
+             << ", sGlobalWmkOfAllTx=" << Worker::sGlobalWmkOfAllTx
+             << ", sGlobalWmkOfShortTx=" << Worker::sGlobalWmkOfShortTx;
 }
 
 void ConcurrencyControl::SwitchToSnapshotIsolation() {

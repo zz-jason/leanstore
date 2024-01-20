@@ -102,7 +102,7 @@ int main(int argc, char** argv) {
           crm.scheduleJobAsync(t_i, [&, begin, end]() {
             for (u64 i = begin; i < end; i++) {
               YCSBPayload payload;
-              utils::RandomGenerator::getRandString(
+              utils::RandomGenerator::RandString(
                   reinterpret_cast<u8*>(&payload), sizeof(YCSBPayload));
               YCSBKey key = i;
               cr::Worker::my().StartTx(tx_type, isolation_level);
@@ -191,7 +191,7 @@ int main(int argc, char** argv) {
               std::random_shuffle(keys.begin(), keys.end());
               cr::Worker::my().StartTx(tx_type, isolation_level);
               for (u64 op_i = 0; op_i < FLAGS_ycsb_ops_per_tx; op_i++) {
-                utils::RandomGenerator::getRandString(
+                utils::RandomGenerator::RandString(
                     reinterpret_cast<u8*>(&result), sizeof(YCSBPayload));
                 // -------------------------------------------------------------------------------------
                 table.update1(

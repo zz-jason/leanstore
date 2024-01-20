@@ -51,8 +51,8 @@ static void BenchUpdateInsert(benchmark::State& state) {
       std::string key;
       std::string val;
       for (size_t i = 0; i < 16; i++) {
-        key = utils::RandomGenerator::RandomAlphString(24);
-        val = utils::RandomGenerator::RandomAlphString(128);
+        key = utils::RandomGenerator::RandAlphString(24);
+        val = utils::RandomGenerator::RandAlphString(128);
         btree->Insert(Slice((const u8*)key.data(), key.size()),
                       Slice((const u8*)val.data(), val.size()));
       }

@@ -28,7 +28,7 @@ protected:
 
   static u64 RandomWorkerId() {
     auto numWorkers = FLAGS_worker_threads;
-    return utils::RandomGenerator::getRand<u64>(0, numWorkers);
+    return utils::RandomGenerator::Rand<u64>(0, numWorkers);
   }
 };
 

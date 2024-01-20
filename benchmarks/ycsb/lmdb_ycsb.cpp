@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
   lm_db.StartTx();
   for (u64 i = 0; i < ycsb_tuple_count; i++) {
     YCSBPayload payload;
-    leanstore::utils::RandomGenerator::getRandString(
+    leanstore::utils::RandomGenerator::RandString(
         reinterpret_cast<u8*>(&payload), sizeof(YCSBPayload));
     YCSBKey& key = i;
     table.insert({key}, {payload});
@@ -96,7 +96,7 @@ int main(int argc, char** argv) {
         jumpmuTry() {
           YCSBKey key;
           if (FLAGS_zipf_factor == 0) {
-            key = leanstore::utils::RandomGenerator::getRandU64(
+            key = leanstore::utils::RandomGenerator::RandU64(
                 0, ycsb_tuple_count);
           } else {
             key = zipf_random->rand();
@@ -104,7 +104,7 @@ int main(int argc, char** argv) {
           assert(key < ycsb_tuple_count);
           YCSBPayload result;
           if (FLAGS_ycsb_read_ratio == 100 ||
-              leanstore::utils::RandomGenerator::getRandU64(0, 100) <
+              leanstore::utils::RandomGenerator::RandU64(0, 100) <
                   FLAGS_ycsb_read_ratio) {
             lm_db.StartTx(true);
             table.lookup1({key},
@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
             lm_db.StartTx();
             UpdateDescriptorGenerator1(tabular_update_descriptor, YCSBTable,
                                        mValue);
-            leanstore::utils::RandomGenerator::getRandString(
+            leanstore::utils::RandomGenerator::RandString(
                 reinterpret_cast<u8*>(&result), sizeof(YCSBPayload));
             table.update1(
                 {key}, [&](YCSBTable& rec) { rec.mValue = result; },

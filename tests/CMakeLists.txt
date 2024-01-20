@@ -41,7 +41,7 @@ leanstore_add_test(RecoveryingTest)
 leanstore_add_test(BufferFrameTest)
 
 leanstore_add_test_without_gtest_main(TransactionKVTest)
-leanstore_add_test_without_gtest_main(MVCCTest)
+leanstore_add_test_without_gtest_main(MvccTest)
 leanstore_add_test_without_gtest_main(AnomaliesTest)
 leanstore_add_test_without_gtest_main(AbortTest)
 leanstore_add_test_without_gtest_main(LongRunningTxTest)
