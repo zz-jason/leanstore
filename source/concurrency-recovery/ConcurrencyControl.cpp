@@ -117,7 +117,7 @@ void ConcurrencyControl::UpdateGlobalTxWatermarks() {
                << ", mWmkOfShortTx=" << cc.mWmkOfShortTx;
   }
 
-  if (!skippedAWorker) {
+  if (skippedAWorker) {
     DLOG(INFO) << "Skip updating global watermarks, some worker hasn't "
                   "committed any new transaction since last round";
     return;

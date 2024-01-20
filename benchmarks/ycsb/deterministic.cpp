@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
   LeanStore db;
   auto& crm = db.getCRManager();
   LeanStoreAdapter<KVTable> table;
-  crm.scheduleJobSync(0,
+  crm.ScheduleJobSync(0,
                       [&]() { table = LeanStoreAdapter<KVTable>(db, "YCSB"); });
   db.registerConfigEntry("ycsb_read_ratio", FLAGS_ycsb_read_ratio);
   db.registerConfigEntry("ycsb_threads", FLAGS_ycsb_threads);
@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
         FLAGS_ycsb_insert_threads ? FLAGS_ycsb_insert_threads
                                   : FLAGS_worker_threads,
         n, [&](u64 t_i, u64 begin, u64 end) {
-          crm.scheduleJobAsync(t_i, [&, begin, end]() {
+          crm.ScheduleJobAsync(t_i, [&, begin, end]() {
             for (u64 i = begin; i < end; i++) {
               YCSBPayload payload;
               utils::RandomGenerator::RandString(
@@ -111,7 +111,7 @@ int main(int argc, char** argv) {
             }
           });
         });
-    crm.joinAll();
+    crm.JoinAll();
     end = chrono::high_resolution_clock::now();
     cout << "time elapsed = "
          << (chrono::duration_cast<chrono::microseconds>(end - begin).count() /
@@ -142,7 +142,7 @@ int main(int argc, char** argv) {
   auto btree_vi =
       reinterpret_cast<leanstore::storage::btree::TransactionKV*>(table.btree);
   for (u64 t_i = 0; t_i < exec_threads; t_i++) {
-    crm.scheduleJobAsync(t_i, [&]() {
+    crm.ScheduleJobAsync(t_i, [&]() {
       jumpmuTry() {
         running_threads_counter++;
         YCSBPayload result;
@@ -221,7 +221,7 @@ int main(int argc, char** argv) {
     keep_running = false;
     while (running_threads_counter) {
     }
-    crm.joinAll();
+    crm.JoinAll();
   }
   cout << "--------------------------------------------------------------------"
           "-----------------"

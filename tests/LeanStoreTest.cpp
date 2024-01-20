@@ -57,7 +57,7 @@ TEST_F(LeanStoreTest, RecoverAfterInsert) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
 
-  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
     mLeanStore->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
 
@@ -84,7 +84,7 @@ TEST_F(LeanStoreTest, RecoverAfterInsert) {
   EXPECT_NE(btree, nullptr);
 
   // lookup the restored btree
-  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());

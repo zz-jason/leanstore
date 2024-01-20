@@ -79,13 +79,13 @@ public:
     LOG(FATAL) << "BufferManagedTree::unlock is unimplemented";
   }
 
-  virtual StringMap serialize() {
-    LOG(FATAL) << "BufferManagedTree::serialize is unimplemented";
+  virtual StringMap Serialize() {
+    LOG(FATAL) << "BufferManagedTree::Serialize is unimplemented";
     return StringMap();
   }
 
-  virtual void deserialize(StringMap) {
-    LOG(FATAL) << "BufferManagedTree::deserialize is unimplemented";
+  virtual void Deserialize(StringMap) {
+    LOG(FATAL) << "BufferManagedTree::Deserialize is unimplemented";
   }
 
   virtual ~BufferManagedTree() {
@@ -282,22 +282,22 @@ public:
   }
 
   // Serialization
-  inline StringMap serialize(TREEID treeId) {
+  inline StringMap Serialize(TREEID treeId) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
     DLOG_IF(FATAL, it == mTrees.end())
         << "BufferManagedTree not find, treeId=" << treeId;
     auto& [tree, treeName] = it->second;
-    return tree->serialize();
+    return tree->Serialize();
   }
 
-  inline void deserialize(TREEID treeId, StringMap map) {
+  inline void Deserialize(TREEID treeId, StringMap map) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
     DLOG_IF(FATAL, it == mTrees.end())
         << "BufferManagedTree not find, treeId=" << treeId;
     auto& [tree, treeName] = it->second;
-    return tree->deserialize(map);
+    return tree->Deserialize(map);
   }
 
 public:

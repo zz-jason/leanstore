@@ -47,7 +47,7 @@ CRManager::CRManager(s32 walFd)
   }
 
   // setup history tree
-  scheduleJobSync(0, [&]() { setupHistoryTree(); });
+  ScheduleJobSync(0, [&]() { setupHistoryTree(); });
   for (u64 workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
     mWorkers[workerId]->cc.mHistoryTree = mHistoryTreePtr.get();
   }
@@ -156,28 +156,28 @@ void CRManager::setupHistoryTree() {
   mHistoryTreePtr = std::move(historyTree);
 }
 
-void CRManager::scheduleJobSync(u64 workerId, std::function<void()> job) {
+void CRManager::ScheduleJobSync(u64 workerId, std::function<void()> job) {
   setJob(workerId, job);
   joinOne(workerId, [&](WorkerThread& meta) { return meta.mIsJobDone.load(); });
 }
 
-void CRManager::scheduleJobAsync(u64 workerId, std::function<void()> job) {
+void CRManager::ScheduleJobAsync(u64 workerId, std::function<void()> job) {
   setJob(workerId, job);
 }
 
-void CRManager::scheduleJobs(u64 numWorkers, std::function<void()> job) {
+void CRManager::ScheduleJobs(u64 numWorkers, std::function<void()> job) {
   for (u32 workerId = 0; workerId < numWorkers; workerId++) {
     setJob(workerId, job);
   }
 }
-void CRManager::scheduleJobs(u64 numWorkers,
+void CRManager::ScheduleJobs(u64 numWorkers,
                              std::function<void(u64 workerId)> job) {
   for (u32 workerId = 0; workerId < numWorkers; workerId++) {
     setJob(workerId, [=]() { return job(workerId); });
   }
 }
 
-void CRManager::joinAll() {
+void CRManager::JoinAll() {
   for (u32 i = 0; i < FLAGS_worker_threads; i++) {
     joinOne(i, [&](WorkerThread& meta) {
       return meta.mIsJobDone && meta.job == nullptr;
@@ -207,7 +207,7 @@ void CRManager::joinOne(u64 workerId,
 constexpr char kKeyWalSize[] = "wal_size";
 constexpr char kKeyGlobalLogicalClock[] = "global_logical_clock";
 
-StringMap CRManager::serialize() {
+StringMap CRManager::Serialize() {
   StringMap map;
   u64 val = ConcurrencyControl::sTimeStampOracle.load();
   map[kKeyWalSize] = std::to_string(mGroupCommitter->mWalSize);
@@ -215,7 +215,7 @@ StringMap CRManager::serialize() {
   return map;
 }
 
-void CRManager::deserialize(StringMap map) {
+void CRManager::Deserialize(StringMap map) {
   u64 val = std::stoull(map[kKeyGlobalLogicalClock]);
   ConcurrencyControl::sTimeStampOracle = val;
   Worker::sGlobalWmkOfAllTx = val;

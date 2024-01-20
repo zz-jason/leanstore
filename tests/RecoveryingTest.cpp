@@ -65,7 +65,7 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
 
   // TODO(jian.z): need to create btree within a transaction, otherwise
   // transactions depend on the btree creator worker may hang on commit.
-  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
     mLeanStore->RegisterTransactionKV(btreeName, btreeConfig, &btree);
@@ -73,7 +73,7 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
   });
 
   // insert some values
-  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
     for (size_t i = 0; i < numKVs; ++i) {
@@ -84,7 +84,7 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     }
   });
 
-  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
     rapidjson::Document doc(rapidjson::kObjectType);
     BTreeGeneric::ToJson(*btree, &doc);
     LOG(INFO) << "btree before destroy: " << utils::JsonToStr(&doc);
@@ -99,14 +99,14 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
   mLeanStore->GetTransactionKV(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
 
-  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
     rapidjson::Document doc(rapidjson::kObjectType);
     BTreeGeneric::ToJson(*btree, &doc);
     LOG(INFO) << "btree after recovery: " << utils::JsonToStr(&doc);
   });
 
   // lookup the restored btree
-  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
     std::string copiedValue;
@@ -122,7 +122,7 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     }
   });
 
-  cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
     mLeanStore->UnRegisterTransactionKV(btreeName);
@@ -160,7 +160,7 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
 
-  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     mLeanStore->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
@@ -188,7 +188,7 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
   mLeanStore = std::make_unique<LeanStore>();
   mLeanStore->GetTransactionKV(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
-  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
     rapidjson::Document doc(rapidjson::kObjectType);
@@ -197,7 +197,7 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
   });
 
   // lookup the restored btree
-  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
     std::string copiedValue;

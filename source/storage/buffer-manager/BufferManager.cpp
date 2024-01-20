@@ -106,7 +106,7 @@ void BufferManager::StartBufferFrameProviders() {
   }
 }
 
-StringMap BufferManager::serialize() {
+StringMap BufferManager::Serialize() {
   // TODO: correctly serialize ranges of used pages
   StringMap map;
   PID maxPageId = 0;
@@ -117,7 +117,7 @@ StringMap BufferManager::serialize() {
   return map;
 }
 
-void BufferManager::deserialize(StringMap map) {
+void BufferManager::Deserialize(StringMap map) {
   PID maxPageId = std::stoull(map["max_pid"]);
   maxPageId = (maxPageId + (mNumPartitions - 1)) & ~(mNumPartitions - 1);
   for (u64 i = 0; i < mNumPartitions; i++) {

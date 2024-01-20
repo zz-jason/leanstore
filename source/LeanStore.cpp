@@ -143,7 +143,7 @@ LeanStore::LeanStore() {
   cr::CRManager::sInstance = std::make_unique<cr::CRManager>(mWalFd);
 
   if (FLAGS_recover) {
-    // deserialize meta from disk
+    // Deserialize meta from disk
     DeSerializeMeta();
     BufferManager::sInstance->RecoveryFromDisk();
   }
@@ -161,7 +161,7 @@ LeanStore::~LeanStore() {
   });
 
   // wait all concurrent jobs to finsh
-  cr::CRManager::sInstance->joinAll();
+  cr::CRManager::sInstance->JoinAll();
 
   if (FLAGS_enable_print_btree_stats_on_exit) {
     // print trees
@@ -171,7 +171,7 @@ LeanStore::~LeanStore() {
       auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(treePtr.get());
 
       u64 numEntries(0);
-      cr::CRManager::sInstance->scheduleJobSync(
+      cr::CRManager::sInstance->ScheduleJobSync(
           0, [&]() { numEntries = btree->CountEntries(); });
 
       LOG(INFO) << "[TransactionKV] name=" << treeName << ", btreeId=" << treeId
@@ -370,7 +370,7 @@ void LeanStore::SerializeMeta() {
   LOG(INFO) << "SerializeMeta started";
   SCOPED_DEFER(LOG(INFO) << "SerializeMeta ended");
 
-  // Serialize data structure instances
+  // serialize data structure instances
   std::ofstream metaFile;
   metaFile.open(leanstore::GetMetaFilePath(), ios::trunc);
 
@@ -380,7 +380,7 @@ void LeanStore::SerializeMeta() {
 
   // cr_manager
   {
-    auto crMetaMap = cr::CRManager::sInstance->serialize();
+    auto crMetaMap = cr::CRManager::sInstance->Serialize();
     rapidjson::Value crJsonObj(rapidjson::kObjectType);
     for (const auto& [key, val] : crMetaMap) {
       rapidjson::Value k, v;
@@ -393,7 +393,7 @@ void LeanStore::SerializeMeta() {
 
   // buffer_manager
   {
-    auto bmMetaMap = BufferManager::sInstance->serialize();
+    auto bmMetaMap = BufferManager::sInstance->Serialize();
     rapidjson::Value bmJsonObj(rapidjson::kObjectType);
     for (const auto& [key, val] : bmMetaMap) {
       rapidjson::Value k, v;
@@ -426,7 +426,7 @@ void LeanStore::SerializeMeta() {
       rapidjson::Value btreeJsonId(btreeId);
       btreeJsonObj.AddMember("id", btreeJsonId, allocator);
 
-      auto btreeMetaMap = TreeRegistry::sInstance->serialize(btreeId);
+      auto btreeMetaMap = TreeRegistry::sInstance->Serialize(btreeId);
       rapidjson::Value btreeMetaJsonObj(rapidjson::kObjectType);
       for (const auto& [key, val] : btreeMetaMap) {
         rapidjson::Value k, v;
@@ -487,24 +487,24 @@ void LeanStore::DeSerializeMeta() {
   rapidjson::Document doc;
   doc.ParseStream(isw);
 
-  // deserialize concurrent resource manager
+  // Deserialize concurrent resource manager
   {
     auto& crJsonObj = doc[META_KEY_CR_MANAGER];
     StringMap crMetaMap;
     for (auto it = crJsonObj.MemberBegin(); it != crJsonObj.MemberEnd(); ++it) {
       crMetaMap[it->name.GetString()] = it->value.GetString();
     }
-    cr::CRManager::sInstance->deserialize(crMetaMap);
+    cr::CRManager::sInstance->Deserialize(crMetaMap);
   }
 
-  // deserialize buffer manager
+  // Deserialize buffer manager
   {
     auto& bmJsonObj = doc[META_KEY_BUFFER_MANAGER];
     StringMap bmMetaMap;
     for (auto it = bmJsonObj.MemberBegin(); it != bmJsonObj.MemberEnd(); ++it) {
       bmMetaMap[it->name.GetString()] = it->value.GetString();
     }
-    BufferManager::sInstance->deserialize(bmMetaMap);
+    BufferManager::sInstance->Deserialize(bmMetaMap);
   }
 
   auto& btreeJsonArray = doc[META_KEY_REGISTERED_DATASTRUCTURES];
@@ -533,7 +533,7 @@ void LeanStore::DeSerializeMeta() {
     case leanstore::storage::btree::BTreeType::kTransactionKV: {
       auto btree = std::make_unique<leanstore::storage::btree::TransactionKV>();
 
-      cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+      cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
         // create btree for graveyard
         auto graveyardName = "_" + btreeName + "_graveyard";
         auto graveyardConfig = storage::btree::BTreeGeneric::Config{
@@ -559,7 +559,7 @@ void LeanStore::DeSerializeMeta() {
                  << ", unsupported btree type=" << btreeType;
     }
     }
-    TreeRegistry::sInstance->deserialize(btreeId, btreeMetaMap);
+    TreeRegistry::sInstance->Deserialize(btreeId, btreeMetaMap);
   }
 }
 
