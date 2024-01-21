@@ -148,9 +148,9 @@ public:
 
   void RecoveryFromDisk();
 
-  StringMap serialize();
+  StringMap Serialize();
 
-  void deserialize(StringMap map);
+  void Deserialize(StringMap map);
 
   u64 consumedPages();
 

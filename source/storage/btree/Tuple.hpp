@@ -131,7 +131,7 @@ public:
 /// Data loyout of a FatTupleDelta:
 /// | mWorkerId | mTxId | mCommandId | UpdateDesc | Delta |
 ///
-/// FatTuple: eager pgc, no scheduled gc todos
+/// FatTuple uses precise garbage collection
 struct __attribute__((packed)) FatTupleDelta {
 public:
   /// ID of the worker who creates this delta.

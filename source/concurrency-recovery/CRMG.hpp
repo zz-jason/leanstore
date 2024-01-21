@@ -69,7 +69,7 @@ public:
    * @param numWorkers amount of workers
    * @param job Job to do. Same for each worker.
    */
-  void scheduleJobs(u64 numWorkers, std::function<void()> job);
+  void ScheduleJobs(u64 numWorkers, std::function<void()> job);
 
   /**
    * @brief Schedule specific job on specific amount of workers.
@@ -77,7 +77,7 @@ public:
    * @param workers amount of workers
    * @param job Job to do. Different for each worker.
    */
-  void scheduleJobs(u64 numWorkers, std::function<void(u64 workerId)> job);
+  void ScheduleJobs(u64 numWorkers, std::function<void(u64 workerId)> job);
 
   /**
    * @brief Schedules one job asynchron on specific worker.
@@ -85,7 +85,7 @@ public:
    * @param workerId worker to compute job
    * @param job job
    */
-  void scheduleJobAsync(u64 workerId, std::function<void()> job);
+  void ScheduleJobAsync(u64 workerId, std::function<void()> job);
 
   /**
    * @brief Schedules one job on one specific worker and waits for completion.
@@ -93,18 +93,18 @@ public:
    * @param workerId worker to compute job
    * @param job job
    */
-  void scheduleJobSync(u64 workerId, std::function<void()> job);
+  void ScheduleJobSync(u64 workerId, std::function<void()> job);
 
   /**
    * @brief Waits for all Workers to complete.
    *
    */
-  void joinAll();
+  void JoinAll();
 
   // State Serialization
-  StringMap serialize();
+  StringMap Serialize();
 
-  void deserialize(StringMap map);
+  void Deserialize(StringMap map);
 
   void stop();
 

@@ -106,7 +106,7 @@ void BufferManager::StartBufferFrameProviders() {
   }
 }
 
-StringMap BufferManager::serialize() {
+StringMap BufferManager::Serialize() {
   // TODO: correctly serialize ranges of used pages
   StringMap map;
   PID maxPageId = 0;
@@ -117,7 +117,7 @@ StringMap BufferManager::serialize() {
   return map;
 }
 
-void BufferManager::deserialize(StringMap map) {
+void BufferManager::Deserialize(StringMap map) {
   PID maxPageId = std::stoull(map["max_pid"]);
   maxPageId = (maxPageId + (mNumPartitions - 1)) & ~(mNumPartitions - 1);
   for (u64 i = 0; i < mNumPartitions; i++) {
@@ -183,12 +183,12 @@ u64 BufferManager::consumedPages() {
 // Buffer Frames Management
 
 Partition& BufferManager::randomPartition() {
-  auto randOrdinal = utils::RandomGenerator::getRand<u64>(0, mNumPartitions);
+  auto randOrdinal = utils::RandomGenerator::Rand<u64>(0, mNumPartitions);
   return getPartition(randOrdinal);
 }
 
 BufferFrame& BufferManager::randomBufferFrame() {
-  auto i = utils::RandomGenerator::getRand<u64>(0, mNumBfs);
+  auto i = utils::RandomGenerator::Rand<u64>(0, mNumBfs);
   auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
   return *reinterpret_cast<BufferFrame*>(bfAddr);
 }
@@ -283,7 +283,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
       WorkerCounters::MyCounters().dt_page_reads[bf.page.mBTreeId]++;
       if (FLAGS_trace_dt_id >= 0 &&
           bf.page.mBTreeId == static_cast<TREEID>(FLAGS_trace_dt_id) &&
-          utils::RandomGenerator::getRand<u64>(
+          utils::RandomGenerator::Rand<u64>(
               0, FLAGS_trace_trigger_probability) == 0) {
         utils::PrintBackTrace();
       }

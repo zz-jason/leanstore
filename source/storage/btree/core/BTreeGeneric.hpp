@@ -107,9 +107,9 @@ public:
     LOG(FATAL) << "unlock is unsupported";
   }
 
-  virtual StringMap serialize() override;
+  virtual StringMap Serialize() override;
 
-  virtual void deserialize(StringMap map) override;
+  virtual void Deserialize(StringMap map) override;
 
 private:
   inline bool isMetaNode(GuardedBufferFrame<BTreeNode>& guardedNode) {
@@ -323,7 +323,7 @@ inline void BTreeGeneric::Checkpoint(BufferFrame& bf, void* dest) {
   }
 }
 
-inline StringMap BTreeGeneric::serialize() {
+inline StringMap BTreeGeneric::Serialize() {
   DCHECK(mMetaNodeSwip.AsBufferFrame().page.mBTreeId == mTreeId);
   auto& metaBf = mMetaNodeSwip.AsBufferFrame();
   auto metaPageId = metaBf.header.mPageId;
@@ -333,7 +333,7 @@ inline StringMap BTreeGeneric::serialize() {
           {kMetaPageId, std::to_string(metaPageId)}};
 }
 
-inline void BTreeGeneric::deserialize(StringMap map) {
+inline void BTreeGeneric::Deserialize(StringMap map) {
   mTreeId = std::stoull(map[kTreeId]);
   mHeight = std::stoull(map[kHeight]);
   mMetaNodeSwip.evict(std::stoull(map[kMetaPageId]));

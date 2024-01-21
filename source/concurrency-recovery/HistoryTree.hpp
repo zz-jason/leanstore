@@ -19,6 +19,10 @@ public:
   inline static const VersionMeta* From(const u8* buffer) {
     return reinterpret_cast<const VersionMeta*>(buffer);
   }
+
+  inline static VersionMeta* From(u8* buffer) {
+    return reinterpret_cast<VersionMeta*>(buffer);
+  }
 };
 
 using BasicKV = leanstore::storage::btree::BasicKV;

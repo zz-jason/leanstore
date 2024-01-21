@@ -202,6 +202,10 @@ public:
     u64 capacity;
 
   public:
+    // CleanUpCommitLog is called when the commit log is full in the begging of
+    // a transaction. It keeps the latest (commitTs, startTs) in the commit log,
+    // and the commit log that is visible for other running transactions. It's
+    // kind of like a garbage collection for the commit log.
     void CleanUpCommitLog();
 
     TXID AppendCommitLog(TXID startTs);
@@ -265,9 +269,11 @@ public:
   /// current transaction.
   TXID mGlobalWmkOfAllTxSnapshot = 0;
 
-  unique_ptr<TXID[]> mLocalSnapshotCache; // = Readview
+  /// The start timestamp used to calculate the LCB of the target worker.
+  unique_ptr<TXID[]> mLcbCacheKey;
 
-  unique_ptr<TXID[]> local_snapshot_cache_ts;
+  /// The LCB of the target worker on the LCB cache key.
+  unique_ptr<TXID[]> mLcbCacheVal;
 
   unique_ptr<TXID[]> local_workers_start_ts;
 
@@ -287,12 +293,6 @@ public:
   // Object utils
   //-------------------------------------------------------------------------
   void GarbageCollection();
-
-  void UpdateGlobalTxWatermarks();
-
-  void SwitchToReadCommitted();
-
-  void SwitchToSnapshotIsolation();
 
   bool VisibleForAll(TXID txId);
 
@@ -321,6 +321,9 @@ private:
   Visibility isVisibleForIt(WORKERID whomWorkerId, TXID commitTs);
 
   TXID getCommitTimestamp(WORKERID workerId, TXID startTs);
+
+  /// Update global watermarks, should be called in each transaction commit.
+  void updateGlobalTxWatermarks();
 
   void updateLocalWatermarks();
 };
@@ -389,15 +392,13 @@ public:
   static std::shared_mutex sGlobalMutex;
 
   static constexpr u64 kWorkersBits = 8;
-  static constexpr u64 kWorkersIncrement = 1ull << kWorkersBits;
-  static constexpr u64 kLatchBit = (1ull << 63);
-  static constexpr u64 kRcBit = (1ull << 62);
-  static constexpr u64 kLongRunningBit = (1ull << 61);
+  static constexpr u64 kRcBit = (1ull << 63);
+  static constexpr u64 kLongRunningBit = (1ull << 62);
   static constexpr u64 kOltpOlapSameBit = kLongRunningBit;
-  static constexpr u64 kCleanBitsMask = ~(kLatchBit | kLongRunningBit | kRcBit);
+  static constexpr u64 kCleanBitsMask = ~(kRcBit | kLongRunningBit);
 
-  // TXID: [ kLatchBit | kRcBit | kLongRunningBit  | id];
-  // LWM:  [ kLatchBit | kRcBit | kOltpOlapSameBit | id];
+  // TXID: [ kRcBit | kLongRunningBit  | id];
+  // LWM:  [ kRcBit | kOltpOlapSameBit | id];
   static constexpr s64 kCrEntrySize = sizeof(WALEntrySimple);
 
 public:

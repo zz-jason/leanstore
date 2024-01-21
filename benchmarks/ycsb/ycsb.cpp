@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
   LeanStore db;
   auto& crm = *cr::CRManager::sInstance;
   LeanStoreAdapter<KVTable> table;
-  crm.scheduleJobSync(0,
+  crm.ScheduleJobSync(0,
                       [&]() { table = LeanStoreAdapter<KVTable>(db, "YCSB"); });
 
   // db.registerConfigEntry("ycsb_read_ratio", FLAGS_ycsb_read_ratio);
@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
       begin = chrono::high_resolution_clock::now();
       utils::Parallelize::range(
           FLAGS_worker_threads, n, [&](u64 t_i, u64 begin, u64 end) {
-            crm.scheduleJobAsync(t_i, [&, begin, end]() {
+            crm.ScheduleJobAsync(t_i, [&, begin, end]() {
               for (u64 i = begin; i < end; i++) {
                 YCSBPayload result;
                 cr::Worker::my().StartTx(txType, isolationLevel);
@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
               }
             });
           });
-      crm.joinAll();
+      crm.JoinAll();
       end = chrono::high_resolution_clock::now();
 
       LOG(INFO)
@@ -105,10 +105,10 @@ int main(int argc, char** argv) {
         FLAGS_ycsb_insert_threads ? FLAGS_ycsb_insert_threads
                                   : FLAGS_worker_threads,
         n, [&](u64 t_i, u64 begin, u64 end) {
-          crm.scheduleJobAsync(t_i, [&, begin, end]() {
+          crm.ScheduleJobAsync(t_i, [&, begin, end]() {
             for (u64 i = begin; i < end; i++) {
               YCSBPayload payload;
-              utils::RandomGenerator::getRandString(
+              utils::RandomGenerator::RandString(
                   reinterpret_cast<u8*>(&payload), sizeof(YCSBPayload));
               YCSBKey key = i;
               cr::Worker::my().StartTx(
@@ -118,7 +118,7 @@ int main(int argc, char** argv) {
             }
           });
         });
-    crm.joinAll();
+    crm.JoinAll();
     end = chrono::high_resolution_clock::now();
     LOG(INFO)
         << "time elapsed = "
@@ -145,13 +145,13 @@ int main(int argc, char** argv) {
       FLAGS_ycsb_threads ? FLAGS_ycsb_threads : FLAGS_worker_threads;
   for (u64 t_i = 0; t_i < exec_threads - ((FLAGS_ycsb_sleepy_thread) ? 1 : 0);
        t_i++) {
-    crm.scheduleJobAsync(t_i, [&]() {
+    crm.ScheduleJobAsync(t_i, [&]() {
       running_threads_counter++;
       while (keep_running) {
         JUMPMU_TRY() {
           YCSBKey key;
           if (FLAGS_zipf_factor == 0) {
-            key = utils::RandomGenerator::getRandU64(0, ycsb_tuple_count);
+            key = utils::RandomGenerator::RandU64(0, ycsb_tuple_count);
           } else {
             key = zipf_random->rand();
           }
@@ -160,7 +160,7 @@ int main(int argc, char** argv) {
           cr::Worker::my().StartTx(txType, isolationLevel);
           for (u64 op_i = 0; op_i < FLAGS_ycsb_ops_per_tx; op_i++) {
             if (FLAGS_ycsb_read_ratio == 100 ||
-                utils::RandomGenerator::getRandU64(0, 100) <
+                utils::RandomGenerator::RandU64(0, 100) <
                     FLAGS_ycsb_read_ratio) {
               table.lookup1({key},
                             [&](const KVTable&) {}); // result = record.mValue;
@@ -174,7 +174,7 @@ int main(int argc, char** argv) {
               updateDesc.mUpdateSlots[0].mOffset = offsetof(KVTable, mValue);
               updateDesc.mUpdateSlots[0].mSize = sizeof(KVTable::mValue);
 
-              utils::RandomGenerator::getRandString(
+              utils::RandomGenerator::RandString(
                   reinterpret_cast<u8*>(&result), sizeof(YCSBPayload));
 
               table.update1(
@@ -197,7 +197,7 @@ int main(int argc, char** argv) {
     const leanstore::TxMode tx_type = FLAGS_enable_long_running_transaction
                                           ? leanstore::TxMode::kLongRunning
                                           : leanstore::TxMode::kShortRunning;
-    crm.scheduleJobAsync(exec_threads - 1, [&]() {
+    crm.ScheduleJobAsync(exec_threads - 1, [&]() {
       running_threads_counter++;
       while (keep_running) {
         JUMPMU_TRY() {
@@ -219,7 +219,7 @@ int main(int argc, char** argv) {
     keep_running = false;
     while (running_threads_counter) {
     }
-    crm.joinAll();
+    crm.JoinAll();
   }
   cout << "--------------------------------------------------------------------"
           "-----------------"
