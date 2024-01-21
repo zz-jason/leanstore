@@ -95,7 +95,7 @@ public:
 };
 
 // TODO(lookup from graveyard)
-TEST_F(LongRunningTxTest, Lookup) {
+TEST_F(LongRunningTxTest, LookupFromGraveyard) {
   std::string key1("1"), val1("10");
   std::string key2("2"), val2("20");
   std::string res;
@@ -145,12 +145,14 @@ TEST_F(LongRunningTxTest, Lookup) {
     EXPECT_EQ(copiedVal, val2);
   });
 
+  // commit the transaction in worker 1, after garbage collection when
+  // committing the transaction, tombstones should be moved to the graveyard.
   cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
-    // commit the transaction in worker 1
     cr::Worker::my().CommitTx();
+    EXPECT_EQ(mKv->mGraveyard->CountEntries(), 2u);
   });
 
-  // still got the old value in worker 2
+  // lookup from graveyard, still got the old value in worker 2
   cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
     EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val1);
@@ -174,8 +176,6 @@ TEST_F(LongRunningTxTest, Lookup) {
 }
 
 TEST_F(LongRunningTxTest, ScanAsc) {
-  GTEST_SKIP();
-
   // randomly generate 100 unique key-values for s1 to insert
   size_t numKV = 100;
   std::unordered_map<std::string, std::string> kvToTest;
@@ -253,8 +253,6 @@ TEST_F(LongRunningTxTest, ScanAsc) {
 }
 
 TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
-  GTEST_SKIP();
-
   // randomly generate 100 unique key-values for s1 to insert
   size_t numKV = 100;
   std::unordered_map<std::string, std::string> kvToTest;

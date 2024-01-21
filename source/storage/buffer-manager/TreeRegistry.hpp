@@ -265,8 +265,12 @@ public:
                              bool calledBefore) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
-    DCHECK(it != mTrees.end())
-        << "BufferManagedTree not find, treeId=" << treeId;
+    if (it == mTrees.end()) {
+      LOG(INFO) << "Skip GarbageCollect on non-existing tree"
+                << ", it is probably that the tree is already dropped"
+                << ", treeId=" << treeId;
+      return;
+    }
     auto& [tree, treeName] = it->second;
     return tree->GarbageCollect(versionData, versionWorkerId, versionTxId,
                                 calledBefore);

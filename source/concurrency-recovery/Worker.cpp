@@ -121,7 +121,6 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
 void Worker::CommitTx() {
   SCOPED_DEFER(COUNTERS_BLOCK() {
     mActiveTx.mState = TxState::kCommitted;
-    sLatestStartTs[mWorkerId].store(0, std::memory_order_release);
     DLOG(INFO) << "Transaction committed"
                << ", workerId=" << mWorkerId
                << ", startTs=" << mActiveTx.mStartTs
@@ -150,6 +149,10 @@ void Worker::CommitTx() {
                << ", workerId=" << my().mWorkerId
                << ", actual startTs=" << mActiveTx.mStartTs;
   }
+
+  // Reset startTs so that other transactions can safely update the global
+  // transaction watermarks and garbage collect the unused versions.
+  sLatestStartTs[mWorkerId].store(0, std::memory_order_release);
 
   mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
 
