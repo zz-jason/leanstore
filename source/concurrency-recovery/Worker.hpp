@@ -202,6 +202,10 @@ public:
     u64 capacity;
 
   public:
+    // CleanUpCommitLog is called when the commit log is full in the begging of
+    // a transaction. It keeps the latest (commitTs, startTs) in the commit log,
+    // and the commit log that is visible for other running transactions. It's
+    // kind of like a garbage collection for the commit log.
     void CleanUpCommitLog();
 
     TXID AppendCommitLog(TXID startTs);
@@ -265,9 +269,11 @@ public:
   /// current transaction.
   TXID mGlobalWmkOfAllTxSnapshot = 0;
 
-  unique_ptr<TXID[]> mLocalSnapshotCache; // = Readview
+  /// The start timestamp used to calculate the LCB of the target worker.
+  unique_ptr<TXID[]> mLcbCacheKey;
 
-  unique_ptr<TXID[]> local_snapshot_cache_ts;
+  /// The LCB of the target worker on the LCB cache key.
+  unique_ptr<TXID[]> mLcbCacheVal;
 
   unique_ptr<TXID[]> local_workers_start_ts;
 
@@ -288,6 +294,7 @@ public:
   //-------------------------------------------------------------------------
   void GarbageCollection();
 
+  /// Update global watermarks, should be called in each transaction commit.
   void UpdateGlobalTxWatermarks();
 
   bool VisibleForAll(TXID txId);

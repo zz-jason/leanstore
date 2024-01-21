@@ -2,6 +2,7 @@
 #include "Config.hpp"
 #include "Worker.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "shared-headers/Exceptions.hpp"
 #include "storage/buffer-manager/TreeRegistry.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Misc.hpp"
@@ -44,6 +45,10 @@ void ConcurrencyControl::UpdateGlobalTxWatermarks() {
   TXID oldestShortTxId = std::numeric_limits<TXID>::max();
   for (WORKERID i = 0; i < Worker::my().mNumAllWorkers; i++) {
     u64 runningTxId = Worker::sLatestStartTs[i].load();
+    // Skip transactions not running.
+    if (runningTxId == 0) {
+      continue;
+    }
     // Skip transactions running in read-committed mode.
     if (runningTxId & Worker::kRcBit) {
       continue;
@@ -294,25 +299,37 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, u64 txId) {
       return Worker::my().mActiveTx.mStartTs > commitTs;
     }
 
+    // mGlobalWmkOfAllTxSnapshot is copied from Worker::sGlobalWmkOfAllTx at the
+    // beginning of each transaction. Worker::sGlobalWmkOfAllTx is occassionally
+    // updated by Worker::UpdateGlobalTxWatermarks, it's possible that
+    // mGlobalWmkOfAllTxSnapshot is not the latest value, but it is always safe
+    // to use it as the lower bound of the visibility check.
     if (startTs < mGlobalWmkOfAllTxSnapshot) {
       return true;
     }
 
-    // Use the cache
-    if (local_snapshot_cache_ts[workerId] == ActiveTx().mStartTs) {
-      return mLocalSnapshotCache[workerId] >= startTs;
+    // If we have queried the LCB on the target worker and cached the value in
+    // mLcbCacheVal, we can use it to check the visibility directly.
+    if (mLcbCacheKey[workerId] == ActiveTx().mStartTs) {
+      return mLcbCacheVal[workerId] >= startTs;
     }
-    if (mLocalSnapshotCache[workerId] >= startTs) {
+
+    // If the tuple is visible for the last transaction, it is visible for the
+    // current transaction as well. No need to query LCB on the target worker.
+    if (mLcbCacheVal[workerId] >= startTs) {
       return true;
     }
+
+    // Now we need to query LCB on the target worker and update the local cache.
     utils::Timer timer(CRCounters::MyCounters().cc_ms_snapshotting);
     TXID largestVisibleTxId =
-        other(workerId).mCommitTree.Lcb(Worker::my().mActiveTx.mStartTs);
+        other(workerId).mCommitTree.Lcb(ActiveTx().mStartTs);
     if (largestVisibleTxId) {
-      mLocalSnapshotCache[workerId] = largestVisibleTxId;
-      local_snapshot_cache_ts[workerId] = Worker::my().mActiveTx.mStartTs;
+      mLcbCacheKey[workerId] = ActiveTx().mStartTs;
+      mLcbCacheVal[workerId] = largestVisibleTxId;
       return largestVisibleTxId >= startTs;
     }
+
     return false;
   }
   default: {
@@ -338,6 +355,10 @@ TXID ConcurrencyControl::CommitTree::AppendCommitLog(TXID startTs) {
   // Transactions are sequential in one worker, so the commitTs and startTs is
   // always increasing in the commit log of one worker
   mCommitLog[cursor++] = {commitTs, startTs};
+  DLOG(INFO) << "Commit log appended"
+             << ", workerId=" << Worker::my().mWorkerId
+             << ", startTs=" << startTs << ", commitTs=" << commitTs
+             << ", cursor=" << cursor << ", capacity=" << capacity;
   mutex.unlock();
   return commitTs;
 }
@@ -373,7 +394,11 @@ void ConcurrencyControl::CommitTree::CleanUpCommitLog() {
   }
 
   utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_cm);
-  std::set<std::pair<TXID, TXID>> set; // TODO: unordered_set
+  std::set<std::pair<TXID, TXID>> set;
+
+  // Keep the latest (commitTs, startTs) in the commit log, so that other
+  // workers can see the latest commitTs of this worker.
+  set.insert(mCommitLog[cursor - 1]);
 
   const WORKERID myWorkerId = Worker::my().mWorkerId;
   for (WORKERID i = 0; i < Worker::my().mNumAllWorkers; i++) {
@@ -381,14 +406,15 @@ void ConcurrencyControl::CommitTree::CleanUpCommitLog() {
       continue;
     }
 
-    u64 latestStartTs = Worker::sLatestStartTs[i].load();
-    latestStartTs &= Worker::kCleanBitsMask;
+    u64 runningTxId = Worker::sLatestStartTs[i].load();
+    if (runningTxId == 0) {
+      // Don't need to keep the old commit log entry if the worker is not
+      // running any transaction.
+      continue;
+    }
 
-    set.insert(mCommitLog[cursor - 1]);
-    if (latestStartTs == 0) {
-      // to avoid race conditions when switching from RC to SI
-      set.insert(mCommitLog[0]);
-    } else if (auto result = lcbNoLatch(latestStartTs); result) {
+    runningTxId &= Worker::kCleanBitsMask;
+    if (auto result = lcbNoLatch(runningTxId); result) {
       set.insert(*result);
     }
   }
@@ -397,6 +423,16 @@ void ConcurrencyControl::CommitTree::CleanUpCommitLog() {
   cursor = 0;
   for (auto& p : set) {
     mCommitLog[cursor++] = p;
+  }
+
+  DEBUG_BLOCK() {
+    for (u64 i = 0; i < cursor; i++) {
+      DLOG(INFO) << "Commit log cleaned up"
+                 << ", workerId=" << Worker::my().mWorkerId
+                 << ", startTs=" << mCommitLog[i].second
+                 << ", commitTs=" << mCommitLog[i].first
+                 << ", cursor=" << cursor << ", capacity=" << capacity;
+    }
   }
   mutex.unlock();
 }

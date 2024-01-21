@@ -39,8 +39,8 @@ Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers)
   mLogging.mWalBuffer = (u8*)(std::aligned_alloc(512, FLAGS_wal_buffer_size));
   std::memset(mLogging.mWalBuffer, 0, FLAGS_wal_buffer_size);
 
-  cc.mLocalSnapshotCache = make_unique<u64[]>(numWorkers);
-  cc.local_snapshot_cache_ts = make_unique<u64[]>(numWorkers);
+  cc.mLcbCacheVal = make_unique<u64[]>(numWorkers);
+  cc.mLcbCacheKey = make_unique<u64[]>(numWorkers);
   cc.local_workers_start_ts = make_unique<u64[]>(numWorkers + 1);
   sLatestStartTs[mWorkerId] = 0;
 }
@@ -121,6 +121,7 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
 void Worker::CommitTx() {
   SCOPED_DEFER(COUNTERS_BLOCK() {
     mActiveTx.mState = TxState::kCommitted;
+    sLatestStartTs[mWorkerId].store(0, std::memory_order_release);
     DLOG(INFO) << "Transaction committed"
                << ", workerId=" << mWorkerId
                << ", startTs=" << mActiveTx.mStartTs
@@ -202,6 +203,7 @@ void Worker::CommitTx() {
 void Worker::AbortTx() {
   SCOPED_DEFER({
     mActiveTx.mState = TxState::kAborted;
+    sLatestStartTs[mWorkerId].store(0, std::memory_order_release);
     LOG(INFO) << "Transaction aborted"
               << ", workerId=" << mWorkerId
               << ", startTs=" << mActiveTx.mStartTs
