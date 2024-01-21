@@ -64,20 +64,15 @@ void ConfigsTable::open() {
   columns.emplace("c_wal", [&](Column& col) { col << FLAGS_wal; });
   columns.emplace("c_wal_io_hack", [&](Column& col) { col << 1; });
   columns.emplace("c_wal_fsync", [&](Column& col) { col << FLAGS_wal_fsync; });
-  columns.emplace("c_wal_log_writers",
-                  [&](Column& col) { col << FLAGS_wal_log_writers; });
   columns.emplace("c_enable_garbage_collection",
                   [&](Column& col) { col << FLAGS_enable_garbage_collection; });
   columns.emplace("c_vi_fat_tuple",
                   [&](Column& col) { col << FLAGS_enable_fat_tuple; });
-  columns.emplace("c_pgc", [&](Column& col) { col << FLAGS_pgc; });
   columns.emplace("c_isolation_level",
                   [&](Column& col) { col << FLAGS_isolation_level; });
   columns.emplace("c_enable_long_running_transaction", [&](Column& col) {
     col << FLAGS_enable_long_running_transaction;
   });
-  columns.emplace("c_history_tree_inserts",
-                  [&](Column& col) { col << FLAGS_history_tree_inserts; });
 
   for (auto& c : columns) {
     c.second.generator(c.second);

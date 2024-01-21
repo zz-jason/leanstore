@@ -39,8 +39,8 @@ Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers)
   mLogging.mWalBuffer = (u8*)(std::aligned_alloc(512, FLAGS_wal_buffer_size));
   std::memset(mLogging.mWalBuffer, 0, FLAGS_wal_buffer_size);
 
-  cc.mLocalSnapshotCache = make_unique<u64[]>(numWorkers);
-  cc.local_snapshot_cache_ts = make_unique<u64[]>(numWorkers);
+  cc.mLcbCacheVal = make_unique<u64[]>(numWorkers);
+  cc.mLcbCacheKey = make_unique<u64[]>(numWorkers);
   cc.local_workers_start_ts = make_unique<u64[]>(numWorkers + 1);
   sLatestStartTs[mWorkerId] = 0;
 }
@@ -95,33 +95,27 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   mLogging.mTxReadSnapshot = Logging::sGlobalMinFlushedGSN.load();
   mLogging.mHasRemoteDependency = false;
 
+  // For now, we only support SI and SSI
+  if (level < IsolationLevel::kSnapshotIsolation) {
+    LOG(FATAL) << "Unsupported isolation level: " << static_cast<u64>(level);
+  }
+
   // Draw TXID from global counter and publish it with the TX type (i.e.
   // long-running or short-running) We have to acquire a transaction id and use
   // it for locking in ANY isolation level
-  if (level >= IsolationLevel::kSnapshotIsolation) {
-    {
-      utils::Timer timer(CRCounters::MyCounters().cc_ms_snapshotting);
-      auto& curWorkerSnapshot = sLatestStartTs[mWorkerId];
-      curWorkerSnapshot.store(mActiveTx.mStartTs | kLatchBit,
-                              std::memory_order_release);
-
-      mActiveTx.mStartTs = ConcurrencyControl::sTimeStampOracle.fetch_add(1);
-      auto curTxId = mActiveTx.mStartTs;
-      if (FLAGS_enable_long_running_transaction && mActiveTx.IsLongRunning()) {
-        // mark as long-running transaction
-        curTxId |= kLongRunningBit;
-      }
-      // publish the transaction id
-      curWorkerSnapshot.store(curTxId, std::memory_order_release);
-    }
-    cc.mCommitTree.CleanUpCommitLog();
-    cc.mGlobalWmkOfAllTxSnapshot = sGlobalWmkOfAllTx.load();
-  } else {
-    if (prevTx.AtLeastSI()) {
-      cc.SwitchToReadCommitted();
-    }
-    cc.mCommitTree.CleanUpCommitLog();
+  mActiveTx.mStartTs = ConcurrencyControl::sTimeStampOracle.fetch_add(1);
+  auto curTxId = mActiveTx.mStartTs;
+  if (FLAGS_enable_long_running_transaction && mActiveTx.IsLongRunning()) {
+    // Mark as long-running transaction
+    curTxId |= kLongRunningBit;
   }
+
+  // Publish the transaction id
+  sLatestStartTs[mWorkerId].store(curTxId, std::memory_order_release);
+  cc.mGlobalWmkOfAllTxSnapshot = sGlobalWmkOfAllTx.load();
+
+  // Cleanup commit log if necessary
+  cc.mCommitTree.CleanUpCommitLog();
 }
 
 void Worker::CommitTx() {
@@ -139,7 +133,8 @@ void Worker::CommitTx() {
     return;
   }
 
-  mCommandId = 0; // Reset mCommandId only on commit and never on abort
+  // Reset mCommandId on commit
+  mCommandId = 0;
   if (mActiveTx.mHasWrote) {
     auto commitTs = cc.mCommitTree.AppendCommitLog(mActiveTx.mStartTs);
     cc.mLatestCommitTs.store(commitTs, std::memory_order_release);
@@ -154,6 +149,10 @@ void Worker::CommitTx() {
                << ", workerId=" << my().mWorkerId
                << ", actual startTs=" << mActiveTx.mStartTs;
   }
+
+  // Reset startTs so that other transactions can safely update the global
+  // transaction watermarks and garbage collect the unused versions.
+  sLatestStartTs[mWorkerId].store(0, std::memory_order_release);
 
   mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
 
@@ -179,12 +178,7 @@ void Worker::CommitTx() {
                << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
   }
 
-  // Only committing snapshot/ changing between SI and lower modes
-  if (mActiveTx.AtLeastSI()) {
-    cc.UpdateGlobalTxWatermarks();
-  }
-
-  // All isolation level generate garbage
+  // All isolation level generate garbage, cleanup in the end transaction
   cc.GarbageCollection();
 
   // wait transaction to be committed
@@ -208,6 +202,7 @@ void Worker::CommitTx() {
 void Worker::AbortTx() {
   SCOPED_DEFER({
     mActiveTx.mState = TxState::kAborted;
+    sLatestStartTs[mWorkerId].store(0, std::memory_order_release);
     LOG(INFO) << "Transaction aborted"
               << ", workerId=" << mWorkerId
               << ", startTs=" << mActiveTx.mStartTs
@@ -249,7 +244,6 @@ void Worker::AbortTx() {
 
 void Worker::shutdown() {
   cc.GarbageCollection();
-  cc.SwitchToReadCommitted();
 }
 
 } // namespace cr

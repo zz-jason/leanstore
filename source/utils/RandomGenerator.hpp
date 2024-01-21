@@ -2,79 +2,83 @@
 
 #include "shared-headers/Units.hpp"
 
+#include <glog/logging.h>
+
 #include <algorithm>
 #include <cstring>
 #include <random>
 #include <string>
-
-#include <assert.h>
 
 namespace leanstore {
 namespace utils {
 
 class MersenneTwister {
 private:
-  static const int NN = 312;
-  static const int MM = 156;
-  static const uint64_t MATRIX_A = 0xB5026F5AA96619E9ULL;
-  static const uint64_t UM = 0xFFFFFFFF80000000ULL;
-  static const uint64_t LM = 0x7FFFFFFFULL;
-  uint64_t mt[NN];
-  int mti;
+  static const int sNn = 312;
+  static const int sMm = 156;
+  static const uint64_t sMatrixA = 0xB5026F5AA96619E9ULL;
+  static const uint64_t sUm = 0xFFFFFFFF80000000ULL;
+  static const uint64_t sLm = 0x7FFFFFFFULL;
+
+  uint64_t mMt[sNn];
+  int mMti;
+
   void init(uint64_t seed);
 
 public:
   MersenneTwister(uint64_t seed = 19650218ULL);
-  uint64_t rnd();
+  uint64_t Rand();
 };
 
 } // namespace utils
 } // namespace leanstore
 
-static thread_local leanstore::utils::MersenneTwister mt_generator;
-static thread_local std::mt19937 random_generator;
+static thread_local leanstore::utils::MersenneTwister tlsMtGenerator;
+static thread_local std::mt19937 tlsStdGenerator;
 
 namespace leanstore {
 namespace utils {
 
 class RandomGenerator {
 public:
-  // ATTENTION: open interval [min, max)
-  static u64 getRandU64(u64 min, u64 max) {
-    u64 rand = min + (mt_generator.rnd() % (max - min));
-    assert(rand < max);
-    assert(rand >= min);
+  /// Get a random number between min inclusive and max exclusive, i.e. in the
+  /// range [min, max)
+  static u64 RandU64(u64 min, u64 max) {
+    u64 rand = min + (tlsMtGenerator.Rand() % (max - min));
+    DCHECK(min <= rand && rand < max)
+        << "Random number should be in range [min, max)"
+        << ", min=" << min << ", max=" << max << ", rand=" << rand;
     return rand;
   }
 
-  static u64 getRandU64() {
-    return mt_generator.rnd();
+  static u64 RandU64() {
+    return tlsMtGenerator.Rand();
   }
 
-  static u64 getRandU64STD(u64 min, u64 max) {
+  static u64 RandU64Std(u64 min, u64 max) {
     std::uniform_int_distribution<u64> distribution(min, max - 1);
-    return distribution(random_generator);
+    return distribution(tlsStdGenerator);
   }
 
-  template <typename T> static inline T getRand(T min, T max) {
-    u64 rand = getRandU64(min, max);
+  template <typename T> inline static T Rand(T min, T max) {
+    u64 rand = RandU64(min, max);
     return static_cast<T>(rand);
   }
 
-  static void getRandString(u8* dst, u64 size) {
+  static void RandString(u8* dst, u64 size) {
     for (u64 i = 0; i < size; i++) {
-      dst[i] = getRand(48, 123);
+      dst[i] = Rand(48, 123);
     }
   }
 
-  static std::string RandomAlphString(size_t len) {
-    static constexpr auto chars = "0123456789"
-                                  "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                                  "abcdefghijklmnopqrstuvwxyz";
+  static std::string RandAlphString(size_t len) {
+    static constexpr auto kChars = "0123456789"
+                                   "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                                   "abcdefghijklmnopqrstuvwxyz";
     auto result = std::string(len, '\0');
     std::generate_n(begin(result), len, [&]() {
-      auto i = getRandU64STD(0, std::strlen(chars));
-      return chars[i];
+      auto i = RandU64Std(0, std::strlen(kChars));
+      return kChars[i];
     });
     return result;
   }

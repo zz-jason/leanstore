@@ -37,7 +37,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
-  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     sLeanStore->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
@@ -46,13 +46,13 @@ static void BenchUpdateInsert(benchmark::State& state) {
 
   std::unordered_set<std::string> dedup;
   for (auto _ : state) {
-    cr::CRManager::sInstance->scheduleJobAsync(0, [&]() {
+    cr::CRManager::sInstance->ScheduleJobAsync(0, [&]() {
       cr::Worker::my().StartTx();
       std::string key;
       std::string val;
       for (size_t i = 0; i < 16; i++) {
-        key = utils::RandomGenerator::RandomAlphString(24);
-        val = utils::RandomGenerator::RandomAlphString(128);
+        key = utils::RandomGenerator::RandAlphString(24);
+        val = utils::RandomGenerator::RandAlphString(128);
         btree->Insert(Slice((const u8*)key.data(), key.size()),
                       Slice((const u8*)val.data(), val.size()));
       }
@@ -60,7 +60,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
     });
   }
 
-  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     SCOPED_DEFER(cr::Worker::my().CommitTx());
     sLeanStore->UnRegisterTransactionKV(btreeName);

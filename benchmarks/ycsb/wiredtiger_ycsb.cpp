@@ -68,7 +68,7 @@ int main(int argc, char** argv) {
           wiredtiger_db.prepareThread();
           for (u64 i = begin; i < end; i++) {
             YCSBPayload payload;
-            leanstore::utils::RandomGenerator::getRandString(
+            leanstore::utils::RandomGenerator::RandString(
                 reinterpret_cast<u8*>(&payload), sizeof(YCSBPayload));
             YCSBKey& key = i;
             table.insert({key}, {payload});
@@ -104,7 +104,7 @@ int main(int argc, char** argv) {
           wiredtiger_db.StartTx();
           YCSBKey key;
           if (FLAGS_zipf_factor == 0) {
-            key = leanstore::utils::RandomGenerator::getRandU64(
+            key = leanstore::utils::RandomGenerator::RandU64(
                 0, ycsb_tuple_count);
           } else {
             key = zipf_random->rand();
@@ -112,14 +112,14 @@ int main(int argc, char** argv) {
           assert(key < ycsb_tuple_count);
           YCSBPayload result;
           if (FLAGS_ycsb_read_ratio == 100 ||
-              leanstore::utils::RandomGenerator::getRandU64(0, 100) <
+              leanstore::utils::RandomGenerator::RandU64(0, 100) <
                   FLAGS_ycsb_read_ratio) {
             table.lookup1({key},
                           [&](const YCSBTable&) {}); // result = record.mValue;
           } else {
             UpdateDescriptorGenerator1(tabular_update_descriptor, YCSBTable,
                                        mValue);
-            leanstore::utils::RandomGenerator::getRandString(
+            leanstore::utils::RandomGenerator::RandString(
                 reinterpret_cast<u8*>(&result), sizeof(YCSBPayload));
             table.update1(
                 {key}, [&](YCSBTable& rec) { rec.mValue = result; },

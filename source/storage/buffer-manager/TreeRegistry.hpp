@@ -79,13 +79,13 @@ public:
     LOG(FATAL) << "BufferManagedTree::unlock is unimplemented";
   }
 
-  virtual StringMap serialize() {
-    LOG(FATAL) << "BufferManagedTree::serialize is unimplemented";
+  virtual StringMap Serialize() {
+    LOG(FATAL) << "BufferManagedTree::Serialize is unimplemented";
     return StringMap();
   }
 
-  virtual void deserialize(StringMap) {
-    LOG(FATAL) << "BufferManagedTree::deserialize is unimplemented";
+  virtual void Deserialize(StringMap) {
+    LOG(FATAL) << "BufferManagedTree::Deserialize is unimplemented";
   }
 
   virtual ~BufferManagedTree() {
@@ -124,7 +124,8 @@ public:
 
 public:
   inline TREEID AllocTreeId() {
-    return mTreeIdAllocator++;
+    auto allocatedTreeId = mTreeIdAllocator++;
+    return allocatedTreeId;
   }
 
   /**
@@ -145,12 +146,12 @@ public:
     auto tree = ctor();
 
     // register the tree
-    auto emplaceResult = mTrees.emplace(std::make_pair(
-        treeId, std::move(std::make_tuple(std::move(tree), treeName))));
+    auto emplaceResult = mTrees.emplace(
+        std::make_pair(treeId, std::make_tuple(std::move(tree), treeName)));
     mTreeIndexByName.emplace(std::make_pair(treeName, emplaceResult.first));
 
     auto it = emplaceResult.first;
-    auto treePtr = std::get<0>(it->second).get();
+    auto* treePtr = std::get<0>(it->second).get();
 
     // return pointer and tree id
     return std::make_tuple(treePtr, treeId);
@@ -165,8 +166,8 @@ public:
       return false;
     }
 
-    auto emplaceResult = mTrees.emplace(std::make_pair(
-        treeId, std::move(std::make_tuple(std::move(tree), treeName))));
+    auto emplaceResult = mTrees.emplace(
+        std::make_pair(treeId, std::make_tuple(std::move(tree), treeName)));
     mTreeIndexByName.emplace(std::make_pair(treeName, emplaceResult.first));
     return true;
   }
@@ -264,8 +265,12 @@ public:
                              bool calledBefore) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
-    DCHECK(it != mTrees.end())
-        << "BufferManagedTree not find, treeId=" << treeId;
+    if (it == mTrees.end()) {
+      LOG(INFO) << "Skip GarbageCollect on non-existing tree"
+                << ", it is probably that the tree is already dropped"
+                << ", treeId=" << treeId;
+      return;
+    }
     auto& [tree, treeName] = it->second;
     return tree->GarbageCollect(versionData, versionWorkerId, versionTxId,
                                 calledBefore);
@@ -281,22 +286,22 @@ public:
   }
 
   // Serialization
-  inline StringMap serialize(TREEID treeId) {
+  inline StringMap Serialize(TREEID treeId) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
     DLOG_IF(FATAL, it == mTrees.end())
         << "BufferManagedTree not find, treeId=" << treeId;
     auto& [tree, treeName] = it->second;
-    return tree->serialize();
+    return tree->Serialize();
   }
 
-  inline void deserialize(TREEID treeId, StringMap map) {
+  inline void Deserialize(TREEID treeId, StringMap map) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
     DLOG_IF(FATAL, it == mTrees.end())
         << "BufferManagedTree not find, treeId=" << treeId;
     auto& [tree, treeName] = it->second;
-    return tree->deserialize(map);
+    return tree->Deserialize(map);
   }
 
 public:

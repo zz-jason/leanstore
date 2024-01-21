@@ -143,7 +143,7 @@ public:
     if (!FLAGS_contention_split) {
       return;
     }
-    const u64 randomNumber = utils::RandomGenerator::getRandU64();
+    const u64 randomNumber = utils::RandomGenerator::RandU64();
 
     // haven't met the contention stats update probability
     if ((randomNumber &

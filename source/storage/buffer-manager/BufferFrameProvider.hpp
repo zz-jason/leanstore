@@ -156,13 +156,13 @@ private:
   }
 
   inline BufferFrame* randomBufferFrame() {
-    auto i = utils::RandomGenerator::getRand<u64>(0, mNumBfs);
+    auto i = utils::RandomGenerator::Rand<u64>(0, mNumBfs);
     auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
     return reinterpret_cast<BufferFrame*>(bfAddr);
   }
 
   inline Partition& randomPartition() {
-    auto i = utils::RandomGenerator::getRand<u64>(0, mNumPartitions);
+    auto i = utils::RandomGenerator::Rand<u64>(0, mNumPartitions);
     return *mPartitions[i];
   }
 

@@ -1,3 +1,4 @@
+#include "Config.hpp"
 #include "KVInterface.hpp"
 #include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
@@ -18,6 +19,10 @@ using namespace leanstore::storage::btree;
 
 namespace leanstore::test {
 
+static Slice ToSlice(const std::string& src) {
+  return Slice((const u8*)src.data(), src.size());
+}
+
 class LongRunningTxTest : public ::testing::Test {
 protected:
   std::string mTreeName;
@@ -32,34 +37,47 @@ protected:
     // init the leanstore
     auto* leanstore = GetLeanStore();
 
-    mTreeName = RandomGenerator::RandomAlphString(10);
+    mTreeName = RandomGenerator::RandAlphString(10);
     auto config = BTreeGeneric::Config{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
 
     // create a btree for test
-    cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
       cr::Worker::my().StartTx();
       SCOPED_DEFER(cr::Worker::my().CommitTx());
       leanstore->RegisterTransactionKV(mTreeName, config, &mKv);
       ASSERT_NE(mKv, nullptr);
     });
+
+    // do extra insert and remove transactions in worker 0 to make it have more
+    // than one entries in the commit log, which helps to advance the global
+    // lower watermarks for garbage collection
+    cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
+      cr::Worker::my().StartTx();
+      ASSERT_EQ(mKv->Insert(ToSlice("0"), ToSlice("0")), OpCode::kOK);
+      cr::Worker::my().CommitTx();
+
+      cr::Worker::my().StartTx();
+      ASSERT_EQ(mKv->Remove(ToSlice("0")), OpCode::kOK);
+      cr::Worker::my().CommitTx();
+    });
   }
 
   void TearDown() override {
-    cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+    TXID lastTxId = 0;
+    cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
       cr::Worker::my().StartTx();
       SCOPED_DEFER(cr::Worker::my().CommitTx());
+      lastTxId = cr::Worker::my().mActiveTx.mStartTs;
       GetLeanStore()->UnRegisterTransactionKV(mTreeName);
     });
   }
 
 public:
   inline static auto CreateLeanStore() {
-    FLAGS_enable_print_btree_stats_on_exit = true;
-    FLAGS_wal = true;
-    FLAGS_bulk_insert = false;
+    FLAGS_enable_eager_garbage_collection = true;
     FLAGS_worker_threads = 3;
     FLAGS_recover = false;
     FLAGS_data_dir = "/tmp/MVCCTest";
@@ -76,12 +94,8 @@ public:
   }
 };
 
-static Slice ToSlice(const std::string& src) {
-  return Slice((const u8*)src.data(), src.size());
-}
-
 // TODO(lookup from graveyard)
-TEST_F(LongRunningTxTest, Lookup) {
+TEST_F(LongRunningTxTest, LookupFromGraveyard) {
   std::string key1("1"), val1("10");
   std::string key2("2"), val2("20");
   std::string res;
@@ -92,17 +106,20 @@ TEST_F(LongRunningTxTest, Lookup) {
   };
 
   // Insert 2 key-values as the test base.
-  cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
     cr::Worker::my().StartTx();
-    SCOPED_DEFER(cr::Worker::my().CommitTx());
     EXPECT_EQ(mKv->Insert(ToSlice(key1), ToSlice(val1)), OpCode::kOK);
+    cr::Worker::my().CommitTx();
+
+    cr::Worker::my().StartTx();
     EXPECT_EQ(mKv->Insert(ToSlice(key2), ToSlice(val2)), OpCode::kOK);
+    cr::Worker::my().CommitTx();
   });
 
-  cr::CRManager::sInstance->scheduleJobSync(
+  cr::CRManager::sInstance->ScheduleJobSync(
       1, [&]() { cr::Worker::my().StartTx(); });
 
-  cr::CRManager::sInstance->scheduleJobSync(2, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
     cr::Worker::my().StartTx(TxMode::kLongRunning);
 
     // got the old value in worker 2
@@ -114,13 +131,13 @@ TEST_F(LongRunningTxTest, Lookup) {
   });
 
   // remove the key in worker 1
-  cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
     EXPECT_EQ(mKv->Remove(ToSlice(key1)), OpCode::kOK);
     EXPECT_EQ(mKv->Remove(ToSlice(key2)), OpCode::kOK);
   });
 
   // got the old value in worker 2
-  cr::CRManager::sInstance->scheduleJobAsync(2, [&]() {
+  cr::CRManager::sInstance->ScheduleJobAsync(2, [&]() {
     EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val1);
 
@@ -128,12 +145,15 @@ TEST_F(LongRunningTxTest, Lookup) {
     EXPECT_EQ(copiedVal, val2);
   });
 
-  // commit the transaction in worker 1
-  cr::CRManager::sInstance->scheduleJobSync(
-      1, [&]() { cr::Worker::my().CommitTx(); });
+  // commit the transaction in worker 1, after garbage collection when
+  // committing the transaction, tombstones should be moved to the graveyard.
+  cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
+    cr::Worker::my().CommitTx();
+    EXPECT_EQ(mKv->mGraveyard->CountEntries(), 2u);
+  });
 
-  // still got the old value in worker 2
-  cr::CRManager::sInstance->scheduleJobSync(2, [&]() {
+  // lookup from graveyard, still got the old value in worker 2
+  cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
     EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val1);
 
@@ -145,7 +165,7 @@ TEST_F(LongRunningTxTest, Lookup) {
   });
 
   // now worker 2 can not get the old value
-  cr::CRManager::sInstance->scheduleJobSync(2, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
     cr::Worker::my().StartTx(TxMode::kLongRunning,
                              IsolationLevel::kSnapshotIsolation, false);
     SCOPED_DEFER(cr::Worker::my().CommitTx());
@@ -155,14 +175,14 @@ TEST_F(LongRunningTxTest, Lookup) {
   });
 }
 
-TEST_F(LongRunningTxTest, ScanAsc) {
+TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
   // randomly generate 100 unique key-values for s1 to insert
   size_t numKV = 100;
   std::unordered_map<std::string, std::string> kvToTest;
   std::string smallestKey;
   for (size_t i = 0; i < numKV; ++i) {
-    std::string key = RandomGenerator::RandomAlphString(10);
-    std::string val = RandomGenerator::RandomAlphString(10);
+    std::string key = RandomGenerator::RandAlphString(10);
+    std::string val = RandomGenerator::RandAlphString(10);
     if (kvToTest.find(key) != kvToTest.end()) {
       --i;
       continue;
@@ -176,7 +196,7 @@ TEST_F(LongRunningTxTest, ScanAsc) {
   }
 
   // insert the key-values in worker 0
-  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
     for (const auto& [key, val] : kvToTest) {
       cr::Worker::my().StartTx();
       SCOPED_DEFER(cr::Worker::my().CommitTx());
@@ -192,14 +212,14 @@ TEST_F(LongRunningTxTest, ScanAsc) {
     EXPECT_EQ(copiedVal, kvToTest[copiedKey]);
     return true;
   };
-  cr::CRManager::sInstance->scheduleJobSync(2, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
     cr::Worker::my().StartTx(TxMode::kLongRunning,
                              IsolationLevel::kSnapshotIsolation, false);
     EXPECT_EQ(mKv->ScanAsc(ToSlice(smallestKey), copyKeyVal), OpCode::kOK);
   });
 
   // remove the key-values in worker 1
-  cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
     cr::Worker::my().StartTx();
     for (const auto& [key, val] : kvToTest) {
       EXPECT_EQ(mKv->Remove(ToSlice(key)), OpCode::kOK);
@@ -207,16 +227,19 @@ TEST_F(LongRunningTxTest, ScanAsc) {
   });
 
   // got the old values in worker 2
-  cr::CRManager::sInstance->scheduleJobSync(2, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
     EXPECT_EQ(mKv->ScanAsc(ToSlice(smallestKey), copyKeyVal), OpCode::kOK);
   });
 
-  // commit the transaction in worker 1
-  cr::CRManager::sInstance->scheduleJobSync(
-      1, [&]() { cr::Worker::my().CommitTx(); });
+  // commit the transaction in worker 1, all the removed key-values should be
+  // moved to graveyard
+  cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
+    cr::Worker::my().CommitTx();
+    EXPECT_EQ(mKv->mGraveyard->CountEntries(), kvToTest.size());
+  });
 
   // still got the old values in worker 2
-  cr::CRManager::sInstance->scheduleJobSync(2, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
     EXPECT_EQ(mKv->ScanAsc(ToSlice(smallestKey), copyKeyVal), OpCode::kOK);
 
     // commit the transaction in worker 2
@@ -224,7 +247,7 @@ TEST_F(LongRunningTxTest, ScanAsc) {
   });
 
   // now worker 2 can not get the old values
-  cr::CRManager::sInstance->scheduleJobSync(2, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
     cr::Worker::my().StartTx(TxMode::kLongRunning,
                              IsolationLevel::kSnapshotIsolation, false);
     SCOPED_DEFER(cr::Worker::my().CommitTx());

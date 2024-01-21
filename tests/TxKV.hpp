@@ -208,17 +208,17 @@ inline void LeanStoreMVCCSession::SetTxMode(TxMode txMode) {
 }
 
 inline void LeanStoreMVCCSession::StartTx() {
-  cr::CRManager::sInstance->scheduleJobSync(
+  cr::CRManager::sInstance->ScheduleJobSync(
       mWorkerId, [&]() { cr::Worker::my().StartTx(mTxMode, mIsolationLevel); });
 }
 
 inline void LeanStoreMVCCSession::CommitTx() {
-  cr::CRManager::sInstance->scheduleJobSync(
+  cr::CRManager::sInstance->ScheduleJobSync(
       mWorkerId, [&]() { cr::Worker::my().CommitTx(); });
 }
 
 inline void LeanStoreMVCCSession::AbortTx() {
-  cr::CRManager::sInstance->scheduleJobSync(
+  cr::CRManager::sInstance->ScheduleJobSync(
       mWorkerId, [&]() { cr::Worker::my().AbortTx(); });
 }
 
@@ -232,7 +232,7 @@ inline auto LeanStoreMVCCSession::CreateTable(const std::string& tblName,
   };
 
   storage::btree::TransactionKV* btree;
-  cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
       cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
     }
@@ -250,7 +250,7 @@ inline auto LeanStoreMVCCSession::CreateTable(const std::string& tblName,
 inline auto LeanStoreMVCCSession::DropTable(const std::string& tblName,
                                             bool implicitTx)
     -> std::expected<void, utils::Error> {
-  cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
       cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
     }
@@ -268,7 +268,7 @@ inline auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
     -> std::expected<void, utils::Error> {
   auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
   OpCode res;
-  cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
       cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
     }
@@ -300,7 +300,7 @@ inline auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key,
     memcpy(val.data(), res.data(), res.size());
   };
 
-  cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
       cr::Worker::my().StartTx(mTxMode, mIsolationLevel, true);
     }
@@ -332,7 +332,7 @@ inline auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
   auto updateCallBack = [&](MutableSlice toUpdate) {
     std::memcpy(toUpdate.Data(), val.data(), val.length());
   };
-  cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
       cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
     }
@@ -368,7 +368,7 @@ inline auto LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key,
     -> std::expected<u64, utils::Error> {
   auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
   OpCode res;
-  cr::CRManager::sInstance->scheduleJobSync(mWorkerId, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
       cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
     }

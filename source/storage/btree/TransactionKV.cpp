@@ -1,19 +1,17 @@
 #include "TransactionKV.hpp"
 
 #include "KVInterface.hpp"
+#include "concurrency-recovery/Worker.hpp"
 #include "shared-headers/Units.hpp"
 #include "storage/btree/BasicKV.hpp"
 #include "storage/btree/ChainedTuple.hpp"
 #include "storage/btree/Tuple.hpp"
+#include "storage/btree/core/BTreeSharedIterator.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
 #include "utils/Defer.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
-
-using namespace std;
-using namespace leanstore::storage;
-using OpCode = leanstore::OpCode;
 
 namespace leanstore::storage::btree {
 
@@ -23,9 +21,26 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
       << ", workerId=" << cr::Worker::my().mWorkerId
       << ", startTs=" << cr::Worker::my().mActiveTx.mStartTs;
 
+  auto lookupInGraveyard = [&]() {
+    BTreeSharedIterator gIter(*static_cast<BTreeGeneric*>(mGraveyard));
+    if (!gIter.SeekExact(key)) {
+      return OpCode::kNotFound;
+    }
+    auto [ret, versionsRead] = GetVisibleTuple(gIter.value(), valCallback);
+    COUNTERS_BLOCK() {
+      WorkerCounters::MyCounters().cc_read_chains[mTreeId]++;
+      WorkerCounters::MyCounters().cc_read_versions_visited[mTreeId] +=
+          versionsRead;
+    }
+    return ret;
+  };
+
   BTreeSharedIterator iter(*static_cast<BTreeGeneric*>(this));
   if (!iter.SeekExact(key)) {
-    return OpCode::kNotFound;
+    // In a lookup-after-remove(other worker) scenario, the tuple may be garbage
+    // collected and moved to the graveyard, check the graveyard for the key.
+    return cr::ActiveTx().IsLongRunning() ? lookupInGraveyard()
+                                          : OpCode::kNotFound;
   }
 
   auto [ret, versionsRead] = GetVisibleTuple(iter.value(), valCallback);
@@ -36,18 +51,8 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
   }
 
   if (cr::ActiveTx().IsLongRunning() && ret == OpCode::kNotFound) {
-    BTreeSharedIterator gIter(*static_cast<BTreeGeneric*>(mGraveyard));
-    if (!gIter.SeekExact(key)) {
-      return OpCode::kNotFound;
-    }
-    std::tie(ret, versionsRead) = GetVisibleTuple(gIter.value(), valCallback);
-    COUNTERS_BLOCK() {
-      WorkerCounters::MyCounters().cc_read_chains[mTreeId]++;
-      WorkerCounters::MyCounters().cc_read_versions_visited[mTreeId] +=
-          versionsRead;
-    }
+    ret = lookupInGraveyard();
   }
-
   return ret;
 }
 
@@ -664,10 +669,16 @@ SpaceCheckResult TransactionKV::checkSpaceUtilization(BufferFrame& bf) {
 void TransactionKV::GarbageCollect(const u8* versionData,
                                    WORKERID versionWorkerId, TXID versionTxId,
                                    bool calledBefore) {
-  const auto& version = *reinterpret_cast<const RemoveVersion*>(versionData);
-  if (version.mTxId < cr::Worker::my().cc.mLocalWmkOfAllTx) {
+  const auto& version = *RemoveVersion::From(versionData);
+
+  // Delete tombstones caused by transactions below cc.mLocalWmkOfAllTx.
+  if (versionTxId <= cr::Worker::my().cc.mLocalWmkOfAllTx) {
+    DLOG(INFO) << "Delete tombstones caused by transactions below "
+               << "cc.mLocalWmkOfAllTx"
+               << ", versionWorkerId=" << versionWorkerId
+               << ", versionTxId=" << versionTxId
+               << ", removedKey=" << ToString(version.RemovedKey());
     DCHECK(version.mDanglingPointer.mBf != nullptr);
-    // Optimistic fast path
     JUMPMU_TRY() {
       BTreeExclusiveIterator xIter(
           *static_cast<BTreeGeneric*>(this), version.mDanglingPointer.mBf,
@@ -675,9 +686,7 @@ void TransactionKV::GarbageCollect(const u8* versionData,
       auto& node = xIter.mGuardedLeaf;
       auto& chainedTuple = *ChainedTuple::From(
           node->ValData(version.mDanglingPointer.mHeadSlot));
-      // Being chained is implicit because we check for version, so the state
-      // can not be changed after staging the todo
-      ENSURE(chainedTuple.mFormat == TupleFormat::kChained &&
+      DCHECK(chainedTuple.mFormat == TupleFormat::kChained &&
              !chainedTuple.IsWriteLocked() &&
              chainedTuple.mWorkerId == versionWorkerId &&
              chainedTuple.mTxId == versionTxId && chainedTuple.mIsTombstone);
@@ -687,78 +696,152 @@ void TransactionKV::GarbageCollect(const u8* versionData,
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
+      DLOG(INFO) << "Delete tombstones caused by transactions below "
+                 << "cc.mLocalWmkOfAllTx failed, try again later";
     }
+    return;
   }
-  auto key = version.RemovedKey();
-  OpCode ret;
+
+  auto removedKey = version.RemovedKey();
+
+  // Delete the removedKey from graveyard since no transaction needs it
   if (calledBefore) {
-    // Delete from mGraveyard
-    // ENSURE(version_tx_id < cr::Worker::my().mLocalWmkOfAllTx);
+    DLOG(INFO) << "Meet the removedKey again, delete it from graveyard"
+               << ", versionWorkerId=" << versionWorkerId
+               << ", versionTxId=" << versionTxId
+               << ", removedKey=" << ToString(removedKey);
     JUMPMU_TRY() {
       BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(mGraveyard));
-      if (xIter.SeekExact(key)) {
-        ret = xIter.RemoveCurrent();
-        ENSURE(ret == OpCode::kOK);
+      if (xIter.SeekExact(removedKey)) {
+        auto ret = xIter.RemoveCurrent();
+        DCHECK(ret == OpCode::kOK)
+            << "Failed to delete the removedKey from graveyard"
+            << ", ret=" << ToString(ret)
+            << ", versionWorkerId=" << versionWorkerId
+            << ", versionTxId=" << versionTxId
+            << ", removedKey=" << ToString(removedKey);
         xIter.MarkAsDirty();
       } else {
-        UNREACHABLE();
+        DLOG(FATAL) << "Cannot find the removedKey in graveyard"
+                    << ", versionWorkerId=" << versionWorkerId
+                    << ", versionTxId=" << versionTxId
+                    << ", removedKey=" << ToString(removedKey);
       }
     }
     JUMPMU_CATCH() {
     }
     return;
   }
-  // TODO: Corner cases if the tuple got inserted after a remove
+
+  // Move the removedKey to graveyard, it's removed by short-running transaction
+  // but still visible for long-running transactions
+  //
+  // TODO(jian.z): handle corner cases in insert-after-remove scenario
   JUMPMU_TRY() {
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
-    if (!xIter.SeekExact(key)) {
-      JUMPMU_RETURN; // TODO:
+    if (!xIter.SeekExact(removedKey)) {
+      DLOG(FATAL)
+          << "Cannot find the removedKey in TransactionKV, should not happen"
+          << ", versionWorkerId=" << versionWorkerId
+          << ", versionTxId=" << versionTxId
+          << ", removedKey=" << ToString(removedKey);
+      JUMPMU_RETURN;
     }
-    // ENSURE(ret == OpCode::kOK);
+
     MutableSlice mutRawVal = xIter.MutableVal();
-    // Checks
     auto& tuple = *Tuple::From(mutRawVal.Data());
     if (tuple.mFormat == TupleFormat::kFat) {
+      DLOG(INFO) << "Skip moving removedKey to graveyard for FatTuple"
+                 << ", versionWorkerId=" << versionWorkerId
+                 << ", versionTxId=" << versionTxId
+                 << ", removedKey=" << ToString(removedKey);
       JUMPMU_RETURN;
     }
+
     ChainedTuple& chainedTuple = *ChainedTuple::From(mutRawVal.Data());
     if (chainedTuple.IsWriteLocked()) {
+      DLOG(FATAL) << "The removedKey is write locked, should not happen"
+                  << ", versionWorkerId=" << versionWorkerId
+                  << ", versionTxId=" << versionTxId
+                  << ", removedKey=" << ToString(removedKey);
       JUMPMU_RETURN;
     }
+
     if (chainedTuple.mWorkerId == versionWorkerId &&
         chainedTuple.mTxId == versionTxId && chainedTuple.mIsTombstone) {
-      if (chainedTuple.mTxId < cr::Worker::my().cc.mLocalWmkOfAllTx) {
-        // remove the tombsone completely
-        ret = xIter.RemoveCurrent();
-        xIter.MarkAsDirty();
-        ENSURE(ret == OpCode::kOK);
-        xIter.TryMergeIfNeeded();
-        COUNTERS_BLOCK() {
-          WorkerCounters::MyCounters().cc_todo_removed[mTreeId]++;
-        }
-      } else if (chainedTuple.mTxId < cr::Worker::my().cc.mLocalWmkOfShortTx) {
-        // move it to graveyard for long-running transactions
+
+      DCHECK(chainedTuple.mTxId > cr::Worker::my().cc.mLocalWmkOfAllTx)
+          << "The removedKey is under cc.mLocalWmkOfAllTx, should not happen"
+          << ", cc.mLocalWmkOfAllTx=" << cr::Worker::my().cc.mLocalWmkOfAllTx
+          << ", versionWorkerId=" << versionWorkerId
+          << ", versionTxId=" << versionTxId
+          << ", removedKey=" << ToString(removedKey);
+      // if (chainedTuple.mTxId <= cr::Worker::my().cc.mLocalWmkOfAllTx) {
+      //   // remove the tombsone completely
+      //   auto ret = xIter.RemoveCurrent();
+      //   xIter.MarkAsDirty();
+      //   ENSURE(ret == OpCode::kOK);
+      //   xIter.TryMergeIfNeeded();
+      //   COUNTERS_BLOCK() {
+      //     WorkerCounters::MyCounters().cc_todo_removed[mTreeId]++;
+      //   }
+      // }
+      if (chainedTuple.mTxId <= cr::Worker::my().cc.mLocalWmkOfShortTx) {
+        DLOG(INFO) << "Move the removedKey to graveyard"
+                   << ", versionWorkerId=" << versionWorkerId
+                   << ", versionTxId=" << versionTxId
+                   << ", removedKey=" << ToString(removedKey);
+        // insert the removed key value to graveyard
         BTreeExclusiveIterator graveyardXIter(
             *static_cast<BTreeGeneric*>(mGraveyard));
-        OpCode gRet = graveyardXIter.InsertKV(key, xIter.value());
-        ENSURE(gRet == OpCode::kOK);
+        auto gRet = graveyardXIter.InsertKV(removedKey, xIter.value());
+        DCHECK(gRet == OpCode::kOK)
+            << "Failed to insert the removedKey to graveyard"
+            << ", ret=" << ToString(gRet)
+            << ", versionWorkerId=" << versionWorkerId
+            << ", versionTxId=" << versionTxId
+            << ", removedKey=" << ToString(removedKey)
+            << ", removedVal=" << ToString(xIter.value());
         graveyardXIter.MarkAsDirty();
 
-        // remove it from the main tree
-        ret = xIter.RemoveCurrent();
-        ENSURE(ret == OpCode::kOK);
+        // remove the tombsone from main tree
+        auto ret = xIter.RemoveCurrent();
+        DCHECK(ret == OpCode::kOK)
+            << "Failed to delete the removedKey tombstone from main tree"
+            << ", ret=" << ToString(ret)
+            << ", versionWorkerId=" << versionWorkerId
+            << ", versionTxId=" << versionTxId
+            << ", removedKey=" << ToString(removedKey);
         xIter.MarkAsDirty();
         xIter.TryMergeIfNeeded();
         COUNTERS_BLOCK() {
           WorkerCounters::MyCounters().cc_todo_moved_gy[mTreeId]++;
         }
       } else {
-        UNREACHABLE();
+        DLOG(FATAL) << "Meet a remove version upper than "
+                       "cc.mLocalWmkOfShortTx, should not happen"
+                    << ", cc.mLocalWmkOfShortTx="
+                    << cr::Worker::my().cc.mLocalWmkOfShortTx
+                    << ", versionWorkerId=" << versionWorkerId
+                    << ", versionTxId=" << versionTxId
+                    << ", removedKey=" << ToString(removedKey);
       }
+    } else {
+      DLOG(INFO)
+          << "Skip moving removedKey to graveyard, tuple changed after remove"
+          << ", chainedTuple.mWorkerId=" << chainedTuple.mWorkerId
+          << ", chainedTuple.mTxId=" << chainedTuple.mTxId
+          << ", chainedTuple.mIsTombstone=" << chainedTuple.mIsTombstone
+          << ", versionWorkerId=" << versionWorkerId
+          << ", versionTxId=" << versionTxId
+          << ", removedKey=" << ToString(removedKey);
     }
   }
   JUMPMU_CATCH() {
-    UNREACHABLE();
+    DLOG(INFO) << "GarbageCollect failed, try for next round"
+               << ", versionWorkerId=" << versionWorkerId
+               << ", versionTxId=" << versionTxId
+               << ", removedKey=" << ToString(removedKey);
   }
 }
 

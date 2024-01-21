@@ -73,25 +73,17 @@ DECLARE_string(tag);
 // -------------------------------------------------------------------------------------
 DECLARE_uint64(buffer_frame_recycle_batch_size);
 DECLARE_bool(reclaim_page_ids);
-// -------------------------------------------------------------------------------------
+
+// logging && recovery
 DECLARE_bool(wal);
 DECLARE_bool(wal_fsync);
-DECLARE_uint64(wal_log_writers);
 DECLARE_uint64(wal_buffer_size);
-// -------------------------------------------------------------------------------------
-DECLARE_string(isolation_level);
-DECLARE_uint64(si_refresh_rate);
-DECLARE_bool(enable_garbage_collection);
-
-// Config for MVCC GC
-DECLARE_bool(pgc);
-DECLARE_uint64(pgc_variant);
-DECLARE_double(garbage_in_page_pct);
-DECLARE_uint64(todo_batch_size);
-DECLARE_bool(history_tree_inserts);
-
-// -------------------------------------------------------------------------------------
 DECLARE_bool(recover);
+
+// MVCC && GC
+DECLARE_string(isolation_level);
+DECLARE_bool(enable_garbage_collection);
+DECLARE_bool(enable_eager_garbage_collection);
 
 namespace leanstore {
 

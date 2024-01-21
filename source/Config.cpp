@@ -28,7 +28,6 @@ DEFINE_bool(enable_long_running_transaction, true,
             "For long running transactions");
 
 DEFINE_uint32(db_file_prealloc_gib, 0, "Disk size to pre-allocate on DB file");
-DEFINE_bool(recover, false, "");
 
 DEFINE_uint32(free_pct, 1, "pct");
 DEFINE_uint32(partition_bits, 6, "bits per partition");
@@ -118,25 +117,21 @@ DEFINE_uint64(buffer_frame_recycle_batch_size, 64,
 
 DEFINE_bool(reclaim_page_ids, true, "Whether to reclaim unused free page ids");
 
-// -------------------------------------------------------------------------------------
+// logging && recovery
 DEFINE_bool(wal, true, "Whether wal is enabled");
 DEFINE_bool(wal_fsync, true, "Whether to explicitly flush wal to disk");
-DEFINE_uint64(wal_log_writers, 1, "");
 DEFINE_uint64(wal_buffer_size, 1024 * 1024 * 10,
               "WAL buffer size for each worker (Bytes)");
+DEFINE_bool(recover, false, "When enabled, the store is recovered from WAL");
 
-// MVCC and transaction
+// MVCC && GC
 DEFINE_string(isolation_level, "si",
               "options: si (Snapshot Isolation), ser (Serializable)");
-DEFINE_uint64(si_refresh_rate, 0, "");
-DEFINE_bool(enable_garbage_collection, true, "");
-
-DEFINE_bool(pgc, true, "Precise garbage collection/recycling");
-DEFINE_uint64(pgc_variant, 0, "0 naive, 1 bit faster, 2 ...");
-DEFINE_double(garbage_in_page_pct, 15,
-              "Threshold to trigger page-wise garbage collection (%)");
-DEFINE_uint64(todo_batch_size, 1024, "");
-DEFINE_bool(history_tree_inserts, true, "");
+DEFINE_bool(enable_garbage_collection, true,
+            "Whether to enable garbage collection");
+DEFINE_bool(enable_eager_garbage_collection, false,
+            "When enabled, the global watermarks are updated after each "
+            "transaction commit. Used for tests");
 
 namespace leanstore {
 

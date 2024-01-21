@@ -13,28 +13,28 @@ using namespace leanstore::storage::btree;
 
 namespace leanstore {
 
-class MVCCTest : public ::testing::Test {
+class MvccTest : public ::testing::Test {
 protected:
   std::string mTreeName;
   TransactionKV* mBTree;
 
 protected:
-  MVCCTest() = default;
+  MvccTest() = default;
 
-  ~MVCCTest() = default;
+  ~MvccTest() = default;
 
   void SetUp() override {
     // init the leanstore
     auto* leanstore = GetLeanStore();
 
-    mTreeName = RandomGenerator::RandomAlphString(10);
+    mTreeName = RandomGenerator::RandAlphString(10);
     auto config = BTreeGeneric::Config{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
 
     // create a btree for test
-    cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+    cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
       cr::Worker::my().StartTx();
       SCOPED_DEFER(cr::Worker::my().CommitTx());
       leanstore->RegisterTransactionKV(mTreeName, config, &mBTree);
@@ -43,7 +43,7 @@ protected:
   }
 
   void TearDown() override {
-    cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+    cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
       cr::Worker::my().StartTx();
       SCOPED_DEFER(cr::Worker::my().CommitTx());
       GetLeanStore()->UnRegisterTransactionKV(mTreeName);
@@ -57,7 +57,7 @@ public:
     FLAGS_bulk_insert = false;
     FLAGS_worker_threads = 3;
     FLAGS_recover = false;
-    FLAGS_data_dir = "/tmp/MVCCTest";
+    FLAGS_data_dir = "/tmp/MvccTest";
 
     std::filesystem::path dirPath = FLAGS_data_dir;
     std::filesystem::remove_all(dirPath);
@@ -66,16 +66,16 @@ public:
   }
 
   inline static leanstore::LeanStore* GetLeanStore() {
-    static auto sLeanStore = MVCCTest::CreateLeanStore();
+    static auto sLeanStore = MvccTest::CreateLeanStore();
     return sLeanStore.get();
   }
 };
 
-TEST_F(MVCCTest, LookupWhileInsert) {
+TEST_F(MvccTest, LookupWhileInsert) {
   // insert a base record
-  auto key0 = RandomGenerator::RandomAlphString(42);
-  auto val0 = RandomGenerator::RandomAlphString(151);
-  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+  auto key0 = RandomGenerator::RandAlphString(42);
+  auto val0 = RandomGenerator::RandAlphString(151);
+  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key0.data(), key0.size()),
                               Slice((const u8*)val0.data(), val0.size()));
@@ -84,9 +84,9 @@ TEST_F(MVCCTest, LookupWhileInsert) {
   });
 
   // start a transaction to insert another record, don't commit
-  auto key1 = RandomGenerator::RandomAlphString(17);
-  auto val1 = RandomGenerator::RandomAlphString(131);
-  cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+  auto key1 = RandomGenerator::RandAlphString(17);
+  auto val1 = RandomGenerator::RandAlphString(131);
+  cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
     cr::Worker::my().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
                               Slice((const u8*)val1.data(), val1.size()));
@@ -95,7 +95,7 @@ TEST_F(MVCCTest, LookupWhileInsert) {
 
   // start a transaction to lookup the base record
   // the lookup should not be blocked
-  cr::CRManager::sInstance->scheduleJobSync(2, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
@@ -110,7 +110,7 @@ TEST_F(MVCCTest, LookupWhileInsert) {
   });
 
   // commit the transaction
-  cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
@@ -124,7 +124,7 @@ TEST_F(MVCCTest, LookupWhileInsert) {
   });
 
   // now we can see the latest record
-  cr::CRManager::sInstance->scheduleJobSync(2, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
@@ -139,11 +139,11 @@ TEST_F(MVCCTest, LookupWhileInsert) {
   });
 }
 
-TEST_F(MVCCTest, InsertConflict) {
+TEST_F(MvccTest, InsertConflict) {
   // insert a base record
-  auto key0 = RandomGenerator::RandomAlphString(42);
-  auto val0 = RandomGenerator::RandomAlphString(151);
-  cr::CRManager::sInstance->scheduleJobSync(0, [&]() {
+  auto key0 = RandomGenerator::RandAlphString(42);
+  auto val0 = RandomGenerator::RandAlphString(151);
+  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
     cr::Worker::my().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key0.data(), key0.size()),
                               Slice((const u8*)val0.data(), val0.size()));
@@ -154,7 +154,7 @@ TEST_F(MVCCTest, InsertConflict) {
   // start a transaction to insert a bigger key, don't commit
   auto key1 = key0 + "a";
   auto val1 = val0;
-  cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
     cr::Worker::my().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
                               Slice((const u8*)val1.data(), val1.size()));
@@ -162,7 +162,7 @@ TEST_F(MVCCTest, InsertConflict) {
   });
 
   // start another transaction to insert the same key
-  cr::CRManager::sInstance->scheduleJobSync(2, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
     cr::Worker::my().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
                               Slice((const u8*)val1.data(), val1.size()));
@@ -173,7 +173,7 @@ TEST_F(MVCCTest, InsertConflict) {
   // start another transaction to insert a smaller key
   auto key2 = std::string(key0.data(), key0.size() - 1);
   auto val2 = val0;
-  cr::CRManager::sInstance->scheduleJobSync(2, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
     cr::Worker::my().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
                               Slice((const u8*)val1.data(), val1.size()));
@@ -182,7 +182,7 @@ TEST_F(MVCCTest, InsertConflict) {
   });
 
   // commit the transaction
-  cr::CRManager::sInstance->scheduleJobSync(1, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
@@ -196,7 +196,7 @@ TEST_F(MVCCTest, InsertConflict) {
   });
 
   // now we can see the latest record
-  cr::CRManager::sInstance->scheduleJobSync(2, [&]() {
+  cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
