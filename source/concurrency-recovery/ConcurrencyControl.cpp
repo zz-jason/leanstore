@@ -223,7 +223,7 @@ void ConcurrencyControl::GarbageCollection() {
   updateLocalWatermarks();
 
   // remove versions that are nolonger needed by any transaction
-  if (mLocalWmkOfAllTx > mCleanedWmkOfShortTx) {
+  if (mCleanedWmkOfShortTx < mLocalWmkOfAllTx) {
     utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_history_tree);
     auto onRemoveVersion =
         [&](const TXID versionTxId, const TREEID treeId, const u8* versionData,
@@ -235,15 +235,28 @@ void ConcurrencyControl::GarbageCollection() {
             WorkerCounters::MyCounters().cc_gc_long_tx_executed[treeId]++;
           }
         };
+    DLOG(INFO) << "Garbage collect history tree"
+               << ", workerId=" << Worker::my().mWorkerId << ", fromTxId=" << 0
+               << ", toTxId(mLocalWmkOfAllTx-1)=" << mLocalWmkOfAllTx - 1
+               << ", mCleanedWmkOfShortTx=" << mCleanedWmkOfShortTx;
     CRManager::sInstance->mHistoryTreePtr->PurgeVersions(
         Worker::my().mWorkerId, 0, mLocalWmkOfAllTx - 1, onRemoveVersion, 0);
     mCleanedWmkOfShortTx = mLocalWmkOfAllTx;
+  } else {
+    DLOG(INFO) << "Skip garbage collect history tree"
+               << ", workerId=" << Worker::my().mWorkerId
+               << ", mCleanedWmkOfShortTx=" << mCleanedWmkOfShortTx
+               << ", mLocalWmkOfAllTx=" << mLocalWmkOfAllTx;
   }
 
   // move tombstones to graveyard
   if (FLAGS_enable_long_running_transaction &&
       mLocalWmkOfAllTx < mLocalWmkOfShortTx &&
       mCleanedWmkOfShortTx < mLocalWmkOfShortTx) {
+    DLOG(INFO) << "Garbage collect removed versions"
+               << ", workerId=" << Worker::my().mWorkerId
+               << ", fromTxId=" << mCleanedWmkOfShortTx
+               << ", toTxId(mLocalWmkOfShortTx-1)=" << mLocalWmkOfShortTx - 1;
     utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_graveyard);
     auto onRemoveVersion = [&](const TXID versionTxId, const TREEID treeId,
                                const u8* versionData, u64,
@@ -259,6 +272,12 @@ void ConcurrencyControl::GarbageCollection() {
         Worker::my().mWorkerId, mCleanedWmkOfShortTx, mLocalWmkOfShortTx - 1,
         onRemoveVersion);
     mCleanedWmkOfShortTx = mLocalWmkOfShortTx;
+  } else {
+    DLOG(INFO) << "Skip garbage collect removed versions"
+               << ", workerId=" << Worker::my().mWorkerId
+               << ", mCleanedWmkOfShortTx=" << mCleanedWmkOfShortTx
+               << ", mLocalWmkOfAllTx=" << mLocalWmkOfAllTx
+               << ", mLocalWmkOfShortTx=" << mLocalWmkOfShortTx;
   }
 }
 

@@ -11,10 +11,6 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-using namespace std;
-using namespace leanstore::storage;
-using OpCode = leanstore::OpCode;
-
 namespace leanstore::storage::btree {
 
 OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
