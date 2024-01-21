@@ -6,6 +6,7 @@
 #include "storage/btree/BasicKV.hpp"
 #include "storage/btree/ChainedTuple.hpp"
 #include "storage/btree/Tuple.hpp"
+#include "storage/btree/core/BTreeSharedIterator.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
 #include "utils/Defer.hpp"
 
