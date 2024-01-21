@@ -294,9 +294,6 @@ public:
   //-------------------------------------------------------------------------
   void GarbageCollection();
 
-  /// Update global watermarks, should be called in each transaction commit.
-  void UpdateGlobalTxWatermarks();
-
   bool VisibleForAll(TXID txId);
 
   /// Visibility check. Whethe the current tuple is visible for the current
@@ -324,6 +321,9 @@ private:
   Visibility isVisibleForIt(WORKERID whomWorkerId, TXID commitTs);
 
   TXID getCommitTimestamp(WORKERID workerId, TXID startTs);
+
+  /// Update global watermarks, should be called in each transaction commit.
+  void updateGlobalTxWatermarks();
 
   void updateLocalWatermarks();
 };

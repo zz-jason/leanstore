@@ -178,10 +178,6 @@ void Worker::CommitTx() {
                << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
   }
 
-  if (mActiveTx.AtLeastSI()) {
-    cc.UpdateGlobalTxWatermarks();
-  }
-
   // All isolation level generate garbage, cleanup in the end transaction
   cc.GarbageCollection();
 
