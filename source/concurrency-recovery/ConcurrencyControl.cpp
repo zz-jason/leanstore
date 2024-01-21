@@ -14,8 +14,8 @@
 
 namespace leanstore::cr {
 
-std::atomic<u64> ConcurrencyControl::sTimeStampOracle =
-    Worker::kWorkersIncrement;
+// Starts from a positive number, 0 is used for invalid timestamp
+std::atomic<u64> ConcurrencyControl::sTimeStampOracle = 1;
 
 // Also for interval garbage collection
 void ConcurrencyControl::UpdateGlobalTxWatermarks() {
@@ -43,17 +43,7 @@ void ConcurrencyControl::UpdateGlobalTxWatermarks() {
   TXID newestLongTxId = std::numeric_limits<TXID>::min();
   TXID oldestShortTxId = std::numeric_limits<TXID>::max();
   for (WORKERID i = 0; i < Worker::my().mNumAllWorkers; i++) {
-    std::atomic<u64>& latestStartTs = Worker::sLatestStartTs[i];
-
-    u64 runningTxId = latestStartTs.load();
-    while ((runningTxId & Worker::kLatchBit) &&
-           ((runningTxId & Worker::kCleanBitsMask) < ActiveTx().mStartTs)) {
-      // can only happen when the worker just finished a transaction whose
-      // startTs is smaller than the current transaction's startTs and the
-      // worker is about to start a new transaction.
-      runningTxId = latestStartTs.load();
-    }
-
+    u64 runningTxId = Worker::sLatestStartTs[i].load();
     // Skip transactions running in read-committed mode.
     if (runningTxId & Worker::kRcBit) {
       continue;
@@ -156,29 +146,6 @@ void ConcurrencyControl::UpdateGlobalTxWatermarks() {
   DLOG(INFO) << "Global watermarks updated"
              << ", sGlobalWmkOfAllTx=" << Worker::sGlobalWmkOfAllTx
              << ", sGlobalWmkOfShortTx=" << Worker::sGlobalWmkOfShortTx;
-}
-
-void ConcurrencyControl::SwitchToSnapshotIsolation() {
-  u64 workerId = Worker::my().mWorkerId;
-  {
-    std::unique_lock guard(Worker::sGlobalMutex);
-    std::atomic<u64>& latestStartTs = Worker::sLatestStartTs[workerId];
-    latestStartTs.store(sTimeStampOracle.load(), std::memory_order_release);
-  }
-  UpdateGlobalTxWatermarks();
-}
-
-void ConcurrencyControl::SwitchToReadCommitted() {
-  u64 workerId = Worker::my().mWorkerId;
-  {
-    // Latch-free work only when all counters increase monotone, we can not
-    // simply go back
-    std::unique_lock guard(Worker::sGlobalMutex);
-    std::atomic<u64>& latestStartTs = Worker::sLatestStartTs[workerId];
-    u64 newSnapshot = latestStartTs.load() | Worker::kRcBit;
-    latestStartTs.store(newSnapshot, std::memory_order_release);
-  }
-  UpdateGlobalTxWatermarks();
 }
 
 void ConcurrencyControl::updateLocalWatermarks() {
@@ -415,12 +382,9 @@ void ConcurrencyControl::CommitTree::CleanUpCommitLog() {
     }
 
     u64 latestStartTs = Worker::sLatestStartTs[i].load();
-    while (latestStartTs & Worker::kLatchBit) {
-      latestStartTs = Worker::sLatestStartTs[i].load();
-    }
     latestStartTs &= Worker::kCleanBitsMask;
 
-    set.insert(mCommitLog[cursor - 1]); // for  the new TX
+    set.insert(mCommitLog[cursor - 1]);
     if (latestStartTs == 0) {
       // to avoid race conditions when switching from RC to SI
       set.insert(mCommitLog[0]);

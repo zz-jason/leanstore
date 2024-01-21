@@ -290,10 +290,6 @@ public:
 
   void UpdateGlobalTxWatermarks();
 
-  void SwitchToReadCommitted();
-
-  void SwitchToSnapshotIsolation();
-
   bool VisibleForAll(TXID txId);
 
   /// Visibility check. Whethe the current tuple is visible for the current
@@ -389,15 +385,13 @@ public:
   static std::shared_mutex sGlobalMutex;
 
   static constexpr u64 kWorkersBits = 8;
-  static constexpr u64 kWorkersIncrement = 1ull << kWorkersBits;
-  static constexpr u64 kLatchBit = (1ull << 63);
-  static constexpr u64 kRcBit = (1ull << 62);
-  static constexpr u64 kLongRunningBit = (1ull << 61);
+  static constexpr u64 kRcBit = (1ull << 63);
+  static constexpr u64 kLongRunningBit = (1ull << 62);
   static constexpr u64 kOltpOlapSameBit = kLongRunningBit;
-  static constexpr u64 kCleanBitsMask = ~(kLatchBit | kLongRunningBit | kRcBit);
+  static constexpr u64 kCleanBitsMask = ~(kRcBit | kLongRunningBit);
 
-  // TXID: [ kLatchBit | kRcBit | kLongRunningBit  | id];
-  // LWM:  [ kLatchBit | kRcBit | kOltpOlapSameBit | id];
+  // TXID: [ kRcBit | kLongRunningBit  | id];
+  // LWM:  [ kRcBit | kOltpOlapSameBit | id];
   static constexpr s64 kCrEntrySize = sizeof(WALEntrySimple);
 
 public:

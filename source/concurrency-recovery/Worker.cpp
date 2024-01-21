@@ -95,33 +95,27 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   mLogging.mTxReadSnapshot = Logging::sGlobalMinFlushedGSN.load();
   mLogging.mHasRemoteDependency = false;
 
+  // For now, we only support SI and SSI
+  if (level < IsolationLevel::kSnapshotIsolation) {
+    LOG(FATAL) << "Unsupported isolation level: " << static_cast<u64>(level);
+  }
+
   // Draw TXID from global counter and publish it with the TX type (i.e.
   // long-running or short-running) We have to acquire a transaction id and use
   // it for locking in ANY isolation level
-  if (level >= IsolationLevel::kSnapshotIsolation) {
-    {
-      utils::Timer timer(CRCounters::MyCounters().cc_ms_snapshotting);
-      auto& curWorkerSnapshot = sLatestStartTs[mWorkerId];
-      curWorkerSnapshot.store(mActiveTx.mStartTs | kLatchBit,
-                              std::memory_order_release);
-
-      mActiveTx.mStartTs = ConcurrencyControl::sTimeStampOracle.fetch_add(1);
-      auto curTxId = mActiveTx.mStartTs;
-      if (FLAGS_enable_long_running_transaction && mActiveTx.IsLongRunning()) {
-        // mark as long-running transaction
-        curTxId |= kLongRunningBit;
-      }
-      // publish the transaction id
-      curWorkerSnapshot.store(curTxId, std::memory_order_release);
-    }
-    cc.mCommitTree.CleanUpCommitLog();
-    cc.mGlobalWmkOfAllTxSnapshot = sGlobalWmkOfAllTx.load();
-  } else {
-    if (prevTx.AtLeastSI()) {
-      cc.SwitchToReadCommitted();
-    }
-    cc.mCommitTree.CleanUpCommitLog();
+  mActiveTx.mStartTs = ConcurrencyControl::sTimeStampOracle.fetch_add(1);
+  auto curTxId = mActiveTx.mStartTs;
+  if (FLAGS_enable_long_running_transaction && mActiveTx.IsLongRunning()) {
+    // Mark as long-running transaction
+    curTxId |= kLongRunningBit;
   }
+
+  // Publish the transaction id
+  sLatestStartTs[mWorkerId].store(curTxId, std::memory_order_release);
+  cc.mGlobalWmkOfAllTxSnapshot = sGlobalWmkOfAllTx.load();
+
+  // Cleanup commit log if necessary
+  cc.mCommitTree.CleanUpCommitLog();
 }
 
 void Worker::CommitTx() {
@@ -249,7 +243,6 @@ void Worker::AbortTx() {
 
 void Worker::shutdown() {
   cc.GarbageCollection();
-  cc.SwitchToReadCommitted();
 }
 
 } // namespace cr
