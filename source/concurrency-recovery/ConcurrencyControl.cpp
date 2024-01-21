@@ -88,18 +88,20 @@ void ConcurrencyControl::UpdateGlobalTxWatermarks() {
   // Update global lower watermarks based on the three transaction ids
   TXID globalWmkOfAllTx = std::numeric_limits<TXID>::max();
   TXID globalWmkOfShortTx = std::numeric_limits<TXID>::max();
-  bool skippedAWorker = false;
   for (WORKERID i = 0; i < Worker::my().mNumAllWorkers; i++) {
     ConcurrencyControl& cc = other(i);
     if (cc.mUpdatedLatestCommitTs == cc.mLatestCommitTs) {
-      skippedAWorker = true;
       DLOG(INFO) << "Skip updating watermarks for worker " << i
                  << ", no transaction committed since last round"
                  << ", mLatestCommitTs=" << cc.mLatestCommitTs;
+      TXID wmkOfAllTx = cc.mWmkOfAllTx;
+      TXID wmkOfShortTx = cc.mWmkOfShortTx;
+      if (wmkOfAllTx > 0 || wmkOfShortTx > 0) {
+        globalWmkOfAllTx = std::min(wmkOfAllTx, globalWmkOfAllTx);
+        globalWmkOfShortTx = std::min(wmkOfShortTx, globalWmkOfShortTx);
+      }
       continue;
     }
-    cc.mUpdatedLatestCommitTs.store(cc.mLatestCommitTs,
-                                    std::memory_order_release);
 
     TXID wmkOfAllTx = cc.mCommitTree.Lcb(Worker::sGlobalOldestTxId);
     TXID wmkOfShortTx = cc.mCommitTree.Lcb(Worker::sGlobalOldestShortTxId);
@@ -108,21 +110,45 @@ void ConcurrencyControl::UpdateGlobalTxWatermarks() {
     cc.mWmkOfAllTx.store(wmkOfAllTx, std::memory_order_release);
     cc.mWmkOfShortTx.store(wmkOfShortTx, std::memory_order_release);
     cc.mWmkVersion.store(cc.mWmkVersion.load() + 1, std::memory_order_release);
+    cc.mUpdatedLatestCommitTs.store(cc.mLatestCommitTs,
+                                    std::memory_order_release);
+    DLOG(INFO) << "Watermarks updated for worker " << i << ", mWmkOfAllTx=LCB("
+               << Worker::sGlobalOldestTxId << ")=" << cc.mWmkOfAllTx
+               << ", mWmkOfShortTx=LCB(" << Worker::sGlobalOldestShortTxId
+               << ")=" << cc.mWmkOfShortTx;
 
-    globalWmkOfShortTx = std::min(wmkOfShortTx, globalWmkOfShortTx);
-    globalWmkOfAllTx = std::min(wmkOfAllTx, globalWmkOfAllTx);
-
-    DLOG(INFO) << "Watermarks updated for worker " << i
-               << ", mWmkOfAllTx=" << cc.mWmkOfAllTx
-               << ", mWmkOfShortTx=" << cc.mWmkOfShortTx;
+    // The lower watermarks of current worker only matters when there are
+    // transactions started before Worker::sGlobalOldestTxId
+    if (wmkOfAllTx > 0 || wmkOfShortTx > 0) {
+      globalWmkOfAllTx = std::min(wmkOfAllTx, globalWmkOfAllTx);
+      globalWmkOfShortTx = std::min(wmkOfShortTx, globalWmkOfShortTx);
+    }
   }
 
-  if (skippedAWorker) {
-    DLOG(INFO) << "Skip updating global watermarks, some worker hasn't "
-                  "committed any new transaction since last round";
+  // If a worker hasn't committed any new transaction since last round, the
+  // commit log keeps the same, which causes the lower watermarks the same
+  // as last round, which further causes the global lower watermarks the
+  // same as last round. This is not a problem, but updating the global
+  // lower watermarks is not necessary in this case.
+  if (Worker::sGlobalWmkOfAllTx == globalWmkOfAllTx &&
+      Worker::sGlobalWmkOfShortTx == globalWmkOfShortTx) {
+    DLOG(INFO) << "Skip updating global watermarks"
+               << ", global watermarks are the same as last round"
+               << ", globalWmkOfAllTx=" << globalWmkOfAllTx
+               << ", globalWmkOfShortTx=" << globalWmkOfShortTx;
     return;
   }
 
+  // TXID globalWmkOfAllTx = std::numeric_limits<TXID>::max();
+  // TXID globalWmkOfShortTx = std::numeric_limits<TXID>::max();
+  if (globalWmkOfAllTx == std::numeric_limits<TXID>::max() ||
+      globalWmkOfShortTx == std::numeric_limits<TXID>::max()) {
+    DLOG(INFO) << "Skip updating global watermarks"
+               << ", can not find any valid lower watermarks"
+               << ", globalWmkOfAllTx=" << globalWmkOfAllTx
+               << ", globalWmkOfShortTx=" << globalWmkOfShortTx;
+    return;
+  }
   Worker::sGlobalWmkOfAllTx.store(globalWmkOfAllTx, std::memory_order_release);
   Worker::sGlobalWmkOfShortTx.store(globalWmkOfShortTx,
                                     std::memory_order_release);
@@ -316,8 +342,10 @@ bool ConcurrencyControl::VisibleForAll(TXID ts) {
 TXID ConcurrencyControl::CommitTree::AppendCommitLog(TXID startTs) {
   utils::Timer timer(CRCounters::MyCounters().cc_ms_committing);
   mutex.lock();
-  assert(cursor < capacity);
+  DCHECK(cursor < capacity);
   const TXID commitTs = sTimeStampOracle.fetch_add(1);
+  // Transactions are sequential in one worker, so the commitTs and startTs is
+  // always increasing in the commit log of one worker
   mCommitLog[cursor++] = {commitTs, startTs};
   mutex.unlock();
   return commitTs;
@@ -326,7 +354,9 @@ TXID ConcurrencyControl::CommitTree::AppendCommitLog(TXID startTs) {
 // find the largest commitTs that is not smaller than startTs
 std::optional<std::pair<TXID, TXID>> ConcurrencyControl::CommitTree::lcbNoLatch(
     TXID startTs) {
-  auto comp = [&](const auto& pair, TXID ts) { return pair.first < ts; };
+  auto comp = [&](const auto& pair, TXID startTs) {
+    return startTs > pair.first;
+  };
   auto* it = std::lower_bound(mCommitLog, mCommitLog + cursor, startTs, comp);
   if (it == mCommitLog) {
     return {};

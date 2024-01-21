@@ -7,7 +7,6 @@
 #include "utils/Defer.hpp"
 #include "utils/RandomGenerator.hpp"
 
-#include "glog/logging.h"
 #include <gtest/gtest.h>
 
 #include <filesystem>
@@ -18,6 +17,10 @@ using namespace leanstore::utils;
 using namespace leanstore::storage::btree;
 
 namespace leanstore::test {
+
+static Slice ToSlice(const std::string& src) {
+  return Slice((const u8*)src.data(), src.size());
+}
 
 class LongRunningTxTest : public ::testing::Test {
 protected:
@@ -46,28 +49,29 @@ protected:
       leanstore->RegisterTransactionKV(mTreeName, config, &mKv);
       ASSERT_NE(mKv, nullptr);
     });
+
+    // do extra insert and remove transactions in worker 0 to make it have more
+    // than one entries in the commit log, which helps to advance the global
+    // lower watermarks for garbage collection
+    cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
+      cr::Worker::my().StartTx();
+      ASSERT_EQ(mKv->Insert(ToSlice("0"), ToSlice("0")), OpCode::kOK);
+      cr::Worker::my().CommitTx();
+
+      cr::Worker::my().StartTx();
+      ASSERT_EQ(mKv->Remove(ToSlice("0")), OpCode::kOK);
+      cr::Worker::my().CommitTx();
+    });
   }
 
   void TearDown() override {
     TXID lastTxId = 0;
-    cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
+    cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
       cr::Worker::my().StartTx();
       SCOPED_DEFER(cr::Worker::my().CommitTx());
       lastTxId = cr::Worker::my().mActiveTx.mStartTs;
       GetLeanStore()->UnRegisterTransactionKV(mTreeName);
     });
-
-    auto onRemoveVersion = [&](const TXID, const TREEID, const u8*, u64,
-                               const bool) {
-      // should not have any removed version in the end of the test
-      ASSERT_TRUE(false);
-    };
-    for (auto i = 0u; i < FLAGS_worker_threads; ++i) {
-      cr::CRManager::sInstance->ScheduleJobSync(i, [&]() {
-        leanstore::cr::CRManager::sInstance->mHistoryTreePtr
-            ->VisitRemovedVersions(1, 0, lastTxId, onRemoveVersion);
-      });
-    }
   }
 
 public:
@@ -91,10 +95,6 @@ public:
   }
 };
 
-static Slice ToSlice(const std::string& src) {
-  return Slice((const u8*)src.data(), src.size());
-}
-
 // TODO(lookup from graveyard)
 TEST_F(LongRunningTxTest, Lookup) {
   std::string key1("1"), val1("10");
@@ -109,9 +109,12 @@ TEST_F(LongRunningTxTest, Lookup) {
   // Insert 2 key-values as the test base.
   cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
     cr::Worker::my().StartTx();
-    SCOPED_DEFER(cr::Worker::my().CommitTx());
     EXPECT_EQ(mKv->Insert(ToSlice(key1), ToSlice(val1)), OpCode::kOK);
+    cr::Worker::my().CommitTx();
+
+    cr::Worker::my().StartTx();
     EXPECT_EQ(mKv->Insert(ToSlice(key2), ToSlice(val2)), OpCode::kOK);
+    cr::Worker::my().CommitTx();
   });
 
   cr::CRManager::sInstance->ScheduleJobSync(
