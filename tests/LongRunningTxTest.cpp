@@ -1,3 +1,4 @@
+#include "Config.hpp"
 #include "KVInterface.hpp"
 #include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
@@ -76,9 +77,7 @@ protected:
 
 public:
   inline static auto CreateLeanStore() {
-    FLAGS_enable_print_btree_stats_on_exit = true;
-    FLAGS_wal = true;
-    FLAGS_bulk_insert = false;
+    FLAGS_enable_eager_garbage_collection = true;
     FLAGS_worker_threads = 3;
     FLAGS_recover = false;
     FLAGS_data_dir = "/tmp/MVCCTest";

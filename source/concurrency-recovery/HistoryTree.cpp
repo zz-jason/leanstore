@@ -16,9 +16,6 @@ void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
                              TREEID treeId, bool isRemove, u64 versionSize,
                              std::function<void(u8*)> insertCallBack,
                              bool sameThread) {
-  if (!FLAGS_history_tree_inserts) {
-    return;
-  }
   const u64 keySize = sizeof(txId) + sizeof(commandId);
   u8 keyBuffer[keySize];
   u64 offset = 0;

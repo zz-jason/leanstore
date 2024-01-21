@@ -26,6 +26,7 @@ void ConcurrencyControl::UpdateGlobalTxWatermarks() {
 
   utils::Timer timer(CRCounters::MyCounters().cc_ms_refresh_global_state);
   auto meetGcProbability =
+      FLAGS_enable_eager_garbage_collection ||
       utils::RandomGenerator::RandU64(0, Worker::my().mNumAllWorkers) == 0;
   auto performGc = meetGcProbability && Worker::sGlobalMutex.try_lock();
   if (!performGc) {
@@ -181,6 +182,10 @@ void ConcurrencyControl::SwitchToReadCommitted() {
 }
 
 void ConcurrencyControl::updateLocalWatermarks() {
+  SCOPED_DEFER(DLOG(INFO) << "Local watermarks updated"
+                          << ", workerId=" << Worker::my().mWorkerId
+                          << ", mLocalWmkOfAllTx=" << mLocalWmkOfAllTx
+                          << ", mLocalWmkOfShortTx=" << mLocalWmkOfShortTx);
   while (true) {
     u64 version = mWmkVersion.load();
 
