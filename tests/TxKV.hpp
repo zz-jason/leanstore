@@ -209,17 +209,17 @@ inline void LeanStoreMVCCSession::SetTxMode(TxMode txMode) {
 
 inline void LeanStoreMVCCSession::StartTx() {
   cr::CRManager::sInstance->ScheduleJobSync(
-      mWorkerId, [&]() { cr::Worker::my().StartTx(mTxMode, mIsolationLevel); });
+      mWorkerId, [&]() { cr::Worker::My().StartTx(mTxMode, mIsolationLevel); });
 }
 
 inline void LeanStoreMVCCSession::CommitTx() {
   cr::CRManager::sInstance->ScheduleJobSync(
-      mWorkerId, [&]() { cr::Worker::my().CommitTx(); });
+      mWorkerId, [&]() { cr::Worker::My().CommitTx(); });
 }
 
 inline void LeanStoreMVCCSession::AbortTx() {
   cr::CRManager::sInstance->ScheduleJobSync(
-      mWorkerId, [&]() { cr::Worker::my().AbortTx(); });
+      mWorkerId, [&]() { cr::Worker::My().AbortTx(); });
 }
 
 // DDL operations
@@ -234,11 +234,11 @@ inline auto LeanStoreMVCCSession::CreateTable(const std::string& tblName,
   storage::btree::TransactionKV* btree;
   cr::CRManager::sInstance->ScheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
+      cr::Worker::My().StartTx(mTxMode, mIsolationLevel);
     }
     mStore->mLeanStore->RegisterTransactionKV(tblName, config, &btree);
     if (implicitTx) {
-      cr::Worker::my().CommitTx();
+      cr::Worker::My().CommitTx();
     }
   });
   if (btree == nullptr) {
@@ -252,11 +252,11 @@ inline auto LeanStoreMVCCSession::DropTable(const std::string& tblName,
     -> std::expected<void, utils::Error> {
   cr::CRManager::sInstance->ScheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
+      cr::Worker::My().StartTx(mTxMode, mIsolationLevel);
     }
     mStore->mLeanStore->UnRegisterTransactionKV(tblName);
     if (implicitTx) {
-      cr::Worker::my().CommitTx();
+      cr::Worker::My().CommitTx();
     }
   });
   return {};
@@ -270,13 +270,13 @@ inline auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
   OpCode res;
   cr::CRManager::sInstance->ScheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
+      cr::Worker::My().StartTx(mTxMode, mIsolationLevel);
     }
     SCOPED_DEFER(if (implicitTx) {
       if (res == OpCode::kOK) {
-        cr::Worker::my().CommitTx();
+        cr::Worker::My().CommitTx();
       } else {
-        cr::Worker::my().AbortTx();
+        cr::Worker::My().AbortTx();
       }
     });
 
@@ -302,13 +302,13 @@ inline auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key,
 
   cr::CRManager::sInstance->ScheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::my().StartTx(mTxMode, mIsolationLevel, true);
+      cr::Worker::My().StartTx(mTxMode, mIsolationLevel, true);
     }
     SCOPED_DEFER(if (implicitTx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
-        cr::Worker::my().CommitTx();
+        cr::Worker::My().CommitTx();
       } else {
-        cr::Worker::my().AbortTx();
+        cr::Worker::My().AbortTx();
       }
     });
 
@@ -334,13 +334,13 @@ inline auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
   };
   cr::CRManager::sInstance->ScheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
+      cr::Worker::My().StartTx(mTxMode, mIsolationLevel);
     }
     SCOPED_DEFER(if (implicitTx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
-        cr::Worker::my().CommitTx();
+        cr::Worker::My().CommitTx();
       } else {
-        cr::Worker::my().AbortTx();
+        cr::Worker::My().AbortTx();
       }
     });
 
@@ -370,13 +370,13 @@ inline auto LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key,
   OpCode res;
   cr::CRManager::sInstance->ScheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::my().StartTx(mTxMode, mIsolationLevel);
+      cr::Worker::My().StartTx(mTxMode, mIsolationLevel);
     }
     SCOPED_DEFER(if (implicitTx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
-        cr::Worker::my().CommitTx();
+        cr::Worker::My().CommitTx();
       } else {
-        cr::Worker::my().AbortTx();
+        cr::Worker::My().AbortTx();
       }
     });
 

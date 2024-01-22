@@ -35,8 +35,8 @@ protected:
 
     // create a btree for test
     cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
-      cr::Worker::my().StartTx();
-      SCOPED_DEFER(cr::Worker::my().CommitTx());
+      cr::Worker::My().StartTx();
+      SCOPED_DEFER(cr::Worker::My().CommitTx());
       leanstore->RegisterTransactionKV(mTreeName, config, &mBTree);
       ASSERT_NE(mBTree, nullptr);
     });
@@ -44,8 +44,8 @@ protected:
 
   void TearDown() override {
     cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
-      cr::Worker::my().StartTx();
-      SCOPED_DEFER(cr::Worker::my().CommitTx());
+      cr::Worker::My().StartTx();
+      SCOPED_DEFER(cr::Worker::My().CommitTx());
       GetLeanStore()->UnRegisterTransactionKV(mTreeName);
     });
   }
@@ -76,10 +76,10 @@ TEST_F(MvccTest, LookupWhileInsert) {
   auto key0 = RandomGenerator::RandAlphString(42);
   auto val0 = RandomGenerator::RandAlphString(151);
   cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
-    cr::Worker::my().StartTx();
+    cr::Worker::My().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key0.data(), key0.size()),
                               Slice((const u8*)val0.data(), val0.size()));
-    cr::Worker::my().CommitTx();
+    cr::Worker::My().CommitTx();
     EXPECT_EQ(res, OpCode::kOK);
   });
 
@@ -87,7 +87,7 @@ TEST_F(MvccTest, LookupWhileInsert) {
   auto key1 = RandomGenerator::RandAlphString(17);
   auto val1 = RandomGenerator::RandAlphString(131);
   cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
-    cr::Worker::my().StartTx();
+    cr::Worker::My().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
                               Slice((const u8*)val1.data(), val1.size()));
     EXPECT_EQ(res, OpCode::kOK);
@@ -100,13 +100,13 @@ TEST_F(MvccTest, LookupWhileInsert) {
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
-    cr::Worker::my().StartTx(TxMode::kShortRunning,
+    cr::Worker::My().StartTx(TxMode::kShortRunning,
                              IsolationLevel::kSnapshotIsolation, true);
     EXPECT_EQ(mBTree->Lookup(Slice((const u8*)key0.data(), key0.size()),
                              copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val0);
-    cr::Worker::my().CommitTx();
+    cr::Worker::My().CommitTx();
   });
 
   // commit the transaction
@@ -120,7 +120,7 @@ TEST_F(MvccTest, LookupWhileInsert) {
                              copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val1);
-    cr::Worker::my().CommitTx();
+    cr::Worker::My().CommitTx();
   });
 
   // now we can see the latest record
@@ -129,13 +129,13 @@ TEST_F(MvccTest, LookupWhileInsert) {
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
-    cr::Worker::my().StartTx(TxMode::kShortRunning,
+    cr::Worker::My().StartTx(TxMode::kShortRunning,
                              IsolationLevel::kSnapshotIsolation, true);
     EXPECT_EQ(mBTree->Lookup(Slice((const u8*)key1.data(), key1.size()),
                              copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val1);
-    cr::Worker::my().CommitTx();
+    cr::Worker::My().CommitTx();
   });
 }
 
@@ -144,10 +144,10 @@ TEST_F(MvccTest, InsertConflict) {
   auto key0 = RandomGenerator::RandAlphString(42);
   auto val0 = RandomGenerator::RandAlphString(151);
   cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
-    cr::Worker::my().StartTx();
+    cr::Worker::My().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key0.data(), key0.size()),
                               Slice((const u8*)val0.data(), val0.size()));
-    cr::Worker::my().CommitTx();
+    cr::Worker::My().CommitTx();
     EXPECT_EQ(res, OpCode::kOK);
   });
 
@@ -155,7 +155,7 @@ TEST_F(MvccTest, InsertConflict) {
   auto key1 = key0 + "a";
   auto val1 = val0;
   cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
-    cr::Worker::my().StartTx();
+    cr::Worker::My().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
                               Slice((const u8*)val1.data(), val1.size()));
     EXPECT_EQ(res, OpCode::kOK);
@@ -163,22 +163,22 @@ TEST_F(MvccTest, InsertConflict) {
 
   // start another transaction to insert the same key
   cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
-    cr::Worker::my().StartTx();
+    cr::Worker::My().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
                               Slice((const u8*)val1.data(), val1.size()));
     EXPECT_EQ(res, OpCode::kAbortTx);
-    cr::Worker::my().AbortTx();
+    cr::Worker::My().AbortTx();
   });
 
   // start another transaction to insert a smaller key
   auto key2 = std::string(key0.data(), key0.size() - 1);
   auto val2 = val0;
   cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
-    cr::Worker::my().StartTx();
+    cr::Worker::My().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
                               Slice((const u8*)val1.data(), val1.size()));
     EXPECT_EQ(res, OpCode::kAbortTx);
-    cr::Worker::my().AbortTx();
+    cr::Worker::My().AbortTx();
   });
 
   // commit the transaction
@@ -192,7 +192,7 @@ TEST_F(MvccTest, InsertConflict) {
                              copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val1);
-    cr::Worker::my().CommitTx();
+    cr::Worker::My().CommitTx();
   });
 
   // now we can see the latest record
@@ -201,13 +201,13 @@ TEST_F(MvccTest, InsertConflict) {
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
-    cr::Worker::my().StartTx(TxMode::kShortRunning,
+    cr::Worker::My().StartTx(TxMode::kShortRunning,
                              IsolationLevel::kSnapshotIsolation, true);
     EXPECT_EQ(mBTree->Lookup(Slice((const u8*)key1.data(), key1.size()),
                              copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val1);
-    cr::Worker::my().CommitTx();
+    cr::Worker::My().CommitTx();
   });
 }
 

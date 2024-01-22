@@ -64,22 +64,6 @@ public:
   //---------------------------------------------------------------------------
 
   /**
-   * @brief Schedule same job on specific amount of workers.
-   *
-   * @param numWorkers amount of workers
-   * @param job Job to do. Same for each worker.
-   */
-  void ScheduleJobs(u64 numWorkers, std::function<void()> job);
-
-  /**
-   * @brief Schedule specific job on specific amount of workers.
-   *
-   * @param workers amount of workers
-   * @param job Job to do. Different for each worker.
-   */
-  void ScheduleJobs(u64 numWorkers, std::function<void(u64 workerId)> job);
-
-  /**
    * @brief Schedules one job asynchron on specific worker.
    *
    * @param workerId worker to compute job

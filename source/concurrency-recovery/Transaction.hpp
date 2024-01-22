@@ -10,8 +10,6 @@ namespace leanstore {
 enum class TxMode : u8 {
   kLongRunning = 0,
   kShortRunning = 1,
-  kDeterministic = 2,
-  kInstantlyVisibleBulkInsert = 3,
 };
 
 inline std::string ToString(TxMode txMode) {
@@ -21,12 +19,6 @@ inline std::string ToString(TxMode txMode) {
   }
   case TxMode::kShortRunning: {
     return "ShortRunning";
-  }
-  case TxMode::kDeterministic: {
-    return "Deterministic";
-  }
-  case TxMode::kInstantlyVisibleBulkInsert: {
-    return "InstantlyVisibleBulkInsert";
   }
   }
   return "Unknown TxMode";
@@ -115,10 +107,6 @@ public:
 public:
   inline bool IsLongRunning() {
     return mTxMode == TxMode::kLongRunning;
-  }
-
-  inline bool IsOLTP() {
-    return mTxMode == TxMode::kShortRunning;
   }
 
   inline bool AtLeastSI() {
