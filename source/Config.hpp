@@ -51,15 +51,7 @@ DECLARE_double(zipf_factor);
 DECLARE_double(target_gib);
 DECLARE_uint64(run_for_seconds);
 DECLARE_uint64(warmup_for_seconds);
-// -------------------------------------------------------------------------------------
-DECLARE_double(tmp1);
-DECLARE_double(tmp2);
-DECLARE_double(tmp3);
-DECLARE_double(tmp4);
-DECLARE_double(tmp5);
-DECLARE_double(tmp6);
-DECLARE_double(tmp7);
-// -------------------------------------------------------------------------------------
+
 DECLARE_bool(enable_print_btree_stats_on_exit);
 DECLARE_bool(btree_prefix_compression);
 DECLARE_int64(btree_hints);

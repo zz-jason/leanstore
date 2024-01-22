@@ -156,34 +156,34 @@ public:
 
   inline void SyncGSNBeforeWrite() {
     DCHECK(mBf != nullptr);
-    DCHECK(mBf->page.mGSN <= cr::Worker::my().mLogging.GetCurrentGsn());
+    DCHECK(mBf->page.mGSN <= cr::Worker::My().mLogging.GetCurrentGsn());
 
     MarkAsDirty();
-    mBf->header.mLastWriterWorker = cr::Worker::my().mWorkerId;
+    mBf->header.mLastWriterWorker = cr::Worker::My().mWorkerId;
 
-    const auto workerGSN = cr::Worker::my().mLogging.GetCurrentGsn();
+    const auto workerGSN = cr::Worker::My().mLogging.GetCurrentGsn();
     mBf->page.mGSN = workerGSN + 1;
-    cr::Worker::my().mLogging.SetCurrentGsn(workerGSN + 1);
+    cr::Worker::My().mLogging.SetCurrentGsn(workerGSN + 1);
   }
 
   // TODO: don't sync on temporary table pages like HistoryTree
   inline void SyncGSNBeforeRead() {
-    if (!cr::Worker::my().mLogging.mHasRemoteDependency &&
-        mBf->page.mGSN > cr::Worker::my().mLogging.mTxReadSnapshot &&
-        mBf->header.mLastWriterWorker != cr::Worker::my().mWorkerId) {
-      cr::Worker::my().mLogging.mHasRemoteDependency = true;
+    if (!cr::Worker::My().mLogging.mHasRemoteDependency &&
+        mBf->page.mGSN > cr::Worker::My().mLogging.mTxReadSnapshot &&
+        mBf->header.mLastWriterWorker != cr::Worker::My().mWorkerId) {
+      cr::Worker::My().mLogging.mHasRemoteDependency = true;
       DLOG(INFO) << "detect remote dependency"
-                 << ", workerId=" << cr::Worker::my().mWorkerId
+                 << ", workerId=" << cr::Worker::My().mWorkerId
                  << ", txReadSnapshot(GSN)="
-                 << cr::Worker::my().mLogging.mTxReadSnapshot
+                 << cr::Worker::My().mLogging.mTxReadSnapshot
                  << ", pageLastWriterWorker=" << mBf->header.mLastWriterWorker
                  << ", pageGSN=" << mBf->page.mGSN;
     }
 
-    const auto workerGSN = cr::Worker::my().mLogging.GetCurrentGsn();
+    const auto workerGSN = cr::Worker::My().mLogging.GetCurrentGsn();
     const auto pageGSN = mBf->page.mGSN;
     if (workerGSN < pageGSN) {
-      cr::Worker::my().mLogging.SetCurrentGsn(pageGSN);
+      cr::Worker::My().mLogging.SetCurrentGsn(pageGSN);
     }
   }
 
@@ -199,7 +199,7 @@ public:
     walSize = ((walSize - 1) / 8 + 1) * 8;
     // TODO: verify
     auto handler =
-        cr::Worker::my().mLogging.ReserveWALEntryComplex<WT, Args...>(
+        cr::Worker::My().mLogging.ReserveWALEntryComplex<WT, Args...>(
             sizeof(WT) + walSize, pageId, mBf->page.mPSN, treeId,
             std::forward<Args>(args)...);
     return handler;

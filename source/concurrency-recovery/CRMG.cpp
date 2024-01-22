@@ -165,18 +165,6 @@ void CRManager::ScheduleJobAsync(u64 workerId, std::function<void()> job) {
   setJob(workerId, job);
 }
 
-void CRManager::ScheduleJobs(u64 numWorkers, std::function<void()> job) {
-  for (u32 workerId = 0; workerId < numWorkers; workerId++) {
-    setJob(workerId, job);
-  }
-}
-void CRManager::ScheduleJobs(u64 numWorkers,
-                             std::function<void(u64 workerId)> job) {
-  for (u32 workerId = 0; workerId < numWorkers; workerId++) {
-    setJob(workerId, [=]() { return job(workerId); });
-  }
-}
-
 void CRManager::JoinAll() {
   for (u32 i = 0; i < FLAGS_worker_threads; i++) {
     joinOne(i, [&](WorkerThread& meta) {
@@ -218,7 +206,7 @@ StringMap CRManager::Serialize() {
 void CRManager::Deserialize(StringMap map) {
   u64 val = std::stoull(map[kKeyGlobalLogicalClock]);
   ConcurrencyControl::sTimeStampOracle = val;
-  Worker::sGlobalWmkOfAllTx = val;
+  Worker::sWmkOfAllTx = val;
   mGroupCommitter->mWalSize = std::stoull(map[kKeyWalSize]);
 }
 

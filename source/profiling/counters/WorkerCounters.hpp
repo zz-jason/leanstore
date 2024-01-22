@@ -51,7 +51,7 @@ struct WorkerCounters {
   std::atomic<u64> dt_restarts_structural_change[max_dt_id] = {0};
   std::atomic<u64> dt_restarts_read[max_dt_id] = {0};
 
-  // temporary counter used to track some value for an idea in my mind
+  // temporary counter used to track some value for an idea in My mind
   std::atomic<u64> dt_researchy[max_dt_id][max_researchy_counter] = {};
 
   std::atomic<u64> dt_find_parent[max_dt_id] = {0};

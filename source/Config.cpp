@@ -80,15 +80,7 @@ DEFINE_bool(
     optimistic_scan, true,
     "Jump to next leaf directly if the pointer in the parent has not changed");
 DEFINE_bool(measure_time, false, "");
-// -------------------------------------------------------------------------------------
-DEFINE_double(tmp1, 0.0, "for ad-hoc experiments");
-DEFINE_double(tmp2, 0.0, "");
-DEFINE_double(tmp3, 0.0, "");
-DEFINE_double(tmp4, 0.0, "");
-DEFINE_double(tmp5, 0.0, "");
-DEFINE_double(tmp6, 0.0, "");
-DEFINE_double(tmp7, 0.0, "");
-// -------------------------------------------------------------------------------------
+
 DEFINE_bool(
     enable_print_btree_stats_on_exit, true,
     "Print BTree stats including name, hight, and num slots, etc. on exit");

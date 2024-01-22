@@ -53,7 +53,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
           return cb(typed_key, record);
         });
     if (ret == leanstore::OpCode::kAbortTx) {
-      cr::Worker::my().AbortTx();
+      cr::Worker::My().AbortTx();
     }
   }
 
@@ -64,7 +64,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
                                      Slice((u8*)(&record), sizeof(Record)));
     DCHECK(res == leanstore::OpCode::kOK || res == leanstore::OpCode::kAbortTx);
     if (res == leanstore::OpCode::kAbortTx) {
-      cr::Worker::my().AbortTx();
+      cr::Worker::My().AbortTx();
     }
   }
 
@@ -78,7 +78,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
           cb(record);
         });
     if (res == leanstore::OpCode::kAbortTx) {
-      cr::Worker::my().AbortTx();
+      cr::Worker::My().AbortTx();
     }
     DCHECK(res == leanstore::OpCode::kOK);
   }
@@ -99,7 +99,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
         updateDesc);
     DCHECK(res != leanstore::OpCode::kNotFound);
     if (res == leanstore::OpCode::kAbortTx) {
-      cr::Worker::my().AbortTx();
+      cr::Worker::My().AbortTx();
     }
   }
 
@@ -108,7 +108,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     u16 foldedKeySize = Record::foldKey(foldedKey, key);
     const auto res = btree->Remove(Slice(foldedKey, foldedKeySize));
     if (res == leanstore::OpCode::kAbortTx) {
-      cr::Worker::my().AbortTx();
+      cr::Worker::My().AbortTx();
     }
     return (res == leanstore::OpCode::kOK);
   }
@@ -131,7 +131,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
           return cb(typed_key, record);
         });
     if (ret == leanstore::OpCode::kAbortTx) {
-      cr::Worker::my().AbortTx();
+      cr::Worker::My().AbortTx();
     }
   }
 
@@ -147,7 +147,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
           local_f = (record).*f;
         });
     if (res == leanstore::OpCode::kAbortTx) {
-      cr::Worker::my().AbortTx();
+      cr::Worker::My().AbortTx();
     }
     DCHECK(res == OpCode::kOK);
     return local_f;

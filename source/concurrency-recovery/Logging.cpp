@@ -93,7 +93,7 @@ WALEntrySimple& Logging::ReserveWALEntrySimple(WALEntry::TYPE type) {
   if (type != WALEntry::TYPE::TX_START) {
     mActiveWALEntrySimple->mPrevLSN = mPrevLSN;
   }
-  auto& curWorker = leanstore::cr::Worker::my();
+  auto& curWorker = leanstore::cr::Worker::My();
   mActiveWALEntrySimple->InitTxInfo(&curWorker.mActiveTx, curWorker.mWorkerId);
   return *mActiveWALEntrySimple;
 }
@@ -112,15 +112,15 @@ void Logging::SubmitWALEntrySimple() {
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
     doc->Accept(writer);
     LOG(INFO) << "Submit WALEntrySimple"
-              << ", workerId=" << Worker::my().mWorkerId
-              << ", startTs=" << Worker::my().mActiveTx.mStartTs
+              << ", workerId=" << Worker::My().mWorkerId
+              << ", startTs=" << Worker::My().mActiveTx.mStartTs
               << ", curGSN=" << GetCurrentGsn()
               << ", walJson=" << buffer.GetString();
   });
 
   if (!((mWalBuffered >= mTxWalBegin) ||
         (mWalBuffered + sizeof(WALEntrySimple) < mTxWalBegin))) {
-    Worker::my().mActiveTx.mWalExceedBuffer = true;
+    Worker::My().mActiveTx.mWalExceedBuffer = true;
   }
   mActiveWALEntrySimple->mCRC32 = mActiveWALEntrySimple->ComputeCRC32();
   mWalBuffered += sizeof(WALEntrySimple);
@@ -138,12 +138,12 @@ void Logging::WriteSimpleWal(WALEntry::TYPE type) {
 void Logging::SubmitWALEntryComplex(u64 totalSize) {
   if (!((mWalBuffered >= mTxWalBegin) ||
         (mWalBuffered + totalSize < mTxWalBegin))) {
-    Worker::my().mActiveTx.mWalExceedBuffer = true;
+    Worker::My().mActiveTx.mWalExceedBuffer = true;
   }
   mActiveWALEntryComplex->mCRC32 = mActiveWALEntryComplex->ComputeCRC32();
   mWalBuffered += totalSize;
   publishWalFlushReq();
-  Worker::my().mActiveTx.MarkAsWrite();
+  Worker::My().mActiveTx.MarkAsWrite();
 
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().wal_write_bytes += totalSize;
@@ -156,7 +156,7 @@ void Logging::publishWalBufferedOffset() {
 
 void Logging::publishWalFlushReq() {
   WalFlushReq current(mWalBuffered, GetCurrentGsn(),
-                      Worker::my().mActiveTx.mStartTs);
+                      Worker::My().mActiveTx.mStartTs);
   mWalFlushReq.SetSync(current);
 }
 

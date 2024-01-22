@@ -38,16 +38,16 @@ static void BenchUpdateInsert(benchmark::State& state) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
   cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
-    cr::Worker::my().StartTx();
+    cr::Worker::My().StartTx();
     sLeanStore->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
-    cr::Worker::my().CommitTx();
+    cr::Worker::My().CommitTx();
   });
 
   std::unordered_set<std::string> dedup;
   for (auto _ : state) {
     cr::CRManager::sInstance->ScheduleJobAsync(0, [&]() {
-      cr::Worker::my().StartTx();
+      cr::Worker::My().StartTx();
       std::string key;
       std::string val;
       for (size_t i = 0; i < 16; i++) {
@@ -56,13 +56,13 @@ static void BenchUpdateInsert(benchmark::State& state) {
         btree->Insert(Slice((const u8*)key.data(), key.size()),
                       Slice((const u8*)val.data(), val.size()));
       }
-      cr::Worker::my().CommitTx();
+      cr::Worker::My().CommitTx();
     });
   }
 
   cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
-    cr::Worker::my().StartTx();
-    SCOPED_DEFER(cr::Worker::my().CommitTx());
+    cr::Worker::My().StartTx();
+    SCOPED_DEFER(cr::Worker::My().CommitTx());
     sLeanStore->UnRegisterTransactionKV(btreeName);
   });
 }

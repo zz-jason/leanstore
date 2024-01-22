@@ -13,20 +13,19 @@
 #include <cstdlib>
 #include <mutex>
 
-namespace leanstore {
-namespace cr {
+namespace leanstore::cr {
 
 thread_local std::unique_ptr<Worker> Worker::sTlsWorker = nullptr;
-std::shared_mutex Worker::sGlobalMutex;
 
-// All transactions < are committed
-std::unique_ptr<std::atomic<u64>[]> Worker::sLatestStartTs =
+std::unique_ptr<std::atomic<u64>[]> Worker::sActiveTxId =
     std::make_unique<std::atomic<u64>[]>(FLAGS_worker_threads);
-std::atomic<u64> Worker::sGlobalOldestTxId = 0;
-std::atomic<u64> Worker::sGlobalOldestShortTxId = 0;
-std::atomic<u64> Worker::sGlobalWmkOfAllTx = 0;
-std::atomic<u64> Worker::sGlobalWmkOfShortTx = 0;
-std::atomic<u64> Worker::sGlobalNewestLongTxId = 0;
+
+std::shared_mutex Worker::sGlobalMutex;
+std::atomic<u64> Worker::sOldestActiveTx = 0;
+std::atomic<u64> Worker::sOldestActiveShortTx = 0;
+std::atomic<u64> Worker::sNetestActiveLongTx = 0;
+std::atomic<u64> Worker::sWmkOfAllTx = 0;
+std::atomic<u64> Worker::sWmkOfShortTx = 0;
 
 Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers)
     : cc(numWorkers),
@@ -41,14 +40,10 @@ Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers)
 
   cc.mLcbCacheVal = make_unique<u64[]>(numWorkers);
   cc.mLcbCacheKey = make_unique<u64[]>(numWorkers);
-  cc.local_workers_start_ts = make_unique<u64[]>(numWorkers + 1);
-  sLatestStartTs[mWorkerId] = 0;
+  sActiveTxId[mWorkerId] = 0;
 }
 
 Worker::~Worker() {
-  delete[] cc.mCommitTree.mCommitLog;
-  cc.mCommitTree.mCommitLog = nullptr;
-
   free(mLogging.mWalBuffer);
   mLogging.mWalBuffer = nullptr;
 }
@@ -111,11 +106,11 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   }
 
   // Publish the transaction id
-  sLatestStartTs[mWorkerId].store(curTxId, std::memory_order_release);
-  cc.mGlobalWmkOfAllTxSnapshot = sGlobalWmkOfAllTx.load();
+  sActiveTxId[mWorkerId].store(curTxId, std::memory_order_release);
+  cc.mGlobalWmkOfAllTx = sWmkOfAllTx.load();
 
   // Cleanup commit log if necessary
-  cc.mCommitTree.CleanUpCommitLog();
+  cc.mCommitTree.CompactCommitLog();
 }
 
 void Worker::CommitTx() {
@@ -141,18 +136,18 @@ void Worker::CommitTx() {
     mActiveTx.mCommitTs = commitTs;
     DCHECK(mActiveTx.mStartTs < mActiveTx.mCommitTs)
         << "startTs should be smaller than commitTs"
-        << ", workerId=" << my().mWorkerId
+        << ", workerId=" << My().mWorkerId
         << ", actual startTs=" << mActiveTx.mStartTs
         << ", actual commitTs=" << mActiveTx.mCommitTs;
   } else {
     DLOG(INFO) << "Transaction has no writes, skip assigning commitTs"
-               << ", workerId=" << my().mWorkerId
+               << ", workerId=" << My().mWorkerId
                << ", actual startTs=" << mActiveTx.mStartTs;
   }
 
   // Reset startTs so that other transactions can safely update the global
   // transaction watermarks and garbage collect the unused versions.
-  sLatestStartTs[mWorkerId].store(0, std::memory_order_release);
+  sActiveTxId[mWorkerId].store(0, std::memory_order_release);
 
   mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
 
@@ -202,7 +197,7 @@ void Worker::CommitTx() {
 void Worker::AbortTx() {
   SCOPED_DEFER({
     mActiveTx.mState = TxState::kAborted;
-    sLatestStartTs[mWorkerId].store(0, std::memory_order_release);
+    sActiveTxId[mWorkerId].store(0, std::memory_order_release);
     LOG(INFO) << "Transaction aborted"
               << ", workerId=" << mWorkerId
               << ", startTs=" << mActiveTx.mStartTs
@@ -242,9 +237,4 @@ void Worker::AbortTx() {
   mLogging.WriteSimpleWal(WALEntry::TYPE::TX_FINISH);
 }
 
-void Worker::shutdown() {
-  cc.GarbageCollection();
-}
-
-} // namespace cr
-} // namespace leanstore
+} // namespace leanstore::cr

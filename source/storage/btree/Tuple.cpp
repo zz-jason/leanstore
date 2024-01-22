@@ -64,13 +64,13 @@ bool Tuple::ToFat(BTreeExclusiveIterator& xIter) {
   bool abortConversion = false;
   u16 numDeltasToReplace = 0;
   while (!abortConversion) {
-    if (cr::Worker::my().cc.VisibleForAll(prevTxId)) {
+    if (cr::Worker::My().cc.VisibleForAll(prevTxId)) {
       // No need to convert versions that are visible for all to the FatTuple,
       // these old version can be GCed. Pruning versions space might get delayed
       break;
     }
 
-    if (!cr::Worker::my().cc.GetVersion(
+    if (!cr::Worker::My().cc.GetVersion(
             prevWorkerId, prevTxId, prevCommandId, [&](const u8* version, u64) {
               numDeltasToReplace++;
               const auto& chainedDelta = *UpdateVersion::From(version);
@@ -194,7 +194,7 @@ void FatTuple::GarbageCollection() {
   };
 
   // Delete for all visible deltas, atm using cheap visibility check
-  if (cr::Worker::my().cc.VisibleForAll(mTxId)) {
+  if (cr::Worker::My().cc.VisibleForAll(mTxId)) {
     mNumDeltas = 0;
     mDataOffset = mPayloadCapacity;
     mPayloadSize = mValSize;
@@ -204,14 +204,14 @@ void FatTuple::GarbageCollection() {
   u16 deltasVisibleForAll = 0;
   for (s32 i = mNumDeltas - 1; i >= 1; i--) {
     auto& delta = getDelta(i);
-    if (cr::Worker::my().cc.VisibleForAll(delta.mTxId)) {
+    if (cr::Worker::My().cc.VisibleForAll(delta.mTxId)) {
       deltasVisibleForAll = i - 1;
       break;
     }
   }
 
-  const TXID local_oldest_oltp = cr::Worker::my().sGlobalOldestShortTxId.load();
-  const TXID local_newest_olap = cr::Worker::my().sGlobalNewestLongTxId.load();
+  const TXID local_oldest_oltp = cr::Worker::My().sOldestActiveShortTx.load();
+  const TXID local_newest_olap = cr::Worker::My().sNetestActiveLongTx.load();
   if (deltasVisibleForAll == 0 && local_newest_olap > local_oldest_oltp) {
     return; // Nothing to do here
   }
@@ -276,40 +276,33 @@ void FatTuple::GarbageCollection() {
 
     // TODO: Optimize
     // Merge from newest to oldest, i.e., from end to beginning
-    if (FLAGS_tmp5 && 0) {
-      // Hack
-      auto& delta = getDelta(zone_begin);
-      appendDelta(newFatTuple, reinterpret_cast<u8*>(&delta),
-                  delta.TotalSize());
-    } else {
-      std::unordered_map<UpdateSlotInfo, std::basic_string<u8>> diffSlotsMap;
-      for (s32 i = zone_end - 1; i >= zone_begin; i--) {
-        auto& deltaId = getDelta(i);
-        auto& updateDesc = deltaId.GetUpdateDesc();
-        auto* deltaPtr = deltaId.GetDeltaPtr();
-        for (s16 i = 0; i < updateDesc.mNumSlots; i++) {
-          diffSlotsMap[updateDesc.mUpdateSlots[i]] =
-              std::basic_string<u8>(deltaPtr, updateDesc.mUpdateSlots[i].mSize);
-          deltaPtr += updateDesc.mUpdateSlots[i].mSize;
-        }
+    std::unordered_map<UpdateSlotInfo, std::basic_string<u8>> diffSlotsMap;
+    for (s32 i = zone_end - 1; i >= zone_begin; i--) {
+      auto& deltaId = getDelta(i);
+      auto& updateDesc = deltaId.GetUpdateDesc();
+      auto* deltaPtr = deltaId.GetDeltaPtr();
+      for (s16 i = 0; i < updateDesc.mNumSlots; i++) {
+        diffSlotsMap[updateDesc.mUpdateSlots[i]] =
+            std::basic_string<u8>(deltaPtr, updateDesc.mUpdateSlots[i].mSize);
+        deltaPtr += updateDesc.mUpdateSlots[i].mSize;
       }
-      u32 totalNewDeltaSize = sizeof(FatTupleDelta) + sizeof(UpdateDesc) +
-                              (sizeof(UpdateSlotInfo) * diffSlotsMap.size());
-      for (auto& slot_itr : diffSlotsMap) {
-        totalNewDeltaSize += slot_itr.second.size();
-      }
-      auto& mergeDelta = newFatTuple.NewDelta(totalNewDeltaSize);
-      mergeDelta = getDelta(zone_begin);
-      auto& updateDesc = mergeDelta.GetUpdateDesc();
-      updateDesc.mNumSlots = diffSlotsMap.size();
-      auto* mergeDeltaPtr = mergeDelta.GetDeltaPtr();
-      u32 s_i = 0;
-      for (auto& slot_itr : diffSlotsMap) {
-        updateDesc.mUpdateSlots[s_i++] = slot_itr.first;
-        std::memcpy(mergeDeltaPtr, slot_itr.second.c_str(),
-                    slot_itr.second.size());
-        mergeDeltaPtr += slot_itr.second.size();
-      }
+    }
+    u32 totalNewDeltaSize = sizeof(FatTupleDelta) + sizeof(UpdateDesc) +
+                            (sizeof(UpdateSlotInfo) * diffSlotsMap.size());
+    for (auto& slot_itr : diffSlotsMap) {
+      totalNewDeltaSize += slot_itr.second.size();
+    }
+    auto& mergeDelta = newFatTuple.NewDelta(totalNewDeltaSize);
+    mergeDelta = getDelta(zone_begin);
+    auto& updateDesc = mergeDelta.GetUpdateDesc();
+    updateDesc.mNumSlots = diffSlotsMap.size();
+    auto* mergeDeltaPtr = mergeDelta.GetDeltaPtr();
+    u32 s_i = 0;
+    for (auto& slot_itr : diffSlotsMap) {
+      updateDesc.mUpdateSlots[s_i++] = slot_itr.first;
+      std::memcpy(mergeDeltaPtr, slot_itr.second.c_str(),
+                  slot_itr.second.size());
+      mergeDeltaPtr += slot_itr.second.size();
     }
 
     for (u32 i = zone_end; i < mNumDeltas; i++) {
@@ -363,12 +356,12 @@ std::tuple<OpCode, u16> FatTuple::GetVisibleTuple(
     ValCallback valCallback) const {
 
   // Latest version is visible
-  if (cr::Worker::my().cc.VisibleForMe(mWorkerId, mTxId)) {
+  if (cr::Worker::My().cc.VisibleForMe(mWorkerId, mTxId)) {
     valCallback(GetValue());
     return {OpCode::kOK, 1};
   }
 
-  DCHECK(!cr::ActiveTx().IsOLTP());
+  DCHECK(cr::ActiveTx().IsLongRunning());
 
   if (mNumDeltas > 0) {
     auto copiedVal = utils::JumpScopedArray<u8>(mValSize);
@@ -380,7 +373,7 @@ std::tuple<OpCode, u16> FatTuple::GetVisibleTuple(
       const auto& updateDesc = delta.GetUpdateDesc();
       auto* xorData = delta.GetDeltaPtr();
       BasicKV::CopyToValue(updateDesc, xorData, copiedVal->get());
-      if (cr::Worker::my().cc.VisibleForMe(delta.mWorkerId, delta.mTxId)) {
+      if (cr::Worker::My().cc.VisibleForMe(delta.mWorkerId, delta.mTxId)) {
         valCallback(Slice(copiedVal->get(), mValSize));
         return {OpCode::kOK, numVisitedVersions};
       }
@@ -430,7 +423,7 @@ void FatTuple::ConvertToChained(TREEID treeId) {
     auto& updateDesc = delta.GetUpdateDesc();
     auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
     auto versionSize = sizeOfDescAndDelta + sizeof(UpdateVersion);
-    cr::Worker::my().cc.mHistoryTree->PutVersion(
+    cr::Worker::My().cc.mHistoryTree->PutVersion(
         prevWorkerId, prevTxId, prevCommandId, treeId, false, versionSize,
         [&](u8* versionBuf) {
           new (versionBuf) UpdateVersion(delta, sizeOfDescAndDelta);
