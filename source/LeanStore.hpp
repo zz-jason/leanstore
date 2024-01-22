@@ -50,7 +50,7 @@ public:
   void RegisterBasicKV(const std::string& name,
                        storage::btree::BTreeGeneric::Config& config,
                        storage::btree::BasicKV** btree) {
-    DCHECK(cr::Worker::my().IsTxStarted());
+    DCHECK(cr::Worker::My().IsTxStarted());
     auto res = storage::btree::BasicKV::Create(name, config);
     if (!res) {
       LOG(ERROR) << "Failed to register BasicKV"
@@ -74,7 +74,7 @@ public:
   /// Unregister a BasicKV
   /// @param name The unique name of the btree
   void UnRegisterBasicKV(const std::string& name) {
-    DCHECK(cr::Worker::my().IsTxStarted());
+    DCHECK(cr::Worker::My().IsTxStarted());
     auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(
         storage::TreeRegistry::sInstance->GetTree(name));
     leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
@@ -93,7 +93,7 @@ public:
   void RegisterTransactionKV(const std::string& name,
                              storage::btree::BTreeGeneric::Config& config,
                              storage::btree::TransactionKV** btree) {
-    DCHECK(cr::Worker::my().IsTxStarted());
+    DCHECK(cr::Worker::My().IsTxStarted());
     *btree = nullptr;
 
     // create btree for graveyard
@@ -137,7 +137,7 @@ public:
   /// Unregister a TransactionKV
   /// @param name The unique name of the btree
   void UnRegisterTransactionKV(const std::string& name) {
-    DCHECK(cr::Worker::my().IsTxStarted());
+    DCHECK(cr::Worker::My().IsTxStarted());
     auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(
         storage::TreeRegistry::sInstance->GetTree(name));
     leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);

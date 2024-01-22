@@ -42,24 +42,24 @@ TEST_F(BasicKVTest, BasicKVCreate) {
   };
 
   cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
-    cr::Worker::my().StartTx();
-    SCOPED_DEFER(cr::Worker::my().CommitTx());
+    cr::Worker::My().StartTx();
+    SCOPED_DEFER(cr::Worker::My().CommitTx());
     mLeanStore->RegisterBasicKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
   });
 
   // create btree with same should fail in the same worker
   cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
-    cr::Worker::my().StartTx();
-    SCOPED_DEFER(cr::Worker::my().CommitTx());
+    cr::Worker::My().StartTx();
+    SCOPED_DEFER(cr::Worker::My().CommitTx());
     mLeanStore->RegisterBasicKV(btreeName, btreeConfig, &another);
     EXPECT_EQ(another, nullptr);
   });
 
   // create btree with same should also fail in other workers
   cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
-    cr::Worker::my().StartTx();
-    SCOPED_DEFER(cr::Worker::my().CommitTx());
+    cr::Worker::My().StartTx();
+    SCOPED_DEFER(cr::Worker::My().CommitTx());
     mLeanStore->RegisterBasicKV(btreeName, btreeConfig, &another);
     EXPECT_EQ(another, nullptr);
   });
@@ -67,8 +67,8 @@ TEST_F(BasicKVTest, BasicKVCreate) {
   // create btree with another different name should success
   btreeName = "testTree2";
   cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
-    cr::Worker::my().StartTx();
-    SCOPED_DEFER(cr::Worker::my().CommitTx());
+    cr::Worker::My().StartTx();
+    SCOPED_DEFER(cr::Worker::My().CommitTx());
     mLeanStore->RegisterBasicKV(btreeName, btreeConfig, &another);
     EXPECT_NE(btree, nullptr);
   });
@@ -100,26 +100,26 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
   cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
-    cr::Worker::my().StartTx();
+    cr::Worker::My().StartTx();
     mLeanStore->RegisterBasicKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
-    cr::Worker::my().CommitTx();
+    cr::Worker::My().CommitTx();
 
     // insert some values
-    cr::Worker::my().StartTx();
+    cr::Worker::My().StartTx();
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
                               Slice((const u8*)val.data(), val.size())),
                 OpCode::kOK);
     }
-    cr::Worker::my().CommitTx();
+    cr::Worker::My().CommitTx();
   });
 
   // query on the created btree in the same worker
   cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
-    cr::Worker::my().StartTx();
-    SCOPED_DEFER(cr::Worker::my().CommitTx());
+    cr::Worker::My().StartTx();
+    SCOPED_DEFER(cr::Worker::My().CommitTx());
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
@@ -135,8 +135,8 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
 
   // query on the created btree in another worker
   cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
-    cr::Worker::my().StartTx();
-    SCOPED_DEFER(cr::Worker::my().CommitTx());
+    cr::Worker::My().StartTx();
+    SCOPED_DEFER(cr::Worker::My().CommitTx());
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());

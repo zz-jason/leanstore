@@ -63,8 +63,8 @@ public:
                                           ValCallback callback) const;
 
   void UpdateStats() {
-    if (cr::Worker::my().cc.VisibleForAll(mTxId) ||
-        mOldestTx != static_cast<u16>(cr::Worker::sGlobalOldestTxId & 0xFFFF)) {
+    if (cr::Worker::My().cc.VisibleForAll(mTxId) ||
+        mOldestTx != static_cast<u16>(cr::Worker::sOldestActiveTx & 0xFFFF)) {
       mOldestTx = 0;
       mTotalUpdates = 0;
       return;
@@ -75,9 +75,9 @@ public:
   bool ShouldConvertToFatTuple() {
     bool commandValid = mCommandId != kInvalidCommandid;
     bool hasLongRunningOLAP =
-        cr::Worker::sGlobalOldestShortTxId != cr::Worker::sGlobalOldestTxId;
+        cr::Worker::sOldestActiveShortTx != cr::Worker::sOldestActiveTx;
     bool frequentlyUpdated = mTotalUpdates > FLAGS_worker_threads;
-    bool recentUpdatedByOthers = mWorkerId != cr::Worker::my().mWorkerId ||
+    bool recentUpdatedByOthers = mWorkerId != cr::Worker::My().mWorkerId ||
                                  mTxId != cr::ActiveTx().mStartTs;
     return commandValid && hasLongRunningOLAP && recentUpdatedByOthers &&
            frequentlyUpdated;
@@ -98,7 +98,7 @@ public:
 
 inline std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
     Slice payload, ValCallback callback) const {
-  if (cr::Worker::my().cc.VisibleForMe(mWorkerId, mTxId)) {
+  if (cr::Worker::My().cc.VisibleForMe(mWorkerId, mTxId)) {
     if (mIsTombstone) {
       return {OpCode::kNotFound, 1};
     }
@@ -123,7 +123,7 @@ inline std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
 
   u16 versionsRead = 1;
   while (true) {
-    bool found = cr::Worker::my().cc.GetVersion(
+    bool found = cr::Worker::My().cc.GetVersion(
         prevWorkerId, prevTxId, prevCommandId,
         [&](const u8* versionBuf, u64 versionSize) {
           auto& version = *reinterpret_cast<const Version*>(versionBuf);
@@ -165,22 +165,16 @@ inline std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
         });
     if (!found) {
       LOG(ERROR) << "Not found in the version tree"
-                 << ", workerId=" << cr::Worker::my().mWorkerId
+                 << ", workerId=" << cr::Worker::My().mWorkerId
                  << ", startTs=" << cr::ActiveTx().mStartTs
                  << ", versionsRead=" << versionsRead
                  << ", prevWorkerId=" << prevWorkerId
                  << ", prevTxId=" << prevTxId
-                 << ", prevCommandId=" << prevCommandId
-                 << ", prevTxId belongs to="
-                 << std::find(cr::Worker::my().cc.local_workers_start_ts.get(),
-                              cr::Worker::my().cc.local_workers_start_ts.get() +
-                                  cr::Worker::my().mNumAllWorkers,
-                              prevTxId) -
-                        cr::Worker::my().cc.local_workers_start_ts.get();
+                 << ", prevCommandId=" << prevCommandId;
       return {OpCode::kNotFound, versionsRead};
     }
 
-    if (cr::Worker::my().cc.VisibleForMe(prevWorkerId, prevTxId)) {
+    if (cr::Worker::My().cc.VisibleForMe(prevWorkerId, prevTxId)) {
       callback(Slice(valueBuf.get(), valueSize));
       return {OpCode::kOK, versionsRead};
     }
@@ -197,7 +191,7 @@ inline void ChainedTuple::Update(BTreeExclusiveIterator& xIter, Slice key,
 
   // Move the newest tuple to the history version tree.
   auto treeId = xIter.mBTree.mTreeId;
-  auto commandId = cr::Worker::my().cc.PutVersion(
+  auto commandId = cr::Worker::My().cc.PutVersion(
       treeId, false, versionSize, [&](u8* versionBuf) {
         auto& updateVersion =
             *new (versionBuf) UpdateVersion(mWorkerId, mTxId, mCommandId, true);
@@ -210,7 +204,7 @@ inline void ChainedTuple::Update(BTreeExclusiveIterator& xIter, Slice key,
     auto mutRawVal = xIter.MutableVal();
     auto userValSize = mutRawVal.Size() - sizeof(ChainedTuple);
     updateCallBack(MutableSlice(mPayload, userValSize));
-    mWorkerId = cr::Worker::my().mWorkerId;
+    mWorkerId = cr::Worker::My().mWorkerId;
     mTxId = cr::ActiveTx().mStartTs;
     mCommandId = commandId;
   };

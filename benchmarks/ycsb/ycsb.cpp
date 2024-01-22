@@ -80,11 +80,11 @@ int main(int argc, char** argv) {
             crm.ScheduleJobAsync(t_i, [&, begin, end]() {
               for (u64 i = begin; i < end; i++) {
                 YCSBPayload result;
-                cr::Worker::my().StartTx(txType, isolationLevel);
+                cr::Worker::My().StartTx(txType, isolationLevel);
                 table.lookup1(
                     {static_cast<YCSBKey>(i)},
                     [&](const KVTable& record) { result = record.mValue; });
-                cr::Worker::my().CommitTx();
+                cr::Worker::My().CommitTx();
               }
             });
           });
@@ -111,10 +111,10 @@ int main(int argc, char** argv) {
               utils::RandomGenerator::RandString(
                   reinterpret_cast<u8*>(&payload), sizeof(YCSBPayload));
               YCSBKey key = i;
-              cr::Worker::my().StartTx(
+              cr::Worker::My().StartTx(
                   txType, leanstore::IsolationLevel::kSnapshotIsolation);
               table.insert({key}, {payload});
-              cr::Worker::my().CommitTx();
+              cr::Worker::My().CommitTx();
             }
           });
         });
@@ -157,7 +157,7 @@ int main(int argc, char** argv) {
           }
           DCHECK(key < ycsb_tuple_count);
           YCSBPayload result;
-          cr::Worker::my().StartTx(txType, isolationLevel);
+          cr::Worker::My().StartTx(txType, isolationLevel);
           for (u64 op_i = 0; op_i < FLAGS_ycsb_ops_per_tx; op_i++) {
             if (FLAGS_ycsb_read_ratio == 100 ||
                 utils::RandomGenerator::RandU64(0, 100) <
@@ -182,7 +182,7 @@ int main(int argc, char** argv) {
                   updateDesc);
             }
           }
-          cr::Worker::my().CommitTx();
+          cr::Worker::My().CommitTx();
           WorkerCounters::MyCounters().tx++;
         }
         JUMPMU_CATCH() {
@@ -201,10 +201,10 @@ int main(int argc, char** argv) {
       running_threads_counter++;
       while (keep_running) {
         JUMPMU_TRY() {
-          cr::Worker::my().StartTx(
+          cr::Worker::My().StartTx(
               tx_type, leanstore::IsolationLevel::kSnapshotIsolation);
           sleep(FLAGS_ycsb_sleepy_thread);
-          cr::Worker::my().CommitTx();
+          cr::Worker::My().CommitTx();
         }
         JUMPMU_CATCH() {
         }

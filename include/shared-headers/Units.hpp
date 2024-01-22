@@ -1,14 +1,13 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <iostream>
 #include <memory>
 #include <ostream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
-
-#include <stddef.h>
-#include <stdint.h>
 
 using std::cerr;
 using std::cout;
@@ -23,7 +22,6 @@ using u8 = uint8_t;
 using u16 = uint16_t;
 using u32 = uint32_t;
 using u64 = uint64_t;
-using u128 = unsigned __int128;
 
 using s8 = int8_t;
 using s16 = int16_t;
@@ -46,8 +44,6 @@ using str = std::string_view;
 using Slice = std::basic_string_view<u8>;
 
 constexpr u64 kLsb = u64(1);
-constexpr u64 kMsb = u64(1) << 63;
-constexpr u64 kMsbMask = ~(kMsb);
 
 namespace leanstore {
 

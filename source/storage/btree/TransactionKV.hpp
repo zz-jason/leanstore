@@ -71,7 +71,7 @@ private:
   OpCode scan4LongRunningTx(Slice key, ScanCallback callback);
 
   inline bool VisibleForMe(WORKERID workerId, TXID txId) {
-    return cr::Worker::my().cc.VisibleForMe(workerId, txId);
+    return cr::Worker::My().cc.VisibleForMe(workerId, txId);
   }
 
   inline static bool triggerPageWiseGarbageCollection(
@@ -140,14 +140,12 @@ public:
 
   inline static void InsertToNode(GuardedBufferFrame<BTreeNode>& guardedNode,
                                   Slice key, Slice val, WORKERID workerId,
-                                  TXID txStartTs, TxMode txMode, s32& slotId) {
+                                  TXID txStartTs,
+                                  TxMode txMode [[maybe_unused]], s32& slotId) {
     auto totalValSize = sizeof(ChainedTuple) + val.size();
     slotId = guardedNode->insertDoNotCopyPayload(key, totalValSize, slotId);
     auto* tupleAddr = guardedNode->ValData(slotId);
-    auto* tuple = new (tupleAddr) ChainedTuple(workerId, txStartTs, val);
-    if (txMode == TxMode::kInstantlyVisibleBulkInsert) {
-      tuple->mTxId = kMsb | 0;
-    }
+    new (tupleAddr) ChainedTuple(workerId, txStartTs, val);
     guardedNode.MarkAsDirty();
   }
 
