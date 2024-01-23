@@ -19,10 +19,10 @@ private:
   /// the value is being modified. The version is increased by 2 when the value
   /// is modified, which can be used to check whether the value is modified
   /// since the last read.
-  std::atomic<u64> mVersion;
+  std::atomic<u64> mVersion = 0;
 
   /// The guarded value.
-  T mValue = 0;
+  T mValue;
 
 public:
   /// Constructor.
