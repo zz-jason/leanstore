@@ -5,8 +5,8 @@
 #include "WALEntry.hpp"
 #include "shared-headers/Exceptions.hpp"
 #include "shared-headers/Units.hpp"
+#include "sync-primitives/OptimisticGuarded.hpp"
 #include "utils/Defer.hpp"
-#include "utils/OptimisticSpinStruct.hpp"
 
 #include <glog/logging.h>
 #include <rapidjson/stringbuffer.h>
@@ -105,7 +105,7 @@ public:
   /// Updated by group committer
   std::atomic<TXID> mSignaledCommitTs = 0;
 
-  utils::OptimisticSpinStruct<WalFlushReq> mWalFlushReq;
+  storage::OptimisticGuarded<WalFlushReq> mWalFlushReq;
 
   /// The ring buffer of the current worker thread. All the wal entries of the
   /// current worker are writtern to this ring buffer firstly, then flushed to

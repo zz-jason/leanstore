@@ -1,3 +1,3 @@
 race:tzset_internal
 deadlock:ExclusiveGuardedBufferFrame
-race_top:OptimisticSpinStruct<*>::SetSync
+race_top:OptimisticGuarded<*>::Set

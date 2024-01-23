@@ -1,5 +1,6 @@
 #include "shared-headers/Units.hpp"
 #include "storage/buffer-manager/BufferFrame.hpp"
+#include "sync-primitives/OptimisticGuarded.hpp"
 #include "utils/Misc.hpp"
 #include "utils/RandomGenerator.hpp"
 
@@ -68,33 +69,6 @@ static void BenchRawArray(benchmark::State& state) {
   }
 }
 
-template <typename T> struct OptimisticGuarded {
-  std::atomic<uint64_t> mVersion;
-  T mValue;
-
-  OptimisticGuarded(const T& value) : mVersion(0), mValue(value) {
-  }
-
-  uint64_t Get(T& copiedValue) {
-    while (true) {
-      auto version = mVersion.load();
-      while (version & 1) {
-        version = mVersion.load();
-      }
-      copiedValue = mValue;
-      if (version == mVersion.load()) {
-        return version;
-      }
-    }
-  }
-
-  void Set(const T& newValue) {
-    mVersion.store(mVersion + 1, std::memory_order_release);
-    mValue = newValue;
-    mVersion.store(mVersion + 1, std::memory_order_release);
-  }
-};
-
 struct TestPayload {
   uint64_t mVal1;
   uint64_t mVal2;
@@ -119,8 +93,8 @@ static void BenchSwmrOptimisticGuard(benchmark::State& state) {
                                           RandomGenerator::Rand(100, 200)));
       }
     } else {
-      TestPayload copiedValue;
-      guardedValue.Get(copiedValue);
+      [[maybe_unused]] TestPayload copiedValue;
+      [[maybe_unused]] auto version = guardedValue.Get(copiedValue);
     }
   }
 }
