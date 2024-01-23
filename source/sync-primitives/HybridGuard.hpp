@@ -82,6 +82,9 @@ public:
            mVersion == mLatch->mVersion.load());
     if (mState == GuardState::kOptimistic &&
         mVersion != mLatch->mVersion.load()) {
+      DLOG(INFO) << "Jump because of contention"
+                 << ", mVersion(expected)=" << mVersion
+                 << ", mLatch->mVersion(actual)=" << mLatch->mVersion.load();
       jumpmu::Jump();
     }
   }
