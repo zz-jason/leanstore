@@ -16,35 +16,39 @@ void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
                              TREEID treeId, bool isRemove, u64 versionSize,
                              std::function<void(u8*)> insertCallBack,
                              bool sameThread) {
-  const u64 keySize = sizeof(txId) + sizeof(commandId);
+  // Compose the key to be inserted
+  auto keySize = sizeof(txId) + sizeof(commandId);
   u8 keyBuffer[keySize];
   u64 offset = 0;
-  offset += utils::fold(keyBuffer + offset, txId);
-  offset += utils::fold(keyBuffer + offset, commandId);
+  offset += utils::Fold(keyBuffer + offset, txId);
+  offset += utils::Fold(keyBuffer + offset, commandId);
   Slice key(keyBuffer, keySize);
+
   versionSize += sizeof(VersionMeta);
 
-  BasicKV* btree =
-      (isRemove) ? mRemoveBTrees[workerId] : mUpdateBTrees[workerId];
+  auto* btree = (isRemove) ? mRemoveBTrees[workerId] : mUpdateBTrees[workerId];
   Session* session = nullptr;
   if (sameThread) {
     session =
         (isRemove) ? &mRemoveSessions[workerId] : &mUpdateSessions[workerId];
   }
-  if (session != nullptr && session->rightmost_init) {
+  if (session != nullptr && session->mRightmostInited) {
     JUMPMU_TRY() {
-      BTreeExclusiveIterator xIter(
-          *static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)),
-          session->rightmost_bf, session->rightmost_version);
+      BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(btree),
+                                   session->mRightmostBf,
+                                   session->mRightmostVersion);
       if (xIter.HasEnoughSpaceFor(key.size(), versionSize) &&
           xIter.KeyInCurrentNode(key)) {
-        if (session->last_tx_id == txId) {
+
+        if (session->mLastTxId == txId) {
+          // Only need to keep one version for each txId?
           xIter.mGuardedLeaf->insertDoNotCopyPayload(key, versionSize,
-                                                     session->rightmost_pos);
-          xIter.mSlotId = session->rightmost_pos;
+                                                     session->mRightmostPos);
+          xIter.mSlotId = session->mRightmostPos;
         } else {
           xIter.InsertToCurrentNode(key, versionSize);
         }
+
         auto& versionMeta = *new (xIter.MutableVal().Data()) VersionMeta();
         versionMeta.mTreeId = treeId;
         insertCallBack(versionMeta.payload);
@@ -67,6 +71,7 @@ void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
 
       OpCode ret = xIter.SeekToInsert(key);
       if (ret == OpCode::kDuplicated) {
+        // remove the last inserted version for the key
         xIter.RemoveCurrent();
       } else {
         ENSURE(ret == OpCode::kOK);
@@ -82,11 +87,11 @@ void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
       xIter.MarkAsDirty();
 
       if (session != nullptr) {
-        session->rightmost_bf = xIter.mGuardedLeaf.mBf;
-        session->rightmost_version = xIter.mGuardedLeaf.mGuard.mVersion + 1;
-        session->rightmost_pos = xIter.mSlotId + 1;
-        session->last_tx_id = txId;
-        session->rightmost_init = true;
+        session->mRightmostInited = true;
+        session->mRightmostBf = xIter.mGuardedLeaf.mBf;
+        session->mRightmostVersion = xIter.mGuardedLeaf.mGuard.mVersion + 1;
+        session->mRightmostPos = xIter.mSlotId + 1;
+        session->mLastTxId = txId;
       }
 
       COUNTERS_BLOCK() {
@@ -108,8 +113,8 @@ bool HistoryTree::GetVersion(WORKERID prevWorkerId, TXID prevTxId,
   const u64 keySize = sizeof(prevTxId) + sizeof(prevCommandId);
   u8 keyBuffer[keySize];
   u64 offset = 0;
-  offset += utils::fold(keyBuffer + offset, prevTxId);
-  offset += utils::fold(keyBuffer + offset, prevCommandId);
+  offset += utils::Fold(keyBuffer + offset, prevTxId);
+  offset += utils::Fold(keyBuffer + offset, prevCommandId);
 
   Slice key(keyBuffer, keySize);
   JUMPMU_TRY() {
@@ -140,7 +145,7 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
                                 [[maybe_unused]] const u64 limit) {
   auto keySize = sizeof(toTxId);
   u8 keyBuffer[FLAGS_page_size];
-  utils::fold(keyBuffer, fromTxId);
+  utils::Fold(keyBuffer, fromTxId);
   Slice key(keyBuffer, keySize);
 
   u8 payload[FLAGS_page_size];
@@ -168,7 +173,7 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
       // finished if we are out of the transaction range
       xIter.AssembleKey();
       TXID curTxId;
-      utils::unfold(xIter.key().data(), curTxId);
+      utils::Unfold(xIter.key().data(), curTxId);
       if (curTxId < fromTxId || curTxId > toTxId) {
         break;
       }
@@ -205,7 +210,7 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
 
   // purge update versions
   btree = mUpdateBTrees[workerId];
-  utils::fold(keyBuffer, fromTxId);
+  utils::Fold(keyBuffer, fromTxId);
 
   // Attention: no cross worker gc in sync
   Session* volatile session = &mUpdateSessions[workerId];
@@ -223,7 +228,7 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
         u8 lastKey[lastKeySize];
         guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, lastKey);
         TXID txIdInLastkey;
-        utils::unfold(lastKey, txIdInLastkey);
+        utils::Unfold(lastKey, txIdInLastkey);
         if (txIdInLastkey > toTxId) {
           shouldTry = false;
         }
@@ -264,7 +269,7 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
             u8 firstKey[firstKeySize];
             guardedLeaf->copyFullKey(0, firstKey);
             TXID txIdInFirstKey;
-            utils::unfold(firstKey, txIdInFirstKey);
+            utils::Unfold(firstKey, txIdInFirstKey);
 
             // get the transaction id in the last key
             auto lastKeySize =
@@ -272,7 +277,7 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
             u8 lastKey[lastKeySize];
             guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, lastKey);
             TXID txIdInLastKey;
-            utils::unfold(lastKey, txIdInLastKey);
+            utils::Unfold(lastKey, txIdInLastKey);
 
             // purge the whole page if it is in the range
             if (fromTxId <= txIdInFirstKey && txIdInLastKey <= toTxId) {
@@ -309,7 +314,7 @@ void HistoryTree::VisitRemovedVersions(WORKERID workerId, TXID fromTxId,
   u8 keyBuffer[FLAGS_page_size];
 
   u64 offset = 0;
-  offset += utils::fold(keyBuffer + offset, fromTxId);
+  offset += utils::Fold(keyBuffer + offset, fromTxId);
   Slice key(keyBuffer, keySize);
   u8 payload[FLAGS_page_size];
   u16 payloadSize;
@@ -322,7 +327,7 @@ void HistoryTree::VisitRemovedVersions(WORKERID workerId, TXID fromTxId,
       // skip versions out of the transaction range
       xIter.AssembleKey();
       TXID curTxId;
-      utils::unfold(xIter.key().data(), curTxId);
+      utils::Unfold(xIter.key().data(), curTxId);
       if (curTxId < fromTxId || curTxId > toTxId) {
         break;
       }

@@ -18,10 +18,10 @@ public:
   BTreeExclusiveIterator(BTreeGeneric& tree, BufferFrame* bf,
                          const u64 bfVersion)
       : BTreePessimisticIterator(tree, LatchMode::kExclusive) {
-    HybridGuard asItWasWitnessed(bf->header.mLatch, bfVersion);
-    asItWasWitnessed.JumpIfModifiedByOthers();
+    HybridGuard optimisticGuard(bf->header.mLatch, bfVersion);
+    optimisticGuard.JumpIfModifiedByOthers();
     mGuardedLeaf =
-        GuardedBufferFrame<BTreeNode>(std::move(asItWasWitnessed), bf);
+        GuardedBufferFrame<BTreeNode>(std::move(optimisticGuard), bf);
     mGuardedLeaf.ToExclusiveMayJump();
   }
 

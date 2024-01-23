@@ -30,14 +30,16 @@ using BasicKV = leanstore::storage::btree::BasicKV;
 class HistoryTree : public HistoryTreeInterface {
 private:
   struct alignas(64) Session {
-    BufferFrame* rightmost_bf;
-    BufferFrame* leftmost_bf;
-    u64 rightmost_version;
-    u64 leftmost_version;
-    s64 rightmost_pos = -1;
-    TXID last_tx_id;
-    bool rightmost_init = false;
+    bool mRightmostInited = false;
+    BufferFrame* mRightmostBf = nullptr;
+    u64 mRightmostVersion = 0;
+    s64 mRightmostPos = -1;
+
     bool leftmost_init = false;
+    BufferFrame* leftmost_bf = nullptr;
+    u64 leftmost_version = 0;
+
+    TXID mLastTxId = 0;
   };
   Session mUpdateSessions[leanstore::cr::kWorkerLimit];
   Session mRemoveSessions[leanstore::cr::kWorkerLimit];

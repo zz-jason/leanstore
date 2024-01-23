@@ -157,7 +157,7 @@ void Logging::publishWalBufferedOffset() {
 void Logging::publishWalFlushReq() {
   WalFlushReq current(mWalBuffered, GetCurrentGsn(),
                       Worker::My().mActiveTx.mStartTs);
-  mWalFlushReq.SetSync(current);
+  mWalFlushReq.Set(current);
 }
 
 // Called by worker, so concurrent writes on the buffer

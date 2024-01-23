@@ -124,8 +124,10 @@ COMMANDID ConcurrencyControl::PutVersion(TREEID treeId, bool isRemoveCommand,
                                          std::function<void(u8*)> putCallBack) {
   utils::Timer timer(CRCounters::MyCounters().cc_ms_history_tree_insert);
   auto& curWorker = Worker::My();
-  auto commandId =
-      (curWorker.mCommandId++) | ((isRemoveCommand) ? TYPE_MSB(COMMANDID) : 0);
+  auto commandId = curWorker.mCommandId++;
+  if (isRemoveCommand) {
+    commandId |= TYPE_MSB(COMMANDID);
+  }
   mHistoryTree->PutVersion(curWorker.mWorkerId, curWorker.mActiveTx.mStartTs,
                            commandId, treeId, isRemoveCommand, versionSize,
                            putCallBack);
