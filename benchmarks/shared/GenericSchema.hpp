@@ -12,12 +12,12 @@ template <typename KeyT, typename ValT> struct Relation {
   // -------------------------------------------------------------------------------------
   template <class T> static unsigned foldKey(uint8_t* out, const T& key) {
     unsigned pos = 0;
-    pos += fold(out + pos, key.mKey);
+    pos += Fold(out + pos, key.mKey);
     return pos;
   }
   template <class T> static unsigned unfoldKey(const uint8_t* in, T& key) {
     unsigned pos = 0;
-    pos += unfold(in + pos, key.mKey);
+    pos += Unfold(in + pos, key.mKey);
     return pos;
   }
   static constexpr unsigned maxFoldLength() {

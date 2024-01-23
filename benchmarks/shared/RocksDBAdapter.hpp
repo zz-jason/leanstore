@@ -95,7 +95,7 @@ template <class Record> struct RocksDBAdapter : public Adapter<Record> {
   // -------------------------------------------------------------------------------------
   void insert(const typename Record::Key& key, const Record& record) final {
     u8 folded_key[Record::maxFoldLength() + sizeof(SEP)];
-    const u32 folded_key_len = fold(folded_key, Record::id) +
+    const u32 folded_key_len = Fold(folded_key, Record::id) +
                                Record::foldKey(folded_key + sizeof(SEP), key);
     // -------------------------------------------------------------------------------------
     rocksdb::Status s;
@@ -116,7 +116,7 @@ template <class Record> struct RocksDBAdapter : public Adapter<Record> {
   void lookup1(const typename Record::Key& key,
                const std::function<void(const Record&)>& fn) final {
     u8 folded_key[Record::maxFoldLength() + sizeof(SEP)];
-    const u32 folded_key_len = fold(folded_key, Record::id) +
+    const u32 folded_key_len = Fold(folded_key, Record::id) +
                                Record::foldKey(folded_key + sizeof(SEP), key);
     // -------------------------------------------------------------------------------------
     rocksdb::PinnableSlice value;
@@ -145,7 +145,7 @@ template <class Record> struct RocksDBAdapter : public Adapter<Record> {
   // -------------------------------------------------------------------------------------
   bool erase(const typename Record::Key& key) final {
     u8 folded_key[Record::maxFoldLength() + sizeof(SEP)];
-    const u32 folded_key_len = fold(folded_key, Record::id) +
+    const u32 folded_key_len = Fold(folded_key, Record::id) +
                                Record::foldKey(folded_key + sizeof(SEP), key);
     // -------------------------------------------------------------------------------------
     rocksdb::Status s;
@@ -176,7 +176,7 @@ template <class Record> struct RocksDBAdapter : public Adapter<Record> {
       const std::function<bool(const typename Record::Key&, const Record&)>& fn,
       std::function<void()>) final {
     u8 folded_key[Record::maxFoldLength() + sizeof(SEP)];
-    const u32 folded_key_len = fold(folded_key, Record::id) +
+    const u32 folded_key_len = Fold(folded_key, Record::id) +
                                Record::foldKey(folded_key + sizeof(SEP), key);
     // -------------------------------------------------------------------------------------
     rocksdb::Iterator* it = map.db->NewIterator(map.ro);
@@ -199,7 +199,7 @@ template <class Record> struct RocksDBAdapter : public Adapter<Record> {
       const std::function<bool(const typename Record::Key&, const Record&)>& fn,
       std::function<void()>) final {
     u8 folded_key[Record::maxFoldLength() + sizeof(SEP)];
-    const u32 folded_key_len = fold(folded_key, Record::id) +
+    const u32 folded_key_len = Fold(folded_key, Record::id) +
                                Record::foldKey(folded_key + sizeof(SEP), key);
     // -------------------------------------------------------------------------------------
     rocksdb::Iterator* it = map.db->NewIterator(map.ro);

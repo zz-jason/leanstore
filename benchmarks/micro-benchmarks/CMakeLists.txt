@@ -1,5 +1,5 @@
-add_executable(CastBench CastBench.cpp)
+add_executable(PrimitiveBench PrimitiveBench.cpp)
 add_executable(InsertUpdateBench InsertUpdateBench.cpp)
 
-target_link_libraries(CastBench gbench leanstore)
-target_link_libraries(InsertUpdateBench gbench gtest leanstore)
+target_link_libraries(PrimitiveBench gbench leanstore atomic)
+target_link_libraries(InsertUpdateBench gbench gtest leanstore atomic)

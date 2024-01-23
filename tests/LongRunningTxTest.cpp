@@ -2,6 +2,7 @@
 #include "KVInterface.hpp"
 #include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
+#include "concurrency-recovery/HistoryTree.hpp"
 #include "concurrency-recovery/Transaction.hpp"
 #include "concurrency-recovery/Worker.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
@@ -43,7 +44,7 @@ protected:
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
 
-    // create a btree for test
+    // Worker 0, create a btree for test
     cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
       cr::Worker::My().StartTx();
       SCOPED_DEFER(cr::Worker::My().CommitTx());
@@ -51,9 +52,9 @@ protected:
       ASSERT_NE(mKv, nullptr);
     });
 
-    // do extra insert and remove transactions in worker 0 to make it have more
-    // than one entries in the commit log, which helps to advance the global
-    // lower watermarks for garbage collection
+    // Worker 0, do extra insert and remove transactions in worker 0 to make it
+    // have more than one entries in the commit log, which helps to advance the
+    // global lower watermarks for garbage collection
     cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
       cr::Worker::My().StartTx();
       ASSERT_EQ(mKv->Insert(ToSlice("0"), ToSlice("0")), OpCode::kOK);
@@ -66,11 +67,10 @@ protected:
   }
 
   void TearDown() override {
-    TXID lastTxId = 0;
+    // Worker 0, remove the btree
     cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
       cr::Worker::My().StartTx();
       SCOPED_DEFER(cr::Worker::My().CommitTx());
-      lastTxId = cr::Worker::My().mActiveTx.mStartTs;
       GetLeanStore()->UnRegisterTransactionKV(mTreeName);
     });
   }
@@ -122,7 +122,7 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
   cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
     cr::Worker::My().StartTx(TxMode::kLongRunning);
 
-    // got the old value in worker 2
+    // get the old value in worker 2
     EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val1);
 
@@ -136,7 +136,7 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
     EXPECT_EQ(mKv->Remove(ToSlice(key2)), OpCode::kOK);
   });
 
-  // got the old value in worker 2
+  // get the old value in worker 2
   cr::CRManager::sInstance->ScheduleJobAsync(2, [&]() {
     EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val1);
@@ -152,7 +152,7 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
     EXPECT_EQ(mKv->mGraveyard->CountEntries(), 2u);
   });
 
-  // lookup from graveyard, still got the old value in worker 2
+  // lookup from graveyard, still get the old value in worker 2
   cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
     EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val1);
@@ -172,6 +172,113 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
 
     EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kNotFound);
     EXPECT_EQ(mKv->Lookup(ToSlice(key2), copyValue), OpCode::kNotFound);
+  });
+}
+
+TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
+  std::string key1("1"), val1("10");
+  std::string key2("2"), val2("20");
+  std::string res;
+
+  std::string copiedVal;
+  auto copyValue = [&](Slice val) {
+    copiedVal = std::string((const char*)val.data(), val.size());
+  };
+
+  // Work 1, insert 2 key-values as the test base
+  cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
+    cr::Worker::My().StartTx();
+    EXPECT_EQ(mKv->Insert(ToSlice(key1), ToSlice(val1)), OpCode::kOK);
+    cr::Worker::My().CommitTx();
+
+    cr::Worker::My().StartTx();
+    EXPECT_EQ(mKv->Insert(ToSlice(key2), ToSlice(val2)), OpCode::kOK);
+    cr::Worker::My().CommitTx();
+  });
+
+  // Worker 1, start a short-running transaction
+  cr::CRManager::sInstance->ScheduleJobSync(
+      1, [&]() { cr::Worker::My().StartTx(); });
+
+  // Worker 2, start a long-running transaction, lookup, get the old value
+  cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
+    cr::Worker::My().StartTx(TxMode::kLongRunning);
+
+    EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
+    EXPECT_EQ(copiedVal, val1);
+
+    EXPECT_EQ(mKv->Lookup(ToSlice(key2), copyValue), OpCode::kOK);
+    EXPECT_EQ(copiedVal, val2);
+  });
+
+  // Worker 1, update key1 100 times with random values
+  std::string newVal;
+  cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
+    auto updateDescBufSize = UpdateDesc::Size(1);
+    u8 updateDescBuf[updateDescBufSize];
+    auto* updateDesc = UpdateDesc::CreateFrom(updateDescBuf);
+    updateDesc->mNumSlots = 1;
+    updateDesc->mUpdateSlots[0].mOffset = 0;
+    updateDesc->mUpdateSlots[0].mSize = val1.size();
+
+    auto updateCallBack = [&](MutableSlice toUpdate) {
+      auto newValSize = updateDesc->mUpdateSlots[0].mSize;
+      newVal = RandomGenerator::RandAlphString(newValSize);
+      std::memcpy(toUpdate.Data(), newVal.data(), newVal.size());
+    };
+
+    for (size_t i = 0; i < 100; ++i) {
+      EXPECT_EQ(mKv->UpdatePartial(ToSlice(key1), updateCallBack, *updateDesc),
+                OpCode::kOK);
+    }
+  });
+
+  // Worker 2, lookup, get the old value
+  cr::CRManager::sInstance->ScheduleJobAsync(2, [&]() {
+    EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
+    EXPECT_EQ(copiedVal, val1);
+
+    EXPECT_EQ(mKv->Lookup(ToSlice(key2), copyValue), OpCode::kOK);
+    EXPECT_EQ(copiedVal, val2);
+  });
+
+  // Worker 1, commit the transaction, graveyard should be empty, update history
+  // trees should have 100 versions
+  cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
+    cr::Worker::My().CommitTx();
+
+    EXPECT_EQ(mKv->mGraveyard->CountEntries(), 0u);
+    auto* historyTree = static_cast<cr::HistoryTree*>(
+        cr::CRManager::sInstance->mHistoryTreePtr.get());
+    auto* updateTree = historyTree->mUpdateBTrees[1];
+    auto* removeTree = historyTree->mRemoveBTrees[1];
+    EXPECT_EQ(updateTree->CountEntries(), 100u);
+    EXPECT_EQ(removeTree->CountEntries(), 0u);
+  });
+
+  // Worker 2, lookup, skip the update versions, still get old values, commit
+  cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
+    EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
+    EXPECT_EQ(copiedVal, val1);
+
+    EXPECT_EQ(mKv->Lookup(ToSlice(key2), copyValue), OpCode::kOK);
+    EXPECT_EQ(copiedVal, val2);
+
+    // commit the transaction in worker 2
+    cr::Worker::My().CommitTx();
+  });
+
+  // Worker 2, now get the updated new value
+  cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
+    cr::Worker::My().StartTx(TxMode::kLongRunning,
+                             IsolationLevel::kSnapshotIsolation, false);
+    SCOPED_DEFER(cr::Worker::My().CommitTx());
+
+    EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
+    EXPECT_EQ(copiedVal, newVal);
+
+    EXPECT_EQ(mKv->Lookup(ToSlice(key2), copyValue), OpCode::kOK);
+    EXPECT_EQ(copiedVal, val2);
   });
 }
 
@@ -204,7 +311,7 @@ TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
     }
   });
 
-  // start transaction on worker 2, got the inserted values
+  // start transaction on worker 2, get the inserted values
   std::string copiedKey, copiedVal;
   auto copyKeyVal = [&](Slice key, Slice val) {
     copiedKey = std::string((const char*)key.data(), key.size());
@@ -226,7 +333,7 @@ TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
     }
   });
 
-  // got the old values in worker 2
+  // get the old values in worker 2
   cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
     EXPECT_EQ(mKv->ScanAsc(ToSlice(smallestKey), copyKeyVal), OpCode::kOK);
   });
@@ -238,7 +345,7 @@ TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
     EXPECT_EQ(mKv->mGraveyard->CountEntries(), kvToTest.size());
   });
 
-  // still got the old values in worker 2
+  // still get the old values in worker 2
   cr::CRManager::sInstance->ScheduleJobSync(2, [&]() {
     EXPECT_EQ(mKv->ScanAsc(ToSlice(smallestKey), copyKeyVal), OpCode::kOK);
 
