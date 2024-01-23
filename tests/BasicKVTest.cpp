@@ -29,7 +29,7 @@ TEST_F(BasicKVTest, BasicKVCreate) {
   std::filesystem::create_directories(dirPath);
 
   FLAGS_worker_threads = 2;
-  FLAGS_recover = false;
+  FLAGS_init = true;
   mLeanStore = std::make_unique<leanstore::LeanStore>();
   storage::btree::BasicKV* btree;
   storage::btree::BasicKV* another;
@@ -80,7 +80,7 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
   std::filesystem::remove_all(dirPath);
   std::filesystem::create_directories(dirPath);
   FLAGS_worker_threads = 2;
-  FLAGS_recover = false;
+  FLAGS_init = true;
   mLeanStore = std::make_unique<leanstore::LeanStore>();
   storage::btree::BasicKV* btree;
 

@@ -51,7 +51,6 @@ void BTreeGeneric::Init(TREEID btreeId, Config config) {
 }
 
 void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
-  cr::Worker::My().mLogging.WalEnsureEnoughSpace(FLAGS_page_size);
   auto parentHandler = findParentEager(*this, toSplit);
   auto guardedParent = parentHandler.GetGuardedParent<BTreeNode>();
   auto guardedChild = GuardedBufferFrame(

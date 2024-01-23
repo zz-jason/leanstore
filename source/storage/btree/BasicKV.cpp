@@ -121,10 +121,6 @@ OpCode BasicKV::ScanDesc(Slice scanKey, ScanCallback callback) {
 }
 
 OpCode BasicKV::Insert(Slice key, Slice val) {
-  if (mConfig.mEnableWal) {
-    cr::Worker::My().mLogging.WalEnsureEnoughSpace(FLAGS_page_size * 1);
-  }
-
   JUMPMU_TRY() {
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
     OpCode ret = xIter.InsertKV(key, val);
@@ -230,10 +226,6 @@ OpCode BasicKV::PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
 
 OpCode BasicKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
                               UpdateDesc& updateDesc) {
-  if (mConfig.mEnableWal) {
-    cr::Worker::My().mLogging.WalEnsureEnoughSpace(FLAGS_page_size);
-  }
-
   JUMPMU_TRY() {
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
     if (!xIter.SeekExact(key)) {
@@ -279,9 +271,6 @@ OpCode BasicKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
 }
 
 OpCode BasicKV::Remove(Slice key) {
-  if (mConfig.mEnableWal) {
-    cr::Worker::My().mLogging.WalEnsureEnoughSpace(FLAGS_page_size);
-  }
   JUMPMU_TRY() {
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
     if (!xIter.SeekExact(key)) {

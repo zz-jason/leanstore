@@ -37,7 +37,7 @@ TEST_F(LeanStoreTest, RecoverAfterInsert) {
   std::filesystem::remove_all(dirPath);
   std::filesystem::create_directories(dirPath);
   FLAGS_worker_threads = 2;
-  FLAGS_recover = false;
+  FLAGS_init = true;
   mLeanStore = std::make_unique<leanstore::LeanStore>();
   storage::btree::TransactionKV* btree;
 
@@ -78,7 +78,7 @@ TEST_F(LeanStoreTest, RecoverAfterInsert) {
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
-  FLAGS_recover = true;
+  FLAGS_init = false;
   mLeanStore = std::make_unique<leanstore::LeanStore>();
   mLeanStore->GetTransactionKV(btreeName, &btree);
   EXPECT_NE(btree, nullptr);

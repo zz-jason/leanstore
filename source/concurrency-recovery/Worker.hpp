@@ -147,7 +147,7 @@ public:
     return mSignaledCommitTs.load() < dependency;
   }
 
-  void WalEnsureEnoughSpace(u32 requestedSize);
+  void ReserveContiguousBuffer(u32 requestedSize);
 
   // Iterate over current TX entries
   void IterateCurrentTxWALs(
@@ -178,8 +178,6 @@ private:
   void publishWalBufferedOffset();
 
   void publishWalFlushReq();
-
-  u32 walFreeSpace();
 
   u32 walContiguousFreeSpace();
 };
@@ -295,7 +293,7 @@ WALPayloadHandler<T> Logging::ReserveWALEntryComplex(u64 payloadSize,
   auto entryLSN = mLsnClock++;
   auto* entryPtr = mWalBuffer + mWalBuffered;
   auto entrySize = sizeof(WALEntryComplex) + payloadSize;
-  DCHECK(walContiguousFreeSpace() >= entrySize);
+  ReserveContiguousBuffer(entrySize);
 
   mActiveWALEntryComplex =
       new (entryPtr) WALEntryComplex(entryLSN, entrySize, psn, treeId, pageId);

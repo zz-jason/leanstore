@@ -46,8 +46,6 @@ DECLARE_double(xmerge_target_pct);
 DECLARE_bool(optimistic_scan);
 DECLARE_bool(measure_time);
 // -------------------------------------------------------------------------------------
-DECLARE_string(zipf_path);
-DECLARE_double(zipf_factor);
 DECLARE_double(target_gib);
 DECLARE_uint64(run_for_seconds);
 DECLARE_uint64(warmup_for_seconds);
@@ -70,7 +68,7 @@ DECLARE_bool(reclaim_page_ids);
 DECLARE_bool(wal);
 DECLARE_bool(wal_fsync);
 DECLARE_uint64(wal_buffer_size);
-DECLARE_bool(recover);
+DECLARE_bool(init);
 
 // MVCC && GC
 DECLARE_string(isolation_level);

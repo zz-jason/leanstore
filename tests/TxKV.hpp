@@ -98,7 +98,7 @@ public:
     FLAGS_wal = true;
     FLAGS_bulk_insert = false;
     FLAGS_worker_threads = sessionLimit;
-    FLAGS_recover = false;
+    FLAGS_init = true;
     FLAGS_data_dir = storeDir;
 
     std::filesystem::path dirPath = FLAGS_data_dir;

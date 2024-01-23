@@ -1,5 +1,6 @@
 #include "../shared/Schema.hpp"
 #include "../shared/WiredTigerAdapter.hpp"
+#include "Config.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/profiling/counters/WorkerCounters.hpp"
@@ -59,7 +60,7 @@ int main(int argc, char** argv) {
           ? FLAGS_ycsb_tuple_count
           : FLAGS_target_gib * 1024 * 1024 * 1024 * 1.0 / 2.0 /
                 (sizeof(YCSBKey) + sizeof(YCSBPayload));
-  if (!FLAGS_recover) {
+  if (FLAGS_init) {
     cout << "Inserting " << ycsb_tuple_count << " values" << endl;
     begin = chrono::high_resolution_clock::now();
     leanstore::utils::Parallelize::range(
@@ -104,8 +105,8 @@ int main(int argc, char** argv) {
           wiredtiger_db.StartTx();
           YCSBKey key;
           if (FLAGS_zipf_factor == 0) {
-            key = leanstore::utils::RandomGenerator::RandU64(
-                0, ycsb_tuple_count);
+            key =
+                leanstore::utils::RandomGenerator::RandU64(0, ycsb_tuple_count);
           } else {
             key = zipf_random->rand();
           }

@@ -59,7 +59,6 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
 OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
                                     UpdateDesc& updateDesc) {
   DCHECK(cr::Worker::My().IsTxStarted());
-  cr::Worker::My().mLogging.WalEnsureEnoughSpace(FLAGS_page_size);
   JUMPMU_TRY() {
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
     if (!xIter.SeekExact(key)) {
@@ -81,11 +80,11 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
       auto& tuple = *Tuple::From(mutRawVal.Data());
       auto visibleForMe = VisibleForMe(tuple.mWorkerId, tuple.mTxId);
       if (tuple.IsWriteLocked() || !visibleForMe) {
-        LOG(ERROR) << "Update failed, primary tuple is write locked or not "
-                      "visible for me"
-                   << ", key=" << ToString(key)
-                   << ", writeLocked=" << tuple.IsWriteLocked()
-                   << ", visibleForMe=" << visibleForMe;
+        // LOG(ERROR) << "Update failed, primary tuple is write locked or not "
+        //               "visible for me"
+        //            << ", key=" << ToString(key)
+        //            << ", writeLocked=" << tuple.IsWriteLocked()
+        //            << ", visibleForMe=" << visibleForMe;
         JUMPMU_RETURN OpCode::kAbortTx;
       }
 
@@ -156,7 +155,6 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
 
 OpCode TransactionKV::Insert(Slice key, Slice val) {
   DCHECK(cr::Worker::My().IsTxStarted());
-  cr::Worker::My().mLogging.WalEnsureEnoughSpace(FLAGS_page_size * 1);
   u16 payloadSize = val.size() + sizeof(ChainedTuple);
 
   while (true) {
@@ -288,8 +286,6 @@ void TransactionKV::insertAfterRemove(BTreeExclusiveIterator& xIter, Slice key,
 
 OpCode TransactionKV::Remove(Slice key) {
   DCHECK(cr::Worker::My().IsTxStarted());
-  cr::Worker::My().mLogging.WalEnsureEnoughSpace(FLAGS_page_size);
-
   JUMPMU_TRY() {
     BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
     if (!xIter.SeekExact(key)) {

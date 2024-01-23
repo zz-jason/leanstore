@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Adapter.hpp"
+#include "Config.hpp"
 #include "LeanStore.hpp"
 #include "shared-headers/Exceptions.hpp"
 
@@ -23,7 +24,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
   }
 
   LeanStoreAdapter(LeanStore& db, string name) : name(name) {
-    if (FLAGS_recover) {
+    if (!FLAGS_init) {
       leanstore::storage::btree::TransactionKV* tree;
       db.GetTransactionKV(name, &tree);
       btree = reinterpret_cast<leanstore::KVInterface*>(tree);

@@ -1,5 +1,6 @@
 #include "LeanStore.hpp"
 
+#include "Config.hpp"
 #include "concurrency-recovery/CRMG.hpp"
 #include "profiling/tables/BMTable.hpp"
 #include "profiling/tables/CPUTable.hpp"
@@ -38,8 +39,6 @@ FlagListS64 LeanStore::sPersistedS64Flags = {};
 LeanStore::LeanStore() {
   // init glog
   if (!google::IsGoogleLoggingInitialized()) {
-    FLAGS_logtostderr = 1;
-    // FLAGS_log_dir = GetLogDir();
     auto customPrefixCallback = [](std::ostream& s,
                                    const google::LogMessageInfo& m, void*) {
       // severity
@@ -69,7 +68,7 @@ LeanStore::LeanStore() {
   SCOPED_DEFER(LOG(INFO) << "LeanStore started");
 
   // init and verify flags
-  if (FLAGS_recover) {
+  if (!FLAGS_init) {
     DeSerializeFlags();
   }
   if (!FLAGS_wal) {
@@ -78,7 +77,7 @@ LeanStore::LeanStore() {
   }
 
   // open file
-  if (FLAGS_recover) {
+  if (!FLAGS_init) {
     // recover pages and WAL from disk
     int flags = O_RDWR | O_DIRECT;
     mPageFd = open(GetDBFilePath().c_str(), flags, 0666);
@@ -142,7 +141,7 @@ LeanStore::LeanStore() {
   // create global concurrenct resource manager
   cr::CRManager::sInstance = std::make_unique<cr::CRManager>(mWalFd);
 
-  if (FLAGS_recover) {
+  if (!FLAGS_init) {
     // Deserialize meta from disk
     DeSerializeMeta();
     BufferManager::sInstance->RecoveryFromDisk();
