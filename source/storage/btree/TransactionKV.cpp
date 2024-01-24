@@ -242,7 +242,7 @@ void TransactionKV::insertAfterRemove(BTreeExclusiveIterator& xIter, Slice key,
   // create an insert version
   auto versionSize = sizeof(InsertVersion) + val.size() + key.size();
   auto commandId = cr::Worker::My().cc.PutVersion(
-      mTreeId, true, versionSize, [&](u8* versionBuf) {
+      mTreeId, false, versionSize, [&](u8* versionBuf) {
         new (versionBuf)
             InsertVersion(chainedTuple->mWorkerId, chainedTuple->mTxId,
                           chainedTuple->mCommandId, key, val);
@@ -692,8 +692,9 @@ void TransactionKV::GarbageCollect(const u8* versionData,
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
-      DLOG(INFO) << "Delete tombstones caused by transactions below "
-                 << "cc.mLocalWmkOfAllTx failed, try again later";
+      DLOG(INFO)
+          << "Delete tombstones caused by transactions below "
+          << "cc.mLocalWmkOfAllTx page has been modified since last delete";
     }
     return;
   }

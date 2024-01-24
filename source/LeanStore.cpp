@@ -18,8 +18,13 @@
 #include <rapidjson/stringbuffer.h>
 #include <tabulate/table.hpp>
 
+#include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <locale>
+#include <memory>
+#include <mutex>
+#include <shared_mutex>
 #include <sstream>
 
 #include <linux/fs.h>
@@ -35,6 +40,31 @@ namespace leanstore {
 // Static members
 FlagListString LeanStore::sPersistedStringFlags = {};
 FlagListS64 LeanStore::sPersistedS64Flags = {};
+
+std::expected<LeanStore*, utils::Error> LeanStore::Open() {
+  static std::shared_mutex sMutex;
+  static std::unique_ptr<LeanStore> sLeanstore = nullptr;
+
+  std::shared_lock readGuard(sMutex);
+  if (sLeanstore != nullptr) {
+    return sLeanstore.get();
+  }
+  readGuard.unlock();
+
+  std::unique_lock writeGuard(sMutex);
+  if (sLeanstore != nullptr) {
+    return sLeanstore.get();
+  }
+
+  if (FLAGS_init) {
+    std::cout << "Clean data dir: " << FLAGS_data_dir << std::endl;
+    std::filesystem::path dirPath = FLAGS_data_dir;
+    std::filesystem::remove_all(dirPath);
+    std::filesystem::create_directories(dirPath);
+  }
+  sLeanstore = std::make_unique<LeanStore>();
+  return sLeanstore.get();
+}
 
 LeanStore::LeanStore() {
   // init glog

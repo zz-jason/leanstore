@@ -5,7 +5,6 @@
 #include "concurrency-recovery/Transaction.hpp"
 #include "concurrency-recovery/Worker.hpp"
 #include "shared-headers/Units.hpp"
-#include "shared/Schema.hpp"
 #include "storage/btree/TransactionKV.hpp"
 #include "storage/btree/core/BTreeGeneric.hpp"
 #include "utils/Defer.hpp"
@@ -20,8 +19,8 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
-#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -100,7 +99,12 @@ double CalculateTps(chrono::high_resolution_clock::time_point begin,
   return numOperations / sec;
 }
 
-static auto CreateLeanStore() {
+static leanstore::LeanStore* GetLeanStore() {
+  static LeanStore* sStore = nullptr;
+  if (sStore != nullptr) {
+    return sStore;
+  }
+
   // Config leanstore flags
   // FLAGS_init = (FLAGS_ycsb_cmd == kCmdLoad);
   FLAGS_init = true;
@@ -109,22 +113,14 @@ static auto CreateLeanStore() {
   FLAGS_logtostderr = false;
   FLAGS_logtostdout = false;
 
-  // Init LeanStore
-  if (FLAGS_init) {
-    std::filesystem::path dirPath = FLAGS_data_dir;
-    std::filesystem::remove_all(dirPath);
-    std::filesystem::create_directories(dirPath);
-
-    dirPath = FLAGS_log_dir;
-    std::filesystem::remove_all(dirPath);
-    std::filesystem::create_directories(dirPath);
+  auto res = LeanStore::Open();
+  if (res) {
+    sStore = res.value();
+    return sStore;
   }
-  return std::make_unique<leanstore::LeanStore>();
-}
-
-static leanstore::LeanStore* GetLeanStore() {
-  static std::unique_ptr<LeanStore> sStore = CreateLeanStore();
-  return sStore.get();
+  std::cerr << "Failed to open leanstore: " << res.error().ToString()
+            << std::endl;
+  exit(res.error().Code());
 }
 
 static KVInterface* CreateTable() {
@@ -150,18 +146,6 @@ static KVInterface* GetTable() {
   leanstore->GetTransactionKV(tableName, &table);
   return table;
 }
-
-// static void DropTable() {
-//   auto* leanstore = GetLeanStore();
-//   auto tableName = "ycsb_" + FLAGS_ycsb_workload;
-//
-//   // Worker 0, create a btree for test
-//   cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
-//     cr::Worker::My().StartTx();
-//     SCOPED_DEFER(cr::Worker::My().CommitTx());
-//     leanstore->UnRegisterTransactionKV(tableName);
-//   });
-// }
 
 static void GenYcsbKey(utils::ScrambledZipfGenerator& zipfRandom, u8* keyBuf) {
   auto zipfKey = zipfRandom.rand();
@@ -331,10 +315,6 @@ static void HandleCmdRun() {
 } // namespace leanstore::ycsb
 
 using namespace leanstore;
-
-using YCSBKey = u64;
-using YCSBPayload = BytesPayload<8>;
-using KVTable = Relation<YCSBKey, YCSBPayload>;
 
 int main(int argc, char** argv) {
   gflags::SetUsageMessage("Ycsb Benchmark");
