@@ -4,10 +4,12 @@
 #include "storage/btree/BasicKV.hpp"
 #include "storage/btree/TransactionKV.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
+#include "utils/Error.hpp"
 
 #include <rapidjson/document.h>
 
 #include <atomic>
+#include <expected>
 #include <list>
 
 namespace leanstore {
@@ -203,6 +205,8 @@ public:
   static void addS64Flag(string name, s64* flag) {
     sPersistedS64Flags.push_back(std::make_tuple(name, flag));
   }
+
+  static std::expected<LeanStore*, utils::Error> Open();
 };
 
 } // namespace leanstore

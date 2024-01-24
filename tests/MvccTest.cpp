@@ -56,7 +56,7 @@ public:
     FLAGS_wal = true;
     FLAGS_bulk_insert = false;
     FLAGS_worker_threads = 3;
-    FLAGS_recover = false;
+    FLAGS_init = true;
     FLAGS_data_dir = "/tmp/MvccTest";
 
     std::filesystem::path dirPath = FLAGS_data_dir;

@@ -1,10 +1,13 @@
 #include "Config.hpp"
+#include "KVInterface.hpp"
 #include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
+#include "concurrency-recovery/Transaction.hpp"
+#include "concurrency-recovery/Worker.hpp"
 #include "shared-headers/Units.hpp"
-#include "shared/LeanStoreAdapter.hpp"
-#include "shared/Schema.hpp"
+#include "storage/btree/TransactionKV.hpp"
+#include "storage/btree/core/BTreeGeneric.hpp"
+#include "utils/Defer.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
 #include "utils/ScrambledZipfGenerator.hpp"
@@ -12,217 +15,333 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <algorithm>
+#include <atomic>
+#include <cctype>
+#include <chrono>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
 
-DEFINE_uint32(ycsb_read_ratio, 100, "");
-DEFINE_uint64(ycsb_tuple_count, 0, "");
-DEFINE_uint32(ycsb_payload_size, 100, "tuple size in bytes");
-DEFINE_uint32(ycsb_warmup_rounds, 0, "");
-DEFINE_uint32(ycsb_insert_threads, 0, "");
-DEFINE_uint32(ycsb_threads, 0, "");
-DEFINE_bool(ycsb_count_unique_lookup_keys, true, "");
-DEFINE_bool(ycsb_warmup, true, "");
-DEFINE_uint32(ycsb_sleepy_thread, 0, "");
-DEFINE_uint32(ycsb_ops_per_tx, 1, "");
+// For data preparation
+static std::string kCmdLoad = "load";
+static std::string kCmdRun = "run";
+
+// For the benchmark driver
+DEFINE_string(ycsb_cmd, "run", "Ycsb command, available: run, load");
+DEFINE_string(ycsb_workload, "a", "Ycsb workload, available: a, b, c, d, e, f");
+DEFINE_uint64(ycsb_run_for_seconds, 300, "Run the benchmark for x seconds");
+
+// For the data preparation
+DEFINE_uint64(ycsb_key_size, 16, "Key size in bytes");
+DEFINE_uint64(ycsb_val_size, 120, "Value size in bytes");
+DEFINE_uint64(ycsb_record_count, 10000, "The number of records to insert");
+DEFINE_double(zipf_factor, 0.99, "Zipf factor, 0 means uniform distribution");
+
+namespace leanstore::ycsb {
+
+enum class Distrubition : u8 {
+  kUniform = 0,
+  kZipf = 1,
+  kLatest = 2,
+};
+
+enum class Workload : u8 {
+  kA = 0,
+  kB = 1,
+  kC = 2,
+  kD = 3,
+  kE = 4,
+  kF = 5,
+};
+
+struct WorkloadSpec {
+  u64 mRecordCount;
+  u64 mOperationCount;
+  bool mReadAllFields;
+  double mReadProportion;
+  double mUpdateProportion;
+  double mScanProportion;
+  double mInsertProportion;
+  Distrubition mKeyDistrubition;
+};
+
+// Generate workload spec from workload type
+WorkloadSpec GetWorkloadSpec(Workload workload) {
+  switch (workload) {
+  case Workload::kA:
+    return {100, 100000, true, 0.5, 0.5, 0.0, 0.0, Distrubition::kZipf};
+  case Workload::kB:
+    return {100, 100000, true, 0.95, 0.05, 0.0, 0.0, Distrubition::kZipf};
+  case Workload::kC:
+    return {100, 100000, true, 1.0, 0.0, 0.0, 0.0, Distrubition::kZipf};
+  case Workload::kD:
+    return {100, 100000, true, 0.95, 0.0, 0.0, 0.05, Distrubition::kLatest};
+  case Workload::kE:
+    return {100, 100000, true, 0.0, 0.0, 0.95, 0.05, Distrubition::kZipf};
+  case Workload::kF:
+    return {100, 100000, true, 0.5, 0.0, 0.0, 0.5, Distrubition::kUniform};
+  default:
+    LOG(FATAL) << "Unknown workload: " << static_cast<u8>(workload);
+  }
+}
+
+double CalculateTps(chrono::high_resolution_clock::time_point begin,
+                    chrono::high_resolution_clock::time_point end,
+                    u64 numOperations) {
+  // calculate secondas elaspsed
+  auto sec = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin)
+                 .count() /
+             1000.0;
+  return numOperations / sec;
+}
+
+static leanstore::LeanStore* GetLeanStore() {
+  static LeanStore* sStore = nullptr;
+  if (sStore != nullptr) {
+    return sStore;
+  }
+
+  // Config leanstore flags
+  // FLAGS_init = (FLAGS_ycsb_cmd == kCmdLoad);
+  FLAGS_init = true;
+  FLAGS_data_dir = "/tmp/ycsb/" + FLAGS_ycsb_workload;
+  FLAGS_log_dir = GetLogDir();
+  FLAGS_logtostderr = false;
+  FLAGS_logtostdout = false;
+
+  auto res = LeanStore::Open();
+  if (res) {
+    sStore = res.value();
+    return sStore;
+  }
+  std::cerr << "Failed to open leanstore: " << res.error().ToString()
+            << std::endl;
+  exit(res.error().Code());
+}
+
+static KVInterface* CreateTable() {
+  auto* leanstore = GetLeanStore();
+  auto tableName = "ycsb_" + FLAGS_ycsb_workload;
+  auto config = btree::BTreeGeneric::Config{
+      .mEnableWal = FLAGS_wal,
+      .mUseBulkInsert = FLAGS_bulk_insert,
+  };
+  btree::TransactionKV* table;
+  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
+    cr::Worker::My().StartTx();
+    SCOPED_DEFER(cr::Worker::My().CommitTx());
+    leanstore->RegisterTransactionKV(tableName, config, &table);
+  });
+  return table;
+}
+
+static KVInterface* GetTable() {
+  auto* leanstore = GetLeanStore();
+  auto tableName = "ycsb_" + FLAGS_ycsb_workload;
+  btree::TransactionKV* table;
+  leanstore->GetTransactionKV(tableName, &table);
+  return table;
+}
+
+static void GenYcsbKey(utils::ScrambledZipfGenerator& zipfRandom, u8* keyBuf) {
+  auto zipfKey = zipfRandom.rand();
+  auto zipfKeyStr = std::to_string(zipfKey);
+  auto prefixSize = FLAGS_ycsb_key_size - zipfKeyStr.size() > 0
+                        ? FLAGS_ycsb_key_size - zipfKeyStr.size()
+                        : 0;
+  std::memset(keyBuf, 'k', prefixSize);
+  std::memcpy(keyBuf + prefixSize, zipfKeyStr.data(), zipfKeyStr.size());
+}
+
+static void HandleCmdLoad() {
+  auto* table = CreateTable();
+  auto zipfRandom = utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count,
+                                                  FLAGS_zipf_factor);
+
+  // record the start and end time, calculating throughput in the end
+  auto start = std::chrono::high_resolution_clock::now();
+  std::cout << "Inserting " << FLAGS_ycsb_record_count << " values"
+            << std::endl;
+  SCOPED_DEFER({
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start)
+            .count();
+    std::cout << "Done inserting"
+              << ", time elapsed: " << duration / 1000000.0 << " seconds"
+              << ", throughput: "
+              << CalculateTps(start, end, FLAGS_ycsb_record_count) << " tps"
+              << std::endl;
+  });
+
+  utils::Parallelize::range(
+      FLAGS_worker_threads, FLAGS_ycsb_record_count,
+      [&](u64 workerId, u64 begin, u64 end) {
+        cr::CRManager::sInstance->ScheduleJobAsync(workerId, [&, begin, end]() {
+          for (u64 i = begin; i < end; i++) {
+            // generate key
+            u8 key[FLAGS_ycsb_key_size];
+            GenYcsbKey(zipfRandom, key);
+
+            // generate value
+            u8 val[FLAGS_ycsb_val_size];
+            utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
+
+            cr::Worker::My().StartTx();
+            table->Insert(Slice(key, FLAGS_ycsb_key_size),
+                          Slice(val, FLAGS_ycsb_val_size));
+            cr::Worker::My().CommitTx();
+          }
+        });
+      });
+  cr::CRManager::sInstance->JoinAll();
+}
+
+static void HandleCmdRun() {
+  auto* table = GetTable();
+  auto workloadType = static_cast<Workload>(FLAGS_ycsb_workload[0] - 'a');
+  auto workload = GetWorkloadSpec(workloadType);
+  auto zipfRandom = utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count,
+                                                  FLAGS_zipf_factor);
+  atomic<bool> keepRunning = true;
+  std::vector<std::atomic<u64>> threadCommitted(FLAGS_worker_threads);
+  std::vector<std::atomic<u64>> threadAborted(FLAGS_worker_threads);
+  // init counters
+  for (auto& c : threadCommitted) {
+    c = 0;
+  }
+  for (auto& a : threadAborted) {
+    a = 0;
+  }
+
+  for (u64 workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
+    cr::CRManager::sInstance->ScheduleJobAsync(workerId, [&]() {
+      u8 key[FLAGS_ycsb_key_size];
+      std::string valRead;
+      auto copyValue = [&](Slice val) {
+        valRead = std::string((char*)val.data(), val.size());
+      };
+
+      auto updateDescBufSize = UpdateDesc::Size(1);
+      u8 updateDescBuf[updateDescBufSize];
+      auto* updateDesc = UpdateDesc::CreateFrom(updateDescBuf);
+      updateDesc->mNumSlots = 1;
+      updateDesc->mUpdateSlots[0].mOffset = 0;
+      updateDesc->mUpdateSlots[0].mSize = FLAGS_ycsb_val_size;
+
+      auto updateCallBack = [&](MutableSlice toUpdate) {
+        auto newValSize = updateDesc->mUpdateSlots[0].mSize;
+        auto newVal = utils::RandomGenerator::RandAlphString(newValSize);
+        std::memcpy(toUpdate.Data(), newVal.data(), newVal.size());
+      };
+
+      while (keepRunning) {
+        JUMPMU_TRY() {
+          switch (workloadType) {
+          case Workload::kA:
+          case Workload::kB:
+          case Workload::kC: {
+            auto readProbability = utils::RandomGenerator::Rand(0, 100);
+            if (readProbability <= workload.mReadProportion * 100) {
+              // generate key for read
+              GenYcsbKey(zipfRandom, key);
+              cr::Worker::My().StartTx(TxMode::kShortRunning,
+                                       IsolationLevel::kSnapshotIsolation,
+                                       true);
+              table->Lookup(Slice(key, FLAGS_ycsb_key_size), copyValue);
+              cr::Worker::My().CommitTx();
+            } else {
+              // generate key for update
+              GenYcsbKey(zipfRandom, key);
+              // generate val for update
+              cr::Worker::My().StartTx();
+              table->UpdatePartial(Slice(key, FLAGS_ycsb_key_size),
+                                   updateCallBack, *updateDesc);
+              cr::Worker::My().CommitTx();
+            }
+            break;
+          }
+          default: {
+            LOG(FATAL) << "Unsupported workload type: "
+                       << static_cast<u8>(workloadType);
+          }
+          }
+          threadCommitted[cr::Worker::My().mWorkerId]++;
+        }
+        JUMPMU_CATCH() {
+          threadAborted[cr::Worker::My().mWorkerId]++;
+        }
+      }
+    });
+  }
+
+  // init counters
+  for (auto& c : threadCommitted) {
+    c = 0;
+  }
+  for (auto& a : threadAborted) {
+    a = 0;
+  }
+
+  auto reportPeriod = 1;
+  for (u64 i = 0; i < FLAGS_ycsb_run_for_seconds; i += reportPeriod) {
+    sleep(reportPeriod);
+    auto committed = 0;
+    auto aborted = 0;
+    for (auto& c : threadCommitted) {
+      committed += c.exchange(0);
+    }
+    for (auto& a : threadAborted) {
+      aborted += a.exchange(0);
+    }
+    auto abortRate = (aborted)*1.0 / (committed + aborted);
+    std::cout << "[" << i << " second] "
+              << "tps: " << committed * 1.0 / reportPeriod // tps
+              << ", committed:" << committed               // committed count
+              << ", conflicted: " << aborted               // aborted count
+              << ", conflict rate: " << abortRate          // abort rate
+              << std::endl;
+  }
+
+  // Shutdown threads
+  keepRunning = false;
+  cr::CRManager::sInstance->JoinAll();
+}
+
+} // namespace leanstore::ycsb
 
 using namespace leanstore;
 
-using YCSBKey = u64;
-using YCSBPayload = BytesPayload<8>;
-using KVTable = Relation<YCSBKey, YCSBPayload>;
-
-double CalculateMTPS(chrono::high_resolution_clock::time_point begin,
-                     chrono::high_resolution_clock::time_point end,
-                     u64 factor) {
-  double tps =
-      ((factor * 1.0 /
-        (chrono::duration_cast<chrono::microseconds>(end - begin).count() /
-         1000000.0)));
-  return (tps / 1000000.0);
-}
-
 int main(int argc, char** argv) {
-  gflags::SetUsageMessage("LeanStore YCSB");
+  gflags::SetUsageMessage("Ycsb Benchmark");
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-  chrono::high_resolution_clock::time_point begin, end;
+  // Transform ycsb_cmd to lowercase
+  std::transform(FLAGS_ycsb_cmd.begin(), FLAGS_ycsb_cmd.end(),
+                 FLAGS_ycsb_cmd.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
 
-  // Always init with the maximum number of threads (FLAGS_worker_threads)
-  LeanStore db;
-  auto& crm = *cr::CRManager::sInstance;
-  LeanStoreAdapter<KVTable> table;
-  crm.ScheduleJobSync(0,
-                      [&]() { table = LeanStoreAdapter<KVTable>(db, "YCSB"); });
+  // Transform ycsb_workload to lowercase
+  std::transform(FLAGS_ycsb_workload.begin(), FLAGS_ycsb_workload.end(),
+                 FLAGS_ycsb_workload.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
 
-  // db.registerConfigEntry("ycsb_read_ratio", FLAGS_ycsb_read_ratio);
-  // db.registerConfigEntry("ycsb_threads", FLAGS_ycsb_threads);
-  // db.registerConfigEntry("ycsb_ops_per_tx", FLAGS_ycsb_ops_per_tx);
+  if (FLAGS_ycsb_key_size < 8) {
+    LOG(FATAL) << "Key size must be >= 8";
+  }
 
-  auto isolationLevel = leanstore::ParseIsolationLevel(FLAGS_isolation_level);
-  const TxMode txType = TxMode::kShortRunning;
-
-  const u64 ycsb_tuple_count =
-      (FLAGS_ycsb_tuple_count)
-          ? FLAGS_ycsb_tuple_count
-          : FLAGS_target_gib * 1024 * 1024 * 1024 * 1.0 / 2.0 /
-                (sizeof(YCSBKey) + sizeof(YCSBPayload));
-
-  // Insert values
-  const u64 n = ycsb_tuple_count;
-
-  if (FLAGS_recover) {
-    // Warmup
-    if (FLAGS_ycsb_warmup) {
-      LOG(INFO) << "Warmup: Scanning...";
-      begin = chrono::high_resolution_clock::now();
-      utils::Parallelize::range(
-          FLAGS_worker_threads, n, [&](u64 t_i, u64 begin, u64 end) {
-            crm.ScheduleJobAsync(t_i, [&, begin, end]() {
-              for (u64 i = begin; i < end; i++) {
-                YCSBPayload result;
-                cr::Worker::My().StartTx(txType, isolationLevel);
-                table.lookup1(
-                    {static_cast<YCSBKey>(i)},
-                    [&](const KVTable& record) { result = record.mValue; });
-                cr::Worker::My().CommitTx();
-              }
-            });
-          });
-      crm.JoinAll();
-      end = chrono::high_resolution_clock::now();
-
-      LOG(INFO)
-          << "time elapsed = "
-          << (chrono::duration_cast<chrono::microseconds>(end - begin).count() /
-              1000000.0)
-          << " seconds";
-      LOG(INFO) << CalculateMTPS(begin, end, n) << " M tps";
-    }
+  if (FLAGS_ycsb_cmd == kCmdLoad) {
+    ycsb::HandleCmdLoad();
+  } else if (FLAGS_ycsb_cmd == kCmdRun) {
+    ycsb::HandleCmdLoad();
+    ycsb::HandleCmdRun();
   } else {
-    LOG(INFO) << "Inserting " << ycsb_tuple_count << " values";
-    begin = chrono::high_resolution_clock::now();
-    utils::Parallelize::range(
-        FLAGS_ycsb_insert_threads ? FLAGS_ycsb_insert_threads
-                                  : FLAGS_worker_threads,
-        n, [&](u64 t_i, u64 begin, u64 end) {
-          crm.ScheduleJobAsync(t_i, [&, begin, end]() {
-            for (u64 i = begin; i < end; i++) {
-              YCSBPayload payload;
-              utils::RandomGenerator::RandString(
-                  reinterpret_cast<u8*>(&payload), sizeof(YCSBPayload));
-              YCSBKey key = i;
-              cr::Worker::My().StartTx(
-                  txType, leanstore::IsolationLevel::kSnapshotIsolation);
-              table.insert({key}, {payload});
-              cr::Worker::My().CommitTx();
-            }
-          });
-        });
-    crm.JoinAll();
-    end = chrono::high_resolution_clock::now();
-    LOG(INFO)
-        << "time elapsed = "
-        << (chrono::duration_cast<chrono::microseconds>(end - begin).count() /
-            1000000.0)
-        << " seconds";
-    LOG(INFO) << CalculateMTPS(begin, end, n) << " M tps";
-
-    const u64 written_pages = BufferManager::sInstance->consumedPages();
-    const u64 mib = written_pages * FLAGS_page_size / 1024 / 1024;
-    LOG(INFO) << "Inserted volume: (pages, MiB) = (" << written_pages << ", "
-              << mib << ")";
+    LOG(FATAL) << "Unknown command: " << FLAGS_ycsb_cmd;
   }
 
-  auto zipf_random = std::make_unique<utils::ScrambledZipfGenerator>(
-      0, ycsb_tuple_count, FLAGS_zipf_factor);
-  cout << setprecision(4);
-
-  cout << "~Transactions" << endl;
-  db.startProfilingThread();
-  atomic<bool> keep_running = true;
-  atomic<u64> running_threads_counter = 0;
-  const u32 exec_threads =
-      FLAGS_ycsb_threads ? FLAGS_ycsb_threads : FLAGS_worker_threads;
-  for (u64 t_i = 0; t_i < exec_threads - ((FLAGS_ycsb_sleepy_thread) ? 1 : 0);
-       t_i++) {
-    crm.ScheduleJobAsync(t_i, [&]() {
-      running_threads_counter++;
-      while (keep_running) {
-        JUMPMU_TRY() {
-          YCSBKey key;
-          if (FLAGS_zipf_factor == 0) {
-            key = utils::RandomGenerator::RandU64(0, ycsb_tuple_count);
-          } else {
-            key = zipf_random->rand();
-          }
-          DCHECK(key < ycsb_tuple_count);
-          YCSBPayload result;
-          cr::Worker::My().StartTx(txType, isolationLevel);
-          for (u64 op_i = 0; op_i < FLAGS_ycsb_ops_per_tx; op_i++) {
-            if (FLAGS_ycsb_read_ratio == 100 ||
-                utils::RandomGenerator::RandU64(0, 100) <
-                    FLAGS_ycsb_read_ratio) {
-              table.lookup1({key},
-                            [&](const KVTable&) {}); // result = record.mValue;
-            } else {
-              const auto updateDescBufSize =
-                  sizeof(leanstore::UpdateDesc) +
-                  (sizeof(leanstore::UpdateSlotInfo) * 1);
-              u8 updateDescBuf[updateDescBufSize];
-              auto& updateDesc = *leanstore::UpdateDesc::From(updateDescBuf);
-              updateDesc.mNumSlots = 1;
-              updateDesc.mUpdateSlots[0].mOffset = offsetof(KVTable, mValue);
-              updateDesc.mUpdateSlots[0].mSize = sizeof(KVTable::mValue);
-
-              utils::RandomGenerator::RandString(
-                  reinterpret_cast<u8*>(&result), sizeof(YCSBPayload));
-
-              table.update1(
-                  {key}, [&](KVTable& rec) { rec.mValue = result; },
-                  updateDesc);
-            }
-          }
-          cr::Worker::My().CommitTx();
-          WorkerCounters::MyCounters().tx++;
-        }
-        JUMPMU_CATCH() {
-          WorkerCounters::MyCounters().tx_abort++;
-        }
-      }
-      running_threads_counter--;
-    });
-  }
-
-  if (FLAGS_ycsb_sleepy_thread) {
-    const leanstore::TxMode tx_type = FLAGS_enable_long_running_transaction
-                                          ? leanstore::TxMode::kLongRunning
-                                          : leanstore::TxMode::kShortRunning;
-    crm.ScheduleJobAsync(exec_threads - 1, [&]() {
-      running_threads_counter++;
-      while (keep_running) {
-        JUMPMU_TRY() {
-          cr::Worker::My().StartTx(
-              tx_type, leanstore::IsolationLevel::kSnapshotIsolation);
-          sleep(FLAGS_ycsb_sleepy_thread);
-          cr::Worker::My().CommitTx();
-        }
-        JUMPMU_CATCH() {
-        }
-      }
-      running_threads_counter--;
-    });
-  }
-
-  {
-    // Shutdown threads
-    sleep(FLAGS_run_for_seconds);
-    keep_running = false;
-    while (running_threads_counter) {
-    }
-    crm.JoinAll();
-  }
-  cout << "--------------------------------------------------------------------"
-          "-----------------"
-       << endl;
   return 0;
 }

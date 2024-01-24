@@ -79,8 +79,10 @@ public:
   inline static auto CreateLeanStore() {
     FLAGS_enable_eager_garbage_collection = true;
     FLAGS_worker_threads = 3;
-    FLAGS_recover = false;
+    FLAGS_init = true;
     FLAGS_data_dir = "/tmp/MVCCTest";
+    FLAGS_alsologtostderr = 1;
+    FLAGS_colorlogtostderr = 1;
 
     std::filesystem::path dirPath = FLAGS_data_dir;
     std::filesystem::remove_all(dirPath);
