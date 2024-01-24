@@ -63,9 +63,8 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
                << ", workerGSN=" << mLogging.GetCurrentGsn()
                << ", globalMinFlushedGSN=" << Logging::sGlobalMinFlushedGSN
                << ", globalMaxFlushedGSN=" << Logging::sGlobalMaxFlushedGSN;
-    if (!isReadOnly && FLAGS_wal) {
-      mLogging.ReserveWALEntrySimple(WALEntry::TYPE::TX_START);
-      mLogging.SubmitWALEntrySimple();
+    if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
+      mLogging.WriteSimpleWal(WALEntry::TYPE::TX_START);
     }
   });
 
@@ -151,8 +150,10 @@ void Worker::CommitTx() {
 
   mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
 
-  mLogging.WriteSimpleWal(WALEntry::TYPE::TX_COMMIT);
-  mLogging.WriteSimpleWal(WALEntry::TYPE::TX_FINISH);
+  if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
+    mLogging.WriteSimpleWal(WALEntry::TYPE::TX_COMMIT);
+    mLogging.WriteSimpleWal(WALEntry::TYPE::TX_FINISH);
+  }
 
   if (mLogging.mHasRemoteDependency) {
     std::unique_lock<std::mutex> g(mLogging.mTxToCommitMutex);
@@ -232,9 +233,11 @@ void Worker::AbortTx() {
       mWorkerId, mActiveTx.mStartTs, mActiveTx.mStartTs,
       [&](const TXID, const TREEID, const u8*, u64, const bool) {});
 
-  mLogging.WriteSimpleWal(WALEntry::TYPE::TX_ABORT);
-  // TODO: write compensation wal records between abort and finish
-  mLogging.WriteSimpleWal(WALEntry::TYPE::TX_FINISH);
+  if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
+    // TODO: write compensation wal records between abort and finish
+    mLogging.WriteSimpleWal(WALEntry::TYPE::TX_ABORT);
+    mLogging.WriteSimpleWal(WALEntry::TYPE::TX_FINISH);
+  }
 }
 
 } // namespace leanstore::cr

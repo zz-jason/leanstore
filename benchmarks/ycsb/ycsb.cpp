@@ -2,6 +2,7 @@
 #include "KVInterface.hpp"
 #include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
+#include "concurrency-recovery/Transaction.hpp"
 #include "concurrency-recovery/Worker.hpp"
 #include "shared-headers/Units.hpp"
 #include "shared/Schema.hpp"
@@ -128,21 +129,17 @@ static leanstore::LeanStore* GetLeanStore() {
 
 static KVInterface* CreateTable() {
   auto* leanstore = GetLeanStore();
-
   auto tableName = "ycsb_" + FLAGS_ycsb_workload;
   auto config = btree::BTreeGeneric::Config{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
-
   btree::TransactionKV* table;
-  // Worker 0, create a btree for test
   cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     leanstore->RegisterTransactionKV(tableName, config, &table);
   });
-
   return table;
 }
 
@@ -268,7 +265,9 @@ static void HandleCmdRun() {
             if (readProbability <= workload.mReadProportion * 100) {
               // generate key for read
               GenYcsbKey(zipfRandom, key);
-              cr::Worker::My().StartTx();
+              cr::Worker::My().StartTx(TxMode::kShortRunning,
+                                       IsolationLevel::kSnapshotIsolation,
+                                       true);
               table->Lookup(Slice(key, FLAGS_ycsb_key_size), copyValue);
               cr::Worker::My().CommitTx();
             } else {
