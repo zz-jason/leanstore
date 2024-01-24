@@ -210,7 +210,7 @@ inline void BufferFrameProvider::evictFlushedBf(
   TREEID btreeId = cooledBf.page.mBTreeId;
   optimisticGuard.JumpIfModifiedByOthers();
   ParentSwipHandler parentHandler =
-      TreeRegistry::sInstance->findParent(btreeId, cooledBf);
+      TreeRegistry::sInstance->FindParent(btreeId, cooledBf);
 
   DCHECK(parentHandler.mParentGuard.mState == GuardState::kOptimistic);
   BMExclusiveUpgradeIfNeeded parentWriteGuard(parentHandler.mParentGuard);
@@ -374,7 +374,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         TREEID btreeId = coolCandidate->page.mBTreeId;
         readGuard.JumpIfModifiedByOthers();
         auto parentHandler =
-            TreeRegistry::sInstance->findParent(btreeId, *coolCandidate);
+            TreeRegistry::sInstance->FindParent(btreeId, *coolCandidate);
 
         DCHECK(parentHandler.mParentGuard.mState == GuardState::kOptimistic);
         DCHECK(parentHandler.mParentGuard.mLatch !=
@@ -387,7 +387,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
                    .count());
         }
         readGuard.JumpIfModifiedByOthers();
-        auto checkResult = TreeRegistry::sInstance->checkSpaceUtilization(
+        auto checkResult = TreeRegistry::sInstance->CheckSpaceUtilization(
             coolCandidate->page.mBTreeId, *coolCandidate);
         if (checkResult == SpaceCheckResult::kRestartSameBf ||
             checkResult == SpaceCheckResult::kPickAnotherBf) {

@@ -1,6 +1,7 @@
 #include "BTreeGeneric.hpp"
 
 #include "Config.hpp"
+#include "LeanStore.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "shared-headers/Units.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
@@ -14,10 +15,12 @@ using namespace leanstore::storage;
 
 namespace leanstore::storage::btree {
 
-void BTreeGeneric::Init(TREEID btreeId, Config config) {
+void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId,
+                        Config config) {
+  this->mStore = store;
   this->mTreeId = btreeId;
   this->mConfig = config;
-  mMetaNodeSwip = &BufferManager::sInstance->AllocNewPage();
+  mMetaNodeSwip = &mStore->mBufferManager->AllocNewPage();
 
   HybridGuard guard(mMetaNodeSwip.AsBufferFrame().header.mLatch,
                     GuardState::kExclusive);
@@ -412,7 +415,7 @@ s16 BTreeGeneric::mergeLeftIntoRight(
 
   auto nodeBuf = utils::JumpScopedArray<u8>(BTreeNode::Size());
   {
-    auto tmp = BTreeNode::Init(nodeBuf->get(), true);
+    auto* tmp = BTreeNode::Init(nodeBuf->get(), true);
 
     tmp->setFences(Slice(newLeftUpperFence, newLeftUpperFenceSize),
                    xGuardedRight->GetUpperFence());
@@ -629,6 +632,42 @@ void BTreeGeneric::PrintInfo(u64 totalSize) {
        << ", space:" << (numAllPages * BTreeNode::Size()) / (float)totalSize
        << ", height:" << mHeight << ", rootCnt:" << guardedRoot->mNumSeps
        << ", freeSpaceAfterCompaction:" << FreeSpaceAfterCompaction() << endl;
+}
+
+StringMap BTreeGeneric::Serialize() {
+  DCHECK(mMetaNodeSwip.AsBufferFrame().page.mBTreeId == mTreeId);
+  auto& metaBf = mMetaNodeSwip.AsBufferFrame();
+  auto metaPageId = metaBf.header.mPageId;
+  mStore->mBufferManager->CheckpointBufferFrame(metaBf);
+  return {{kTreeId, std::to_string(mTreeId)},
+          {kHeight, std::to_string(mHeight.load())},
+          {kMetaPageId, std::to_string(metaPageId)}};
+}
+
+void BTreeGeneric::Deserialize(StringMap map) {
+  mTreeId = std::stoull(map[kTreeId]);
+  mHeight = std::stoull(map[kHeight]);
+  mMetaNodeSwip.evict(std::stoull(map[kMetaPageId]));
+
+  // load meta node to memory
+  HybridLatch dummyLatch;
+  HybridGuard dummyGuard(&dummyLatch);
+  dummyGuard.toOptimisticSpin();
+
+  u16 failcounter = 0;
+  while (true) {
+    JUMPMU_TRY() {
+      mMetaNodeSwip =
+          mStore->mBufferManager->ResolveSwipMayJump(dummyGuard, mMetaNodeSwip);
+      JUMPMU_BREAK;
+    }
+    JUMPMU_CATCH() {
+      failcounter++;
+      LOG_IF(FATAL, failcounter >= 100) << "Failed to load MetaNode";
+    }
+  }
+  mMetaNodeSwip.AsBufferFrame().header.mKeepInMemory = true;
+  DCHECK(mMetaNodeSwip.AsBufferFrame().page.mBTreeId == mTreeId);
 }
 
 } // namespace leanstore::storage::btree

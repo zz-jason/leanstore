@@ -19,6 +19,12 @@
 #include <shared_mutex>
 #include <vector>
 
+namespace leanstore {
+
+class LeanStore;
+
+} // namespace leanstore
+
 namespace leanstore::cr {
 
 static constexpr u16 kWorkerLimit = std::numeric_limits<WORKERID>::max();
@@ -239,10 +245,6 @@ public:
   static constexpr u64 kLongRunningBit = (1ull << 62);
   static constexpr u64 kOltpOlapSameBit = kLongRunningBit;
   static constexpr u64 kCleanBitsMask = ~(kRcBit | kLongRunningBit);
-
-  // TXID: [ kRcBit | kLongRunningBit  | id];
-  // LWM:  [ kRcBit | kOltpOlapSameBit | id];
-  static constexpr s64 kCrEntrySize = sizeof(WALEntrySimple);
 
 public:
   inline static Worker& My() {

@@ -1,6 +1,7 @@
 #include "CRMG.hpp"
 
 #include "GroupCommitter.hpp"
+#include "LeanStore.hpp"
 #include "concurrency-recovery/HistoryTree.hpp"
 #include "profiling/counters/CPUCounters.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
@@ -21,8 +22,9 @@ std::unique_ptr<CRManager> CRManager::sInstance = nullptr;
 std::atomic<u64> CRManager::sFsyncCounter = 0;
 std::atomic<u64> CRManager::sSsdOffset = 1 * 1024 * 1024 * 1024;
 
-CRManager::CRManager(s32 walFd)
-    : mGroupCommitter(nullptr),
+CRManager::CRManager(leanstore::LeanStore* store, s32 walFd)
+    : mStore(store),
+      mGroupCommitter(nullptr),
       mHistoryTreePtr(nullptr),
       mWorkerThreadsMeta(FLAGS_worker_threads) {
 
@@ -53,7 +55,7 @@ CRManager::CRManager(s32 walFd)
   }
 }
 
-void CRManager::stop() {
+void CRManager::Stop() {
   mGroupCommitter->Stop();
   mGroupCommitterStarted = false;
   mWorkerKeepRunning = false;
@@ -67,7 +69,7 @@ void CRManager::stop() {
 }
 
 CRManager::~CRManager() {
-  stop();
+  Stop();
 }
 
 void CRManager::runWorker(u64 workerId) {
@@ -132,7 +134,7 @@ void CRManager::setupHistoryTree() {
                                                    .mUseBulkInsert = true};
     // setup update tree
     std::string updateBtreeName = name + "_updates";
-    auto res = storage::btree::BasicKV::Create(updateBtreeName, config);
+    auto res = storage::btree::BasicKV::Create(mStore, updateBtreeName, config);
     if (!res) {
       LOG(FATAL) << "Failed to set up _updates tree"
                  << ", treeName=" << name
@@ -143,7 +145,7 @@ void CRManager::setupHistoryTree() {
 
     // setup delete tree
     std::string removeBtreeName = name + "_removes";
-    res = storage::btree::BasicKV::Create(removeBtreeName, config);
+    res = storage::btree::BasicKV::Create(mStore, removeBtreeName, config);
     if (!res) {
       LOG(FATAL) << "Failed to set up _removes tree"
                  << ", treeName=" << name

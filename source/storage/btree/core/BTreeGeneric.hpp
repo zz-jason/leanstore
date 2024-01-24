@@ -32,6 +32,8 @@ public:
   enum class XMergeReturnCode : u8 { kNothing, kFullMerge, kPartialMerge };
 
 public:
+  leanstore::LeanStore* mStore;
+
   TREEID mTreeId;
 
   BTreeType mTreeType = BTreeType::kGeneric;
@@ -50,7 +52,7 @@ public:
   virtual ~BTreeGeneric() override = default;
 
 public:
-  void Init(TREEID treeId, Config config);
+  void Init(leanstore::LeanStore* store, TREEID treeId, Config config);
 
   /// Try to merge the current node with its left or right sibling, reclaim the
   /// merged left or right sibling if successful.
@@ -79,7 +81,7 @@ public:
       BufferFrame& bf,
       std::function<bool(Swip<BufferFrame>&)> callback) override;
 
-  virtual ParentSwipHandler findParent(BufferFrame& childBf) override {
+  virtual ParentSwipHandler FindParent(BufferFrame& childBf) override {
     return BTreeGeneric::findParentMayJump(*this, childBf);
   }
 
@@ -88,7 +90,7 @@ public:
   /// synchronized with the ones in the buffer frame manager stack frame
   ///
   /// Called by buffer manager before eviction
-  virtual SpaceCheckResult checkSpaceUtilization(BufferFrame& bf) override;
+  virtual SpaceCheckResult CheckSpaceUtilization(BufferFrame& bf) override;
 
   /// Flush the page content in the buffer frame to disk
   ///
@@ -138,17 +140,16 @@ public:
                               GuardedBufferFrame<BTreeNode>& guardedTarget);
 
 public:
-  /// @brief
-  /// @note Note on Synchronization: it is called by the page provide
-  /// thread which are not allowed to block Therefore, we jump whenever we
-  /// encounter a latched node on our way Moreover, we jump if any page on the
-  /// path is already evicted or of the bf could not be found Pre: bfToFind is
-  /// not exclusively latched
+  /// Note on Synchronization: it is called by the page provide thread which are
+  /// not allowed to block. Therefore, we jump whenever we encounter a latched
+  /// node on our way Moreover, we jump if any page on the path is already
+  /// evicted or of the bf could not be found Pre: bfToFind is not exclusively
+  /// latched
   /// @tparam jumpIfEvicted
   /// @param btree the target tree which the parent is on
   /// @param bfToFind the target node to find parent for
   template <bool jumpIfEvicted = true>
-  static ParentSwipHandler findParent(BTreeGeneric& btree,
+  static ParentSwipHandler FindParent(BTreeGeneric& btree,
                                       BufferFrame& bfToFind);
 
   /// Removes a btree from disk, reclaim all the buffer frames in memory and
@@ -193,12 +194,12 @@ private:
 
   static ParentSwipHandler findParentMayJump(BTreeGeneric& btree,
                                              BufferFrame& bfToFind) {
-    return findParent<true>(btree, bfToFind);
+    return FindParent<true>(btree, bfToFind);
   }
 
   static ParentSwipHandler findParentEager(BTreeGeneric& btree,
                                            BufferFrame& bfToFind) {
-    return findParent<false>(btree, bfToFind);
+    return FindParent<false>(btree, bfToFind);
   }
 
 public:
@@ -281,7 +282,7 @@ inline void BTreeGeneric::IterateChildSwips(
   callback(childNode.mRightMostChildSwip.CastTo<BufferFrame>());
 }
 
-inline SpaceCheckResult BTreeGeneric::checkSpaceUtilization(BufferFrame& bf) {
+inline SpaceCheckResult BTreeGeneric::CheckSpaceUtilization(BufferFrame& bf) {
   if (!FLAGS_xmerge) {
     return SpaceCheckResult::kNothing;
   }
@@ -323,42 +324,6 @@ inline void BTreeGeneric::Checkpoint(BufferFrame& bf, void* dest) {
   }
 }
 
-inline StringMap BTreeGeneric::Serialize() {
-  DCHECK(mMetaNodeSwip.AsBufferFrame().page.mBTreeId == mTreeId);
-  auto& metaBf = mMetaNodeSwip.AsBufferFrame();
-  auto metaPageId = metaBf.header.mPageId;
-  BufferManager::sInstance->CheckpointBufferFrame(metaBf);
-  return {{kTreeId, std::to_string(mTreeId)},
-          {kHeight, std::to_string(mHeight.load())},
-          {kMetaPageId, std::to_string(metaPageId)}};
-}
-
-inline void BTreeGeneric::Deserialize(StringMap map) {
-  mTreeId = std::stoull(map[kTreeId]);
-  mHeight = std::stoull(map[kHeight]);
-  mMetaNodeSwip.evict(std::stoull(map[kMetaPageId]));
-
-  // load meta node to memory
-  HybridLatch dummyLatch;
-  HybridGuard dummyGuard(&dummyLatch);
-  dummyGuard.toOptimisticSpin();
-
-  u16 failcounter = 0;
-  while (true) {
-    JUMPMU_TRY() {
-      mMetaNodeSwip = BufferManager::sInstance->ResolveSwipMayJump(
-          dummyGuard, mMetaNodeSwip);
-      JUMPMU_BREAK;
-    }
-    JUMPMU_CATCH() {
-      failcounter++;
-      LOG_IF(FATAL, failcounter >= 100) << "Failed to load MetaNode";
-    }
-  }
-  mMetaNodeSwip.AsBufferFrame().header.mKeepInMemory = true;
-  DCHECK(mMetaNodeSwip.AsBufferFrame().page.mBTreeId == mTreeId);
-}
-
 template <LatchMode mode>
 inline void BTreeGeneric::FindLeafCanJump(
     Slice key, GuardedBufferFrame<BTreeNode>& guardedTarget) {
@@ -388,7 +353,7 @@ inline void BTreeGeneric::FindLeafCanJump(
 }
 
 template <bool jumpIfEvicted>
-inline ParentSwipHandler BTreeGeneric::findParent(BTreeGeneric& btree,
+inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
                                                   BufferFrame& bfToFind) {
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().dt_find_parent[btree.mTreeId]++;

@@ -68,8 +68,6 @@ private:
 /// visibility check are stored here.
 class ConcurrencyControl {
 public:
-
-public:
   ConcurrencyControl(u64 numWorkers)
       : mHistoryTree(nullptr),
         mCommitTree(numWorkers) {

@@ -1,6 +1,7 @@
 #include "TransactionKV.hpp"
 
 #include "KVInterface.hpp"
+#include "LeanStore.hpp"
 #include "concurrency-recovery/Worker.hpp"
 #include "shared-headers/Units.hpp"
 #include "storage/btree/BasicKV.hpp"
@@ -14,6 +15,31 @@
 #include <glog/logging.h>
 
 namespace leanstore::storage::btree {
+
+TransactionKV* TransactionKV::Create(leanstore::LeanStore* store,
+                                     const std::string& treeName,
+                                     Config& config, BasicKV* graveyard) {
+  auto [treePtr, treeId] = store->mTreeRegistry->CreateTree(treeName, [&]() {
+    return std::unique_ptr<BufferManagedTree>(
+        static_cast<BufferManagedTree*>(new TransactionKV()));
+  });
+  if (treePtr == nullptr) {
+    LOG(ERROR) << "Failed to create TransactionKV, treeName has been taken"
+               << ", treeName=" << treeName;
+    return nullptr;
+  }
+  auto* tree = dynamic_cast<TransactionKV*>(treePtr);
+  tree->Init(store, treeId, config, graveyard);
+
+  // TODO(jian.z): record WAL
+  return tree;
+}
+
+void TransactionKV::Init(leanstore::LeanStore* store, TREEID treeId,
+                         Config config, BasicKV* graveyard) {
+  this->mGraveyard = graveyard;
+  BasicKV::Init(store, treeId, config);
+}
 
 OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
   DCHECK(cr::Worker::My().IsTxStarted())
@@ -621,7 +647,7 @@ bool TransactionKV::UpdateInFatTuple(BTreeExclusiveIterator& xIter, Slice key,
   }
 }
 
-SpaceCheckResult TransactionKV::checkSpaceUtilization(BufferFrame& bf) {
+SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
   if (!FLAGS_xmerge) {
     return SpaceCheckResult::kNothing;
   }
@@ -634,7 +660,7 @@ SpaceCheckResult TransactionKV::checkSpaceUtilization(BufferFrame& bf) {
 
   GuardedBufferFrame<BTreeNode> guardedNode(std::move(bfGuard), &bf);
   if (!guardedNode->mIsLeaf || !triggerPageWiseGarbageCollection(guardedNode)) {
-    return BTreeGeneric::checkSpaceUtilization(bf);
+    return BTreeGeneric::CheckSpaceUtilization(bf);
   }
 
   guardedNode.ToExclusiveMayJump();
@@ -654,7 +680,7 @@ SpaceCheckResult TransactionKV::checkSpaceUtilization(BufferFrame& bf) {
   guardedNode->mHasGarbage = false;
   guardedNode.unlock();
 
-  const SpaceCheckResult result = BTreeGeneric::checkSpaceUtilization(bf);
+  const SpaceCheckResult result = BTreeGeneric::CheckSpaceUtilization(bf);
   if (result == SpaceCheckResult::kPickAnotherBf) {
     return SpaceCheckResult::kPickAnotherBf;
   }

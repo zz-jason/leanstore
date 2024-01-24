@@ -49,14 +49,14 @@ TEST_F(OptimisticGuardedTest, Set) {
   storage::OptimisticGuarded<TestPayload> guardedVal({0, 100});
 
   // Worker 0, set the guardedVal 100 times
-  cr::CRManager::sInstance->ScheduleJobAsync(0, [&]() {
+  GetLeanStore()->mCRManager->ScheduleJobAsync(0, [&]() {
     for (s64 i = 0; i < 100; i++) {
       guardedVal.Set(TestPayload{i, 100 - i});
     }
   });
 
   // Worker 1, read the guardedVal 200 times
-  cr::CRManager::sInstance->ScheduleJobAsync(1, [&]() {
+  GetLeanStore()->mCRManager->ScheduleJobAsync(1, [&]() {
     TestPayload copiedVal;
     u64 version;
     for (s64 i = 0; i < 200; i++) {
@@ -70,21 +70,21 @@ TEST_F(OptimisticGuardedTest, Set) {
   });
 
   // Wait for all jobs to finish
-  cr::CRManager::sInstance->JoinAll();
+  GetLeanStore()->mCRManager->JoinAll();
 }
 
 TEST_F(OptimisticGuardedTest, UpdateAttribute) {
   storage::OptimisticGuarded<TestPayload> guardedVal({0, 100});
 
   // Worker 0, update the guardedVal 100 times
-  cr::CRManager::sInstance->ScheduleJobAsync(0, [&]() {
+  GetLeanStore()->mCRManager->ScheduleJobAsync(0, [&]() {
     for (s64 i = 0; i < 100; i++) {
       guardedVal.UpdateAttribute(&TestPayload::mA, i);
     }
   });
 
   // Worker 1, read the guardedVal 200 times
-  cr::CRManager::sInstance->ScheduleJobAsync(1, [&]() {
+  GetLeanStore()->mCRManager->ScheduleJobAsync(1, [&]() {
     TestPayload copiedVal;
     u64 version;
     for (s64 i = 0; i < 200; i++) {
@@ -98,7 +98,7 @@ TEST_F(OptimisticGuardedTest, UpdateAttribute) {
   });
 
   // Wait for all jobs to finish
-  cr::CRManager::sInstance->JoinAll();
+  GetLeanStore()->mCRManager->JoinAll();
 }
 
 } // namespace leanstore::test

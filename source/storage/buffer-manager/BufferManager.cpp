@@ -2,6 +2,7 @@
 
 #include "BufferFrame.hpp"
 #include "Config.hpp"
+#include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
 #include "concurrency-recovery/GroupCommitter.hpp"
 #include "concurrency-recovery/Recovery.hpp"
@@ -27,7 +28,9 @@ thread_local BufferFrame* BufferManager::sTlsLastReadBf = nullptr;
 
 std::unique_ptr<BufferManager> BufferManager::sInstance = nullptr;
 
-BufferManager::BufferManager(s32 fd) : mPageFd(fd) {
+BufferManager::BufferManager(leanstore::LeanStore* store, s32 fd)
+    : mStore(store),
+      mPageFd(fd) {
   mNumBfs = FLAGS_buffer_pool_size / BufferFrame::Size();
   const u64 totalMemSize = BufferFrame::Size() * (mNumBfs + mNumSaftyBfs);
 
@@ -140,7 +143,7 @@ void BufferManager::CheckpointAllBufferFrames() {
       auto& bf = *reinterpret_cast<BufferFrame*>(bfAddr);
       bf.header.mLatch.LockExclusively();
       if (!bf.isFree()) {
-        TreeRegistry::sInstance->Checkpoint(bf.page.mBTreeId, bf, buffer);
+        mStore->mTreeRegistry->Checkpoint(bf.page.mBTreeId, bf, buffer);
         auto ret = pwrite(mPageFd, buffer, FLAGS_page_size,
                           bf.header.mPageId * FLAGS_page_size);
         DCHECK_EQ(ret, FLAGS_page_size);
@@ -155,7 +158,7 @@ void BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
   auto* buffer = alignedBuffer.Get();
   bf.header.mLatch.LockExclusively();
   if (!bf.isFree()) {
-    TreeRegistry::sInstance->Checkpoint(bf.page.mBTreeId, bf, buffer);
+    mStore->mTreeRegistry->Checkpoint(bf.page.mBTreeId, bf, buffer);
     auto ret = pwrite(mPageFd, buffer, FLAGS_page_size,
                       bf.header.mPageId * FLAGS_page_size);
     DCHECK_EQ(ret, FLAGS_page_size);
@@ -163,10 +166,10 @@ void BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
   bf.header.mLatch.UnlockExclusively();
 }
 
-void BufferManager::RecoveryFromDisk() {
+void BufferManager::RecoverFromDisk() {
   auto recovery = std::make_unique<leanstore::cr::Recovery>(
-      leanstore::cr::CRManager::sInstance->mGroupCommitter->mWalFd, 0,
-      leanstore::cr::CRManager::sInstance->mGroupCommitter->mWalSize);
+      mStore->mCRManager->mGroupCommitter->mWalFd, 0,
+      mStore->mCRManager->mGroupCommitter->mWalSize);
   recovery->Run();
 }
 

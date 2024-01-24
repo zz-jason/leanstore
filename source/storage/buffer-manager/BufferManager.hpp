@@ -46,6 +46,9 @@ private:
   friend class leanstore::profiling::BMTable;
 
 public:
+  /// The LeanStore instance.
+  leanstore::LeanStore* mStore;
+
   /// All the managed buffer frames in the memory.
   u8* mBufferPool;
 
@@ -67,7 +70,7 @@ public:
   std::vector<std::unique_ptr<BufferFrameProvider>> mBfProviders;
 
 public:
-  BufferManager(s32 pageFd);
+  BufferManager(leanstore::LeanStore* store, s32 pageFd);
 
   ~BufferManager();
 
@@ -146,7 +149,7 @@ public:
   /// Checkpoints all the buffer frames.
   void CheckpointAllBufferFrames();
 
-  void RecoveryFromDisk();
+  void RecoverFromDisk();
 
   StringMap Serialize();
 

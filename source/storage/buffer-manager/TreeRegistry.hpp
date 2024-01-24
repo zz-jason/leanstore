@@ -55,12 +55,12 @@ public:
     LOG(FATAL) << "BufferManagedTree::IterateChildSwips is unimplemented";
   }
 
-  virtual ParentSwipHandler findParent(BufferFrame&) {
-    LOG(FATAL) << "BufferManagedTree::findParent is unimplemented";
+  virtual ParentSwipHandler FindParent(BufferFrame&) {
+    LOG(FATAL) << "BufferManagedTree::FindParent is unimplemented";
   }
 
-  virtual SpaceCheckResult checkSpaceUtilization(BufferFrame&) {
-    LOG(FATAL) << "BufferManagedTree::checkSpaceUtilization is unimplemented ";
+  virtual SpaceCheckResult CheckSpaceUtilization(BufferFrame&) {
+    LOG(FATAL) << "BufferManagedTree::CheckSpaceUtilization is unimplemented ";
   }
 
   virtual void Checkpoint(BufferFrame&, void*) {
@@ -98,28 +98,21 @@ using TreeIndexByName = std::unordered_map<std::string, TreeMap::iterator>;
 
 class TreeRegistry {
 public:
-  /**
-   * mMutex protects concurrent access to mTrees, mTreeIndexByName, and the
-   * lifetime of a managed tree object, i.e. the tree should stay valid during
-   * read/write access.
-   */
+  /// mMutex protects concurrent access to mTrees, mTreeIndexByName, and the
+  /// lifetime of a managed tree object, i.e. the tree should stay valid during
+  /// read/write access.
   std::shared_mutex mMutex;
 
-  /**
-   * mTrees records and manages the lifetime of all the trees whose content are
-   * stored the buffer pool, for example BTrees.
-   */
+  /// mTrees records and manages the lifetime of all the trees whose content are
+  /// stored the buffer pool, for example BTrees.
   TreeMap mTrees;
 
-  /**
-   *
-   */
+  /// mTreeIndexByName is a secondary index for mTrees, it allows to find a tree
+  /// by its name.
   TreeIndexByName mTreeIndexByName;
 
-  /**
-   * Tree ID allocator, tree IDs are global unique. IDs of destoried tree are
-   * not recycled.
-   */
+  /// Tree ID allocator, tree IDs are global unique. IDs of destoried tree are
+  /// not recycled.
   std::atomic<TREEID> mTreeIdAllocator = 0;
 
 public:
@@ -128,9 +121,7 @@ public:
     return allocatedTreeId;
   }
 
-  /**
-   * Creates a tree managed by buffer manager.
-   */
+  /// Creates a tree managed by buffer manager.
   inline std::tuple<BufferManagedTree*, TREEID> CreateTree(
       const std::string& treeName,
       std::function<std::unique_ptr<BufferManagedTree>()> ctor) {
@@ -206,9 +197,8 @@ public:
     if (it != mTreeIndexByName.end()) {
       auto treeIt = it->second;
       return std::get<0>(treeIt->second).get();
-    } else {
-      return nullptr;
     }
+    return nullptr;
   }
 
   inline void IterateChildSwips(
@@ -222,23 +212,23 @@ public:
     tree->IterateChildSwips(bf, callback);
   }
 
-  inline ParentSwipHandler findParent(TREEID treeId, BufferFrame& bf) {
+  inline ParentSwipHandler FindParent(TREEID treeId, BufferFrame& bf) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
     DLOG_IF(FATAL, it == mTrees.end())
         << "BufferManagedTree not find, treeId=" << treeId;
     auto& [tree, treeName] = it->second;
-    return tree->findParent(bf);
+    return tree->FindParent(bf);
   }
 
-  inline SpaceCheckResult checkSpaceUtilization(TREEID treeId,
+  inline SpaceCheckResult CheckSpaceUtilization(TREEID treeId,
                                                 BufferFrame& bf) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
     DLOG_IF(FATAL, it == mTrees.end())
         << "BufferManagedTree not find, treeId=" << treeId;
     auto& [tree, treeName] = it->second;
-    return tree->checkSpaceUtilization(bf);
+    return tree->CheckSpaceUtilization(bf);
   }
 
   // Pre: bf is shared/exclusive latched

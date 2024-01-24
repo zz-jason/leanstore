@@ -17,7 +17,6 @@
 namespace leanstore::test {
 
 static void BenchUpdateInsert(benchmark::State& state) {
-  FLAGS_enable_print_btree_stats_on_exit = true;
   FLAGS_wal = true;
   FLAGS_bulk_insert = false;
   FLAGS_worker_threads = 4;
