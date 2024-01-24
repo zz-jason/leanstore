@@ -1,3 +1,4 @@
+#include "Config.hpp"
 #include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
 #include "storage/btree/core/BTreeGeneric.hpp"
@@ -20,7 +21,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
   FLAGS_wal = true;
   FLAGS_bulk_insert = false;
   FLAGS_worker_threads = 4;
-  FLAGS_recover = false;
+  FLAGS_init = true;
   FLAGS_data_dir = "/tmp/InsertUpdateBench";
   FLAGS_wal_fsync = false;
 

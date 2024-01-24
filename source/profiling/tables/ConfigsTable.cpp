@@ -58,9 +58,6 @@ void ConfigsTable::open() {
   columns.emplace("c_btree_hints",
                   [&](Column& col) { col << FLAGS_btree_hints; });
 
-  columns.emplace("c_zipf_factor",
-                  [&](Column& col) { col << FLAGS_zipf_factor; });
-
   columns.emplace("c_wal", [&](Column& col) { col << FLAGS_wal; });
   columns.emplace("c_wal_io_hack", [&](Column& col) { col << 1; });
   columns.emplace("c_wal_fsync", [&](Column& col) { col << FLAGS_wal_fsync; });

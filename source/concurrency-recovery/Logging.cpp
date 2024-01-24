@@ -15,65 +15,49 @@ namespace cr {
 std::atomic<u64> Logging::sGlobalMinFlushedGSN = 0;
 std::atomic<u64> Logging::sGlobalMaxFlushedGSN = 0;
 
-/// @brief Calculate the free space left in the wal ring buffer.
-/// @return Size of the free space
-u32 Logging::walFreeSpace() {
-  const auto flushed = mWalFlushed.load();
-  if (flushed == mWalBuffered) {
-    return FLAGS_wal_buffer_size;
-  }
-  if (flushed < mWalBuffered) {
-    return flushed + (FLAGS_wal_buffer_size - mWalBuffered);
-  }
-  return flushed - mWalBuffered;
-}
-
 /// @brief Calculate the continuous free space left in the wal ring buffer.
 /// @return Size of the contiguous free space
 u32 Logging::walContiguousFreeSpace() {
   const auto flushed = mWalFlushed.load();
-  if (flushed == mWalBuffered) {
-    return FLAGS_wal_buffer_size;
-  }
-  if (flushed < mWalBuffered) {
+  if (flushed <= mWalBuffered) {
     return FLAGS_wal_buffer_size - mWalBuffered;
   }
   return flushed - mWalBuffered;
 }
 
-void Logging::WalEnsureEnoughSpace(u32 requiredBytes) {
-  if (!FLAGS_wal) {
-    return;
-  }
-
-  u32 walEntryBytes = requiredBytes + Worker::kCrEntrySize;
-  u32 totalRequiredBytes = walEntryBytes;
-  if ((FLAGS_wal_buffer_size - mWalBuffered) < walEntryBytes) {
-    totalRequiredBytes += FLAGS_wal_buffer_size - mWalBuffered;
-  }
+void Logging::ReserveContiguousBuffer(u32 bytesRequired) {
+  SCOPED_DEFER({
+    DCHECK(bytesRequired <= walContiguousFreeSpace())
+        << "bytesRequired=" << bytesRequired
+        << ", walContiguousFreeSpace()=" << walContiguousFreeSpace();
+  });
 
   // Spin until there is enough space. The wal ring buffer space is reclaimed
   // when the group commit thread commits the written wal entries.
-  while (walFreeSpace() < totalRequiredBytes) {
+  while (true) {
+    const auto flushed = mWalFlushed.load();
+    if (flushed <= mWalBuffered) {
+      // carraige return, consume the last bytes from mWalBuffered to the end
+      if (FLAGS_wal_buffer_size - mWalBuffered < bytesRequired) {
+        auto entrySize = FLAGS_wal_buffer_size - mWalBuffered;
+        auto entryType = WALEntry::TYPE::CARRIAGE_RETURN;
+        auto* entryPtr = mWalBuffer + mWalBuffered;
+        auto* entry = new (entryPtr) WALEntrySimple(0, entrySize, entryType);
+        entry->mCRC32 = entry->ComputeCRC32();
+        mWalBuffered = 0;
+        publishWalBufferedOffset();
+        continue;
+      }
+      // Have enough space from mWalBuffered to the end
+      return;
+    }
+
+    if (flushed - mWalBuffered < bytesRequired) {
+      // wait for group commit thread to commit the written wal entries
+      continue;
+    }
+    return;
   }
-
-  // Carriage Return. Start a new round on the wal ring buffer.
-  if (walContiguousFreeSpace() < walEntryBytes) {
-    // Always keep place for CR entry
-    auto entrySize = FLAGS_wal_buffer_size - mWalBuffered;
-    auto entryType = WALEntry::TYPE::CARRIAGE_RETURN;
-    auto* entryPtr = mWalBuffer + mWalBuffered;
-    auto* entry = new (entryPtr) WALEntrySimple(0, entrySize, entryType);
-
-    entry->mCRC32 = entry->ComputeCRC32();
-
-    // start a new round
-    mWalBuffered = 0;
-    publishWalBufferedOffset();
-  }
-
-  DCHECK(walContiguousFreeSpace() >= requiredBytes);
-  DCHECK(mWalBuffered + walEntryBytes <= FLAGS_wal_buffer_size);
 }
 
 /// Reserve space and initialize a WALEntrySimple when a transaction is started,
@@ -82,7 +66,7 @@ void Logging::WalEnsureEnoughSpace(u32 requiredBytes) {
 WALEntrySimple& Logging::ReserveWALEntrySimple(WALEntry::TYPE type) {
   SCOPED_DEFER(mPrevLSN = mActiveWALEntrySimple->lsn;);
 
-  WalEnsureEnoughSpace(sizeof(WALEntrySimple));
+  ReserveContiguousBuffer(sizeof(WALEntrySimple));
   auto* entryPtr = mWalBuffer + mWalBuffered;
   auto entrySize = sizeof(WALEntrySimple);
   std::memset(entryPtr, 0, entrySize);

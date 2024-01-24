@@ -26,7 +26,7 @@ protected:
 
   ~RecoveringTest() = default;
 
-  static u64 RandomWorkerId() {
+  static u64 randomWorkerId() {
     auto numWorkers = FLAGS_worker_threads;
     return utils::RandomGenerator::Rand<u64>(0, numWorkers);
   }
@@ -43,7 +43,7 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
   std::filesystem::create_directories(dirPath);
 
   FLAGS_worker_threads = 2;
-  FLAGS_recover = false;
+  FLAGS_init = true;
   mLeanStore = std::make_unique<LeanStore>();
   TransactionKV* btree;
 
@@ -63,8 +63,6 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
 
-  // TODO(jian.z): need to create btree within a transaction, otherwise
-  // transactions depend on the btree creator worker may hang on commit.
   cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
@@ -92,7 +90,7 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
 
   // meta file should be serialized during destructor.
   mLeanStore.reset(nullptr);
-  FLAGS_recover = true;
+  FLAGS_init = false;
 
   // recreate the store, it's expected that all the meta and pages are rebult.
   mLeanStore = std::make_unique<LeanStore>();
@@ -140,7 +138,7 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
   std::filesystem::create_directories(dirPath);
 
   FLAGS_worker_threads = 2;
-  FLAGS_recover = false;
+  FLAGS_init = true;
   mLeanStore = std::make_unique<LeanStore>();
   TransactionKV* btree;
 
@@ -181,7 +179,7 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
   LS_DEBUG_ENABLE("skip_CheckpointAllBufferFrames");
   SCOPED_DEFER(LS_DEBUG_DISABLE("skip_CheckpointAllBufferFrames"));
   mLeanStore.reset(nullptr);
-  FLAGS_recover = true;
+  FLAGS_init = false;
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries

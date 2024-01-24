@@ -30,7 +30,7 @@ protected:
 public:
   inline static auto CreateLeanStore() {
     FLAGS_worker_threads = 2;
-    FLAGS_recover = false;
+    FLAGS_init = true;
     FLAGS_data_dir = "/tmp/OptimisticGuardedTest";
 
     std::filesystem::path dirPath = FLAGS_data_dir;

@@ -5,11 +5,11 @@
 static bool PageSizeValidator(const char* flagname, google::uint32 value) {
   google::uint32 kMaxPageSize = 4096;
   if (value > kMaxPageSize) {
+    LOG(FATAL) << "Invalid value for --" << flagname << ": " << value
+               << ". Must be <= " << kMaxPageSize << " Bytes";
     return false;
   }
-  LOG(FATAL) << "Invalid value for --" << flagname << ": " << value
-             << ". Must be <= " << kMaxPageSize << " Bytes";
-  return false;
+  return true;
 }
 
 // Buffer management
@@ -56,8 +56,6 @@ DEFINE_bool(smt, true, "Simultaneous multithreading");
 DEFINE_bool(root, false, "does this process have root rights ?");
 // -------------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------------
-DEFINE_string(zipf_path, "/bulk/zipf", "");
-DEFINE_double(zipf_factor, 0.0, "");
 DEFINE_double(
     target_gib, 0.0,
     "size of dataset in gib (exact interpretation depends on the driver)");
@@ -114,7 +112,8 @@ DEFINE_bool(wal, true, "Whether wal is enabled");
 DEFINE_bool(wal_fsync, true, "Whether to explicitly flush wal to disk");
 DEFINE_uint64(wal_buffer_size, 1024 * 1024 * 10,
               "WAL buffer size for each worker (Bytes)");
-DEFINE_bool(recover, false, "When enabled, the store is recovered from WAL");
+
+DEFINE_bool(init, true, "When enabled, the store is initialized from scratch");
 
 // MVCC && GC
 DEFINE_string(isolation_level, "si",

@@ -7,7 +7,7 @@
 
 #include <gtest/gtest.h>
 
-#include <filesystem>
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -25,23 +25,20 @@ protected:
   ~TransactionKVTest() = default;
 
 public:
-  inline static auto CreateLeanStore() {
-    FLAGS_enable_print_btree_stats_on_exit = true;
-    FLAGS_wal = true;
-    FLAGS_bulk_insert = false;
-    FLAGS_worker_threads = 3;
-    FLAGS_recover = false;
-    FLAGS_data_dir = "/tmp/TransactionKVTest";
-
-    std::filesystem::path dirPath = FLAGS_data_dir;
-    std::filesystem::remove_all(dirPath);
-    std::filesystem::create_directories(dirPath);
-    return std::make_unique<leanstore::LeanStore>();
-  }
-
   inline static leanstore::LeanStore* GetLeanStore() {
-    static std::unique_ptr<LeanStore> sTore = CreateLeanStore();
-    return sTore.get();
+    static LeanStore* sStore = nullptr;
+    if (sStore != nullptr) {
+      return sStore;
+    }
+
+    FLAGS_init = true;
+    FLAGS_logtostdout = true;
+    FLAGS_data_dir = "/tmp/TransactionKVTest";
+    FLAGS_worker_threads = 3;
+    FLAGS_enable_eager_garbage_collection = true;
+    auto res = LeanStore::Open();
+    sStore = res.value();
+    return sStore;
   }
 };
 

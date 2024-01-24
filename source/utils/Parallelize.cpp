@@ -1,6 +1,5 @@
 #include "Parallelize.hpp"
 
-#include "shared-headers/Exceptions.hpp"
 #include "shared-headers/Units.hpp"
 
 #include <glog/logging.h>
@@ -14,18 +13,17 @@
 namespace leanstore {
 namespace utils {
 
-void Parallelize::range(
-    u64 threads_count, u64 n,
-    std::function<void(u64 t_i, u64 begin, u64 end)> callback) {
-  const u64 block_size = n / threads_count;
-  ENSURE(block_size > 0);
-  for (u64 t_i = 0; t_i < threads_count; t_i++) {
-    u64 begin = (t_i * block_size);
-    u64 end = begin + (block_size);
-    if (t_i == threads_count - 1) {
+void Parallelize::range(u64 numThreads, u64 n,
+                        std::function<void(u64, u64, u64)> callback) {
+  const u64 jobsPerThread = n / numThreads;
+  DCHECK(jobsPerThread > 0) << "Jobs per thread must be > 0";
+  for (u64 i = 0; i < numThreads; i++) {
+    u64 begin = (i * jobsPerThread);
+    u64 end = begin + (jobsPerThread);
+    if (i == numThreads - 1) {
       end = n;
     }
-    callback(t_i, begin, end);
+    callback(i, begin, end);
   }
 }
 
@@ -57,23 +55,23 @@ void Parallelize::parallelRange(
   }
 }
 
-void Parallelize::parallelRange(u64 a, u64 b, u64 n_threads,
+void Parallelize::parallelRange(u64 a, u64 b, u64 numThreads,
                                 std::function<void(u64 i)> callback) {
   std::vector<std::thread> threads;
   std::mutex m;
   std::condition_variable cv;
-  u64 active_threads = 0;
-  // -------------------------------------------------------------------------------------
+  u64 numActiveThreads = 0;
+
   while (a <= b) {
     std::unique_lock<std::mutex> lk(m);
-    cv.wait(lk, [&] { return active_threads < n_threads; });
-    active_threads++;
+    cv.wait(lk, [&] { return numActiveThreads < numThreads; });
+    numActiveThreads++;
     threads.emplace_back(
         [&](u64 i) {
           callback(i);
           {
             std::unique_lock<std::mutex> lk(m);
-            active_threads--;
+            numActiveThreads--;
           }
           cv.notify_all();
         },
@@ -83,6 +81,6 @@ void Parallelize::parallelRange(u64 a, u64 b, u64 n_threads,
     thread.join();
   }
 }
-// -------------------------------------------------------------------------------------
+
 } // namespace utils
 } // namespace leanstore

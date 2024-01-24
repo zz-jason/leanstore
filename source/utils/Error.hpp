@@ -72,6 +72,10 @@ public:
     return std::format("ER-{}: {}", static_cast<u64>(mCode), mMessage);
   }
 
+  inline u64 Code() const {
+    return static_cast<u64>(mCode);
+  }
+
 public:
   template <typename... Args> inline static Error General(Args&&... args) {
     const std::string msg = "{}";

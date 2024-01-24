@@ -1,5 +1,6 @@
 #include "LeanStore.hpp"
 
+#include "Config.hpp"
 #include "concurrency-recovery/CRMG.hpp"
 #include "profiling/tables/BMTable.hpp"
 #include "profiling/tables/CPUTable.hpp"
@@ -17,8 +18,13 @@
 #include <rapidjson/stringbuffer.h>
 #include <tabulate/table.hpp>
 
+#include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <locale>
+#include <memory>
+#include <mutex>
+#include <shared_mutex>
 #include <sstream>
 
 #include <linux/fs.h>
@@ -35,11 +41,34 @@ namespace leanstore {
 FlagListString LeanStore::sPersistedStringFlags = {};
 FlagListS64 LeanStore::sPersistedS64Flags = {};
 
+std::expected<LeanStore*, utils::Error> LeanStore::Open() {
+  static std::shared_mutex sMutex;
+  static std::unique_ptr<LeanStore> sLeanstore = nullptr;
+
+  std::shared_lock readGuard(sMutex);
+  if (sLeanstore != nullptr) {
+    return sLeanstore.get();
+  }
+  readGuard.unlock();
+
+  std::unique_lock writeGuard(sMutex);
+  if (sLeanstore != nullptr) {
+    return sLeanstore.get();
+  }
+
+  if (FLAGS_init) {
+    std::cout << "Clean data dir: " << FLAGS_data_dir << std::endl;
+    std::filesystem::path dirPath = FLAGS_data_dir;
+    std::filesystem::remove_all(dirPath);
+    std::filesystem::create_directories(dirPath);
+  }
+  sLeanstore = std::make_unique<LeanStore>();
+  return sLeanstore.get();
+}
+
 LeanStore::LeanStore() {
   // init glog
   if (!google::IsGoogleLoggingInitialized()) {
-    FLAGS_logtostderr = 1;
-    // FLAGS_log_dir = GetLogDir();
     auto customPrefixCallback = [](std::ostream& s,
                                    const google::LogMessageInfo& m, void*) {
       // severity
@@ -69,7 +98,7 @@ LeanStore::LeanStore() {
   SCOPED_DEFER(LOG(INFO) << "LeanStore started");
 
   // init and verify flags
-  if (FLAGS_recover) {
+  if (!FLAGS_init) {
     DeSerializeFlags();
   }
   if (!FLAGS_wal) {
@@ -78,7 +107,7 @@ LeanStore::LeanStore() {
   }
 
   // open file
-  if (FLAGS_recover) {
+  if (!FLAGS_init) {
     // recover pages and WAL from disk
     int flags = O_RDWR | O_DIRECT;
     mPageFd = open(GetDBFilePath().c_str(), flags, 0666);
@@ -142,7 +171,7 @@ LeanStore::LeanStore() {
   // create global concurrenct resource manager
   cr::CRManager::sInstance = std::make_unique<cr::CRManager>(mWalFd);
 
-  if (FLAGS_recover) {
+  if (!FLAGS_init) {
     // Deserialize meta from disk
     DeSerializeMeta();
     BufferManager::sInstance->RecoveryFromDisk();
