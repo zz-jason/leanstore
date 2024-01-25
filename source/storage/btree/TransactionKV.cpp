@@ -659,7 +659,8 @@ SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
     jumpmu::Jump();
   }
 
-  GuardedBufferFrame<BTreeNode> guardedNode(std::move(bfGuard), &bf);
+  GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
+                                            std::move(bfGuard), &bf);
   if (!guardedNode->mIsLeaf || !triggerPageWiseGarbageCollection(guardedNode)) {
     return BTreeGeneric::CheckSpaceUtilization(bf);
   }

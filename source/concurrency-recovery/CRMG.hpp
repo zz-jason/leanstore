@@ -81,10 +81,8 @@ public:
   void Stop();
 
 private:
-  static std::atomic<u64> sFsyncCounter;
-  static std::atomic<u64> sSsdOffset;
-
   void runGroupCommiter();
+
   void runWorker(u64 workerId);
 
   /// Set the Job to specific worker.

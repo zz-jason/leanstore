@@ -2,6 +2,7 @@
 
 #include "leanstore/Store.hpp"
 #include "profiling/tables/ConfigsTable.hpp"
+#include "shared-headers/Units.hpp"
 #include "utils/Error.hpp"
 
 #include <gflags/gflags.h>
@@ -11,6 +12,7 @@
 #include <expected>
 #include <list>
 #include <memory>
+#include <mutex>
 
 namespace leanstore::storage::btree {
 
@@ -68,10 +70,15 @@ public:
   std::unique_ptr<storage::TreeRegistry> mTreeRegistry;
 
   /// The Buffer manager
-  storage::BufferManager* mBufferManager;
+  std::unique_ptr<storage::BufferManager> mBufferManager;
 
   /// The concurrent resource manager
   std::unique_ptr<cr::CRManager> mCRManager;
+
+  /// The global timestamp oracle, used to generate start and commit timestamps
+  /// for all transactions in the store. Start from a positive number, 0
+  /// indicates invalid timestamp
+  std::atomic<u64> mTimestampOracle = 1;
 
 public:
   LeanStore();
@@ -117,6 +124,11 @@ public:
   /// Unregister a TransactionKV
   /// @param name The unique name of the btree
   void UnRegisterTransactionKV(const std::string& name);
+
+  /// Alloc a new timestamp from the timestamp oracle
+  u64 AllocTs() {
+    return mTimestampOracle.fetch_add(1);
+  }
 
   void StartProfilingThread();
 

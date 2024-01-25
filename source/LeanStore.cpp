@@ -86,9 +86,7 @@ LeanStore::LeanStore() {
   mTreeRegistry = std::make_unique<storage::TreeRegistry>();
 
   // create global buffer manager and buffer frame providers
-  BufferManager::sInstance =
-      std::make_unique<storage::BufferManager>(this, mPageFd);
-  mBufferManager = BufferManager::sInstance.get();
+  mBufferManager = std::make_unique<storage::BufferManager>(this, mPageFd);
   mBufferManager->StartBufferFrameProviders();
 
   // create global transaction worker and group committer
@@ -226,7 +224,7 @@ LeanStore::~LeanStore() {
   mCRManager = nullptr;
 
   // destroy buffer manager (buffer frame providers)
-  BufferManager::sInstance = nullptr;
+  mBufferManager = nullptr;
 
   // destroy global btree catalog
   mTreeRegistry = nullptr;

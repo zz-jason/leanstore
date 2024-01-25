@@ -20,8 +20,8 @@ public:
       : BTreePessimisticIterator(tree, LatchMode::kExclusive) {
     HybridGuard optimisticGuard(bf->header.mLatch, bfVersion);
     optimisticGuard.JumpIfModifiedByOthers();
-    mGuardedLeaf =
-        GuardedBufferFrame<BTreeNode>(std::move(optimisticGuard), bf);
+    mGuardedLeaf = GuardedBufferFrame<BTreeNode>(
+        tree.mStore->mBufferManager.get(), std::move(optimisticGuard), bf);
     mGuardedLeaf.ToExclusiveMayJump();
   }
 

@@ -2,9 +2,10 @@
 
 #include "concurrency-recovery/WALEntry.hpp"
 #include "concurrency-recovery/Worker.hpp"
-#include "shared-headers/Exceptions.hpp"
+#include "shared-headers/Units.hpp"
+#include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
-#include "storage/buffer-manager/Tracing.hpp"
+#include "storage/buffer-manager/TreeRegistry.hpp"
 #include "sync-primitives/HybridGuard.hpp"
 
 #include <glog/logging.h>
@@ -27,6 +28,10 @@ template <typename T> class SharedGuardedBufferFrame;
 /// A lock guarded buffer frame
 template <typename T> class GuardedBufferFrame {
 public:
+  /// The buffer manager who manages the guarded buffer frame. Used to reclaim
+  /// the buffer frame, buffer manager must be set when keep alive is false.
+  BufferManager* mBufferManager = nullptr;
+
   /// The guarded buffer frame. Latch mode is determined by mGuard.
   BufferFrame* mBf = nullptr;
 
@@ -37,62 +42,66 @@ public:
 
 public:
   /// Construct an empty GuardedBufferFrame, nothing to guard.
-  GuardedBufferFrame() : mBf(nullptr), mGuard(nullptr) {
+  GuardedBufferFrame()
+      : mBufferManager(nullptr),
+        mBf(nullptr),
+        mGuard(nullptr),
+        mKeepAlive(true) {
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
   /// Construct a GuardedBufferFrame from an existing latch guard.
   /// @param hybridGuard the latch guard of the buffer frame
   /// @param bf the latch guarded buffer frame
-  GuardedBufferFrame(HybridGuard&& hybridGuard, BufferFrame* bf)
-      : mBf(bf),
-        mGuard(std::move(hybridGuard)) {
+  GuardedBufferFrame(BufferManager* bufferManager, HybridGuard&& hybridGuard,
+                     BufferFrame* bf)
+      : mBufferManager(bufferManager),
+        mBf(bf),
+        mGuard(std::move(hybridGuard)),
+        mKeepAlive(true) {
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
   GuardedBufferFrame(GuardedBufferFrame& other) = delete;  // Copy constructor
   GuardedBufferFrame(GuardedBufferFrame&& other) = delete; // Move constructor
 
-  /// Allocate a new page, latch the buffer frame exclusively. The newly created
-  ///
-  /// @param treeId The tree ID which this page belongs to.
-  /// @param keepAlive
-  GuardedBufferFrame(TREEID treeId, bool keepAlive = true)
-      : mBf(&BufferManager::sInstance->AllocNewPage()),
+  GuardedBufferFrame(BufferManager* bufferManager, BufferFrame* bf,
+                     bool keepAlive = true)
+      : mBufferManager(bufferManager),
+        mBf(bf),
         mGuard(mBf->header.mLatch, GuardState::kExclusive),
         mKeepAlive(keepAlive) {
-    mBf->page.mBTreeId = treeId;
-    MarkAsDirty();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
-  /// Construct a GuardedBufferFrame from a HOT swip, usually used for latching
-  /// the meta node of a BTree.
-  GuardedBufferFrame(Swip<BufferFrame> hotSwip,
-                     const LatchMode ifContended = LatchMode::kSpin)
-      : mBf(&hotSwip.AsBufferFrame()),
-        mGuard(&mBf->header.mLatch) {
-    latchMayJump(mGuard, ifContended);
+  /// Guard a single page, usually used for latching the meta node of a BTree.
+  GuardedBufferFrame(BufferManager* bufferManager, Swip<BufferFrame> hotSwip,
+                     const LatchMode latchMode = LatchMode::kSpin)
+      : mBufferManager(bufferManager),
+        mBf(&hotSwip.AsBufferFrame()),
+        mGuard(&mBf->header.mLatch),
+        mKeepAlive(true) {
+    latchMayJump(mGuard, latchMode);
     SyncGSNBeforeRead();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
-  /// Construct a GuardedBufferFrame from the guarded parent and the child swip,
-  /// usually used for lock coupling which locks the parent firstly then lock
-  /// the child.
-  ///
+  /// Guard the childSwip when holding the guarded parent, usually used for lock
+  /// coupling which locks the parent firstly then lock the child.
   /// @param guardedParent The guarded parent node, which protects everyting in
   /// the parent node, including childSwip.
   /// @param childSwip The swip to the child node. The child page is loaded to
   /// memory if it is evicted.
-  /// @param ifContended Lock fall back mode if contention happens.
   template <typename T2>
-  GuardedBufferFrame(GuardedBufferFrame<T2>& guardedParent, Swip<T>& childSwip,
-                     const LatchMode ifContended = LatchMode::kSpin)
-      : mBf(BufferManager::sInstance->TryFastResolveSwip(
+  GuardedBufferFrame(BufferManager* bufferManager,
+                     GuardedBufferFrame<T2>& guardedParent, Swip<T>& childSwip,
+                     const LatchMode latchMode = LatchMode::kSpin)
+      : mBufferManager(bufferManager),
+        mBf(bufferManager->TryFastResolveSwip(
             guardedParent.mGuard, childSwip.template CastTo<BufferFrame>())),
-        mGuard(&mBf->header.mLatch) {
-    latchMayJump(mGuard, ifContended);
+        mGuard(&mBf->header.mLatch),
+        mKeepAlive(true) {
+    latchMayJump(mGuard, latchMode);
     SyncGSNBeforeRead();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
 
@@ -111,14 +120,14 @@ public:
     guardedParent.JumpIfModifiedByOthers();
   }
 
-  /// Downgrade an exclusive guard
+  /// Downgrade from an exclusive guard
   GuardedBufferFrame(ExclusiveGuardedBufferFrame<T>&&) = delete;
   GuardedBufferFrame& operator=(ExclusiveGuardedBufferFrame<T>&&) {
     mGuard.unlock();
     return *this;
   }
 
-  /// Downgrade a shared guard
+  /// Downgrade from a shared guard
   GuardedBufferFrame(SharedGuardedBufferFrame<T>&&) = delete;
   GuardedBufferFrame& operator=(SharedGuardedBufferFrame<T>&&) {
     mGuard.unlock();
@@ -143,6 +152,7 @@ public:
   /// Move assignment
   template <typename T2>
   constexpr GuardedBufferFrame& operator=(GuardedBufferFrame<T2>&& other) {
+    mBufferManager = other.mBufferManager;
     mBf = other.mBf;
     mGuard = std::move(other.mGuard);
     mKeepAlive = other.mKeepAlive;
@@ -256,7 +266,7 @@ public:
   }
 
   void Reclaim() {
-    BufferManager::sInstance->ReclaimPage(*(mBf));
+    mBufferManager->ReclaimPage(*(mBf));
     mGuard.mState = GuardState::kMoved;
   }
 

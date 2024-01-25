@@ -17,9 +17,6 @@ namespace cr {
 ///   Workers (#workers)
 ///   Group Committer Thread (1)
 ///   Page Provider Threads (#pageProviders)
-std::atomic<u64> CRManager::sFsyncCounter = 0;
-std::atomic<u64> CRManager::sSsdOffset = 1 * 1024 * 1024 * 1024;
-
 CRManager::CRManager(leanstore::LeanStore* store, s32 walFd)
     : mStore(store),
       mGroupCommitter(nullptr),
@@ -197,7 +194,7 @@ constexpr char kKeyGlobalLogicalClock[] = "global_logical_clock";
 
 StringMap CRManager::Serialize() {
   StringMap map;
-  u64 val = ConcurrencyControl::sTimeStampOracle.load();
+  u64 val = mStore->mTimestampOracle.load();
   map[kKeyWalSize] = std::to_string(mGroupCommitter->mWalSize);
   map[kKeyGlobalLogicalClock] = std::to_string(val);
   return map;
@@ -205,7 +202,7 @@ StringMap CRManager::Serialize() {
 
 void CRManager::Deserialize(StringMap map) {
   u64 val = std::stoull(map[kKeyGlobalLogicalClock]);
-  ConcurrencyControl::sTimeStampOracle = val;
+  mStore->mTimestampOracle = val;
   Worker::sWmkOfAllTx = val;
   mGroupCommitter->mWalSize = std::stoull(map[kKeyWalSize]);
 }

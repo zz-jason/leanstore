@@ -153,19 +153,19 @@ private:
   inline void randomBufferFramesToCoolOrEvict() {
     mCoolCandidateBfs.clear();
     for (u64 i = 0; i < FLAGS_buffer_frame_recycle_batch_size; i++) {
-      auto* randomBf = RandomBufferFrame();
+      auto* randomBf = randomBufferFrame();
       DO_NOT_OPTIMIZE(randomBf->header.state);
       mCoolCandidateBfs.push_back(randomBf);
     }
   }
 
-  inline BufferFrame* RandomBufferFrame() {
+  inline BufferFrame* randomBufferFrame() {
     auto i = utils::RandomGenerator::Rand<u64>(0, mNumBfs);
     auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
     return reinterpret_cast<BufferFrame*>(bfAddr);
   }
 
-  inline Partition& RandomPartition() {
+  inline Partition& randomPartition() {
     auto i = utils::RandomGenerator::Rand<u64>(0, mNumPartitions);
     return *mPartitions[i];
   }
@@ -188,7 +188,7 @@ inline void BufferFrameProvider::RunImpl() {
   }
 
   while (mKeepRunning) {
-    auto& targetPartition = RandomPartition();
+    auto& targetPartition = randomPartition();
     if (!targetPartition.NeedMoreFreeBfs()) {
       continue;
     }

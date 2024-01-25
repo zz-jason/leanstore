@@ -136,7 +136,8 @@ std::expected<void, utils::Error> Recovery::redo() {
     case WALPayload::TYPE::WALInsert: {
       auto* walInsert = reinterpret_cast<WALInsert*>(complexEntry->payload);
       HybridGuard guard(&bf.header.mLatch);
-      GuardedBufferFrame<BTreeNode> guardedNode(std::move(guard), &bf);
+      GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
+                                                std::move(guard), &bf);
 
       s32 slotId = -1;
       TransactionKV::InsertToNode(guardedNode, walInsert->GetKey(),
@@ -148,7 +149,8 @@ std::expected<void, utils::Error> Recovery::redo() {
     case WALPayload::TYPE::WALTxInsert: {
       auto* walInsert = reinterpret_cast<WALTxInsert*>(complexEntry->payload);
       HybridGuard guard(&bf.header.mLatch);
-      GuardedBufferFrame<BTreeNode> guardedNode(std::move(guard), &bf);
+      GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
+                                                std::move(guard), &bf);
 
       s32 slotId = -1;
       TransactionKV::InsertToNode(guardedNode, walInsert->GetKey(),
@@ -180,7 +182,8 @@ std::expected<void, utils::Error> Recovery::redo() {
     case WALPayload::TYPE::WALInitPage: {
       auto* walInitPage = reinterpret_cast<WALInitPage*>(complexEntry->payload);
       HybridGuard guard(&bf.header.mLatch);
-      GuardedBufferFrame<BTreeNode> guardedNode(std::move(guard), &bf);
+      GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
+                                                std::move(guard), &bf);
       auto xGuardedNode =
           ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNode));
       xGuardedNode.InitPayload(walInitPage->mIsLeaf);

@@ -221,7 +221,8 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
       BufferFrame* bf = session->leftmost_bf;
       HybridGuard bfGuard(bf->header.mLatch, session->leftmost_version);
       bfGuard.JumpIfModifiedByOthers();
-      GuardedBufferFrame<BTreeNode> guardedLeaf(std::move(bfGuard), bf);
+      GuardedBufferFrame<BTreeNode> guardedLeaf(
+          btree->mStore->mBufferManager.get(), std::move(bfGuard), bf);
 
       if (guardedLeaf->mLowerFence.length == 0) {
         auto lastKeySize =

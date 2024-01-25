@@ -4,7 +4,9 @@
 #include "LeanStore.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "shared-headers/Units.hpp"
+#include "storage/btree/core/BTreeNode.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
+#include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "storage/buffer-manager/GuardedBufferFrame.hpp"
 #include "utils/Misc.hpp"
@@ -20,20 +22,22 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId,
   this->mStore = store;
   this->mTreeId = btreeId;
   this->mConfig = config;
-  mMetaNodeSwip = &mStore->mBufferManager->AllocNewPage();
 
+  mMetaNodeSwip = &mStore->mBufferManager->AllocNewPage(btreeId);
   HybridGuard guard(mMetaNodeSwip.AsBufferFrame().header.mLatch,
                     GuardState::kExclusive);
   mMetaNodeSwip.AsBufferFrame().header.mKeepInMemory = true;
-  mMetaNodeSwip.AsBufferFrame().page.mBTreeId = btreeId;
   guard.unlock();
 
-  auto guardedRoot = GuardedBufferFrame<BTreeNode>(btreeId);
+  auto guardedRoot = GuardedBufferFrame<BTreeNode>(
+      mStore->mBufferManager.get(),
+      &mStore->mBufferManager->AllocNewPage(btreeId));
   auto xGuardedRoot =
       ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedRoot));
   xGuardedRoot.InitPayload(true);
 
-  GuardedBufferFrame<BTreeNode> guardedMeta(mMetaNodeSwip);
+  GuardedBufferFrame<BTreeNode> guardedMeta(mStore->mBufferManager.get(),
+                                            mMetaNodeSwip);
   ExclusiveGuardedBufferFrame xGuardedMeta(std::move(guardedMeta));
   xGuardedMeta->mIsLeaf = false;
   xGuardedMeta->mRightMostChildSwip = xGuardedRoot.bf();
@@ -55,9 +59,12 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId,
 
 void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
   auto parentHandler = findParentEager(*this, toSplit);
-  auto guardedParent = parentHandler.GetGuardedParent<BTreeNode>();
-  auto guardedChild = GuardedBufferFrame(
-      guardedParent, parentHandler.mChildSwip.CastTo<BTreeNode>());
+  GuardedBufferFrame<BTreeNode> guardedParent(
+      mStore->mBufferManager.get(), std::move(parentHandler.mParentGuard),
+      parentHandler.mParentBf);
+  auto guardedChild =
+      GuardedBufferFrame(mStore->mBufferManager.get(), guardedParent,
+                         parentHandler.mChildSwip.CastTo<BTreeNode>());
   if (guardedChild->mNumSeps <= 1) {
     DLOG(WARNING) << "Split failed, not enough separators in node"
                   << ", toSplit.header.mPageId=" << toSplit.header.mPageId
@@ -91,10 +98,15 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
     DCHECK(mHeight == 1 || !xGuardedChild->mIsLeaf);
 
     // create new root
-    auto guardedNewRoot = GuardedBufferFrame<BTreeNode>(mTreeId, false);
+    auto* newRootBf = &mStore->mBufferManager->AllocNewPage(mTreeId);
+    auto guardedNewRoot = GuardedBufferFrame<BTreeNode>(
+        mStore->mBufferManager.get(), newRootBf, false);
     auto xGuardedNewRoot =
         ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewRoot));
-    auto guardedNewLeft = GuardedBufferFrame<BTreeNode>(mTreeId);
+
+    auto* newLeftBf = &mStore->mBufferManager->AllocNewPage(mTreeId);
+    auto guardedNewLeft =
+        GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(), newLeftBf);
     auto xGuardedNewLeft =
         ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
 
@@ -164,7 +176,9 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
     DCHECK(&mMetaNodeSwip.AsBufferFrame() != xGuardedParent.bf());
     DCHECK(!xGuardedParent->mIsLeaf);
 
-    auto guardedNewLeft = GuardedBufferFrame<BTreeNode>(mTreeId);
+    auto* newLeftBf = &mStore->mBufferManager->AllocNewPage(mTreeId);
+    auto guardedNewLeft =
+        GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(), newLeftBf);
     auto xGuardedNewLeft =
         ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
 
@@ -226,8 +240,10 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
   // pos == guardedParent->mNumSeps means that the current node is the upper
   // swip in parent
   auto parentHandler = findParentEager(*this, toMerge);
-  auto guardedParent = parentHandler.GetGuardedParent<BTreeNode>();
-  GuardedBufferFrame guardedChild(guardedParent,
+  GuardedBufferFrame<BTreeNode> guardedParent(
+      mStore->mBufferManager.get(), std::move(parentHandler.mParentGuard),
+      parentHandler.mParentBf);
+  GuardedBufferFrame guardedChild(mStore->mBufferManager.get(), guardedParent,
                                   parentHandler.mChildSwip.CastTo<BTreeNode>());
   auto posInParent = parentHandler.mPosInParent;
   if (isMetaNode(guardedParent) ||
@@ -252,7 +268,8 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
       if (!swizzleSibling && leftSwip.isEVICTED()) {
         return false;
       }
-      auto guardedLeft = GuardedBufferFrame(guardedParent, leftSwip);
+      auto guardedLeft = GuardedBufferFrame(mStore->mBufferManager.get(),
+                                            guardedParent, leftSwip);
       auto xGuardedParent =
           ExclusiveGuardedBufferFrame(std::move(guardedParent));
       auto xGuardedChild = ExclusiveGuardedBufferFrame(std::move(guardedChild));
@@ -291,7 +308,8 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
       if (!swizzleSibling && rightSwip.isEVICTED()) {
         return false;
       }
-      auto guardedRight = GuardedBufferFrame(guardedParent, rightSwip);
+      auto guardedRight = GuardedBufferFrame(mStore->mBufferManager.get(),
+                                             guardedParent, rightSwip);
       auto xGuardedParent =
           ExclusiveGuardedBufferFrame(std::move(guardedParent));
       auto xGuardedChild = ExclusiveGuardedBufferFrame(std::move(guardedChild));
@@ -334,7 +352,8 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
   }
 
   JUMPMU_TRY() {
-    GuardedBufferFrame<BTreeNode> guardedMeta(mMetaNodeSwip);
+    GuardedBufferFrame<BTreeNode> guardedMeta(mStore->mBufferManager.get(),
+                                              mMetaNodeSwip);
     if (!isMetaNode(guardedParent) &&
         guardedParent->FreeSpaceAfterCompaction() >=
             BTreeNode::UnderFullSize()) {
@@ -493,7 +512,8 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
     }
 
     guardedNodes[maxRight - pos] = GuardedBufferFrame<BTreeNode>(
-        guardedParent, guardedParent->getChild(maxRight));
+        mStore->mBufferManager.get(), guardedParent,
+        guardedParent->getChild(maxRight));
     fullyMerged[maxRight - pos] = false;
     totalFillFactor +=
         guardedNodes[maxRight - pos]->fillFactorAfterCompaction();
@@ -566,9 +586,11 @@ s64 BTreeGeneric::iterateAllPages(BTreeNodeCallback inner,
                                   BTreeNodeCallback leaf) {
   while (true) {
     JUMPMU_TRY() {
-      GuardedBufferFrame<BTreeNode> guardedParent(mMetaNodeSwip);
+      GuardedBufferFrame<BTreeNode> guardedParent(mStore->mBufferManager.get(),
+                                                  mMetaNodeSwip);
       GuardedBufferFrame<BTreeNode> guardedChild(
-          guardedParent, guardedParent->mRightMostChildSwip);
+          mStore->mBufferManager.get(), guardedParent,
+          guardedParent->mRightMostChildSwip);
       s64 result = iterateAllPagesRecursive(guardedChild, inner, leaf);
       JUMPMU_RETURN result;
     }
@@ -586,13 +608,15 @@ s64 BTreeGeneric::iterateAllPagesRecursive(
   s64 res = inner(guardedNode.ref());
   for (u16 i = 0; i < guardedNode->mNumSeps; i++) {
     Swip<BTreeNode>& childSwip = guardedNode->getChild(i);
-    auto guardedChild = GuardedBufferFrame(guardedNode, childSwip);
+    auto guardedChild = GuardedBufferFrame(mStore->mBufferManager.get(),
+                                           guardedNode, childSwip);
     guardedChild.JumpIfModifiedByOthers();
     res += iterateAllPagesRecursive(guardedChild, inner, leaf);
   }
 
   Swip<BTreeNode>& childSwip = guardedNode->mRightMostChildSwip;
-  auto guardedChild = GuardedBufferFrame(guardedNode, childSwip);
+  auto guardedChild =
+      GuardedBufferFrame(mStore->mBufferManager.get(), guardedNode, childSwip);
   guardedChild.JumpIfModifiedByOthers();
   res += iterateAllPagesRecursive(guardedChild, inner, leaf);
 
@@ -625,8 +649,10 @@ u32 BTreeGeneric::FreeSpaceAfterCompaction() {
 }
 
 void BTreeGeneric::PrintInfo(u64 totalSize) {
-  GuardedBufferFrame<BTreeNode> guardedMeta(mMetaNodeSwip);
-  GuardedBufferFrame guardedRoot(guardedMeta, guardedMeta->mRightMostChildSwip);
+  GuardedBufferFrame<BTreeNode> guardedMeta(mStore->mBufferManager.get(),
+                                            mMetaNodeSwip);
+  GuardedBufferFrame guardedRoot(mStore->mBufferManager.get(), guardedMeta,
+                                 guardedMeta->mRightMostChildSwip);
   u64 numAllPages = CountAllPages();
   cout << "nodes:" << numAllPages << ", innerNodes:" << CountInnerPages()
        << ", space:" << (numAllPages * BTreeNode::Size()) / (float)totalSize

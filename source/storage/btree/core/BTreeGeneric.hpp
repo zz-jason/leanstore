@@ -2,6 +2,7 @@
 
 #include "BTreeNode.hpp"
 #include "Config.hpp"
+#include "LeanStore.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "shared-headers/Units.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
@@ -158,10 +159,12 @@ public:
   ///
   /// @param btree The tree to free.
   static void FreeAndReclaim(BTreeGeneric& btree) {
-    GuardedBufferFrame<BTreeNode> guardedMetaNode(btree.mMetaNodeSwip);
+    GuardedBufferFrame<BTreeNode> guardedMetaNode(
+        btree.mStore->mBufferManager.get(), btree.mMetaNodeSwip);
     GuardedBufferFrame<BTreeNode> guardedRootNode(
-        guardedMetaNode, guardedMetaNode->mRightMostChildSwip);
-    BTreeGeneric::freeBTreeNodesRecursive(guardedRootNode);
+        btree.mStore->mBufferManager.get(), guardedMetaNode,
+        guardedMetaNode->mRightMostChildSwip);
+    BTreeGeneric::freeBTreeNodesRecursive(btree, guardedRootNode);
 
     auto xGuardedMeta = ExclusiveGuardedBufferFrame(std::move(guardedMetaNode));
     xGuardedMeta.Reclaim();
@@ -172,24 +175,27 @@ public:
     auto& allocator = resultDoc->GetAllocator();
 
     // meta node
-    GuardedBufferFrame<BTreeNode> guardedMetaNode(btree.mMetaNodeSwip);
+    GuardedBufferFrame<BTreeNode> guardedMetaNode(
+        btree.mStore->mBufferManager.get(), btree.mMetaNodeSwip);
     rapidjson::Value metaJson(rapidjson::kObjectType);
     guardedMetaNode.mBf->ToJson(&metaJson, allocator);
     resultDoc->AddMember("metaNode", metaJson, allocator);
 
     // root node
     GuardedBufferFrame<BTreeNode> guardedRootNode(
-        guardedMetaNode, guardedMetaNode->mRightMostChildSwip);
+        btree.mStore->mBufferManager.get(), guardedMetaNode,
+        guardedMetaNode->mRightMostChildSwip);
     rapidjson::Value rootJson(rapidjson::kObjectType);
-    toJsonRecursive(guardedRootNode, &rootJson, allocator);
+    toJsonRecursive(btree, guardedRootNode, &rootJson, allocator);
     resultDoc->AddMember("rootNode", rootJson, allocator);
   }
 
 private:
   static void freeBTreeNodesRecursive(
-      GuardedBufferFrame<BTreeNode>& guardedNode);
+      BTreeGeneric& btree, GuardedBufferFrame<BTreeNode>& guardedNode);
 
-  static void toJsonRecursive(GuardedBufferFrame<BTreeNode>& guardedNode,
+  static void toJsonRecursive(BTreeGeneric& btree,
+                              GuardedBufferFrame<BTreeNode>& guardedNode,
                               rapidjson::Value* resultObj,
                               rapidjson::Value::AllocatorType& allocator);
 
@@ -210,12 +216,13 @@ public:
 };
 
 inline void BTreeGeneric::freeBTreeNodesRecursive(
-    GuardedBufferFrame<BTreeNode>& guardedNode) {
+    BTreeGeneric& btree, GuardedBufferFrame<BTreeNode>& guardedNode) {
   if (!guardedNode->mIsLeaf) {
     for (auto i = 0u; i <= guardedNode->mNumSeps; ++i) {
       auto childSwip = guardedNode->GetChildIncludingRightMost(i);
-      GuardedBufferFrame<BTreeNode> guardedChild(guardedNode, childSwip);
-      freeBTreeNodesRecursive(guardedChild);
+      GuardedBufferFrame<BTreeNode> guardedChild(
+          btree.mStore->mBufferManager.get(), guardedNode, childSwip);
+      freeBTreeNodesRecursive(btree, guardedChild);
     }
   }
 
@@ -224,8 +231,8 @@ inline void BTreeGeneric::freeBTreeNodesRecursive(
 }
 
 inline void BTreeGeneric::toJsonRecursive(
-    GuardedBufferFrame<BTreeNode>& guardedNode, rapidjson::Value* resultObj,
-    rapidjson::Value::AllocatorType& allocator) {
+    BTreeGeneric& btree, GuardedBufferFrame<BTreeNode>& guardedNode,
+    rapidjson::Value* resultObj, rapidjson::Value::AllocatorType& allocator) {
 
   DCHECK(resultObj->IsObject());
   // buffer frame header
@@ -245,10 +252,11 @@ inline void BTreeGeneric::toJsonRecursive(
   rapidjson::Value childrenJson(rapidjson::kArrayType);
   for (auto i = 0u; i < guardedNode->mNumSeps; ++i) {
     auto childSwip = guardedNode->getChild(i);
-    GuardedBufferFrame<BTreeNode> guardedChild(guardedNode, childSwip);
+    GuardedBufferFrame<BTreeNode> guardedChild(
+        btree.mStore->mBufferManager.get(), guardedNode, childSwip);
 
     rapidjson::Value childObj(rapidjson::kObjectType);
-    toJsonRecursive(guardedChild, &childObj, allocator);
+    toJsonRecursive(btree, guardedChild, &childObj, allocator);
     guardedChild.unlock();
 
     childrenJson.PushBack(childObj, allocator);
@@ -256,9 +264,10 @@ inline void BTreeGeneric::toJsonRecursive(
 
   if (guardedNode->mRightMostChildSwip != nullptr) {
     GuardedBufferFrame<BTreeNode> guardedChild(
-        guardedNode, guardedNode->mRightMostChildSwip);
+        btree.mStore->mBufferManager.get(), guardedNode,
+        guardedNode->mRightMostChildSwip);
     rapidjson::Value childObj(rapidjson::kObjectType);
-    toJsonRecursive(guardedChild, &childObj, allocator);
+    toJsonRecursive(btree, guardedChild, &childObj, allocator);
     guardedChild.unlock();
 
     childrenJson.PushBack(childObj, allocator);
@@ -289,11 +298,12 @@ inline SpaceCheckResult BTreeGeneric::CheckSpaceUtilization(BufferFrame& bf) {
   }
 
   ParentSwipHandler parentHandler = BTreeGeneric::findParentMayJump(*this, bf);
-  GuardedBufferFrame<BTreeNode> guardedParent =
-      parentHandler.GetGuardedParent<BTreeNode>();
+  GuardedBufferFrame<BTreeNode> guardedParent(
+      mStore->mBufferManager.get(), std::move(parentHandler.mParentGuard),
+      parentHandler.mParentBf);
   GuardedBufferFrame<BTreeNode> guardedChild(
-      guardedParent, parentHandler.mChildSwip.CastTo<BTreeNode>(),
-      LatchMode::kJump);
+      mStore->mBufferManager.get(), guardedParent,
+      parentHandler.mChildSwip.CastTo<BTreeNode>(), LatchMode::kJump);
   auto mergeResult = XMerge(guardedParent, guardedChild, parentHandler);
   guardedParent.unlock();
   guardedChild.unlock();
@@ -329,9 +339,10 @@ template <LatchMode mode>
 inline void BTreeGeneric::FindLeafCanJump(
     Slice key, GuardedBufferFrame<BTreeNode>& guardedTarget) {
   guardedTarget.unlock();
-  GuardedBufferFrame<BTreeNode> guardedParent(mMetaNodeSwip);
+  auto* bufferManager = mStore->mBufferManager.get();
+  GuardedBufferFrame<BTreeNode> guardedParent(bufferManager, mMetaNodeSwip);
   guardedTarget = GuardedBufferFrame<BTreeNode>(
-      guardedParent, guardedParent->mRightMostChildSwip);
+      bufferManager, guardedParent, guardedParent->mRightMostChildSwip);
 
   volatile u16 level = 0;
   while (!guardedTarget->mIsLeaf) {
@@ -343,9 +354,11 @@ inline void BTreeGeneric::FindLeafCanJump(
     DCHECK(!childSwip.IsEmpty());
     guardedParent = std::move(guardedTarget);
     if (level == mHeight - 1) {
-      guardedTarget = GuardedBufferFrame(guardedParent, childSwip, mode);
+      guardedTarget =
+          GuardedBufferFrame(bufferManager, guardedParent, childSwip, mode);
     } else {
-      guardedTarget = GuardedBufferFrame(guardedParent, childSwip);
+      guardedTarget =
+          GuardedBufferFrame(bufferManager, guardedParent, childSwip);
     }
     level = level + 1;
   }
@@ -361,7 +374,8 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
   }
 
   // Check whether search on the wrong tree or the root node is evicted
-  GuardedBufferFrame<BTreeNode> guardedParent(btree.mMetaNodeSwip);
+  GuardedBufferFrame<BTreeNode> guardedParent(
+      btree.mStore->mBufferManager.get(), btree.mMetaNodeSwip);
   if (btree.mTreeId != bfToFind.page.mBTreeId ||
       guardedParent->mRightMostChildSwip.isEVICTED()) {
     jumpmu::Jump();
@@ -410,7 +424,8 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
   LatchMode latchMode = LatchMode::kJump;
   // The parent of the bf we are looking for (bfToFind)
   GuardedBufferFrame guardedChild(
-      guardedParent, guardedParent->mRightMostChildSwip, latchMode);
+      btree.mStore->mBufferManager.get(), guardedParent,
+      guardedParent->mRightMostChildSwip, latchMode);
   u16 level = 0;
   while (!guardedChild->mIsLeaf && searchCondition(guardedChild)) {
     guardedParent = std::move(guardedChild);
@@ -419,8 +434,9 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
         jumpmu::Jump();
       }
     }
-    guardedChild = GuardedBufferFrame(
-        guardedParent, childSwip->CastTo<BTreeNode>(), latchMode);
+    guardedChild =
+        GuardedBufferFrame(btree.mStore->mBufferManager.get(), guardedParent,
+                           childSwip->CastTo<BTreeNode>(), latchMode);
     level = level + 1;
   }
   guardedParent.unlock();

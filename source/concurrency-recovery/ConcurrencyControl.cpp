@@ -24,20 +24,14 @@ namespace leanstore::cr {
 // CommitTree
 //------------------------------------------------------------------------------
 
-TXID CommitTree::AppendCommitLog(TXID startTs) {
+void CommitTree::AppendCommitLog(TXID startTs, TXID commitTs) {
+  DCHECK(mCommitLog.size() < mCapacity);
   utils::Timer timer(CRCounters::MyCounters().cc_ms_committing);
   std::unique_lock xGuard(mMutex);
-
-  DCHECK(mCommitLog.size() < mCapacity);
-
-  // Transactions are sequential in one worker, so the commitTs and startTs are
-  // also increasing in the commit log of one worker
-  const TXID commitTs = ConcurrencyControl::sTimeStampOracle.fetch_add(1);
   mCommitLog.push_back({commitTs, startTs});
   DLOG(INFO) << "Commit log appended"
              << ", workerId=" << Worker::My().mWorkerId
              << ", startTs=" << startTs << ", commitTs=" << commitTs;
-  return commitTs;
 }
 
 void CommitTree::CompactCommitLog() {
@@ -116,8 +110,6 @@ std::optional<std::pair<TXID, TXID>> CommitTree::lcbNoLatch(TXID startTs) {
 //------------------------------------------------------------------------------
 // ConcurrencyControl
 //------------------------------------------------------------------------------
-
-std::atomic<TXID> ConcurrencyControl::sTimeStampOracle = 1;
 
 COMMANDID ConcurrencyControl::PutVersion(TREEID treeId, bool isRemoveCommand,
                                          u64 versionSize,

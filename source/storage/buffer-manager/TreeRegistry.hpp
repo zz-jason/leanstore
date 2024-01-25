@@ -1,8 +1,8 @@
 #pragma once
 
-#include "BMPlainGuard.hpp"
 #include "BufferFrame.hpp"
 #include "shared-headers/Units.hpp"
+#include "sync-primitives/HybridGuard.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
 
@@ -38,11 +38,6 @@ public:
   /// @brief mIsChildBfUpdated records whether the child buffer frame is updated
   /// since this ParentSwipHandler was created.
   bool mIsChildBfUpdated = false;
-
-public:
-  template <typename T> GuardedBufferFrame<T> GetGuardedParent() {
-    return GuardedBufferFrame<T>(std::move(mParentGuard), mParentBf);
-  }
 };
 
 enum class SpaceCheckResult : u8 { kNothing, kPickAnotherBf, kRestartSameBf };

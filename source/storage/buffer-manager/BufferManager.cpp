@@ -8,6 +8,8 @@
 #include "concurrency-recovery/Recovery.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "shared-headers/Exceptions.hpp"
+#include "shared-headers/Units.hpp"
+#include "storage/buffer-manager/GuardedBufferFrame.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Misc.hpp"
 #include "utils/Parallelize.hpp"
@@ -24,39 +26,28 @@
 namespace leanstore {
 namespace storage {
 
-thread_local BufferFrame* BufferManager::sTlsLastReadBf = nullptr;
-
-std::unique_ptr<BufferManager> BufferManager::sInstance = nullptr;
-
 BufferManager::BufferManager(leanstore::LeanStore* store, s32 fd)
     : mStore(store),
       mPageFd(fd) {
-  mNumBfs = FLAGS_buffer_pool_size / BufferFrame::Size();
+  mNumBfs = mStore->mStoreOption.mBufferPoolSize / BufferFrame::Size();
   const u64 totalMemSize = BufferFrame::Size() * (mNumBfs + mNumSaftyBfs);
 
   // Init buffer pool with zero-initialized buffer frames. Use mmap with flags
   // MAP_PRIVATE and MAP_ANONYMOUS, no underlying file desciptor to allocate
-  // totalmemSize buffer pool with zero-initialized contents. See:
-  //  1. https://man7.org/linux/man-pages/man2/mmap.2.html
-  //  2.
-  //  https://stackoverflow.com/questions/34042915/what-is-the-purpose-of-map-anonymous-flag-in-mmap-system-call
-  {
-    void* underlyingBuf = mmap(/* addr= */ NULL, /* length= */ totalMemSize,
-                               /* prot= */ PROT_READ | PROT_WRITE,
-                               /* flags= */ MAP_PRIVATE | MAP_ANONYMOUS,
-                               /* fd= */ -1, /* offset= */ 0);
-    LOG_IF(FATAL, underlyingBuf == MAP_FAILED)
-        << "Failed to allocate memory for the buffer pool"
-        << ", FLAGS_buffer_pool_size=" << FLAGS_buffer_pool_size
-        << ", totalMemSize=" << totalMemSize;
+  // totalmemSize buffer pool with zero-initialized contents.
+  void* underlyingBuf = mmap(NULL, totalMemSize, PROT_READ | PROT_WRITE,
+                             MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  LOG_IF(FATAL, underlyingBuf == MAP_FAILED)
+      << "Failed to allocate memory for the buffer pool"
+      << ", FLAGS_buffer_pool_size=" << mStore->mStoreOption.mBufferPoolSize
+      << ", totalMemSize=" << totalMemSize;
 
-    mBufferPool = reinterpret_cast<u8*>(underlyingBuf);
-    madvise(mBufferPool, totalMemSize, MADV_HUGEPAGE);
-    madvise(mBufferPool, totalMemSize, MADV_DONTFORK);
-  }
+  mBufferPool = reinterpret_cast<u8*>(underlyingBuf);
+  madvise(mBufferPool, totalMemSize, MADV_HUGEPAGE);
+  madvise(mBufferPool, totalMemSize, MADV_DONTFORK);
 
   // Initialize mPartitions
-  mNumPartitions = (1 << FLAGS_partition_bits);
+  mNumPartitions = mStore->mStoreOption.mNumPartitions;
   mPartitionsMask = mNumPartitions - 1;
   const u64 freeBfsLimitPerPartition =
       std::ceil((FLAGS_free_pct * 1.0 * mNumBfs / 100.0) /
@@ -79,16 +70,17 @@ BufferManager::BufferManager(leanstore::LeanStore* store, s32 fd)
 }
 
 void BufferManager::StartBufferFrameProviders() {
+  auto numBufferProviders = mStore->mStoreOption.mNumBufferProviders;
   // make it optional for pure in-memory experiments
-  if (FLAGS_pp_threads <= 0) {
+  if (numBufferProviders <= 0) {
     return;
   }
 
-  DCHECK(FLAGS_pp_threads <= mNumPartitions);
-  mBfProviders.reserve(FLAGS_pp_threads);
-  for (auto i = 0u; i < FLAGS_pp_threads; ++i) {
+  DCHECK(numBufferProviders <= mNumPartitions);
+  mBfProviders.reserve(numBufferProviders);
+  for (auto i = 0u; i < numBufferProviders; ++i) {
     std::string threadName = "BuffProvider";
-    if (FLAGS_pp_threads > 1) {
+    if (numBufferProviders > 1) {
       threadName += std::to_string(i);
     }
 
@@ -196,7 +188,7 @@ BufferFrame& BufferManager::RandomBufferFrame() {
   return *reinterpret_cast<BufferFrame*>(bfAddr);
 }
 
-BufferFrame& BufferManager::AllocNewPage() {
+BufferFrame& BufferManager::AllocNewPage(TREEID treeId) {
   Partition& partition = RandomPartition();
   BufferFrame& freeBf = partition.mFreeBfList.PopFrontMayJump();
   freeBf.Init(partition.NextPageId());
@@ -205,6 +197,8 @@ BufferFrame& BufferManager::AllocNewPage() {
     WorkerCounters::MyCounters().allocate_operations_counter++;
   }
 
+  freeBf.page.mBTreeId = treeId;
+  freeBf.page.mPSN++; // mark as dirty
   return freeBf;
 }
 
@@ -316,7 +310,6 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
         partition.mInflightIOs.Remove(pageId);
       }
 
-      sTlsLastReadBf = &bf;
       JUMPMU_RETURN& bf;
     }
     JUMPMU_CATCH() {
@@ -372,7 +365,6 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
         ioFrame.state = IOFrame::STATE::TO_DELETE;
       }
       inflightIOGuard->unlock();
-      sTlsLastReadBf = bf;
       return bf;
     }
   }

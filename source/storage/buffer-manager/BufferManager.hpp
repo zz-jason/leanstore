@@ -1,6 +1,5 @@
 #pragma once
 
-#include "BufferFrame.hpp"
 #include "BufferFrameProvider.hpp"
 #include "Partition.hpp"
 #include "Swip.hpp"
@@ -22,6 +21,8 @@ class BMTable;
 } // namespace profiling
 
 namespace storage {
+
+template <typename T> class GuardedBufferFrame;
 
 /// Notes on Synchronization in Buffer Manager.
 /// Terminology:
@@ -91,7 +92,7 @@ public:
   ///
   /// NOTE: The buffer frame is initialized with an unused page ID, and is
   /// exclusively locked.
-  BufferFrame& AllocNewPage();
+  BufferFrame& AllocNewPage(TREEID treeId);
 
   /// Resolves the buffer frame pointed by the swipValue.
   ///
@@ -159,13 +160,6 @@ public:
   /// Do something on all the buffer frames which satisify the condition
   void DoWithBufferFrameIf(std::function<bool(BufferFrame& bf)> condition,
                            std::function<void(BufferFrame& bf)> action);
-
-public:
-  /// Global buffer manager singleton instance, lazily initialized.
-  static std::unique_ptr<BufferManager> sInstance;
-
-  /// Temporary hack: let workers evict the last page they used
-  static thread_local BufferFrame* sTlsLastReadBf;
 };
 
 } // namespace storage
