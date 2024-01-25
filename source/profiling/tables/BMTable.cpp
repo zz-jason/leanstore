@@ -20,15 +20,15 @@ void BMTable::open() {
   columns.emplace("key", [](Column& col) { col << 0; });
   columns.emplace("space_usage_gib", [&](Column& col) {
     const double gib =
-        bm.consumedPages() * 1.0 * FLAGS_page_size / 1024.0 / 1024.0 / 1024.0;
+        bm.ConsumedPages() * 1.0 * FLAGS_page_size / 1024.0 / 1024.0 / 1024.0;
     col << gib;
   });
   columns.emplace("space_usage_kib", [&](Column& col) {
-    const double kib = bm.consumedPages() * 1.0 * FLAGS_page_size / 1024.0;
+    const double kib = bm.ConsumedPages() * 1.0 * FLAGS_page_size / 1024.0;
     col << kib;
   });
   columns.emplace("consumed_pages",
-                  [&](Column& col) { col << bm.consumedPages(); });
+                  [&](Column& col) { col << bm.ConsumedPages(); });
   columns.emplace("p1_pct", [&](Column& col) {
     col << (local_phase_1_ms * 100.0 / total);
   });
@@ -105,7 +105,7 @@ void BMTable::next() {
 
   local_total_free = 0;
   for (u64 i = 0; i < bm.mNumPartitions; i++) {
-    local_total_free += bm.getPartition(i).mFreeBfList.mSize.load();
+    local_total_free += bm.GetPartition(i).mFreeBfList.mSize.load();
   }
   total = local_phase_1_ms + local_phase_2_ms + local_phase_3_ms;
   for (auto& c : columns) {

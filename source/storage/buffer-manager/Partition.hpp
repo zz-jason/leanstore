@@ -116,12 +116,11 @@ public:
       const u64 pageId = mReclaimedPageIds.back();
       mReclaimedPageIds.pop_back();
       return pageId;
-    } else {
-      const u64 pageId = mNextPageId;
-      mNextPageId += mPageIdDistance;
-      ENSURE(pageId * FLAGS_page_size <= FLAGS_db_file_capacity);
-      return pageId;
     }
+
+    const u64 pageId = mNextPageId;
+    mNextPageId += mPageIdDistance;
+    return pageId;
   }
 
   inline void ReclaimPageId(PID pageId) {

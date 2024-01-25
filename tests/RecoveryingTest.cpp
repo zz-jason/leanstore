@@ -1,5 +1,8 @@
 #include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
+#include "storage/btree/BasicKV.hpp"
+#include "storage/btree/TransactionKV.hpp"
+#include "storage/btree/core/BTreeGeneric.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Defer.hpp"
@@ -19,8 +22,6 @@ protected:
   std::unique_ptr<LeanStore> mLeanStore;
 
   RecoveringTest() {
-    FLAGS_enable_print_btree_stats_on_exit = true;
-    FLAGS_wal = true;
     FLAGS_bulk_insert = false;
   }
 
@@ -58,12 +59,12 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
 
   // create btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = BTreeGeneric::Config{
+  auto btreeConfig = BTreeConfig{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
 
-  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
+  mLeanStore->mCRManager->ScheduleJobSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     mLeanStore->RegisterTransactionKV(btreeName, btreeConfig, &btree);
@@ -71,7 +72,7 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
   });
 
   // insert some values
-  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
+  mLeanStore->mCRManager->ScheduleJobSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     for (size_t i = 0; i < numKVs; ++i) {
@@ -82,7 +83,7 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     }
   });
 
-  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
+  mLeanStore->mCRManager->ScheduleJobSync(0, [&]() {
     rapidjson::Document doc(rapidjson::kObjectType);
     BTreeGeneric::ToJson(*btree, &doc);
     LOG(INFO) << "btree before destroy: " << utils::JsonToStr(&doc);
@@ -97,14 +98,14 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
   mLeanStore->GetTransactionKV(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
 
-  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
+  mLeanStore->mCRManager->ScheduleJobSync(0, [&]() {
     rapidjson::Document doc(rapidjson::kObjectType);
     BTreeGeneric::ToJson(*btree, &doc);
     LOG(INFO) << "btree after recovery: " << utils::JsonToStr(&doc);
   });
 
   // lookup the restored btree
-  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
+  mLeanStore->mCRManager->ScheduleJobSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     std::string copiedValue;
@@ -120,7 +121,7 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     }
   });
 
-  cr::CRManager::sInstance->ScheduleJobSync(1, [&]() {
+  mLeanStore->mCRManager->ScheduleJobSync(1, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     mLeanStore->UnRegisterTransactionKV(btreeName);
@@ -153,12 +154,12 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = BTreeGeneric::Config{
+  auto btreeConfig = BTreeConfig{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
 
-  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
+  mLeanStore->mCRManager->ScheduleJobSync(0, [&]() {
     cr::Worker::My().StartTx();
     mLeanStore->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
@@ -186,7 +187,7 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
   mLeanStore = std::make_unique<LeanStore>();
   mLeanStore->GetTransactionKV(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
-  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
+  mLeanStore->mCRManager->ScheduleJobSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     rapidjson::Document doc(rapidjson::kObjectType);
@@ -195,7 +196,7 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
   });
 
   // lookup the restored btree
-  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
+  mLeanStore->mCRManager->ScheduleJobSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     std::string copiedValue;

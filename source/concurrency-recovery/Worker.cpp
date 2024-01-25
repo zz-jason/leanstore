@@ -1,6 +1,7 @@
 #include "Worker.hpp"
 
 #include "Config.hpp"
+#include "LeanStore.hpp"
 #include "concurrency-recovery/Transaction.hpp"
 #include "profiling/counters/CRCounters.hpp"
 #include "shared-headers/Exceptions.hpp"
@@ -27,8 +28,10 @@ std::atomic<u64> Worker::sNetestActiveLongTx = 0;
 std::atomic<u64> Worker::sWmkOfAllTx = 0;
 std::atomic<u64> Worker::sWmkOfShortTx = 0;
 
-Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers)
-    : cc(numWorkers),
+Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers,
+               leanstore::LeanStore* store)
+    : mStore(store),
+      cc(store, numWorkers),
       mWorkerId(workerId),
       mAllWorkers(allWorkers),
       mNumAllWorkers(numWorkers) {
@@ -97,7 +100,7 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   // Draw TXID from global counter and publish it with the TX type (i.e.
   // long-running or short-running) We have to acquire a transaction id and use
   // it for locking in ANY isolation level
-  mActiveTx.mStartTs = ConcurrencyControl::sTimeStampOracle.fetch_add(1);
+  mActiveTx.mStartTs = mStore->AllocTs();
   auto curTxId = mActiveTx.mStartTs;
   if (FLAGS_enable_long_running_transaction && mActiveTx.IsLongRunning()) {
     // Mark as long-running transaction
@@ -130,16 +133,12 @@ void Worker::CommitTx() {
   // Reset mCommandId on commit
   mCommandId = 0;
   if (mActiveTx.mHasWrote) {
-    auto commitTs = cc.mCommitTree.AppendCommitLog(mActiveTx.mStartTs);
-    cc.mLatestCommitTs.store(commitTs, std::memory_order_release);
-    mActiveTx.mCommitTs = commitTs;
-    DCHECK(mActiveTx.mStartTs < mActiveTx.mCommitTs)
-        << "startTs should be smaller than commitTs"
-        << ", workerId=" << My().mWorkerId
-        << ", actual startTs=" << mActiveTx.mStartTs
-        << ", actual commitTs=" << mActiveTx.mCommitTs;
+    mActiveTx.mCommitTs = mStore->AllocTs();
+    cc.mCommitTree.AppendCommitLog(mActiveTx.mStartTs, mActiveTx.mCommitTs);
+    cc.mLatestCommitTs.store(mActiveTx.mCommitTs, std::memory_order_release);
   } else {
-    DLOG(INFO) << "Transaction has no writes, skip assigning commitTs"
+    DLOG(INFO) << "Transaction has no writes, skip assigning commitTs, append "
+                  "log to commit tree, and group commit"
                << ", workerId=" << My().mWorkerId
                << ", actual startTs=" << mActiveTx.mStartTs;
   }
@@ -148,14 +147,18 @@ void Worker::CommitTx() {
   // transaction watermarks and garbage collect the unused versions.
   sActiveTxId[mWorkerId].store(0, std::memory_order_release);
 
-  mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
-
   if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
     mLogging.WriteSimpleWal(WALEntry::TYPE::TX_COMMIT);
     mLogging.WriteSimpleWal(WALEntry::TYPE::TX_FINISH);
+  } else if (mActiveTx.mIsReadOnly) {
+    DCHECK(!mActiveTx.mHasWrote)
+        << "Read-only transaction should not have writes"
+        << ", workerId=" << mWorkerId << ", startTs=" << mActiveTx.mStartTs;
   }
 
-  if (mLogging.mHasRemoteDependency) {
+  if (mActiveTx.mHasWrote && mLogging.mHasRemoteDependency) {
+    // for group commit
+    mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
     std::unique_lock<std::mutex> g(mLogging.mTxToCommitMutex);
     mLogging.mTxToCommit.push_back(mActiveTx);
     DLOG(INFO) << "Puting transaction with remote dependency to mTxToCommit"
@@ -163,7 +166,9 @@ void Worker::CommitTx() {
                << ", startTs=" << mActiveTx.mStartTs
                << ", commitTs=" << mActiveTx.mCommitTs
                << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
-  } else {
+  } else if (mActiveTx.mHasWrote) {
+    // for group commit
+    mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
     std::unique_lock<std::mutex> g(mLogging.mRfaTxToCommitMutex);
     CRCounters::MyCounters().rfa_committed_tx++;
     mLogging.mRfaTxToCommit.push_back(mActiveTx);
@@ -174,10 +179,10 @@ void Worker::CommitTx() {
                << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
   }
 
-  // All isolation level generate garbage, cleanup in the end transaction
+  // Cleanup versions in history tree
   cc.GarbageCollection();
 
-  // wait transaction to be committed
+  // Wait transaction to be committed
   while (mLogging.TxUnCommitted(mActiveTx.mCommitTs)) {
   }
 }
@@ -225,8 +230,8 @@ void Worker::AbortTx() {
   const u64 txId = mActiveTx.mStartTs;
   std::for_each(entries.rbegin(), entries.rend(), [&](const WALEntry* entry) {
     const auto& complexEntry = *reinterpret_cast<const WALEntryComplex*>(entry);
-    leanstore::storage::TreeRegistry::sInstance->undo(
-        complexEntry.mTreeId, complexEntry.payload, txId);
+    mStore->mTreeRegistry->undo(complexEntry.mTreeId, complexEntry.payload,
+                                txId);
   });
 
   cc.mHistoryTree->PurgeVersions(

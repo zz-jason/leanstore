@@ -1,5 +1,6 @@
 #pragma once
 
+#include "LeanStore.hpp"
 #include "concurrency-recovery/WALEntry.hpp"
 #include "shared-headers/Units.hpp"
 #include "storage/btree/core/BTreeNode.hpp"
@@ -18,6 +19,8 @@ namespace cr {
 
 class Recovery {
 private:
+  leanstore::LeanStore* mStore;
+
   /// The file descriptor of the underlying DB file, which contains all the
   /// pages and WAL records.
   s32 mWalFd;
@@ -39,8 +42,9 @@ private:
   std::map<PID, storage::BufferFrame*> mResolvedPages;
 
 public:
-  Recovery(s32 fd, u64 offset, u64 size)
-      : mWalFd(fd),
+  Recovery(leanstore::LeanStore* store, s32 fd, u64 offset, u64 size)
+      : mStore(store),
+        mWalFd(fd),
         mWalStartOffset(offset),
         mWalSize(size) {
   }
@@ -122,7 +126,7 @@ inline storage::BufferFrame& Recovery::resolvePage(PID pageId) {
     return *it->second;
   }
 
-  auto& bf = storage::BufferManager::sInstance->ReadPageSync(pageId);
+  auto& bf = mStore->mBufferManager->ReadPageSync(pageId);
   // prevent the buffer frame from being evicted by buffer frame providers
   bf.header.mKeepInMemory = true;
   mResolvedPages.emplace(pageId, &bf);

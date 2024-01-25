@@ -1,6 +1,7 @@
 #pragma once
 
 #include "HistoryTreeInterface.hpp"
+#include "LeanStore.hpp"
 #include "profiling/counters/CRCounters.hpp"
 #include "shared-headers/Units.hpp"
 #include "utils/Misc.hpp"
@@ -10,6 +11,10 @@
 #include <shared_mutex>
 #include <utility>
 #include <vector>
+
+namespace leanstore {
+class LeanStore;
+} // namespace leanstore
 
 namespace leanstore::cr {
 
@@ -36,12 +41,13 @@ public:
   }
 
 public:
-  /// AppendCommitLog is called when a transaction is committed. It generates a
-  /// commit timestamp for the transaction, appends a (commitTs, startTs) pair
-  /// to the commit log, and return the commit timestamp in the end.
+  /// AppendCommitLog is called when a transaction is committed. It appends the
+  /// (commitTs, startTs) pair to the commit log. Transactions are sequential in
+  /// one worker, so the commitTs and startTs are also increasing in the commit
+  /// log of one worker
   /// @param startTs: the start timestamp of the transaction.
-  /// @return: the commit timestamp of the transaction.
-  TXID AppendCommitLog(TXID startTs);
+  /// @param commitTs: the commit timestamp of the transaction.
+  void AppendCommitLog(TXID startTs, TXID commitTs);
 
   /// CompactCommitLog is called when the commit log is full in the begging of a
   /// transaction. It keeps the latest (commitTs, startTs) in the commit log,
@@ -68,20 +74,15 @@ private:
 /// visibility check are stored here.
 class ConcurrencyControl {
 public:
-
-public:
-  ConcurrencyControl(u64 numWorkers)
-      : mHistoryTree(nullptr),
+  ConcurrencyControl(leanstore::LeanStore* store, u64 numWorkers)
+      : mStore(store),
+        mHistoryTree(nullptr),
         mCommitTree(numWorkers) {
   }
 
 public:
-  /// The global timestamp oracle, used to generate start and commit timestamps
-  /// for all transactions in the system. Starts from a positive number, 0 is
-  /// used for invalid timestamp
-  static std::atomic<TXID> sTimeStampOracle;
+  leanstore::LeanStore* mStore;
 
-public:
   /// The history tree of the current worker thread. All the history versions of
   /// transaction removes and updates are stored here. It's the version storage
   /// of the chained tuple. Used for MVCC.

@@ -11,6 +11,8 @@
 #include <vector>
 
 namespace leanstore {
+
+class LeanStore;
 namespace cr {
 
 struct WorkerThread {
@@ -25,8 +27,10 @@ class GroupCommitter;
 /// Manages a fixed number of worker threads, each one gets a partition. CR is
 /// short for "concurrent resource"
 class CRManager {
-
 public:
+  /// The LeanStore instance.
+  leanstore::LeanStore* mStore;
+
   /// The group committer thread, created and started if WAL is enabled when the
   /// CRManager instance is created.
   ///
@@ -52,37 +56,21 @@ public:
   std::vector<Worker*> mWorkers;
 
 public:
-  //---------------------------------------------------------------------------
-  // Constructor and Destructors
-  //---------------------------------------------------------------------------
-  CRManager(s32 ssdFd);
+  CRManager(leanstore::LeanStore* store, s32 ssdFd);
   ~CRManager();
 
 public:
-  //---------------------------------------------------------------------------
-  // Public Object Utils
-  //---------------------------------------------------------------------------
-
-  /**
-   * @brief Schedules one job asynchron on specific worker.
-   *
-   * @param workerId worker to compute job
-   * @param job job
-   */
+  /// Schedules one job asynchron on specific worker.
+  /// @param workerId worker to compute job
+  /// @param job job
   void ScheduleJobAsync(u64 workerId, std::function<void()> job);
 
-  /**
-   * @brief Schedules one job on one specific worker and waits for completion.
-   *
-   * @param workerId worker to compute job
-   * @param job job
-   */
+  /// Schedules one job on one specific worker and waits for completion.
+  /// @param workerId worker to compute job
+  /// @param job job
   void ScheduleJobSync(u64 workerId, std::function<void()> job);
 
-  /**
-   * @brief Waits for all Workers to complete.
-   *
-   */
+  /// Waits for all Workers to complete.
   void JoinAll();
 
   // State Serialization
@@ -90,38 +78,24 @@ public:
 
   void Deserialize(StringMap map);
 
-  void stop();
+  void Stop();
 
 private:
-  static std::atomic<u64> sFsyncCounter;
-  static std::atomic<u64> sSsdOffset;
-
   void runGroupCommiter();
+
   void runWorker(u64 workerId);
 
-  /**
-   * @brief Set the Job to specific worker.
-   *
-   * @param workerId specific worker
-   * @param job job
-   */
+  /// Set the Job to specific worker.
+  /// @param workerId specific worker
+  /// @param job job
   void setJob(u64 workerId, std::function<void()> job);
 
-  /**
-   * @brief Wait for one worker to complete.
-   *
-   * @param workerId worker id.
-   * @param condition what is the completion condition?
-   */
+  /// Wait for one worker to complete.
+  /// @param workerId worker id.
+  /// @param condition what is the completion condition?
   void joinOne(u64 workerId, std::function<bool(WorkerThread&)> condition);
 
   void setupHistoryTree();
-
-public:
-  //----------------------------------------------------------------------------
-  // static members
-  //----------------------------------------------------------------------------
-  static std::unique_ptr<CRManager> sInstance;
 };
 
 } // namespace cr

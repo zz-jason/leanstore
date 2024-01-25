@@ -6,9 +6,9 @@ std::mutex CPUCounters::mutex;
 u64 CPUCounters::id = 0;
 std::unordered_map<u64, CPUCounters> CPUCounters::threads;
 
-u64 CPUCounters::registerThread(string name, bool perf_inherit) {
+u64 CPUCounters::registerThread(string name, bool perfInherit) {
   std::unique_lock guard(mutex);
-  threads[id] = {.e = std::make_unique<PerfEvent>(perf_inherit), .name = name};
+  threads[id] = {.e = std::make_unique<PerfEvent>(perfInherit), .name = name};
   return id++;
 }
 

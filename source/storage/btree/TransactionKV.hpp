@@ -3,11 +3,13 @@
 #include "BasicKV.hpp"
 #include "Config.hpp"
 #include "KVInterface.hpp"
+#include "concurrency-recovery/Worker.hpp"
 #include "shared-headers/Units.hpp"
 #include "storage/btree/BasicKV.hpp"
 #include "storage/btree/ChainedTuple.hpp"
 #include "storage/btree/Tuple.hpp"
 #include "storage/btree/core/BTreeExclusiveIterator.hpp"
+#include "storage/btree/core/BTreeGeneric.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
 #include "storage/buffer-manager/GuardedBufferFrame.hpp"
 #include "utils/Defer.hpp"
@@ -15,6 +17,12 @@
 #include <glog/logging.h>
 
 #include <string>
+
+namespace leanstore {
+
+class LeanStore;
+
+} // namespace leanstore
 
 namespace leanstore::storage::btree {
 
@@ -47,12 +55,10 @@ public:
 
   OpCode Remove(Slice key) override;
 
-  void Init(TREEID treeId, Config config, BasicKV* graveyard) {
-    this->mGraveyard = graveyard;
-    BasicKV::Init(treeId, config);
-  }
+  void Init(leanstore::LeanStore* store, TREEID treeId, BTreeConfig config,
+            BasicKV* graveyard);
 
-  SpaceCheckResult checkSpaceUtilization(BufferFrame& bf) override;
+  SpaceCheckResult CheckSpaceUtilization(BufferFrame& bf) override;
 
   // This undo implementation works only for rollback and not for undo
   // operations during recovery
@@ -119,24 +125,9 @@ private:
   void undoLastRemove(const WALTxRemove* walRemove);
 
 public:
-  inline static TransactionKV* Create(const std::string& treeName,
-                                      Config& config, BasicKV* graveyard) {
-    auto [treePtr, treeId] =
-        TreeRegistry::sInstance->CreateTree(treeName, [&]() {
-          return std::unique_ptr<BufferManagedTree>(
-              static_cast<BufferManagedTree*>(new TransactionKV()));
-        });
-    if (treePtr == nullptr) {
-      LOG(ERROR) << "Failed to create TransactionKV, treeName has been taken"
-                 << ", treeName=" << treeName;
-      return nullptr;
-    }
-    auto* tree = dynamic_cast<TransactionKV*>(treePtr);
-    tree->Init(treeId, config, graveyard);
-
-    // TODO(jian.z): record WAL
-    return tree;
-  }
+  static TransactionKV* Create(leanstore::LeanStore* store,
+                               const std::string& treeName, BTreeConfig& config,
+                               BasicKV* graveyard);
 
   inline static void InsertToNode(GuardedBufferFrame<BTreeNode>& guardedNode,
                                   Slice key, Slice val, WORKERID workerId,

@@ -3,15 +3,11 @@
 #include "Adapter.hpp"
 #include "Config.hpp"
 #include "LeanStore.hpp"
-#include "shared-headers/Exceptions.hpp"
+#include "storage/btree/core/BTreeGeneric.hpp"
 
 #include <glog/logging.h>
 
-#include <cassert>
-#include <cstdint>
-#include <cstring>
 #include <functional>
-#include <string>
 
 using namespace leanstore;
 template <class Record> struct LeanStoreAdapter : Adapter<Record> {
@@ -30,8 +26,8 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
       btree = reinterpret_cast<leanstore::KVInterface*>(tree);
     } else {
       leanstore::storage::btree::TransactionKV* tree;
-      storage::btree::BTreeGeneric::Config config{.mEnableWal = FLAGS_wal,
-                                                  .mUseBulkInsert = false};
+      storage::btree::BTreeConfig config{.mEnableWal = FLAGS_wal,
+                                         .mUseBulkInsert = false};
       db.RegisterTransactionKV(name, config, &tree);
       btree = reinterpret_cast<leanstore::KVInterface*>(tree);
     }

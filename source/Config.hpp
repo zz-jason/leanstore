@@ -8,7 +8,6 @@
 DECLARE_uint32(page_size);
 DECLARE_uint64(buffer_pool_size);
 DECLARE_string(data_dir);
-DECLARE_uint64(db_file_capacity);
 
 // Config for TransactionKV
 DECLARE_bool(enable_fat_tuple);
@@ -23,7 +22,6 @@ DECLARE_bool(csv_truncate);
 DECLARE_uint32(free_pct);
 DECLARE_uint32(partition_bits);
 DECLARE_uint32(write_buffer_size);
-DECLARE_uint32(db_file_prealloc_gib);
 DECLARE_uint32(pp_threads);
 DECLARE_bool(root);
 DECLARE_bool(print_debug);
@@ -50,7 +48,6 @@ DECLARE_double(target_gib);
 DECLARE_uint64(run_for_seconds);
 DECLARE_uint64(warmup_for_seconds);
 
-DECLARE_bool(enable_print_btree_stats_on_exit);
 DECLARE_bool(btree_prefix_compression);
 DECLARE_int64(btree_hints);
 DECLARE_bool(btree_heads);

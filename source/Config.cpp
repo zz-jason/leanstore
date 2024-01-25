@@ -19,15 +19,11 @@ DEFINE_uint64(buffer_pool_size, 1073741824,
               "The buffer pool size (bytes)"); // 1 GiB
 DEFINE_string(data_dir, "~/.leanstore",
               "Where to put all the database files, meta file, and log files");
-DEFINE_uint64(db_file_capacity, 1825361100800,
-              "DB file capacity (bytes)"); // 1700 GB
 
 // Config for TransactionKV
 DEFINE_bool(enable_fat_tuple, false, "");
 DEFINE_bool(enable_long_running_transaction, true,
             "For long running transactions");
-
-DEFINE_uint32(db_file_prealloc_gib, 0, "Disk size to pre-allocate on DB file");
 
 DEFINE_uint32(free_pct, 1, "pct");
 DEFINE_uint32(partition_bits, 6, "bits per partition");
@@ -79,9 +75,6 @@ DEFINE_bool(
     "Jump to next leaf directly if the pointer in the parent has not changed");
 DEFINE_bool(measure_time, false, "");
 
-DEFINE_bool(
-    enable_print_btree_stats_on_exit, true,
-    "Print BTree stats including name, hight, and num slots, etc. on exit");
 DEFINE_bool(btree_prefix_compression, true, "");
 DEFINE_bool(btree_heads, true,
             "Enable heads optimization in lowerBound search");

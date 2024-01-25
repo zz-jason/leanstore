@@ -56,12 +56,8 @@ public:
   }
 
   // Move constructor
-  HybridGuard(HybridGuard&& other)
-      : mLatch(other.mLatch),
-        mState(other.mState),
-        mVersion(other.mVersion),
-        mEncounteredContention(other.mEncounteredContention) {
-    other.mState = GuardState::kMoved;
+  HybridGuard(HybridGuard&& other) {
+    *this = std::move(other);
   }
 
   // Move assignment

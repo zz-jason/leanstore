@@ -19,6 +19,12 @@
 #include <shared_mutex>
 #include <vector>
 
+namespace leanstore {
+
+class LeanStore;
+
+} // namespace leanstore
+
 namespace leanstore::cr {
 
 static constexpr u16 kWorkerLimit = std::numeric_limits<WORKERID>::max();
@@ -184,6 +190,7 @@ private:
 
 class Worker {
 public:
+  leanstore::LeanStore* mStore = nullptr;
   /// The write-ahead logging component.
   Logging mLogging;
 
@@ -204,7 +211,8 @@ public:
   const u64 mNumAllWorkers;
 
 public:
-  Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers);
+  Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers,
+         leanstore::LeanStore* store);
 
   ~Worker();
 
@@ -239,10 +247,6 @@ public:
   static constexpr u64 kLongRunningBit = (1ull << 62);
   static constexpr u64 kOltpOlapSameBit = kLongRunningBit;
   static constexpr u64 kCleanBitsMask = ~(kRcBit | kLongRunningBit);
-
-  // TXID: [ kRcBit | kLongRunningBit  | id];
-  // LWM:  [ kRcBit | kOltpOlapSameBit | id];
-  static constexpr s64 kCrEntrySize = sizeof(WALEntrySimple);
 
 public:
   inline static Worker& My() {
