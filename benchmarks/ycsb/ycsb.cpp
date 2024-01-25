@@ -109,9 +109,6 @@ static leanstore::LeanStore* GetLeanStore() {
   // FLAGS_init = (FLAGS_ycsb_cmd == kCmdLoad);
   FLAGS_init = true;
   FLAGS_data_dir = "/tmp/ycsb/" + FLAGS_ycsb_workload;
-  FLAGS_log_dir = GetLogDir();
-  FLAGS_logtostderr = false;
-  FLAGS_logtostdout = false;
 
   auto res = LeanStore::Open();
   if (res) {

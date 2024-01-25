@@ -61,6 +61,9 @@ std::expected<LeanStore*, utils::Error> LeanStore::Open() {
     std::filesystem::path dirPath = FLAGS_data_dir;
     std::filesystem::remove_all(dirPath);
     std::filesystem::create_directories(dirPath);
+    std::filesystem::create_directories(GetLogDir());
+    // for glog
+    FLAGS_log_dir = GetLogDir();
   }
   sLeanstore = std::make_unique<LeanStore>();
   return sLeanstore.get();

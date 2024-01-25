@@ -58,7 +58,7 @@ TEST_F(OptimisticGuardedTest, Set) {
   // Worker 1, read the guardedVal 200 times
   GetLeanStore()->mCRManager->ScheduleJobAsync(1, [&]() {
     TestPayload copiedVal;
-    u64 version;
+    auto version = guardedVal.Get(copiedVal);
     for (s64 i = 0; i < 200; i++) {
       auto currVersion = guardedVal.Get(copiedVal);
       if (currVersion != version) {
@@ -86,7 +86,7 @@ TEST_F(OptimisticGuardedTest, UpdateAttribute) {
   // Worker 1, read the guardedVal 200 times
   GetLeanStore()->mCRManager->ScheduleJobAsync(1, [&]() {
     TestPayload copiedVal;
-    u64 version;
+    auto version = guardedVal.Get(copiedVal);
     for (s64 i = 0; i < 200; i++) {
       auto currVersion = guardedVal.Get(copiedVal);
       if (currVersion != version) {

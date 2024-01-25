@@ -113,7 +113,7 @@ struct PerfEvent {
   }
 
   void registerCounter(const std::string& name, uint64_t type, uint64_t eventID,
-                       const bool exclude_user = false) {
+                       const bool excludeUser = false) {
     names.push_back(name);
     events.push_back(event());
     auto& event = events.back();
@@ -125,7 +125,7 @@ struct PerfEvent {
     pe.disabled = true;
     pe.inherit = inherit;
     pe.inherit_stat = 0;
-    pe.exclude_user = exclude_user;
+    pe.exclude_user = excludeUser;
     pe.exclude_kernel = false;
     pe.exclude_hv = false;
     pe.read_format =
