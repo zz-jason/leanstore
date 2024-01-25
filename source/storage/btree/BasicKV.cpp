@@ -1,7 +1,9 @@
 #include "BasicKV.hpp"
 
 #include "KVInterface.hpp"
+#include "LeanStore.hpp"
 #include "storage/btree/core/BTreeExclusiveIterator.hpp"
+#include "storage/btree/core/BTreeGeneric.hpp"
 #include "storage/btree/core/BTreeSharedIterator.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
 #include "utils/Misc.hpp"
@@ -13,6 +15,22 @@ using namespace std;
 using namespace leanstore::storage;
 
 namespace leanstore::storage::btree {
+
+auto BasicKV::Create(leanstore::LeanStore* store, const std::string& treeName,
+                     BTreeConfig& config)
+    -> std::expected<BasicKV*, utils::Error> {
+  auto [treePtr, treeId] = store->mTreeRegistry->CreateTree(treeName, [&]() {
+    return std::unique_ptr<BufferManagedTree>(
+        static_cast<BufferManagedTree*>(new BasicKV()));
+  });
+  if (treePtr == nullptr) {
+    return std::unexpected<utils::Error>(
+        utils::Error::General("Tree name has been taken"));
+  }
+  auto* tree = dynamic_cast<BasicKV*>(treePtr);
+  tree->Init(store, treeId, config);
+  return tree;
+}
 
 OpCode BasicKV::Lookup(Slice key, ValCallback valCallback) {
   while (true) {
@@ -45,8 +63,7 @@ bool BasicKV::IsRangeEmpty(Slice startKey, Slice endKey) {
       FindLeafCanJump(startKey, guardedLeaf);
 
       Slice upperFence = guardedLeaf->GetUpperFence();
-      Slice lowerFence = guardedLeaf->GetLowerFence();
-      assert(startKey >= lowerFence);
+      DCHECK(startKey >= guardedLeaf->GetLowerFence());
 
       if ((guardedLeaf->mUpperFence.offset == 0 || endKey <= upperFence) &&
           guardedLeaf->mNumSeps == 0) {

@@ -9,6 +9,9 @@
 using namespace leanstore::storage;
 
 namespace leanstore {
+
+class LeanStore;
+
 namespace storage {
 namespace btree {
 
@@ -46,21 +49,10 @@ public:
   bool IsRangeEmpty(Slice startKey, Slice endKey);
 
 public:
-  [[nodiscard]] static auto Create(const std::string& treeName, Config& config)
-      -> std::expected<BasicKV*, utils::Error> {
-    auto [treePtr, treeId] =
-        TreeRegistry::sInstance->CreateTree(treeName, [&]() {
-          return std::unique_ptr<BufferManagedTree>(
-              static_cast<BufferManagedTree*>(new BasicKV()));
-        });
-    if (treePtr == nullptr) {
-      return std::unexpected<utils::Error>(
-          utils::Error::General("Tree name has been taken"));
-    }
-    auto* tree = dynamic_cast<BasicKV*>(treePtr);
-    tree->Init(treeId, config);
-    return tree;
-  }
+  [[nodiscard]] static auto Create(leanstore::LeanStore* store,
+                                   const std::string& treeName,
+                                   BTreeConfig& config)
+      -> std::expected<BasicKV*, utils::Error>;
 
   /// Copy the slots from the value to the buffer.
   ///

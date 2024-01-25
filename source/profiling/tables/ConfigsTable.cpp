@@ -28,8 +28,6 @@ void ConfigsTable::open() {
                   [&](Column& col) { col << FLAGS_partition_bits; });
   columns.emplace("c_buffer_pool_size",
                   [&](Column& col) { col << FLAGS_buffer_pool_size; });
-  columns.emplace("c_db_file_capacity",
-                  [&](Column& col) { col << FLAGS_db_file_capacity; });
   columns.emplace("c_target_gib",
                   [&](Column& col) { col << FLAGS_target_gib; });
   columns.emplace("c_run_for_seconds",

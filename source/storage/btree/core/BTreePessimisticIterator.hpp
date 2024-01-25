@@ -68,12 +68,14 @@ protected:
     while (true) {
       mLeafPosInParent = -1;
       JUMPMU_TRY() {
-        mGuardedParent = GuardedBufferFrame<BTreeNode>(mBTree.mMetaNodeSwip);
+        mGuardedParent = GuardedBufferFrame<BTreeNode>(
+            mBTree.mStore->mBufferManager.get(), mBTree.mMetaNodeSwip);
         guardedChild.unlock();
 
         // it's the root node right now.
         guardedChild = GuardedBufferFrame<BTreeNode>(
-            mGuardedParent, mGuardedParent->mRightMostChildSwip);
+            mBTree.mStore->mBufferManager.get(), mGuardedParent,
+            mGuardedParent->mRightMostChildSwip);
 
         for (u16 level = 0; !guardedChild->mIsLeaf; level++) {
           COUNTERS_BLOCK() {
@@ -84,9 +86,13 @@ protected:
               &guardedChild->GetChildIncludingRightMost(mLeafPosInParent);
           mGuardedParent = std::move(guardedChild);
           if (level == mBTree.mHeight - 1) {
-            guardedChild = GuardedBufferFrame(mGuardedParent, *childSwip, mode);
+            guardedChild =
+                GuardedBufferFrame(mBTree.mStore->mBufferManager.get(),
+                                   mGuardedParent, *childSwip, mode);
           } else {
-            guardedChild = GuardedBufferFrame(mGuardedParent, *childSwip);
+            guardedChild =
+                GuardedBufferFrame(mBTree.mStore->mBufferManager.get(),
+                                   mGuardedParent, *childSwip);
           }
         }
 
@@ -239,8 +245,9 @@ public:
             s32 nextLeafPos = mLeafPosInParent + 1;
             auto& nextLeafSwip =
                 mGuardedParent->GetChildIncludingRightMost(nextLeafPos);
-            GuardedBufferFrame guardedNextLeaf(mGuardedParent, nextLeafSwip,
-                                               LatchMode::kJump);
+            GuardedBufferFrame guardedNextLeaf(
+                mBTree.mStore->mBufferManager.get(), mGuardedParent,
+                nextLeafSwip, LatchMode::kJump);
             if (mMode == LatchMode::kExclusive) {
               guardedNextLeaf.TryToExclusiveMayJump();
             } else {
@@ -339,8 +346,9 @@ public:
           if ((mLeafPosInParent - 1) >= 0) {
             s32 nextLeafPos = mLeafPosInParent - 1;
             auto& nextLeafSwip = mGuardedParent->getChild(nextLeafPos);
-            GuardedBufferFrame guardedNextLeaf(mGuardedParent, nextLeafSwip,
-                                               LatchMode::kJump);
+            GuardedBufferFrame guardedNextLeaf(
+                mBTree.mStore->mBufferManager.get(), mGuardedParent,
+                nextLeafSwip, LatchMode::kJump);
             if (mMode == LatchMode::kExclusive) {
               guardedNextLeaf.TryToExclusiveMayJump();
             } else {

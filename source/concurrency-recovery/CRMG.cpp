@@ -1,6 +1,7 @@
 #include "CRMG.hpp"
 
 #include "GroupCommitter.hpp"
+#include "LeanStore.hpp"
 #include "concurrency-recovery/HistoryTree.hpp"
 #include "profiling/counters/CPUCounters.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
@@ -16,13 +17,9 @@ namespace cr {
 ///   Workers (#workers)
 ///   Group Committer Thread (1)
 ///   Page Provider Threads (#pageProviders)
-std::unique_ptr<CRManager> CRManager::sInstance = nullptr;
-
-std::atomic<u64> CRManager::sFsyncCounter = 0;
-std::atomic<u64> CRManager::sSsdOffset = 1 * 1024 * 1024 * 1024;
-
-CRManager::CRManager(s32 walFd)
-    : mGroupCommitter(nullptr),
+CRManager::CRManager(leanstore::LeanStore* store, s32 walFd)
+    : mStore(store),
+      mGroupCommitter(nullptr),
       mHistoryTreePtr(nullptr),
       mWorkerThreadsMeta(FLAGS_worker_threads) {
 
@@ -53,7 +50,7 @@ CRManager::CRManager(s32 walFd)
   }
 }
 
-void CRManager::stop() {
+void CRManager::Stop() {
   mGroupCommitter->Stop();
   mGroupCommitterStarted = false;
   mWorkerKeepRunning = false;
@@ -67,7 +64,7 @@ void CRManager::stop() {
 }
 
 CRManager::~CRManager() {
-  stop();
+  Stop();
 }
 
 void CRManager::runWorker(u64 workerId) {
@@ -87,8 +84,8 @@ void CRManager::runWorker(u64 workerId) {
   WorkerCounters::MyCounters().mWorkerId = workerId;
   CRCounters::MyCounters().mWorkerId = workerId;
 
-  Worker::sTlsWorker =
-      std::make_unique<Worker>(workerId, mWorkers, FLAGS_worker_threads);
+  Worker::sTlsWorker = std::make_unique<Worker>(workerId, mWorkers,
+                                                FLAGS_worker_threads, mStore);
   mWorkers[workerId] = Worker::sTlsWorker.get();
   mRunningThreads++;
 
@@ -128,11 +125,11 @@ void CRManager::setupHistoryTree() {
 
   for (u64 i = 0; i < FLAGS_worker_threads; i++) {
     std::string name = "_history_tree_" + std::to_string(i);
-    storage::btree::BTreeGeneric::Config config = {.mEnableWal = false,
-                                                   .mUseBulkInsert = true};
+    storage::btree::BTreeConfig config = {.mEnableWal = false,
+                                          .mUseBulkInsert = true};
     // setup update tree
     std::string updateBtreeName = name + "_updates";
-    auto res = storage::btree::BasicKV::Create(updateBtreeName, config);
+    auto res = storage::btree::BasicKV::Create(mStore, updateBtreeName, config);
     if (!res) {
       LOG(FATAL) << "Failed to set up _updates tree"
                  << ", treeName=" << name
@@ -143,7 +140,7 @@ void CRManager::setupHistoryTree() {
 
     // setup delete tree
     std::string removeBtreeName = name + "_removes";
-    res = storage::btree::BasicKV::Create(removeBtreeName, config);
+    res = storage::btree::BasicKV::Create(mStore, removeBtreeName, config);
     if (!res) {
       LOG(FATAL) << "Failed to set up _removes tree"
                  << ", treeName=" << name
@@ -197,7 +194,7 @@ constexpr char kKeyGlobalLogicalClock[] = "global_logical_clock";
 
 StringMap CRManager::Serialize() {
   StringMap map;
-  u64 val = ConcurrencyControl::sTimeStampOracle.load();
+  u64 val = mStore->mTimestampOracle.load();
   map[kKeyWalSize] = std::to_string(mGroupCommitter->mWalSize);
   map[kKeyGlobalLogicalClock] = std::to_string(val);
   return map;
@@ -205,7 +202,7 @@ StringMap CRManager::Serialize() {
 
 void CRManager::Deserialize(StringMap map) {
   u64 val = std::stoull(map[kKeyGlobalLogicalClock]);
-  ConcurrencyControl::sTimeStampOracle = val;
+  mStore->mTimestampOracle = val;
   Worker::sWmkOfAllTx = val;
   mGroupCommitter->mWalSize = std::stoull(map[kKeyWalSize]);
 }

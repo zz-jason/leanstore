@@ -1,6 +1,5 @@
 #pragma once
 
-#include "BufferFrame.hpp"
 #include "BufferFrameProvider.hpp"
 #include "Partition.hpp"
 #include "Swip.hpp"
@@ -22,6 +21,8 @@ class BMTable;
 } // namespace profiling
 
 namespace storage {
+
+template <typename T> class GuardedBufferFrame;
 
 /// Notes on Synchronization in Buffer Manager.
 /// Terminology:
@@ -46,6 +47,9 @@ private:
   friend class leanstore::profiling::BMTable;
 
 public:
+  /// The LeanStore instance.
+  leanstore::LeanStore* mStore;
+
   /// All the managed buffer frames in the memory.
   u8* mBufferPool;
 
@@ -67,28 +71,28 @@ public:
   std::vector<std::unique_ptr<BufferFrameProvider>> mBfProviders;
 
 public:
-  BufferManager(s32 pageFd);
+  BufferManager(leanstore::LeanStore* store, s32 pageFd);
 
   ~BufferManager();
 
 public:
   /// Get the partition ID of the page.
-  u64 getPartitionID(PID);
+  u64 GetPartitionID(PID);
 
   /// Get the partition of the page.
-  Partition& getPartition(PID);
+  Partition& GetPartition(PID);
 
   /// Randomly pick a partition.
-  Partition& randomPartition();
+  Partition& RandomPartition();
 
   /// Randomly pick a buffer frame.
-  BufferFrame& randomBufferFrame();
+  BufferFrame& RandomBufferFrame();
 
   /// Get a buffer frame from a random partition for new page.
   ///
   /// NOTE: The buffer frame is initialized with an unused page ID, and is
   /// exclusively locked.
-  BufferFrame& AllocNewPage();
+  BufferFrame& AllocNewPage(TREEID treeId);
 
   /// Resolves the buffer frame pointed by the swipValue.
   ///
@@ -100,21 +104,20 @@ public:
   /// Usually a swip represents a btree node.
   ///
   /// @return The buffer frame regarding to the swip.
-  inline BufferFrame* tryFastResolveSwip(HybridGuard& swipGuard,
+  inline BufferFrame* TryFastResolveSwip(HybridGuard& swipGuard,
                                          Swip<BufferFrame>& swipValue) {
     if (swipValue.isHOT()) {
       BufferFrame& bf = swipValue.AsBufferFrame();
       swipGuard.JumpIfModifiedByOthers();
       return &bf;
-    } else {
-      return ResolveSwipMayJump(swipGuard, swipValue);
     }
+    return ResolveSwipMayJump(swipGuard, swipValue);
   }
 
   BufferFrame* ResolveSwipMayJump(HybridGuard& swipGuard,
                                   Swip<BufferFrame>& swipValue);
 
-  void reclaimPage(BufferFrame& bf);
+  void ReclaimPage(BufferFrame& bf);
 
   /// Reads the page at pageId to the destination buffer. All the pages are
   /// stored in one file (mPageFd), page id (pageId) determines the offset of
@@ -146,24 +149,17 @@ public:
   /// Checkpoints all the buffer frames.
   void CheckpointAllBufferFrames();
 
-  void RecoveryFromDisk();
+  void RecoverFromDisk();
 
   StringMap Serialize();
 
   void Deserialize(StringMap map);
 
-  u64 consumedPages();
+  u64 ConsumedPages();
 
   /// Do something on all the buffer frames which satisify the condition
   void DoWithBufferFrameIf(std::function<bool(BufferFrame& bf)> condition,
                            std::function<void(BufferFrame& bf)> action);
-
-public:
-  /// Global buffer manager singleton instance, lazily initialized.
-  static std::unique_ptr<BufferManager> sInstance;
-
-  /// Temporary hack: let workers evict the last page they used
-  static thread_local BufferFrame* sTlsLastReadBf;
 };
 
 } // namespace storage

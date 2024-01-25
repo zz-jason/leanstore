@@ -5,6 +5,8 @@
 #include "concurrency-recovery/CRMG.hpp"
 #include "concurrency-recovery/Transaction.hpp"
 #include "shared-headers/Units.hpp"
+#include "storage/btree/TransactionKV.hpp"
+#include "storage/btree/core/BTreeGeneric.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
 
@@ -94,8 +96,6 @@ public:
 
 public:
   LeanStoreMVCC(const std::string& storeDir, u32 sessionLimit) {
-    FLAGS_enable_print_btree_stats_on_exit = true;
-    FLAGS_wal = true;
     FLAGS_bulk_insert = false;
     FLAGS_worker_threads = sessionLimit;
     FLAGS_init = true;
@@ -208,17 +208,17 @@ inline void LeanStoreMVCCSession::SetTxMode(TxMode txMode) {
 }
 
 inline void LeanStoreMVCCSession::StartTx() {
-  cr::CRManager::sInstance->ScheduleJobSync(
+  mStore->mLeanStore->mCRManager->ScheduleJobSync(
       mWorkerId, [&]() { cr::Worker::My().StartTx(mTxMode, mIsolationLevel); });
 }
 
 inline void LeanStoreMVCCSession::CommitTx() {
-  cr::CRManager::sInstance->ScheduleJobSync(
+  mStore->mLeanStore->mCRManager->ScheduleJobSync(
       mWorkerId, [&]() { cr::Worker::My().CommitTx(); });
 }
 
 inline void LeanStoreMVCCSession::AbortTx() {
-  cr::CRManager::sInstance->ScheduleJobSync(
+  mStore->mLeanStore->mCRManager->ScheduleJobSync(
       mWorkerId, [&]() { cr::Worker::My().AbortTx(); });
 }
 
@@ -226,13 +226,13 @@ inline void LeanStoreMVCCSession::AbortTx() {
 inline auto LeanStoreMVCCSession::CreateTable(const std::string& tblName,
                                               bool implicitTx)
     -> std::expected<TableRef*, utils::Error> {
-  auto config = storage::btree::BTreeGeneric::Config{
+  auto config = storage::btree::BTreeConfig{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
 
   storage::btree::TransactionKV* btree;
-  cr::CRManager::sInstance->ScheduleJobSync(mWorkerId, [&]() {
+  mStore->mLeanStore->mCRManager->ScheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
       cr::Worker::My().StartTx(mTxMode, mIsolationLevel);
     }
@@ -250,7 +250,7 @@ inline auto LeanStoreMVCCSession::CreateTable(const std::string& tblName,
 inline auto LeanStoreMVCCSession::DropTable(const std::string& tblName,
                                             bool implicitTx)
     -> std::expected<void, utils::Error> {
-  cr::CRManager::sInstance->ScheduleJobSync(mWorkerId, [&]() {
+  mStore->mLeanStore->mCRManager->ScheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
       cr::Worker::My().StartTx(mTxMode, mIsolationLevel);
     }
@@ -268,7 +268,7 @@ inline auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
     -> std::expected<void, utils::Error> {
   auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
   OpCode res;
-  cr::CRManager::sInstance->ScheduleJobSync(mWorkerId, [&]() {
+  mStore->mLeanStore->mCRManager->ScheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
       cr::Worker::My().StartTx(mTxMode, mIsolationLevel);
     }
@@ -300,7 +300,7 @@ inline auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key,
     memcpy(val.data(), res.data(), res.size());
   };
 
-  cr::CRManager::sInstance->ScheduleJobSync(mWorkerId, [&]() {
+  mStore->mLeanStore->mCRManager->ScheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
       cr::Worker::My().StartTx(mTxMode, mIsolationLevel, true);
     }
@@ -332,7 +332,7 @@ inline auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
   auto updateCallBack = [&](MutableSlice toUpdate) {
     std::memcpy(toUpdate.Data(), val.data(), val.length());
   };
-  cr::CRManager::sInstance->ScheduleJobSync(mWorkerId, [&]() {
+  mStore->mLeanStore->mCRManager->ScheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
       cr::Worker::My().StartTx(mTxMode, mIsolationLevel);
     }
@@ -368,7 +368,7 @@ inline auto LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key,
     -> std::expected<u64, utils::Error> {
   auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
   OpCode res;
-  cr::CRManager::sInstance->ScheduleJobSync(mWorkerId, [&]() {
+  mStore->mLeanStore->mCRManager->ScheduleJobSync(mWorkerId, [&]() {
     if (implicitTx) {
       cr::Worker::My().StartTx(mTxMode, mIsolationLevel);
     }

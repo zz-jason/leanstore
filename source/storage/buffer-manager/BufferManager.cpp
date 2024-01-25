@@ -2,11 +2,14 @@
 
 #include "BufferFrame.hpp"
 #include "Config.hpp"
+#include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
 #include "concurrency-recovery/GroupCommitter.hpp"
 #include "concurrency-recovery/Recovery.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "shared-headers/Exceptions.hpp"
+#include "shared-headers/Units.hpp"
+#include "storage/buffer-manager/GuardedBufferFrame.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Misc.hpp"
 #include "utils/Parallelize.hpp"
@@ -23,37 +26,28 @@
 namespace leanstore {
 namespace storage {
 
-thread_local BufferFrame* BufferManager::sTlsLastReadBf = nullptr;
-
-std::unique_ptr<BufferManager> BufferManager::sInstance = nullptr;
-
-BufferManager::BufferManager(s32 fd) : mPageFd(fd) {
-  mNumBfs = FLAGS_buffer_pool_size / BufferFrame::Size();
+BufferManager::BufferManager(leanstore::LeanStore* store, s32 fd)
+    : mStore(store),
+      mPageFd(fd) {
+  mNumBfs = mStore->mStoreOption.mBufferPoolSize / BufferFrame::Size();
   const u64 totalMemSize = BufferFrame::Size() * (mNumBfs + mNumSaftyBfs);
 
   // Init buffer pool with zero-initialized buffer frames. Use mmap with flags
   // MAP_PRIVATE and MAP_ANONYMOUS, no underlying file desciptor to allocate
-  // totalmemSize buffer pool with zero-initialized contents. See:
-  //  1. https://man7.org/linux/man-pages/man2/mmap.2.html
-  //  2.
-  //  https://stackoverflow.com/questions/34042915/what-is-the-purpose-of-map-anonymous-flag-in-mmap-system-call
-  {
-    void* underlyingBuf = mmap(/* addr= */ NULL, /* length= */ totalMemSize,
-                               /* prot= */ PROT_READ | PROT_WRITE,
-                               /* flags= */ MAP_PRIVATE | MAP_ANONYMOUS,
-                               /* fd= */ -1, /* offset= */ 0);
-    LOG_IF(FATAL, underlyingBuf == MAP_FAILED)
-        << "Failed to allocate memory for the buffer pool"
-        << ", FLAGS_buffer_pool_size=" << FLAGS_buffer_pool_size
-        << ", totalMemSize=" << totalMemSize;
+  // totalmemSize buffer pool with zero-initialized contents.
+  void* underlyingBuf = mmap(NULL, totalMemSize, PROT_READ | PROT_WRITE,
+                             MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  LOG_IF(FATAL, underlyingBuf == MAP_FAILED)
+      << "Failed to allocate memory for the buffer pool"
+      << ", FLAGS_buffer_pool_size=" << mStore->mStoreOption.mBufferPoolSize
+      << ", totalMemSize=" << totalMemSize;
 
-    mBufferPool = reinterpret_cast<u8*>(underlyingBuf);
-    madvise(mBufferPool, totalMemSize, MADV_HUGEPAGE);
-    madvise(mBufferPool, totalMemSize, MADV_DONTFORK);
-  }
+  mBufferPool = reinterpret_cast<u8*>(underlyingBuf);
+  madvise(mBufferPool, totalMemSize, MADV_HUGEPAGE);
+  madvise(mBufferPool, totalMemSize, MADV_DONTFORK);
 
   // Initialize mPartitions
-  mNumPartitions = (1 << FLAGS_partition_bits);
+  mNumPartitions = mStore->mStoreOption.mNumPartitions;
   mPartitionsMask = mNumPartitions - 1;
   const u64 freeBfsLimitPerPartition =
       std::ceil((FLAGS_free_pct * 1.0 * mNumBfs / 100.0) /
@@ -67,7 +61,7 @@ BufferManager::BufferManager(s32 fd) : mPageFd(fd) {
   utils::Parallelize::parallelRange(mNumBfs, [&](u64 begin, u64 end) {
     u64 partitionId = 0;
     for (u64 i = begin; i < end; i++) {
-      auto& partition = getPartition(partitionId);
+      auto& partition = GetPartition(partitionId);
       auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
       partition.mFreeBfList.PushFront(*new (bfAddr) BufferFrame());
       partitionId = (partitionId + 1) % mNumPartitions;
@@ -76,16 +70,17 @@ BufferManager::BufferManager(s32 fd) : mPageFd(fd) {
 }
 
 void BufferManager::StartBufferFrameProviders() {
+  auto numBufferProviders = mStore->mStoreOption.mNumBufferProviders;
   // make it optional for pure in-memory experiments
-  if (FLAGS_pp_threads <= 0) {
+  if (numBufferProviders <= 0) {
     return;
   }
 
-  DCHECK(FLAGS_pp_threads <= mNumPartitions);
-  mBfProviders.reserve(FLAGS_pp_threads);
-  for (auto i = 0u; i < FLAGS_pp_threads; ++i) {
+  DCHECK(numBufferProviders <= mNumPartitions);
+  mBfProviders.reserve(numBufferProviders);
+  for (auto i = 0u; i < numBufferProviders; ++i) {
     std::string threadName = "BuffProvider";
-    if (FLAGS_pp_threads > 1) {
+    if (numBufferProviders > 1) {
       threadName += std::to_string(i);
     }
 
@@ -97,7 +92,7 @@ void BufferManager::StartBufferFrameProviders() {
     }
 
     mBfProviders.push_back(std::make_unique<BufferFrameProvider>(
-        threadName, runningCPU, mNumBfs, mBufferPool, mNumPartitions,
+        mStore, threadName, runningCPU, mNumBfs, mBufferPool, mNumPartitions,
         mPartitionsMask, mPartitions, mPageFd));
   }
 
@@ -111,7 +106,7 @@ StringMap BufferManager::Serialize() {
   StringMap map;
   PID maxPageId = 0;
   for (u64 i = 0; i < mNumPartitions; i++) {
-    maxPageId = std::max<PID>(getPartition(i).mNextPageId, maxPageId);
+    maxPageId = std::max<PID>(GetPartition(i).mNextPageId, maxPageId);
   }
   map["max_pid"] = std::to_string(maxPageId);
   return map;
@@ -121,7 +116,7 @@ void BufferManager::Deserialize(StringMap map) {
   PID maxPageId = std::stoull(map["max_pid"]);
   maxPageId = (maxPageId + (mNumPartitions - 1)) & ~(mNumPartitions - 1);
   for (u64 i = 0; i < mNumPartitions; i++) {
-    getPartition(i).mNextPageId = maxPageId + i;
+    GetPartition(i).mNextPageId = maxPageId + i;
   }
 }
 
@@ -140,7 +135,7 @@ void BufferManager::CheckpointAllBufferFrames() {
       auto& bf = *reinterpret_cast<BufferFrame*>(bfAddr);
       bf.header.mLatch.LockExclusively();
       if (!bf.isFree()) {
-        TreeRegistry::sInstance->Checkpoint(bf.page.mBTreeId, bf, buffer);
+        mStore->mTreeRegistry->Checkpoint(bf.page.mBTreeId, bf, buffer);
         auto ret = pwrite(mPageFd, buffer, FLAGS_page_size,
                           bf.header.mPageId * FLAGS_page_size);
         DCHECK_EQ(ret, FLAGS_page_size);
@@ -155,7 +150,7 @@ void BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
   auto* buffer = alignedBuffer.Get();
   bf.header.mLatch.LockExclusively();
   if (!bf.isFree()) {
-    TreeRegistry::sInstance->Checkpoint(bf.page.mBTreeId, bf, buffer);
+    mStore->mTreeRegistry->Checkpoint(bf.page.mBTreeId, bf, buffer);
     auto ret = pwrite(mPageFd, buffer, FLAGS_page_size,
                       bf.header.mPageId * FLAGS_page_size);
     DCHECK_EQ(ret, FLAGS_page_size);
@@ -163,38 +158,38 @@ void BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
   bf.header.mLatch.UnlockExclusively();
 }
 
-void BufferManager::RecoveryFromDisk() {
+void BufferManager::RecoverFromDisk() {
   auto recovery = std::make_unique<leanstore::cr::Recovery>(
-      leanstore::cr::CRManager::sInstance->mGroupCommitter->mWalFd, 0,
-      leanstore::cr::CRManager::sInstance->mGroupCommitter->mWalSize);
+      mStore, mStore->mCRManager->mGroupCommitter->mWalFd, 0,
+      mStore->mCRManager->mGroupCommitter->mWalSize);
   recovery->Run();
 }
 
-u64 BufferManager::consumedPages() {
+u64 BufferManager::ConsumedPages() {
   u64 totalUsedBfs = 0;
   u64 totalFreeBfs = 0;
   for (u64 i = 0; i < mNumPartitions; i++) {
-    totalFreeBfs += getPartition(i).NumReclaimedPages();
-    totalUsedBfs += getPartition(i).NumAllocatedPages();
+    totalFreeBfs += GetPartition(i).NumReclaimedPages();
+    totalUsedBfs += GetPartition(i).NumAllocatedPages();
   }
   return totalUsedBfs - totalFreeBfs;
 }
 
 // Buffer Frames Management
 
-Partition& BufferManager::randomPartition() {
+Partition& BufferManager::RandomPartition() {
   auto randOrdinal = utils::RandomGenerator::Rand<u64>(0, mNumPartitions);
-  return getPartition(randOrdinal);
+  return GetPartition(randOrdinal);
 }
 
-BufferFrame& BufferManager::randomBufferFrame() {
+BufferFrame& BufferManager::RandomBufferFrame() {
   auto i = utils::RandomGenerator::Rand<u64>(0, mNumBfs);
   auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
   return *reinterpret_cast<BufferFrame*>(bfAddr);
 }
 
-BufferFrame& BufferManager::AllocNewPage() {
-  Partition& partition = randomPartition();
+BufferFrame& BufferManager::AllocNewPage(TREEID treeId) {
+  Partition& partition = RandomPartition();
   BufferFrame& freeBf = partition.mFreeBfList.PopFrontMayJump();
   freeBf.Init(partition.NextPageId());
 
@@ -202,13 +197,15 @@ BufferFrame& BufferManager::AllocNewPage() {
     WorkerCounters::MyCounters().allocate_operations_counter++;
   }
 
+  freeBf.page.mBTreeId = treeId;
+  freeBf.page.mPSN++; // mark as dirty
   return freeBf;
 }
 
 // Pre: bf is exclusively locked
 // ATTENTION: this function unlocks it !!
-void BufferManager::reclaimPage(BufferFrame& bf) {
-  Partition& partition = getPartition(bf.header.mPageId);
+void BufferManager::ReclaimPage(BufferFrame& bf) {
+  Partition& partition = GetPartition(bf.header.mPageId);
   if (FLAGS_reclaim_page_ids) {
     partition.ReclaimPageId(bf.header.mPageId);
   }
@@ -254,7 +251,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
   swipGuard.unlock();
 
   const PID pageId = swipValue.asPageID();
-  Partition& partition = getPartition(pageId);
+  Partition& partition = GetPartition(pageId);
   JumpScoped<std::unique_lock<std::mutex>> inflightIOGuard(
       partition.mInflightIOMutex);
   swipGuard.JumpIfModifiedByOthers();
@@ -264,7 +261,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
   // Create an IO frame to read page from disk.
   if (!frameHandler) {
     // 1. Randomly get a buffer frame from partitions
-    BufferFrame& bf = randomPartition().mFreeBfList.PopFrontMayJump();
+    BufferFrame& bf = RandomPartition().mFreeBfList.PopFrontMayJump();
     DCHECK(!bf.header.mLatch.IsLockedExclusively());
     DCHECK(bf.header.state == STATE::FREE);
 
@@ -313,7 +310,6 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
         partition.mInflightIOs.Remove(pageId);
       }
 
-      sTlsLastReadBf = &bf;
       JUMPMU_RETURN& bf;
     }
     JUMPMU_CATCH() {
@@ -369,7 +365,6 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
         ioFrame.state = IOFrame::STATE::TO_DELETE;
       }
       inflightIOGuard->unlock();
-      sTlsLastReadBf = bf;
       return bf;
     }
   }
@@ -386,6 +381,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
   }
   }
   assert(false);
+  return nullptr;
 }
 
 void BufferManager::ReadPageSync(PID pageId, void* destination) {
@@ -432,7 +428,7 @@ void BufferManager::WritePageSync(BufferFrame& bf) {
   HybridGuard guardedBf(&bf.header.mLatch);
   guardedBf.ToExclusiveMayJump();
   auto pageId = bf.header.mPageId;
-  auto& partition = getPartition(pageId);
+  auto& partition = GetPartition(pageId);
   pwrite(mPageFd, &bf.page, FLAGS_page_size, pageId * FLAGS_page_size);
   bf.Reset();
   guardedBf.unlock();
@@ -443,12 +439,12 @@ void BufferManager::SyncAllPageWrites() {
   fdatasync(mPageFd);
 }
 
-u64 BufferManager::getPartitionID(PID pageId) {
+u64 BufferManager::GetPartitionID(PID pageId) {
   return pageId & mPartitionsMask;
 }
 
-Partition& BufferManager::getPartition(PID pageId) {
-  const u64 partitionId = getPartitionID(pageId);
+Partition& BufferManager::GetPartition(PID pageId) {
+  const u64 partitionId = GetPartitionID(pageId);
   return *mPartitions[partitionId];
 }
 

@@ -26,7 +26,8 @@ void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
 
   versionSize += sizeof(VersionMeta);
 
-  auto* btree = (isRemove) ? mRemoveBTrees[workerId] : mUpdateBTrees[workerId];
+  volatile auto* btree =
+      (isRemove) ? mRemoveBTrees[workerId] : mUpdateBTrees[workerId];
   Session* session = nullptr;
   if (sameThread) {
     session =
@@ -34,9 +35,9 @@ void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
   }
   if (session != nullptr && session->mRightmostInited) {
     JUMPMU_TRY() {
-      BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(btree),
-                                   session->mRightmostBf,
-                                   session->mRightmostVersion);
+      BTreeExclusiveIterator xIter(
+          *static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)),
+          session->mRightmostBf, session->mRightmostVersion);
       if (xIter.HasEnoughSpaceFor(key.size(), versionSize) &&
           xIter.KeyInCurrentNode(key)) {
 
@@ -108,8 +109,8 @@ bool HistoryTree::GetVersion(WORKERID prevWorkerId, TXID prevTxId,
                              COMMANDID prevCommandId,
                              const bool isRemoveCommand,
                              std::function<void(const u8*, u64)> cb) {
-  BasicKV* btree = (isRemoveCommand) ? mRemoveBTrees[prevWorkerId]
-                                     : mUpdateBTrees[prevWorkerId];
+  volatile BasicKV* btree = (isRemoveCommand) ? mRemoveBTrees[prevWorkerId]
+                                              : mUpdateBTrees[prevWorkerId];
   const u64 keySize = sizeof(prevTxId) + sizeof(prevCommandId);
   u8 keyBuffer[keySize];
   u64 offset = 0;
@@ -220,7 +221,8 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
       BufferFrame* bf = session->leftmost_bf;
       HybridGuard bfGuard(bf->header.mLatch, session->leftmost_version);
       bfGuard.JumpIfModifiedByOthers();
-      GuardedBufferFrame<BTreeNode> guardedLeaf(std::move(bfGuard), bf);
+      GuardedBufferFrame<BTreeNode> guardedLeaf(
+          btree->mStore->mBufferManager.get(), std::move(bfGuard), bf);
 
       if (guardedLeaf->mLowerFence.length == 0) {
         auto lastKeySize =

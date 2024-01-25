@@ -109,9 +109,6 @@ static leanstore::LeanStore* GetLeanStore() {
   // FLAGS_init = (FLAGS_ycsb_cmd == kCmdLoad);
   FLAGS_init = true;
   FLAGS_data_dir = "/tmp/ycsb/" + FLAGS_ycsb_workload;
-  FLAGS_log_dir = GetLogDir();
-  FLAGS_logtostderr = false;
-  FLAGS_logtostdout = false;
 
   auto res = LeanStore::Open();
   if (res) {
@@ -126,12 +123,12 @@ static leanstore::LeanStore* GetLeanStore() {
 static KVInterface* CreateTable() {
   auto* leanstore = GetLeanStore();
   auto tableName = "ycsb_" + FLAGS_ycsb_workload;
-  auto config = btree::BTreeGeneric::Config{
+  auto config = btree::BTreeConfig{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
   btree::TransactionKV* table;
-  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
+  GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     leanstore->RegisterTransactionKV(tableName, config, &table);
@@ -181,24 +178,25 @@ static void HandleCmdLoad() {
   utils::Parallelize::range(
       FLAGS_worker_threads, FLAGS_ycsb_record_count,
       [&](u64 workerId, u64 begin, u64 end) {
-        cr::CRManager::sInstance->ScheduleJobAsync(workerId, [&, begin, end]() {
-          for (u64 i = begin; i < end; i++) {
-            // generate key
-            u8 key[FLAGS_ycsb_key_size];
-            GenYcsbKey(zipfRandom, key);
+        GetLeanStore()->mCRManager->ScheduleJobAsync(
+            workerId, [&, begin, end]() {
+              for (u64 i = begin; i < end; i++) {
+                // generate key
+                u8 key[FLAGS_ycsb_key_size];
+                GenYcsbKey(zipfRandom, key);
 
-            // generate value
-            u8 val[FLAGS_ycsb_val_size];
-            utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
+                // generate value
+                u8 val[FLAGS_ycsb_val_size];
+                utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
 
-            cr::Worker::My().StartTx();
-            table->Insert(Slice(key, FLAGS_ycsb_key_size),
-                          Slice(val, FLAGS_ycsb_val_size));
-            cr::Worker::My().CommitTx();
-          }
-        });
+                cr::Worker::My().StartTx();
+                table->Insert(Slice(key, FLAGS_ycsb_key_size),
+                              Slice(val, FLAGS_ycsb_val_size));
+                cr::Worker::My().CommitTx();
+              }
+            });
       });
-  cr::CRManager::sInstance->JoinAll();
+  GetLeanStore()->mCRManager->JoinAll();
 }
 
 static void HandleCmdRun() {
@@ -219,7 +217,7 @@ static void HandleCmdRun() {
   }
 
   for (u64 workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
-    cr::CRManager::sInstance->ScheduleJobAsync(workerId, [&]() {
+    GetLeanStore()->mCRManager->ScheduleJobAsync(workerId, [&]() {
       u8 key[FLAGS_ycsb_key_size];
       std::string valRead;
       auto copyValue = [&](Slice val) {
@@ -309,7 +307,7 @@ static void HandleCmdRun() {
 
   // Shutdown threads
   keepRunning = false;
-  cr::CRManager::sInstance->JoinAll();
+  GetLeanStore()->mCRManager->JoinAll();
 }
 
 } // namespace leanstore::ycsb
