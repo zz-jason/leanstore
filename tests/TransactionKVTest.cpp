@@ -1,6 +1,9 @@
+#include "storage/btree/TransactionKV.hpp"
+
 #include "KVInterface.hpp"
 #include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
+#include "storage/btree/core/BTreeGeneric.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/Defer.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -48,7 +51,7 @@ TEST_F(TransactionKVTest, Create) {
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+  auto btreeConfig = leanstore::storage::btree::BTreeConfig{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
@@ -108,7 +111,7 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+  auto btreeConfig = leanstore::storage::btree::BTreeConfig{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
@@ -177,7 +180,7 @@ TEST_F(TransactionKVTest, Insert1000KVs) {
 
     // create leanstore btree for table records
     const auto* btreeName = "testTree1";
-    auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
@@ -218,7 +221,7 @@ TEST_F(TransactionKVTest, InsertDuplicates) {
 
     // create leanstore btree for table records
     const auto* btreeName = "testTree1";
-    auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
@@ -269,7 +272,7 @@ TEST_F(TransactionKVTest, Remove) {
 
     // create leanstore btree for table records
     const auto* btreeName = "testTree1";
-    auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
@@ -326,7 +329,7 @@ TEST_F(TransactionKVTest, RemoveNotExisted) {
 
     // create leanstore btree for table records
     const auto* btreeName = "testTree1";
-    auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
@@ -384,7 +387,7 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
 
   GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
     // create leanstore btree for table records
-    auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
@@ -466,7 +469,7 @@ TEST_F(TransactionKVTest, ToJson) {
     }
     // create leanstore btree for table records
     const auto* btreeName = "testTree1";
-    auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
@@ -512,7 +515,7 @@ TEST_F(TransactionKVTest, Update) {
   const auto* btreeName = "testTree1";
 
   GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
-    auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
@@ -605,7 +608,7 @@ TEST_F(TransactionKVTest, ScanAsc) {
   const auto* btreeName = "testTree1";
 
   GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
-    auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
@@ -691,7 +694,7 @@ TEST_F(TransactionKVTest, ScanDesc) {
   const auto* btreeName = "testTree1";
 
   GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
-    auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
@@ -783,7 +786,7 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
   };
 
   GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
-    auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
@@ -897,7 +900,7 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
   };
 
   GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
-    auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
     };

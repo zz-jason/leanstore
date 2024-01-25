@@ -50,7 +50,8 @@ public:
 
 public:
   [[nodiscard]] static auto Create(leanstore::LeanStore* store,
-                                   const std::string& treeName, Config& config)
+                                   const std::string& treeName,
+                                   BTreeConfig& config)
       -> std::expected<BasicKV*, utils::Error>;
 
   /// Copy the slots from the value to the buffer.

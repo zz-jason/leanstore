@@ -5,6 +5,8 @@
 #include "concurrency-recovery/CRMG.hpp"
 #include "concurrency-recovery/Transaction.hpp"
 #include "shared-headers/Units.hpp"
+#include "storage/btree/TransactionKV.hpp"
+#include "storage/btree/core/BTreeGeneric.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
 
@@ -224,7 +226,7 @@ inline void LeanStoreMVCCSession::AbortTx() {
 inline auto LeanStoreMVCCSession::CreateTable(const std::string& tblName,
                                               bool implicitTx)
     -> std::expected<TableRef*, utils::Error> {
-  auto config = storage::btree::BTreeGeneric::Config{
+  auto config = storage::btree::BTreeConfig{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };

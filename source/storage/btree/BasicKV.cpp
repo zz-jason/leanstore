@@ -3,6 +3,7 @@
 #include "KVInterface.hpp"
 #include "LeanStore.hpp"
 #include "storage/btree/core/BTreeExclusiveIterator.hpp"
+#include "storage/btree/core/BTreeGeneric.hpp"
 #include "storage/btree/core/BTreeSharedIterator.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
 #include "utils/Misc.hpp"
@@ -16,7 +17,8 @@ using namespace leanstore::storage;
 namespace leanstore::storage::btree {
 
 auto BasicKV::Create(leanstore::LeanStore* store, const std::string& treeName,
-                     Config& config) -> std::expected<BasicKV*, utils::Error> {
+                     BTreeConfig& config)
+    -> std::expected<BasicKV*, utils::Error> {
   auto [treePtr, treeId] = store->mTreeRegistry->CreateTree(treeName, [&]() {
     return std::unique_ptr<BufferManagedTree>(
         static_cast<BufferManagedTree*>(new BasicKV()));
@@ -61,8 +63,7 @@ bool BasicKV::IsRangeEmpty(Slice startKey, Slice endKey) {
       FindLeafCanJump(startKey, guardedLeaf);
 
       Slice upperFence = guardedLeaf->GetUpperFence();
-      Slice lowerFence = guardedLeaf->GetLowerFence();
-      assert(startKey >= lowerFence);
+      DCHECK(startKey >= guardedLeaf->GetLowerFence());
 
       if ((guardedLeaf->mUpperFence.offset == 0 || endKey <= upperFence) &&
           guardedLeaf->mNumSeps == 0) {

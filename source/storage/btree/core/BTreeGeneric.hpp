@@ -20,14 +20,14 @@ enum class BTreeType : u8 { kGeneric = 0, kBasicKV = 1, kTransactionKV = 2 };
 
 using BTreeNodeCallback = std::function<s64(BTreeNode&)>;
 
+struct BTreeConfig {
+  bool mEnableWal = true;
+  bool mUseBulkInsert = false;
+};
+
 class BTreeGeneric : public leanstore::storage::BufferManagedTree {
 public:
   friend class BTreePessimisticIterator;
-
-  struct Config {
-    bool mEnableWal = true;
-    bool mUseBulkInsert = false;
-  };
 
   enum class XMergeReturnCode : u8 { kNothing, kFullMerge, kPartialMerge };
 
@@ -38,7 +38,7 @@ public:
 
   BTreeType mTreeType = BTreeType::kGeneric;
 
-  Config mConfig;
+  BTreeConfig mConfig;
 
   /// Owns the meta node of the tree. The right-most child of meta node is the
   /// root of the tree.
@@ -52,7 +52,7 @@ public:
   virtual ~BTreeGeneric() override = default;
 
 public:
-  void Init(leanstore::LeanStore* store, TREEID treeId, Config config);
+  void Init(leanstore::LeanStore* store, TREEID treeId, BTreeConfig config);
 
   /// Try to merge the current node with its left or right sibling, reclaim the
   /// merged left or right sibling if successful.

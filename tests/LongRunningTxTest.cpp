@@ -5,6 +5,8 @@
 #include "concurrency-recovery/HistoryTree.hpp"
 #include "concurrency-recovery/Transaction.hpp"
 #include "concurrency-recovery/Worker.hpp"
+#include "storage/btree/BasicKV.hpp"
+#include "storage/btree/TransactionKV.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/Defer.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -39,7 +41,7 @@ protected:
     auto* leanstore = GetLeanStore();
 
     mTreeName = RandomGenerator::RandAlphString(10);
-    auto config = BTreeGeneric::Config{
+    auto config = BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
     };

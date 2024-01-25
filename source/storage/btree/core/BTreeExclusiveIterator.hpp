@@ -69,7 +69,7 @@ public:
   }
 
   virtual void SplitForKey(Slice key) {
-    u64 numAttempts(0);
+    volatile u64 numAttempts(0);
     while (true) {
       JUMPMU_TRY() {
         if (mSlotId == -1 || !KeyInCurrentNode(key)) {
@@ -83,7 +83,8 @@ public:
         JUMPMU_BREAK;
       }
       JUMPMU_CATCH() {
-        LOG_IF(WARNING, (++numAttempts) % 5 == 0)
+        numAttempts = numAttempts + 1;
+        LOG_IF(WARNING, (numAttempts) % 5 == 0)
             << "SplitForKey failed for " << numAttempts << " times";
       }
     }

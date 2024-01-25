@@ -9,6 +9,7 @@
 #include "storage/btree/ChainedTuple.hpp"
 #include "storage/btree/Tuple.hpp"
 #include "storage/btree/core/BTreeExclusiveIterator.hpp"
+#include "storage/btree/core/BTreeGeneric.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
 #include "storage/buffer-manager/GuardedBufferFrame.hpp"
 #include "utils/Defer.hpp"
@@ -54,7 +55,7 @@ public:
 
   OpCode Remove(Slice key) override;
 
-  void Init(leanstore::LeanStore* store, TREEID treeId, Config config,
+  void Init(leanstore::LeanStore* store, TREEID treeId, BTreeConfig config,
             BasicKV* graveyard);
 
   SpaceCheckResult CheckSpaceUtilization(BufferFrame& bf) override;
@@ -125,7 +126,7 @@ private:
 
 public:
   static TransactionKV* Create(leanstore::LeanStore* store,
-                               const std::string& treeName, Config& config,
+                               const std::string& treeName, BTreeConfig& config,
                                BasicKV* graveyard);
 
   inline static void InsertToNode(GuardedBufferFrame<BTreeNode>& guardedNode,

@@ -1,5 +1,9 @@
+#include "storage/btree/BasicKV.hpp"
+
 #include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
+#include "storage/btree/TransactionKV.hpp"
+#include "storage/btree/core/BTreeGeneric.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/Defer.hpp"
 
@@ -34,7 +38,7 @@ TEST_F(BasicKVTest, BasicKVCreate) {
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+  auto btreeConfig = leanstore::storage::btree::BTreeConfig{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
@@ -93,7 +97,7 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+  auto btreeConfig = leanstore::storage::btree::BTreeConfig{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };

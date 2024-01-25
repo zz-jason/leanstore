@@ -1,5 +1,8 @@
 #include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
+#include "storage/btree/BasicKV.hpp"
+#include "storage/btree/TransactionKV.hpp"
+#include "storage/btree/core/BTreeGeneric.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Defer.hpp"
@@ -56,7 +59,7 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
 
   // create btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = BTreeGeneric::Config{
+  auto btreeConfig = BTreeConfig{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
@@ -151,7 +154,7 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = BTreeGeneric::Config{
+  auto btreeConfig = BTreeConfig{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };

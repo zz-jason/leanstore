@@ -7,6 +7,7 @@
 #include "storage/btree/BasicKV.hpp"
 #include "storage/btree/ChainedTuple.hpp"
 #include "storage/btree/Tuple.hpp"
+#include "storage/btree/core/BTreeGeneric.hpp"
 #include "storage/btree/core/BTreeSharedIterator.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
 #include "utils/Defer.hpp"
@@ -18,7 +19,7 @@ namespace leanstore::storage::btree {
 
 TransactionKV* TransactionKV::Create(leanstore::LeanStore* store,
                                      const std::string& treeName,
-                                     Config& config, BasicKV* graveyard) {
+                                     BTreeConfig& config, BasicKV* graveyard) {
   auto [treePtr, treeId] = store->mTreeRegistry->CreateTree(treeName, [&]() {
     return std::unique_ptr<BufferManagedTree>(
         static_cast<BufferManagedTree*>(new TransactionKV()));
@@ -36,7 +37,7 @@ TransactionKV* TransactionKV::Create(leanstore::LeanStore* store,
 }
 
 void TransactionKV::Init(leanstore::LeanStore* store, TREEID treeId,
-                         Config config, BasicKV* graveyard) {
+                         BTreeConfig config, BasicKV* graveyard) {
   this->mGraveyard = graveyard;
   BasicKV::Init(store, treeId, config);
 }

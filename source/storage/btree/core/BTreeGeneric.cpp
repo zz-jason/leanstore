@@ -16,7 +16,7 @@ using namespace leanstore::storage;
 namespace leanstore::storage::btree {
 
 void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId,
-                        Config config) {
+                        BTreeConfig config) {
   this->mStore = store;
   this->mTreeId = btreeId;
   this->mConfig = config;

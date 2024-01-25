@@ -1,27 +1,40 @@
 #pragma once
-
 #include "leanstore/Store.hpp"
 #include "profiling/tables/ConfigsTable.hpp"
-#include "storage/btree/BasicKV.hpp"
-#include "storage/btree/TransactionKV.hpp"
-#include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/Error.hpp"
 
+#include <gflags/gflags.h>
 #include <rapidjson/document.h>
 
 #include <atomic>
 #include <expected>
 #include <list>
 
-namespace leanstore {
+namespace leanstore::storage::btree {
 
-namespace cr {
+class BTreeConfig;
+class BTreeGeneric;
+class Config;
+class BasicKV;
+class TransactionKV;
+
+} // namespace leanstore::storage::btree
+
+namespace leanstore::storage {
+class TreeRegistry;
+class BufferManager;
+} // namespace leanstore::storage
+
+namespace leanstore::cr {
 
 class CRManager;
 
-} // namespace cr
+} // namespace leanstore::cr
+
+namespace leanstore {
 
 using FlagListString = std::list<std::tuple<string, fLS::clstring*>>;
+
 using FlagListS64 = std::list<std::tuple<string, s64*>>;
 
 struct GlobalStats {
@@ -60,6 +73,7 @@ public:
 
 public:
   LeanStore();
+
   ~LeanStore();
 
 public:
@@ -69,17 +83,14 @@ public:
   /// @param config The config of the btree
   /// @param btree The pointer to store the registered btree
   void RegisterBasicKV(const std::string& name,
-                       storage::btree::BTreeGeneric::Config& config,
+                       storage::btree::BTreeConfig& config,
                        storage::btree::BasicKV** btree);
 
   /// Get a registered BasicKV
   ///
   /// @param name The unique name of the btree
   /// @param btree The pointer to store the found btree
-  void GetBasicKV(const std::string& name, storage::btree::BasicKV** btree) {
-    *btree =
-        dynamic_cast<storage::btree::BasicKV*>(mTreeRegistry->GetTree(name));
-  }
+  void GetBasicKV(const std::string& name, storage::btree::BasicKV** btree);
 
   /// Unregister a BasicKV
   /// @param name The unique name of the btree
@@ -91,7 +102,7 @@ public:
   /// @param config The config of the btree
   /// @param btree The pointer to store the registered btree
   void RegisterTransactionKV(const std::string& name,
-                             storage::btree::BTreeGeneric::Config& config,
+                             storage::btree::BTreeConfig& config,
                              storage::btree::TransactionKV** btree);
 
   /// Get a registered TransactionKV
@@ -99,10 +110,7 @@ public:
   /// @param name The unique name of the btree
   /// @param btree The pointer to store the found btree
   void GetTransactionKV(const std::string& name,
-                        storage::btree::TransactionKV** btree) {
-    *btree = dynamic_cast<storage::btree::TransactionKV*>(
-        mTreeRegistry->GetTree(name));
-  }
+                        storage::btree::TransactionKV** btree);
 
   /// Unregister a TransactionKV
   /// @param name The unique name of the btree
@@ -141,18 +149,11 @@ private:
   void recoverFromExistingStore();
 
 private:
-  //----------------------------------------------------------------------------
-  // static members
-  //----------------------------------------------------------------------------
-
   static FlagListString sPersistedStringFlags;
+
   static FlagListS64 sPersistedS64Flags;
 
 public:
-  //----------------------------------------------------------------------------
-  // static functions
-  //----------------------------------------------------------------------------
-
   static void AddStringFlag(string name, fLS::clstring* flag) {
     sPersistedStringFlags.push_back(std::make_tuple(name, flag));
   }

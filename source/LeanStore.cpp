@@ -7,6 +7,10 @@
 #include "profiling/tables/CRTable.hpp"
 #include "profiling/tables/DTTable.hpp"
 #include "profiling/tables/LatencyTable.hpp"
+#include "storage/btree/BasicKV.hpp"
+#include "storage/btree/TransactionKV.hpp"
+#include "storage/btree/core/BTreeGeneric.hpp"
+#include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/Defer.hpp"
 #include "utils/UserThread.hpp"
 
@@ -570,7 +574,7 @@ void LeanStore::deserializeMeta() {
       // create graveyard
       mCRManager->ScheduleJobSync(0, [&]() {
         auto graveyardName = "_" + btreeName + "_graveyard";
-        auto graveyardConfig = storage::btree::BTreeGeneric::Config{
+        auto graveyardConfig = storage::btree::BTreeConfig{
             .mEnableWal = false, .mUseBulkInsert = false};
         auto res = storage::btree::BasicKV::Create(this, graveyardName,
                                                    graveyardConfig);
@@ -626,7 +630,7 @@ void LeanStore::deserializeFlags() {
 }
 
 void LeanStore::RegisterBasicKV(const std::string& name,
-                                storage::btree::BTreeGeneric::Config& config,
+                                storage::btree::BTreeConfig& config,
                                 storage::btree::BasicKV** btree) {
   DCHECK(cr::Worker::My().IsTxStarted());
   auto res = storage::btree::BasicKV::Create(this, name, config);
@@ -638,6 +642,11 @@ void LeanStore::RegisterBasicKV(const std::string& name,
   }
 
   *btree = res.value();
+}
+
+void LeanStore::GetBasicKV(const std::string& name,
+                           storage::btree::BasicKV** btree) {
+  *btree = dynamic_cast<storage::btree::BasicKV*>(mTreeRegistry->GetTree(name));
 }
 
 void LeanStore::UnRegisterBasicKV(const std::string& name) {
@@ -652,16 +661,16 @@ void LeanStore::UnRegisterBasicKV(const std::string& name) {
   }
 }
 
-void LeanStore::RegisterTransactionKV(
-    const std::string& name, storage::btree::BTreeGeneric::Config& config,
-    storage::btree::TransactionKV** btree) {
+void LeanStore::RegisterTransactionKV(const std::string& name,
+                                      storage::btree::BTreeConfig& config,
+                                      storage::btree::TransactionKV** btree) {
   DCHECK(cr::Worker::My().IsTxStarted());
   *btree = nullptr;
 
   // create btree for graveyard
   auto graveyardName = "_" + name + "_graveyard";
-  auto graveyardConfig = storage::btree::BTreeGeneric::Config{
-      .mEnableWal = false, .mUseBulkInsert = false};
+  auto graveyardConfig =
+      storage::btree::BTreeConfig{.mEnableWal = false, .mUseBulkInsert = false};
   auto res =
       storage::btree::BasicKV::Create(this, graveyardName, graveyardConfig);
   if (!res) {
@@ -685,6 +694,12 @@ void LeanStore::RegisterTransactionKV(
 
   // create btree for main data
   *btree = storage::btree::TransactionKV::Create(this, name, config, graveyard);
+}
+
+void LeanStore::GetTransactionKV(const std::string& name,
+                                 storage::btree::TransactionKV** btree) {
+  *btree = dynamic_cast<storage::btree::TransactionKV*>(
+      mTreeRegistry->GetTree(name));
 }
 
 void LeanStore::UnRegisterTransactionKV(const std::string& name) {

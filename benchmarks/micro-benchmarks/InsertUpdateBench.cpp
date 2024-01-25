@@ -1,6 +1,8 @@
 #include "Config.hpp"
 #include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
+#include "storage/btree/BasicKV.hpp"
+#include "storage/btree/TransactionKV.hpp"
 #include "storage/btree/core/BTreeGeneric.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -33,11 +35,11 @@ static void BenchUpdateInsert(benchmark::State& state) {
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = leanstore::storage::btree::BTreeGeneric::Config{
+  auto btreeConfig = leanstore::storage::btree::BTreeConfig{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
-  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
+  sLeanStore->mCRManager->ScheduleJobSync(0, [&]() {
     cr::Worker::My().StartTx();
     sLeanStore->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
@@ -46,7 +48,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
 
   std::unordered_set<std::string> dedup;
   for (auto _ : state) {
-    cr::CRManager::sInstance->ScheduleJobAsync(0, [&]() {
+    sLeanStore->mCRManager->ScheduleJobAsync(0, [&]() {
       cr::Worker::My().StartTx();
       std::string key;
       std::string val;
@@ -60,7 +62,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
     });
   }
 
-  cr::CRManager::sInstance->ScheduleJobSync(0, [&]() {
+  sLeanStore->mCRManager->ScheduleJobSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     sLeanStore->UnRegisterTransactionKV(btreeName);

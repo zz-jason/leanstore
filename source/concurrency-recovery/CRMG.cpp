@@ -130,8 +130,8 @@ void CRManager::setupHistoryTree() {
 
   for (u64 i = 0; i < FLAGS_worker_threads; i++) {
     std::string name = "_history_tree_" + std::to_string(i);
-    storage::btree::BTreeGeneric::Config config = {.mEnableWal = false,
-                                                   .mUseBulkInsert = true};
+    storage::btree::BTreeConfig config = {.mEnableWal = false,
+                                          .mUseBulkInsert = true};
     // setup update tree
     std::string updateBtreeName = name + "_updates";
     auto res = storage::btree::BasicKV::Create(mStore, updateBtreeName, config);
