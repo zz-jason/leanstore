@@ -20,7 +20,8 @@ enum class BTreeType : u8 { kGeneric = 0, kBasicKV = 1, kTransactionKV = 2 };
 
 using BTreeNodeCallback = std::function<s64(BTreeNode&)>;
 
-struct BTreeConfig {
+class BTreeConfig {
+public:
   bool mEnableWal = true;
   bool mUseBulkInsert = false;
 };
@@ -163,7 +164,7 @@ public:
     BTreeGeneric::freeBTreeNodesRecursive(guardedRootNode);
 
     auto xGuardedMeta = ExclusiveGuardedBufferFrame(std::move(guardedMetaNode));
-    xGuardedMeta.reclaim();
+    xGuardedMeta.Reclaim();
   }
 
   static void ToJson(BTreeGeneric& btree, rapidjson::Document* resultDoc) {
@@ -219,7 +220,7 @@ inline void BTreeGeneric::freeBTreeNodesRecursive(
   }
 
   auto xGuardedNode = ExclusiveGuardedBufferFrame(std::move(guardedNode));
-  xGuardedNode.reclaim();
+  xGuardedNode.Reclaim();
 }
 
 inline void BTreeGeneric::toJsonRecursive(

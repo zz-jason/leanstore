@@ -76,16 +76,16 @@ public:
 
 public:
   /// Get the partition ID of the page.
-  u64 getPartitionID(PID);
+  u64 GetPartitionID(PID);
 
   /// Get the partition of the page.
-  Partition& getPartition(PID);
+  Partition& GetPartition(PID);
 
   /// Randomly pick a partition.
-  Partition& randomPartition();
+  Partition& RandomPartition();
 
   /// Randomly pick a buffer frame.
-  BufferFrame& randomBufferFrame();
+  BufferFrame& RandomBufferFrame();
 
   /// Get a buffer frame from a random partition for new page.
   ///
@@ -103,21 +103,20 @@ public:
   /// Usually a swip represents a btree node.
   ///
   /// @return The buffer frame regarding to the swip.
-  inline BufferFrame* tryFastResolveSwip(HybridGuard& swipGuard,
+  inline BufferFrame* TryFastResolveSwip(HybridGuard& swipGuard,
                                          Swip<BufferFrame>& swipValue) {
     if (swipValue.isHOT()) {
       BufferFrame& bf = swipValue.AsBufferFrame();
       swipGuard.JumpIfModifiedByOthers();
       return &bf;
-    } else {
-      return ResolveSwipMayJump(swipGuard, swipValue);
     }
+    return ResolveSwipMayJump(swipGuard, swipValue);
   }
 
   BufferFrame* ResolveSwipMayJump(HybridGuard& swipGuard,
                                   Swip<BufferFrame>& swipValue);
 
-  void reclaimPage(BufferFrame& bf);
+  void ReclaimPage(BufferFrame& bf);
 
   /// Reads the page at pageId to the destination buffer. All the pages are
   /// stored in one file (mPageFd), page id (pageId) determines the offset of
@@ -155,7 +154,7 @@ public:
 
   void Deserialize(StringMap map);
 
-  u64 consumedPages();
+  u64 ConsumedPages();
 
   /// Do something on all the buffer frames which satisify the condition
   void DoWithBufferFrameIf(std::function<bool(BufferFrame& bf)> condition,

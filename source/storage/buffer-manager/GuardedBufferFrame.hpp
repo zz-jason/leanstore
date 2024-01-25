@@ -89,7 +89,7 @@ public:
   template <typename T2>
   GuardedBufferFrame(GuardedBufferFrame<T2>& guardedParent, Swip<T>& childSwip,
                      const LatchMode ifContended = LatchMode::kSpin)
-      : mBf(BufferManager::sInstance->tryFastResolveSwip(
+      : mBf(BufferManager::sInstance->TryFastResolveSwip(
             guardedParent.mGuard, childSwip.template CastTo<BufferFrame>())),
         mGuard(&mBf->header.mLatch) {
     latchMayJump(mGuard, ifContended);
@@ -130,7 +130,7 @@ public:
   ~GuardedBufferFrame() {
     if (mGuard.mState == GuardState::kExclusive) {
       if (!mKeepAlive) {
-        reclaim();
+        Reclaim();
       }
     }
     mGuard.unlock();
@@ -255,8 +255,8 @@ public:
     mGuard.TryToExclusiveMayJump();
   }
 
-  void reclaim() {
-    BufferManager::sInstance->reclaimPage(*(mBf));
+  void Reclaim() {
+    BufferManager::sInstance->ReclaimPage(*(mBf));
     mGuard.mState = GuardState::kMoved;
   }
 
@@ -319,7 +319,7 @@ public:
   ~ExclusiveGuardedBufferFrame() {
     if (!mRefGuard.mKeepAlive &&
         mRefGuard.mGuard.mState == GuardState::kExclusive) {
-      mRefGuard.reclaim();
+      mRefGuard.Reclaim();
     } else {
       mRefGuard.unlock();
     }
@@ -351,8 +351,8 @@ public:
     return mRefGuard.mBf;
   }
 
-  inline void reclaim() {
-    mRefGuard.reclaim();
+  inline void Reclaim() {
+    mRefGuard.Reclaim();
   }
 };
 
@@ -362,9 +362,8 @@ template <typename T> class SharedGuardedBufferFrame {
 public:
   GuardedBufferFrame<T>& mRefGuard;
 
-  // I: Upgrade
-  SharedGuardedBufferFrame(GuardedBufferFrame<T>&& h_guard)
-      : mRefGuard(h_guard) {
+  SharedGuardedBufferFrame(GuardedBufferFrame<T>&& guardedBf)
+      : mRefGuard(guardedBf) {
     mRefGuard.ToSharedMayJump();
   }
 
