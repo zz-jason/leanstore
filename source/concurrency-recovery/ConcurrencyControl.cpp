@@ -181,6 +181,7 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, TXID txId) {
                 << static_cast<u64>(ActiveTx().mTxIsolationLevel);
   }
   }
+  return false;
 }
 
 bool ConcurrencyControl::VisibleForAll(TXID txId) {
@@ -205,13 +206,13 @@ void ConcurrencyControl::GarbageCollection() {
                << ", workerId=" << Worker::My().mWorkerId << ", fromTxId=" << 0
                << ", toTxId(mLocalWmkOfAllTx)=" << mLocalWmkOfAllTx
                << ", mCleanedWmkOfShortTx=" << mCleanedWmkOfShortTx;
-    CRManager::sInstance->mHistoryTreePtr->PurgeVersions(
+    mStore->mCRManager->mHistoryTreePtr->PurgeVersions(
         Worker::My().mWorkerId, 0, mLocalWmkOfAllTx,
         [&](const TXID versionTxId, const TREEID treeId, const u8* versionData,
             u64 versionSize [[maybe_unused]], const bool calledBefore) {
-          leanstore::storage::TreeRegistry::sInstance->GarbageCollect(
-              treeId, versionData, Worker::My().mWorkerId, versionTxId,
-              calledBefore);
+          mStore->mTreeRegistry->GarbageCollect(treeId, versionData,
+                                                Worker::My().mWorkerId,
+                                                versionTxId, calledBefore);
           COUNTERS_BLOCK() {
             WorkerCounters::MyCounters().cc_gc_long_tx_executed[treeId]++;
           }
@@ -234,13 +235,13 @@ void ConcurrencyControl::GarbageCollection() {
                << ", workerId=" << Worker::My().mWorkerId
                << ", fromTxId=" << mCleanedWmkOfShortTx
                << ", toTxId(mLocalWmkOfShortTx)=" << mLocalWmkOfShortTx;
-    CRManager::sInstance->mHistoryTreePtr->VisitRemovedVersions(
+    mStore->mCRManager->mHistoryTreePtr->VisitRemovedVersions(
         Worker::My().mWorkerId, mCleanedWmkOfShortTx, mLocalWmkOfShortTx,
         [&](const TXID versionTxId, const TREEID treeId, const u8* versionData,
             u64, const bool calledBefore) {
-          leanstore::storage::TreeRegistry::sInstance->GarbageCollect(
-              treeId, versionData, Worker::My().mWorkerId, versionTxId,
-              calledBefore);
+          mStore->mTreeRegistry->GarbageCollect(treeId, versionData,
+                                                Worker::My().mWorkerId,
+                                                versionTxId, calledBefore);
           COUNTERS_BLOCK() {
             WorkerCounters::MyCounters().cc_todo_oltp_executed[treeId]++;
           }

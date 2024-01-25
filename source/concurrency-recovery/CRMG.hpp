@@ -98,9 +98,6 @@ private:
   void joinOne(u64 workerId, std::function<bool(WorkerThread&)> condition);
 
   void setupHistoryTree();
-
-public:
-  static std::unique_ptr<CRManager> sInstance;
 };
 
 } // namespace cr

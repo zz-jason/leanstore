@@ -100,7 +100,7 @@ void BufferManager::StartBufferFrameProviders() {
     }
 
     mBfProviders.push_back(std::make_unique<BufferFrameProvider>(
-        threadName, runningCPU, mNumBfs, mBufferPool, mNumPartitions,
+        mStore, threadName, runningCPU, mNumBfs, mBufferPool, mNumPartitions,
         mPartitionsMask, mPartitions, mPageFd));
   }
 
@@ -168,7 +168,7 @@ void BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
 
 void BufferManager::RecoverFromDisk() {
   auto recovery = std::make_unique<leanstore::cr::Recovery>(
-      mStore->mCRManager->mGroupCommitter->mWalFd, 0,
+      mStore, mStore->mCRManager->mGroupCommitter->mWalFd, 0,
       mStore->mCRManager->mGroupCommitter->mWalSize);
   recovery->Run();
 }
@@ -389,6 +389,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
   }
   }
   assert(false);
+  return nullptr;
 }
 
 void BufferManager::ReadPageSync(PID pageId, void* destination) {

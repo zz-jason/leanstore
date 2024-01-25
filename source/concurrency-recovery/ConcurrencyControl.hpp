@@ -1,6 +1,7 @@
 #pragma once
 
 #include "HistoryTreeInterface.hpp"
+#include "LeanStore.hpp"
 #include "profiling/counters/CRCounters.hpp"
 #include "shared-headers/Units.hpp"
 #include "utils/Misc.hpp"
@@ -10,6 +11,10 @@
 #include <shared_mutex>
 #include <utility>
 #include <vector>
+
+namespace leanstore {
+class LeanStore;
+} // namespace leanstore
 
 namespace leanstore::cr {
 
@@ -68,8 +73,9 @@ private:
 /// visibility check are stored here.
 class ConcurrencyControl {
 public:
-  ConcurrencyControl(u64 numWorkers)
-      : mHistoryTree(nullptr),
+  ConcurrencyControl(leanstore::LeanStore* store, u64 numWorkers)
+      : mStore(store),
+        mHistoryTree(nullptr),
         mCommitTree(numWorkers) {
   }
 
@@ -80,6 +86,8 @@ public:
   static std::atomic<TXID> sTimeStampOracle;
 
 public:
+  leanstore::LeanStore* mStore;
+
   /// The history tree of the current worker thread. All the history versions of
   /// transaction removes and updates are stored here. It's the version storage
   /// of the chained tuple. Used for MVCC.

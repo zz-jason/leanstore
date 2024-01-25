@@ -83,8 +83,7 @@ LeanStore::LeanStore() {
   initPageAndWalFd();
 
   // create global btree catalog
-  storage::TreeRegistry::sInstance = std::make_unique<storage::TreeRegistry>();
-  mTreeRegistry = storage::TreeRegistry::sInstance.get();
+  mTreeRegistry = std::make_unique<storage::TreeRegistry>();
 
   // create global buffer manager and buffer frame providers
   BufferManager::sInstance =
@@ -93,8 +92,7 @@ LeanStore::LeanStore() {
   mBufferManager->StartBufferFrameProviders();
 
   // create global transaction worker and group committer
-  cr::CRManager::sInstance = std::make_unique<cr::CRManager>(this, mWalFd);
-  mCRManager = cr::CRManager::sInstance.get();
+  mCRManager = std::make_unique<cr::CRManager>(this, mWalFd);
 
   // recover from disk
   if (!mStoreOption.mCreateFromScratch) {
@@ -225,13 +223,13 @@ LeanStore::~LeanStore() {
   mBufferManager->SyncAllPageWrites();
 
   // destroy and Stop all foreground workers
-  cr::CRManager::sInstance = nullptr;
+  mCRManager = nullptr;
 
   // destroy buffer manager (buffer frame providers)
   BufferManager::sInstance = nullptr;
 
   // destroy global btree catalog
-  storage::TreeRegistry::sInstance = nullptr;
+  mTreeRegistry = nullptr;
 
   // close open fds
   if (close(mPageFd) == -1) {

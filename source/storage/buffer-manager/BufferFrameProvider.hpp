@@ -5,6 +5,7 @@
 #include "BufferFrame.hpp"
 #include "Config.hpp"
 #include "FreeList.hpp"
+#include "LeanStore.hpp"
 #include "Partition.hpp"
 #include "Swip.hpp"
 #include "Tracing.hpp"
@@ -71,6 +72,7 @@ public:
 /// BufferFrameProvider provides free buffer frames for partitions.
 class BufferFrameProvider : public utils::UserThread {
 public:
+  leanstore::LeanStore* mStore;
   const u64 mNumBfs;
   u8* mBufferPool;
 
@@ -86,11 +88,13 @@ public:
   FreeBfList mFreeBfList;                       // output of phase 3
 
 public:
-  BufferFrameProvider(const std::string& threadName, u64 runningCPU, u64 numBfs,
+  BufferFrameProvider(leanstore::LeanStore* store,
+                      const std::string& threadName, u64 runningCPU, u64 numBfs,
                       u8* bfs, u64 numPartitions, u64 partitionMask,
                       std::vector<std::unique_ptr<Partition>>& partitions,
                       int fd)
       : utils::UserThread(threadName, runningCPU),
+        mStore(store),
         mNumBfs(numBfs),
         mBufferPool(bfs),
         mNumPartitions(numPartitions),
@@ -210,7 +214,7 @@ inline void BufferFrameProvider::evictFlushedBf(
   TREEID btreeId = cooledBf.page.mBTreeId;
   optimisticGuard.JumpIfModifiedByOthers();
   ParentSwipHandler parentHandler =
-      TreeRegistry::sInstance->FindParent(btreeId, cooledBf);
+      mStore->mTreeRegistry->FindParent(btreeId, cooledBf);
 
   DCHECK(parentHandler.mParentGuard.mState == GuardState::kOptimistic);
   BMExclusiveUpgradeIfNeeded parentWriteGuard(parentHandler.mParentGuard);
@@ -328,7 +332,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
           iterateChildrenBegin = std::chrono::high_resolution_clock::now();
         }
 
-        TreeRegistry::sInstance->IterateChildSwips(
+        mStore->mTreeRegistry->IterateChildSwips(
             coolCandidate->page.mBTreeId, *coolCandidate,
             [&](Swip<BufferFrame>& swip) {
               // Ignore when it has a child in the cooling stage
@@ -374,7 +378,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         TREEID btreeId = coolCandidate->page.mBTreeId;
         readGuard.JumpIfModifiedByOthers();
         auto parentHandler =
-            TreeRegistry::sInstance->FindParent(btreeId, *coolCandidate);
+            mStore->mTreeRegistry->FindParent(btreeId, *coolCandidate);
 
         DCHECK(parentHandler.mParentGuard.mState == GuardState::kOptimistic);
         DCHECK(parentHandler.mParentGuard.mLatch !=
@@ -387,7 +391,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
                    .count());
         }
         readGuard.JumpIfModifiedByOthers();
-        auto checkResult = TreeRegistry::sInstance->CheckSpaceUtilization(
+        auto checkResult = mStore->mTreeRegistry->CheckSpaceUtilization(
             coolCandidate->page.mBTreeId, *coolCandidate);
         if (checkResult == SpaceCheckResult::kRestartSameBf ||
             checkResult == SpaceCheckResult::kPickAnotherBf) {

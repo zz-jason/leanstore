@@ -17,8 +17,6 @@ namespace cr {
 ///   Workers (#workers)
 ///   Group Committer Thread (1)
 ///   Page Provider Threads (#pageProviders)
-std::unique_ptr<CRManager> CRManager::sInstance = nullptr;
-
 std::atomic<u64> CRManager::sFsyncCounter = 0;
 std::atomic<u64> CRManager::sSsdOffset = 1 * 1024 * 1024 * 1024;
 
@@ -89,8 +87,8 @@ void CRManager::runWorker(u64 workerId) {
   WorkerCounters::MyCounters().mWorkerId = workerId;
   CRCounters::MyCounters().mWorkerId = workerId;
 
-  Worker::sTlsWorker =
-      std::make_unique<Worker>(workerId, mWorkers, FLAGS_worker_threads);
+  Worker::sTlsWorker = std::make_unique<Worker>(workerId, mWorkers,
+                                                FLAGS_worker_threads, mStore);
   mWorkers[workerId] = Worker::sTlsWorker.get();
   mRunningThreads++;
 

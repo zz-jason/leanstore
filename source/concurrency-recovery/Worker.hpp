@@ -190,6 +190,7 @@ private:
 
 class Worker {
 public:
+  leanstore::LeanStore* mStore = nullptr;
   /// The write-ahead logging component.
   Logging mLogging;
 
@@ -210,7 +211,8 @@ public:
   const u64 mNumAllWorkers;
 
 public:
-  Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers);
+  Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers,
+         leanstore::LeanStore* store);
 
   ~Worker();
 

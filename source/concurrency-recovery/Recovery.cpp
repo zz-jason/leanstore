@@ -199,7 +199,7 @@ std::expected<void, utils::Error> Recovery::redo() {
 
   // Write all the resolved pages to disk
   for (auto it = mResolvedPages.begin(); it != mResolvedPages.end(); it++) {
-    BufferManager::sInstance->WritePageSync(*it->second);
+    mStore->mBufferManager->WritePageSync(*it->second);
   }
 
   return {};

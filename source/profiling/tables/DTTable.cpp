@@ -278,7 +278,7 @@ void DTTable::open() {
 
 void DTTable::next() {
   clear();
-  for (const auto& entry : TreeRegistry::sInstance->mTrees) {
+  for (const auto& entry : bm.mStore->mTreeRegistry->mTrees) {
     mTreeId = entry.first;
     dt_name = std::get<1>(entry.second);
     for (auto& c : columns) {

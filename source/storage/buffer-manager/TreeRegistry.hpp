@@ -293,9 +293,6 @@ public:
     auto& [tree, treeName] = it->second;
     return tree->Deserialize(map);
   }
-
-public:
-  static std::unique_ptr<TreeRegistry> sInstance;
 };
 
 } // namespace storage

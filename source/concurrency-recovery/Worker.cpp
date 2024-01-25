@@ -1,6 +1,7 @@
 #include "Worker.hpp"
 
 #include "Config.hpp"
+#include "LeanStore.hpp"
 #include "concurrency-recovery/Transaction.hpp"
 #include "profiling/counters/CRCounters.hpp"
 #include "shared-headers/Exceptions.hpp"
@@ -27,8 +28,10 @@ std::atomic<u64> Worker::sNetestActiveLongTx = 0;
 std::atomic<u64> Worker::sWmkOfAllTx = 0;
 std::atomic<u64> Worker::sWmkOfShortTx = 0;
 
-Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers)
-    : cc(numWorkers),
+Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers,
+               leanstore::LeanStore* store)
+    : mStore(store),
+      cc(store, numWorkers),
       mWorkerId(workerId),
       mAllWorkers(allWorkers),
       mNumAllWorkers(numWorkers) {
@@ -225,8 +228,8 @@ void Worker::AbortTx() {
   const u64 txId = mActiveTx.mStartTs;
   std::for_each(entries.rbegin(), entries.rend(), [&](const WALEntry* entry) {
     const auto& complexEntry = *reinterpret_cast<const WALEntryComplex*>(entry);
-    leanstore::storage::TreeRegistry::sInstance->undo(
-        complexEntry.mTreeId, complexEntry.payload, txId);
+    mStore->mTreeRegistry->undo(complexEntry.mTreeId, complexEntry.payload,
+                                txId);
   });
 
   cc.mHistoryTree->PurgeVersions(

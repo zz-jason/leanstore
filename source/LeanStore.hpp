@@ -1,4 +1,5 @@
 #pragma once
+
 #include "leanstore/Store.hpp"
 #include "profiling/tables/ConfigsTable.hpp"
 #include "utils/Error.hpp"
@@ -9,6 +10,7 @@
 #include <atomic>
 #include <expected>
 #include <list>
+#include <memory>
 
 namespace leanstore::storage::btree {
 
@@ -63,13 +65,13 @@ public:
   GlobalStats mGlobalStats;
 
   /// The tree registry
-  storage::TreeRegistry* mTreeRegistry;
+  std::unique_ptr<storage::TreeRegistry> mTreeRegistry;
 
   /// The Buffer manager
   storage::BufferManager* mBufferManager;
 
   /// The concurrent resource manager
-  cr::CRManager* mCRManager;
+  std::unique_ptr<cr::CRManager> mCRManager;
 
 public:
   LeanStore();
