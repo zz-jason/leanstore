@@ -11,7 +11,7 @@
 
 namespace leanstore::cr {
 
-CRManager::CRManager(leanstore::LeanStore* store, s32 walFd)
+CRManager::CRManager(leanstore::LeanStore* store)
     : mStore(store),
       mGroupCommitter(nullptr),
       mHistoryTreePtr(nullptr) {
@@ -28,22 +28,24 @@ CRManager::CRManager(leanstore::LeanStore* store, s32 walFd)
           workerId, mWorkers, FLAGS_worker_threads, mStore);
       mWorkers[workerId] = Worker::sTlsWorker.get();
     });
-    workerThread->JoinJob();
+    workerThread->Wait();
     mWorkerThreads.emplace_back(std::move(workerThread));
   }
 
   // start group commit thread
   if (FLAGS_wal) {
     const int cpu = FLAGS_enable_pin_worker_threads ? FLAGS_worker_threads : -1;
-    mGroupCommitter = std::make_unique<GroupCommitter>(walFd, mWorkers, cpu);
+    mGroupCommitter =
+        std::make_unique<GroupCommitter>(mStore->mWalFd, mWorkers, cpu);
     mGroupCommitter->Start();
   }
 
   // create history tree for each worker
-  ExecSync(0, [&]() { setupHistoryTree(); });
+  mWorkerThreads[0]->SetJob([&]() { setupHistoryTree(); });
   for (u64 workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
     mWorkers[workerId]->cc.mHistoryTree = mHistoryTreePtr.get();
   }
+  mWorkerThreads[0]->Wait();
 }
 
 void CRManager::Stop() {
@@ -90,21 +92,6 @@ void CRManager::setupHistoryTree() {
   }
 
   mHistoryTreePtr = std::move(historyTree);
-}
-
-void CRManager::ExecSync(u64 workerId, std::function<void()> job) {
-  mWorkerThreads[workerId]->SetJob(job);
-  mWorkerThreads[workerId]->JoinJob();
-}
-
-void CRManager::ExecAsync(u64 workerId, std::function<void()> job) {
-  mWorkerThreads[workerId]->SetJob(job);
-}
-
-void CRManager::WaitAll() {
-  for (u32 i = 0; i < FLAGS_worker_threads; i++) {
-    mWorkerThreads[i]->JoinJob();
-  }
 }
 
 constexpr char kKeyWalSize[] = "wal_size";

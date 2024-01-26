@@ -86,11 +86,11 @@ LeanStore::LeanStore() {
   mTreeRegistry = std::make_unique<storage::TreeRegistry>();
 
   // create global buffer manager and buffer frame providers
-  mBufferManager = std::make_unique<storage::BufferManager>(this, mPageFd);
+  mBufferManager = std::make_unique<storage::BufferManager>(this);
   mBufferManager->StartBufferFrameProviders();
 
   // create global transaction worker and group committer
-  mCRManager = std::make_unique<cr::CRManager>(this, mWalFd);
+  mCRManager = std::make_unique<cr::CRManager>(this);
 
   // recover from disk
   if (!mStoreOption.mCreateFromScratch) {
@@ -196,7 +196,7 @@ LeanStore::~LeanStore() {
   });
 
   // wait all concurrent jobs to finsh
-  mCRManager->WaitAll();
+  WaitAll();
 
   // print trees
   for (auto& it : mTreeRegistry->mTrees) {
@@ -205,7 +205,7 @@ LeanStore::~LeanStore() {
     auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(treePtr.get());
 
     u64 numEntries(0);
-    mCRManager->ExecSync(0, [&]() { numEntries = btree->CountEntries(); });
+    ExecSync(0, [&]() { numEntries = btree->CountEntries(); });
 
     LOG(INFO) << "[TransactionKV] name=" << treeName << ", btreeId=" << treeId
               << ", height=" << btree->mHeight << ", numEntries=" << numEntries;
@@ -252,6 +252,26 @@ LeanStore::~LeanStore() {
   // mProfilingThreadKeepRunning = false;
   // while (mNumProfilingThreads) {
   // }
+}
+
+void LeanStore::ExecSync(u64 workerId, std::function<void()> job) {
+  mCRManager->mWorkerThreads[workerId]->SetJob(job);
+  mCRManager->mWorkerThreads[workerId]->Wait();
+}
+
+void LeanStore::ExecAsync(u64 workerId, std::function<void()> job) {
+  mCRManager->mWorkerThreads[workerId]->SetJob(job);
+}
+
+/// Waits for the worker to complete.
+void LeanStore::Wait(WORKERID workerId) {
+  mCRManager->mWorkerThreads[workerId]->Wait();
+}
+
+void LeanStore::WaitAll() {
+  for (u32 i = 0; i < FLAGS_worker_threads; i++) {
+    mCRManager->mWorkerThreads[i]->Wait();
+  }
 }
 
 void LeanStore::StartProfilingThread() {
@@ -567,7 +587,7 @@ void LeanStore::deserializeMeta() {
       auto btree = std::make_unique<leanstore::storage::btree::TransactionKV>();
       btree->mStore = this;
       // create graveyard
-      mCRManager->ExecSync(0, [&]() {
+      ExecSync(0, [&]() {
         auto graveyardName = "_" + btreeName + "_graveyard";
         auto graveyardConfig = storage::btree::BTreeConfig{
             .mEnableWal = false, .mUseBulkInsert = false};
@@ -624,9 +644,9 @@ void LeanStore::deserializeFlags() {
   }
 }
 
-void LeanStore::RegisterBasicKV(const std::string& name,
-                                storage::btree::BTreeConfig& config,
-                                storage::btree::BasicKV** btree) {
+void LeanStore::CreateBasicKV(const std::string& name,
+                              storage::btree::BTreeConfig& config,
+                              storage::btree::BasicKV** btree) {
   DCHECK(cr::Worker::My().IsTxStarted());
   auto res = storage::btree::BasicKV::Create(this, name, config);
   if (!res) {
@@ -644,7 +664,7 @@ void LeanStore::GetBasicKV(const std::string& name,
   *btree = dynamic_cast<storage::btree::BasicKV*>(mTreeRegistry->GetTree(name));
 }
 
-void LeanStore::UnRegisterBasicKV(const std::string& name) {
+void LeanStore::DropBasicKV(const std::string& name) {
   DCHECK(cr::Worker::My().IsTxStarted());
   auto* btree =
       dynamic_cast<btree::BTreeGeneric*>(mTreeRegistry->GetTree(name));
@@ -656,9 +676,9 @@ void LeanStore::UnRegisterBasicKV(const std::string& name) {
   }
 }
 
-void LeanStore::RegisterTransactionKV(const std::string& name,
-                                      storage::btree::BTreeConfig& config,
-                                      storage::btree::TransactionKV** btree) {
+void LeanStore::CreateTransactionKV(const std::string& name,
+                                    storage::btree::BTreeConfig& config,
+                                    storage::btree::TransactionKV** btree) {
   DCHECK(cr::Worker::My().IsTxStarted());
   *btree = nullptr;
 
@@ -697,7 +717,7 @@ void LeanStore::GetTransactionKV(const std::string& name,
       mTreeRegistry->GetTree(name));
 }
 
-void LeanStore::UnRegisterTransactionKV(const std::string& name) {
+void LeanStore::DropTransactionKV(const std::string& name) {
   DCHECK(cr::Worker::My().IsTxStarted());
   auto* btree =
       dynamic_cast<storage::btree::BTreeGeneric*>(mTreeRegistry->GetTree(name));

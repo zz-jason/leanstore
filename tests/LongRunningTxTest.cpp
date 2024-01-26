@@ -47,17 +47,17 @@ protected:
     };
 
     // Worker 0, create a btree for test
-    GetLeanStore()->mCRManager->ExecSync(0, [&]() {
+    GetLeanStore()->ExecSync(0, [&]() {
       cr::Worker::My().StartTx();
       SCOPED_DEFER(cr::Worker::My().CommitTx());
-      leanstore->RegisterTransactionKV(mTreeName, config, &mKv);
+      leanstore->CreateTransactionKV(mTreeName, config, &mKv);
       ASSERT_NE(mKv, nullptr);
     });
 
     // Worker 0, do extra insert and remove transactions in worker 0 to make it
     // have more than one entries in the commit log, which helps to advance the
     // global lower watermarks for garbage collection
-    GetLeanStore()->mCRManager->ExecSync(0, [&]() {
+    GetLeanStore()->ExecSync(0, [&]() {
       cr::Worker::My().StartTx();
       ASSERT_EQ(mKv->Insert(ToSlice("0"), ToSlice("0")), OpCode::kOK);
       cr::Worker::My().CommitTx();
@@ -70,10 +70,10 @@ protected:
 
   void TearDown() override {
     // Worker 0, remove the btree
-    GetLeanStore()->mCRManager->ExecSync(0, [&]() {
+    GetLeanStore()->ExecSync(0, [&]() {
       cr::Worker::My().StartTx();
       SCOPED_DEFER(cr::Worker::My().CommitTx());
-      GetLeanStore()->UnRegisterTransactionKV(mTreeName);
+      GetLeanStore()->DropTransactionKV(mTreeName);
     });
   }
 
@@ -110,7 +110,7 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
   };
 
   // Insert 2 key-values as the test base.
-  GetLeanStore()->mCRManager->ExecSync(1, [&]() {
+  GetLeanStore()->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     EXPECT_EQ(mKv->Insert(ToSlice(key1), ToSlice(val1)), OpCode::kOK);
     cr::Worker::My().CommitTx();
@@ -120,10 +120,9 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
     cr::Worker::My().CommitTx();
   });
 
-  GetLeanStore()->mCRManager->ExecSync(1,
-                                       [&]() { cr::Worker::My().StartTx(); });
+  GetLeanStore()->ExecSync(1, [&]() { cr::Worker::My().StartTx(); });
 
-  GetLeanStore()->mCRManager->ExecSync(2, [&]() {
+  GetLeanStore()->ExecSync(2, [&]() {
     cr::Worker::My().StartTx(TxMode::kLongRunning);
 
     // get the old value in worker 2
@@ -135,13 +134,13 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
   });
 
   // remove the key in worker 1
-  GetLeanStore()->mCRManager->ExecSync(1, [&]() {
+  GetLeanStore()->ExecSync(1, [&]() {
     EXPECT_EQ(mKv->Remove(ToSlice(key1)), OpCode::kOK);
     EXPECT_EQ(mKv->Remove(ToSlice(key2)), OpCode::kOK);
   });
 
   // get the old value in worker 2
-  GetLeanStore()->mCRManager->ExecSync(2, [&]() {
+  GetLeanStore()->ExecSync(2, [&]() {
     EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val1);
 
@@ -151,13 +150,13 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
 
   // commit the transaction in worker 1, after garbage collection when
   // committing the transaction, tombstones should be moved to the graveyard.
-  GetLeanStore()->mCRManager->ExecSync(1, [&]() {
+  GetLeanStore()->ExecSync(1, [&]() {
     cr::Worker::My().CommitTx();
     EXPECT_EQ(mKv->mGraveyard->CountEntries(), 2u);
   });
 
   // lookup from graveyard, still get the old value in worker 2
-  GetLeanStore()->mCRManager->ExecSync(2, [&]() {
+  GetLeanStore()->ExecSync(2, [&]() {
     EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val1);
 
@@ -169,7 +168,7 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
   });
 
   // now worker 2 can not get the old value
-  GetLeanStore()->mCRManager->ExecSync(2, [&]() {
+  GetLeanStore()->ExecSync(2, [&]() {
     cr::Worker::My().StartTx(TxMode::kLongRunning,
                              IsolationLevel::kSnapshotIsolation, false);
     SCOPED_DEFER(cr::Worker::My().CommitTx());
@@ -190,7 +189,7 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
   };
 
   // Work 1, insert 2 key-values as the test base
-  GetLeanStore()->mCRManager->ExecSync(1, [&]() {
+  GetLeanStore()->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     EXPECT_EQ(mKv->Insert(ToSlice(key1), ToSlice(val1)), OpCode::kOK);
     cr::Worker::My().CommitTx();
@@ -201,11 +200,10 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
   });
 
   // Worker 1, start a short-running transaction
-  GetLeanStore()->mCRManager->ExecSync(1,
-                                       [&]() { cr::Worker::My().StartTx(); });
+  GetLeanStore()->ExecSync(1, [&]() { cr::Worker::My().StartTx(); });
 
   // Worker 2, start a long-running transaction, lookup, get the old value
-  GetLeanStore()->mCRManager->ExecSync(2, [&]() {
+  GetLeanStore()->ExecSync(2, [&]() {
     cr::Worker::My().StartTx(TxMode::kLongRunning);
 
     EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
@@ -217,7 +215,7 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
 
   // Worker 1, update key1 100 times with random values
   std::string newVal;
-  GetLeanStore()->mCRManager->ExecSync(1, [&]() {
+  GetLeanStore()->ExecSync(1, [&]() {
     auto updateDescBufSize = UpdateDesc::Size(1);
     u8 updateDescBuf[updateDescBufSize];
     auto* updateDesc = UpdateDesc::CreateFrom(updateDescBuf);
@@ -238,7 +236,7 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
   });
 
   // Worker 2, lookup, get the old value
-  GetLeanStore()->mCRManager->ExecSync(2, [&]() {
+  GetLeanStore()->ExecSync(2, [&]() {
     EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val1);
 
@@ -248,7 +246,7 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
 
   // Worker 1, commit the transaction, graveyard should be empty, update history
   // trees should have 100 versions
-  GetLeanStore()->mCRManager->ExecSync(1, [&]() {
+  GetLeanStore()->ExecSync(1, [&]() {
     cr::Worker::My().CommitTx();
 
     EXPECT_EQ(mKv->mGraveyard->CountEntries(), 0u);
@@ -261,7 +259,7 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
   });
 
   // Worker 2, lookup, skip the update versions, still get old values, commit
-  GetLeanStore()->mCRManager->ExecSync(2, [&]() {
+  GetLeanStore()->ExecSync(2, [&]() {
     EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val1);
 
@@ -273,7 +271,7 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
   });
 
   // Worker 2, now get the updated new value
-  GetLeanStore()->mCRManager->ExecSync(2, [&]() {
+  GetLeanStore()->ExecSync(2, [&]() {
     cr::Worker::My().StartTx(TxMode::kLongRunning,
                              IsolationLevel::kSnapshotIsolation, false);
     SCOPED_DEFER(cr::Worker::My().CommitTx());
@@ -307,7 +305,7 @@ TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
   }
 
   // insert the key-values in worker 0
-  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
+  GetLeanStore()->ExecSync(0, [&]() {
     for (const auto& [key, val] : kvToTest) {
       cr::Worker::My().StartTx();
       SCOPED_DEFER(cr::Worker::My().CommitTx());
@@ -323,14 +321,14 @@ TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
     EXPECT_EQ(copiedVal, kvToTest[copiedKey]);
     return true;
   };
-  GetLeanStore()->mCRManager->ExecSync(2, [&]() {
+  GetLeanStore()->ExecSync(2, [&]() {
     cr::Worker::My().StartTx(TxMode::kLongRunning,
                              IsolationLevel::kSnapshotIsolation, false);
     EXPECT_EQ(mKv->ScanAsc(ToSlice(smallestKey), copyKeyVal), OpCode::kOK);
   });
 
   // remove the key-values in worker 1
-  GetLeanStore()->mCRManager->ExecSync(1, [&]() {
+  GetLeanStore()->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     for (const auto& [key, val] : kvToTest) {
       EXPECT_EQ(mKv->Remove(ToSlice(key)), OpCode::kOK);
@@ -338,19 +336,19 @@ TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
   });
 
   // get the old values in worker 2
-  GetLeanStore()->mCRManager->ExecSync(2, [&]() {
+  GetLeanStore()->ExecSync(2, [&]() {
     EXPECT_EQ(mKv->ScanAsc(ToSlice(smallestKey), copyKeyVal), OpCode::kOK);
   });
 
   // commit the transaction in worker 1, all the removed key-values should be
   // moved to graveyard
-  GetLeanStore()->mCRManager->ExecSync(1, [&]() {
+  GetLeanStore()->ExecSync(1, [&]() {
     cr::Worker::My().CommitTx();
     EXPECT_EQ(mKv->mGraveyard->CountEntries(), kvToTest.size());
   });
 
   // still get the old values in worker 2
-  GetLeanStore()->mCRManager->ExecSync(2, [&]() {
+  GetLeanStore()->ExecSync(2, [&]() {
     EXPECT_EQ(mKv->ScanAsc(ToSlice(smallestKey), copyKeyVal), OpCode::kOK);
 
     // commit the transaction in worker 2
@@ -358,7 +356,7 @@ TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
   });
 
   // now worker 2 can not get the old values
-  GetLeanStore()->mCRManager->ExecSync(2, [&]() {
+  GetLeanStore()->ExecSync(2, [&]() {
     cr::Worker::My().StartTx(TxMode::kLongRunning,
                              IsolationLevel::kSnapshotIsolation, false);
     SCOPED_DEFER(cr::Worker::My().CommitTx());

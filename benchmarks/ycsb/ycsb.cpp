@@ -22,7 +22,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -128,10 +127,10 @@ static KVInterface* CreateTable() {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
   btree::TransactionKV* table;
-  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
+  GetLeanStore()->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    leanstore->RegisterTransactionKV(tableName, config, &table);
+    leanstore->CreateTransactionKV(tableName, config, &table);
   });
   return table;
 }
@@ -178,7 +177,7 @@ static void HandleCmdLoad() {
   utils::Parallelize::range(
       FLAGS_worker_threads, FLAGS_ycsb_record_count,
       [&](u64 workerId, u64 begin, u64 end) {
-        GetLeanStore()->mCRManager->ExecAsync(workerId, [&, begin, end]() {
+        GetLeanStore()->ExecAsync(workerId, [&, begin, end]() {
           for (u64 i = begin; i < end; i++) {
             // generate key
             u8 key[FLAGS_ycsb_key_size];
@@ -195,7 +194,7 @@ static void HandleCmdLoad() {
           }
         });
       });
-  GetLeanStore()->mCRManager->WaitAll();
+  GetLeanStore()->WaitAll();
 }
 
 static void HandleCmdRun() {
@@ -216,7 +215,7 @@ static void HandleCmdRun() {
   }
 
   for (u64 workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
-    GetLeanStore()->mCRManager->ExecAsync(workerId, [&]() {
+    GetLeanStore()->ExecAsync(workerId, [&]() {
       u8 key[FLAGS_ycsb_key_size];
       std::string valRead;
       auto copyValue = [&](Slice val) {
@@ -306,7 +305,7 @@ static void HandleCmdRun() {
 
   // Shutdown threads
   keepRunning = false;
-  GetLeanStore()->mCRManager->WaitAll();
+  GetLeanStore()->WaitAll();
 }
 
 } // namespace leanstore::ycsb

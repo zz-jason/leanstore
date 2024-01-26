@@ -49,7 +49,7 @@ public:
 
   /// Wait until the job is done.
   /// API for the job sender.
-  void JoinJob();
+  void Wait();
 
 protected:
   /// The main loop of the worker thread.
@@ -115,7 +115,7 @@ inline void WorkerThread::SetJob(std::function<void()> job) {
   mCv.notify_one();
 }
 
-inline void WorkerThread::JoinJob() {
+inline void WorkerThread::Wait() {
   std::unique_lock guard(mMutex);
   mCv.wait(guard, [&]() { return mJob == nullptr; });
 }

@@ -18,6 +18,7 @@ namespace profiling {
 
 // Forward declaration
 class BMTable;
+
 } // namespace profiling
 
 namespace storage {
@@ -53,9 +54,6 @@ public:
   /// All the managed buffer frames in the memory.
   u8* mBufferPool;
 
-  /// FD for disk files storing pages.
-  const int mPageFd;
-
   /// Free Pages, reserved to to prevent segmentfaults.
   const u8 mNumSaftyBfs = 10;
 
@@ -64,14 +62,16 @@ public:
 
   /// For cooling and inflight io
   u64 mNumPartitions;
+
   u64 mPartitionsMask;
+
   std::vector<std::unique_ptr<Partition>> mPartitions;
 
   /// All the buffer frame provider threads.
   std::vector<std::unique_ptr<BufferFrameProvider>> mBfProviders;
 
 public:
-  BufferManager(leanstore::LeanStore* store, s32 pageFd);
+  BufferManager(leanstore::LeanStore* store);
 
   ~BufferManager();
 

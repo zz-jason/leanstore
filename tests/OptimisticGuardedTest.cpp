@@ -49,14 +49,14 @@ TEST_F(OptimisticGuardedTest, Set) {
   storage::OptimisticGuarded<TestPayload> guardedVal({0, 100});
 
   // Worker 0, set the guardedVal 100 times
-  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
+  GetLeanStore()->ExecSync(0, [&]() {
     for (s64 i = 0; i < 100; i++) {
       guardedVal.Set(TestPayload{i, 100 - i});
     }
   });
 
   // Worker 1, read the guardedVal 200 times
-  GetLeanStore()->mCRManager->ExecSync(1, [&]() {
+  GetLeanStore()->ExecSync(1, [&]() {
     TestPayload copiedVal;
     auto version = guardedVal.Get(copiedVal);
     for (s64 i = 0; i < 200; i++) {
@@ -70,21 +70,21 @@ TEST_F(OptimisticGuardedTest, Set) {
   });
 
   // Wait for all jobs to finish
-  GetLeanStore()->mCRManager->WaitAll();
+  GetLeanStore()->WaitAll();
 }
 
 TEST_F(OptimisticGuardedTest, UpdateAttribute) {
   storage::OptimisticGuarded<TestPayload> guardedVal({0, 100});
 
   // Worker 0, update the guardedVal 100 times
-  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
+  GetLeanStore()->ExecSync(0, [&]() {
     for (s64 i = 0; i < 100; i++) {
       guardedVal.UpdateAttribute(&TestPayload::mA, i);
     }
   });
 
   // Worker 1, read the guardedVal 200 times
-  GetLeanStore()->mCRManager->ExecSync(1, [&]() {
+  GetLeanStore()->ExecSync(1, [&]() {
     TestPayload copiedVal;
     auto version = guardedVal.Get(copiedVal);
     for (s64 i = 0; i < 200; i++) {
@@ -98,7 +98,7 @@ TEST_F(OptimisticGuardedTest, UpdateAttribute) {
   });
 
   // Wait for all jobs to finish
-  GetLeanStore()->mCRManager->WaitAll();
+  GetLeanStore()->WaitAll();
 }
 
 } // namespace leanstore::test

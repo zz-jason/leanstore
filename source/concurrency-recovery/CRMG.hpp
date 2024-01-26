@@ -5,8 +5,6 @@
 #include "WorkerThread.hpp"
 #include "shared-headers/Units.hpp"
 
-#include <atomic>
-#include <functional>
 #include <memory>
 #include <vector>
 
@@ -25,6 +23,9 @@ public:
   /// The LeanStore instance.
   leanstore::LeanStore* mStore;
 
+  /// All the worker threads
+  std::vector<std::unique_ptr<WorkerThread>> mWorkerThreads;
+
   /// The group committer thread, created and started if WAL is enabled when the
   /// CRManager instance is created.
   ///
@@ -36,32 +37,15 @@ public:
   /// started.
   std::unique_ptr<HistoryTreeInterface> mHistoryTreePtr;
 
-  std::atomic<u64> mRunningThreads = 0;
-
-  std::vector<std::unique_ptr<WorkerThread>> mWorkerThreads;
-
   /// All the thread-local worker references
   std::vector<Worker*> mWorkers;
 
 public:
-  CRManager(leanstore::LeanStore* store, s32 ssdFd);
+  CRManager(leanstore::LeanStore* store);
 
   ~CRManager();
 
 public:
-  /// Execute a custom user function on a worker thread.
-  /// @param workerId worker to compute job
-  /// @param job job
-  void ExecSync(u64 workerId, std::function<void()> job);
-
-  /// Execute a custom user function on a worker thread asynchronously.
-  /// @param workerId worker to compute job
-  /// @param job job
-  void ExecAsync(u64 workerId, std::function<void()> job);
-
-  /// Waits for all Workers to complete.
-  void WaitAll();
-
   // State Serialization
   StringMap Serialize();
 

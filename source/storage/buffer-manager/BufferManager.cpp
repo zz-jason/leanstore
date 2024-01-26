@@ -25,9 +25,7 @@
 namespace leanstore {
 namespace storage {
 
-BufferManager::BufferManager(leanstore::LeanStore* store, s32 fd)
-    : mStore(store),
-      mPageFd(fd) {
+BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
   mNumBfs = mStore->mStoreOption.mBufferPoolSize / BufferFrame::Size();
   const u64 totalMemSize = BufferFrame::Size() * (mNumBfs + mNumSaftyBfs);
 
@@ -92,7 +90,7 @@ void BufferManager::StartBufferFrameProviders() {
 
     mBfProviders.push_back(std::make_unique<BufferFrameProvider>(
         mStore, threadName, runningCPU, mNumBfs, mBufferPool, mNumPartitions,
-        mPartitionsMask, mPartitions, mPageFd));
+        mPartitionsMask, mPartitions));
   }
 
   for (auto i = 0u; i < mBfProviders.size(); ++i) {
@@ -135,7 +133,7 @@ void BufferManager::CheckpointAllBufferFrames() {
       bf.header.mLatch.LockExclusively();
       if (!bf.isFree()) {
         mStore->mTreeRegistry->Checkpoint(bf.page.mBTreeId, bf, buffer);
-        auto ret = pwrite(mPageFd, buffer, FLAGS_page_size,
+        auto ret = pwrite(mStore->mPageFd, buffer, FLAGS_page_size,
                           bf.header.mPageId * FLAGS_page_size);
         DCHECK_EQ(ret, FLAGS_page_size);
       }
@@ -150,7 +148,7 @@ void BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
   bf.header.mLatch.LockExclusively();
   if (!bf.isFree()) {
     mStore->mTreeRegistry->Checkpoint(bf.page.mBTreeId, bf, buffer);
-    auto ret = pwrite(mPageFd, buffer, FLAGS_page_size,
+    auto ret = pwrite(mStore->mPageFd, buffer, FLAGS_page_size,
                       bf.header.mPageId * FLAGS_page_size);
     DCHECK_EQ(ret, FLAGS_page_size);
   }
@@ -388,7 +386,7 @@ void BufferManager::ReadPageSync(PID pageId, void* destination) {
   s64 bytesLeft = FLAGS_page_size;
   do {
     auto bytesRead =
-        pread(mPageFd, destination, bytesLeft,
+        pread(mStore->mPageFd, destination, bytesLeft,
               pageId * FLAGS_page_size + (FLAGS_page_size - bytesLeft));
     if (bytesRead < 0) {
       LOG(ERROR) << "pread failed"
@@ -428,14 +426,14 @@ void BufferManager::WritePageSync(BufferFrame& bf) {
   guardedBf.ToExclusiveMayJump();
   auto pageId = bf.header.mPageId;
   auto& partition = GetPartition(pageId);
-  pwrite(mPageFd, &bf.page, FLAGS_page_size, pageId * FLAGS_page_size);
+  pwrite(mStore->mPageFd, &bf.page, FLAGS_page_size, pageId * FLAGS_page_size);
   bf.Reset();
   guardedBf.unlock();
   partition.mFreeBfList.PushFront(bf);
 }
 
 void BufferManager::SyncAllPageWrites() {
-  fdatasync(mPageFd);
+  fdatasync(mStore->mPageFd);
 }
 
 u64 BufferManager::GetPartitionID(PID pageId) {

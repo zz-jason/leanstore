@@ -64,15 +64,15 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
 
-  mLeanStore->mCRManager->ExecSync(0, [&]() {
+  mLeanStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mLeanStore->RegisterTransactionKV(btreeName, btreeConfig, &btree);
+    mLeanStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
   });
 
   // insert some values
-  mLeanStore->mCRManager->ExecSync(0, [&]() {
+  mLeanStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     for (size_t i = 0; i < numKVs; ++i) {
@@ -83,7 +83,7 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     }
   });
 
-  mLeanStore->mCRManager->ExecSync(0, [&]() {
+  mLeanStore->ExecSync(0, [&]() {
     rapidjson::Document doc(rapidjson::kObjectType);
     BTreeGeneric::ToJson(*btree, &doc);
     LOG(INFO) << "btree before destroy: " << utils::JsonToStr(&doc);
@@ -98,14 +98,14 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
   mLeanStore->GetTransactionKV(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
 
-  mLeanStore->mCRManager->ExecSync(0, [&]() {
+  mLeanStore->ExecSync(0, [&]() {
     rapidjson::Document doc(rapidjson::kObjectType);
     BTreeGeneric::ToJson(*btree, &doc);
     LOG(INFO) << "btree after recovery: " << utils::JsonToStr(&doc);
   });
 
   // lookup the restored btree
-  mLeanStore->mCRManager->ExecSync(0, [&]() {
+  mLeanStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     std::string copiedValue;
@@ -121,10 +121,10 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     }
   });
 
-  mLeanStore->mCRManager->ExecSync(1, [&]() {
+  mLeanStore->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mLeanStore->UnRegisterTransactionKV(btreeName);
+    mLeanStore->DropTransactionKV(btreeName);
   });
 }
 
@@ -159,9 +159,9 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
 
-  mLeanStore->mCRManager->ExecSync(0, [&]() {
+  mLeanStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
-    mLeanStore->RegisterTransactionKV(btreeName, btreeConfig, &btree);
+    mLeanStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::My().CommitTx();
 
@@ -187,7 +187,7 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
   mLeanStore = std::make_unique<LeanStore>();
   mLeanStore->GetTransactionKV(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
-  mLeanStore->mCRManager->ExecSync(0, [&]() {
+  mLeanStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     rapidjson::Document doc(rapidjson::kObjectType);
@@ -196,7 +196,7 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
   });
 
   // lookup the restored btree
-  mLeanStore->mCRManager->ExecSync(0, [&]() {
+  mLeanStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     std::string copiedValue;
