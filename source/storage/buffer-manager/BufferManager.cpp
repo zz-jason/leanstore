@@ -149,7 +149,7 @@ void BufferManager::CheckpointAllBufferFrames() {
 
 auto BufferManager::CheckpointBufferFrame(BufferFrame& bf)
     -> std::expected<void, utils::Error> {
-  u8 buffer[FLAGS_page_size];
+  alignas(512) u8 buffer[FLAGS_page_size];
   bf.header.mLatch.LockExclusively();
   if (!bf.isFree()) {
     mStore->mTreeRegistry->Checkpoint(bf.page.mBTreeId, bf, buffer);
