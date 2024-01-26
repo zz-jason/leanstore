@@ -5,6 +5,9 @@
 #include "Swip.hpp"
 #include "profiling/tables/BMTable.hpp"
 #include "shared-headers/Units.hpp"
+#include "utils/Error.hpp"
+
+#include <expected>
 
 #include <libaio.h>
 #include <sys/mman.h>
@@ -144,7 +147,8 @@ public:
   /// Checkpoints a buffer frame to disk. The buffer frame content is copied to
   /// a tmp memory buffer, swips in the tmp memory buffer are changed to page
   /// IDs, then the tmp memory buffer is written to the disk.
-  void CheckpointBufferFrame(BufferFrame& bf);
+  [[nodiscard]] auto CheckpointBufferFrame(BufferFrame& bf)
+      -> std::expected<void, utils::Error>;
 
   /// Checkpoints all the buffer frames.
   void CheckpointAllBufferFrames();

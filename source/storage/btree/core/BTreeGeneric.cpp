@@ -664,7 +664,9 @@ StringMap BTreeGeneric::Serialize() {
   DCHECK(mMetaNodeSwip.AsBufferFrame().page.mBTreeId == mTreeId);
   auto& metaBf = mMetaNodeSwip.AsBufferFrame();
   auto metaPageId = metaBf.header.mPageId;
-  mStore->mBufferManager->CheckpointBufferFrame(metaBf);
+  auto res = mStore->mBufferManager->CheckpointBufferFrame(metaBf);
+  DLOG_IF(FATAL, !res) << "Failed to checkpoint meta node: "
+                       << res.error().ToString();
   return {{kTreeId, std::to_string(mTreeId)},
           {kHeight, std::to_string(mHeight.load())},
           {kMetaPageId, std::to_string(metaPageId)}};

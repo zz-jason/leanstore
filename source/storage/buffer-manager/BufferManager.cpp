@@ -10,6 +10,7 @@
 #include "shared-headers/Exceptions.hpp"
 #include "shared-headers/Units.hpp"
 #include "utils/DebugFlags.hpp"
+#include "utils/Error.hpp"
 #include "utils/Misc.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -17,7 +18,9 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <cerrno>
 #include <cstring>
+#include <expected>
 
 #include <fcntl.h>
 #include <sys/resource.h>
@@ -144,16 +147,25 @@ void BufferManager::CheckpointAllBufferFrames() {
   });
 }
 
-void BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
+auto BufferManager::CheckpointBufferFrame(BufferFrame& bf)
+    -> std::expected<void, utils::Error> {
   u8 buffer[FLAGS_page_size];
   bf.header.mLatch.LockExclusively();
   if (!bf.isFree()) {
     mStore->mTreeRegistry->Checkpoint(bf.page.mBTreeId, bf, buffer);
     auto ret = pwrite(mStore->mPageFd, buffer, FLAGS_page_size,
                       bf.header.mPageId * FLAGS_page_size);
-    DCHECK_EQ(ret, FLAGS_page_size);
+    if (ret < 0) {
+      return std::unexpected<utils::Error>(
+          utils::Error::FileWrite(GetDBFilePath(), errno, strerror(errno)));
+    }
+    if (ret < FLAGS_page_size) {
+      return std::unexpected<utils::Error>(utils::Error::General(
+          "Write incomplete, only " + std::to_string(ret) + " bytes written"));
+    }
   }
   bf.header.mLatch.UnlockExclusively();
+  return {};
 }
 
 void BufferManager::RecoverFromDisk() {
