@@ -9,7 +9,6 @@
 #include "profiling/counters/WorkerCounters.hpp"
 #include "shared-headers/Exceptions.hpp"
 #include "shared-headers/Units.hpp"
-#include "storage/buffer-manager/GuardedBufferFrame.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Misc.hpp"
 #include "utils/Parallelize.hpp"

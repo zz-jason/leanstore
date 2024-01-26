@@ -147,7 +147,7 @@ public:
   void FlushAndRecycleBufferFrames(Partition& targetPartition);
 
 protected:
-  void RunImpl() override;
+  void runImpl() override;
 
 private:
   inline void randomBufferFramesToCoolOrEvict() {
@@ -180,7 +180,7 @@ private:
 
 using Time = decltype(std::chrono::high_resolution_clock::now());
 
-inline void BufferFrameProvider::RunImpl() {
+inline void BufferFrameProvider::runImpl() {
   CPUCounters::registerThread(mThreadName);
   if (FLAGS_root) {
     // https://linux.die.net/man/2/setpriority
