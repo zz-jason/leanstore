@@ -60,7 +60,7 @@ public:
   virtual ~GroupCommitter() override = default;
 
 protected:
-  virtual void RunImpl() override;
+  virtual void runImpl() override;
 
 private:
   /// Phase 1: Prepare IOCBs

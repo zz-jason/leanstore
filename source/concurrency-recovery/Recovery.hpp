@@ -1,9 +1,7 @@
 #pragma once
 
 #include "LeanStore.hpp"
-#include "concurrency-recovery/WALEntry.hpp"
 #include "shared-headers/Units.hpp"
-#include "storage/btree/core/BTreeNode.hpp"
 #include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/Defer.hpp"

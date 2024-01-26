@@ -18,6 +18,7 @@ enum class ErrorCode : u64 {
   kFileClose,
   kFileSeek,
   kFileRead,
+  kFileWrite,
 
   // BasicKV related error code
   kBasicKV = 200,
@@ -109,6 +110,12 @@ public:
   template <typename... Args> inline static Error FileRead(Args&&... args) {
     const std::string msg = "Fail to read file, file={}, errno={}, strerror={}";
     return Error(ErrorCode::kFileRead, msg, std::forward<Args>(args)...);
+  }
+
+  template <typename... Args> inline static Error FileWrite(Args&&... args) {
+    const std::string msg =
+        "Fail to write file, file={}, errno={}, strerror={}";
+    return Error(ErrorCode::kFileWrite, msg, std::forward<Args>(args)...);
   }
 };
 

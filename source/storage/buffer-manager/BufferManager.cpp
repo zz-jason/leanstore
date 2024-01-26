@@ -9,14 +9,18 @@
 #include "profiling/counters/WorkerCounters.hpp"
 #include "shared-headers/Exceptions.hpp"
 #include "shared-headers/Units.hpp"
-#include "storage/buffer-manager/GuardedBufferFrame.hpp"
 #include "utils/DebugFlags.hpp"
+#include "utils/Error.hpp"
 #include "utils/Misc.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
+
+#include <cerrno>
+#include <cstring>
+#include <expected>
 
 #include <fcntl.h>
 #include <sys/resource.h>
@@ -26,9 +30,7 @@
 namespace leanstore {
 namespace storage {
 
-BufferManager::BufferManager(leanstore::LeanStore* store, s32 fd)
-    : mStore(store),
-      mPageFd(fd) {
+BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
   mNumBfs = mStore->mStoreOption.mBufferPoolSize / BufferFrame::Size();
   const u64 totalMemSize = BufferFrame::Size() * (mNumBfs + mNumSaftyBfs);
 
@@ -93,7 +95,7 @@ void BufferManager::StartBufferFrameProviders() {
 
     mBfProviders.push_back(std::make_unique<BufferFrameProvider>(
         mStore, threadName, runningCPU, mNumBfs, mBufferPool, mNumPartitions,
-        mPartitionsMask, mPartitions, mPageFd));
+        mPartitionsMask, mPartitions));
   }
 
   for (auto i = 0u; i < mBfProviders.size(); ++i) {
@@ -136,7 +138,7 @@ void BufferManager::CheckpointAllBufferFrames() {
       bf.header.mLatch.LockExclusively();
       if (!bf.isFree()) {
         mStore->mTreeRegistry->Checkpoint(bf.page.mBTreeId, bf, buffer);
-        auto ret = pwrite(mPageFd, buffer, FLAGS_page_size,
+        auto ret = pwrite(mStore->mPageFd, buffer, FLAGS_page_size,
                           bf.header.mPageId * FLAGS_page_size);
         DCHECK_EQ(ret, FLAGS_page_size);
       }
@@ -145,17 +147,25 @@ void BufferManager::CheckpointAllBufferFrames() {
   });
 }
 
-void BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
-  utils::AlignedBuffer<512> alignedBuffer(FLAGS_page_size);
-  auto* buffer = alignedBuffer.Get();
+auto BufferManager::CheckpointBufferFrame(BufferFrame& bf)
+    -> std::expected<void, utils::Error> {
+  alignas(512) u8 buffer[FLAGS_page_size];
   bf.header.mLatch.LockExclusively();
   if (!bf.isFree()) {
     mStore->mTreeRegistry->Checkpoint(bf.page.mBTreeId, bf, buffer);
-    auto ret = pwrite(mPageFd, buffer, FLAGS_page_size,
+    auto ret = pwrite(mStore->mPageFd, buffer, FLAGS_page_size,
                       bf.header.mPageId * FLAGS_page_size);
-    DCHECK_EQ(ret, FLAGS_page_size);
+    if (ret < 0) {
+      return std::unexpected<utils::Error>(
+          utils::Error::FileWrite(GetDBFilePath(), errno, strerror(errno)));
+    }
+    if (ret < FLAGS_page_size) {
+      return std::unexpected<utils::Error>(utils::Error::General(
+          "Write incomplete, only " + std::to_string(ret) + " bytes written"));
+    }
   }
   bf.header.mLatch.UnlockExclusively();
+  return {};
 }
 
 void BufferManager::RecoverFromDisk() {
@@ -191,6 +201,8 @@ BufferFrame& BufferManager::RandomBufferFrame() {
 BufferFrame& BufferManager::AllocNewPage(TREEID treeId) {
   Partition& partition = RandomPartition();
   BufferFrame& freeBf = partition.mFreeBfList.PopFrontMayJump();
+  memset((void*)&freeBf, 0, BufferFrame::Size());
+  new (&freeBf) BufferFrame();
   freeBf.Init(partition.NextPageId());
 
   COUNTERS_BLOCK() {
@@ -389,7 +401,7 @@ void BufferManager::ReadPageSync(PID pageId, void* destination) {
   s64 bytesLeft = FLAGS_page_size;
   do {
     auto bytesRead =
-        pread(mPageFd, destination, bytesLeft,
+        pread(mStore->mPageFd, destination, bytesLeft,
               pageId * FLAGS_page_size + (FLAGS_page_size - bytesLeft));
     if (bytesRead < 0) {
       LOG(ERROR) << "pread failed"
@@ -429,14 +441,14 @@ void BufferManager::WritePageSync(BufferFrame& bf) {
   guardedBf.ToExclusiveMayJump();
   auto pageId = bf.header.mPageId;
   auto& partition = GetPartition(pageId);
-  pwrite(mPageFd, &bf.page, FLAGS_page_size, pageId * FLAGS_page_size);
+  pwrite(mStore->mPageFd, &bf.page, FLAGS_page_size, pageId * FLAGS_page_size);
   bf.Reset();
   guardedBf.unlock();
   partition.mFreeBfList.PushFront(bf);
 }
 
 void BufferManager::SyncAllPageWrites() {
-  fdatasync(mPageFd);
+  fdatasync(mStore->mPageFd);
 }
 
 u64 BufferManager::GetPartitionID(PID pageId) {
@@ -449,9 +461,6 @@ Partition& BufferManager::GetPartition(PID pageId) {
 }
 
 void BufferManager::StopBufferFrameProviders() {
-  for (auto i = 0u; i < mBfProviders.size(); ++i) {
-    mBfProviders[i]->Stop();
-  }
   mBfProviders.clear();
 }
 

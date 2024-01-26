@@ -12,7 +12,6 @@
 #include <expected>
 #include <list>
 #include <memory>
-#include <mutex>
 
 namespace leanstore::storage::btree {
 
@@ -25,8 +24,10 @@ class TransactionKV;
 } // namespace leanstore::storage::btree
 
 namespace leanstore::storage {
+
 class TreeRegistry;
 class BufferManager;
+
 } // namespace leanstore::storage
 
 namespace leanstore::cr {
@@ -91,9 +92,9 @@ public:
   /// @param name The unique name of the btree
   /// @param config The config of the btree
   /// @param btree The pointer to store the registered btree
-  void RegisterBasicKV(const std::string& name,
-                       storage::btree::BTreeConfig& config,
-                       storage::btree::BasicKV** btree);
+  void CreateBasicKV(const std::string& name,
+                     storage::btree::BTreeConfig& config,
+                     storage::btree::BasicKV** btree);
 
   /// Get a registered BasicKV
   ///
@@ -103,16 +104,16 @@ public:
 
   /// Unregister a BasicKV
   /// @param name The unique name of the btree
-  void UnRegisterBasicKV(const std::string& name);
+  void DropBasicKV(const std::string& name);
 
   /// Register a TransactionKV
   ///
   /// @param name The unique name of the btree
   /// @param config The config of the btree
   /// @param btree The pointer to store the registered btree
-  void RegisterTransactionKV(const std::string& name,
-                             storage::btree::BTreeConfig& config,
-                             storage::btree::TransactionKV** btree);
+  void CreateTransactionKV(const std::string& name,
+                           storage::btree::BTreeConfig& config,
+                           storage::btree::TransactionKV** btree);
 
   /// Get a registered TransactionKV
   ///
@@ -123,12 +124,28 @@ public:
 
   /// Unregister a TransactionKV
   /// @param name The unique name of the btree
-  void UnRegisterTransactionKV(const std::string& name);
+  void DropTransactionKV(const std::string& name);
 
   /// Alloc a new timestamp from the timestamp oracle
   u64 AllocTs() {
     return mTimestampOracle.fetch_add(1);
   }
+
+  /// Execute a custom user function on a worker thread.
+  /// @param workerId worker to compute job
+  /// @param job job
+  void ExecSync(u64 workerId, std::function<void()> fn);
+
+  /// Execute a custom user function on a worker thread asynchronously.
+  /// @param workerId worker to compute job
+  /// @param job job
+  void ExecAsync(u64 workerId, std::function<void()> fn);
+
+  /// Waits for the worker to complete.
+  void Wait(WORKERID workerId);
+
+  /// Waits for all Workers to complete.
+  void WaitAll();
 
   void StartProfilingThread();
 
@@ -159,8 +176,6 @@ private:
   void initGoogleLog();
 
   void initPageAndWalFd();
-
-  void recoverFromExistingStore();
 
 private:
   static FlagListString sPersistedStringFlags;

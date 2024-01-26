@@ -182,7 +182,7 @@ public:
         mBf->page.mGSN > cr::Worker::My().mLogging.mTxReadSnapshot &&
         mBf->header.mLastWriterWorker != cr::Worker::My().mWorkerId) {
       cr::Worker::My().mLogging.mHasRemoteDependency = true;
-      DLOG(INFO) << "detect remote dependency"
+      DLOG(INFO) << "Detected remote dependency"
                  << ", workerId=" << cr::Worker::My().mWorkerId
                  << ", txReadSnapshot(GSN)="
                  << cr::Worker::My().mLogging.mTxReadSnapshot

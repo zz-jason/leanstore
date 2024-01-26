@@ -29,6 +29,10 @@ void Jump() {
 
   // Jump to the preset jump point
   auto& jumpPoint = jumpmu::tlsJumpPoints[jumpmu::tlsNumJumpPoints - 1];
+  DLOG(INFO) << "Jump to jump point " << jumpmu::tlsNumJumpPoints - 1 << " ("
+             << jumpmu::tlsNumStackObjs << " stack objects, "
+             << jumpmu::tlsJumpPointNumStackObjs[jumpmu::tlsNumJumpPoints - 1]
+             << " jump stack objects)";
   tlsNumJumpPoints--;
   longjmp(jumpPoint, 1);
 }

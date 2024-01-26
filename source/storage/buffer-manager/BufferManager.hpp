@@ -5,6 +5,9 @@
 #include "Swip.hpp"
 #include "profiling/tables/BMTable.hpp"
 #include "shared-headers/Units.hpp"
+#include "utils/Error.hpp"
+
+#include <expected>
 
 #include <libaio.h>
 #include <sys/mman.h>
@@ -18,6 +21,7 @@ namespace profiling {
 
 // Forward declaration
 class BMTable;
+
 } // namespace profiling
 
 namespace storage {
@@ -53,9 +57,6 @@ public:
   /// All the managed buffer frames in the memory.
   u8* mBufferPool;
 
-  /// FD for disk files storing pages.
-  const int mPageFd;
-
   /// Free Pages, reserved to to prevent segmentfaults.
   const u8 mNumSaftyBfs = 10;
 
@@ -64,14 +65,16 @@ public:
 
   /// For cooling and inflight io
   u64 mNumPartitions;
+
   u64 mPartitionsMask;
+
   std::vector<std::unique_ptr<Partition>> mPartitions;
 
   /// All the buffer frame provider threads.
   std::vector<std::unique_ptr<BufferFrameProvider>> mBfProviders;
 
 public:
-  BufferManager(leanstore::LeanStore* store, s32 pageFd);
+  BufferManager(leanstore::LeanStore* store);
 
   ~BufferManager();
 
@@ -144,7 +147,8 @@ public:
   /// Checkpoints a buffer frame to disk. The buffer frame content is copied to
   /// a tmp memory buffer, swips in the tmp memory buffer are changed to page
   /// IDs, then the tmp memory buffer is written to the disk.
-  void CheckpointBufferFrame(BufferFrame& bf);
+  [[nodiscard]] auto CheckpointBufferFrame(BufferFrame& bf)
+      -> std::expected<void, utils::Error>;
 
   /// Checkpoints all the buffer frames.
   void CheckpointAllBufferFrames();

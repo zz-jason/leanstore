@@ -109,7 +109,7 @@ inline std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
   }
 
   if (mCommandId == kInvalidCommandid) {
-    JUMPMU_RETURN{OpCode::kNotFound, 1};
+    return {OpCode::kNotFound, 1};
   }
 
   // Head is not visible

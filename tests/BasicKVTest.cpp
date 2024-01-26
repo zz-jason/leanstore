@@ -43,35 +43,35 @@ TEST_F(BasicKVTest, BasicKVCreate) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
 
-  mLeanStore->mCRManager->ScheduleJobSync(0, [&]() {
+  mLeanStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mLeanStore->RegisterBasicKV(btreeName, btreeConfig, &btree);
+    mLeanStore->CreateBasicKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
   });
 
   // create btree with same should fail in the same worker
-  mLeanStore->mCRManager->ScheduleJobSync(0, [&]() {
+  mLeanStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mLeanStore->RegisterBasicKV(btreeName, btreeConfig, &another);
+    mLeanStore->CreateBasicKV(btreeName, btreeConfig, &another);
     EXPECT_EQ(another, nullptr);
   });
 
   // create btree with same should also fail in other workers
-  mLeanStore->mCRManager->ScheduleJobSync(1, [&]() {
+  mLeanStore->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mLeanStore->RegisterBasicKV(btreeName, btreeConfig, &another);
+    mLeanStore->CreateBasicKV(btreeName, btreeConfig, &another);
     EXPECT_EQ(another, nullptr);
   });
 
   // create btree with another different name should success
   btreeName = "testTree2";
-  mLeanStore->mCRManager->ScheduleJobSync(0, [&]() {
+  mLeanStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mLeanStore->RegisterBasicKV(btreeName, btreeConfig, &another);
+    mLeanStore->CreateBasicKV(btreeName, btreeConfig, &another);
     EXPECT_NE(btree, nullptr);
   });
 }
@@ -101,9 +101,9 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
-  mLeanStore->mCRManager->ScheduleJobSync(0, [&]() {
+  mLeanStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
-    mLeanStore->RegisterBasicKV(btreeName, btreeConfig, &btree);
+    mLeanStore->CreateBasicKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::My().CommitTx();
 
@@ -119,7 +119,7 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
   });
 
   // query on the created btree in the same worker
-  mLeanStore->mCRManager->ScheduleJobSync(0, [&]() {
+  mLeanStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     std::string copiedValue;
@@ -136,7 +136,7 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
   });
 
   // query on the created btree in another worker
-  mLeanStore->mCRManager->ScheduleJobSync(1, [&]() {
+  mLeanStore->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     std::string copiedValue;
