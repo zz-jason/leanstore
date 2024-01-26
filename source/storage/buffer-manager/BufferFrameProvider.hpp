@@ -91,8 +91,7 @@ public:
   BufferFrameProvider(leanstore::LeanStore* store,
                       const std::string& threadName, u64 runningCPU, u64 numBfs,
                       u8* bfs, u64 numPartitions, u64 partitionMask,
-                      std::vector<std::unique_ptr<Partition>>& partitions,
-                      int fd)
+                      std::vector<std::unique_ptr<Partition>>& partitions)
       : utils::UserThread(threadName, runningCPU),
         mStore(store),
         mNumBfs(numBfs),
@@ -100,10 +99,11 @@ public:
         mNumPartitions(numPartitions),
         mPartitionsMask(partitionMask),
         mPartitions(partitions),
-        mFD(fd),
+        mFD(store->mPageFd),
         mCoolCandidateBfs(),
         mEvictCandidateBfs(),
-        mAsyncWriteBuffer(fd, FLAGS_page_size, FLAGS_write_buffer_size),
+        mAsyncWriteBuffer(store->mPageFd, FLAGS_page_size,
+                          FLAGS_write_buffer_size),
         mFreeBfList() {
     mCoolCandidateBfs.reserve(FLAGS_buffer_frame_recycle_batch_size);
     mEvictCandidateBfs.reserve(FLAGS_buffer_frame_recycle_batch_size);
@@ -147,7 +147,7 @@ public:
   void FlushAndRecycleBufferFrames(Partition& targetPartition);
 
 protected:
-  void RunImpl() override;
+  void runImpl() override;
 
 private:
   inline void randomBufferFramesToCoolOrEvict() {
@@ -180,7 +180,7 @@ private:
 
 using Time = decltype(std::chrono::high_resolution_clock::now());
 
-inline void BufferFrameProvider::RunImpl() {
+inline void BufferFrameProvider::runImpl() {
   CPUCounters::registerThread(mThreadName);
   if (FLAGS_root) {
     // https://linux.die.net/man/2/setpriority

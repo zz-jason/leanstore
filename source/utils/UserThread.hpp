@@ -48,12 +48,12 @@ public:
   void Start() {
     if (mThread == nullptr) {
       mKeepRunning = true;
-      mThread = std::make_unique<std::thread>(&UserThread::Run, this);
+      mThread = std::make_unique<std::thread>(&UserThread::run, this);
     }
   }
 
   /// Stop executing the thread.
-  void Stop() {
+  virtual void Stop() {
     mKeepRunning = false;
     if (mThread && mThread->joinable()) {
       mThread->join();
@@ -66,7 +66,7 @@ public:
   }
 
 protected:
-  void Run() {
+  void run() {
     // set thread-local thread name at the very beging so that logs printed by
     // the thread can get it.
     tlsThreadName = mThreadName;
@@ -85,11 +85,11 @@ protected:
     }
 
     // run custom thread loop
-    RunImpl();
+    runImpl();
   }
 
   /// Custom thread loop
-  virtual void RunImpl() = 0;
+  virtual void runImpl() = 0;
 };
 
 } // namespace utils

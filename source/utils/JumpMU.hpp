@@ -75,22 +75,26 @@ public:
 /// JUMPMU_CATCH supplements normal execution path which is to remove the last
 /// jump point set by JUMPMU_TRY, adds the execution path once jump happens
 #define JUMPMU_CATCH()                                                         \
+  DLOG(INFO) << "Jump point " << jumpmu::tlsNumJumpPoints - 1 << " caught";    \
   jumpmu::tlsNumJumpPoints--;                                                  \
   }                                                                            \
   else
 
 /// JUMPMU_RETURN removes the last jump point and finish the function execution
 #define JUMPMU_RETURN                                                          \
+  DLOG(INFO) << "Jump point " << jumpmu::tlsNumJumpPoints - 1 << " returned";  \
   jumpmu::tlsNumJumpPoints--;                                                  \
   return
 
 /// JUMPMU_BREAK removes the last jump point and breaks the current loop
 #define JUMPMU_BREAK                                                           \
+  DLOG(INFO) << "Jump point " << jumpmu::tlsNumJumpPoints - 1 << " breaked";   \
   jumpmu::tlsNumJumpPoints--;                                                  \
   break
 
 /// JUMPMU_CONTINUE removes the last jump point and continues the current loop
 #define JUMPMU_CONTINUE                                                        \
+  DLOG(INFO) << "Jump point " << jumpmu::tlsNumJumpPoints - 1 << " continued"; \
   jumpmu::tlsNumJumpPoints--;                                                  \
   continue
 

@@ -28,7 +28,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
       leanstore::storage::btree::TransactionKV* tree;
       storage::btree::BTreeConfig config{.mEnableWal = FLAGS_wal,
                                          .mUseBulkInsert = false};
-      db.RegisterTransactionKV(name, config, &tree);
+      db.CreateTransactionKV(name, config, &tree);
       btree = reinterpret_cast<leanstore::KVInterface*>(tree);
     }
   }
