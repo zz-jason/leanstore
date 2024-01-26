@@ -17,6 +17,8 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <cstring>
+
 #include <fcntl.h>
 #include <sys/resource.h>
 #include <sys/time.h>
@@ -143,8 +145,7 @@ void BufferManager::CheckpointAllBufferFrames() {
 }
 
 void BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
-  utils::AlignedBuffer<512> alignedBuffer(FLAGS_page_size);
-  auto* buffer = alignedBuffer.Get();
+  u8 buffer[FLAGS_page_size];
   bf.header.mLatch.LockExclusively();
   if (!bf.isFree()) {
     mStore->mTreeRegistry->Checkpoint(bf.page.mBTreeId, bf, buffer);
@@ -188,6 +189,8 @@ BufferFrame& BufferManager::RandomBufferFrame() {
 BufferFrame& BufferManager::AllocNewPage(TREEID treeId) {
   Partition& partition = RandomPartition();
   BufferFrame& freeBf = partition.mFreeBfList.PopFrontMayJump();
+  memset((void*)&freeBf, 0, BufferFrame::Size());
+  new (&freeBf) BufferFrame();
   freeBf.Init(partition.NextPageId());
 
   COUNTERS_BLOCK() {

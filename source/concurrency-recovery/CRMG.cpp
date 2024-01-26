@@ -42,10 +42,10 @@ CRManager::CRManager(leanstore::LeanStore* store)
 
   // create history tree for each worker
   mWorkerThreads[0]->SetJob([&]() { setupHistoryTree(); });
+  mWorkerThreads[0]->Wait();
   for (u64 workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
     mWorkers[workerId]->cc.mHistoryTree = mHistoryTreePtr.get();
   }
-  mWorkerThreads[0]->Wait();
 }
 
 void CRManager::Stop() {

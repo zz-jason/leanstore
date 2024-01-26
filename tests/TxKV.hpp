@@ -96,10 +96,10 @@ public:
 
 public:
   LeanStoreMVCC(const std::string& storeDir, u32 sessionLimit) {
-    FLAGS_bulk_insert = false;
-    FLAGS_worker_threads = sessionLimit;
     FLAGS_init = true;
+    FLAGS_logtostdout = true;
     FLAGS_data_dir = storeDir;
+    FLAGS_worker_threads = sessionLimit;
 
     std::filesystem::path dirPath = FLAGS_data_dir;
     std::filesystem::remove_all(dirPath);

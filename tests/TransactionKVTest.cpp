@@ -6,9 +6,11 @@
 #include "storage/btree/core/BTreeGeneric.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/Defer.hpp"
+#include "utils/JsonUtil.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <gtest/gtest.h>
+#include <rapidjson/document.h>
 
 #include <cstddef>
 #include <string>
@@ -489,8 +491,9 @@ TEST_F(TransactionKVTest, ToJson) {
     }
     cr::Worker::My().CommitTx();
 
-    // auto doc = leanstore::storage::btree::BTreeGeneric::ToJson(*btree);
-    // std::cout << leanstore::utils::JsonToStr(&doc);
+    rapidjson::Document doc(rapidjson::kObjectType);
+    leanstore::storage::btree::BTreeGeneric::ToJson(*btree, &doc);
+    EXPECT_GE(leanstore::utils::JsonToStr(&doc).size(), 0u);
 
     cr::Worker::My().StartTx();
     GetLeanStore()->DropTransactionKV(btreeName);
