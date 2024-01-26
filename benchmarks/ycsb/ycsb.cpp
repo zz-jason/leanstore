@@ -128,7 +128,7 @@ static KVInterface* CreateTable() {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
   btree::TransactionKV* table;
-  GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     leanstore->RegisterTransactionKV(tableName, config, &table);
@@ -178,25 +178,24 @@ static void HandleCmdLoad() {
   utils::Parallelize::range(
       FLAGS_worker_threads, FLAGS_ycsb_record_count,
       [&](u64 workerId, u64 begin, u64 end) {
-        GetLeanStore()->mCRManager->ScheduleJobAsync(
-            workerId, [&, begin, end]() {
-              for (u64 i = begin; i < end; i++) {
-                // generate key
-                u8 key[FLAGS_ycsb_key_size];
-                GenYcsbKey(zipfRandom, key);
+        GetLeanStore()->mCRManager->ExecAsync(workerId, [&, begin, end]() {
+          for (u64 i = begin; i < end; i++) {
+            // generate key
+            u8 key[FLAGS_ycsb_key_size];
+            GenYcsbKey(zipfRandom, key);
 
-                // generate value
-                u8 val[FLAGS_ycsb_val_size];
-                utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
+            // generate value
+            u8 val[FLAGS_ycsb_val_size];
+            utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
 
-                cr::Worker::My().StartTx();
-                table->Insert(Slice(key, FLAGS_ycsb_key_size),
-                              Slice(val, FLAGS_ycsb_val_size));
-                cr::Worker::My().CommitTx();
-              }
-            });
+            cr::Worker::My().StartTx();
+            table->Insert(Slice(key, FLAGS_ycsb_key_size),
+                          Slice(val, FLAGS_ycsb_val_size));
+            cr::Worker::My().CommitTx();
+          }
+        });
       });
-  GetLeanStore()->mCRManager->JoinAll();
+  GetLeanStore()->mCRManager->WaitAll();
 }
 
 static void HandleCmdRun() {
@@ -217,7 +216,7 @@ static void HandleCmdRun() {
   }
 
   for (u64 workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
-    GetLeanStore()->mCRManager->ScheduleJobAsync(workerId, [&]() {
+    GetLeanStore()->mCRManager->ExecAsync(workerId, [&]() {
       u8 key[FLAGS_ycsb_key_size];
       std::string valRead;
       auto copyValue = [&](Slice val) {
@@ -307,7 +306,7 @@ static void HandleCmdRun() {
 
   // Shutdown threads
   keepRunning = false;
-  GetLeanStore()->mCRManager->JoinAll();
+  GetLeanStore()->mCRManager->WaitAll();
 }
 
 } // namespace leanstore::ycsb

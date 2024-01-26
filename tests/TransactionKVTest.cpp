@@ -56,7 +56,7 @@ TEST_F(TransactionKVTest, Create) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
 
-  GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     GetLeanStore()->RegisterTransactionKV(btreeName, btreeConfig, &btree);
@@ -64,7 +64,7 @@ TEST_F(TransactionKVTest, Create) {
   });
 
   // create btree with same should fail in the same worker
-  GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     GetLeanStore()->RegisterTransactionKV(btreeName, btreeConfig, &another);
@@ -72,7 +72,7 @@ TEST_F(TransactionKVTest, Create) {
   });
 
   // create btree with same should also fail in other workers
-  GetLeanStore()->mCRManager->ScheduleJobSync(1, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     GetLeanStore()->RegisterTransactionKV(btreeName, btreeConfig, &another);
@@ -81,14 +81,14 @@ TEST_F(TransactionKVTest, Create) {
 
   // create btree with another different name should success
   const auto* btreeName2 = "testTree2";
-  GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     GetLeanStore()->RegisterTransactionKV(btreeName2, btreeConfig, &another);
     EXPECT_NE(btree, nullptr);
   });
 
-  GetLeanStore()->mCRManager->ScheduleJobSync(1, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     GetLeanStore()->UnRegisterTransactionKV(btreeName);
@@ -115,7 +115,7 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
-  GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     GetLeanStore()->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
@@ -133,7 +133,7 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
   });
 
   // query on the created btree in the same worker
-  GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     std::string copiedValue;
@@ -150,7 +150,7 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
   });
 
   // query on the created btree in another worker
-  GetLeanStore()->mCRManager->ScheduleJobSync(1, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     std::string copiedValue;
@@ -166,7 +166,7 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
     }
   });
 
-  GetLeanStore()->mCRManager->ScheduleJobSync(1, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     GetLeanStore()->UnRegisterTransactionKV(btreeName);
@@ -175,7 +175,7 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
 
 TEST_F(TransactionKVTest, Insert1000KVs) {
   GetLeanStore();
-  GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
     storage::btree::TransactionKV* btree;
 
     // create leanstore btree for table records
@@ -216,7 +216,7 @@ TEST_F(TransactionKVTest, Insert1000KVs) {
 
 TEST_F(TransactionKVTest, InsertDuplicates) {
   GetLeanStore();
-  GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
     storage::btree::TransactionKV* btree;
 
     // create leanstore btree for table records
@@ -267,7 +267,7 @@ TEST_F(TransactionKVTest, InsertDuplicates) {
 
 TEST_F(TransactionKVTest, Remove) {
   GetLeanStore();
-  GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
     storage::btree::TransactionKV* btree;
 
     // create leanstore btree for table records
@@ -324,7 +324,7 @@ TEST_F(TransactionKVTest, Remove) {
 
 TEST_F(TransactionKVTest, RemoveNotExisted) {
   GetLeanStore();
-  GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
     storage::btree::TransactionKV* btree;
 
     // create leanstore btree for table records
@@ -385,7 +385,7 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
   std::set<std::string> uniqueKeys;
   storage::btree::TransactionKV* btree;
 
-  GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
     // create leanstore btree for table records
     auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
@@ -416,7 +416,7 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
     }
   });
 
-  GetLeanStore()->mCRManager->ScheduleJobSync(1, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(1, [&]() {
     // remove from another worker
     for (auto& key : uniqueKeys) {
       cr::Worker::My().StartTx();
@@ -435,7 +435,7 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
     }
   });
 
-  GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
     // lookup from another worker, should not found any keys
     for (auto& key : uniqueKeys) {
       cr::Worker::My().StartTx();
@@ -446,7 +446,7 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
     }
   });
 
-  GetLeanStore()->mCRManager->ScheduleJobSync(1, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(1, [&]() {
     // unregister the tree from another worker
     cr::Worker::My().StartTx();
     GetLeanStore()->UnRegisterTransactionKV(btreeName);
@@ -456,7 +456,7 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
 
 TEST_F(TransactionKVTest, ToJson) {
   GetLeanStore();
-  GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
     storage::btree::TransactionKV* btree;
 
     // prepare key-value pairs to insert
@@ -514,7 +514,7 @@ TEST_F(TransactionKVTest, Update) {
 
   const auto* btreeName = "testTree1";
 
-  GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
     auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
@@ -607,7 +607,7 @@ TEST_F(TransactionKVTest, ScanAsc) {
 
   const auto* btreeName = "testTree1";
 
-  GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
     auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
@@ -693,7 +693,7 @@ TEST_F(TransactionKVTest, ScanDesc) {
 
   const auto* btreeName = "testTree1";
 
-  GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
     auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
@@ -785,7 +785,7 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
     copiedValue = std::string((const char*)val.data(), val.size());
   };
 
-  GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
     auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
@@ -853,7 +853,7 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
 
   LOG(INFO) << "key=" << kvToTest.begin()->first
             << ", val=" << kvToTest.begin()->second << ", newVal=" << newVal;
-  GetLeanStore()->mCRManager->ScheduleJobSync(1, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(1, [&]() {
     // lookup the new value
     cr::Worker::My().StartTx();
     for (const auto& [key, val] : kvToTest) {
@@ -899,7 +899,7 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
     copiedValue = std::string((const char*)val.data(), val.size());
   };
 
-  GetLeanStore()->mCRManager->ScheduleJobSync(0, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(0, [&]() {
     auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
@@ -929,7 +929,7 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
     }
   });
 
-  GetLeanStore()->mCRManager->ScheduleJobSync(1, [&]() {
+  GetLeanStore()->mCRManager->ExecSync(1, [&]() {
     for (const auto& [key, val] : kvToTest) {
       cr::Worker::My().StartTx();
       SCOPED_DEFER(cr::Worker::My().CommitTx());

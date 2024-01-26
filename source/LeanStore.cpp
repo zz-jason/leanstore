@@ -196,7 +196,7 @@ LeanStore::~LeanStore() {
   });
 
   // wait all concurrent jobs to finsh
-  mCRManager->JoinAll();
+  mCRManager->WaitAll();
 
   // print trees
   for (auto& it : mTreeRegistry->mTrees) {
@@ -205,8 +205,7 @@ LeanStore::~LeanStore() {
     auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(treePtr.get());
 
     u64 numEntries(0);
-    mCRManager->ScheduleJobSync(0,
-                                [&]() { numEntries = btree->CountEntries(); });
+    mCRManager->ExecSync(0, [&]() { numEntries = btree->CountEntries(); });
 
     LOG(INFO) << "[TransactionKV] name=" << treeName << ", btreeId=" << treeId
               << ", height=" << btree->mHeight << ", numEntries=" << numEntries;
@@ -568,7 +567,7 @@ void LeanStore::deserializeMeta() {
       auto btree = std::make_unique<leanstore::storage::btree::TransactionKV>();
       btree->mStore = this;
       // create graveyard
-      mCRManager->ScheduleJobSync(0, [&]() {
+      mCRManager->ExecSync(0, [&]() {
         auto graveyardName = "_" + btreeName + "_graveyard";
         auto graveyardConfig = storage::btree::BTreeConfig{
             .mEnableWal = false, .mUseBulkInsert = false};

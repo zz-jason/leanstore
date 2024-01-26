@@ -39,7 +39,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
-  sLeanStore->mCRManager->ScheduleJobSync(0, [&]() {
+  sLeanStore->mCRManager->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     sLeanStore->RegisterTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
@@ -48,7 +48,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
 
   std::unordered_set<std::string> dedup;
   for (auto _ : state) {
-    sLeanStore->mCRManager->ScheduleJobAsync(0, [&]() {
+    sLeanStore->mCRManager->ExecSync(0, [&]() {
       cr::Worker::My().StartTx();
       std::string key;
       std::string val;
@@ -62,7 +62,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
     });
   }
 
-  sLeanStore->mCRManager->ScheduleJobSync(0, [&]() {
+  sLeanStore->mCRManager->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     sLeanStore->UnRegisterTransactionKV(btreeName);

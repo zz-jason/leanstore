@@ -448,9 +448,6 @@ Partition& BufferManager::GetPartition(PID pageId) {
 }
 
 void BufferManager::StopBufferFrameProviders() {
-  for (auto i = 0u; i < mBfProviders.size(); ++i) {
-    mBfProviders[i]->Stop();
-  }
   mBfProviders.clear();
 }
 

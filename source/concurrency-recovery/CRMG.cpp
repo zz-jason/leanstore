@@ -2,40 +2,34 @@
 
 #include "GroupCommitter.hpp"
 #include "LeanStore.hpp"
-#include "WorkerThreadNew.hpp"
+#include "WorkerThread.hpp"
 #include "concurrency-recovery/HistoryTree.hpp"
 
 #include <glog/logging.h>
 
 #include <memory>
 
-namespace leanstore {
-namespace cr {
+namespace leanstore::cr {
 
-/// Threads id order:
-///   Workers (#workers)
-///   Group Committer Thread (1)
-///   Page Provider Threads (#pageProviders)
 CRManager::CRManager(leanstore::LeanStore* store, s32 walFd)
     : mStore(store),
       mGroupCommitter(nullptr),
       mHistoryTreePtr(nullptr) {
   // start all worker threads
   mWorkers.resize(FLAGS_worker_threads);
-  mWorkerThreadsNew.reserve(FLAGS_worker_threads);
+  mWorkerThreads.reserve(FLAGS_worker_threads);
   for (u64 workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
-    auto workerThreadNew =
-        std::make_unique<WorkerThreadNew>(workerId, workerId);
-    workerThreadNew->Start();
+    auto workerThread = std::make_unique<WorkerThread>(workerId, workerId);
+    workerThread->Start();
 
     // create thread-local transaction executor on each worker thread
-    workerThreadNew->SetJob([&]() {
+    workerThread->SetJob([&]() {
       Worker::sTlsWorker = std::make_unique<Worker>(
           workerId, mWorkers, FLAGS_worker_threads, mStore);
       mWorkers[workerId] = Worker::sTlsWorker.get();
     });
-    workerThreadNew->JoinJob();
-    mWorkerThreadsNew.emplace_back(std::move(workerThreadNew));
+    workerThread->JoinJob();
+    mWorkerThreads.emplace_back(std::move(workerThread));
   }
 
   // start group commit thread
@@ -46,7 +40,7 @@ CRManager::CRManager(leanstore::LeanStore* store, s32 walFd)
   }
 
   // create history tree for each worker
-  ScheduleJobSync(0, [&]() { setupHistoryTree(); });
+  ExecSync(0, [&]() { setupHistoryTree(); });
   for (u64 workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
     mWorkers[workerId]->cc.mHistoryTree = mHistoryTreePtr.get();
   }
@@ -54,7 +48,7 @@ CRManager::CRManager(leanstore::LeanStore* store, s32 walFd)
 
 void CRManager::Stop() {
   mGroupCommitter->Stop();
-  mWorkerThreadsNew.clear();
+  mWorkerThreads.clear();
 }
 
 CRManager::~CRManager() {
@@ -64,11 +58,9 @@ CRManager::~CRManager() {
 void CRManager::setupHistoryTree() {
   auto historyTree = std::make_unique<HistoryTree>();
   historyTree->mUpdateBTrees =
-      std::make_unique<leanstore::storage::btree::BasicKV*[]>(
-          FLAGS_worker_threads);
+      std::make_unique<storage::btree::BasicKV*[]>(FLAGS_worker_threads);
   historyTree->mRemoveBTrees =
-      std::make_unique<leanstore::storage::btree::BasicKV*[]>(
-          FLAGS_worker_threads);
+      std::make_unique<storage::btree::BasicKV*[]>(FLAGS_worker_threads);
 
   for (u64 i = 0; i < FLAGS_worker_threads; i++) {
     std::string name = "_history_tree_" + std::to_string(i);
@@ -100,18 +92,18 @@ void CRManager::setupHistoryTree() {
   mHistoryTreePtr = std::move(historyTree);
 }
 
-void CRManager::ScheduleJobSync(u64 workerId, std::function<void()> job) {
-  mWorkerThreadsNew[workerId]->SetJob(job);
-  mWorkerThreadsNew[workerId]->JoinJob();
+void CRManager::ExecSync(u64 workerId, std::function<void()> job) {
+  mWorkerThreads[workerId]->SetJob(job);
+  mWorkerThreads[workerId]->JoinJob();
 }
 
-void CRManager::ScheduleJobAsync(u64 workerId, std::function<void()> job) {
-  mWorkerThreadsNew[workerId]->SetJob(job);
+void CRManager::ExecAsync(u64 workerId, std::function<void()> job) {
+  mWorkerThreads[workerId]->SetJob(job);
 }
 
-void CRManager::JoinAll() {
+void CRManager::WaitAll() {
   for (u32 i = 0; i < FLAGS_worker_threads; i++) {
-    mWorkerThreadsNew[i]->JoinJob();
+    mWorkerThreads[i]->JoinJob();
   }
 }
 
@@ -133,5 +125,4 @@ void CRManager::Deserialize(StringMap map) {
   mGroupCommitter->mWalSize = std::stoull(map[kKeyWalSize]);
 }
 
-} // namespace cr
-} // namespace leanstore
+} // namespace leanstore::cr

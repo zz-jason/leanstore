@@ -1,6 +1,5 @@
 #pragma once
 
-#include "concurrency-recovery/Worker.hpp"
 #include "profiling/counters/CPUCounters.hpp"
 #include "profiling/counters/CRCounters.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
@@ -13,42 +12,51 @@
 
 namespace leanstore::cr {
 
-class WorkerThreadNew : public utils::UserThread {
+class WorkerThread : public utils::UserThread {
 public:
+  /// The id of the worker thread.
   WORKERID mWorkerId;
 
+  /// The mutex to guard the job.
   std::mutex mMutex;
 
+  /// The condition variable to notify the worker thread and job sender.
   std::condition_variable mCv;
 
+  /// The job to be executed by the worker thread.
   std::function<void()> mJob = nullptr;
 
-  std::atomic<bool> mIsJobDone = true; // Job done
-
 public:
-  WorkerThreadNew(WORKERID workerId, int cpu)
+  /// Constructor.
+  WorkerThread(WORKERID workerId, int cpu)
       : utils::UserThread("Worker" + std::to_string(workerId), cpu),
         mWorkerId(workerId),
-        mJob(nullptr),
-        mIsJobDone(true) {
+        mJob(nullptr) {
   }
 
-  ~WorkerThreadNew() {
+  /// Destructor.
+  ~WorkerThread() {
     Stop();
   }
 
-protected:
-  void runImpl() override;
-
-public:
+  /// Stop the worker thread.
+  /// API for the job sender.
   void Stop() override;
 
+  /// Set a job to the worker thread and notify it to run.
+  /// API for the job sender.
   void SetJob(std::function<void()> job);
 
+  /// Wait until the job is done.
+  /// API for the job sender.
   void JoinJob();
+
+protected:
+  /// The main loop of the worker thread.
+  void runImpl() override;
 };
 
-inline void WorkerThreadNew::runImpl() {
+inline void WorkerThread::runImpl() {
   if (FLAGS_cpu_counters) {
     CPUCounters::registerThread(mThreadName, false);
   }
@@ -74,7 +82,6 @@ inline void WorkerThreadNew::runImpl() {
     mJob();
 
     // clear the executed job
-    mIsJobDone = true;
     mJob = nullptr;
 
     // notify the job sender
@@ -82,7 +89,7 @@ inline void WorkerThreadNew::runImpl() {
   }
 };
 
-inline void WorkerThreadNew::Stop() {
+inline void WorkerThread::Stop() {
   if (!(mThread && mThread->joinable())) {
     return;
   }
@@ -95,23 +102,22 @@ inline void WorkerThreadNew::Stop() {
   mThread = nullptr;
 }
 
-inline void WorkerThreadNew::SetJob(std::function<void()> job) {
+inline void WorkerThread::SetJob(std::function<void()> job) {
   // wait the previous job to finish
   std::unique_lock guard(mMutex);
-  mCv.wait(guard, [&]() { return mIsJobDone && mJob == nullptr; });
+  mCv.wait(guard, [&]() { return mJob == nullptr; });
 
   // set a new job
   mJob = job;
-  mIsJobDone = false;
 
   // notify the worker thread to run
   guard.unlock();
   mCv.notify_one();
 }
 
-inline void WorkerThreadNew::JoinJob() {
+inline void WorkerThread::JoinJob() {
   std::unique_lock guard(mMutex);
-  mCv.wait(guard, [&]() { return mIsJobDone.load(); });
+  mCv.wait(guard, [&]() { return mJob == nullptr; });
 }
 
 } // namespace leanstore::cr

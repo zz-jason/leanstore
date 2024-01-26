@@ -40,18 +40,18 @@ public:
       WORKERID workerId) = 0;
 
   /// Execute a custom user function on a worker thread.
-  virtual void RunOn(WORKERID workerId, std::function<void()> fn) = 0;
+  virtual void ExecSync(WORKERID workerId, std::function<void()> fn) = 0;
 
   /// Execute a custom user function on a worker thread asynchronously. It's
-  /// expected to call this function with WaitOn(). For example:
-  ///   store.RunOnAsync(0, []() { /* do something */ });
+  /// expected to call this function with Wait(). For example:
+  ///   store.ExecAsync(0, []() { /* do something */ });
   ///   /* do something else ... */
-  ///   store.WaitOn(0);
-  virtual void RunOnAsync(WORKERID workerId, std::function<void()> fn) = 0;
+  ///   store.Wait(0);
+  virtual void ExecAsync(WORKERID workerId, std::function<void()> fn) = 0;
 
   /// Wait the completion of the execution of a custom user function on a worker
   /// thread.
-  virtual void WaitOn(WORKERID workerId) = 0;
+  virtual void Wait(WORKERID workerId) = 0;
 };
 
 class StoreOption {

@@ -2,7 +2,7 @@
 
 #include "HistoryTreeInterface.hpp"
 #include "Worker.hpp"
-#include "WorkerThreadNew.hpp"
+#include "WorkerThread.hpp"
 #include "shared-headers/Units.hpp"
 
 #include <atomic>
@@ -38,7 +38,7 @@ public:
 
   std::atomic<u64> mRunningThreads = 0;
 
-  std::vector<std::unique_ptr<WorkerThreadNew>> mWorkerThreadsNew;
+  std::vector<std::unique_ptr<WorkerThread>> mWorkerThreads;
 
   /// All the thread-local worker references
   std::vector<Worker*> mWorkers;
@@ -49,24 +49,26 @@ public:
   ~CRManager();
 
 public:
-  /// Schedules one job asynchron on specific worker.
+  /// Execute a custom user function on a worker thread.
   /// @param workerId worker to compute job
   /// @param job job
-  void ScheduleJobAsync(u64 workerId, std::function<void()> job);
+  void ExecSync(u64 workerId, std::function<void()> job);
 
-  /// Schedules one job on one specific worker and waits for completion.
+  /// Execute a custom user function on a worker thread asynchronously.
   /// @param workerId worker to compute job
   /// @param job job
-  void ScheduleJobSync(u64 workerId, std::function<void()> job);
+  void ExecAsync(u64 workerId, std::function<void()> job);
 
   /// Waits for all Workers to complete.
-  void JoinAll();
+  void WaitAll();
 
   // State Serialization
   StringMap Serialize();
 
+  /// Deserialize the state of the CRManager from a StringMap.
   void Deserialize(StringMap map);
 
+  /// Stop all the worker threads and the group committer thread.
   void Stop();
 
 private:
