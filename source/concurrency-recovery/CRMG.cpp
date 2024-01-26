@@ -4,13 +4,10 @@
 #include "LeanStore.hpp"
 #include "WorkerThreadNew.hpp"
 #include "concurrency-recovery/HistoryTree.hpp"
-#include "profiling/counters/CPUCounters.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
 
 #include <glog/logging.h>
 
 #include <memory>
-#include <mutex>
 
 namespace leanstore {
 namespace cr {
@@ -57,10 +54,6 @@ CRManager::CRManager(leanstore::LeanStore* store, s32 walFd)
 
 void CRManager::Stop() {
   mGroupCommitter->Stop();
-  mWorkerKeepRunning = false;
-  for (auto& workerThread : mWorkerThreadsNew) {
-    workerThread->mCv.notify_one();
-  }
   mWorkerThreadsNew.clear();
 }
 

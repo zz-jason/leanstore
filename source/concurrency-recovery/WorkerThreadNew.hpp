@@ -1,5 +1,6 @@
 #pragma once
 
+#include "concurrency-recovery/Worker.hpp"
 #include "profiling/counters/CPUCounters.hpp"
 #include "profiling/counters/CRCounters.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
@@ -32,10 +33,16 @@ public:
         mIsJobDone(true) {
   }
 
+  ~WorkerThreadNew() {
+    Stop();
+  }
+
 protected:
   void runImpl() override;
 
 public:
+  void Stop() override;
+
   void SetJob(std::function<void()> job);
 
   void JoinJob();
@@ -74,6 +81,19 @@ inline void WorkerThreadNew::runImpl() {
     mCv.notify_one();
   }
 };
+
+inline void WorkerThreadNew::Stop() {
+  if (!(mThread && mThread->joinable())) {
+    return;
+  }
+
+  mKeepRunning = false;
+  mCv.notify_one();
+  if (mThread && mThread->joinable()) {
+    mThread->join();
+  }
+  mThread = nullptr;
+}
 
 inline void WorkerThreadNew::SetJob(std::function<void()> job) {
   // wait the previous job to finish

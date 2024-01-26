@@ -53,7 +53,7 @@ public:
   }
 
   /// Stop executing the thread.
-  void Stop() {
+  virtual void Stop() {
     mKeepRunning = false;
     if (mThread && mThread->joinable()) {
       mThread->join();

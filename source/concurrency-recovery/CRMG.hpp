@@ -4,13 +4,10 @@
 #include "Worker.hpp"
 #include "WorkerThreadNew.hpp"
 #include "shared-headers/Units.hpp"
-#include "utils/ThreadHolder.hpp"
 
 #include <atomic>
-#include <condition_variable>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <vector>
 
 namespace leanstore {
@@ -18,16 +15,6 @@ namespace leanstore {
 class LeanStore;
 
 namespace cr {
-
-struct WorkerThread {
-  std::mutex mMutex;
-
-  std::condition_variable mCv;
-
-  std::function<void()> mJob = nullptr;
-
-  std::atomic<bool> mIsJobDone = true; // Job done
-};
 
 class GroupCommitter;
 
@@ -50,8 +37,6 @@ public:
   std::unique_ptr<HistoryTreeInterface> mHistoryTreePtr;
 
   std::atomic<u64> mRunningThreads = 0;
-
-  std::atomic<bool> mWorkerKeepRunning = true;
 
   std::vector<std::unique_ptr<WorkerThreadNew>> mWorkerThreadsNew;
 
