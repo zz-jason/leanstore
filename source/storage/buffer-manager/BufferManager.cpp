@@ -396,20 +396,34 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
   return nullptr;
 }
 
-void BufferManager::ReadPageSync(PID pageId, void* destination) {
-  DCHECK(u64(destination) % 512 == 0);
+void BufferManager::ReadPageSync(PID pageId, void* pageBuffer) {
+  DCHECK(u64(pageBuffer) % 512 == 0);
   s64 bytesLeft = FLAGS_page_size;
-  do {
-    auto bytesRead =
-        pread(mStore->mPageFd, destination, bytesLeft,
-              pageId * FLAGS_page_size + (FLAGS_page_size - bytesLeft));
-    if (bytesRead < 0) {
-      LOG(ERROR) << "pread failed"
-                 << ", error= " << bytesRead << ", pageId=" << pageId;
+  while (bytesLeft > 0) {
+    auto totalRead = FLAGS_page_size - bytesLeft;
+    auto curOffset = pageId * FLAGS_page_size + totalRead;
+    auto* curBuffer = reinterpret_cast<u8*>(pageBuffer) + totalRead;
+    auto bytesRead = pread(mStore->mPageFd, curBuffer, bytesLeft, curOffset);
+
+    // read error, return a zero-initialized pageBuffer frame
+    if (bytesRead <= 0) {
+      memset(pageBuffer, 0, FLAGS_page_size);
+      auto* page = new (pageBuffer) BufferFrame();
+      page->Init(pageId);
+      LOG(ERROR) << "Failed to read page"
+                 << ", error="
+                 << utils::Error::FileRead(GetDBFilePath(), errno,
+                                           strerror(errno))
+                        .ToString()              // error
+                 << ", fd=" << mStore->mPageFd   // file descriptor
+                 << ", pageId=" << pageId        // page id
+                 << ", bytesRead=" << bytesRead  // bytes read
+                 << ", bytesLeft=" << bytesLeft; // bytes left
       return;
     }
+
     bytesLeft -= bytesRead;
-  } while (bytesLeft > 0);
+  };
 
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().read_operations_counter++;

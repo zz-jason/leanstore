@@ -9,6 +9,7 @@
 #include "utils/JsonUtil.hpp"
 #include "utils/RandomGenerator.hpp"
 
+#include "glog/logging.h"
 #include <gtest/gtest.h>
 
 #include <filesystem>
@@ -140,6 +141,7 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
 
   FLAGS_worker_threads = 2;
   FLAGS_init = true;
+  FLAGS_logtostdout = true;
   mLeanStore = std::make_unique<LeanStore>();
   TransactionKV* btree;
 
@@ -174,6 +176,10 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
                 OpCode::kOK);
     }
     cr::Worker::My().CommitTx();
+
+    rapidjson::Document doc(rapidjson::kObjectType);
+    leanstore::storage::btree::BTreeGeneric::ToJson(*btree, &doc);
+    LOG(INFO) << "BTree before destroy:\n" << leanstore::utils::JsonToStr(&doc);
   });
 
   // skip dumpping buffer frames on exit
