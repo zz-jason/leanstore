@@ -1,6 +1,7 @@
 #include "Tuple.hpp"
 
 #include "TransactionKV.hpp"
+#include "concurrency-recovery/CRMG.hpp"
 #include "concurrency-recovery/Worker.hpp"
 #include "storage/btree/BasicKV.hpp"
 #include "storage/btree/ChainedTuple.hpp"
@@ -210,8 +211,12 @@ void FatTuple::GarbageCollection() {
     }
   }
 
-  const TXID local_oldest_oltp = cr::Worker::My().sOldestActiveShortTx.load();
-  const TXID local_newest_olap = cr::Worker::My().sNetestActiveLongTx.load();
+  const TXID local_oldest_oltp =
+      cr::Worker::My()
+          .mStore->mCRManager->mGlobalWmkInfo.mOldestActiveShortTx.load();
+  const TXID local_newest_olap =
+      cr::Worker::My()
+          .mStore->mCRManager->mGlobalWmkInfo.mNewestActiveLongTx.load();
   if (deltasVisibleForAll == 0 && local_newest_olap > local_oldest_oltp) {
     return; // Nothing to do here
   }

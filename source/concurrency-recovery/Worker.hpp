@@ -16,7 +16,6 @@
 #include <functional>
 #include <memory>
 #include <mutex>
-#include <shared_mutex>
 #include <vector>
 
 namespace leanstore {
@@ -26,8 +25,6 @@ class LeanStore;
 } // namespace leanstore
 
 namespace leanstore::cr {
-
-static constexpr u16 kWorkerLimit = std::numeric_limits<WORKERID>::max();
 
 /// Used to sync wal flush request to group commit thread for each worker
 /// thread.
@@ -190,16 +187,24 @@ private:
 
 class Worker {
 public:
+  /// The store it belongs to.
   leanstore::LeanStore* mStore = nullptr;
+
   /// The write-ahead logging component.
   Logging mLogging;
 
   ConcurrencyControl cc;
 
+  /// The ID of the current command in the current transaction.
   COMMANDID mCommandId = 0;
 
   /// The current running transaction.
   Transaction mActiveTx;
+
+  /// The ID of the current transaction. It's set by the current worker thread
+  /// and read by the garbage collection process to determine the lower
+  /// watermarks of the transactions.
+  std::atomic<TXID> mActiveTxId = 0;
 
   /// ID of the current worker itself.
   const u64 mWorkerId;
@@ -207,11 +212,8 @@ public:
   /// All the workers.
   std::vector<Worker*>& mAllWorkers;
 
-  /// Number of all the workers.
-  const u64 mNumAllWorkers;
-
 public:
-  Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers,
+  Worker(u64 workerId, std::vector<Worker*>& allWorkers,
          leanstore::LeanStore* store);
 
   ~Worker();
@@ -232,20 +234,8 @@ public:
 public:
   static thread_local std::unique_ptr<Worker> sTlsWorker;
 
-  // Concurrency Control
-  static std::unique_ptr<std::atomic<u64>[]> sActiveTxId;
-
-  static std::shared_mutex sGlobalMutex;
-  static std::atomic<TXID> sOldestActiveTx;
-  static std::atomic<TXID> sOldestActiveShortTx;
-  static std::atomic<TXID> sNetestActiveLongTx;
-  static std::atomic<TXID> sWmkOfAllTx;
-  static std::atomic<TXID> sWmkOfShortTx;
-
-  static constexpr u64 kWorkersBits = 8;
   static constexpr u64 kRcBit = (1ull << 63);
   static constexpr u64 kLongRunningBit = (1ull << 62);
-  static constexpr u64 kOltpOlapSameBit = kLongRunningBit;
   static constexpr u64 kCleanBitsMask = ~(kRcBit | kLongRunningBit);
 
 public:
