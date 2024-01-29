@@ -1,5 +1,6 @@
 #include "Worker.hpp"
 
+#include "CRMG.hpp"
 #include "Config.hpp"
 #include "LeanStore.hpp"
 #include "concurrency-recovery/Transaction.hpp"
@@ -18,32 +19,21 @@ namespace leanstore::cr {
 
 thread_local std::unique_ptr<Worker> Worker::sTlsWorker = nullptr;
 
-std::unique_ptr<std::atomic<u64>[]> Worker::sActiveTxId =
-    std::make_unique<std::atomic<u64>[]>(FLAGS_worker_threads);
-
-std::shared_mutex Worker::sGlobalMutex;
-std::atomic<u64> Worker::sOldestActiveTx = 0;
-std::atomic<u64> Worker::sOldestActiveShortTx = 0;
-std::atomic<u64> Worker::sNetestActiveLongTx = 0;
-std::atomic<u64> Worker::sWmkOfAllTx = 0;
-std::atomic<u64> Worker::sWmkOfShortTx = 0;
-
-Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers, u64 numWorkers,
+Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers,
                leanstore::LeanStore* store)
     : mStore(store),
-      cc(store, numWorkers),
+      cc(store, allWorkers.size()),
+      mActiveTxId(0),
       mWorkerId(workerId),
-      mAllWorkers(allWorkers),
-      mNumAllWorkers(numWorkers) {
+      mAllWorkers(allWorkers) {
   CRCounters::MyCounters().mWorkerId = workerId;
 
   // init wal buffer
   mLogging.mWalBuffer = (u8*)(std::aligned_alloc(512, FLAGS_wal_buffer_size));
   std::memset(mLogging.mWalBuffer, 0, FLAGS_wal_buffer_size);
 
-  cc.mLcbCacheVal = make_unique<u64[]>(numWorkers);
-  cc.mLcbCacheKey = make_unique<u64[]>(numWorkers);
-  sActiveTxId[mWorkerId] = 0;
+  cc.mLcbCacheVal = make_unique<u64[]>(mAllWorkers.size());
+  cc.mLcbCacheKey = make_unique<u64[]>(mAllWorkers.size());
 }
 
 Worker::~Worker() {
@@ -108,8 +98,8 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   }
 
   // Publish the transaction id
-  sActiveTxId[mWorkerId].store(curTxId, std::memory_order_release);
-  cc.mGlobalWmkOfAllTx = sWmkOfAllTx.load();
+  mActiveTxId.store(curTxId, std::memory_order_release);
+  cc.mGlobalWmkOfAllTx = mStore->mCRManager->mGlobalWmkInfo.mWmkOfAllTx.load();
 
   // Cleanup commit log if necessary
   cc.mCommitTree.CompactCommitLog();
@@ -145,7 +135,7 @@ void Worker::CommitTx() {
 
   // Reset startTs so that other transactions can safely update the global
   // transaction watermarks and garbage collect the unused versions.
-  sActiveTxId[mWorkerId].store(0, std::memory_order_release);
+  mActiveTxId.store(0, std::memory_order_release);
 
   if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
     mLogging.WriteSimpleWal(WALEntry::TYPE::TX_COMMIT);
@@ -203,7 +193,7 @@ void Worker::CommitTx() {
 void Worker::AbortTx() {
   SCOPED_DEFER({
     mActiveTx.mState = TxState::kAborted;
-    sActiveTxId[mWorkerId].store(0, std::memory_order_release);
+    mActiveTxId.store(0, std::memory_order_release);
     LOG(INFO) << "Transaction aborted"
               << ", workerId=" << mWorkerId
               << ", startTs=" << mActiveTx.mStartTs

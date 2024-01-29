@@ -48,12 +48,13 @@ void CommitTree::CompactCommitLog() {
   set.insert(mCommitLog[mCommitLog.size() - 1]);
 
   const WORKERID myWorkerId = Worker::My().mWorkerId;
-  for (WORKERID i = 0; i < Worker::My().mNumAllWorkers; i++) {
+  auto allWorkers = Worker::My().mAllWorkers;
+  for (WORKERID i = 0; i < Worker::My().mAllWorkers.size(); i++) {
     if (i == myWorkerId) {
       continue;
     }
 
-    auto activeTxId = Worker::sActiveTxId[i].load();
+    auto activeTxId = allWorkers[i]->mActiveTxId.load();
     if (activeTxId == 0) {
       // Don't need to keep the old commit log entry if the worker is not
       // running any transaction.
@@ -135,11 +136,11 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, TXID txId) {
   switch (ActiveTx().mTxIsolationLevel) {
   case IsolationLevel::kSnapshotIsolation:
   case IsolationLevel::kSerializable: {
-    // mGlobalWmkOfAllTx is copied from Worker::sWmkOfAllTx at the
-    // beginning of each transaction. Worker::sWmkOfAllTx is occassionally
-    // updated by Worker::updateGlobalTxWatermarks, it's possible that
-    // mGlobalWmkOfAllTx is not the latest value, but it is always safe
-    // to use it as the lower bound of the visibility check.
+    // mGlobalWmkOfAllTx is copied from global watermark info at the beginning
+    // of each transaction. Global watermarks are occassionally updated by
+    // Worker::updateGlobalTxWatermarks, it's possible that mGlobalWmkOfAllTx is
+    // not the latest value, but it is always safe to use it as the lower bound
+    // of the visibility check.
     if (txId < mGlobalWmkOfAllTx) {
       return true;
     }
@@ -177,7 +178,7 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, TXID txId) {
 }
 
 bool ConcurrencyControl::VisibleForAll(TXID txId) {
-  return txId < Worker::sWmkOfAllTx.load();
+  return txId < mStore->mCRManager->mGlobalWmkInfo.mWmkOfAllTx.load();
 }
 
 // TODO: smooth purge, we should not let the system hang on this, as a quick
@@ -270,8 +271,9 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
   utils::Timer timer(CRCounters::MyCounters().cc_ms_refresh_global_state);
   auto meetGcProbability =
       FLAGS_enable_eager_garbage_collection ||
-      utils::RandomGenerator::RandU64(0, Worker::My().mNumAllWorkers) == 0;
-  auto performGc = meetGcProbability && Worker::sGlobalMutex.try_lock();
+      utils::RandomGenerator::RandU64(0, Worker::My().mAllWorkers.size()) == 0;
+  auto performGc = meetGcProbability &&
+                   mStore->mCRManager->mGlobalWmkInfo.mGlobalMutex.try_lock();
   if (!performGc) {
     DLOG(INFO) << "Skip updating global watermarks"
                << ", meetGcProbability=" << meetGcProbability
@@ -280,7 +282,7 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
   }
 
   // release the lock on exit
-  SCOPED_DEFER(Worker::sGlobalMutex.unlock());
+  SCOPED_DEFER(mStore->mCRManager->mGlobalWmkInfo.mGlobalMutex.unlock());
 
   // There is a chance that oldestTxId or oldestShortTxId is
   // std::numeric_limits<TXID>::max(). It is ok because LCB(+oo) returns the id
@@ -290,8 +292,9 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
   TXID oldestTxId = std::numeric_limits<TXID>::max();
   TXID newestLongTxId = std::numeric_limits<TXID>::min();
   TXID oldestShortTxId = std::numeric_limits<TXID>::max();
-  for (WORKERID i = 0; i < Worker::My().mNumAllWorkers; i++) {
-    auto activeTxId = Worker::sActiveTxId[i].load();
+  auto allWorkers = Worker::My().mAllWorkers;
+  for (WORKERID i = 0; i < Worker::My().mAllWorkers.size(); i++) {
+    auto activeTxId = allWorkers[i]->mActiveTxId.load();
     // Skip transactions not running.
     if (activeTxId == 0) {
       continue;
@@ -312,25 +315,19 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
   }
 
   // Update the three transaction ids
-  Worker::sOldestActiveTx.store(oldestTxId, std::memory_order_release);
-  Worker::sNetestActiveLongTx.store(newestLongTxId, std::memory_order_release);
-  Worker::sOldestActiveShortTx.store(oldestShortTxId,
-                                     std::memory_order_release);
-
-  DLOG(INFO) << "Global watermark updated"
-             << ", sOldestActiveTx=" << Worker::sOldestActiveTx
-             << ", sNetestActiveLongTx=" << Worker::sNetestActiveLongTx
-             << ", sOldestActiveShortTx=" << Worker::sOldestActiveShortTx;
+  mStore->mCRManager->mGlobalWmkInfo.UpdateActiveTxInfo(
+      oldestTxId, oldestShortTxId, newestLongTxId);
 
   LOG_IF(FATAL, !FLAGS_enable_long_running_transaction &&
-                    Worker::sOldestActiveTx != Worker::sOldestActiveShortTx)
+                    mStore->mCRManager->mGlobalWmkInfo.mOldestActiveTx !=
+                        mStore->mCRManager->mGlobalWmkInfo.mOldestActiveShortTx)
       << "Oldest transaction id should be equal to the oldest short-running "
          "transaction id when long-running transaction is disabled";
 
   // Update global lower watermarks based on the three transaction ids
   TXID globalWmkOfAllTx = std::numeric_limits<TXID>::max();
   TXID globalWmkOfShortTx = std::numeric_limits<TXID>::max();
-  for (WORKERID i = 0; i < Worker::My().mNumAllWorkers; i++) {
+  for (WORKERID i = 0; i < Worker::My().mAllWorkers.size(); i++) {
     ConcurrencyControl& cc = Other(i);
     if (cc.mUpdatedLatestCommitTs == cc.mLatestCommitTs) {
       DLOG(INFO) << "Skip updating watermarks for worker " << i
@@ -345,8 +342,10 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
       continue;
     }
 
-    TXID wmkOfAllTx = cc.mCommitTree.Lcb(Worker::sOldestActiveTx);
-    TXID wmkOfShortTx = cc.mCommitTree.Lcb(Worker::sOldestActiveShortTx);
+    TXID wmkOfAllTx =
+        cc.mCommitTree.Lcb(mStore->mCRManager->mGlobalWmkInfo.mOldestActiveTx);
+    TXID wmkOfShortTx = cc.mCommitTree.Lcb(
+        mStore->mCRManager->mGlobalWmkInfo.mOldestActiveShortTx);
 
     cc.mWmkVersion.store(cc.mWmkVersion.load() + 1, std::memory_order_release);
     cc.mWmkOfAllTx.store(wmkOfAllTx, std::memory_order_release);
@@ -355,12 +354,11 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
     cc.mUpdatedLatestCommitTs.store(cc.mLatestCommitTs,
                                     std::memory_order_release);
     DLOG(INFO) << "Watermarks updated for worker " << i << ", mWmkOfAllTx=LCB("
-               << Worker::sOldestActiveTx << ")=" << cc.mWmkOfAllTx
-               << ", mWmkOfShortTx=LCB(" << Worker::sOldestActiveShortTx
-               << ")=" << cc.mWmkOfShortTx;
+               << wmkOfAllTx << ")=" << cc.mWmkOfAllTx << ", mWmkOfShortTx=LCB("
+               << wmkOfShortTx << ")=" << cc.mWmkOfShortTx;
 
     // The lower watermarks of current worker only matters when there are
-    // transactions started before Worker::sOldestActiveTx
+    // transactions started before global oldestActiveTx
     if (wmkOfAllTx > 0 || wmkOfShortTx > 0) {
       globalWmkOfAllTx = std::min(wmkOfAllTx, globalWmkOfAllTx);
       globalWmkOfShortTx = std::min(wmkOfShortTx, globalWmkOfShortTx);
@@ -372,8 +370,8 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
   // as last round, which further causes the global lower watermarks the
   // same as last round. This is not a problem, but updating the global
   // lower watermarks is not necessary in this case.
-  if (Worker::sWmkOfAllTx == globalWmkOfAllTx &&
-      Worker::sWmkOfShortTx == globalWmkOfShortTx) {
+  if (mStore->mCRManager->mGlobalWmkInfo.mWmkOfAllTx == globalWmkOfAllTx &&
+      mStore->mCRManager->mGlobalWmkInfo.mWmkOfShortTx == globalWmkOfShortTx) {
     DLOG(INFO) << "Skip updating global watermarks"
                << ", global watermarks are the same as last round"
                << ", globalWmkOfAllTx=" << globalWmkOfAllTx
@@ -391,11 +389,9 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
                << ", globalWmkOfShortTx=" << globalWmkOfShortTx;
     return;
   }
-  Worker::sWmkOfAllTx.store(globalWmkOfAllTx, std::memory_order_release);
-  Worker::sWmkOfShortTx.store(globalWmkOfShortTx, std::memory_order_release);
-  DLOG(INFO) << "Global watermarks updated"
-             << ", sWmkOfAllTx=" << Worker::sWmkOfAllTx
-             << ", sWmkOfShortTx=" << Worker::sWmkOfShortTx;
+
+  mStore->mCRManager->mGlobalWmkInfo.UpdateWmks(globalWmkOfAllTx,
+                                                globalWmkOfShortTx);
 }
 
 void ConcurrencyControl::updateLocalWatermarks() {

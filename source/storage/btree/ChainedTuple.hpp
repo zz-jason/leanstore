@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Tuple.hpp"
+#include "concurrency-recovery/CRMG.hpp"
+#include "concurrency-recovery/Worker.hpp"
 #include "shared-headers/Units.hpp"
 #include "storage/btree/BasicKV.hpp"
 #include "storage/btree/core/BTreeExclusiveIterator.hpp"
@@ -64,7 +66,11 @@ public:
 
   void UpdateStats() {
     if (cr::Worker::My().cc.VisibleForAll(mTxId) ||
-        mOldestTx != static_cast<u16>(cr::Worker::sOldestActiveTx & 0xFFFF)) {
+        mOldestTx !=
+            static_cast<u16>(
+                cr::Worker::My()
+                    .mStore->mCRManager->mGlobalWmkInfo.mOldestActiveTx &
+                0xFFFF)) {
       mOldestTx = 0;
       mTotalUpdates = 0;
       return;
@@ -75,7 +81,8 @@ public:
   bool ShouldConvertToFatTuple() {
     bool commandValid = mCommandId != kInvalidCommandid;
     bool hasLongRunningOLAP =
-        cr::Worker::sOldestActiveShortTx != cr::Worker::sOldestActiveTx;
+        cr::Worker::My()
+            .mStore->mCRManager->mGlobalWmkInfo.HasActiveLongRunningTx();
     bool frequentlyUpdated = mTotalUpdates > FLAGS_worker_threads;
     bool recentUpdatedByOthers = mWorkerId != cr::Worker::My().mWorkerId ||
                                  mTxId != cr::ActiveTx().mStartTs;

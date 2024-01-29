@@ -13,8 +13,8 @@ namespace leanstore::cr {
 
 CRManager::CRManager(leanstore::LeanStore* store)
     : mStore(store),
-      mGroupCommitter(nullptr),
-      mHistoryTreePtr(nullptr) {
+      mHistoryTreePtr(nullptr),
+      mGroupCommitter(nullptr) {
   // start all worker threads
   mWorkers.resize(FLAGS_worker_threads);
   mWorkerThreads.reserve(FLAGS_worker_threads);
@@ -24,8 +24,7 @@ CRManager::CRManager(leanstore::LeanStore* store)
 
     // create thread-local transaction executor on each worker thread
     workerThread->SetJob([&]() {
-      Worker::sTlsWorker = std::make_unique<Worker>(
-          workerId, mWorkers, FLAGS_worker_threads, mStore);
+      Worker::sTlsWorker = std::make_unique<Worker>(workerId, mWorkers, mStore);
       mWorkers[workerId] = Worker::sTlsWorker.get();
     });
     workerThread->Wait();
@@ -108,7 +107,7 @@ StringMap CRManager::Serialize() {
 void CRManager::Deserialize(StringMap map) {
   u64 val = std::stoull(map[kKeyGlobalLogicalClock]);
   mStore->mTimestampOracle = val;
-  Worker::sWmkOfAllTx = val;
+  mStore->mCRManager->mGlobalWmkInfo.mWmkOfAllTx = val;
   mGroupCommitter->mWalSize = std::stoull(map[kKeyWalSize]);
 }
 
