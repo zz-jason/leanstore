@@ -102,7 +102,7 @@ public:
         mFD(store->mPageFd),
         mCoolCandidateBfs(),
         mEvictCandidateBfs(),
-        mAsyncWriteBuffer(store->mPageFd, FLAGS_page_size,
+        mAsyncWriteBuffer(store->mPageFd, store->mStoreOption.mPageSize,
                           FLAGS_write_buffer_size),
         mFreeBfList() {
     mCoolCandidateBfs.reserve(FLAGS_buffer_frame_recycle_batch_size);
@@ -236,7 +236,8 @@ inline void BufferFrameProvider::evictFlushedBf(
   cooledBf.header.mLatch.UnlockExclusively();
 
   mFreeBfList.PushFront(cooledBf);
-  if (mFreeBfList.Size() <= std::min<u64>(FLAGS_worker_threads, 128)) {
+  if (mFreeBfList.Size() <=
+      std::min<u64>(mStore->mStoreOption.mNumTxWorkers, 128)) {
     mFreeBfList.PopTo(targetPartition);
   }
 

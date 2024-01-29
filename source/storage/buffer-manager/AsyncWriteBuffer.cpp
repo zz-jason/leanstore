@@ -1,8 +1,8 @@
 #include "AsyncWriteBuffer.hpp"
 
-#include "shared-headers/Exceptions.hpp"
 #include "Tracing.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "shared-headers/Exceptions.hpp"
 
 #include <glog/logging.h>
 
@@ -11,16 +11,18 @@
 namespace leanstore {
 namespace storage {
 
-AsyncWriteBuffer::AsyncWriteBuffer(int fd, u64 page_size, u64 batch_max_size)
-    : fd(fd), page_size(page_size), batch_max_size(batch_max_size),
-      mWriteBuffer(FLAGS_page_size * batch_max_size) {
-  write_buffer_commands = make_unique<WriteCommand[]>(batch_max_size);
-  iocbs = make_unique<struct iocb[]>(batch_max_size);
-  iocbs_ptr = make_unique<struct iocb*[]>(batch_max_size);
-  events = make_unique<struct io_event[]>(batch_max_size);
+AsyncWriteBuffer::AsyncWriteBuffer(int fd, u64 pageSize, u64 maxBatchSize)
+    : fd(fd),
+      page_size(pageSize),
+      batch_max_size(maxBatchSize),
+      mWriteBuffer(pageSize * maxBatchSize) {
+  write_buffer_commands = make_unique<WriteCommand[]>(maxBatchSize);
+  iocbs = make_unique<struct iocb[]>(maxBatchSize);
+  iocbs_ptr = make_unique<struct iocb*[]>(maxBatchSize);
+  events = make_unique<struct io_event[]>(maxBatchSize);
 
   memset(&aio_context, 0, sizeof(aio_context));
-  const int ret = io_setup(batch_max_size, &aio_context);
+  const int ret = io_setup(maxBatchSize, &aio_context);
   if (ret != 0) {
     throw ex::GenericException("io_setup failed, ret code = " +
                                std::to_string(ret));
@@ -30,9 +32,8 @@ AsyncWriteBuffer::AsyncWriteBuffer(int fd, u64 page_size, u64 batch_max_size)
 bool AsyncWriteBuffer::full() {
   if (pending_requests >= batch_max_size - 2) {
     return true;
-  } else {
-    return false;
   }
+  return false;
 }
 
 void AsyncWriteBuffer::AddToIOBatch(BufferFrame& bf, PID pageId) {
@@ -58,19 +59,19 @@ void AsyncWriteBuffer::AddToIOBatch(BufferFrame& bf, PID pageId) {
   write_buffer_commands[slot].bf = &bf;
   write_buffer_commands[slot].mPageId = pageId;
   bf.page.mMagicDebuging = pageId;
-  void* write_buffer_slot_ptr = GetWriteBuffer(slot);
-  std::memcpy(write_buffer_slot_ptr, &bf.page, page_size);
+  void* writeBufferSlotPtr = GetWriteBuffer(slot);
+  std::memcpy(writeBufferSlotPtr, &bf.page, page_size);
   io_prep_pwrite(/* iocb */ &iocbs[slot], /* fd */ fd,
-                 /* buf */ write_buffer_slot_ptr, /* count */ page_size,
+                 /* buf */ writeBufferSlotPtr, /* count */ page_size,
                  /* offset */ page_size * pageId);
-  iocbs[slot].data = write_buffer_slot_ptr;
+  iocbs[slot].data = writeBufferSlotPtr;
   iocbs_ptr[slot] = &iocbs[slot];
 }
 
 u64 AsyncWriteBuffer::SubmitIORequest() {
   if (pending_requests > 0) {
-    int ret_code = io_submit(aio_context, pending_requests, iocbs_ptr.get());
-    DCHECK(ret_code == s32(pending_requests));
+    int retCode = io_submit(aio_context, pending_requests, iocbs_ptr.get());
+    DCHECK(retCode == s32(pending_requests));
     return pending_requests;
   }
   return 0;
@@ -78,15 +79,15 @@ u64 AsyncWriteBuffer::SubmitIORequest() {
 
 u64 AsyncWriteBuffer::WaitIORequestToComplete() {
   if (pending_requests > 0) {
-    const int done_requests = io_getevents(
+    const int doneRequests = io_getevents(
         /* ctx */ aio_context, /* min_nr */ pending_requests,
         /* nr */ pending_requests, /* io_event */ events.get(),
         /* timeout */ NULL);
-    LOG_IF(FATAL, u32(done_requests) != pending_requests)
+    LOG_IF(FATAL, u32(doneRequests) != pending_requests)
         << "Failed to complete all the IO requests"
-        << ", expected=" << pending_requests << ", completed=" << done_requests;
+        << ", expected=" << pending_requests << ", completed=" << doneRequests;
     pending_requests = 0;
-    return done_requests;
+    return doneRequests;
   }
   return 0;
 }
@@ -99,9 +100,9 @@ void AsyncWriteBuffer::IterateFlushedBfs(
 
     DCHECK(events[i].res == page_size);
     explainIfNot(events[i].res2 == 0);
-    auto flushedPage = reinterpret_cast<Page*>(GetWriteBuffer(slot));
+    auto* flushedPage = reinterpret_cast<Page*>(GetWriteBuffer(slot));
     auto flushedLSN = flushedPage->mPSN;
-    auto flushedBf = write_buffer_commands[slot].bf;
+    auto* flushedBf = write_buffer_commands[slot].bf;
     callback(*flushedBf, flushedLSN);
   }
 }

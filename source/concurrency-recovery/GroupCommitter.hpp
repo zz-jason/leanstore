@@ -61,11 +61,11 @@ public:
         mGlobalMaxFlushedGSN(0),
         mWorkers(workers),
         mIOContext(nullptr),
-        mIOCBs(new iocb[FLAGS_worker_threads * 2 + 2]),
-        mIOCBPtrs(new iocb*[FLAGS_worker_threads * 2 + 2]),
-        mIOEvents(new io_event[FLAGS_worker_threads * 2 + 2]) {
+        mIOCBs(new iocb[workers.size() * 2 + 2]),
+        mIOCBPtrs(new iocb*[workers.size() * 2 + 2]),
+        mIOEvents(new io_event[workers.size() * 2 + 2]) {
     // setup AIO context
-    const auto error = io_setup(FLAGS_worker_threads * 2 + 2, &mIOContext);
+    const auto error = io_setup(workers.size() * 2 + 2, &mIOContext);
     LOG_IF(FATAL, error != 0) << "io_setup failed, error=" << error;
   }
 

@@ -125,8 +125,7 @@ public:
   /// Reads the page at pageId to the destination buffer. All the pages are
   /// stored in one file (mPageFd), page id (pageId) determines the offset of
   /// the pageId-th page in the underlying file:
-  ///   1. offset of pageId-th page: pageId * FLAGS_page_size
-  ///   2. size of each page: FLAGS_page_size
+  ///   - offset of pageId-th page: pageId * pageSize
   void ReadPageSync(PID pageId, void* destination);
 
   /// Reads the page at pageId, returns the buffer frame containing that page.

@@ -1,7 +1,9 @@
 #include "LeanStore.hpp"
 
 #include "Config.hpp"
+#include "TxWorkerImpl.hpp"
 #include "concurrency-recovery/CRMG.hpp"
+#include "leanstore/Store.hpp"
 #include "profiling/tables/BMTable.hpp"
 #include "profiling/tables/CPUTable.hpp"
 #include "profiling/tables/CRTable.hpp"
@@ -22,6 +24,7 @@
 #include <rapidjson/stringbuffer.h>
 #include <tabulate/table.hpp>
 
+#include <expected>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -233,6 +236,11 @@ LeanStore::~LeanStore() {
   // }
 }
 
+std::expected<std::unique_ptr<TxWorker>, utils::Error> LeanStore::GetTxWorker(
+    WORKERID workerId) {
+  return std::make_unique<TxWorkerImpl>(this, workerId);
+}
+
 void LeanStore::ExecSync(u64 workerId, std::function<void()> job) {
   mCRManager->mWorkerThreads[workerId]->SetJob(job);
   mCRManager->mWorkerThreads[workerId]->Wait();
@@ -248,7 +256,7 @@ void LeanStore::Wait(WORKERID workerId) {
 }
 
 void LeanStore::WaitAll() {
-  for (u32 i = 0; i < FLAGS_worker_threads; i++) {
+  for (u32 i = 0; i < mStoreOption.mNumTxWorkers; i++) {
     mCRManager->mWorkerThreads[i]->Wait();
   }
 }
@@ -256,7 +264,7 @@ void LeanStore::WaitAll() {
 void LeanStore::StartProfilingThread() {
   std::thread profilingThread([&]() {
     utils::PinThisThread(
-        ((FLAGS_enable_pin_worker_threads) ? FLAGS_worker_threads : 0) +
+        ((FLAGS_enable_pin_worker_threads) ? mStoreOption.mNumTxWorkers : 0) +
         FLAGS_wal + FLAGS_pp_threads);
     if (FLAGS_root) {
       POSIX_CHECK(setpriority(PRIO_PROCESS, 0, -20) == 0);

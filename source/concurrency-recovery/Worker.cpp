@@ -30,8 +30,9 @@ Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers,
   CRCounters::MyCounters().mWorkerId = workerId;
 
   // init wal buffer
-  mLogging.mWalBuffer = (u8*)(std::aligned_alloc(512, FLAGS_wal_buffer_size));
-  std::memset(mLogging.mWalBuffer, 0, FLAGS_wal_buffer_size);
+  mLogging.mWalBufferSize = mStore->mStoreOption.mWalRingBufferSize;
+  mLogging.mWalBuffer = (u8*)(std::aligned_alloc(512, mLogging.mWalBufferSize));
+  std::memset(mLogging.mWalBuffer, 0, mLogging.mWalBufferSize);
 
   cc.mLcbCacheVal = make_unique<u64[]>(mAllWorkers.size());
   cc.mLcbCacheKey = make_unique<u64[]>(mAllWorkers.size());

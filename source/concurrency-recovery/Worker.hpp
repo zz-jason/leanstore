@@ -95,6 +95,9 @@ public:
   /// disk by the group commit thread.
   alignas(512) u8* mWalBuffer;
 
+  /// The size of the wal ring buffer.
+  u64 mWalBufferSize;
+
   /// Used to track the write order of wal entries.
   LID mLsnClock = 0;
 
