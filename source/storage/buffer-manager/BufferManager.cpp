@@ -123,7 +123,7 @@ void BufferManager::Deserialize(StringMap map) {
 }
 
 void BufferManager::CheckpointAllBufferFrames() {
-  LS_DEBUG_EXECUTE("skip_CheckpointAllBufferFrames", {
+  LS_DEBUG_EXECUTE(mStore, "skip_CheckpointAllBufferFrames", {
     LOG(ERROR) << "CheckpointAllBufferFrames skipped due to debug flag";
     return;
   });

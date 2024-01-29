@@ -52,26 +52,6 @@ struct WalFlushReq {
 /// Helps to transaction concurrenct control and write-ahead logging.
 class Logging {
 public:
-  /// The minimum flushed GSN among all worker threads. Transactions whose max
-  /// observed GSN not larger than sGlobalMinFlushedGSN can be committed safely.
-  static std::atomic<u64> sGlobalMinFlushedGSN;
-
-  /// The maximum flushed GSN among all worker threads in each group commit
-  /// round. It is updated by the group commit thread and used to update the GCN
-  /// counter of the current worker thread to prevent GSN from skewing and
-  /// undermining RFA.
-  static std::atomic<u64> sGlobalMaxFlushedGSN;
-
-public:
-  static void UpdateGlobalMinFlushedGSN(u64 toUpdate) {
-    sGlobalMinFlushedGSN.store(toUpdate, std::memory_order_release);
-  }
-
-  static void UpdateGlobalMaxFlushedGSN(LID toUpdate) {
-    sGlobalMaxFlushedGSN.store(toUpdate, std::memory_order_release);
-  }
-
-public:
   LID mPrevLSN;
 
   /// The active simple WALEntry for the current transaction, usually used for

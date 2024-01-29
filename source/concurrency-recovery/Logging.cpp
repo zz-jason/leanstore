@@ -12,9 +12,6 @@
 namespace leanstore {
 namespace cr {
 
-std::atomic<u64> Logging::sGlobalMinFlushedGSN = 0;
-std::atomic<u64> Logging::sGlobalMaxFlushedGSN = 0;
-
 /// @brief Calculate the continuous free space left in the wal ring buffer.
 /// @return Size of the contiguous free space
 u32 Logging::walContiguousFreeSpace() {

@@ -3,6 +3,7 @@
 #include "leanstore/Store.hpp"
 #include "profiling/tables/ConfigsTable.hpp"
 #include "shared-headers/Units.hpp"
+#include "utils/DebugFlags.hpp"
 #include "utils/Error.hpp"
 
 #include <gflags/gflags.h>
@@ -48,6 +49,9 @@ struct GlobalStats {
 
 class LeanStore {
 public:
+  static std::expected<LeanStore*, utils::Error> Open();
+
+public:
   /// The storage option for leanstore
   StoreOption mStoreOption;
 
@@ -80,6 +84,10 @@ public:
   /// for all transactions in the store. Start from a positive number, 0
   /// indicates invalid timestamp
   std::atomic<u64> mTimestampOracle = 1;
+
+#ifdef LS_DEBUG
+  utils::DebugFlagsRegistry mDebugFlagsRegistry;
+#endif
 
 public:
   LeanStore();
@@ -176,22 +184,6 @@ private:
   void initGoogleLog();
 
   void initPageAndWalFd();
-
-private:
-  static FlagListString sPersistedStringFlags;
-
-  static FlagListS64 sPersistedS64Flags;
-
-public:
-  static void AddStringFlag(string name, fLS::clstring* flag) {
-    sPersistedStringFlags.push_back(std::make_tuple(name, flag));
-  }
-
-  static void AddS64Flag(string name, s64* flag) {
-    sPersistedS64Flags.push_back(std::make_tuple(name, flag));
-  }
-
-  static std::expected<LeanStore*, utils::Error> Open();
 };
 
 } // namespace leanstore
