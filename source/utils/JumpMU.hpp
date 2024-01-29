@@ -98,7 +98,7 @@ public:
   jumpmu::tlsNumJumpPoints--;                                                  \
   continue
 
-/// JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP defines a static function to destruct
+/// JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP defines a class function to destruct
 /// the object. It's usually used together with
 /// JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP() and
 /// JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP()

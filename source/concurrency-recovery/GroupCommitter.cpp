@@ -6,6 +6,7 @@
 #include "utils/Timer.hpp"
 
 #include <algorithm>
+#include <atomic>
 
 namespace leanstore {
 namespace cr {
@@ -223,8 +224,8 @@ void GroupCommitter::commitTXs(
   if (minFlushedGSN < std::numeric_limits<u64>::max()) {
     DLOG(INFO) << "Update globalMinFlushedGSN=" << minFlushedGSN
                << ", globalMaxFlushedGSN=" << maxFlushedGSN;
-    Logging::UpdateGlobalMinFlushedGSN(minFlushedGSN);
-    Logging::UpdateGlobalMaxFlushedGSN(maxFlushedGSN);
+    mGlobalMinFlushedGSN.store(minFlushedGSN, std::memory_order_release);
+    mGlobalMaxFlushedGSN.store(maxFlushedGSN, std::memory_order_release);
   }
 }
 

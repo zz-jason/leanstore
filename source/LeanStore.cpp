@@ -41,10 +41,6 @@
 
 namespace leanstore {
 
-// Static members
-FlagListString LeanStore::sPersistedStringFlags = {};
-FlagListS64 LeanStore::sPersistedS64Flags = {};
-
 std::expected<LeanStore*, utils::Error> LeanStore::Open() {
   static std::shared_mutex sMutex;
   static std::unique_ptr<LeanStore> sLeanstore = nullptr;
@@ -511,22 +507,6 @@ void LeanStore::serializeFlags(rapidjson::Document& doc) {
   rapidjson::Value flagsJsonObj(rapidjson::kObjectType);
   auto& allocator = doc.GetAllocator();
 
-  for (auto flag : sPersistedStringFlags) {
-    auto& flagName = std::get<0>(flag);
-    auto& flagValue = *std::get<1>(flag);
-    rapidjson::Value name(flagName.data(), flagName.size(), allocator);
-    rapidjson::Value value(flagValue.data(), flagValue.size(), allocator);
-    flagsJsonObj.AddMember(name, value, allocator);
-  }
-
-  for (auto flag : sPersistedS64Flags) {
-    auto& flagName = std::get<0>(flag);
-    auto flagValue = std::to_string(*std::get<1>(flag));
-    rapidjson::Value name(flagName.data(), flagName.size(), allocator);
-    rapidjson::Value value(flagValue.data(), flagValue.size(), allocator);
-    flagsJsonObj.AddMember(name, value, allocator);
-  }
-
   doc.AddMember(META_KEY_FLAGS, flagsJsonObj, allocator);
 }
 
@@ -630,17 +610,6 @@ void LeanStore::deserializeFlags() {
   for (auto it = flagsJsonObj.MemberBegin(); it != flagsJsonObj.MemberEnd();
        ++it) {
     serializedFlags[it->name.GetString()] = it->value.GetString();
-  }
-
-  for (auto flags : sPersistedStringFlags) {
-    auto& flagKey = std::get<0>(flags);
-    *std::get<1>(flags) = serializedFlags[flagKey];
-  }
-
-  for (auto flags : sPersistedS64Flags) {
-    auto& flagKey = std::get<0>(flags);
-    *std::get<1>(flags) =
-        strtoll(serializedFlags[flagKey].c_str(), nullptr, 10);
   }
 }
 

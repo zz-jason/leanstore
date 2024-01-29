@@ -3,6 +3,7 @@
 #include "CRMG.hpp"
 #include "Config.hpp"
 #include "LeanStore.hpp"
+#include "concurrency-recovery/GroupCommitter.hpp"
 #include "concurrency-recovery/Transaction.hpp"
 #include "profiling/counters/CRCounters.hpp"
 #include "shared-headers/Exceptions.hpp"
@@ -54,8 +55,10 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
                << ", startTs=" << mActiveTx.mStartTs
                << ", txReadSnapshot(GSN)=" << mLogging.mTxReadSnapshot
                << ", workerGSN=" << mLogging.GetCurrentGsn()
-               << ", globalMinFlushedGSN=" << Logging::sGlobalMinFlushedGSN
-               << ", globalMaxFlushedGSN=" << Logging::sGlobalMaxFlushedGSN;
+               << ", globalMinFlushedGSN="
+               << mStore->mCRManager->mGroupCommitter->mGlobalMinFlushedGSN
+               << ", globalMaxFlushedGSN="
+               << mStore->mCRManager->mGroupCommitter->mGlobalMaxFlushedGSN;
     if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
       mLogging.WriteSimpleWal(WALEntry::TYPE::TX_START);
     }
@@ -70,7 +73,8 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   // Sync GSN clock with the global max flushed (observed) GSN, so that the
   // global min flushed GSN can be advanced, transactions with remote dependency
   // can be committed in time.
-  const auto maxFlushedGsn = Logging::sGlobalMaxFlushedGSN.load();
+  const auto maxFlushedGsn =
+      mStore->mCRManager->mGroupCommitter->mGlobalMaxFlushedGSN.load();
   if (maxFlushedGsn > mLogging.GetCurrentGsn()) {
     mLogging.SetCurrentGsn(maxFlushedGsn);
   }
@@ -79,7 +83,8 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   mLogging.mTxWalBegin = mLogging.mWalBuffered;
 
   // For remote dependency validation
-  mLogging.mTxReadSnapshot = Logging::sGlobalMinFlushedGSN.load();
+  mLogging.mTxReadSnapshot =
+      mStore->mCRManager->mGroupCommitter->mGlobalMinFlushedGSN.load();
   mLogging.mHasRemoteDependency = false;
 
   // For now, we only support SI and SSI

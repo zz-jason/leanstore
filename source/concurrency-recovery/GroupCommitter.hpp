@@ -27,6 +27,16 @@ public:
   /// Start file offset of the next WALEntry.
   u64 mWalSize;
 
+  /// The minimum flushed GSN among all worker threads. Transactions whose max
+  /// observed GSN not larger than it can be committed safely.
+  std::atomic<u64> mGlobalMinFlushedGSN;
+
+  /// The maximum flushed GSN among all worker threads in each group commit
+  /// round. It is updated by the group commit thread and used to update the GCN
+  /// counter of the current worker thread to prevent GSN from skewing and
+  /// undermining RFA.
+  std::atomic<u64> mGlobalMaxFlushedGSN;
+
   /// All the workers.
   std::vector<Worker*>& mWorkers;
 
@@ -47,6 +57,8 @@ public:
       : UserThread("GroupCommitter", cpu),
         mWalFd(walFd),
         mWalSize(0),
+        mGlobalMinFlushedGSN(0),
+        mGlobalMaxFlushedGSN(0),
         mWorkers(workers),
         mIOContext(nullptr),
         mIOCBs(new iocb[FLAGS_worker_threads * 2 + 2]),
