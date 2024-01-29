@@ -183,8 +183,8 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
   });
 
   // skip dumpping buffer frames on exit
-  LS_DEBUG_ENABLE("skip_CheckpointAllBufferFrames");
-  SCOPED_DEFER(LS_DEBUG_DISABLE("skip_CheckpointAllBufferFrames"));
+  LS_DEBUG_ENABLE(mLeanStore, "skip_CheckpointAllBufferFrames");
+  SCOPED_DEFER(LS_DEBUG_DISABLE(mLeanStore, "skip_CheckpointAllBufferFrames"));
   mLeanStore.reset(nullptr);
   FLAGS_init = false;
 

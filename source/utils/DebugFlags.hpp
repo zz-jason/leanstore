@@ -1,31 +1,39 @@
 #pragma once
 
-#include <memory>
 #include <mutex>
 #include <shared_mutex>
+#include <string>
 #include <unordered_set>
 
 namespace leanstore {
 namespace utils {
 
-#ifdef NDEBUG
-#define LS_DEBUG_EXECUTE(name, action)
-#define LS_DEBUG_ENABLE(name)
-#define LS_DEBUG_DISABLE(name)
+// determine whether the code is running in debug mode
+#ifndef NDEBUG
+#define LS_DEBUG
+constexpr bool kIsDebug = true;
 #else
-#define LS_DEBUG_EXECUTE(name, action)                                         \
-  if (leanstore::utils::DebugFlagsRegistry::sInstance->IsExists(name)) {       \
+constexpr bool kIsDebug = false;
+#endif
+
+#ifdef LS_DEBUG
+#define LS_DEBUG_EXECUTE(store, name, action)                                  \
+  if (store->mDebugFlagsRegistry.IsExists(name)) {                             \
     action;                                                                    \
   }
-#define LS_DEBUG_ENABLE(name)                                                  \
+#define LS_DEBUG_ENABLE(store, name)                                           \
   do {                                                                         \
-    leanstore::utils::DebugFlagsRegistry::sInstance->Insert(name);             \
+    store->mDebugFlagsRegistry.Insert(name);                                   \
   } while (false);
 
-#define LS_DEBUG_DISABLE(name)                                                 \
+#define LS_DEBUG_DISABLE(store, name)                                          \
   do {                                                                         \
-    leanstore::utils::DebugFlagsRegistry::sInstance->Erase(name);              \
+    store->mDebugFlagsRegistry.Erase(name);                                    \
   } while (false);
+#else
+#define LS_DEBUG_EXECUTE(store, name, action)
+#define LS_DEBUG_ENABLE(store, name)
+#define LS_DEBUG_DISABLE(store, name)
 #endif
 
 class DebugFlagsRegistry {
@@ -52,9 +60,6 @@ public:
     auto it = mFlags.find(name);
     return it != mFlags.end();
   }
-
-public:
-  static std::unique_ptr<DebugFlagsRegistry> sInstance;
 };
 
 } // namespace utils
