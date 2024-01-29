@@ -49,7 +49,7 @@ struct GlobalStats {
 
 class LeanStore {
 public:
-  static std::expected<LeanStore*, utils::Error> Open();
+  static std::expected<std::unique_ptr<LeanStore>, utils::Error> Open();
 
 public:
   /// The storage option for leanstore
@@ -85,7 +85,7 @@ public:
   /// indicates invalid timestamp
   std::atomic<u64> mTimestampOracle = 1;
 
-#ifdef LS_DEBUG
+#ifdef DEBUG
   utils::DebugFlagsRegistry mDebugFlagsRegistry;
 #endif
 

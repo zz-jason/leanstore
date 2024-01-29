@@ -9,30 +9,36 @@
 
 #include <gtest/gtest.h>
 
-#include <filesystem>
-
-namespace leanstore {
+namespace leanstore::test {
 
 class BasicKVTest : public ::testing::Test {
 protected:
-  std::unique_ptr<LeanStore> mLeanStore;
+  std::unique_ptr<LeanStore> mStore;
 
   BasicKVTest() {
     FLAGS_bulk_insert = false;
   }
 
   ~BasicKVTest() = default;
+
+  void SetUp() override {
+    // Create a leanstore instance for the test case
+    auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
+    auto curTestName = std::string(curTest->test_case_name()) + "_" +
+                       std::string(curTest->name());
+    FLAGS_init = true;
+    FLAGS_logtostdout = true;
+    FLAGS_data_dir = "/tmp/" + curTestName;
+    FLAGS_worker_threads = 2;
+    FLAGS_enable_eager_garbage_collection = true;
+    auto res = LeanStore::Open();
+    ASSERT_TRUE(res);
+
+    mStore = std::move(res.value());
+  }
 };
 
 TEST_F(BasicKVTest, BasicKVCreate) {
-  FLAGS_data_dir = "/tmp/BasicKVTest/BasicKVCreate";
-  std::filesystem::path dirPath = FLAGS_data_dir;
-  std::filesystem::remove_all(dirPath);
-  std::filesystem::create_directories(dirPath);
-
-  FLAGS_worker_threads = 2;
-  FLAGS_init = true;
-  mLeanStore = std::make_unique<leanstore::LeanStore>();
   storage::btree::BasicKV* btree;
   storage::btree::BasicKV* another;
 
@@ -43,47 +49,40 @@ TEST_F(BasicKVTest, BasicKVCreate) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
 
-  mLeanStore->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mLeanStore->CreateBasicKV(btreeName, btreeConfig, &btree);
+    mStore->CreateBasicKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
   });
 
   // create btree with same should fail in the same worker
-  mLeanStore->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mLeanStore->CreateBasicKV(btreeName, btreeConfig, &another);
+    mStore->CreateBasicKV(btreeName, btreeConfig, &another);
     EXPECT_EQ(another, nullptr);
   });
 
   // create btree with same should also fail in other workers
-  mLeanStore->ExecSync(1, [&]() {
+  mStore->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mLeanStore->CreateBasicKV(btreeName, btreeConfig, &another);
+    mStore->CreateBasicKV(btreeName, btreeConfig, &another);
     EXPECT_EQ(another, nullptr);
   });
 
   // create btree with another different name should success
   btreeName = "testTree2";
-  mLeanStore->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mLeanStore->CreateBasicKV(btreeName, btreeConfig, &another);
+    mStore->CreateBasicKV(btreeName, btreeConfig, &another);
     EXPECT_NE(btree, nullptr);
   });
 }
 
 TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
-  FLAGS_data_dir = "/tmp/BasicKVTest/BasicKVInsertAndLookup";
-  std::filesystem::path dirPath = FLAGS_data_dir;
-  std::filesystem::remove_all(dirPath);
-  std::filesystem::create_directories(dirPath);
-  FLAGS_worker_threads = 2;
-  FLAGS_init = true;
-  mLeanStore = std::make_unique<leanstore::LeanStore>();
   storage::btree::BasicKV* btree;
 
   // prepare key-value pairs to insert
@@ -101,9 +100,9 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
-  mLeanStore->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
-    mLeanStore->CreateBasicKV(btreeName, btreeConfig, &btree);
+    mStore->CreateBasicKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::My().CommitTx();
 
@@ -119,7 +118,7 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
   });
 
   // query on the created btree in the same worker
-  mLeanStore->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     std::string copiedValue;
@@ -136,7 +135,7 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
   });
 
   // query on the created btree in another worker
-  mLeanStore->ExecSync(1, [&]() {
+  mStore->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     std::string copiedValue;
@@ -153,4 +152,4 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
   });
 }
 
-} // namespace leanstore
+} // namespace leanstore::test

@@ -12,18 +12,26 @@
 #include "glog/logging.h"
 #include <gtest/gtest.h>
 
-#include <filesystem>
-
-namespace leanstore {
-
 using namespace leanstore::storage::btree;
+
+namespace leanstore::test {
 
 class RecoveringTest : public ::testing::Test {
 protected:
-  std::unique_ptr<LeanStore> mLeanStore;
+  std::unique_ptr<LeanStore> mStore;
 
   RecoveringTest() {
-    FLAGS_bulk_insert = false;
+    // Create a leanstore instance for the test case
+    auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
+    auto curTestName = std::string(curTest->test_case_name()) + "_" +
+                       std::string(curTest->name());
+    FLAGS_init = true;
+    FLAGS_logtostdout = true;
+    FLAGS_data_dir = "/tmp/" + curTestName;
+    FLAGS_worker_threads = 2;
+    FLAGS_enable_eager_garbage_collection = true;
+    auto res = LeanStore::Open();
+    mStore = std::move(res.value());
   }
 
   ~RecoveringTest() = default;
@@ -35,18 +43,6 @@ protected:
 };
 
 TEST_F(RecoveringTest, SerializeAndDeserialize) {
-  FLAGS_data_dir = "/tmp/RecoveringTest/SerializeAndDeserialize";
-  std::filesystem::path dirPath = FLAGS_data_dir;
-  std::filesystem::remove_all(dirPath);
-  std::filesystem::create_directories(dirPath);
-
-  dirPath = GetLogDir();
-  std::filesystem::remove_all(dirPath);
-  std::filesystem::create_directories(dirPath);
-
-  FLAGS_worker_threads = 2;
-  FLAGS_init = true;
-  mLeanStore = std::make_unique<LeanStore>();
   TransactionKV* btree;
 
   // prepare key-value pairs to insert
@@ -65,15 +61,15 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
 
-  mLeanStore->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mLeanStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
   });
 
   // insert some values
-  mLeanStore->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     for (size_t i = 0; i < numKVs; ++i) {
@@ -84,29 +80,32 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     }
   });
 
-  mLeanStore->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     rapidjson::Document doc(rapidjson::kObjectType);
     BTreeGeneric::ToJson(*btree, &doc);
     LOG(INFO) << "btree before destroy: " << utils::JsonToStr(&doc);
   });
 
   // meta file should be serialized during destructor.
-  mLeanStore.reset(nullptr);
-  FLAGS_init = false;
+  mStore.reset(nullptr);
 
   // recreate the store, it's expected that all the meta and pages are rebult.
-  mLeanStore = std::make_unique<LeanStore>();
-  mLeanStore->GetTransactionKV(btreeName, &btree);
+  FLAGS_init = false;
+  auto res = LeanStore::Open();
+  EXPECT_TRUE(res);
+
+  mStore = std::move(res.value());
+  mStore->GetTransactionKV(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
 
-  mLeanStore->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     rapidjson::Document doc(rapidjson::kObjectType);
     BTreeGeneric::ToJson(*btree, &doc);
     LOG(INFO) << "btree after recovery: " << utils::JsonToStr(&doc);
   });
 
   // lookup the restored btree
-  mLeanStore->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     std::string copiedValue;
@@ -122,27 +121,18 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     }
   });
 
-  mLeanStore->ExecSync(1, [&]() {
+  mStore->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mLeanStore->DropTransactionKV(btreeName);
+    mStore->DropTransactionKV(btreeName);
   });
 }
 
 TEST_F(RecoveringTest, RecoverAfterInsert) {
-  FLAGS_data_dir = "/tmp/RecoveringTest/RecoverAfterInsert";
-  std::filesystem::path dirPath = FLAGS_data_dir;
-  std::filesystem::remove_all(dirPath);
-  std::filesystem::create_directories(dirPath);
+#ifndef DEBUG
+  GTEST_SKIP() << "This test only works in debug mode";
+#endif
 
-  dirPath = GetLogDir();
-  std::filesystem::remove_all(dirPath);
-  std::filesystem::create_directories(dirPath);
-
-  FLAGS_worker_threads = 2;
-  FLAGS_init = true;
-  FLAGS_logtostdout = true;
-  mLeanStore = std::make_unique<LeanStore>();
   TransactionKV* btree;
 
   // prepare key-value pairs to insert
@@ -161,9 +151,9 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
 
-  mLeanStore->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
-    mLeanStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::My().CommitTx();
 
@@ -183,17 +173,20 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
   });
 
   // skip dumpping buffer frames on exit
-  LS_DEBUG_ENABLE(mLeanStore, "skip_CheckpointAllBufferFrames");
-  SCOPED_DEFER(LS_DEBUG_DISABLE(mLeanStore, "skip_CheckpointAllBufferFrames"));
-  mLeanStore.reset(nullptr);
-  FLAGS_init = false;
+  LS_DEBUG_ENABLE(mStore, "skip_CheckpointAllBufferFrames");
+  SCOPED_DEFER(LS_DEBUG_DISABLE(mStore, "skip_CheckpointAllBufferFrames"));
+  mStore.reset(nullptr);
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
-  mLeanStore = std::make_unique<LeanStore>();
-  mLeanStore->GetTransactionKV(btreeName, &btree);
+  FLAGS_init = false;
+  auto res = LeanStore::Open();
+  EXPECT_TRUE(res);
+
+  mStore = std::move(res.value());
+  mStore->GetTransactionKV(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
-  mLeanStore->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     rapidjson::Document doc(rapidjson::kObjectType);
@@ -202,7 +195,7 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
   });
 
   // lookup the restored btree
-  mLeanStore->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     std::string copiedValue;
@@ -219,4 +212,4 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
   });
 }
 
-} // namespace leanstore
+} // namespace leanstore::test

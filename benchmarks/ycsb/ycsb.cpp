@@ -22,6 +22,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -99,9 +100,9 @@ double CalculateTps(chrono::high_resolution_clock::time_point begin,
 }
 
 static leanstore::LeanStore* GetLeanStore() {
-  static LeanStore* sStore = nullptr;
+  static std::unique_ptr<LeanStore> sStore = nullptr;
   if (sStore != nullptr) {
-    return sStore;
+    return sStore.get();
   }
 
   // Config leanstore flags
@@ -111,8 +112,8 @@ static leanstore::LeanStore* GetLeanStore() {
 
   auto res = LeanStore::Open();
   if (res) {
-    sStore = res.value();
-    return sStore;
+    sStore = std::move(res.value());
+    return sStore.get();
   }
   std::cerr << "Failed to open leanstore: " << res.error().ToString()
             << std::endl;

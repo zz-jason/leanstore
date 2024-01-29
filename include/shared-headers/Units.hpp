@@ -51,4 +51,8 @@ inline std::string ToString(Slice slice) {
   return std::string(reinterpret_cast<const char*>(slice.data()), slice.size());
 }
 
+inline Slice ToSlice(const std::string& str) {
+  return Slice(reinterpret_cast<const u8*>(str.data()), str.size());
+}
+
 } // namespace leanstore
