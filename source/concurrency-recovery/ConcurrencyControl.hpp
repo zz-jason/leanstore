@@ -69,6 +69,40 @@ private:
   std::optional<std::pair<TXID, TXID>> lcbNoLatch(TXID startTs);
 };
 
+// Concurrency Control
+struct WaterMarkInfo {
+  std::shared_mutex mGlobalMutex;
+  std::atomic<TXID> mOldestActiveTx;
+  std::atomic<TXID> mOldestActiveShortTx;
+  std::atomic<TXID> mNewestActiveLongTx;
+
+  std::atomic<TXID> mWmkOfAllTx;
+  std::atomic<TXID> mWmkOfShortTx;
+
+  void UpdateActiveTxInfo(TXID oldestTx, TXID oldestShortTx,
+                          TXID newestLongTx) {
+    mOldestActiveTx.store(oldestTx, std::memory_order_release);
+    mOldestActiveShortTx.store(oldestShortTx, std::memory_order_release);
+    mNewestActiveLongTx.store(newestLongTx, std::memory_order_release);
+    DLOG(INFO) << "Global watermark updated"
+               << ", oldestActiveTx=" << mOldestActiveTx
+               << ", netestActiveLongTx=" << mNewestActiveLongTx
+               << ", oldestActiveShortTx=" << mOldestActiveShortTx;
+  }
+
+  void UpdateWmks(TXID wmkOfAll, TXID wmkOfShort) {
+    mWmkOfAllTx.store(wmkOfAll, std::memory_order_release);
+    mWmkOfShortTx.store(wmkOfShort, std::memory_order_release);
+    DLOG(INFO) << "Global watermarks updated"
+               << ", wmkOfAllTx=" << mWmkOfAllTx
+               << ", wmkOfShortTx=" << mWmkOfShortTx;
+  }
+
+  bool HasActiveLongRunningTx() {
+    return mOldestActiveTx != mOldestActiveShortTx;
+  }
+};
+
 /// The version storage of the current worker thread. All the history versions
 /// of transaction removes and updates, all the necessary commit log for MVCC
 /// visibility check are stored here.
@@ -133,9 +167,9 @@ public:
   /// each round of garbage collection.
   TXID mLocalWmkOfShortTx;
 
-  /// A snapshot of sWmkOfAllTx, copied from sWmkOfAllTx at the beginning of
-  /// each transaction start. Used for visibility check of the current
-  /// transaction.
+  /// A snapshot of global watermark, copied from global watermark info at the
+  /// beginning of each transaction start. Used for visibility check of the
+  /// current transaction.
   TXID mGlobalWmkOfAllTx = 0;
 
 public:

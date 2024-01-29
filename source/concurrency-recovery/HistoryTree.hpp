@@ -27,6 +27,8 @@ public:
 
 using BasicKV = leanstore::storage::btree::BasicKV;
 
+static constexpr u16 kWorkerLimit = std::numeric_limits<WORKERID>::max();
+
 class HistoryTree : public HistoryTreeInterface {
 private:
   struct alignas(64) Session {
