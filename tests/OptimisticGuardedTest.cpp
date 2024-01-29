@@ -7,7 +7,6 @@
 
 #include <gtest/gtest.h>
 
-#include <filesystem>
 #include <memory>
 
 namespace leanstore::test {
@@ -19,29 +18,24 @@ protected:
     s64 mB;
   };
 
+  std::unique_ptr<LeanStore> mStore;
+
   OptimisticGuardedTest() {
     FLAGS_worker_threads = 2;
   }
 
   void SetUp() override {
-    ASSERT_NE(GetLeanStore(), nullptr);
-  }
-
-public:
-  inline static auto CreateLeanStore() {
-    FLAGS_worker_threads = 2;
+    auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
+    auto curTestName = std::string(curTest->test_case_name()) + "_" +
+                       std::string(curTest->name());
     FLAGS_init = true;
-    FLAGS_data_dir = "/tmp/OptimisticGuardedTest";
+    FLAGS_logtostdout = true;
+    FLAGS_data_dir = "/tmp/" + curTestName;
+    FLAGS_worker_threads = 2;
+    auto res = LeanStore::Open();
 
-    std::filesystem::path dirPath = FLAGS_data_dir;
-    std::filesystem::remove_all(dirPath);
-    std::filesystem::create_directories(dirPath);
-    return std::make_unique<leanstore::LeanStore>();
-  }
-
-  inline static leanstore::LeanStore* GetLeanStore() {
-    static std::unique_ptr<LeanStore> sTore = CreateLeanStore();
-    return sTore.get();
+    ASSERT_TRUE(res);
+    mStore = std::move(res.value());
   }
 };
 
@@ -49,14 +43,14 @@ TEST_F(OptimisticGuardedTest, Set) {
   storage::OptimisticGuarded<TestPayload> guardedVal({0, 100});
 
   // Worker 0, set the guardedVal 100 times
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     for (s64 i = 0; i < 100; i++) {
       guardedVal.Set(TestPayload{i, 100 - i});
     }
   });
 
   // Worker 1, read the guardedVal 200 times
-  GetLeanStore()->ExecSync(1, [&]() {
+  mStore->ExecSync(1, [&]() {
     TestPayload copiedVal;
     auto version = guardedVal.Get(copiedVal);
     for (s64 i = 0; i < 200; i++) {
@@ -70,21 +64,21 @@ TEST_F(OptimisticGuardedTest, Set) {
   });
 
   // Wait for all jobs to finish
-  GetLeanStore()->WaitAll();
+  mStore->WaitAll();
 }
 
 TEST_F(OptimisticGuardedTest, UpdateAttribute) {
   storage::OptimisticGuarded<TestPayload> guardedVal({0, 100});
 
   // Worker 0, update the guardedVal 100 times
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     for (s64 i = 0; i < 100; i++) {
       guardedVal.UpdateAttribute(&TestPayload::mA, i);
     }
   });
 
   // Worker 1, read the guardedVal 200 times
-  GetLeanStore()->ExecSync(1, [&]() {
+  mStore->ExecSync(1, [&]() {
     TestPayload copiedVal;
     auto version = guardedVal.Get(copiedVal);
     for (s64 i = 0; i < 200; i++) {
@@ -98,7 +92,7 @@ TEST_F(OptimisticGuardedTest, UpdateAttribute) {
   });
 
   // Wait for all jobs to finish
-  GetLeanStore()->WaitAll();
+  mStore->WaitAll();
 }
 
 } // namespace leanstore::test

@@ -14,11 +14,10 @@
 
 #include <cstring>
 #include <expected>
-#include <filesystem>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 namespace leanstore {
 namespace test {
@@ -26,7 +25,8 @@ namespace test {
 class Store;
 class StoreFactory {
 public:
-  static Store* GetLeanStoreMVCC(const std::string& storeDir, u32 sessionLimit);
+  static std::unique_ptr<Store> NewLeanStoreMVCC(const std::string& storeDir,
+                                                 u32 sessionLimit);
 
   inline static Store* GetLeanStoreSingleVersion() {
     return nullptr;
@@ -100,11 +100,8 @@ public:
     FLAGS_logtostdout = true;
     FLAGS_data_dir = storeDir;
     FLAGS_worker_threads = sessionLimit;
-
-    std::filesystem::path dirPath = FLAGS_data_dir;
-    std::filesystem::remove_all(dirPath);
-    std::filesystem::create_directories(dirPath);
-    mLeanStore = std::make_unique<leanstore::LeanStore>();
+    auto res = LeanStore::Open();
+    mLeanStore = std::move(res.value());
   }
 
   ~LeanStoreMVCC() override = default;
@@ -170,17 +167,9 @@ public:
 //------------------------------------------------------------------------------
 // StoreFactory
 //------------------------------------------------------------------------------
-inline Store* StoreFactory::GetLeanStoreMVCC(const std::string& storeDir,
-                                             u32 sessionLimit) {
-  static std::unique_ptr<LeanStoreMVCC> sStore = nullptr;
-  static std::mutex sStoreMutex;
-  if (sStore == nullptr) {
-    std::unique_lock<std::mutex> guard(sStoreMutex);
-    if (sStore == nullptr) {
-      sStore = std::make_unique<LeanStoreMVCC>(storeDir, sessionLimit);
-    }
-  }
-  return sStore.get();
+inline std::unique_ptr<Store> StoreFactory::NewLeanStoreMVCC(
+    const std::string& storeDir, u32 sessionLimit) {
+  return std::make_unique<LeanStoreMVCC>(storeDir, sessionLimit);
 }
 
 //------------------------------------------------------------------------------
@@ -390,10 +379,6 @@ inline auto LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key,
   }
   return std::unexpected<utils::Error>(
       utils::Error::General("Delete failed: " + ToString(res)));
-}
-
-inline Slice ToSlice(const std::string& src) {
-  return Slice((const u8*)src.data(), src.size());
 }
 
 } // namespace test

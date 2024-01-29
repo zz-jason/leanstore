@@ -5,6 +5,8 @@
 #include "gtest/gtest.h"
 #include <gtest/gtest.h>
 
+#include <memory>
+
 using namespace leanstore::utils;
 using namespace leanstore::storage::btree;
 
@@ -12,7 +14,7 @@ namespace leanstore::test {
 
 class AbortTest : public ::testing::Test {
 protected:
-  Store* mStore;
+  std::unique_ptr<Store> mStore;
   std::string mTblName;
   TableRef* mTbl;
 
@@ -22,9 +24,12 @@ protected:
   ~AbortTest() = default;
 
   void SetUp() override {
-    std::string storeDir = "/tmp/AbortTest";
+    auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
+    auto curTestName = std::string(curTest->test_case_name()) + "_" +
+                       std::string(curTest->name());
+    std::string storeDir = "/tmp/" + curTestName;
     u32 sessionLimit = 2;
-    mStore = StoreFactory::GetLeanStoreMVCC(storeDir, sessionLimit);
+    mStore = StoreFactory::NewLeanStoreMVCC(storeDir, sessionLimit);
     ASSERT_NE(mStore, nullptr);
 
     // Set transaction isolation to SI before transaction tests, get ride of
@@ -185,8 +190,3 @@ TEST_F(AbortTest, AfterInsertOnRemove) {
 }
 
 } // namespace leanstore::test
-
-int main(int argc, char** argv) {
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}

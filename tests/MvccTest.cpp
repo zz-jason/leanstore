@@ -9,66 +9,57 @@
 
 #include <gtest/gtest.h>
 
-#include <filesystem>
+#include <memory>
 
 using namespace leanstore::utils;
 using namespace leanstore::storage::btree;
 
-namespace leanstore {
+namespace leanstore::test {
 
 class MvccTest : public ::testing::Test {
 protected:
+  std::unique_ptr<LeanStore> mStore;
   std::string mTreeName;
   TransactionKV* mBTree;
 
 protected:
-  MvccTest() = default;
+  // create a leanstore instance for current test case
+  MvccTest() {
+    auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
+    auto curTestName = std::string(curTest->test_case_name()) + "_" +
+                       std::string(curTest->name());
+    FLAGS_init = true;
+    FLAGS_logtostdout = true;
+    FLAGS_data_dir = "/tmp/" + curTestName;
+    FLAGS_worker_threads = 3;
+    auto res = LeanStore::Open();
+    mStore = std::move(res.value());
+  }
 
   ~MvccTest() = default;
 
   void SetUp() override {
-    // init the leanstore
-    auto* leanstore = GetLeanStore();
-
+    // create a btree name for test
     mTreeName = RandomGenerator::RandAlphString(10);
     auto config = BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
-
-    // create a btree for test
-    GetLeanStore()->ExecSync(0, [&]() {
+    mStore->ExecSync(0, [&]() {
       cr::Worker::My().StartTx();
       SCOPED_DEFER(cr::Worker::My().CommitTx());
-      leanstore->CreateTransactionKV(mTreeName, config, &mBTree);
+
+      mStore->CreateTransactionKV(mTreeName, config, &mBTree);
       ASSERT_NE(mBTree, nullptr);
     });
   }
 
   void TearDown() override {
-    GetLeanStore()->ExecSync(1, [&]() {
+    mStore->ExecSync(1, [&]() {
       cr::Worker::My().StartTx();
       SCOPED_DEFER(cr::Worker::My().CommitTx());
-      GetLeanStore()->DropTransactionKV(mTreeName);
+      mStore->DropTransactionKV(mTreeName);
     });
-  }
-
-public:
-  inline static auto CreateLeanStore() {
-    FLAGS_bulk_insert = false;
-    FLAGS_worker_threads = 3;
-    FLAGS_init = true;
-    FLAGS_data_dir = "/tmp/MvccTest";
-
-    std::filesystem::path dirPath = FLAGS_data_dir;
-    std::filesystem::remove_all(dirPath);
-    std::filesystem::create_directories(dirPath);
-    return std::make_unique<leanstore::LeanStore>();
-  }
-
-  inline static leanstore::LeanStore* GetLeanStore() {
-    static auto sLeanStore = MvccTest::CreateLeanStore();
-    return sLeanStore.get();
   }
 };
 
@@ -76,7 +67,7 @@ TEST_F(MvccTest, LookupWhileInsert) {
   // insert a base record
   auto key0 = RandomGenerator::RandAlphString(42);
   auto val0 = RandomGenerator::RandAlphString(151);
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key0.data(), key0.size()),
                               Slice((const u8*)val0.data(), val0.size()));
@@ -87,7 +78,7 @@ TEST_F(MvccTest, LookupWhileInsert) {
   // start a transaction to insert another record, don't commit
   auto key1 = RandomGenerator::RandAlphString(17);
   auto val1 = RandomGenerator::RandAlphString(131);
-  GetLeanStore()->ExecSync(1, [&]() {
+  mStore->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
                               Slice((const u8*)val1.data(), val1.size()));
@@ -96,7 +87,7 @@ TEST_F(MvccTest, LookupWhileInsert) {
 
   // start a transaction to lookup the base record
   // the lookup should not be blocked
-  GetLeanStore()->ExecSync(2, [&]() {
+  mStore->ExecSync(2, [&]() {
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
@@ -111,7 +102,7 @@ TEST_F(MvccTest, LookupWhileInsert) {
   });
 
   // commit the transaction
-  GetLeanStore()->ExecSync(1, [&]() {
+  mStore->ExecSync(1, [&]() {
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
@@ -125,7 +116,7 @@ TEST_F(MvccTest, LookupWhileInsert) {
   });
 
   // now we can see the latest record
-  GetLeanStore()->ExecSync(2, [&]() {
+  mStore->ExecSync(2, [&]() {
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
@@ -144,7 +135,7 @@ TEST_F(MvccTest, InsertConflict) {
   // insert a base record
   auto key0 = RandomGenerator::RandAlphString(42);
   auto val0 = RandomGenerator::RandAlphString(151);
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key0.data(), key0.size()),
                               Slice((const u8*)val0.data(), val0.size()));
@@ -155,7 +146,7 @@ TEST_F(MvccTest, InsertConflict) {
   // start a transaction to insert a bigger key, don't commit
   auto key1 = key0 + "a";
   auto val1 = val0;
-  GetLeanStore()->ExecSync(1, [&]() {
+  mStore->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
                               Slice((const u8*)val1.data(), val1.size()));
@@ -163,7 +154,7 @@ TEST_F(MvccTest, InsertConflict) {
   });
 
   // start another transaction to insert the same key
-  GetLeanStore()->ExecSync(2, [&]() {
+  mStore->ExecSync(2, [&]() {
     cr::Worker::My().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
                               Slice((const u8*)val1.data(), val1.size()));
@@ -174,7 +165,7 @@ TEST_F(MvccTest, InsertConflict) {
   // start another transaction to insert a smaller key
   auto key2 = std::string(key0.data(), key0.size() - 1);
   auto val2 = val0;
-  GetLeanStore()->ExecSync(2, [&]() {
+  mStore->ExecSync(2, [&]() {
     cr::Worker::My().StartTx();
     auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
                               Slice((const u8*)val1.data(), val1.size()));
@@ -183,7 +174,7 @@ TEST_F(MvccTest, InsertConflict) {
   });
 
   // commit the transaction
-  GetLeanStore()->ExecSync(1, [&]() {
+  mStore->ExecSync(1, [&]() {
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
@@ -197,7 +188,7 @@ TEST_F(MvccTest, InsertConflict) {
   });
 
   // now we can see the latest record
-  GetLeanStore()->ExecSync(2, [&]() {
+  mStore->ExecSync(2, [&]() {
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
@@ -212,9 +203,4 @@ TEST_F(MvccTest, InsertConflict) {
   });
 }
 
-} // namespace leanstore
-
-int main(int argc, char** argv) {
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}
+} // namespace leanstore::test
