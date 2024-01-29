@@ -13,6 +13,7 @@
 #include <rapidjson/document.h>
 
 #include <cstddef>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -24,30 +25,26 @@ namespace leanstore::test {
 
 class TransactionKVTest : public ::testing::Test {
 protected:
-  TransactionKVTest() = default;
+  std::unique_ptr<LeanStore> mStore;
 
-  ~TransactionKVTest() = default;
-
-public:
-  inline static leanstore::LeanStore* GetLeanStore() {
-    static LeanStore* sStore = nullptr;
-    if (sStore != nullptr) {
-      return sStore;
-    }
-
+  /// Create a leanstore instance for each test case
+  TransactionKVTest() {
+    auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
+    auto curTestName = std::string(curTest->test_case_name()) + "_" +
+                       std::string(curTest->name());
     FLAGS_init = true;
     FLAGS_logtostdout = true;
-    FLAGS_data_dir = "/tmp/TransactionKVTest";
+    FLAGS_data_dir = "/tmp/" + curTestName;
     FLAGS_worker_threads = 3;
     FLAGS_enable_eager_garbage_collection = true;
     auto res = LeanStore::Open();
-    sStore = res.value();
-    return sStore;
+    mStore = std::move(res.value());
   }
+
+  ~TransactionKVTest() = default;
 };
 
 TEST_F(TransactionKVTest, Create) {
-  GetLeanStore();
   storage::btree::TransactionKV* btree;
   storage::btree::TransactionKV* another;
 
@@ -58,48 +55,47 @@ TEST_F(TransactionKVTest, Create) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
 
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    GetLeanStore()->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
   });
 
   // create btree with same should fail in the same worker
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    GetLeanStore()->CreateTransactionKV(btreeName, btreeConfig, &another);
+    mStore->CreateTransactionKV(btreeName, btreeConfig, &another);
     EXPECT_EQ(another, nullptr);
   });
 
   // create btree with same should also fail in other workers
-  GetLeanStore()->ExecSync(1, [&]() {
+  mStore->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    GetLeanStore()->CreateTransactionKV(btreeName, btreeConfig, &another);
+    mStore->CreateTransactionKV(btreeName, btreeConfig, &another);
     EXPECT_EQ(another, nullptr);
   });
 
   // create btree with another different name should success
   const auto* btreeName2 = "testTree2";
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    GetLeanStore()->CreateTransactionKV(btreeName2, btreeConfig, &another);
+    mStore->CreateTransactionKV(btreeName2, btreeConfig, &another);
     EXPECT_NE(btree, nullptr);
   });
 
-  GetLeanStore()->ExecSync(1, [&]() {
+  mStore->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    GetLeanStore()->DropTransactionKV(btreeName);
-    GetLeanStore()->DropTransactionKV(btreeName2);
+    mStore->DropTransactionKV(btreeName);
+    mStore->DropTransactionKV(btreeName2);
   });
 }
 
 TEST_F(TransactionKVTest, InsertAndLookup) {
-  GetLeanStore();
   storage::btree::TransactionKV* btree;
 
   // prepare key-value pairs to insert
@@ -117,9 +113,9 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
-    GetLeanStore()->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::My().CommitTx();
 
@@ -135,7 +131,7 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
   });
 
   // query on the created btree in the same worker
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     std::string copiedValue;
@@ -152,7 +148,7 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
   });
 
   // query on the created btree in another worker
-  GetLeanStore()->ExecSync(1, [&]() {
+  mStore->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     std::string copiedValue;
@@ -168,16 +164,15 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
     }
   });
 
-  GetLeanStore()->ExecSync(1, [&]() {
+  mStore->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    GetLeanStore()->DropTransactionKV(btreeName);
+    mStore->DropTransactionKV(btreeName);
   });
 }
 
 TEST_F(TransactionKVTest, Insert1000KVs) {
-  GetLeanStore();
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     storage::btree::TransactionKV* btree;
 
     // create leanstore btree for table records
@@ -188,7 +183,7 @@ TEST_F(TransactionKVTest, Insert1000KVs) {
     };
 
     cr::Worker::My().StartTx();
-    GetLeanStore()->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::My().CommitTx();
 
@@ -211,14 +206,13 @@ TEST_F(TransactionKVTest, Insert1000KVs) {
     cr::Worker::My().CommitTx();
 
     cr::Worker::My().StartTx();
-    GetLeanStore()->DropTransactionKV(btreeName);
+    mStore->DropTransactionKV(btreeName);
     cr::Worker::My().CommitTx();
   });
 }
 
 TEST_F(TransactionKVTest, InsertDuplicates) {
-  GetLeanStore();
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     storage::btree::TransactionKV* btree;
 
     // create leanstore btree for table records
@@ -229,7 +223,7 @@ TEST_F(TransactionKVTest, InsertDuplicates) {
     };
 
     cr::Worker::My().StartTx();
-    GetLeanStore()->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::My().CommitTx();
 
@@ -262,14 +256,13 @@ TEST_F(TransactionKVTest, InsertDuplicates) {
     }
 
     cr::Worker::My().StartTx();
-    GetLeanStore()->DropTransactionKV(btreeName);
+    mStore->DropTransactionKV(btreeName);
     cr::Worker::My().CommitTx();
   });
 }
 
 TEST_F(TransactionKVTest, Remove) {
-  GetLeanStore();
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     storage::btree::TransactionKV* btree;
 
     // create leanstore btree for table records
@@ -280,7 +273,7 @@ TEST_F(TransactionKVTest, Remove) {
     };
 
     cr::Worker::My().StartTx();
-    GetLeanStore()->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::My().CommitTx();
 
@@ -319,14 +312,13 @@ TEST_F(TransactionKVTest, Remove) {
     }
 
     cr::Worker::My().StartTx();
-    GetLeanStore()->DropTransactionKV(btreeName);
+    mStore->DropTransactionKV(btreeName);
     cr::Worker::My().CommitTx();
   });
 }
 
 TEST_F(TransactionKVTest, RemoveNotExisted) {
-  GetLeanStore();
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     storage::btree::TransactionKV* btree;
 
     // create leanstore btree for table records
@@ -337,7 +329,7 @@ TEST_F(TransactionKVTest, RemoveNotExisted) {
     };
 
     cr::Worker::My().StartTx();
-    GetLeanStore()->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::My().CommitTx();
 
@@ -376,18 +368,17 @@ TEST_F(TransactionKVTest, RemoveNotExisted) {
     }
 
     cr::Worker::My().StartTx();
-    GetLeanStore()->DropTransactionKV(btreeName);
+    mStore->DropTransactionKV(btreeName);
     cr::Worker::My().CommitTx();
   });
 }
 
 TEST_F(TransactionKVTest, RemoveFromOthers) {
-  GetLeanStore();
   const auto* btreeName = "testTree1";
   std::set<std::string> uniqueKeys;
   storage::btree::TransactionKV* btree;
 
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     // create leanstore btree for table records
     auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
@@ -395,7 +386,7 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
     };
 
     cr::Worker::My().StartTx();
-    GetLeanStore()->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::My().CommitTx();
 
@@ -418,7 +409,7 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
     }
   });
 
-  GetLeanStore()->ExecSync(1, [&]() {
+  mStore->ExecSync(1, [&]() {
     // remove from another worker
     for (auto& key : uniqueKeys) {
       cr::Worker::My().StartTx();
@@ -437,7 +428,7 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
     }
   });
 
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     // lookup from another worker, should not found any keys
     for (auto& key : uniqueKeys) {
       cr::Worker::My().StartTx();
@@ -448,17 +439,16 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
     }
   });
 
-  GetLeanStore()->ExecSync(1, [&]() {
+  mStore->ExecSync(1, [&]() {
     // unregister the tree from another worker
     cr::Worker::My().StartTx();
-    GetLeanStore()->DropTransactionKV(btreeName);
+    mStore->DropTransactionKV(btreeName);
     cr::Worker::My().CommitTx();
   });
 }
 
 TEST_F(TransactionKVTest, ToJson) {
-  GetLeanStore();
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     storage::btree::TransactionKV* btree;
 
     // prepare key-value pairs to insert
@@ -477,7 +467,7 @@ TEST_F(TransactionKVTest, ToJson) {
     };
 
     cr::Worker::My().StartTx();
-    GetLeanStore()->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
     EXPECT_NE(btree, nullptr);
     cr::Worker::My().CommitTx();
 
@@ -496,13 +486,12 @@ TEST_F(TransactionKVTest, ToJson) {
     EXPECT_GE(leanstore::utils::JsonToStr(&doc).size(), 0u);
 
     cr::Worker::My().StartTx();
-    GetLeanStore()->DropTransactionKV(btreeName);
+    mStore->DropTransactionKV(btreeName);
     cr::Worker::My().CommitTx();
   });
 }
 
 TEST_F(TransactionKVTest, Update) {
-  GetLeanStore();
   storage::btree::TransactionKV* btree;
 
   // prepare key-value pairs to insert
@@ -517,7 +506,7 @@ TEST_F(TransactionKVTest, Update) {
 
   const auto* btreeName = "testTree1";
 
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
@@ -525,7 +514,7 @@ TEST_F(TransactionKVTest, Update) {
 
     // create btree
     cr::Worker::My().StartTx();
-    GetLeanStore()->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
     cr::Worker::My().CommitTx();
     EXPECT_NE(btree, nullptr);
 
@@ -577,13 +566,12 @@ TEST_F(TransactionKVTest, Update) {
     }
 
     cr::Worker::My().StartTx();
-    GetLeanStore()->DropTransactionKV(btreeName);
+    mStore->DropTransactionKV(btreeName);
     cr::Worker::My().CommitTx();
   });
 }
 
 TEST_F(TransactionKVTest, ScanAsc) {
-  GetLeanStore();
   storage::btree::TransactionKV* btree;
 
   // prepare key-value pairs to insert
@@ -610,7 +598,7 @@ TEST_F(TransactionKVTest, ScanAsc) {
 
   const auto* btreeName = "testTree1";
 
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
@@ -618,7 +606,7 @@ TEST_F(TransactionKVTest, ScanAsc) {
 
     // create btree
     cr::Worker::My().StartTx();
-    GetLeanStore()->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
     cr::Worker::My().CommitTx();
     EXPECT_NE(btree, nullptr);
 
@@ -663,13 +651,12 @@ TEST_F(TransactionKVTest, ScanAsc) {
 
     // destroy the tree
     cr::Worker::My().StartTx();
-    GetLeanStore()->DropTransactionKV(btreeName);
+    mStore->DropTransactionKV(btreeName);
     cr::Worker::My().CommitTx();
   });
 }
 
 TEST_F(TransactionKVTest, ScanDesc) {
-  GetLeanStore();
   storage::btree::TransactionKV* btree;
 
   // prepare key-value pairs to insert
@@ -696,7 +683,7 @@ TEST_F(TransactionKVTest, ScanDesc) {
 
   const auto* btreeName = "testTree1";
 
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
@@ -704,7 +691,7 @@ TEST_F(TransactionKVTest, ScanDesc) {
 
     // create btree
     cr::Worker::My().StartTx();
-    GetLeanStore()->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
     cr::Worker::My().CommitTx();
     EXPECT_NE(btree, nullptr);
 
@@ -750,13 +737,12 @@ TEST_F(TransactionKVTest, ScanDesc) {
 
     // destroy the tree
     cr::Worker::My().StartTx();
-    GetLeanStore()->DropTransactionKV(btreeName);
+    mStore->DropTransactionKV(btreeName);
     cr::Worker::My().CommitTx();
   });
 }
 
 TEST_F(TransactionKVTest, InsertAfterRemove) {
-  GetLeanStore();
   storage::btree::TransactionKV* btree;
 
   // prepare key-value pairs to insert
@@ -788,7 +774,7 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
     copiedValue = std::string((const char*)val.data(), val.size());
   };
 
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
@@ -796,7 +782,7 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
 
     // create btree
     cr::Worker::My().StartTx();
-    GetLeanStore()->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
     cr::Worker::My().CommitTx();
     EXPECT_NE(btree, nullptr);
 
@@ -856,7 +842,7 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
 
   LOG(INFO) << "key=" << kvToTest.begin()->first
             << ", val=" << kvToTest.begin()->second << ", newVal=" << newVal;
-  GetLeanStore()->ExecSync(1, [&]() {
+  mStore->ExecSync(1, [&]() {
     // lookup the new value
     cr::Worker::My().StartTx();
     for (const auto& [key, val] : kvToTest) {
@@ -870,7 +856,6 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
 }
 
 TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
-  GetLeanStore();
   storage::btree::TransactionKV* btree;
 
   // prepare key-value pairs to insert
@@ -902,7 +887,7 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
     copiedValue = std::string((const char*)val.data(), val.size());
   };
 
-  GetLeanStore()->ExecSync(0, [&]() {
+  mStore->ExecSync(0, [&]() {
     auto btreeConfig = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
@@ -910,7 +895,7 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
 
     // create btree
     cr::Worker::My().StartTx();
-    GetLeanStore()->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
     cr::Worker::My().CommitTx();
     EXPECT_NE(btree, nullptr);
 
@@ -932,7 +917,7 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
     }
   });
 
-  GetLeanStore()->ExecSync(1, [&]() {
+  mStore->ExecSync(1, [&]() {
     for (const auto& [key, val] : kvToTest) {
       cr::Worker::My().StartTx();
       SCOPED_DEFER(cr::Worker::My().CommitTx());
@@ -975,8 +960,3 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
 }
 
 } // namespace leanstore::test
-
-int main(int argc, char** argv) {
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}

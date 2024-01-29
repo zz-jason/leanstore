@@ -27,8 +27,6 @@
 #include <iostream>
 #include <locale>
 #include <memory>
-#include <mutex>
-#include <shared_mutex>
 #include <sstream>
 
 #include <linux/fs.h>
@@ -41,32 +39,17 @@
 
 namespace leanstore {
 
-std::expected<LeanStore*, utils::Error> LeanStore::Open() {
-  static std::shared_mutex sMutex;
-  static std::unique_ptr<LeanStore> sLeanstore = nullptr;
-
-  std::shared_lock readGuard(sMutex);
-  if (sLeanstore != nullptr) {
-    return sLeanstore.get();
-  }
-  readGuard.unlock();
-
-  std::unique_lock writeGuard(sMutex);
-  if (sLeanstore != nullptr) {
-    return sLeanstore.get();
-  }
-
+std::expected<std::unique_ptr<LeanStore>, utils::Error> LeanStore::Open() {
   if (FLAGS_init) {
     std::cout << "Clean data dir: " << FLAGS_data_dir << std::endl;
     std::filesystem::path dirPath = FLAGS_data_dir;
     std::filesystem::remove_all(dirPath);
     std::filesystem::create_directories(dirPath);
     std::filesystem::create_directories(GetLogDir());
-    // for glog
-    FLAGS_log_dir = GetLogDir();
   }
-  sLeanstore = std::make_unique<LeanStore>();
-  return sLeanstore.get();
+  // for glog
+  FLAGS_log_dir = GetLogDir();
+  return std::make_unique<LeanStore>();
 }
 
 LeanStore::LeanStore() {

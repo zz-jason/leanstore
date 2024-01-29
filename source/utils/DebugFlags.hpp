@@ -8,15 +8,7 @@
 namespace leanstore {
 namespace utils {
 
-// determine whether the code is running in debug mode
-#ifndef NDEBUG
-#define LS_DEBUG
-constexpr bool kIsDebug = true;
-#else
-constexpr bool kIsDebug = false;
-#endif
-
-#ifdef LS_DEBUG
+#ifdef DEBUG
 #define LS_DEBUG_EXECUTE(store, name, action)                                  \
   if (store->mDebugFlagsRegistry.IsExists(name)) {                             \
     action;                                                                    \
