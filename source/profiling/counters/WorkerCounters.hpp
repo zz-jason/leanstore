@@ -13,31 +13,25 @@ struct WorkerCounters {
   // ATTENTION: buffer overflow if more than max_dt_id in system are registered
   static constexpr u64 max_dt_id = 1000;
 
-  std::atomic<u64> t_id = 9999;               // used by tpcc
-  std::atomic<u64> variable_for_workload = 0; // Used by tpcc
-
   std::atomic<u64> mWorkerId = -1;
 
-  std::atomic<u64> hot_hit_counter = 0; // TODO: give it a try ?
-  std::atomic<u64> cold_hit_counter = 0;
-  std::atomic<u64> read_operations_counter = 0;
-  std::atomic<u64> allocate_operations_counter = 0;
+  std::atomic<u64> mPageReadCounter = 0;
+  std::atomic<u64> mPageAllocCounter = 0;
   std::atomic<u64> mNumContentions = 0;
-  std::atomic<u64> tx = 0;
-  std::atomic<u64> long_running_tx = 0;
-  std::atomic<u64> olap_scanned_tuples = 0;
-  std::atomic<u64> tx_abort = 0;
-  std::atomic<u64> olap_tx_abort = 0;
-  std::atomic<u64> tmp = 0;
+  std::atomic<u64> mTxExecuted = 0;
+  std::atomic<u64> mTxExecutedLong = 0;
+  std::atomic<u64> mTxScannedTuplesLong = 0;
+  std::atomic<u64> mTxAborted = 0;
+  std::atomic<u64> mTxAbortedLong = 0;
 
   // Space and contention management
-  std::atomic<u64> contention_split_succ_counter[max_dt_id] = {0};
-  std::atomic<u64> contention_split_fail_counter[max_dt_id] = {0};
-  std::atomic<u64> dt_split[max_dt_id] = {0};
-  std::atomic<u64> dt_merge_succ[max_dt_id] = {0};
-  std::atomic<u64> dt_merge_parent_succ[max_dt_id] = {0};
-  std::atomic<u64> dt_merge_fail[max_dt_id] = {0};
-  std::atomic<u64> dt_merge_parent_fail[max_dt_id] = {0};
+  std::atomic<u64> mContentionSplitSucceed[max_dt_id] = {0};
+  std::atomic<u64> mContentionSplitFailed[max_dt_id] = {0};
+  std::atomic<u64> mPageSplits[max_dt_id] = {0};
+  std::atomic<u64> mPageMergeSucceed[max_dt_id] = {0};
+  std::atomic<u64> mPageMergeFailed[max_dt_id] = {0};
+  std::atomic<u64> mPageMergeParentSucceed[max_dt_id] = {0};
+  std::atomic<u64> mPageMergeParentFailed[max_dt_id] = {0};
   std::atomic<u64> xmerge_partial_counter[max_dt_id] = {0};
   std::atomic<u64> xmerge_full_counter[max_dt_id] = {0};
 
@@ -60,8 +54,8 @@ struct WorkerCounters {
   std::atomic<u64> dt_find_parent_slow[max_dt_id] = {0};
 
   std::atomic<u64> dt_empty_leaf[max_dt_id] = {0};
-  std::atomic<u64> dt_goto_page_exec[max_dt_id] = {0};
-  std::atomic<u64> dt_goto_page_shared[max_dt_id] = {0};
+  std::atomic<u64> mGotoPageExclusive[max_dt_id] = {0};
+  std::atomic<u64> mGotoPageShared[max_dt_id] = {0};
   std::atomic<u64> dt_next_tuple[max_dt_id] = {0};
   std::atomic<u64> dt_next_tuple_opt[max_dt_id] = {0};
   std::atomic<u64> dt_prev_tuple[max_dt_id] = {0};
@@ -117,7 +111,6 @@ struct WorkerCounters {
 
   // -------------------------------------------------------------------------------------
   WorkerCounters() {
-    t_id = sNumWorkers++;
   }
 
   static std::atomic<u64> sNumWorkers;

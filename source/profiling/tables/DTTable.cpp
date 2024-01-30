@@ -40,12 +40,12 @@ void DTTable::open() {
     col << Sum(WorkerCounters::sCounters, &WorkerCounters::dt_empty_leaf,
                mTreeId);
   });
-  columns.emplace("dt_goto_page_exec", [&](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::dt_goto_page_exec,
+  columns.emplace("mGotoPageExclusive", [&](Column& col) {
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mGotoPageExclusive,
                mTreeId);
   });
-  columns.emplace("dt_goto_page_shared", [&](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::dt_goto_page_shared,
+  columns.emplace("mGotoPageShared", [&](Column& col) {
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mGotoPageShared,
                mTreeId);
   });
   columns.emplace("dt_next_tuple", [&](Column& col) {
@@ -101,31 +101,31 @@ void DTTable::open() {
                     });
   }
 
-  columns.emplace("contention_split_succ_counter", [&](Column& col) {
+  columns.emplace("mContentionSplitSucceed", [&](Column& col) {
     col << Sum(WorkerCounters::sCounters,
-               &WorkerCounters::contention_split_succ_counter, mTreeId);
+               &WorkerCounters::mContentionSplitSucceed, mTreeId);
   });
-  columns.emplace("contention_split_fail_counter", [&](Column& col) {
+  columns.emplace("mContentionSplitFailed", [&](Column& col) {
     col << Sum(WorkerCounters::sCounters,
-               &WorkerCounters::contention_split_fail_counter, mTreeId);
+               &WorkerCounters::mContentionSplitFailed, mTreeId);
   });
-  columns.emplace("dt_split", [&](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::dt_split, mTreeId);
+  columns.emplace("mPageSplits", [&](Column& col) {
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mPageSplits, mTreeId);
   });
-  columns.emplace("dt_merge_succ", [&](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::dt_merge_succ,
+  columns.emplace("mPageMergeSucceed", [&](Column& col) {
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mPageMergeSucceed,
                mTreeId);
   });
-  columns.emplace("dt_merge_fail", [&](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::dt_merge_fail,
+  columns.emplace("mPageMergeFailed", [&](Column& col) {
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mPageMergeFailed,
                mTreeId);
   });
-  columns.emplace("dt_merge_parent_succ", [&](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::dt_merge_parent_succ,
+  columns.emplace("mPageMergeParentSucceed", [&](Column& col) {
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mPageMergeParentSucceed,
                mTreeId);
   });
-  columns.emplace("dt_merge_parent_fail", [&](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::dt_merge_parent_fail,
+  columns.emplace("mPageMergeParentFailed", [&](Column& col) {
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mPageMergeParentFailed,
                mTreeId);
   });
   columns.emplace("xmerge_partial_counter", [&](Column& col) {

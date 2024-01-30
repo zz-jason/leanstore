@@ -116,9 +116,9 @@ protected:
   void gotoPage(const Slice& key) {
     COUNTERS_BLOCK() {
       if (mMode == LatchMode::kExclusive) {
-        WorkerCounters::MyCounters().dt_goto_page_exec[mBTree.mTreeId]++;
+        WorkerCounters::MyCounters().mGotoPageExclusive[mBTree.mTreeId]++;
       } else {
-        WorkerCounters::MyCounters().dt_goto_page_shared[mBTree.mTreeId]++;
+        WorkerCounters::MyCounters().mGotoPageShared[mBTree.mTreeId]++;
       }
     }
 

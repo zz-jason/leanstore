@@ -30,20 +30,20 @@ void CRTable::open() {
   columns.emplace("gct_rounds", [&](Column& col) {
     col << Sum(CRCounters::sCounters, &CRCounters::gct_rounds);
   });
-  columns.emplace("tx", [](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::tx);
+  columns.emplace("mTxExecuted", [](Column& col) {
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mTxExecuted);
   });
-  columns.emplace("tx_abort", [](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::tx_abort);
+  columns.emplace("mTxAborted", [](Column& col) {
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mTxAborted);
   });
-  columns.emplace("long_running_tx", [](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::long_running_tx);
+  columns.emplace("mTxExecutedLong", [](Column& col) {
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mTxExecutedLong);
   });
-  columns.emplace("olap_scanned_tuples", [](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::olap_scanned_tuples);
+  columns.emplace("mTxScannedTuplesLong", [](Column& col) {
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mTxScannedTuplesLong);
   });
-  columns.emplace("olap_tx_abort", [](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::olap_tx_abort);
+  columns.emplace("mTxAbortedLong", [](Column& col) {
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mTxAbortedLong);
   });
   columns.emplace("rfa_committed_tx", [&](Column& col) {
     col << Sum(CRCounters::sCounters, &CRCounters::rfa_committed_tx);

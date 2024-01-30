@@ -198,13 +198,12 @@ BufferFrame& BufferManager::AllocNewPage(TREEID treeId) {
   memset((void*)&freeBf, 0, BufferFrame::Size());
   new (&freeBf) BufferFrame();
   freeBf.Init(partition.NextPageId());
-
-  COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().allocate_operations_counter++;
-  }
-
   freeBf.page.mBTreeId = treeId;
   freeBf.page.mPSN++; // mark as dirty
+
+  COUNTERS_BLOCK() {
+    WorkerCounters::MyCounters().mPageAllocCounter++;
+  }
   return freeBf;
 }
 
@@ -420,7 +419,7 @@ void BufferManager::ReadPageSync(PID pageId, void* pageBuffer) {
   };
 
   COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().read_operations_counter++;
+    WorkerCounters::MyCounters().mPageReadCounter++;
   }
 }
 

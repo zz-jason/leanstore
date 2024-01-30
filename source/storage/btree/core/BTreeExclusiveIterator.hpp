@@ -175,7 +175,7 @@ public:
       JUMPMU_TRY() {
         mBTree.TrySplitMayJump(*mGuardedLeaf.mBf, splitSlot);
         WorkerCounters::MyCounters()
-            .contention_split_succ_counter[mBTree.mTreeId]++;
+            .mContentionSplitSucceed[mBTree.mTreeId]++;
         DLOG(INFO) << "[Contention Split] contention split succeed"
                    << ", pageId=" << mGuardedLeaf.mBf->header.mPageId
                    << ", contention pct=" << contentionPct
@@ -183,7 +183,7 @@ public:
       }
       JUMPMU_CATCH() {
         WorkerCounters::MyCounters()
-            .contention_split_fail_counter[mBTree.mTreeId]++;
+            .mContentionSplitFailed[mBTree.mTreeId]++;
         LOG(INFO) << "[Contention Split] contention split failed"
                   << ", pageId=" << mGuardedLeaf.mBf->header.mPageId
                   << ", contention pct=" << contentionPct
