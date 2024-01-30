@@ -64,10 +64,6 @@ inline void WorkerThread::runImpl() {
   WorkerCounters::MyCounters().mWorkerId = mWorkerId;
   CRCounters::MyCounters().mWorkerId = mWorkerId;
 
-  // // wait group committer thread to run
-  // while (FLAGS_wal && !mGroupCommitterStarted) {
-  // }
-
   while (mKeepRunning) {
     // wait until there is a job
     std::unique_lock guard(mMutex);

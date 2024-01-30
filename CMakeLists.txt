@@ -1,10 +1,10 @@
-cmake_minimum_required(VERSION 3.7)
-
 # ------------------------------------------------------------------------------
 # Project settings
 # ------------------------------------------------------------------------------
 
 project(leanstoredb)
+cmake_minimum_required(VERSION 3.7)
+
 if (NOT UNIX)
     message(SEND_ERROR "unsupported platform")
 endif ()
@@ -46,7 +46,7 @@ endif()
 
 if(ENABLE_TSAN)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread")
-endif() 
+endif()
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" AND CMAKE_BUILD_TYPE MATCHES Debug)
     add_compile_options(-fstandalone-debug)
@@ -66,12 +66,19 @@ endif (CYGWIN)
 # Dependencies
 # ------------------------------------------------------------------------------
 
-include(${CMAKE_SOURCE_DIR}/third-party/tabluate.cmake)
-include(${CMAKE_SOURCE_DIR}/third-party/rapidjson.cmake)
-include(${CMAKE_SOURCE_DIR}/third-party/gflags.cmake)
-include(${CMAKE_SOURCE_DIR}/third-party/glog.cmake)
-include(${CMAKE_SOURCE_DIR}/third-party/gtest.cmake)
-include(${CMAKE_SOURCE_DIR}/third-party/gbench.cmake)
+find_package(tabulate CONFIG REQUIRED)
+find_package(RapidJSON CONFIG REQUIRED)
+find_package(gflags CONFIG REQUIRED)
+add_compile_definitions(GLOG_CUSTOM_PREFIX_SUPPORT)
+find_package(glog CONFIG REQUIRED)
+find_package(GTest CONFIG REQUIRED)
+find_package(benchmark CONFIG REQUIRED)
+# include(${CMAKE_SOURCE_DIR}/third-party/tabluate.cmake)
+# include(${CMAKE_SOURCE_DIR}/third-party/rapidjson.cmake)
+# include(${CMAKE_SOURCE_DIR}/third-party/gflags.cmake)
+# include(${CMAKE_SOURCE_DIR}/third-party/glog.cmake)
+# include(${CMAKE_SOURCE_DIR}/third-party/gtest.cmake)
+# include(${CMAKE_SOURCE_DIR}/third-party/gbench.cmake)
 
 # ------------------------------------------------------------------------------
 # Project build targets

@@ -17,8 +17,6 @@ void ConfigsTable::open() {
   columns.emplace("c_tag", [&](Column& col) { col << FLAGS_tag; });
   columns.emplace("c_worker_threads",
                   [&](Column& col) { col << FLAGS_worker_threads; });
-  columns.emplace("c_enable_pin_worker_threads",
-                  [&](Column& col) { col << FLAGS_enable_pin_worker_threads; });
   columns.emplace("c_smt", [&](Column& col) { col << FLAGS_smt; });
 
   columns.emplace("c_free_pct", [&](Column& col) { col << FLAGS_free_pct; });

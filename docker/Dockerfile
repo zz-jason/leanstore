@@ -22,6 +22,14 @@ RUN apt-get update && apt-get install -y \
  && pip3 install gcovr==6.0 --break-system-packages \
  && rm -rf /var/lib/apt/lists/*
 
+# install vcpkg and its prerequisites
+RUN apt-get update && apt-get install -y \
+        zip pkg-control \
+ && git clone https://github.com/Microsoft/vcpkg.git /opt/vcpkg \
+ && echo 'export VCPKG_ROOT=/opt/vcpkg' >> ~/.bashrc \
+ && echo 'export PATH=$VCPKG_ROOT:$PATH' >> ~/.bashrc \
+ && rm -rf /var/lib/apt/lists/*
+
 
 ################################################################################
 # other settings

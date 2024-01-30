@@ -44,9 +44,6 @@ DEFINE_bool(crc_check, false, "");
 DEFINE_uint32(worker_threads, 4, "");
 DEFINE_bool(cpu_counters, true,
             "Disable if HW does not have enough counters for all threads");
-DEFINE_bool(enable_pin_worker_threads, false,
-            "Whether to ping each worker thread to a specified CPU thread to "
-            "get better CPU affinity and memory locality");
 DEFINE_bool(smt, true, "Simultaneous multithreading");
 // -------------------------------------------------------------------------------------
 DEFINE_bool(root, false, "does this process have root rights ?");

@@ -182,8 +182,7 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
     auto xGuardedNewLeft =
         ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
 
-    // Increment GSNs before writing WAL to make sure that these pages marked
-    // as dirty regardless of the FLAGS_wal
+    // Increment GSNs before writing WAL to ensure they are marked as dirty
     if (mConfig.mEnableWal) {
       xGuardedParent.SyncGSNBeforeWrite();
       xGuardedNewLeft.SyncGSNBeforeWrite();

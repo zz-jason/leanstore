@@ -86,13 +86,7 @@ void BufferManager::StartBufferFrameProviders() {
       threadName += std::to_string(i);
     }
 
-    int runningCPU = 0;
-    if (FLAGS_enable_pin_worker_threads) {
-      runningCPU = mStore->mStoreOption.mNumTxWorkers + FLAGS_wal + i;
-    } else {
-      runningCPU = FLAGS_wal + i;
-    }
-
+    auto runningCPU = mStore->mStoreOption.mNumTxWorkers + FLAGS_wal + i;
     mBfProviders.push_back(std::make_unique<BufferFrameProvider>(
         mStore, threadName, runningCPU, mNumBfs, mBufferPool, mNumPartitions,
         mPartitionsMask, mPartitions));
