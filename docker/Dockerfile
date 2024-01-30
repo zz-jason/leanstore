@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y \
 
 # install vcpkg and its prerequisites
 RUN apt-get update && apt-get install -y \
-        zip pkg-control \
+        zip pkg-config \
  && git clone https://github.com/Microsoft/vcpkg.git /opt/vcpkg \
  && echo 'export VCPKG_ROOT=/opt/vcpkg' >> ~/.bashrc \
  && echo 'export PATH=$VCPKG_ROOT:$PATH' >> ~/.bashrc \

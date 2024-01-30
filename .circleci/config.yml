@@ -25,7 +25,7 @@ jobs:
 
       - run:
           name: "Install dependencies"
-          command: apt update && apt install -y build-essential cmake git libaio-dev cppcheck coreutils curl gnupg python3-pip
+          command: apt update && apt install -y build-essential cmake git libaio-dev cppcheck coreutils curl gnupg python3-pip zip pkg-config
 
       - run:
           name: "Install gcc-13 && gcovr 6.0"
@@ -45,6 +45,14 @@ jobs:
             ln -sf /usr/bin/g++-13        /usr/bin/c++
             ln -sf /usr/bin/gcc-13        /usr/bin/cc
             pip3 install gcovr==6.0 --break-system-packages
+
+      - run:
+          name: "Install vcpkg"
+          command: |
+            git clone https://github.com/Microsoft/vcpkg.git /opt/vcpkg
+            echo 'export VCPKG_ROOT=/opt/vcpkg' >> ~/.bashrc
+            echo 'export PATH=$VCPKG_ROOT:$PATH' >> ~/.bashrc
+            source ~/.bashrc
 
       - run:
           name: "Config project"
