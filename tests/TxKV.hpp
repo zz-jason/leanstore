@@ -3,7 +3,6 @@
 #include "KVInterface.hpp"
 #include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
-#include "concurrency-recovery/Transaction.hpp"
 #include "shared-headers/Units.hpp"
 #include "storage/btree/TransactionKV.hpp"
 #include "storage/btree/core/BTreeGeneric.hpp"

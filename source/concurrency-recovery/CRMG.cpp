@@ -15,10 +15,11 @@ CRManager::CRManager(leanstore::LeanStore* store)
     : mStore(store),
       mHistoryTreePtr(nullptr),
       mGroupCommitter(nullptr) {
+  auto& storeOption = store->mStoreOption;
   // start all worker threads
-  mWorkers.resize(FLAGS_worker_threads);
-  mWorkerThreads.reserve(FLAGS_worker_threads);
-  for (u64 workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
+  mWorkers.resize(storeOption.mNumTxWorkers);
+  mWorkerThreads.reserve(storeOption.mNumTxWorkers);
+  for (u64 workerId = 0; workerId < storeOption.mNumTxWorkers; workerId++) {
     auto workerThread = std::make_unique<WorkerThread>(workerId, workerId);
     workerThread->Start();
 
@@ -33,7 +34,8 @@ CRManager::CRManager(leanstore::LeanStore* store)
 
   // start group commit thread
   if (FLAGS_wal) {
-    const int cpu = FLAGS_enable_pin_worker_threads ? FLAGS_worker_threads : -1;
+    const int cpu =
+        FLAGS_enable_pin_worker_threads ? storeOption.mNumTxWorkers : -1;
     mGroupCommitter =
         std::make_unique<GroupCommitter>(mStore->mWalFd, mWorkers, cpu);
     mGroupCommitter->Start();
@@ -42,7 +44,7 @@ CRManager::CRManager(leanstore::LeanStore* store)
   // create history tree for each worker
   mWorkerThreads[0]->SetJob([&]() { setupHistoryTree(); });
   mWorkerThreads[0]->Wait();
-  for (u64 workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
+  for (u64 workerId = 0; workerId < storeOption.mNumTxWorkers; workerId++) {
     mWorkers[workerId]->cc.mHistoryTree = mHistoryTreePtr.get();
   }
 }
@@ -58,12 +60,12 @@ CRManager::~CRManager() {
 
 void CRManager::setupHistoryTree() {
   auto historyTree = std::make_unique<HistoryTree>();
-  historyTree->mUpdateBTrees =
-      std::make_unique<storage::btree::BasicKV*[]>(FLAGS_worker_threads);
-  historyTree->mRemoveBTrees =
-      std::make_unique<storage::btree::BasicKV*[]>(FLAGS_worker_threads);
+  historyTree->mUpdateBTrees = std::make_unique<storage::btree::BasicKV*[]>(
+      mStore->mStoreOption.mNumTxWorkers);
+  historyTree->mRemoveBTrees = std::make_unique<storage::btree::BasicKV*[]>(
+      mStore->mStoreOption.mNumTxWorkers);
 
-  for (u64 i = 0; i < FLAGS_worker_threads; i++) {
+  for (u64 i = 0; i < mStore->mStoreOption.mNumTxWorkers; i++) {
     std::string name = "_history_tree_" + std::to_string(i);
     storage::btree::BTreeConfig config = {.mEnableWal = false,
                                           .mUseBulkInsert = true};

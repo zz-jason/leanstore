@@ -83,7 +83,8 @@ public:
     bool hasLongRunningOLAP =
         cr::Worker::My()
             .mStore->mCRManager->mGlobalWmkInfo.HasActiveLongRunningTx();
-    bool frequentlyUpdated = mTotalUpdates > FLAGS_worker_threads;
+    bool frequentlyUpdated =
+        mTotalUpdates > cr::Worker::My().mStore->mStoreOption.mNumTxWorkers;
     bool recentUpdatedByOthers = mWorkerId != cr::Worker::My().mWorkerId ||
                                  mTxId != cr::ActiveTx().mStartTs;
     return commandValid && hasLongRunningOLAP && recentUpdatedByOthers &&

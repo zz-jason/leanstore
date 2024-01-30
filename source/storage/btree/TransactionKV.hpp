@@ -141,7 +141,7 @@ public:
   }
 
   inline static u64 ConvertToFatTupleThreshold() {
-    return FLAGS_worker_threads;
+    return cr::Worker::My().mStore->mStoreOption.mNumTxWorkers;
   }
 
   /// Updates the value stored in FatTuple. The former newest version value is

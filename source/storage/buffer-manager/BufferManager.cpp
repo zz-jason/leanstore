@@ -41,7 +41,7 @@ BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
                              MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   LOG_IF(FATAL, underlyingBuf == MAP_FAILED)
       << "Failed to allocate memory for the buffer pool"
-      << ", FLAGS_buffer_pool_size=" << mStore->mStoreOption.mBufferPoolSize
+      << ", bufferPoolSize=" << mStore->mStoreOption.mBufferPoolSize
       << ", totalMemSize=" << totalMemSize;
 
   mBufferPool = reinterpret_cast<u8*>(underlyingBuf);
@@ -88,7 +88,7 @@ void BufferManager::StartBufferFrameProviders() {
 
     int runningCPU = 0;
     if (FLAGS_enable_pin_worker_threads) {
-      runningCPU = FLAGS_worker_threads + FLAGS_wal + i;
+      runningCPU = mStore->mStoreOption.mNumTxWorkers + FLAGS_wal + i;
     } else {
       runningCPU = FLAGS_wal + i;
     }
@@ -130,7 +130,7 @@ void BufferManager::CheckpointAllBufferFrames() {
 
   StopBufferFrameProviders();
   utils::Parallelize::parallelRange(mNumBfs, [&](u64 begin, u64 end) {
-    utils::AlignedBuffer<512> alignedBuffer(FLAGS_page_size);
+    utils::AlignedBuffer<512> alignedBuffer(mStore->mStoreOption.mPageSize);
     auto* buffer = alignedBuffer.Get();
     for (u64 i = begin; i < end; i++) {
       auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
@@ -138,9 +138,10 @@ void BufferManager::CheckpointAllBufferFrames() {
       bf.header.mLatch.LockExclusively();
       if (!bf.isFree()) {
         mStore->mTreeRegistry->Checkpoint(bf.page.mBTreeId, bf, buffer);
-        auto ret = pwrite(mStore->mPageFd, buffer, FLAGS_page_size,
-                          bf.header.mPageId * FLAGS_page_size);
-        DCHECK_EQ(ret, FLAGS_page_size);
+        auto ret =
+            pwrite(mStore->mPageFd, buffer, mStore->mStoreOption.mPageSize,
+                   bf.header.mPageId * mStore->mStoreOption.mPageSize);
+        DCHECK_EQ(ret, (s64)mStore->mStoreOption.mPageSize);
       }
       bf.header.mLatch.UnlockExclusively();
     }
@@ -149,17 +150,17 @@ void BufferManager::CheckpointAllBufferFrames() {
 
 auto BufferManager::CheckpointBufferFrame(BufferFrame& bf)
     -> std::expected<void, utils::Error> {
-  alignas(512) u8 buffer[FLAGS_page_size];
+  alignas(512) u8 buffer[mStore->mStoreOption.mPageSize];
   bf.header.mLatch.LockExclusively();
   if (!bf.isFree()) {
     mStore->mTreeRegistry->Checkpoint(bf.page.mBTreeId, bf, buffer);
-    auto ret = pwrite(mStore->mPageFd, buffer, FLAGS_page_size,
-                      bf.header.mPageId * FLAGS_page_size);
+    auto ret = pwrite(mStore->mPageFd, buffer, mStore->mStoreOption.mPageSize,
+                      bf.header.mPageId * mStore->mStoreOption.mPageSize);
     if (ret < 0) {
       return std::unexpected<utils::Error>(
           utils::Error::FileWrite(GetDBFilePath(), errno, strerror(errno)));
     }
-    if (ret < FLAGS_page_size) {
+    if ((u64)ret < mStore->mStoreOption.mPageSize) {
       return std::unexpected<utils::Error>(utils::Error::General(
           "Write incomplete, only " + std::to_string(ret) + " bytes written"));
     }
@@ -170,8 +171,7 @@ auto BufferManager::CheckpointBufferFrame(BufferFrame& bf)
 
 void BufferManager::RecoverFromDisk() {
   auto recovery = std::make_unique<leanstore::cr::Recovery>(
-      mStore, mStore->mCRManager->mGroupCommitter->mWalFd, 0,
-      mStore->mCRManager->mGroupCommitter->mWalSize);
+      mStore, 0, mStore->mCRManager->mGroupCommitter->mWalSize);
   recovery->Run();
 }
 
@@ -398,16 +398,16 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
 
 void BufferManager::ReadPageSync(PID pageId, void* pageBuffer) {
   DCHECK(u64(pageBuffer) % 512 == 0);
-  s64 bytesLeft = FLAGS_page_size;
+  s64 bytesLeft = mStore->mStoreOption.mPageSize;
   while (bytesLeft > 0) {
-    auto totalRead = FLAGS_page_size - bytesLeft;
-    auto curOffset = pageId * FLAGS_page_size + totalRead;
+    auto totalRead = mStore->mStoreOption.mPageSize - bytesLeft;
+    auto curOffset = pageId * mStore->mStoreOption.mPageSize + totalRead;
     auto* curBuffer = reinterpret_cast<u8*>(pageBuffer) + totalRead;
     auto bytesRead = pread(mStore->mPageFd, curBuffer, bytesLeft, curOffset);
 
     // read error, return a zero-initialized pageBuffer frame
     if (bytesRead <= 0) {
-      memset(pageBuffer, 0, FLAGS_page_size);
+      memset(pageBuffer, 0, mStore->mStoreOption.mPageSize);
       auto* page = new (pageBuffer) BufferFrame();
       page->Init(pageId);
       LOG(ERROR) << "Failed to read page"
@@ -455,7 +455,8 @@ void BufferManager::WritePageSync(BufferFrame& bf) {
   guardedBf.ToExclusiveMayJump();
   auto pageId = bf.header.mPageId;
   auto& partition = GetPartition(pageId);
-  pwrite(mStore->mPageFd, &bf.page, FLAGS_page_size, pageId * FLAGS_page_size);
+  pwrite(mStore->mPageFd, &bf.page, mStore->mStoreOption.mPageSize,
+         pageId * mStore->mStoreOption.mPageSize);
   bf.Reset();
   guardedBf.unlock();
   partition.mFreeBfList.PushFront(bf);

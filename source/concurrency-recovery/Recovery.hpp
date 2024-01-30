@@ -19,10 +19,6 @@ class Recovery {
 private:
   leanstore::LeanStore* mStore;
 
-  /// The file descriptor of the underlying DB file, which contains all the
-  /// pages and WAL records.
-  s32 mWalFd;
-
   /// The offset of WAL in the underlying data file.
   u64 mWalStartOffset;
 
@@ -40,9 +36,8 @@ private:
   std::map<PID, storage::BufferFrame*> mResolvedPages;
 
 public:
-  Recovery(leanstore::LeanStore* store, s32 fd, u64 offset, u64 size)
+  Recovery(leanstore::LeanStore* store, u64 offset, u64 size)
       : mStore(store),
-        mWalFd(fd),
         mWalStartOffset(offset),
         mWalSize(size) {
   }

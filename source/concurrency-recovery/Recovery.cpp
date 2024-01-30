@@ -16,7 +16,7 @@ using namespace leanstore::storage::btree;
 
 std::expected<void, utils::Error> Recovery::analysis() {
   // asume that each WALEntry is smaller than the page size
-  utils::AlignedBuffer<512> alignedBuffer(FLAGS_page_size);
+  utils::AlignedBuffer<512> alignedBuffer(mStore->mStoreOption.mPageSize);
   u8* walEntryPtr = alignedBuffer.Get();
   u64 walEntrySize = sizeof(WALEntry);
   for (auto offset = mWalStartOffset; offset < mWalSize;) {
@@ -94,7 +94,7 @@ std::expected<void, utils::Error> Recovery::analysis() {
 
 std::expected<void, utils::Error> Recovery::redo() {
   // asume that each WALEntry is smaller than the page size
-  utils::AlignedBuffer<512> alignedBuffer(FLAGS_page_size);
+  utils::AlignedBuffer<512> alignedBuffer(mStore->mStoreOption.mPageSize);
   u8* walEntryPtr = alignedBuffer.Get();
   u64 walEntrySize = sizeof(WALEntry);
 

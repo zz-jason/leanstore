@@ -315,7 +315,7 @@ inline SpaceCheckResult BTreeGeneric::CheckSpaceUtilization(BufferFrame& bf) {
 }
 
 inline void BTreeGeneric::Checkpoint(BufferFrame& bf, void* dest) {
-  std::memcpy(dest, &bf.page, FLAGS_page_size);
+  std::memcpy(dest, &bf.page, mStore->mStoreOption.mPageSize);
   auto* destPage = reinterpret_cast<Page*>(dest);
   auto* destNode = reinterpret_cast<BTreeNode*>(destPage->mPayload);
 

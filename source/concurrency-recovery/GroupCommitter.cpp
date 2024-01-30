@@ -18,8 +18,8 @@ void GroupCommitter::runImpl() {
   u64 minFlushedGSN = std::numeric_limits<u64>::max();
   u64 maxFlushedGSN = 0;
   TXID minFlushedTxId = std::numeric_limits<TXID>::max();
-  std::vector<u64> numRfaTxs(FLAGS_worker_threads, 0);
-  std::vector<WalFlushReq> walFlushReqCopies(FLAGS_worker_threads);
+  std::vector<u64> numRfaTxs(mWorkers.size(), 0);
+  std::vector<WalFlushReq> walFlushReqCopies(mWorkers.size());
 
   /// write WAL records from every worker thread to SSD.
   while (mKeepRunning) {

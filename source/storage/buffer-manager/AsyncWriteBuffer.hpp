@@ -36,7 +36,7 @@ public:
   bool full();
 
   u8* GetWriteBuffer(u64 slot) {
-    return &mWriteBuffer.Get()[slot * FLAGS_page_size];
+    return &mWriteBuffer.Get()[slot * page_size];
   }
 
   void AddToIOBatch(BufferFrame& bf, PID pageId);

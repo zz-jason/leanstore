@@ -55,4 +55,38 @@ inline Slice ToSlice(const std::string& str) {
   return Slice(reinterpret_cast<const u8*>(str.data()), str.size());
 }
 
+enum class TxMode : u8 {
+  kLongRunning = 0,
+  kShortRunning = 1,
+};
+
+inline std::string ToString(TxMode txMode) {
+  switch (txMode) {
+  case TxMode::kLongRunning: {
+    return "LongRunning";
+  }
+  case TxMode::kShortRunning: {
+    return "ShortRunning";
+  }
+  }
+  return "Unknown TxMode";
+}
+
+enum class IsolationLevel : u8 {
+  // kReadUnCommitted = 0,
+  // kReadCommitted = 1,
+  kSnapshotIsolation = 2,
+  kSerializable = 3,
+};
+
+inline IsolationLevel ParseIsolationLevel(std::string str) {
+  if (str == "ser") {
+    return leanstore::IsolationLevel::kSerializable;
+  }
+  if (str == "si") {
+    return leanstore::IsolationLevel::kSnapshotIsolation;
+  }
+  return leanstore::IsolationLevel::kSnapshotIsolation;
+}
+
 } // namespace leanstore
