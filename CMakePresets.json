@@ -9,7 +9,6 @@
                 "CMAKE_C_COMPILER": "gcc",
                 "CMAKE_CXX_COMPILER": "g++",
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-                "THIRD_PARTY_SRC_DIR": "${sourceDir}/build/cmake-expernal-project-downloaded",
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
@@ -19,8 +18,11 @@
             "binaryDir": "${sourceDir}/build/debug_tsan",
             "cacheVariables": {
                 "BUILD_WITH_COVERAGE": "ON",
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_GENERATOR": "Ninja",
+                "CMAKE_MAKE_PROGRAM": "ninja",
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-                "THIRD_PARTY_SRC_DIR": "${sourceDir}/build/cmake-expernal-project-downloaded",
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "ENABLE_TSAN": "ON"
@@ -31,10 +33,10 @@
             "binaryDir": "${sourceDir}/build/release",
             "cacheVariables": {
                 "CMAKE_C_COMPILER": "gcc",
-                "CMAKE_GENERATOR": "Ninja",
                 "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_GENERATOR": "Ninja",
+                "CMAKE_MAKE_PROGRAM": "ninja",
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-                "THIRD_PARTY_SRC_DIR": "${sourceDir}/build/cmake-expernal-project-downloaded",
                 "CMAKE_BUILD_TYPE": "Release",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
