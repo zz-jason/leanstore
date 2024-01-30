@@ -11,7 +11,6 @@
 
 #include <atomic>
 #include <expected>
-#include <list>
 #include <memory>
 
 namespace leanstore::storage::btree {
@@ -38,10 +37,6 @@ class CRManager;
 } // namespace leanstore::cr
 
 namespace leanstore {
-
-using FlagListString = std::list<std::tuple<string, fLS::clstring*>>;
-
-using FlagListS64 = std::list<std::tuple<string, s64*>>;
 
 struct GlobalStats {
   u64 mAccumulatedTxCounter = 0;
@@ -138,6 +133,9 @@ public:
   u64 AllocTs() {
     return mTimestampOracle.fetch_add(1);
   }
+
+  std::expected<std::unique_ptr<TxWorker>, utils::Error> GetTxWorker(
+      WORKERID workerId);
 
   /// Execute a custom user function on a worker thread.
   /// @param workerId worker to compute job

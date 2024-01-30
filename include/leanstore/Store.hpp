@@ -36,7 +36,7 @@ public:
 
   /// Get a transaction worker, all the transaction operations are dispatched
   /// to the worker thread.
-  virtual std::expected<TxWorker, utils::Error> GetTxWorker(
+  virtual std::expected<std::unique_ptr<TxWorker>, utils::Error> GetTxWorker(
       WORKERID workerId) = 0;
 
   /// Execute a custom user function on a worker thread.
@@ -95,7 +95,9 @@ public:
   virtual ~TxWorker() = default;
 
   /// Start a transaction.
-  virtual std::expected<void, utils::Error> StartTx() = 0;
+  virtual std::expected<void, utils::Error> StartTx(TxMode mode,
+                                                    IsolationLevel level,
+                                                    bool isReadOnly) = 0;
 
   /// Commit a transaction.
   virtual std::expected<void, utils::Error> CommitTx() = 0;
@@ -137,8 +139,8 @@ public:
 
   /// Create an iterator to scan a table, should be executed inside a
   /// transaction.
-  virtual std::expected<TableIterator, utils::Error> NewTableIterator(
-      TableRef table) = 0;
+  virtual std::expected<std::unique_ptr<TableIterator>, utils::Error>
+  NewTableIterator(TableRef table) = 0;
 
   /// Get the total key-value pairs in a table, should be executed inside a
   /// transaction.

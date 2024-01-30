@@ -137,7 +137,7 @@ public:
                            const LatchMode mode = LatchMode::kShared)
       : mBTree(tree),
         mMode(mode),
-        mBuffer(FLAGS_page_size, 0) {
+        mBuffer(tree.mStore->mStoreOption.mPageSize, 0) {
   }
 
   void SetEnterLeafCallback(LeafCallback cb) {

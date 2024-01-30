@@ -9,7 +9,6 @@
 #include <rapidjson/document.h>
 
 #include <algorithm>
-#include <cassert>
 #include <cstring>
 
 using namespace std;

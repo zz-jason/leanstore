@@ -17,7 +17,7 @@ namespace cr {
 u32 Logging::walContiguousFreeSpace() {
   const auto flushed = mWalFlushed.load();
   if (flushed <= mWalBuffered) {
-    return FLAGS_wal_buffer_size - mWalBuffered;
+    return mWalBufferSize - mWalBuffered;
   }
   return flushed - mWalBuffered;
 }
@@ -35,8 +35,8 @@ void Logging::ReserveContiguousBuffer(u32 bytesRequired) {
     const auto flushed = mWalFlushed.load();
     if (flushed <= mWalBuffered) {
       // carraige return, consume the last bytes from mWalBuffered to the end
-      if (FLAGS_wal_buffer_size - mWalBuffered < bytesRequired) {
-        auto entrySize = FLAGS_wal_buffer_size - mWalBuffered;
+      if (mWalBufferSize - mWalBuffered < bytesRequired) {
+        auto entrySize = mWalBufferSize - mWalBuffered;
         auto entryType = WALEntry::TYPE::CARRIAGE_RETURN;
         auto* entryPtr = mWalBuffer + mWalBuffered;
         auto* entry = new (entryPtr) WALEntrySimple(0, entrySize, entryType);

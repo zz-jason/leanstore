@@ -185,7 +185,7 @@ bool ConcurrencyControl::VisibleForAll(TXID txId) {
 // fix, it should be enough if we purge in small batches
 void ConcurrencyControl::GarbageCollection() {
   utils::Timer timer(CRCounters::MyCounters().cc_ms_gc);
-  if (!FLAGS_enable_garbage_collection) {
+  if (!mStore->mStoreOption.mEnableGc) {
     return;
   }
 
@@ -263,14 +263,14 @@ ConcurrencyControl& ConcurrencyControl::Other(WORKERID otherWorkerId) {
 // Called by the worker thread that is committing a transaction before garbage
 // collection.
 void ConcurrencyControl::updateGlobalTxWatermarks() {
-  if (!FLAGS_enable_garbage_collection) {
+  if (!mStore->mStoreOption.mEnableGc) {
     DLOG(INFO) << "Skip updating global watermarks, GC is disabled";
     return;
   }
 
   utils::Timer timer(CRCounters::MyCounters().cc_ms_refresh_global_state);
   auto meetGcProbability =
-      FLAGS_enable_eager_garbage_collection ||
+      mStore->mStoreOption.mEnableEagerGc ||
       utils::RandomGenerator::RandU64(0, Worker::My().mAllWorkers.size()) == 0;
   auto performGc = meetGcProbability &&
                    mStore->mCRManager->mGlobalWmkInfo.mGlobalMutex.try_lock();
