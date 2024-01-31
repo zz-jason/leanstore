@@ -2,7 +2,6 @@
 #include "KVInterface.hpp"
 #include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
-#include "concurrency-recovery/Transaction.hpp"
 #include "concurrency-recovery/Worker.hpp"
 #include "shared-headers/Units.hpp"
 #include "storage/btree/TransactionKV.hpp"
@@ -31,6 +30,7 @@ static std::string kCmdLoad = "load";
 static std::string kCmdRun = "run";
 
 // For the benchmark driver
+DEFINE_string(ycsb_target, "leanstore", "Ycsb target, available: unordered_map, leanstore, rocksdb, leveldb");
 DEFINE_string(ycsb_cmd, "run", "Ycsb command, available: run, load");
 DEFINE_string(ycsb_workload, "a", "Ycsb workload, available: a, b, c, d, e, f");
 DEFINE_uint64(ycsb_run_for_seconds, 300, "Run the benchmark for x seconds");

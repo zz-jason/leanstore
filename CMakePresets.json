@@ -6,7 +6,6 @@
             "binaryDir": "${sourceDir}/build/debug",
             "cacheVariables": {
                 "BUILD_WITH_COVERAGE": "ON",
-                "THIRD_PARTY_SRC_DIR": "${sourceDir}/build/cmake-expernal-project-downloaded",
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
@@ -16,7 +15,6 @@
             "binaryDir": "${sourceDir}/build/debug_tsan",
             "cacheVariables": {
                 "BUILD_WITH_COVERAGE": "ON",
-                "THIRD_PARTY_SRC_DIR": "${sourceDir}/build/cmake-expernal-project-downloaded",
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "ENABLE_TSAN": "ON"
@@ -26,7 +24,6 @@
             "name": "release",
             "binaryDir": "${sourceDir}/build/release",
             "cacheVariables": {
-                "THIRD_PARTY_SRC_DIR": "${sourceDir}/build/cmake-expernal-project-downloaded",
                 "CMAKE_BUILD_TYPE": "Release",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
