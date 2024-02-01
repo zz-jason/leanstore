@@ -61,8 +61,8 @@ inline void WorkerThread::runImpl() {
     CPUCounters::registerThread(mThreadName, false);
   }
 
-  WorkerCounters::MyCounters().mWorkerId = mWorkerId;
-  CRCounters::MyCounters().mWorkerId = mWorkerId;
+  WorkerCounters::My().mWorkerId = mWorkerId;
+  CRCounters::My().mWorkerId = mWorkerId;
 
   while (mKeepRunning) {
     // wait until there is a job

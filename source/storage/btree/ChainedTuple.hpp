@@ -222,7 +222,7 @@ inline void ChainedTuple::Update(BTreeExclusiveIterator& xIter, Slice key,
     xIter.MarkAsDirty();
     xIter.UpdateContentionStats();
     COUNTERS_BLOCK() {
-      WorkerCounters::MyCounters().cc_update_versions_created[treeId]++;
+      WorkerCounters::My().cc_update_versions_created[treeId]++;
     }
   });
 

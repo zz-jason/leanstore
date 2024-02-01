@@ -3,6 +3,7 @@
 #include "Config.hpp"
 #include "LeanStore.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "shared-headers/Exceptions.hpp"
 #include "shared-headers/Units.hpp"
 #include "storage/btree/core/BTreeNode.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
@@ -159,7 +160,7 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
                          sepInfo.length);
     mHeight++;
     COUNTERS_BLOCK() {
-      WorkerCounters::MyCounters().mPageSplits[mTreeId]++;
+      WorkerCounters::My().mPageSplits[mTreeId]++;
     }
     return;
   }
@@ -225,7 +226,7 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
     xGuardedChild->split(xGuardedParent, xGuardedNewLeft, sepInfo.slot, sepKey,
                          sepInfo.length);
     COUNTERS_BLOCK() {
-      WorkerCounters::MyCounters().mPageSplits[mTreeId]++;
+      WorkerCounters::My().mPageSplits[mTreeId]++;
     }
   } else {
     guardedParent.unlock();
@@ -357,21 +358,21 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
         guardedParent->FreeSpaceAfterCompaction() >=
             BTreeNode::UnderFullSize()) {
       if (TryMergeMayJump(*guardedParent.mBf, true)) {
-        WorkerCounters::MyCounters().mPageMergeParentSucceed[mTreeId]++;
+        COUNTER_INC(WorkerCounters::My().mPageMergeParentSucceed[mTreeId]);
       } else {
-        WorkerCounters::MyCounters().mPageMergeParentFailed[mTreeId]++;
+        COUNTER_INC(WorkerCounters::My().mPageMergeParentFailed[mTreeId]);
       }
     }
   }
   JUMPMU_CATCH() {
-    WorkerCounters::MyCounters().mPageMergeFailed[mTreeId]++;
+    WorkerCounters::My().mPageMergeFailed[mTreeId]++;
   }
 
   COUNTERS_BLOCK() {
     if (succeed) {
-      WorkerCounters::MyCounters().mPageMergeSucceed[mTreeId]++;
+      WorkerCounters::My().mPageMergeSucceed[mTreeId]++;
     } else {
-      WorkerCounters::MyCounters().mPageMergeFailed[mTreeId]++;
+      WorkerCounters::My().mPageMergeFailed[mTreeId]++;
     }
   }
   return succeed;
@@ -480,7 +481,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
     GuardedBufferFrame<BTreeNode>& guardedParent,
     GuardedBufferFrame<BTreeNode>& guardedChild,
     ParentSwipHandler& parentHandler) {
-  WorkerCounters::MyCounters().dt_researchy[0][1]++;
+  WorkerCounters::My().dt_researchy[0][1]++;
   if (guardedChild->fillFactorAfterCompaction() >= 0.9) {
     return XMergeReturnCode::kNothing;
   }
@@ -559,11 +560,11 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
       // we unlock only the left page, the right one should not be touched again
       if (ret == 1) {
         fullyMerged[leftHand - pos] = true;
-        WorkerCounters::MyCounters().xmerge_full_counter[mTreeId]++;
+        COUNTER_INC(WorkerCounters::My().mXMergeFullCounter[mTreeId]);
         retCode = XMergeReturnCode::kFullMerge;
       } else if (ret == 2) {
         guardedNodes[leftHand - pos] = std::move(xGuardedLeft);
-        WorkerCounters::MyCounters().xmerge_partial_counter[mTreeId]++;
+        COUNTER_INC(WorkerCounters::My().mXMergePartialCounter[mTreeId]);
       } else if (ret == 0) {
         break;
       } else {

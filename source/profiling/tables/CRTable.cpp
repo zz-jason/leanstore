@@ -30,17 +30,14 @@ void CRTable::open() {
   columns.emplace("gct_rounds", [&](Column& col) {
     col << Sum(CRCounters::sCounters, &CRCounters::gct_rounds);
   });
-  columns.emplace("mTxExecuted", [](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mTxExecuted);
+  columns.emplace("mTxCommittedShort", [](Column& col) {
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mTxCommittedShort);
   });
-  columns.emplace("mTxAborted", [](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mTxAborted);
+  columns.emplace("mTxAbortedShort", [](Column& col) {
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mTxAbortedShort);
   });
-  columns.emplace("mTxExecutedLong", [](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mTxExecutedLong);
-  });
-  columns.emplace("mTxScannedTuplesLong", [](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mTxScannedTuplesLong);
+  columns.emplace("mTxCommittedLong", [](Column& col) {
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mTxCommittedLong);
   });
   columns.emplace("mTxAbortedLong", [](Column& col) {
     col << Sum(WorkerCounters::sCounters, &WorkerCounters::mTxAbortedLong);

@@ -347,7 +347,7 @@ inline void BTreeGeneric::FindLeafCanJump(
   volatile u16 level = 0;
   while (!guardedTarget->mIsLeaf) {
     COUNTERS_BLOCK() {
-      WorkerCounters::MyCounters().dt_inner_page[mTreeId]++;
+      WorkerCounters::My().dt_inner_page[mTreeId]++;
     }
 
     auto& childSwip = guardedTarget->lookupInner(key);
@@ -370,7 +370,7 @@ template <bool jumpIfEvicted>
 inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
                                                   BufferFrame& bfToFind) {
   COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().dt_find_parent[btree.mTreeId]++;
+    WorkerCounters::My().dt_find_parent[btree.mTreeId]++;
   }
 
   // Check whether search on the wrong tree or the root node is evicted
@@ -386,7 +386,7 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
   if (&childSwip->asBufferFrameMasked() == &bfToFind) {
     guardedParent.JumpIfModifiedByOthers();
     COUNTERS_BLOCK() {
-      WorkerCounters::MyCounters().dt_find_parent_root[btree.mTreeId]++;
+      WorkerCounters::My().dt_find_parent_root[btree.mTreeId]++;
     }
     return {.mParentGuard = std::move(guardedParent.mGuard),
             .mParentBf = &btree.mMetaNodeSwip.AsBufferFrame(),
@@ -455,7 +455,7 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
       .mChildSwip = childSwip->CastTo<BufferFrame>(),
       .mPosInParent = posInParent};
   COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().dt_find_parent_slow[btree.mTreeId]++;
+    WorkerCounters::My().dt_find_parent_slow[btree.mTreeId]++;
   }
   return parentHandler;
 }

@@ -55,8 +55,8 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
     }
     auto [ret, versionsRead] = GetVisibleTuple(gIter.value(), valCallback);
     COUNTERS_BLOCK() {
-      WorkerCounters::MyCounters().cc_read_chains[mTreeId]++;
-      WorkerCounters::MyCounters().cc_read_versions_visited[mTreeId] +=
+      WorkerCounters::My().cc_read_chains[mTreeId]++;
+      WorkerCounters::My().cc_read_versions_visited[mTreeId] +=
           versionsRead;
     }
     return ret;
@@ -72,8 +72,8 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
 
   auto [ret, versionsRead] = GetVisibleTuple(iter.value(), valCallback);
   COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().cc_read_chains[mTreeId]++;
-    WorkerCounters::MyCounters().cc_read_versions_visited[mTreeId] +=
+    WorkerCounters::My().cc_read_chains[mTreeId]++;
+    WorkerCounters::My().cc_read_versions_visited[mTreeId] +=
         versionsRead;
   }
 
@@ -116,7 +116,7 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
       }
 
       COUNTERS_BLOCK() {
-        WorkerCounters::MyCounters().cc_update_chains[mTreeId]++;
+        WorkerCounters::My().cc_update_chains[mTreeId]++;
       }
 
       // write lock the tuple
@@ -150,14 +150,14 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
         // workers
         if (FLAGS_enable_fat_tuple && chainedTuple.ShouldConvertToFatTuple()) {
           COUNTERS_BLOCK() {
-            WorkerCounters::MyCounters().cc_fat_tuple_triggered[mTreeId]++;
+            WorkerCounters::My().cc_fat_tuple_triggered[mTreeId]++;
           }
           chainedTuple.mTotalUpdates = 0;
           auto succeed = Tuple::ToFat(xIter);
           if (succeed) {
             xIter.mGuardedLeaf->mHasGarbage = true;
             COUNTERS_BLOCK() {
-              WorkerCounters::MyCounters().cc_fat_tuple_convert[mTreeId]++;
+              WorkerCounters::My().cc_fat_tuple_convert[mTreeId]++;
             }
           }
           Tuple::From(mutRawVal.Data())->WriteUnlock();
@@ -592,7 +592,7 @@ void TransactionKV::undoLastRemove(const WALTxRemove* walRemove) {
 bool TransactionKV::UpdateInFatTuple(BTreeExclusiveIterator& xIter, Slice key,
                                      MutValCallback updateCallBack,
                                      UpdateDesc& updateDesc) {
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_fat_tuple);
+  utils::Timer timer(CRCounters::My().cc_ms_fat_tuple);
   while (true) {
     auto* fatTuple = reinterpret_cast<FatTuple*>(xIter.MutableVal().Data());
     DCHECK(fatTuple->IsWriteLocked())
@@ -808,7 +808,7 @@ void TransactionKV::GarbageCollect(const u8* versionData,
       //   ENSURE(ret == OpCode::kOK);
       //   xIter.TryMergeIfNeeded();
       //   COUNTERS_BLOCK() {
-      //     WorkerCounters::MyCounters().cc_todo_removed[mTreeId]++;
+      //     WorkerCounters::My().cc_todo_removed[mTreeId]++;
       //   }
       // }
       if (chainedTuple.mTxId <= cr::Worker::My().cc.mLocalWmkOfShortTx) {
@@ -840,7 +840,7 @@ void TransactionKV::GarbageCollect(const u8* versionData,
         xIter.MarkAsDirty();
         xIter.TryMergeIfNeeded();
         COUNTERS_BLOCK() {
-          WorkerCounters::MyCounters().cc_todo_moved_gy[mTreeId]++;
+          WorkerCounters::My().cc_todo_moved_gy[mTreeId]++;
         }
       } else {
         DLOG(FATAL) << "Meet a remove version upper than "
@@ -914,9 +914,9 @@ template <bool asc>
 OpCode TransactionKV::scan4ShortRunningTx(Slice key, ScanCallback callback) {
   COUNTERS_BLOCK() {
     if constexpr (asc) {
-      WorkerCounters::MyCounters().dt_scan_asc[mTreeId]++;
+      WorkerCounters::My().dt_scan_asc[mTreeId]++;
     } else {
-      WorkerCounters::MyCounters().dt_scan_desc[mTreeId]++;
+      WorkerCounters::My().dt_scan_desc[mTreeId]++;
     }
   }
 
@@ -931,18 +931,18 @@ OpCode TransactionKV::scan4ShortRunningTx(Slice key, ScanCallback callback) {
       auto [opCode, versionsRead] =
           GetVisibleTuple(iter.value(), [&](Slice scannedVal) {
             COUNTERS_BLOCK() {
-              WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
+              WorkerCounters::My().dt_scan_callback[mTreeId] +=
                   cr::ActiveTx().IsLongRunning();
             }
             keepScanning = callback(scannedKey, scannedVal);
           });
       COUNTERS_BLOCK() {
-        WorkerCounters::MyCounters().cc_read_chains[mTreeId]++;
-        WorkerCounters::MyCounters().cc_read_versions_visited[mTreeId] +=
+        WorkerCounters::My().cc_read_chains[mTreeId]++;
+        WorkerCounters::My().cc_read_versions_visited[mTreeId] +=
             versionsRead;
         if (opCode != OpCode::kOK) {
-          WorkerCounters::MyCounters().cc_read_chains_not_found[mTreeId]++;
-          WorkerCounters::MyCounters()
+          WorkerCounters::My().cc_read_chains_not_found[mTreeId]++;
+          WorkerCounters::My()
               .cc_read_versions_visited_not_found[mTreeId] += versionsRead;
         }
       }
@@ -965,9 +965,9 @@ template <bool asc>
 OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
   COUNTERS_BLOCK() {
     if constexpr (asc) {
-      WorkerCounters::MyCounters().dt_scan_asc[mTreeId]++;
+      WorkerCounters::My().dt_scan_asc[mTreeId]++;
     } else {
-      WorkerCounters::MyCounters().dt_scan_desc[mTreeId]++;
+      WorkerCounters::My().dt_scan_desc[mTreeId]++;
     }
   }
 
@@ -1016,7 +1016,7 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
     auto takeFromOltp = [&]() {
       GetVisibleTuple(iter.value(), [&](Slice value) {
         COUNTERS_BLOCK() {
-          WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
+          WorkerCounters::My().dt_scan_callback[mTreeId] +=
               cr::ActiveTx().IsLongRunning();
         }
         keepScanning = callback(iter.key(), value);
@@ -1048,7 +1048,7 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
         Slice gKey = gIter.key();
         GetVisibleTuple(gIter.value(), [&](Slice value) {
           COUNTERS_BLOCK() {
-            WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
+            WorkerCounters::My().dt_scan_callback[mTreeId] +=
                 cr::ActiveTx().IsLongRunning();
           }
           keepScanning = callback(gKey, value);
@@ -1069,7 +1069,7 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
         } else {
           GetVisibleTuple(gIter.value(), [&](Slice value) {
             COUNTERS_BLOCK() {
-              WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
+              WorkerCounters::My().dt_scan_callback[mTreeId] +=
                   cr::ActiveTx().IsLongRunning();
             }
             keepScanning = callback(gKey, value);

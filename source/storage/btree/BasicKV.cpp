@@ -49,7 +49,7 @@ OpCode BasicKV::Lookup(Slice key, ValCallback valCallback) {
     }
     JUMPMU_CATCH() {
       DLOG(WARNING) << "BasicKV::Lookup retried";
-      WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
+      WorkerCounters::My().dt_restarts_read[mTreeId]++;
     }
   }
   UNREACHABLE();
@@ -89,7 +89,7 @@ bool BasicKV::IsRangeEmpty(Slice startKey, Slice endKey) {
 
 OpCode BasicKV::ScanAsc(Slice startKey, ScanCallback callback) {
   COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().dt_scan_asc[mTreeId]++;
+    WorkerCounters::My().dt_scan_asc[mTreeId]++;
   }
 
   JUMPMU_TRY() {
@@ -112,7 +112,7 @@ OpCode BasicKV::ScanAsc(Slice startKey, ScanCallback callback) {
 
 OpCode BasicKV::ScanDesc(Slice scanKey, ScanCallback callback) {
   COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().dt_scan_desc[mTreeId]++;
+    WorkerCounters::My().dt_scan_desc[mTreeId]++;
   }
   JUMPMU_TRY() {
     BTreeSharedIterator iter(*static_cast<BTreeGeneric*>(this));
@@ -190,7 +190,7 @@ OpCode BasicKV::PrefixLookup(Slice key, PrefixLookupCallback callback) {
       JUMPMU_RETURN ret;
     }
     JUMPMU_CATCH() {
-      WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
+      WorkerCounters::My().dt_restarts_read[mTreeId]++;
     }
   }
 
@@ -233,7 +233,7 @@ OpCode BasicKV::PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
       JUMPMU_RETURN ret;
     }
     JUMPMU_CATCH() {
-      WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
+      WorkerCounters::My().dt_restarts_read[mTreeId]++;
     }
   }
 
@@ -338,7 +338,7 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
         auto currentKey = xIter.key();
         if (currentKey >= startKey && currentKey <= endKey) {
           COUNTERS_BLOCK() {
-            WorkerCounters::MyCounters().dt_range_removed[mTreeId]++;
+            WorkerCounters::My().dt_range_removed[mTreeId]++;
           }
           auto ret = xIter.RemoveCurrent();
           ENSURE(ret == OpCode::kOK);
@@ -374,7 +374,7 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
       if (pageStartKey >= startKey && pageEndKey <= endKey) {
         // Purge the whole page
         COUNTERS_BLOCK() {
-          WorkerCounters::MyCounters().dt_range_removed[mTreeId] +=
+          WorkerCounters::My().dt_range_removed[mTreeId] +=
               guardedLeaf->mNumSeps;
         }
         guardedLeaf->Reset();

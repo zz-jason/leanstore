@@ -127,7 +127,7 @@ void Logging::SubmitWALEntryComplex(u64 totalSize) {
   Worker::My().mActiveTx.MarkAsWrite();
 
   COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().wal_write_bytes += totalSize;
+    WorkerCounters::My().wal_write_bytes += totalSize;
   }
 }
 

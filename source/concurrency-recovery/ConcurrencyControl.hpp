@@ -209,7 +209,7 @@ public:
   inline bool GetVersion(
       WORKERID prevWorkerId, TXID prevTxId, COMMANDID prevCommandId,
       std::function<void(const u8*, u64 versionSize)> getCallback) {
-    utils::Timer timer(CRCounters::MyCounters().cc_ms_history_tree_retrieve);
+    utils::Timer timer(CRCounters::My().cc_ms_history_tree_retrieve);
     auto isRemoveCommand = prevCommandId & TYPE_MSB(COMMANDID);
     return mHistoryTree->GetVersion(prevWorkerId, prevTxId, prevCommandId,
                                     isRemoveCommand, getCallback);

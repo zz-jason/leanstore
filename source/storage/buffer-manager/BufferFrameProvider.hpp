@@ -154,7 +154,7 @@ private:
     mCoolCandidateBfs.clear();
     for (u64 i = 0; i < FLAGS_buffer_frame_recycle_batch_size; i++) {
       auto* randomBf = randomBufferFrame();
-      DO_NOT_OPTIMIZE(randomBf->header.state);
+      DoNotOptimize(randomBf->header.state);
       mCoolCandidateBfs.push_back(randomBf);
     }
   }
@@ -203,7 +203,7 @@ inline void BufferFrameProvider::runImpl() {
     FlushAndRecycleBufferFrames(targetPartition);
 
     COUNTERS_BLOCK() {
-      PPCounters::MyCounters().pp_thread_rounds++;
+      PPCounters::My().pp_thread_rounds++;
     }
   }
 }
@@ -252,7 +252,7 @@ inline void BufferFrameProvider::evictFlushedBf(
   }
 
   COUNTERS_BLOCK() {
-    PPCounters::MyCounters().evicted_pages++;
+    PPCounters::My().evicted_pages++;
   }
 };
 
@@ -271,7 +271,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
     auto phase1Begin = std::chrono::high_resolution_clock::now();
     SCOPED_DEFER({
       auto phase1End = std::chrono::high_resolution_clock::now();
-      PPCounters::MyCounters().mPhase1MS +=
+      PPCounters::My().mPhase1MS +=
           (std::chrono::duration_cast<std::chrono::microseconds>(phase1End -
                                                                  phase1Begin)
                .count());
@@ -287,7 +287,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
       auto* coolCandidate = mCoolCandidateBfs.back();
       mCoolCandidateBfs.pop_back();
       COUNTERS_BLOCK() {
-        PPCounters::MyCounters().phase_1_counter++;
+        PPCounters::My().phase_1_counter++;
       }
       JUMPMU_TRY() {
         BMOptimisticGuard readGuard(coolCandidate->header.mLatch);
@@ -319,7 +319,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         readGuard.JumpIfModifiedByOthers();
 
         COUNTERS_BLOCK() {
-          PPCounters::MyCounters().touched_bfs_counter++;
+          PPCounters::My().touched_bfs_counter++;
         }
 
         // Iterate all the child pages to check wherher all the children are
@@ -356,7 +356,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
 
         COUNTERS_BLOCK() {
           iterateChildrenEnd = std::chrono::high_resolution_clock::now();
-          PPCounters::MyCounters().mIterateChildrenMS +=
+          PPCounters::My().mIterateChildrenMS +=
               (std::chrono::duration_cast<std::chrono::microseconds>(
                    iterateChildrenEnd - iterateChildrenBegin)
                    .count());
@@ -386,7 +386,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
                reinterpret_cast<HybridLatch*>(0x99));
         COUNTERS_BLOCK() {
           findParentEnd = std::chrono::high_resolution_clock::now();
-          PPCounters::MyCounters().mFindParentMS +=
+          PPCounters::My().mFindParentMS +=
               (std::chrono::duration_cast<std::chrono::microseconds>(
                    findParentEnd - findParentBegin)
                    .count());
@@ -428,7 +428,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         }
 
         COUNTERS_BLOCK() {
-          PPCounters::MyCounters().unswizzled_pages_counter++;
+          PPCounters::My().unswizzled_pages_counter++;
         }
         failedAttempts = 0;
       }
@@ -547,7 +547,7 @@ inline void BufferFrameProvider::FlushAndRecycleBufferFrames(
             // For recovery, so much has to be done here...
             writtenBf.header.mFlushedPSN = flushPSN;
             writtenBf.header.mIsBeingWrittenBack = false;
-            PPCounters::MyCounters().flushed_pages_counter++;
+            PPCounters::My().flushed_pages_counter++;
           }
           JUMPMU_CATCH() {
             writtenBf.header.crc = 0;

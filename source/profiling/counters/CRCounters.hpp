@@ -65,7 +65,7 @@ struct CRCounters {
 
   static utils::EnumerableThreadLocal<CRCounters> sCounters;
 
-  static CRCounters& MyCounters() {
+  static CRCounters& My() {
     return *sCounters.Local();
   }
 };

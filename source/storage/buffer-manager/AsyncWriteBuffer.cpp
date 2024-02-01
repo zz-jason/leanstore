@@ -40,20 +40,8 @@ void AsyncWriteBuffer::AddToIOBatch(BufferFrame& bf, PID pageId) {
   DCHECK(!full());
   DCHECK(u64(&bf.page) % 512 == 0);
   DCHECK(pending_requests <= batch_max_size);
-  COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().dt_page_writes[bf.page.mBTreeId]++;
-  }
 
-  PARANOID_BLOCK() {
-    if (FLAGS_pid_tracing && !FLAGS_reclaim_page_ids) {
-      Tracing::mutex.lock();
-      if (Tracing::ht.contains(pageId)) {
-        auto& entry = Tracing::ht[pageId];
-        DCHECK(std::get<0>(entry) == bf.page.mBTreeId);
-      }
-      Tracing::mutex.unlock();
-    }
-  }
+  COUNTER_INC(WorkerCounters::My().mPageWriteCounter);
 
   auto slot = pending_requests++;
   write_buffer_commands[slot].bf = &bf;

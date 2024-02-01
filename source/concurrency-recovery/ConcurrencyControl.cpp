@@ -26,7 +26,7 @@ namespace leanstore::cr {
 
 void CommitTree::AppendCommitLog(TXID startTs, TXID commitTs) {
   DCHECK(mCommitLog.size() < mCapacity);
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_committing);
+  utils::Timer timer(CRCounters::My().cc_ms_committing);
   std::unique_lock xGuard(mMutex);
   mCommitLog.push_back({commitTs, startTs});
   DLOG(INFO) << "Commit log appended"
@@ -35,7 +35,7 @@ void CommitTree::AppendCommitLog(TXID startTs, TXID commitTs) {
 }
 
 void CommitTree::CompactCommitLog() {
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_cm);
+  utils::Timer timer(CRCounters::My().cc_ms_gc_cm);
   if (mCommitLog.size() < mCapacity) {
     return;
   }
@@ -115,7 +115,7 @@ std::optional<std::pair<TXID, TXID>> CommitTree::lcbNoLatch(TXID startTs) {
 COMMANDID ConcurrencyControl::PutVersion(TREEID treeId, bool isRemoveCommand,
                                          u64 versionSize,
                                          std::function<void(u8*)> putCallBack) {
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_history_tree_insert);
+  utils::Timer timer(CRCounters::My().cc_ms_history_tree_insert);
   auto& curWorker = Worker::My();
   auto commandId = curWorker.mCommandId++;
   if (isRemoveCommand) {
@@ -158,7 +158,7 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, TXID txId) {
     }
 
     // Now we need to query LCB on the target worker and update the local cache.
-    utils::Timer timer(CRCounters::MyCounters().cc_ms_snapshotting);
+    utils::Timer timer(CRCounters::My().cc_ms_snapshotting);
     TXID largestVisibleTxId =
         Other(workerId).mCommitTree.Lcb(ActiveTx().mStartTs);
     if (largestVisibleTxId) {
@@ -184,7 +184,7 @@ bool ConcurrencyControl::VisibleForAll(TXID txId) {
 // TODO: smooth purge, we should not let the system hang on this, as a quick
 // fix, it should be enough if we purge in small batches
 void ConcurrencyControl::GarbageCollection() {
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_gc);
+  utils::Timer timer(CRCounters::My().cc_ms_gc);
   if (!mStore->mStoreOption.mEnableGc) {
     return;
   }
@@ -194,7 +194,7 @@ void ConcurrencyControl::GarbageCollection() {
 
   // remove versions that are nolonger needed by any transaction
   if (mCleanedWmkOfShortTx <= mLocalWmkOfAllTx) {
-    utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_history_tree);
+    utils::Timer timer(CRCounters::My().cc_ms_gc_history_tree);
     DLOG(INFO) << "Garbage collect history tree"
                << ", workerId=" << Worker::My().mWorkerId << ", fromTxId=" << 0
                << ", toTxId(mLocalWmkOfAllTx)=" << mLocalWmkOfAllTx
@@ -207,7 +207,7 @@ void ConcurrencyControl::GarbageCollection() {
                                                 Worker::My().mWorkerId,
                                                 versionTxId, calledBefore);
           COUNTERS_BLOCK() {
-            WorkerCounters::MyCounters().cc_gc_long_tx_executed[treeId]++;
+            WorkerCounters::My().cc_gc_long_tx_executed[treeId]++;
           }
         },
         0);
@@ -223,7 +223,7 @@ void ConcurrencyControl::GarbageCollection() {
   if (FLAGS_enable_long_running_transaction &&
       mLocalWmkOfAllTx < mLocalWmkOfShortTx &&
       mCleanedWmkOfShortTx <= mLocalWmkOfShortTx) {
-    utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_graveyard);
+    utils::Timer timer(CRCounters::My().cc_ms_gc_graveyard);
     DLOG(INFO) << "Garbage collect removed versions"
                << ", workerId=" << Worker::My().mWorkerId
                << ", fromTxId=" << mCleanedWmkOfShortTx
@@ -236,7 +236,7 @@ void ConcurrencyControl::GarbageCollection() {
                                                 Worker::My().mWorkerId,
                                                 versionTxId, calledBefore);
           COUNTERS_BLOCK() {
-            WorkerCounters::MyCounters().cc_todo_oltp_executed[treeId]++;
+            WorkerCounters::My().cc_todo_oltp_executed[treeId]++;
           }
         });
     mCleanedWmkOfShortTx = mLocalWmkOfShortTx + 1;
@@ -268,7 +268,7 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
     return;
   }
 
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_refresh_global_state);
+  utils::Timer timer(CRCounters::My().cc_ms_refresh_global_state);
   auto meetGcProbability =
       mStore->mStoreOption.mEnableEagerGc ||
       utils::RandomGenerator::RandU64(0, Worker::My().mAllWorkers.size()) == 0;

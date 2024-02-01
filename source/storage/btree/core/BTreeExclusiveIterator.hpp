@@ -2,6 +2,8 @@
 
 #include "BTreePessimisticIterator.hpp"
 #include "KVInterface.hpp"
+#include "profiling/counters/WorkerCounters.hpp"
+#include "shared-headers/Exceptions.hpp"
 
 #include <glog/logging.h>
 
@@ -174,16 +176,14 @@ public:
       mSlotId = -1;
       JUMPMU_TRY() {
         mBTree.TrySplitMayJump(*mGuardedLeaf.mBf, splitSlot);
-        WorkerCounters::MyCounters()
-            .mContentionSplitSucceed[mBTree.mTreeId]++;
+        COUNTER_INC(WorkerCounters::My().mContentionSplitSucceed);
         DLOG(INFO) << "[Contention Split] contention split succeed"
                    << ", pageId=" << mGuardedLeaf.mBf->header.mPageId
                    << ", contention pct=" << contentionPct
                    << ", split slot=" << splitSlot;
       }
       JUMPMU_CATCH() {
-        WorkerCounters::MyCounters()
-            .mContentionSplitFailed[mBTree.mTreeId]++;
+        COUNTER_INC(WorkerCounters::My().mContentionSplitFailed);
         LOG(INFO) << "[Contention Split] contention split failed"
                   << ", pageId=" << mGuardedLeaf.mBf->header.mPageId
                   << ", contention pct=" << contentionPct

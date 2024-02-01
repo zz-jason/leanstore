@@ -6,6 +6,7 @@
 #include "concurrency-recovery/GroupCommitter.hpp"
 #include "concurrency-recovery/Transaction.hpp"
 #include "profiling/counters/CRCounters.hpp"
+#include "profiling/counters/WorkerCounters.hpp"
 #include "shared-headers/Exceptions.hpp"
 #include "storage/buffer-manager/TreeRegistry.hpp"
 #include "utils/Defer.hpp"
@@ -27,7 +28,7 @@ Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers,
       mActiveTxId(0),
       mWorkerId(workerId),
       mAllWorkers(allWorkers) {
-  CRCounters::MyCounters().mWorkerId = workerId;
+  CRCounters::My().mWorkerId = workerId;
 
   // init wal buffer
   mLogging.mWalBufferSize = mStore->mStoreOption.mWalRingBufferSize;
@@ -44,7 +45,7 @@ Worker::~Worker() {
 }
 
 void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_start_tx);
+  utils::Timer timer(CRCounters::My().cc_ms_start_tx);
   Transaction prevTx = mActiveTx;
   DCHECK(prevTx.mState != TxState::kStarted)
       << "Previous transaction not ended"
@@ -112,16 +113,23 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
 }
 
 void Worker::CommitTx() {
-  SCOPED_DEFER(COUNTERS_BLOCK() {
+  SCOPED_DEFER({
     mActiveTx.mState = TxState::kCommitted;
     DLOG(INFO) << "Transaction committed"
                << ", workerId=" << mWorkerId
                << ", startTs=" << mActiveTx.mStartTs
                << ", commitTs=" << mActiveTx.mCommitTs
                << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
+    COUNTERS_BLOCK() {
+      if (mActiveTx.mTxMode == TxMode::kLongRunning) {
+        WorkerCounters::My().mTxCommittedLong++;
+      } else {
+        WorkerCounters::My().mTxCommittedShort++;
+      }
+    };
   });
 
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_commit_tx);
+  utils::Timer timer(CRCounters::My().cc_ms_commit_tx);
   if (!mActiveTx.mIsDurable) {
     return;
   }
@@ -166,7 +174,7 @@ void Worker::CommitTx() {
     // for group commit
     mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
     std::unique_lock<std::mutex> g(mLogging.mRfaTxToCommitMutex);
-    CRCounters::MyCounters().rfa_committed_tx++;
+    CRCounters::My().rfa_committed_tx++;
     mLogging.mRfaTxToCommit.push_back(mActiveTx);
     DLOG(INFO) << "Puting transaction (RFA) to mRfaTxToCommit"
                << ", workerId=" << mWorkerId
@@ -205,9 +213,16 @@ void Worker::AbortTx() {
               << ", startTs=" << mActiveTx.mStartTs
               << ", commitTs=" << mActiveTx.mCommitTs
               << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
+    COUNTERS_BLOCK() {
+      if (mActiveTx.mTxMode == TxMode::kLongRunning) {
+        WorkerCounters::My().mTxAbortedLong++;
+      } else {
+        WorkerCounters::My().mTxAbortedShort++;
+      }
+    };
   });
 
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_abort_tx);
+  utils::Timer timer(CRCounters::My().cc_ms_abort_tx);
   if (!(mActiveTx.mState == TxState::kStarted && mActiveTx.mIsDurable)) {
     return;
   }

@@ -42,7 +42,7 @@ static u64 MaxFatTupleLength() {
 }
 
 bool Tuple::ToFat(BTreeExclusiveIterator& xIter) {
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_fat_tuple_conversion);
+  utils::Timer timer(CRCounters::My().cc_ms_fat_tuple_conversion);
 
   // Process the chain tuple
   MutableSlice mutRawVal = xIter.MutableVal();
@@ -182,7 +182,7 @@ void FatTuple::GarbageCollection() {
   if (mNumDeltas == 0) {
     return;
   }
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_gc);
+  utils::Timer timer(CRCounters::My().cc_ms_gc);
 
   auto appendDelta = [](FatTuple& fatTuple, u8* delta, u16 deltaSize) {
     assert(fatTuple.mPayloadCapacity >=
@@ -442,7 +442,7 @@ void FatTuple::ConvertToChained(TREEID treeId) {
   new (this) ChainedTuple(*this);
 
   COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().cc_fat_tuple_decompose[treeId]++;
+    WorkerCounters::My().cc_fat_tuple_decompose[treeId]++;
   }
 }
 

@@ -202,7 +202,7 @@ BufferFrame& BufferManager::AllocNewPage(TREEID treeId) {
   freeBf.page.mPSN++; // mark as dirty
 
   COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().mPageAllocCounter++;
+    WorkerCounters::My().mPageAllocCounter++;
   }
   return freeBf;
 }
@@ -279,17 +279,6 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
 
     // 3. Read page at pageId to the target buffer frame
     ReadPageSync(pageId, &bf.page);
-    // DLOG_IF(FATAL, bf.page.mMagicDebuging != pageId)
-    //     << "Failed to read page, page corrupted";
-    COUNTERS_BLOCK() {
-      WorkerCounters::MyCounters().dt_page_reads[bf.page.mBTreeId]++;
-      if (FLAGS_trace_dt_id >= 0 &&
-          bf.page.mBTreeId == static_cast<TREEID>(FLAGS_trace_dt_id) &&
-          utils::RandomGenerator::Rand<u64>(
-              0, FLAGS_trace_trigger_probability) == 0) {
-        utils::PrintBackTrace();
-      }
-    }
 
     // 4. Intialize the buffer frame header
     DCHECK(!bf.header.mIsBeingWrittenBack);
@@ -419,7 +408,7 @@ void BufferManager::ReadPageSync(PID pageId, void* pageBuffer) {
   };
 
   COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().mPageReadCounter++;
+    WorkerCounters::My().mPageReadCounter++;
   }
 }
 

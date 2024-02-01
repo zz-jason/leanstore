@@ -15,14 +15,6 @@ std::string DTTable::getName() {
 void DTTable::open() {
   columns.emplace("key", [&](Column& col) { col << mTreeId; });
   columns.emplace("dt_name", [&](Column& col) { col << dt_name; });
-  columns.emplace("dt_page_reads", [&](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::dt_page_reads,
-               mTreeId);
-  });
-  columns.emplace("dt_page_writes", [&](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::dt_page_writes,
-               mTreeId);
-  });
   columns.emplace("dt_restarts_update_same_size", [&](Column& col) {
     col << Sum(WorkerCounters::sCounters,
                &WorkerCounters::dt_restarts_update_same_size, mTreeId);
@@ -93,7 +85,7 @@ void DTTable::open() {
                mTreeId);
   });
 
-  for (u64 r_i = 0; r_i < WorkerCounters::max_researchy_counter; r_i++) {
+  for (u64 r_i = 0; r_i < WorkerCounters::kMaxResearchyCounter; r_i++) {
     columns.emplace("dt_researchy_" + std::to_string(r_i),
                     [&, r_i](Column& col) {
                       col << Sum(WorkerCounters::sCounters,
@@ -103,14 +95,15 @@ void DTTable::open() {
 
   columns.emplace("mContentionSplitSucceed", [&](Column& col) {
     col << Sum(WorkerCounters::sCounters,
-               &WorkerCounters::mContentionSplitSucceed, mTreeId);
+               &WorkerCounters::mContentionSplitSucceed);
   });
   columns.emplace("mContentionSplitFailed", [&](Column& col) {
     col << Sum(WorkerCounters::sCounters,
-               &WorkerCounters::mContentionSplitFailed, mTreeId);
+               &WorkerCounters::mContentionSplitFailed);
   });
   columns.emplace("mPageSplits", [&](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mPageSplits, mTreeId);
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mPageSplits,
+               mTreeId);
   });
   columns.emplace("mPageMergeSucceed", [&](Column& col) {
     col << Sum(WorkerCounters::sCounters, &WorkerCounters::mPageMergeSucceed,
@@ -121,19 +114,19 @@ void DTTable::open() {
                mTreeId);
   });
   columns.emplace("mPageMergeParentSucceed", [&](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mPageMergeParentSucceed,
-               mTreeId);
+    col << Sum(WorkerCounters::sCounters,
+               &WorkerCounters::mPageMergeParentSucceed, mTreeId);
   });
   columns.emplace("mPageMergeParentFailed", [&](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mPageMergeParentFailed,
-               mTreeId);
-  });
-  columns.emplace("xmerge_partial_counter", [&](Column& col) {
     col << Sum(WorkerCounters::sCounters,
-               &WorkerCounters::xmerge_partial_counter, mTreeId);
+               &WorkerCounters::mPageMergeParentFailed, mTreeId);
   });
-  columns.emplace("xmerge_full_counter", [&](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::xmerge_full_counter,
+  columns.emplace("mXMergePartialCounter", [&](Column& col) {
+    col << Sum(WorkerCounters::sCounters,
+               &WorkerCounters::mXMergePartialCounter, mTreeId);
+  });
+  columns.emplace("mXMergeFullCounter", [&](Column& col) {
+    col << Sum(WorkerCounters::sCounters, &WorkerCounters::mXMergeFullCounter,
                mTreeId);
   });
 
@@ -143,10 +136,6 @@ void DTTable::open() {
   });
   columns.emplace("dt_find_parent_root", [&](Column& col) {
     col << Sum(WorkerCounters::sCounters, &WorkerCounters::dt_find_parent_root,
-               mTreeId);
-  });
-  columns.emplace("dt_find_parent_fast", [&](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::dt_find_parent_fast,
                mTreeId);
   });
   columns.emplace("dt_find_parent_slow", [&](Column& col) {

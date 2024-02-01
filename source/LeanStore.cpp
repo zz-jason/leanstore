@@ -329,9 +329,9 @@ void LeanStore::StartProfilingThread() {
       }
 
       const u64 tx = std::stoull(cr_table.get("0", "tx"));
-      const u64 mTxExecutedLong =
-          std::stoull(cr_table.get("0", "mTxExecutedLong"));
-      const double txAbort = std::stod(cr_table.get("0", "mTxAborted"));
+      const u64 txExecutedLong =
+          std::stoull(cr_table.get("0", "txExecutedLong"));
+      const double txAbort = std::stod(cr_table.get("0", "mTxAbortedShort"));
       const double tx_abort_pct = txAbort * 100.0 / (txAbort + tx);
       const double rfa_pct =
           std::stod(cr_table.get("0", "rfa_committed_tx")) * 100.0 / tx;
@@ -353,7 +353,7 @@ void LeanStore::StartProfilingThread() {
         table.add_row(
             {std::to_string(seconds), std::to_string(tx),
              std::to_string(remote_flushes_pct), std::to_string(tx_abort_pct),
-             std::to_string(mTxExecutedLong), bm_table.get("0", "w_mib"),
+             std::to_string(txExecutedLong), bm_table.get("0", "w_mib"),
              bm_table.get("0", "r_mib"), std::to_string(instr_per_tx),
              std::to_string(cycles_per_tx),
              std::to_string(cpu_table.workers_agg_events["CPU"]),

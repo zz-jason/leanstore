@@ -79,7 +79,7 @@ protected:
 
         for (u16 level = 0; !guardedChild->mIsLeaf; level++) {
           COUNTERS_BLOCK() {
-            WorkerCounters::MyCounters().dt_inner_page[mBTree.mTreeId]++;
+            WorkerCounters::My().dt_inner_page[mBTree.mTreeId]++;
           }
           mLeafPosInParent = guardedChild->lowerBound<false>(key);
           auto* childSwip =
@@ -116,9 +116,9 @@ protected:
   void gotoPage(const Slice& key) {
     COUNTERS_BLOCK() {
       if (mMode == LatchMode::kExclusive) {
-        WorkerCounters::MyCounters().mGotoPageExclusive[mBTree.mTreeId]++;
+        WorkerCounters::My().mGotoPageExclusive[mBTree.mTreeId]++;
       } else {
-        WorkerCounters::MyCounters().mGotoPageShared[mBTree.mTreeId]++;
+        WorkerCounters::My().mGotoPageShared[mBTree.mTreeId]++;
       }
     }
 
@@ -209,7 +209,7 @@ public:
 
   virtual bool Next() override {
     COUNTERS_BLOCK() {
-      WorkerCounters::MyCounters().dt_next_tuple[mBTree.mTreeId]++;
+      WorkerCounters::My().dt_next_tuple[mBTree.mTreeId]++;
     }
     while (true) {
       ENSURE(mGuardedLeaf.mGuard.mState != GuardState::kOptimistic);
@@ -268,7 +268,7 @@ public:
             }
             ENSURE(mSlotId < mGuardedLeaf->mNumSeps);
             COUNTERS_BLOCK() {
-              WorkerCounters::MyCounters().dt_next_tuple_opt[mBTree.mTreeId]++;
+              WorkerCounters::My().dt_next_tuple_opt[mBTree.mTreeId]++;
             }
             JUMPMU_RETURN true;
           }
@@ -289,7 +289,7 @@ public:
           }
         });
         COUNTERS_BLOCK() {
-          WorkerCounters::MyCounters().dt_empty_leaf[mBTree.mTreeId]++;
+          WorkerCounters::My().dt_empty_leaf[mBTree.mTreeId]++;
         }
         continue;
       }
@@ -303,7 +303,7 @@ public:
 
   virtual bool Prev() override {
     COUNTERS_BLOCK() {
-      WorkerCounters::MyCounters().dt_prev_tuple[mBTree.mTreeId]++;
+      WorkerCounters::My().dt_prev_tuple[mBTree.mTreeId]++;
     }
 
     while (true) {
@@ -368,7 +368,7 @@ public:
               JUMPMU_CONTINUE;
             }
             COUNTERS_BLOCK() {
-              WorkerCounters::MyCounters().dt_prev_tuple_opt[mBTree.mTreeId]++;
+              WorkerCounters::My().dt_prev_tuple_opt[mBTree.mTreeId]++;
             }
             JUMPMU_RETURN true;
           }
@@ -382,7 +382,7 @@ public:
 
       if (mGuardedLeaf->mNumSeps == 0) {
         COUNTERS_BLOCK() {
-          WorkerCounters::MyCounters().dt_empty_leaf[mBTree.mTreeId]++;
+          WorkerCounters::My().dt_empty_leaf[mBTree.mTreeId]++;
         }
         continue;
       }
