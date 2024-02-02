@@ -67,7 +67,7 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
 
   mActiveTx.Start(mode, level, isReadOnly);
 
-  if (!FLAGS_wal) {
+  if (!mActiveTx.mIsDurable) {
     return;
   }
 

@@ -17,6 +17,7 @@ jobs:
     environment:
       DEBIAN_FRONTEND: "noninteractive"
       TZ: "Asia/Shanghai"
+      VCPKG_ROOT: "/opt/vcpkg"
 
     # Add steps to the job
     # See: https://circleci.com/docs/configuration-reference/#steps
@@ -25,13 +26,12 @@ jobs:
 
       - run:
           name: "Install dependencies"
-          command: apt update && apt install -y build-essential cmake git libaio-dev cppcheck coreutils curl gnupg python3-pip
-
-      - run:
-          name: "Install gcc-13 && gcovr 6.0"
           command: |
-            apt remove gcc g++ -y
-            apt install -y gcc-13 g++-13 -y
+            apt update
+            apt install -y build-essential git cmake make gcc-13 g++-13
+            apt install -y libaio-dev python3-pip cppcheck ninja-build
+            apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+            apt install -y curl zip unzip tar pkg-config
             ln -sf /usr/bin/cpp-13        /usr/bin/cpp
             ln -sf /usr/bin/g++-13        /usr/bin/g++
             ln -sf /usr/bin/gcc-13        /usr/bin/gcc
@@ -45,28 +45,43 @@ jobs:
             ln -sf /usr/bin/g++-13        /usr/bin/c++
             ln -sf /usr/bin/gcc-13        /usr/bin/cc
             pip3 install gcovr==6.0 --break-system-packages
+            git clone https://github.com/Microsoft/vcpkg.git /opt/vcpkg
+            echo 'export VCPKG_ROOT=/opt/vcpkg' >> ~/.bashrc
+            echo 'export PATH=$VCPKG_ROOT:$PATH' >> ~/.bashrc
+            echo 'export VCPKG_FORCE_SYSTEM_BINARIES=1' >> ~/.bashrc
+            rm -rf /var/lib/apt/lists/*
 
       - run:
           name: "Config project"
-          command: cmake -B build/debug -S . -DCMAKE_BUILD_TYPE=Debug -DBUILD_WITH_COVERAGE=ON -DENABLE_TSAN=ON
+          command: |
+            source ~/.bashrc
+            cmake --preset debug_tsan
 
       - run:
           name: "Cppcheck"
-          command: cppcheck --project=build/debug/compile_commands.json -i tests --error-exitcode=1
+          command: |
+            source ~/.bashrc
+            cppcheck --project=build/debug_tsan/compile_commands.json -i tests --error-exitcode=1
 
       - run:
           name: "Build project"
-          command: cmake --build build/debug -j `nproc`
+          command: |
+            source ~/.bashrc
+            cmake --build build/debug_tsan -j `nproc`
           no_output_timeout: 5m
 
       - run:
           name: "Test project"
-          command: TSAN_OPTIONS="suppressions=$(pwd)/tsan_suppression" ctest --test-dir build/debug --output-on-failure -j 2
+          command: |
+            source ~/.bashrc
+            TSAN_OPTIONS="suppressions=$(pwd)/tsan_suppression" ctest --test-dir build/debug_tsan --output-on-failure -j 2
           no_output_timeout: 5m
 
       - run:
           name: "Generate coverage file"
-          command: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*' --verbose
+          command: |
+            source ~/.bashrc
+            gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*' --verbose
 
       - codecov/upload:
           file: coverage.xml
