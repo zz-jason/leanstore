@@ -11,7 +11,15 @@ file(GLOB_RECURSE LEANSTORE_SRC **.cpp **/**.cpp **.cc **/**.cc **.hpp **/**.hpp
 add_library(leanstore STATIC ${LEANSTORE_SRC})
 
 # dependencies
-target_link_libraries(leanstore aio tabulate::tabulate rapidjson gflags::gflags glog::glog prometheus::prometheus)
+target_link_libraries(leanstore
+  aio
+  tabulate::tabulate
+  rapidjson
+  gflags::gflags
+  glog::glog
+  prometheus-cpp::core
+  prometheus-cpp::pull
+)
 
 # include dirs
 target_include_directories(leanstore PUBLIC ${CMAKE_SOURCE_DIR}/include)

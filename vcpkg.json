@@ -4,8 +4,17 @@
     "gflags",
     {
       "name": "glog",
-      "features": ["customprefix"],
+      "features": [
+        "customprefix"
+      ],
       "version>=": "0.6.0"
+    },
+    {
+      "name": "prometheus-cpp",
+      "features": [
+        "pull"
+      ],
+      "version>=": "1.1.0"
     },
     "gtest",
     "rapidjson",
