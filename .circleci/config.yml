@@ -48,6 +48,7 @@ jobs:
             git clone https://github.com/Microsoft/vcpkg.git /opt/vcpkg
             echo 'export VCPKG_ROOT=/opt/vcpkg' >> ~/.bashrc
             echo 'export PATH=$VCPKG_ROOT:$PATH' >> ~/.bashrc
+            echo 'export VCPKG_FORCE_SYSTEM_BINARIES=1' >> ~/.bashrc
             rm -rf /var/lib/apt/lists/*
 
       - run:
