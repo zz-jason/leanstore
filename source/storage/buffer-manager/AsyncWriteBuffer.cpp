@@ -1,8 +1,8 @@
 #include "AsyncWriteBuffer.hpp"
 
-#include "Tracing.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "shared-headers/Exceptions.hpp"
+#include "telemetry/MetricsManager.hpp"
 
 #include <glog/logging.h>
 
@@ -41,6 +41,9 @@ void AsyncWriteBuffer::AddToIOBatch(BufferFrame& bf, PID pageId) {
   DCHECK(u64(&bf.page) % 512 == 0);
   DCHECK(pending_requests <= batch_max_size);
 
+  COUNTERS_BLOCK() {
+    MetricsManager::sInstance->PageWrites().Increment();
+  }
   COUNTER_INC(WorkerCounters::My().mPageWriteCounter);
 
   auto slot = pending_requests++;

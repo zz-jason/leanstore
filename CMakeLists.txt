@@ -65,6 +65,7 @@ find_package(gflags CONFIG REQUIRED)
 find_package(glog CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
 find_package(benchmark CONFIG REQUIRED)
+find_package(prometheus-cpp CONFIG REQUIRED)
 
 # ------------------------------------------------------------------------------
 # Project build targets
