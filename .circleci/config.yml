@@ -27,6 +27,7 @@ jobs:
       - run:
           name: "Install dependencies"
           command: |
+            apt update
             apt install -y build-essential git cmake make gcc-13 g++-13
             apt install -y libaio-dev python3-pip cppcheck ninja-build
             apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
@@ -47,6 +48,7 @@ jobs:
             git clone https://github.com/Microsoft/vcpkg.git /opt/vcpkg
             echo 'export VCPKG_ROOT=/opt/vcpkg' >> ~/.bashrc
             echo 'export PATH=$VCPKG_ROOT:$PATH' >> ~/.bashrc
+            rm -rf /var/lib/apt/lists/*
 
       - run:
           name: "Config project"
