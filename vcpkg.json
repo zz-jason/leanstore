@@ -4,6 +4,7 @@
     "gflags",
     {
       "name": "glog",
+      "features": ["customprefix"],
       "version>=": "0.6.0"
     },
     "gtest",

@@ -100,34 +100,32 @@ void LeanStore::initGoogleLog() {
   if (google::IsGoogleLoggingInitialized()) {
     return;
   }
-  google::InitGoogleLogging("leanstore");
+  // google::InitGoogleLogging("leanstore");
 
-  // auto customPrefixCallback = [](std::ostream& s,
-  //                                const google::LogMessageInfo& m, void*) {
-  //   // severity
-  //   s << "[" << std::string(m.severity) << "]";
+  auto customPrefixCallback = [](std::ostream& s,
+                                 const google::LogMessageInfo& m, void*) {
+    // severity
+    s << "[" << std::string(m.severity) << "]";
 
-  //   // YYYY-MM-DD hh:mm::ss.xxxxxx
-  //   s << " [" << setw(4) << 1900 + m.time.year() << "-" << setw(2)
-  //     << 1 + m.time.month() << "-" << setw(2) << m.time.day() << ' ' <<
-  //     setw(2)
-  //     << m.time.hour() << ':' << setw(2) << m.time.min() << ':' << setw(2)
-  //     << m.time.sec() << "." << setw(6) << m.time.usec() << ']';
+    // YYYY-MM-DD hh:mm::ss.xxxxxx
+    s << " [" << setw(4) << 1900 + m.time.year() << "-" << setw(2)
+      << 1 + m.time.month() << "-" << setw(2) << m.time.day() << ' ' << setw(2)
+      << m.time.hour() << ':' << setw(2) << m.time.min() << ':' << setw(2)
+      << m.time.sec() << "." << setw(6) << m.time.usec() << ']';
 
-  //   // thread id and name
-  //   if (utils::tlsThreadName.size() > 0) {
-  //     s << " [" << setfill(' ') << setw(5) << m.thread_id << setfill('0') <<
-  //     " "
-  //       << utils::tlsThreadName << ']';
-  //   } else {
-  //     s << " [" << setfill(' ') << setw(5) << m.thread_id << setfill('0')
-  //       << ']';
-  //   }
+    // thread id and name
+    if (utils::tlsThreadName.size() > 0) {
+      s << " [" << setfill(' ') << setw(5) << m.thread_id << setfill('0') << " "
+        << utils::tlsThreadName << ']';
+    } else {
+      s << " [" << setfill(' ') << setw(5) << m.thread_id << setfill('0')
+        << ']';
+    }
 
-  //   // filename and line number
-  //   s << " [" << m.filename << ':' << m.line_number << "]";
-  // };
-  // google::InitGoogleLogging("leanstore", customPrefixCallback, nullptr);
+    // filename and line number
+    s << " [" << m.filename << ':' << m.line_number << "]";
+  };
+  google::InitGoogleLogging("leanstore", customPrefixCallback, nullptr);
 }
 
 void LeanStore::initPageAndWalFd() {
