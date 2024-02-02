@@ -5,28 +5,24 @@
             "name": "default",
             "binaryDir": "${sourceDir}/build/debug",
             "cacheVariables": {
-                "BUILD_WITH_COVERAGE": "ON",
-                "CMAKE_C_COMPILER": "gcc",
-                "CMAKE_CXX_COMPILER": "g++",
-                "CMAKE_GENERATOR": "Ninja",
-                "CMAKE_MAKE_PROGRAM": "ninja",
+                "CMAKE_C_COMPILER": "gcc-13",
+                "CMAKE_CXX_COMPILER": "g++-13",
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+                "BUILD_WITH_COVERAGE": "ON"
             }
         },
         {
             "name": "debug_tsan",
             "binaryDir": "${sourceDir}/build/debug_tsan",
             "cacheVariables": {
-                "BUILD_WITH_COVERAGE": "ON",
-                "CMAKE_C_COMPILER": "gcc",
-                "CMAKE_CXX_COMPILER": "g++",
-                "CMAKE_GENERATOR": "Ninja",
-                "CMAKE_MAKE_PROGRAM": "ninja",
+                "CMAKE_C_COMPILER": "gcc-13",
+                "CMAKE_CXX_COMPILER": "g++-13",
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-                "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_BUILD_TYPE": "Debug",
+                "BUILD_WITH_COVERAGE": "ON",
                 "ENABLE_TSAN": "ON"
             }
         },
@@ -34,13 +30,11 @@
             "name": "release",
             "binaryDir": "${sourceDir}/build/release",
             "cacheVariables": {
-                "CMAKE_C_COMPILER": "gcc",
-                "CMAKE_CXX_COMPILER": "g++",
-                "CMAKE_GENERATOR": "Ninja",
-                "CMAKE_MAKE_PROGRAM": "ninja",
+                "CMAKE_C_COMPILER": "gcc-13",
+                "CMAKE_CXX_COMPILER": "g++-13",
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-                "CMAKE_BUILD_TYPE": "Release",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_BUILD_TYPE": "Release"
             }
         }
     ]

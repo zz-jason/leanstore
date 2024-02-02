@@ -26,12 +26,11 @@ jobs:
 
       - run:
           name: "Install dependencies"
-          command: apt update && apt install -y git cmake make cppcheck
-
-      - run:
-          name: "Install gcc-13 && gcovr 6.0"
           command: |
-            apt install -y gcc-13 g++-13 libaio-dev python3-pip
+            apt install -y build-essential git cmake make gcc-13 g++-13
+            apt install -y libaio-dev python3-pip cppcheck ninja-build
+            apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+            apt install -y curl zip unzip tar pkg-config
             ln -sf /usr/bin/cpp-13        /usr/bin/cpp
             ln -sf /usr/bin/g++-13        /usr/bin/g++
             ln -sf /usr/bin/gcc-13        /usr/bin/gcc
@@ -45,20 +44,9 @@ jobs:
             ln -sf /usr/bin/g++-13        /usr/bin/c++
             ln -sf /usr/bin/gcc-13        /usr/bin/cc
             pip3 install gcovr==6.0 --break-system-packages
-
-      - run:
-          name: "Install vcpkg"
-          command: |
             git clone https://github.com/Microsoft/vcpkg.git /opt/vcpkg
             echo 'export VCPKG_ROOT=/opt/vcpkg' >> ~/.bashrc
             echo 'export PATH=$VCPKG_ROOT:$PATH' >> ~/.bashrc
-            source ~/.bashrc
-            apt install -y curl zip unzip tar pkg-config
-
-      - run:
-          name: "Install ninja-build"
-          command: |
-            apt install -y ninja-build
 
       - run:
           name: "Config project"
