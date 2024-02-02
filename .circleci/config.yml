@@ -18,7 +18,6 @@ jobs:
       DEBIAN_FRONTEND: "noninteractive"
       TZ: "Asia/Shanghai"
       VCPKG_ROOT: "/opt/vcpkg"
-      PATH: "$VCPKG_ROOT/bin:$PATH"
 
     # Add steps to the job
     # See: https://circleci.com/docs/configuration-reference/#steps
@@ -63,25 +62,35 @@ jobs:
 
       - run:
           name: "Config project"
-          command: cmake --preset debug_tsan
+          command: |
+            source ~/.bashrc
+            cmake --preset debug_tsan
 
       - run:
           name: "Cppcheck"
-          command: cppcheck --project=build/debug_tsan/compile_commands.json -i tests --error-exitcode=1
+          command: |
+            source ~/.bashrc
+            cppcheck --project=build/debug_tsan/compile_commands.json -i tests --error-exitcode=1
 
       - run:
           name: "Build project"
-          command: cmake --build build/debug_tsan -j `nproc`
+          command: |
+            source ~/.bashrc
+            cmake --build build/debug_tsan -j `nproc`
           no_output_timeout: 5m
 
       - run:
           name: "Test project"
-          command: TSAN_OPTIONS="suppressions=$(pwd)/tsan_suppression" ctest --test-dir build/debug_tsan --output-on-failure -j 2
+          command: |
+            source ~/.bashrc
+            TSAN_OPTIONS="suppressions=$(pwd)/tsan_suppression" ctest --test-dir build/debug_tsan --output-on-failure -j 2
           no_output_timeout: 5m
 
       - run:
           name: "Generate coverage file"
-          command: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*' --verbose
+          command: |
+            source ~/.bashrc
+            gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*' --verbose
 
       - codecov/upload:
           file: coverage.xml
