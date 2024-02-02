@@ -19,12 +19,9 @@
 namespace leanstore::test {
 
 static void BenchUpdateInsert(benchmark::State& state) {
-  FLAGS_wal = true;
-  FLAGS_bulk_insert = false;
-  FLAGS_worker_threads = 4;
   FLAGS_init = true;
+  FLAGS_worker_threads = 4;
   FLAGS_data_dir = "/tmp/InsertUpdateBench";
-  FLAGS_wal_fsync = false;
 
   std::filesystem::path dirPath = FLAGS_data_dir;
   std::filesystem::remove_all(dirPath);

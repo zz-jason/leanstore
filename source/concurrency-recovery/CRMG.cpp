@@ -34,8 +34,7 @@ CRManager::CRManager(leanstore::LeanStore* store)
 
   // start group commit thread
   if (FLAGS_wal) {
-    const int cpu =
-        FLAGS_enable_pin_worker_threads ? storeOption.mNumTxWorkers : -1;
+    const int cpu = storeOption.mNumTxWorkers;
     mGroupCommitter =
         std::make_unique<GroupCommitter>(mStore->mWalFd, mWorkers, cpu);
     mGroupCommitter->Start();

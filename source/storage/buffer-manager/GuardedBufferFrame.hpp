@@ -198,8 +198,9 @@ public:
   }
 
   template <typename WT, typename... Args>
-  cr::WALPayloadHandler<WT> ReserveWALPayload(u64 walSize, Args&&... args) {
-    DCHECK(FLAGS_wal);
+  inline cr::WALPayloadHandler<WT> ReserveWALPayload(u64 walSize,
+                                                     Args&&... args) {
+    DCHECK(cr::ActiveTx().mIsDurable);
     DCHECK(mGuard.mState == GuardState::kExclusive);
 
     SyncGSNBeforeWrite();

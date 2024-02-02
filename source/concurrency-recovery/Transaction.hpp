@@ -66,7 +66,7 @@ public:
 
   /// Whether the transaction is durable. A durable transaction can be committed
   /// or aborted only after all the WAL entries are flushed to disk.
-  bool mIsDurable = FLAGS_wal;
+  bool mIsDurable = true;
 
   bool mWalExceedBuffer = false;
 
