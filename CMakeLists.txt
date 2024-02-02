@@ -2,8 +2,8 @@
 # Project settings
 # ------------------------------------------------------------------------------
 
-project(leanstoredb)
-cmake_minimum_required(VERSION 3.7)
+cmake_minimum_required(VERSION 3.10)
+project(leanstoredb CXX)
 
 if (NOT UNIX)
     message(SEND_ERROR "unsupported platform")
@@ -11,13 +11,6 @@ endif ()
 
 # Define custom build options
 option(BUILD_WITH_COVERAGE "Build the library with code coverage" OFF)
-
-option(THIRD_PARTY_SRC_DIR "The directory to store downloaded third-party sources" "${CMAKE_CURRENT_BINARY_DIR}/third-party-src")
-if(NOT THIRD_PARTY_SRC_DIR)
-  set(THIRD_PARTY_SRC_DIR ${CMAKE_CURRENT_BINARY_DIR}/third-party-src)
-endif()
-message(STATUS "THIRD_PARTY_SRC_DIR: ${THIRD_PARTY_SRC_DIR}")
-
 
 enable_language(ASM)
 set(CMAKE_CXX_STANDARD 23)
@@ -72,12 +65,6 @@ find_package(gflags CONFIG REQUIRED)
 find_package(glog CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
 find_package(benchmark CONFIG REQUIRED)
-# include(${CMAKE_SOURCE_DIR}/third-party/tabluate.cmake)
-# include(${CMAKE_SOURCE_DIR}/third-party/rapidjson.cmake)
-# include(${CMAKE_SOURCE_DIR}/third-party/gflags.cmake)
-# include(${CMAKE_SOURCE_DIR}/third-party/glog.cmake)
-# include(${CMAKE_SOURCE_DIR}/third-party/gtest.cmake)
-# include(${CMAKE_SOURCE_DIR}/third-party/gbench.cmake)
 
 # ------------------------------------------------------------------------------
 # Project build targets
