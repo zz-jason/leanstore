@@ -4,7 +4,7 @@ FROM ubuntu:23.04
 # install prerequisted libriaries
 ################################################################################
 RUN apt-get update && apt-get install -y \
-        git cmake make gcc-13 g++-13 libaio-dev python3-pip \
+        git cmake make gcc-13 g++-13 libaio-dev python3-pip cppcheck \
  && ln -sf /usr/bin/cpp-13        /usr/bin/cpp \
  && ln -sf /usr/bin/g++-13        /usr/bin/g++ \
  && ln -sf /usr/bin/gcc-13        /usr/bin/gcc \
