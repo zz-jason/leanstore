@@ -4,9 +4,7 @@ FROM ubuntu:23.04
 # install prerequisted libriaries
 ################################################################################
 RUN apt-get update && apt-get install -y \
-        build-essential cmake git libaio-dev python3-pip \
- && apt remove gcc g++ -y \
- && apt install -y gcc-13 g++-13 -y \
+        git cmake make gcc-13 g++-13 libaio-dev python3-pip \
  && ln -sf /usr/bin/cpp-13        /usr/bin/cpp \
  && ln -sf /usr/bin/g++-13        /usr/bin/g++ \
  && ln -sf /usr/bin/gcc-13        /usr/bin/gcc \
@@ -24,10 +22,20 @@ RUN apt-get update && apt-get install -y \
 
 # install vcpkg and its prerequisites
 RUN apt-get update && apt-get install -y \
-        zip pkg-config \
+        curl zip unzip tar pkg-config \
  && git clone https://github.com/Microsoft/vcpkg.git /opt/vcpkg \
  && echo 'export VCPKG_ROOT=/opt/vcpkg' >> ~/.bashrc \
  && echo 'export PATH=$VCPKG_ROOT:$PATH' >> ~/.bashrc \
+ && rm -rf /var/lib/apt/lists/*
+
+# config vcpkg triplets
+RUN mv /opt/vcpkg/triplets/x64-linux.cmake /opt/vcpkg/triplets/x64-linux-static.cmake
+COPY vcpkg-triplets/x64-linux.cmake /opt/vcpkg/triplets/x64-linux.cmake
+COPY vcpkg-triplets/arm64-linux.cmake /opt/vcpkg/triplets/arm64-linux.cmake
+
+# use ninja-build
+RUN apt-get update && apt-get install -y \
+        ninja-build \
  && rm -rf /var/lib/apt/lists/*
 
 

@@ -26,7 +26,7 @@ be built from the Dockerfile defined in
 # build and test
 cmake --preset default
 cmake --build build/debug -j `nproc`
-ctest --test-dir build/debug -j `nproc`
+ctest --test-dir build/debug
 ```
 
 ## Contributing

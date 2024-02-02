@@ -25,13 +25,12 @@ jobs:
 
       - run:
           name: "Install dependencies"
-          command: apt update && apt install -y build-essential cmake git libaio-dev cppcheck coreutils curl gnupg python3-pip zip pkg-config
+          command: apt update && apt install -y git cmake make
 
       - run:
           name: "Install gcc-13 && gcovr 6.0"
           command: |
-            apt remove gcc g++ -y
-            apt install -y gcc-13 g++-13 -y
+            apt install -y gcc-13 g++-13 libaio-dev python3-pip
             ln -sf /usr/bin/cpp-13        /usr/bin/cpp
             ln -sf /usr/bin/g++-13        /usr/bin/g++
             ln -sf /usr/bin/gcc-13        /usr/bin/gcc
@@ -53,23 +52,29 @@ jobs:
             echo 'export VCPKG_ROOT=/opt/vcpkg' >> ~/.bashrc
             echo 'export PATH=$VCPKG_ROOT:$PATH' >> ~/.bashrc
             source ~/.bashrc
+            apt install -y curl zip unzip tar pkg-config
+
+      - run:
+          name: "Install ninja-build"
+          command: |
+            apt install -y ninja-build
 
       - run:
           name: "Config project"
-          command: cmake -B build/debug -S . -DCMAKE_BUILD_TYPE=Debug -DBUILD_WITH_COVERAGE=ON -DENABLE_TSAN=ON
+          command: cmake --preset debug_tsan
 
       - run:
           name: "Cppcheck"
-          command: cppcheck --project=build/debug/compile_commands.json -i tests --error-exitcode=1
+          command: cppcheck --project=build/debug_tsan/compile_commands.json -i tests --error-exitcode=1
 
       - run:
           name: "Build project"
-          command: cmake --build build/debug -j `nproc`
+          command: cmake --build build/debug_tsan -j `nproc`
           no_output_timeout: 5m
 
       - run:
           name: "Test project"
-          command: TSAN_OPTIONS="suppressions=$(pwd)/tsan_suppression" ctest --test-dir build/debug --output-on-failure -j 2
+          command: TSAN_OPTIONS="suppressions=$(pwd)/tsan_suppression" ctest --test-dir build/debug_tsan --output-on-failure -j 2
           no_output_timeout: 5m
 
       - run:

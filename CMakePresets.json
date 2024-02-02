@@ -8,6 +8,8 @@
                 "BUILD_WITH_COVERAGE": "ON",
                 "CMAKE_C_COMPILER": "gcc",
                 "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_GENERATOR": "Ninja",
+                "CMAKE_MAKE_PROGRAM": "ninja",
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
