@@ -4,7 +4,8 @@ FROM ubuntu:23.04
 # install prerequisted libriaries
 ################################################################################
 RUN apt-get update && apt-get install -y \
-        build-essential git cmake make gcc-13 g++-13 libaio-dev python3-pip cppcheck g++-aarch64-linux-gnu gcc-aarch64-linux-gnu \
+        build-essential git cmake make gcc-13 g++-13 ninja-build \
+        libaio-dev python3-pip cppcheck g++-aarch64-linux-gnu gcc-aarch64-linux-gnu \
  && ln -sf /usr/bin/cpp-13        /usr/bin/cpp \
  && ln -sf /usr/bin/g++-13        /usr/bin/g++ \
  && ln -sf /usr/bin/gcc-13        /usr/bin/gcc \
@@ -32,11 +33,6 @@ RUN apt-get update && apt-get install -y \
 RUN mv /opt/vcpkg/triplets/x64-linux.cmake /opt/vcpkg/triplets/x64-linux-static.cmake
 COPY vcpkg-triplets/x64-linux.cmake /opt/vcpkg/triplets/x64-linux.cmake
 COPY vcpkg-triplets/arm64-linux.cmake /opt/vcpkg/triplets/arm64-linux.cmake
-
-# use ninja-build
-RUN apt-get update && apt-get install -y \
-        ninja-build \
- && rm -rf /var/lib/apt/lists/*
 
 
 ################################################################################
