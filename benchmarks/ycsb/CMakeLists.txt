@@ -5,11 +5,14 @@
 add_executable(ycsb ycsb.cpp)
 
 # dependencies
-target_link_libraries(ycsb leanstore rocksdb)
+find_package(RocksDB CONFIG REQUIRED)
+target_link_libraries(ycsb PRIVATE
+  leanstore
+  RocksDB::rocksdb
+  RocksDB::rocksdb-shared
+)
 
 # include dirs
 target_include_directories(ycsb PUBLIC ${CMAKE_SOURCE_DIR}/include)
 target_include_directories(ycsb PUBLIC ${CMAKE_SOURCE_DIR}/benchmarks)
 target_include_directories(ycsb PRIVATE ${CMAKE_CURRENT_LIST_DIR})
-
-include(${CMAKE_SOURCE_DIR}/third-party/rocksdb.cmake)
