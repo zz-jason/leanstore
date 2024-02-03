@@ -17,7 +17,7 @@
     },
     {
       "name": "gperftools",
-      "platform": "linux & x64"
+      "platform": "linux"
     },
     "tabulate"
   ],

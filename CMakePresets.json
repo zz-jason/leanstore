@@ -10,7 +10,7 @@
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "CMAKE_BUILD_TYPE": "Debug",
-                "BUILD_WITH_COVERAGE": "ON"
+                "ENABLE_COVERAGE": "ON"
             }
         },
         {
@@ -22,7 +22,7 @@
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "CMAKE_BUILD_TYPE": "Debug",
-                "BUILD_WITH_COVERAGE": "ON",
+                "ENABLE_COVERAGE": "ON",
                 "ENABLE_TSAN": "ON"
             }
         },
