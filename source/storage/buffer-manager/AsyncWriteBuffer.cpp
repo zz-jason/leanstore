@@ -42,7 +42,6 @@ void AsyncWriteBuffer::AddToIOBatch(BufferFrame& bf, PID pageId) {
   DCHECK(pending_requests <= batch_max_size);
 
   COUNTERS_BLOCK() {
-    // MetricsManager::sInstance->PageWrites().Increment();
   }
   COUNTER_INC(WorkerCounters::My().mPageWriteCounter);
 

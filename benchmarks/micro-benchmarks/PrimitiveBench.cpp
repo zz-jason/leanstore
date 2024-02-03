@@ -5,6 +5,7 @@
 #include "utils/RandomGenerator.hpp"
 
 #include <benchmark/benchmark.h>
+#include <prometheus/counter.h>
 
 #include <array>
 #include <atomic>
@@ -115,6 +116,24 @@ static void BenchSwmrAtomicValue(benchmark::State& state) {
   }
 }
 
+static void BenchCounterAtomic(benchmark::State& state) {
+  std::atomic<u64> counter = 0;
+  for (auto _ : state) {
+    for (auto i = 0; i < 1000; i++) {
+      counter.fetch_add(1, std::memory_order_relaxed);
+    }
+  }
+}
+
+static void BenchCounterPrometheus(benchmark::State& state) {
+  prometheus::Counter counter = prometheus::Counter();
+  for (auto _ : state) {
+    for (auto i = 0; i < 1000; i++) {
+      counter.Increment();
+    }
+  }
+}
+
 BENCHMARK(BenchSwmrOptimisticGuard)->Threads(8);
 BENCHMARK(BenchSwmrAtomicValue)->Threads(8);
 BENCHMARK(BenchU8ToPage);
@@ -122,5 +141,7 @@ BENCHMARK(BenchPageDirectly);
 BENCHMARK(BenchStdArray);
 BENCHMARK(BenchVecArray);
 BENCHMARK(BenchRawArray);
+BENCHMARK(BenchCounterAtomic);
+BENCHMARK(BenchCounterPrometheus);
 
 BENCHMARK_MAIN();

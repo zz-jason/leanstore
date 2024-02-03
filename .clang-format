@@ -27,9 +27,7 @@ QualifierOrder: ['inline', 'static', 'const', 'volatile', 'type']
 IncludeCategories:
   - Regex:           '^".*.hpp'
     Priority:        2
-  - Regex:           '^("|<)(benchmark)/'
-    Priority:        3
-  - Regex:           '^("|<)(gtest|gmock|gflags|glog|rapidjson|tabulate|opentelemetry|prometheus)/'
+  - Regex:           '^("|<)(gtest|gmock|gflags|glog|benchmark|rapidjson|tabulate|opentelemetry|prometheus)/'
     Priority:        4
   - Regex:           '<[[:alnum:]_/]+>'
     Priority:        5

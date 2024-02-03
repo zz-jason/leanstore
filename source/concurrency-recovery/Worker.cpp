@@ -9,12 +9,15 @@
 #include "profiling/counters/WorkerCounters.hpp"
 #include "shared-headers/Exceptions.hpp"
 #include "storage/buffer-manager/TreeRegistry.hpp"
+#include "telemetry/MetricsManager.hpp"
+#include "telemetry/WorkerMetrics.hpp"
 #include "utils/Defer.hpp"
 
 #include <glog/logging.h>
 
 #include <algorithm>
 #include <cstdlib>
+#include <memory>
 #include <mutex>
 
 namespace leanstore::cr {
@@ -28,6 +31,7 @@ Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers,
       mActiveTxId(0),
       mWorkerId(workerId),
       mAllWorkers(allWorkers) {
+
   CRCounters::My().mWorkerId = workerId;
 
   // init wal buffer
@@ -37,6 +41,11 @@ Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers,
 
   cc.mLcbCacheVal = make_unique<u64[]>(mAllWorkers.size());
   cc.mLcbCacheKey = make_unique<u64[]>(mAllWorkers.size());
+
+  COUNTERS_BLOCK() {
+    mWorkerMetrics = std::make_unique<WorkerMetrics>(
+        MetricsManager::Get(), "", "worker" + std::to_string(workerId));
+  }
 }
 
 Worker::~Worker() {
@@ -122,9 +131,9 @@ void Worker::CommitTx() {
                << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
     COUNTERS_BLOCK() {
       if (mActiveTx.mTxMode == TxMode::kLongRunning) {
-        WorkerCounters::My().mTxCommittedLong++;
+        mWorkerMetrics->mTxCommittedLong->Increment();
       } else {
-        WorkerCounters::My().mTxCommittedShort++;
+        mWorkerMetrics->mTxCommittedShort->Increment();
       }
     };
   });

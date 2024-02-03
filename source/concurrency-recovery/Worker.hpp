@@ -6,6 +6,7 @@
 #include "shared-headers/Exceptions.hpp"
 #include "shared-headers/Units.hpp"
 #include "sync-primitives/OptimisticGuarded.hpp"
+#include "telemetry/WorkerMetrics.hpp"
 #include "utils/Defer.hpp"
 
 #include <glog/logging.h>
@@ -194,6 +195,9 @@ public:
 
   /// All the workers.
   std::vector<Worker*>& mAllWorkers;
+
+  /// All the worker metrics
+  std::unique_ptr<WorkerMetrics> mWorkerMetrics;
 
 public:
   Worker(u64 workerId, std::vector<Worker*>& allWorkers,
