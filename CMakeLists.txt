@@ -12,7 +12,7 @@ endif ()
 enable_language(ASM)
 
 set(CMAKE_CXX_STANDARD 23)
-# add_compile_definitions(__cpp_concepts=202002L)
+add_compile_definitions(__cpp_concepts=202002L)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -55,19 +55,6 @@ endif (APPLE)
 if (CYGWIN)
   SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++")
 endif (CYGWIN)
-
-find_library(profiler_LIB profiler)
-if (profiler_LIB)
-  message(STATUS "Found ${profiler_LIB}")
-  # get the directory of the library
-  get_filename_component(profiler_LIB_DIR ${profiler_LIB} DIRECTORY)
-  # add the directory to the library search path
-  link_directories(${profiler_LIB_DIR})
-  # add the library to the project
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lprofiler")
-  message(STATUS "CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
-endif (profiler_LIB)
-
 
 
 # ------------------------------------------------------------------------------
