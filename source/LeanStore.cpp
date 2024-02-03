@@ -100,6 +100,7 @@ void LeanStore::initGoogleLog() {
   if (google::IsGoogleLoggingInitialized()) {
     return;
   }
+  // google::InitGoogleLogging("leanstore");
 
   auto customPrefixCallback = [](std::ostream& s,
                                  const google::LogMessageInfo& m, void*) {
@@ -263,9 +264,8 @@ void LeanStore::WaitAll() {
 
 void LeanStore::StartProfilingThread() {
   std::thread profilingThread([&]() {
-    utils::PinThisThread(
-        ((FLAGS_enable_pin_worker_threads) ? mStoreOption.mNumTxWorkers : 0) +
-        FLAGS_wal + FLAGS_pp_threads);
+    utils::PinThisThread(mStoreOption.mNumTxWorkers + FLAGS_wal +
+                         FLAGS_pp_threads);
     if (FLAGS_root) {
       POSIX_CHECK(setpriority(PRIO_PROCESS, 0, -20) == 0);
     }

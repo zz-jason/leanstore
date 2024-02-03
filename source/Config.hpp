@@ -15,7 +15,6 @@ DECLARE_bool(enable_long_running_transaction);
 
 DECLARE_uint32(worker_threads);
 DECLARE_bool(cpu_counters);
-DECLARE_bool(enable_pin_worker_threads);
 DECLARE_bool(smt);
 DECLARE_string(csv_path);
 DECLARE_bool(csv_truncate);

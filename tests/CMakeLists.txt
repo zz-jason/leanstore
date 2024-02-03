@@ -11,8 +11,8 @@ function(leanstore_add_test TARGET_NAME)
   )
   target_link_libraries(
     ${TARGET_NAME}
-    gtest_main
-    gtest
+    GTest::gtest
+    GTest::gtest_main
     leanstore
   )
   gtest_discover_tests(${TARGET_NAME})
@@ -27,7 +27,7 @@ function(leanstore_add_test_without_gtest_main TARGET_NAME)
   )
   target_link_libraries(
     ${TARGET_NAME}
-    gtest
+    GTest::gtest
     leanstore
   )
   gtest_discover_tests(${TARGET_NAME})

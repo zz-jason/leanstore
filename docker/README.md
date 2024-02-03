@@ -13,7 +13,7 @@ docker build -t leanstore-dev .
 Run a container based on the image:
 
 ```sh
-docker run -itd --privileged -v /path/to/leanstore/on/host:/path/to/leanstore/on/container leanstore-dev bash
+docker run -it --privileged -v /path/to/leanstore/on/host:/path/to/leanstore/on/container leanstore-dev bash
 ```
 
 Build and test LeanStore in the running container:
@@ -22,5 +22,5 @@ Build and test LeanStore in the running container:
 cd /path/to/leanstore/on/container
 cmake -B build -S .
 cmake --build build -j `nproc`
-ctest --test-dir build 
+ctest --test-dir build
 ```
