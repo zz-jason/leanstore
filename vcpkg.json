@@ -4,7 +4,9 @@
     "gflags",
     {
       "name": "glog",
-      "features": ["customprefix"],
+      "features": [
+        "customprefix"
+      ],
       "version>=": "0.6.0"
     },
     "gtest",
@@ -12,6 +14,10 @@
     {
       "name": "rocksdb",
       "version>=": "8.10.0"
+    },
+    {
+      "name": "gperftools",
+      "platform": "linux & x64"
     },
     "tabulate"
   ],

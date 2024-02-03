@@ -13,6 +13,12 @@ add_library(leanstore STATIC ${LEANSTORE_SRC})
 # dependencies
 target_link_libraries(leanstore aio tabulate::tabulate rapidjson gflags::gflags glog::glog)
 
+find_package(gperftools QUIET)
+if (gperftools_FOUND)
+  message(STATUS "Found gperftools")
+  target_link_libraries(leanstore profile)
+endif (gperftools_FOUND)
+
 # include dirs
 target_include_directories(leanstore PUBLIC ${CMAKE_SOURCE_DIR}/include)
 target_include_directories(leanstore PRIVATE ${CMAKE_CURRENT_LIST_DIR})

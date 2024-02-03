@@ -66,6 +66,7 @@ find_package(glog CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
 find_package(benchmark CONFIG REQUIRED)
 
+
 # ------------------------------------------------------------------------------
 # Project build targets
 # ------------------------------------------------------------------------------

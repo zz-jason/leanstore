@@ -48,6 +48,11 @@ RUN mv /opt/vcpkg/triplets/x64-linux.cmake /opt/vcpkg/triplets/x64-linux-static.
 COPY vcpkg-triplets/x64-linux.cmake /opt/vcpkg/triplets/x64-linux.cmake
 COPY vcpkg-triplets/arm64-linux.cmake /opt/vcpkg/triplets/arm64-linux.cmake
 
+# for gperftools
+RUN apt-get update && apt-get install -y \
+        autoconf \
+ && rm -rf /var/lib/apt/lists/*
+
 
 ################################################################################
 # other settings
