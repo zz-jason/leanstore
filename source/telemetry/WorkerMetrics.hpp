@@ -9,12 +9,12 @@
 #define INIT_WORKER_COUNTER(name, manager, store, worker, ...)                 \
   m##name = manager->GetWorkerCounter(manager->m##name##Family, store, worker);
 
-#define DECR_WORKER_HISTOGRAM(name, ...)                                       \
+#define DECR_WORKER_HISTOGRAM(name, boundaries, ...)                           \
   prometheus::Histogram* m##name = nullptr;
 
-#define INIT_WORKER_HISTOGRAM(name, manager, store, worker, ...)               \
-  m##name =                                                                    \
-      manager->GetWorkerHistogram(manager->m##name##Family, store, worker);
+#define INIT_WORKER_HISTOGRAM(name, boundaries, manager, store, worker, ...)   \
+  m##name = manager->GetWorkerHistogram(manager->m##name##Family, store,       \
+                                        worker, boundaries);
 
 namespace leanstore {
 
