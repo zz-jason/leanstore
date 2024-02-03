@@ -1,15 +1,18 @@
 #include "shared-headers/Units.hpp"
 #include "storage/buffer-manager/BufferFrame.hpp"
 #include "sync-primitives/OptimisticGuarded.hpp"
+#include "telemetry/Histogram.hpp"
 #include "utils/Misc.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <benchmark/benchmark.h>
 #include <prometheus/counter.h>
+#include <prometheus/histogram.h>
 
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <iostream>
 #include <limits>
 #include <memory>
 #include <vector>
@@ -116,21 +119,45 @@ static void BenchSwmrAtomicValue(benchmark::State& state) {
   }
 }
 
+static void BenchCounterUint64(benchmark::State& state) {
+  uint64_t counter = 0;
+  for (auto _ : state) {
+    counter++;
+  }
+  std::cout << counter << std::endl;
+}
+
 static void BenchCounterAtomic(benchmark::State& state) {
   std::atomic<u64> counter = 0;
   for (auto _ : state) {
-    for (auto i = 0; i < 1000; i++) {
-      counter.fetch_add(1, std::memory_order_relaxed);
-    }
+    counter.fetch_add(1, std::memory_order_relaxed);
   }
+  std::cout << counter << std::endl;
 }
 
 static void BenchCounterPrometheus(benchmark::State& state) {
   prometheus::Counter counter = prometheus::Counter();
   for (auto _ : state) {
-    for (auto i = 0; i < 1000; i++) {
-      counter.Increment();
-    }
+    counter.Increment();
+  }
+  std::cout << counter.Value() << std::endl;
+}
+
+static void BenchHistogramSimple(benchmark::State& state) {
+  std::vector<double> bounds = {0, 1, 2, 3, 4, 5};
+  Histogram histogram = Histogram(bounds);
+  for (auto _ : state) {
+    double value = RandomGenerator::Rand(0, 5);
+    histogram.Observe(value);
+  }
+}
+
+static void BenchHistogramPrometheus(benchmark::State& state) {
+  std::vector<double> bounds = {0, 1, 2, 3, 4, 5};
+  prometheus::Histogram histogram = prometheus::Histogram(bounds);
+  for (auto _ : state) {
+    double value = RandomGenerator::Rand(0, 5);
+    histogram.Observe(value);
   }
 }
 
@@ -141,7 +168,10 @@ BENCHMARK(BenchPageDirectly);
 BENCHMARK(BenchStdArray);
 BENCHMARK(BenchVecArray);
 BENCHMARK(BenchRawArray);
+BENCHMARK(BenchCounterUint64);
 BENCHMARK(BenchCounterAtomic);
 BENCHMARK(BenchCounterPrometheus);
+BENCHMARK(BenchHistogramSimple);
+BENCHMARK(BenchHistogramPrometheus);
 
 BENCHMARK_MAIN();
