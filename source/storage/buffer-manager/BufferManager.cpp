@@ -427,7 +427,7 @@ void BufferManager::ReadPageSync(PID pageId, void* pageBuffer) {
 BufferFrame& BufferManager::ReadPageSync(PID pageId) {
   HybridLatch dummyLatch;
   HybridGuard dummyGuard(&dummyLatch);
-  dummyGuard.toOptimisticSpin();
+  dummyGuard.ToOptimisticSpin();
 
   Swip<BufferFrame> swip;
   swip.evict(pageId);

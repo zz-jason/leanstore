@@ -191,17 +191,12 @@ public:
   }
 
   inline bool ShouldRemainInMem() {
-    return header.mKeepInMemory || header.mIsBeingWrittenBack
-           || header.mLatch.IsLockedExclusively();
+    return header.mKeepInMemory || header.mIsBeingWrittenBack ||
+           header.mLatch.IsLockedExclusively();
   }
 
   inline void Init(PID pageId) {
     DCHECK(header.state == STATE::FREE);
-    DCHECK(!header.mLatch.IsLockedExclusively());
-
-    // Exclusive lock before changing to HOT
-    header.mLatch.LockExclusively();
-    DCHECK(header.mLatch.IsLockedExclusively());
     header.mPageId = pageId;
     header.state = STATE::HOT;
     header.mFlushedPSN = 0;

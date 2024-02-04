@@ -22,7 +22,7 @@ public:
   HybridGuard mGuard;
 
   BMOptimisticGuard(HybridLatch& lock) : mGuard(&lock) {
-    mGuard.toOptimisticOrJump();
+    mGuard.ToOptimisticOrJump();
   }
 
   BMOptimisticGuard() = delete;

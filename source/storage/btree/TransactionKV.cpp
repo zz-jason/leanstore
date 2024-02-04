@@ -657,7 +657,7 @@ SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
   }
 
   HybridGuard bfGuard(&bf.header.mLatch);
-  bfGuard.toOptimisticOrJump();
+  bfGuard.ToOptimisticOrJump();
   if (bf.page.mBTreeId != mTreeId) {
     jumpmu::Jump();
   }

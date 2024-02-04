@@ -100,7 +100,7 @@ protected:
         if (mode == LatchMode::kExclusive) {
           guardedChild.ToExclusiveMayJump();
         } else {
-          guardedChild.ToSharedMayJump();
+          guardedChild.ToOptimisticOrShared();
         }
         mIsPrefixCopied = false;
         if (mFuncEnterLeaf != nullptr) {
