@@ -8,19 +8,23 @@ namespace utils {
 #ifndef SCOPED_DEFER
 
 template <class F> struct ScopedDeferrer {
-  F f;
+  F mFunc;
 
-  ScopedDeferrer(F f) : f(f) {
+  ScopedDeferrer(F f) : mFunc(f) {
   }
 
   ~ScopedDeferrer() {
-    f();
+    mFunc();
   }
+
+  ScopedDeferrer(const ScopedDeferrer&) = delete;
+  ScopedDeferrer(ScopedDeferrer&&) = default;
+  ScopedDeferrer& operator=(const ScopedDeferrer&) = delete;
+  ScopedDeferrer& operator=(ScopedDeferrer&&) = delete;
 };
 
-template <typename F>
-std::unique_ptr<ScopedDeferrer<F>> MakeScopedDeferrer(F f) {
-  return std::make_unique<ScopedDeferrer<F>>(f);
+template <typename F> ScopedDeferrer<F> MakeScopedDeferrer(F f) {
+  return ScopedDeferrer<F>(f);
 }
 
 #define SCOPED_DEFER_INTERNAL_INTERNAL(LINE) deferAtLine##LINE

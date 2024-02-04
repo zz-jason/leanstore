@@ -137,7 +137,7 @@ public:
                            const LatchMode mode = LatchMode::kShared)
       : mBTree(tree),
         mMode(mode),
-        mBuffer(tree.mStore->mStoreOption.mPageSize, 0) {
+        mBuffer() {
   }
 
   void SetEnterLeafCallback(LeafCallback cb) {
@@ -323,7 +323,9 @@ public:
       // Seek to the previous leaf
       mFenceSize = mGuardedLeaf->mLowerFence.length;
       mIsUsingUpperFence = false;
-      DCHECK(mBuffer.size() >= mFenceSize);
+      if (mBuffer.size() < mFenceSize) {
+        mBuffer.resize(mFenceSize, 0);
+      }
       std::memcpy(&mBuffer[0], mGuardedLeaf->getLowerFenceKey(), mFenceSize);
 
       // callback before exiting current leaf
@@ -401,6 +403,12 @@ public:
   }
 
   virtual void AssembleKey() {
+    if (auto fullKeySize = mGuardedLeaf->getFullKeyLen(mSlotId);
+        mBuffer.size() < fullKeySize) {
+      mBuffer.resize(fullKeySize, 0);
+      mIsPrefixCopied = false;
+    }
+
     if (!mIsPrefixCopied) {
       mGuardedLeaf->copyPrefix(&mBuffer[0]);
       mIsPrefixCopied = true;
@@ -447,13 +455,16 @@ private:
   void assembleUpperFence() {
     mFenceSize = mGuardedLeaf->mUpperFence.length + 1;
     mIsUsingUpperFence = true;
-    DCHECK(mBuffer.size() >= mFenceSize);
+    if (mBuffer.size() < mFenceSize) {
+      mBuffer.resize(mFenceSize, 0);
+    }
     std::memcpy(mBuffer.data(), mGuardedLeaf->getUpperFenceKey(),
                 mGuardedLeaf->mUpperFence.length);
     mBuffer[mFenceSize - 1] = 0;
   }
 
   inline Slice assembedFence() {
+    DCHECK(mBuffer.size() >= mFenceSize);
     return Slice(&mBuffer[0], mFenceSize);
   }
 };

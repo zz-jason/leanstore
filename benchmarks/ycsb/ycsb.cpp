@@ -13,6 +13,8 @@
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
+#include <gperftools/heap-profiler.h>
+#include <gperftools/profiler.h>
 #include <rocksdb/db.h>
 
 #include <algorithm>
@@ -234,7 +236,8 @@ public:
         u8 key[FLAGS_ycsb_key_size];
         std::string valRead;
         auto copyValue = [&](Slice val) {
-          valRead = std::string((char*)val.data(), val.size());
+          valRead.resize(val.size(), 0);
+          std::memcpy(valRead.data(), val.data(), val.size());
         };
 
         auto updateDescBufSize = UpdateDesc::Size(1);
@@ -470,6 +473,10 @@ public:
 using namespace leanstore;
 
 int main(int argc, char** argv) {
+  std::string profileFile = FLAGS_data_dir + "/gperftools/ycsb.prof";
+  ProfilerStart(profileFile.c_str());
+  SCOPED_DEFER(ProfilerStop());
+
   gflags::SetUsageMessage("Ycsb Benchmark");
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 

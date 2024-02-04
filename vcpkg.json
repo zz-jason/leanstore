@@ -15,6 +15,7 @@
       "name": "rocksdb",
       "version>=": "8.10.0"
     },
+    "gperftools",
     "tabulate"
   ],
   "builtin-baseline": "4a2c30139309a6e4690ce929df33e85a1706a0e2"

@@ -15,6 +15,9 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <cstring>
+#include <string_view>
+
 namespace leanstore::storage::btree {
 
 TransactionKV* TransactionKV::Create(leanstore::LeanStore* store,
@@ -1030,6 +1033,11 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
       }
       oRet = iter.Next() ? OpCode::kOK : OpCode::kNotFound;
       if (isLastOne) {
+        if (iter.mBuffer.size() < iter.mFenceSize + 1) {
+          std::basic_string<u8> newBuffer(iter.mBuffer.size() + 1, 0);
+          memcpy(newBuffer.data(), iter.mBuffer.data(), iter.mFenceSize);
+          iter.mBuffer = std::move(newBuffer);
+        }
         graveyardLowerBound = Slice(&iter.mBuffer[0], iter.mFenceSize + 1);
         graveyardUpperBound = Slice(iter.mGuardedLeaf->getUpperFenceKey(),
                                     iter.mGuardedLeaf->mUpperFence.length);

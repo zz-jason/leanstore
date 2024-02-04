@@ -32,7 +32,7 @@ jobs:
             apt install -y libaio-dev python3-pip cppcheck ninja-build
             apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
             apt install -y curl zip unzip tar pkg-config
-            apt install -y autoconf
+            apt install -y autoconf libtool
             ln -sf /usr/bin/cpp-13        /usr/bin/cpp
             ln -sf /usr/bin/g++-13        /usr/bin/g++
             ln -sf /usr/bin/gcc-13        /usr/bin/gcc

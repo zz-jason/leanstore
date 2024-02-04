@@ -48,10 +48,12 @@ RUN mv /opt/vcpkg/triplets/x64-linux.cmake /opt/vcpkg/triplets/x64-linux-static.
 COPY vcpkg-triplets/x64-linux.cmake /opt/vcpkg/triplets/x64-linux.cmake
 COPY vcpkg-triplets/arm64-linux.cmake /opt/vcpkg/triplets/arm64-linux.cmake
 
-# for gperftools
+# for gperftools, pprof, pidstat
 RUN apt-get update && apt-get install -y \
-        autoconf \
- && rm -rf /var/lib/apt/lists/*
+        autoconf libtool golang graphviz sysstat \
+ && rm -rf /var/lib/apt/lists/* \
+ && go install github.com/google/pprof@latest \
+ && echo 'export PATH=$HOME/go/bin:$PATH' >> ~/.bashrc
 
 
 ################################################################################

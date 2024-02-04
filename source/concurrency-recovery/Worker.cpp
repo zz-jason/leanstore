@@ -19,6 +19,7 @@
 namespace leanstore::cr {
 
 thread_local std::unique_ptr<Worker> Worker::sTlsWorker = nullptr;
+thread_local Worker* Worker::sTlsWorkerRaw = nullptr;
 
 Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers,
                leanstore::LeanStore* store)
@@ -176,7 +177,9 @@ void Worker::CommitTx() {
   }
 
   // Cleanup versions in history tree
-  cc.GarbageCollection();
+  if (!mActiveTx.mIsReadOnly) {
+    cc.GarbageCollection();
+  }
 
   // Wait transaction to be committed
   while (mLogging.TxUnCommitted(mActiveTx.mCommitTs)) {
