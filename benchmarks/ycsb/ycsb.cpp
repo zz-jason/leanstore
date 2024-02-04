@@ -473,9 +473,13 @@ public:
 using namespace leanstore;
 
 int main(int argc, char** argv) {
-  std::string profileFile = FLAGS_data_dir + "/gperftools/ycsb.prof";
-  ProfilerStart(profileFile.c_str());
+  std::string cpuProfile = FLAGS_data_dir + "/profile/cpu.prof";
+  ProfilerStart(cpuProfile.c_str());
   SCOPED_DEFER(ProfilerStop());
+
+  std::string heapProfile = FLAGS_data_dir + "/profile/heap.prof";
+  HeapProfilerStart(heapProfile.c_str());
+  SCOPED_DEFER(HeapProfilerStop());
 
   gflags::SetUsageMessage("Ycsb Benchmark");
   gflags::ParseCommandLineFlags(&argc, &argv, true);
