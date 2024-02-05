@@ -13,7 +13,7 @@ HEAPPROFILE=ycsb.heap.profile HEAPPROFILESIGNAL=13 \
   --ycsb_target=leanstore
 ```
 
-# Profile
+## Profile
 
 Get the cpu profile:
 
@@ -36,3 +36,9 @@ pprof -http 0.0.0.0:10080 </path/to/ycsb> </path/to/profile>
 ```
 
 Then open the browser at **127.0.0.1:10080** to view the cpu/heap profile.
+
+## Run With RocksDB
+
+Compiling rocksdb takes is too slow, benchmark on rocksdb is not supported by
+default. To enable it, you need to add a `rocksdb` dependency on `vcpkg.json`
+and use `YcsbRocksDb` in `Ycsb.cpp`, and recompiling the project.

@@ -11,10 +11,6 @@
     },
     "gtest",
     "rapidjson",
-    {
-      "name": "rocksdb",
-      "version>=": "8.10.0"
-    },
     "gperftools",
     "tabulate"
   ],

@@ -2,14 +2,14 @@
 # Set build target and dependencies for the lib
 # ---------------------------------------------------------------------------
 
-add_executable(ycsb ycsb.cpp)
+add_executable(ycsb Ycsb.cpp YcsbFlags.cpp)
 
 # dependencies
-find_package(RocksDB CONFIG REQUIRED)
+# find_package(RocksDB CONFIG REQUIRED)
 target_link_libraries(ycsb PRIVATE
   leanstore
-  RocksDB::rocksdb
-  RocksDB::rocksdb-shared
+  # RocksDB::rocksdb
+  # RocksDB::rocksdb-shared
 )
 
 find_package(PkgConfig REQUIRED)
