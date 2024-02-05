@@ -62,7 +62,7 @@ public:
 
   // Move assignment
   HybridGuard& operator=(HybridGuard&& other) {
-    unlock();
+    Unlock();
 
     mLatch = other.mLatch;
     mState = other.mState;
@@ -85,7 +85,7 @@ public:
     }
   }
 
-  inline void unlock() {
+  inline void Unlock() {
     if (mState == GuardState::kExclusive) {
       unlockExclusive();
       DCHECK(!HasExclusiveMark(mLatch->mVersion));

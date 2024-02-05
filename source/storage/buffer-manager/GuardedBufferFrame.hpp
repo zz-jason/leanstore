@@ -136,14 +136,14 @@ public:
   /// Downgrade from an exclusive guard
   GuardedBufferFrame(ExclusiveGuardedBufferFrame<T>&&) = delete;
   GuardedBufferFrame& operator=(ExclusiveGuardedBufferFrame<T>&&) {
-    mGuard.unlock();
+    mGuard.Unlock();
     return *this;
   }
 
   /// Downgrade from a shared guard
   GuardedBufferFrame(SharedGuardedBufferFrame<T>&&) = delete;
   GuardedBufferFrame& operator=(SharedGuardedBufferFrame<T>&&) {
-    mGuard.unlock();
+    mGuard.Unlock();
     return *this;
   }
 
@@ -155,7 +155,7 @@ public:
         Reclaim();
       }
     }
-    mGuard.unlock();
+    mGuard.Unlock();
     JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP()
   }
 
@@ -240,7 +240,7 @@ public:
   }
 
   inline void unlock() {
-    mGuard.unlock();
+    mGuard.Unlock();
   }
 
   inline void JumpIfModifiedByOthers() {
