@@ -19,6 +19,8 @@ namespace leanstore::storage::btree {
 
 enum class BTreeType : u8 { kGeneric = 0, kBasicKV = 1, kTransactionKV = 2 };
 
+class BTreePessimisticSharedIterator;
+class BTreePessimisticExclusiveIterator;
 using BTreeNodeCallback = std::function<s64(BTreeNode&)>;
 
 class BTreeConfig {
@@ -44,7 +46,7 @@ public:
 
   /// Owns the meta node of the tree. The right-most child of meta node is the
   /// root of the tree.
-  Swip<BufferFrame> mMetaNodeSwip;
+  Swip mMetaNodeSwip;
 
   std::atomic<u64> mHeight = 1;
 
@@ -55,6 +57,10 @@ public:
 
 public:
   void Init(leanstore::LeanStore* store, TREEID treeId, BTreeConfig config);
+
+  BTreePessimisticSharedIterator GetIterator();
+
+  BTreePessimisticExclusiveIterator GetExclusiveIterator();
 
   /// Try to merge the current node with its left or right sibling, reclaim the
   /// merged left or right sibling if successful.
@@ -79,9 +85,8 @@ public:
   void PrintInfo(u64 totalSize);
 
   // for buffer manager
-  virtual void IterateChildSwips(
-      BufferFrame& bf,
-      std::function<bool(Swip<BufferFrame>&)> callback) override;
+  virtual void IterateChildSwips(BufferFrame& bf,
+                                 std::function<bool(Swip&)> callback) override;
 
   virtual ParentSwipHandler FindParent(BufferFrame& childBf) override {
     return BTreeGeneric::findParentMayJump(*this, childBf);
@@ -137,7 +142,7 @@ private:
 
 public:
   // Helpers
-  template <LatchMode mode = LatchMode::kShared>
+  template <LatchMode mode = LatchMode::kPessimisticShared>
   inline void FindLeafCanJump(Slice key,
                               GuardedBufferFrame<BTreeNode>& guardedTarget);
 
@@ -278,18 +283,18 @@ inline void BTreeGeneric::toJsonRecursive(
 }
 
 inline void BTreeGeneric::IterateChildSwips(
-    BufferFrame& bf, std::function<bool(Swip<BufferFrame>&)> callback) {
+    BufferFrame& bf, std::function<bool(Swip&)> callback) {
   // Pre: bf is read locked
   auto& childNode = *reinterpret_cast<BTreeNode*>(bf.page.mPayload);
   if (childNode.mIsLeaf) {
     return;
   }
   for (u16 i = 0; i < childNode.mNumSeps; i++) {
-    if (!callback(childNode.getChild(i).CastTo<BufferFrame>())) {
+    if (!callback(childNode.getChild(i))) {
       return;
     }
   }
-  callback(childNode.mRightMostChildSwip.CastTo<BufferFrame>());
+  callback(childNode.mRightMostChildSwip);
 }
 
 inline SpaceCheckResult BTreeGeneric::CheckSpaceUtilization(BufferFrame& bf) {
@@ -302,8 +307,8 @@ inline SpaceCheckResult BTreeGeneric::CheckSpaceUtilization(BufferFrame& bf) {
       mStore->mBufferManager.get(), std::move(parentHandler.mParentGuard),
       parentHandler.mParentBf);
   GuardedBufferFrame<BTreeNode> guardedChild(
-      mStore->mBufferManager.get(), guardedParent,
-      parentHandler.mChildSwip.CastTo<BTreeNode>(), LatchMode::kOptimisticOrJump);
+      mStore->mBufferManager.get(), guardedParent, parentHandler.mChildSwip,
+      LatchMode::kOptimisticOrJump);
   auto mergeResult = XMerge(guardedParent, guardedChild, parentHandler);
   guardedParent.unlock();
   guardedChild.unlock();
@@ -322,14 +327,14 @@ inline void BTreeGeneric::Checkpoint(BufferFrame& bf, void* dest) {
   if (!destNode->mIsLeaf) {
     // Replace all child swip to their page ID
     for (u64 i = 0; i < destNode->mNumSeps; i++) {
-      if (!destNode->getChild(i).isEVICTED()) {
-        auto& childBf = destNode->getChild(i).asBufferFrameMasked();
+      if (!destNode->getChild(i).IsEvicted()) {
+        auto& childBf = destNode->getChild(i).AsBufferFrameMasked();
         destNode->getChild(i).evict(childBf.header.mPageId);
       }
     }
     // Replace right most child swip to page id
-    if (!destNode->mRightMostChildSwip.isEVICTED()) {
-      auto& childBf = destNode->mRightMostChildSwip.asBufferFrameMasked();
+    if (!destNode->mRightMostChildSwip.IsEvicted()) {
+      auto& childBf = destNode->mRightMostChildSwip.AsBufferFrameMasked();
       destNode->mRightMostChildSwip.evict(childBf.header.mPageId);
     }
   }
@@ -354,11 +359,11 @@ inline void BTreeGeneric::FindLeafCanJump(
     DCHECK(!childSwip.IsEmpty());
     guardedParent = std::move(guardedTarget);
     if (level == mHeight - 1) {
-      guardedTarget =
-          GuardedBufferFrame(bufferManager, guardedParent, childSwip, mode);
+      guardedTarget = GuardedBufferFrame<BTreeNode>(
+          bufferManager, guardedParent, childSwip, mode);
     } else {
-      guardedTarget =
-          GuardedBufferFrame(bufferManager, guardedParent, childSwip);
+      guardedTarget = GuardedBufferFrame<BTreeNode>(bufferManager,
+                                                    guardedParent, childSwip);
     }
     level = level + 1;
   }
@@ -377,25 +382,25 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
   GuardedBufferFrame<BTreeNode> guardedParent(
       btree.mStore->mBufferManager.get(), btree.mMetaNodeSwip);
   if (btree.mTreeId != bfToFind.page.mBTreeId ||
-      guardedParent->mRightMostChildSwip.isEVICTED()) {
+      guardedParent->mRightMostChildSwip.IsEvicted()) {
     jumpmu::Jump();
   }
 
   // Check whether the parent buffer frame to find is root
-  Swip<BTreeNode>* childSwip = &guardedParent->mRightMostChildSwip;
-  if (&childSwip->asBufferFrameMasked() == &bfToFind) {
+  auto* childSwip = &guardedParent->mRightMostChildSwip;
+  if (&childSwip->AsBufferFrameMasked() == &bfToFind) {
     guardedParent.JumpIfModifiedByOthers();
     COUNTERS_BLOCK() {
       WorkerCounters::MyCounters().dt_find_parent_root[btree.mTreeId]++;
     }
     return {.mParentGuard = std::move(guardedParent.mGuard),
             .mParentBf = &btree.mMetaNodeSwip.AsBufferFrame(),
-            .mChildSwip = childSwip->CastTo<BufferFrame>()};
+            .mChildSwip = *childSwip};
   }
 
   // Check whether the root node is cool, all nodes below including the parent
   // of the buffer frame to find are evicted.
-  if (guardedParent->mRightMostChildSwip.isCOOL()) {
+  if (guardedParent->mRightMostChildSwip.IsCool()) {
     jumpmu::Jump();
   }
 
@@ -416,32 +421,32 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
         childSwip = &(guardedNode->getChild(posInParent));
       }
     }
-    return (&childSwip->asBufferFrameMasked() != &bfToFind);
+    return (&childSwip->AsBufferFrameMasked() != &bfToFind);
   };
 
   // LatchMode latchMode = (jumpIfEvicted) ?
-  // LatchMode::kOptimisticOrJump : LatchMode::kExclusive;
+  // LatchMode::kOptimisticOrJump : LatchMode::kPessimisticExclusive;
   LatchMode latchMode = LatchMode::kOptimisticOrJump;
   // The parent of the bf we are looking for (bfToFind)
-  GuardedBufferFrame guardedChild(
+  GuardedBufferFrame<BTreeNode> guardedChild(
       btree.mStore->mBufferManager.get(), guardedParent,
       guardedParent->mRightMostChildSwip, latchMode);
   u16 level = 0;
   while (!guardedChild->mIsLeaf && searchCondition(guardedChild)) {
     guardedParent = std::move(guardedChild);
     if constexpr (jumpIfEvicted) {
-      if (childSwip->isEVICTED()) {
+      if (childSwip->IsEvicted()) {
         jumpmu::Jump();
       }
     }
     guardedChild =
-        GuardedBufferFrame(btree.mStore->mBufferManager.get(), guardedParent,
-                           childSwip->CastTo<BTreeNode>(), latchMode);
+        GuardedBufferFrame<BTreeNode>(btree.mStore->mBufferManager.get(),
+                                      guardedParent, *childSwip, latchMode);
     level = level + 1;
   }
   guardedParent.unlock();
 
-  const bool found = &childSwip->asBufferFrameMasked() == &bfToFind;
+  const bool found = &childSwip->AsBufferFrameMasked() == &bfToFind;
   guardedChild.JumpIfModifiedByOthers();
   if (!found) {
     jumpmu::Jump();
@@ -449,11 +454,11 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
 
   DCHECK(posInParent != std::numeric_limits<u32>::max())
       << "Invalid posInParent=" << posInParent;
-  ParentSwipHandler parentHandler = {
-      .mParentGuard = std::move(guardedChild.mGuard),
-      .mParentBf = guardedChild.mBf,
-      .mChildSwip = childSwip->CastTo<BufferFrame>(),
-      .mPosInParent = posInParent};
+  ParentSwipHandler parentHandler = {.mParentGuard =
+                                         std::move(guardedChild.mGuard),
+                                     .mParentBf = guardedChild.mBf,
+                                     .mChildSwip = *childSwip,
+                                     .mPosInParent = posInParent};
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().dt_find_parent_slow[btree.mTreeId]++;
   }

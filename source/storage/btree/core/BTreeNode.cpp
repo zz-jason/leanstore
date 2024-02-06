@@ -188,7 +188,7 @@ bool BTreeNode::merge(u16 slotId,
         (reinterpret_cast<u8*>(slot + mNumSeps + xGuardedRight->mNumSeps) -
          RawPtr()) +
         leftGrow + rightGrow +
-        spaceNeeded(extraKeyLength, sizeof(SwipType), tmp->mPrefixSize);
+        spaceNeeded(extraKeyLength, sizeof(Swip), tmp->mPrefixSize);
     if (spaceUpperBound > BTreeNode::Size())
       return false;
     copyKeyValueRange(tmp, 0, 0, mNumSeps);
@@ -197,7 +197,7 @@ bool BTreeNode::merge(u16 slotId,
     xGuardedParent->copyFullKey(slotId, extraKey->get());
     tmp->storeKeyValue(
         mNumSeps, Slice(extraKey->get(), extraKeyLength),
-        Slice(reinterpret_cast<u8*>(&mRightMostChildSwip), sizeof(SwipType)));
+        Slice(reinterpret_cast<u8*>(&mRightMostChildSwip), sizeof(Swip)));
     tmp->mNumSeps++;
     xGuardedRight->copyKeyValueRange(tmp, tmp->mNumSeps, 0,
                                      xGuardedRight->mNumSeps);
@@ -390,7 +390,7 @@ s32 BTreeNode::compareKeyWithBoundaries(Slice key) {
   return 0;
 }
 
-Swip<BTreeNode>& BTreeNode::lookupInner(Slice key) {
+Swip& BTreeNode::lookupInner(Slice key) {
   s32 slotId = lowerBound<false>(key);
   if (slotId == mNumSeps) {
     return mRightMostChildSwip;
@@ -405,8 +405,8 @@ Swip<BTreeNode>& BTreeNode::lookupInner(Slice key) {
 void BTreeNode::split(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
                       ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedLeft,
                       u16 sepSlot, u8* sepKey, u16 sepLength) {
-  DCHECK(sepSlot < (BTreeNode::Size() / sizeof(SwipType)));
-  DCHECK(xGuardedParent->canInsert(sepLength, sizeof(SwipType)));
+  DCHECK(sepSlot < (BTreeNode::Size() / sizeof(Swip)));
+  DCHECK(xGuardedParent->canInsert(sepLength, sizeof(Swip)));
 
   xGuardedLeft->setFences(GetLowerFence(), Slice(sepKey, sepLength));
 
@@ -416,7 +416,7 @@ void BTreeNode::split(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
   nodeRight->setFences(Slice(sepKey, sepLength), GetUpperFence());
   auto swip = xGuardedLeft.swip();
   xGuardedParent->Insert(Slice(sepKey, sepLength),
-                         Slice(reinterpret_cast<u8*>(&swip), sizeof(SwipType)));
+                         Slice(reinterpret_cast<u8*>(&swip), sizeof(Swip)));
   if (mIsLeaf) {
     copyKeyValueRange(xGuardedLeft.GetPagePayload(), 0, 0, sepSlot + 1);
     copyKeyValueRange(nodeRight, 0, xGuardedLeft->mNumSeps,

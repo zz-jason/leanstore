@@ -1,6 +1,6 @@
 #include "shared-headers/Units.hpp"
 #include "storage/buffer-manager/BufferFrame.hpp"
-#include "sync-primitives/OptimisticGuarded.hpp"
+#include "sync/OptimisticGuarded.hpp"
 #include "utils/Misc.hpp"
 #include "utils/RandomGenerator.hpp"
 

@@ -41,7 +41,7 @@ static u64 MaxFatTupleLength() {
   return BTreeNode::Size() - 1000;
 }
 
-bool Tuple::ToFat(BTreeExclusiveIterator& xIter) {
+bool Tuple::ToFat(BTreePessimisticExclusiveIterator& xIter) {
   utils::Timer timer(CRCounters::MyCounters().cc_ms_fat_tuple_conversion);
 
   // Process the chain tuple

@@ -19,7 +19,6 @@ namespace storage {
 namespace btree {
 
 class BTreeNode;
-using SwipType = Swip<BTreeNode>;
 using HeadType = u32;
 
 class BTreeNodeHeader {
@@ -39,7 +38,7 @@ public:
 
 public:
   /// The swip of the right-most child.
-  Swip<BTreeNode> mRightMostChildSwip = nullptr;
+  Swip mRightMostChildSwip = nullptr;
 
   /// The lower fence of the node. Exclusive.
   FenceKey mLowerFence = {0, 0};
@@ -201,16 +200,16 @@ public:
     return slot[slotId].mValSize;
   }
 
-  inline SwipType& GetChildIncludingRightMost(u16 slotId) {
+  inline Swip& GetChildIncludingRightMost(u16 slotId) {
     if (slotId == mNumSeps) {
       return mRightMostChildSwip;
     } else {
-      return *reinterpret_cast<SwipType*>(ValData(slotId));
+      return *reinterpret_cast<Swip*>(ValData(slotId));
     }
   }
 
-  inline SwipType& getChild(u16 slotId) {
-    return *reinterpret_cast<SwipType*>(ValData(slotId));
+  inline Swip& getChild(u16 slotId) {
+    return *reinterpret_cast<Swip*>(ValData(slotId));
   }
 
   inline u16 getKVConsumedSpace(u16 slot_id) {
@@ -478,7 +477,9 @@ public:
       int cmpPrefix = CmpKeys(keyPrefix, lowerFencePrefix);
       if (cmpPrefix < 0) {
         return 0;
-      } else if (cmpPrefix > 0) {
+      }
+
+      if (cmpPrefix > 0) {
         return mNumSeps;
       }
     }
@@ -549,7 +550,7 @@ public:
   u16 commonPrefix(u16 aPos, u16 bPos);
   SeparatorInfo findSep();
   void getSep(u8* sepKeyOut, SeparatorInfo info);
-  Swip<BTreeNode>& lookupInner(Slice key);
+  Swip& lookupInner(Slice key);
 
   // Not synchronized or todo section
   bool removeSlot(u16 slotId);

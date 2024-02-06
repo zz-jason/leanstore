@@ -2,9 +2,9 @@
 
 #include "KVInterface.hpp"
 #include "LeanStore.hpp"
-#include "storage/btree/core/BTreeExclusiveIterator.hpp"
 #include "storage/btree/core/BTreeGeneric.hpp"
-#include "storage/btree/core/BTreeSharedIterator.hpp"
+#include "storage/btree/core/BTreePessimisticExclusiveIterator.hpp"
+#include "storage/btree/core/BTreePessimisticSharedIterator.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
 #include "utils/Misc.hpp"
 
@@ -93,7 +93,7 @@ OpCode BasicKV::ScanAsc(Slice startKey, ScanCallback callback) {
   }
 
   JUMPMU_TRY() {
-    BTreeSharedIterator iter(*static_cast<BTreeGeneric*>(this));
+    auto iter = GetIterator();
     for (bool succeed = iter.Seek(startKey); succeed; succeed = iter.Next()) {
       iter.AssembleKey();
       auto key = iter.key();
@@ -115,7 +115,7 @@ OpCode BasicKV::ScanDesc(Slice scanKey, ScanCallback callback) {
     WorkerCounters::MyCounters().dt_scan_desc[mTreeId]++;
   }
   JUMPMU_TRY() {
-    BTreeSharedIterator iter(*static_cast<BTreeGeneric*>(this));
+    auto iter = GetIterator();
     if (!iter.SeekForPrev(scanKey)) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
@@ -139,7 +139,7 @@ OpCode BasicKV::ScanDesc(Slice scanKey, ScanCallback callback) {
 
 OpCode BasicKV::Insert(Slice key, Slice val) {
   JUMPMU_TRY() {
-    BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
+    auto xIter = GetExclusiveIterator();
     OpCode ret = xIter.InsertKV(key, val);
     ENSURE(ret == OpCode::kOK);
     if (mConfig.mEnableWal) {
@@ -244,7 +244,7 @@ OpCode BasicKV::PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
 OpCode BasicKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
                               UpdateDesc& updateDesc) {
   JUMPMU_TRY() {
-    BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
+    auto xIter = GetExclusiveIterator();
     if (!xIter.SeekExact(key)) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
@@ -289,7 +289,7 @@ OpCode BasicKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
 
 OpCode BasicKV::Remove(Slice key) {
   JUMPMU_TRY() {
-    BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
+    auto xIter = GetExclusiveIterator();
     if (!xIter.SeekExact(key)) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
@@ -314,7 +314,7 @@ OpCode BasicKV::Remove(Slice key) {
 
 OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
   JUMPMU_TRY() {
-    BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
+    auto xIter = GetExclusiveIterator();
     xIter.SetExitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
       if (guardedLeaf->FreeSpaceAfterCompaction() >=
           BTreeNode::UnderFullSize()) {

@@ -18,7 +18,7 @@ class BufferFrame;
 ///    2nd most most significant bits is 1 which marks the pointer as "COOL".
 /// 3. EVICTED. The swip represents a page id. The most most significant bit is
 ///    1 which marks the swip as "EVICTED".
-template <typename T> class Swip {
+class Swip {
 public:
   union {
     u64 mPageId;
@@ -33,26 +33,32 @@ public:
   Swip(BufferFrame* bf) : bf(bf) {
   }
 
-  /// Copy construct from another swip.
-  template <typename T2> Swip(Swip<T2>& other) : mPageId(other.mPageId) {
-  }
+  // /// Copy construct from another swip.
+  // Swip(const Swip& other) {
+  //   *this = other;
+  // }
+
+  // Swip& operator=(const Swip& other) {
+  //   mPageId = other.mPageId;
+  //   return *this;
+  // }
 
 public:
   /// Whether two swip is equal.
   bool operator==(const Swip& other) const {
-    return (raw() == other.raw());
+    return (Raw() == other.Raw());
   }
 
-  bool isHOT() {
-    return (mPageId & (evicted_bit | cool_bit)) == 0;
+  bool IsHot() {
+    return (mPageId & (sEvictedBit | sCoolBit)) == 0;
   }
 
-  bool isCOOL() {
-    return mPageId & cool_bit;
+  bool IsCool() {
+    return mPageId & sCoolBit;
   }
 
-  bool isEVICTED() {
-    return mPageId & evicted_bit;
+  bool IsEvicted() {
+    return mPageId & sEvictedBit;
   }
 
   /// Indicates whether this swip points to nothing: no evicted bit, no cool
@@ -61,60 +67,57 @@ public:
     return mPageId == 0;
   }
 
-  u64 asPageID() {
-    DCHECK(isEVICTED());
-    return mPageId & evicted_mask;
+  u64 AsPageId() {
+    DCHECK(IsEvicted());
+    return mPageId & sEvictedMask;
   }
 
   /// Return the underlying buffer frame from a HOT buffer frame.
   BufferFrame& AsBufferFrame() {
-    DCHECK(isHOT());
+    DCHECK(IsHot());
     return *bf;
   }
 
   /// Return the underlying buffer frame from a COOL buffer frame.
-  BufferFrame& asBufferFrameMasked() {
-    return *reinterpret_cast<BufferFrame*>(mPageId & hot_mask);
+  BufferFrame& AsBufferFrameMasked() {
+    return *reinterpret_cast<BufferFrame*>(mPageId & sHotMask);
   }
 
-  u64 raw() const {
+  u64 Raw() const {
     return mPageId;
   }
 
-  template <typename T2> void MarkHOT(T2* bf) {
+  void MarkHOT(BufferFrame* bf) {
     this->bf = bf;
   }
 
   void MarkHOT() {
-    DCHECK(isCOOL());
-    this->mPageId = mPageId & ~cool_bit;
+    DCHECK(IsCool());
+    this->mPageId = mPageId & ~sCoolBit;
   }
 
-  void cool() {
-    this->mPageId = mPageId | cool_bit;
+  void Cool() {
+    this->mPageId = mPageId | sCoolBit;
   }
 
   void evict(PID pageId) {
-    this->mPageId = pageId | evicted_bit;
-  }
-
-  template <typename T2> Swip<T2>& CastTo() {
-    return *reinterpret_cast<Swip<T2>*>(this);
+    this->mPageId = pageId | sEvictedBit;
   }
 
 private:
-  // 1xxxxxxxxxxxx evicted,
-  // 01xxxxxxxxxxx cool,
+  // 1xxxxxxxxxxxx evicted
+  // 01xxxxxxxxxxx cool
   // 00xxxxxxxxxxx hot
-  static const u64 evicted_bit = u64(1) << 63;
-  static const u64 evicted_mask = ~(u64(1) << 63);
-  static const u64 cool_bit = u64(1) << 62;
-  static const u64 cool_mask = ~(u64(1) << 62);
-  static const u64 hot_mask = ~(u64(3) << 62);
 
-  static_assert(evicted_bit == 0x8000000000000000, "");
-  static_assert(evicted_mask == 0x7FFFFFFFFFFFFFFF, "");
-  static_assert(hot_mask == 0x3FFFFFFFFFFFFFFF, "");
+  static const u64 sEvictedBit = u64(1) << 63;
+  static const u64 sEvictedMask = ~(u64(1) << 63);
+  static const u64 sCoolBit = u64(1) << 62;
+  static const u64 sCoolMask = ~(u64(1) << 62);
+  static const u64 sHotMask = ~(u64(3) << 62);
+
+  static_assert(sEvictedBit == 0x8000000000000000, "");
+  static_assert(sEvictedMask == 0x7FFFFFFFFFFFFFFF, "");
+  static_assert(sHotMask == 0x3FFFFFFFFFFFFFFF, "");
 };
 
 } // namespace storage
