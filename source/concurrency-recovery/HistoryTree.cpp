@@ -320,8 +320,7 @@ void HistoryTree::VisitRemovedVersions(WORKERID workerId, TXID fromTxId,
 
   JUMPMU_TRY() {
   restart : {
-    leanstore::storage::btree::BTreePessimisticExclusiveIterator xIter(
-        *static_cast<BTreeGeneric*>(removeTree));
+    auto xIter = removeTree->GetExclusiveIterator();
     while (xIter.Seek(key)) {
       // skip versions out of the transaction range
       xIter.AssembleKey();
