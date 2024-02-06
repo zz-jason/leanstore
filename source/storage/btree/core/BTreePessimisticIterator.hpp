@@ -100,7 +100,7 @@ protected:
         if (mode == LatchMode::kExclusive) {
           guardedChild.ToExclusiveMayJump();
         } else {
-          guardedChild.ToOptimisticOrShared();
+          guardedChild.ToSharedMayJump();
         }
         mIsPrefixCopied = false;
         if (mFuncEnterLeaf != nullptr) {
@@ -247,7 +247,7 @@ public:
                 mGuardedParent->GetChildIncludingRightMost(nextLeafPos);
             GuardedBufferFrame guardedNextLeaf(
                 mBTree.mStore->mBufferManager.get(), mGuardedParent,
-                nextLeafSwip, LatchMode::kJump);
+                nextLeafSwip, LatchMode::kOptimisticOrJump);
             if (mMode == LatchMode::kExclusive) {
               guardedNextLeaf.TryToExclusiveMayJump();
             } else {
@@ -350,7 +350,7 @@ public:
             auto& nextLeafSwip = mGuardedParent->getChild(nextLeafPos);
             GuardedBufferFrame guardedNextLeaf(
                 mBTree.mStore->mBufferManager.get(), mGuardedParent,
-                nextLeafSwip, LatchMode::kJump);
+                nextLeafSwip, LatchMode::kOptimisticOrJump);
             if (mMode == LatchMode::kExclusive) {
               guardedNextLeaf.TryToExclusiveMayJump();
             } else {

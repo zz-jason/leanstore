@@ -116,7 +116,10 @@ public:
   }
 
   inline void ToOptimisticOrShared() {
-    DCHECK(mState == GuardState::kUninitialized && mLatch != nullptr);
+    if (mState == GuardState::kOptimistic || mState == GuardState::kShared) {
+      return;
+    }
+    DCHECK(mState == GuardState::kUninitialized || mLatch != nullptr);
     mVersion = mLatch->mVersion.load();
     if (HasExclusiveMark(mVersion)) {
       lockShared();

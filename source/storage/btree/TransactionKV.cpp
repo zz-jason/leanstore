@@ -1033,7 +1033,7 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
       }
       oRet = iter.Next() ? OpCode::kOK : OpCode::kNotFound;
       if (isLastOne) {
-        if (iter.mBuffer.size() < iter.mFenceSize + 1) {
+        if (iter.mBuffer.size() < iter.mFenceSize + 1u) {
           std::basic_string<u8> newBuffer(iter.mBuffer.size() + 1, 0);
           memcpy(newBuffer.data(), iter.mBuffer.data(), iter.mFenceSize);
           iter.mBuffer = std::move(newBuffer);

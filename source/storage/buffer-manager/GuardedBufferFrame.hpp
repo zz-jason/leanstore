@@ -18,8 +18,8 @@ namespace storage {
 enum class LatchMode : u8 {
   kShared = 0,
   kExclusive = 1,
-  kJump = 2,
-  kSpin = 3,
+  kOptimisticOrJump = 2,
+  kOptimisticSpin = 3,
 };
 
 template <typename T> class ExclusiveGuardedBufferFrame;
@@ -81,7 +81,7 @@ public:
   //       mBf(&bufferManager->AllocNewPage(treeId)),
   //       mGuard(&mBf->header.mLatch),
   //       mKeepAlive(keepAlive) {
-  //   latchMayJump(mGuard, LatchMode::kSpin);
+  //   latchMayJump(mGuard, LatchMode::kOptimisticSpin);
   //   SyncGSNBeforeRead();
   //   DCHECK(HasExclusiveMark(mBf->header.mLatch.GetOptimisticVersion()));
   //   JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
@@ -89,7 +89,7 @@ public:
 
   /// Guard a single page, usually used for latching the meta node of a BTree.
   GuardedBufferFrame(BufferManager* bufferManager, Swip<BufferFrame> hotSwip,
-                     const LatchMode latchMode = LatchMode::kSpin)
+                     const LatchMode latchMode = LatchMode::kOptimisticSpin)
       : mBufferManager(bufferManager),
         mBf(&hotSwip.AsBufferFrame()),
         mGuard(&mBf->header.mLatch),
@@ -108,7 +108,7 @@ public:
   template <typename T2>
   GuardedBufferFrame(BufferManager* bufferManager,
                      GuardedBufferFrame<T2>& guardedParent, Swip<T>& childSwip,
-                     const LatchMode latchMode = LatchMode::kSpin)
+                     const LatchMode latchMode = LatchMode::kOptimisticSpin)
       : mBufferManager(bufferManager),
         mBf(bufferManager->TryFastResolveSwip(
             guardedParent.mGuard, childSwip.template CastTo<BufferFrame>())),
@@ -292,7 +292,7 @@ public:
 protected:
   void latchMayJump(HybridGuard& guard, const LatchMode latchMode) {
     switch (latchMode) {
-    case LatchMode::kSpin: {
+    case LatchMode::kOptimisticSpin: {
       guard.ToOptimisticSpin();
       break;
     }
@@ -304,7 +304,7 @@ protected:
       guard.ToOptimisticOrShared();
       break;
     }
-    case LatchMode::kJump: {
+    case LatchMode::kOptimisticOrJump: {
       guard.ToOptimisticOrJump();
       break;
     }
