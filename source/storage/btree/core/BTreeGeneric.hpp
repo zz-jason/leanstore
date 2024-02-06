@@ -303,7 +303,7 @@ inline SpaceCheckResult BTreeGeneric::CheckSpaceUtilization(BufferFrame& bf) {
       parentHandler.mParentBf);
   GuardedBufferFrame<BTreeNode> guardedChild(
       mStore->mBufferManager.get(), guardedParent,
-      parentHandler.mChildSwip.CastTo<BTreeNode>(), LatchMode::kJump);
+      parentHandler.mChildSwip.CastTo<BTreeNode>(), LatchMode::kOptimisticOrJump);
   auto mergeResult = XMerge(guardedParent, guardedChild, parentHandler);
   guardedParent.unlock();
   guardedChild.unlock();
@@ -420,8 +420,8 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
   };
 
   // LatchMode latchMode = (jumpIfEvicted) ?
-  // LatchMode::kJump : LatchMode::kExclusive;
-  LatchMode latchMode = LatchMode::kJump;
+  // LatchMode::kOptimisticOrJump : LatchMode::kExclusive;
+  LatchMode latchMode = LatchMode::kOptimisticOrJump;
   // The parent of the bf we are looking for (bfToFind)
   GuardedBufferFrame guardedChild(
       btree.mStore->mBufferManager.get(), guardedParent,

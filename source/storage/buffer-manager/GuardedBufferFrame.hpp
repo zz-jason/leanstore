@@ -5,8 +5,8 @@
 #include "shared-headers/Units.hpp"
 #include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
-#include "storage/buffer-manager/TreeRegistry.hpp"
 #include "sync-primitives/HybridGuard.hpp"
+#include "sync-primitives/HybridLatch.hpp"
 
 #include <glog/logging.h>
 
@@ -18,8 +18,8 @@ namespace storage {
 enum class LatchMode : u8 {
   kShared = 0,
   kExclusive = 1,
-  kJump = 2,
-  kSpin = 3,
+  kOptimisticOrJump = 2,
+  kOptimisticSpin = 3,
 };
 
 template <typename T> class ExclusiveGuardedBufferFrame;
@@ -69,14 +69,27 @@ public:
                      bool keepAlive = true)
       : mBufferManager(bufferManager),
         mBf(bf),
-        mGuard(mBf->header.mLatch, GuardState::kExclusive),
+        mGuard(mBf->header.mLatch, GuardState::kUninitialized),
         mKeepAlive(keepAlive) {
+    DCHECK(!HasExclusiveMark(mBf->header.mLatch.GetOptimisticVersion()));
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
+  // GuardedBufferFrame(BufferManager* bufferManager, TREEID treeId,
+  //                    bool keepAlive = true)
+  //     : mBufferManager(bufferManager),
+  //       mBf(&bufferManager->AllocNewPage(treeId)),
+  //       mGuard(&mBf->header.mLatch),
+  //       mKeepAlive(keepAlive) {
+  //   latchMayJump(mGuard, LatchMode::kOptimisticSpin);
+  //   SyncGSNBeforeRead();
+  //   DCHECK(HasExclusiveMark(mBf->header.mLatch.GetOptimisticVersion()));
+  //   JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
+  // }
+
   /// Guard a single page, usually used for latching the meta node of a BTree.
   GuardedBufferFrame(BufferManager* bufferManager, Swip<BufferFrame> hotSwip,
-                     const LatchMode latchMode = LatchMode::kSpin)
+                     const LatchMode latchMode = LatchMode::kOptimisticSpin)
       : mBufferManager(bufferManager),
         mBf(&hotSwip.AsBufferFrame()),
         mGuard(&mBf->header.mLatch),
@@ -95,7 +108,7 @@ public:
   template <typename T2>
   GuardedBufferFrame(BufferManager* bufferManager,
                      GuardedBufferFrame<T2>& guardedParent, Swip<T>& childSwip,
-                     const LatchMode latchMode = LatchMode::kSpin)
+                     const LatchMode latchMode = LatchMode::kOptimisticSpin)
       : mBufferManager(bufferManager),
         mBf(bufferManager->TryFastResolveSwip(
             guardedParent.mGuard, childSwip.template CastTo<BufferFrame>())),
@@ -123,14 +136,14 @@ public:
   /// Downgrade from an exclusive guard
   GuardedBufferFrame(ExclusiveGuardedBufferFrame<T>&&) = delete;
   GuardedBufferFrame& operator=(ExclusiveGuardedBufferFrame<T>&&) {
-    mGuard.unlock();
+    mGuard.Unlock();
     return *this;
   }
 
   /// Downgrade from a shared guard
   GuardedBufferFrame(SharedGuardedBufferFrame<T>&&) = delete;
   GuardedBufferFrame& operator=(SharedGuardedBufferFrame<T>&&) {
-    mGuard.unlock();
+    mGuard.Unlock();
     return *this;
   }
 
@@ -142,7 +155,7 @@ public:
         Reclaim();
       }
     }
-    mGuard.unlock();
+    mGuard.Unlock();
     JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP()
   }
 
@@ -227,7 +240,7 @@ public:
   }
 
   inline void unlock() {
-    mGuard.unlock();
+    mGuard.Unlock();
   }
 
   inline void JumpIfModifiedByOthers() {
@@ -254,6 +267,11 @@ public:
   void ToSharedMayJump() {
     mGuard.ToSharedMayJump();
   }
+
+  void ToOptimisticOrShared() {
+    mGuard.ToOptimisticOrShared();
+  }
+
   void ToExclusiveMayJump() {
     mGuard.ToExclusiveMayJump();
   }
@@ -272,27 +290,27 @@ public:
   }
 
 protected:
-  void latchMayJump(HybridGuard& guard, const LatchMode ifContended) {
-    switch (ifContended) {
-    case LatchMode::kSpin: {
-      guard.toOptimisticSpin();
+  void latchMayJump(HybridGuard& guard, const LatchMode latchMode) {
+    switch (latchMode) {
+    case LatchMode::kOptimisticSpin: {
+      guard.ToOptimisticSpin();
       break;
     }
     case LatchMode::kExclusive: {
-      guard.toOptimisticOrExclusive();
+      guard.ToOptimisticOrExclusive();
       break;
     }
     case LatchMode::kShared: {
-      guard.toOptimisticOrShared();
+      guard.ToOptimisticOrShared();
       break;
     }
-    case LatchMode::kJump: {
-      guard.toOptimisticOrJump();
+    case LatchMode::kOptimisticOrJump: {
+      guard.ToOptimisticOrJump();
       break;
     }
     default: {
       DCHECK(false) << "Unhandled LatchMode: "
-                    << std::to_string(static_cast<u64>(ifContended));
+                    << std::to_string(static_cast<u64>(latchMode));
     }
     }
   }

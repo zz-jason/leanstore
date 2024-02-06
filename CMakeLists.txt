@@ -6,32 +6,34 @@ cmake_minimum_required(VERSION 3.10)
 project(leanstoredb CXX)
 
 if (NOT UNIX)
-    message(SEND_ERROR "unsupported platform")
+  message(SEND_ERROR "unsupported platform")
 endif ()
 
-# Define custom build options
-option(BUILD_WITH_COVERAGE "Build the library with code coverage" OFF)
-
 enable_language(ASM)
+
 set(CMAKE_CXX_STANDARD 23)
+add_compile_definitions(__cpp_concepts=202002L)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -rdynamic -fno-omit-frame-pointer -g3 -static-libstdc++")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wunused -Wunreachable-code -fno-omit-frame-pointer")
-if(BUILD_WITH_COVERAGE)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage -g -O0")
-endif()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-if (CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
-  add_compile_options(-Wall -Wextra -mavx2 -mcx16 -m64) # -fno-elide-constructors no need for now
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -rdynamic -fno-omit-frame-pointer -pthread")
+if (CMAKE_BUILD_TYPE MATCHES Debug)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDEBUG -O0 -g3")
 else()
-  add_compile_options(-Wall -Wextra -march=native)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNDEBUG -O3 -g")
+  add_compile_options()
 endif()
 
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG -O0")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3") # because we had weird behavior on aws ARM
-add_compile_definitions(__cpp_concepts=202002L)
+# platform specific flags
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
+  add_compile_options(-mavx2 -mcx16 -m64)
+else()
+  add_compile_options(-march=native)
+endif()
+
+if(ENABLE_COVERAGE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
+endif()
 
 if(ENABLE_ASAN)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
@@ -42,16 +44,16 @@ if(ENABLE_TSAN)
 endif()
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" AND CMAKE_BUILD_TYPE MATCHES Debug)
-    add_compile_options(-fstandalone-debug)
+  add_compile_options(-fstandalone-debug)
 endif ()
 
 if (APPLE)
-    LIST(APPEND CMAKE_PREFIX_PATH /usr/local/opt/bison)
-    LIST(APPEND CMAKE_PREFIX_PATH /usr/local/opt/flex)
+  LIST(APPEND CMAKE_PREFIX_PATH /usr/local/opt/bison)
+  LIST(APPEND CMAKE_PREFIX_PATH /usr/local/opt/flex)
 endif (APPLE)
 
 if (CYGWIN)
-    SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++")
+  SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++")
 endif (CYGWIN)
 
 
@@ -65,6 +67,7 @@ find_package(gflags CONFIG REQUIRED)
 find_package(glog CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
 find_package(benchmark CONFIG REQUIRED)
+
 
 # ------------------------------------------------------------------------------
 # Project build targets

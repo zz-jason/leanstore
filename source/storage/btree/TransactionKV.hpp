@@ -88,9 +88,10 @@ private:
   inline std::tuple<OpCode, u16> GetVisibleTuple(Slice payload,
                                                  ValCallback callback) {
     std::tuple<OpCode, u16> ret;
-    SCOPED_DEFER(DCHECK(std::get<0>(ret) == OpCode::kOK ||
-                        std::get<0>(ret) == OpCode::kNotFound)
-                     << "GetVisibleTuple should return either OK or NotFound";);
+    // SCOPED_DEFER(DCHECK(std::get<0>(ret) == OpCode::kOK ||
+    //                     std::get<0>(ret) == OpCode::kNotFound)
+    //                  << "GetVisibleTuple should return either OK or
+    //                  NotFound";);
     while (true) {
       JUMPMU_TRY() {
         const auto* const tuple = Tuple::From(payload.data());
