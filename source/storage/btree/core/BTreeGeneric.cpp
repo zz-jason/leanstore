@@ -24,10 +24,9 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId,
   this->mConfig = config;
 
   mMetaNodeSwip = &mStore->mBufferManager->AllocNewPage(btreeId);
-  HybridGuard guard(mMetaNodeSwip.AsBufferFrame().header.mLatch,
-                    GuardState::kExclusive);
   mMetaNodeSwip.AsBufferFrame().header.mKeepInMemory = true;
-  guard.unlock();
+  DCHECK(mMetaNodeSwip.AsBufferFrame().header.mLatch.GetOptimisticVersion() ==
+         0);
 
   auto guardedRoot = GuardedBufferFrame<BTreeNode>(
       mStore->mBufferManager.get(),
@@ -36,9 +35,9 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId,
       ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedRoot));
   xGuardedRoot.InitPayload(true);
 
-  GuardedBufferFrame<BTreeNode> guardedMeta(mStore->mBufferManager.get(),
-                                            mMetaNodeSwip);
-  ExclusiveGuardedBufferFrame xGuardedMeta(std::move(guardedMeta));
+  auto guardedMeta = GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(),
+                                                   mMetaNodeSwip);
+  auto xGuardedMeta = ExclusiveGuardedBufferFrame(std::move(guardedMeta));
   xGuardedMeta->mIsLeaf = false;
   xGuardedMeta->mRightMostChildSwip = xGuardedRoot.bf();
 
@@ -679,7 +678,7 @@ void BTreeGeneric::Deserialize(StringMap map) {
   // load meta node to memory
   HybridLatch dummyLatch;
   HybridGuard dummyGuard(&dummyLatch);
-  dummyGuard.toOptimisticSpin();
+  dummyGuard.ToOptimisticSpin();
 
   u16 failcounter = 0;
   while (true) {

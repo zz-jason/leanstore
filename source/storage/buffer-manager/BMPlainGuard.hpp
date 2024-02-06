@@ -22,7 +22,7 @@ public:
   HybridGuard mGuard;
 
   BMOptimisticGuard(HybridLatch& lock) : mGuard(&lock) {
-    mGuard.toOptimisticOrJump();
+    mGuard.ToOptimisticOrJump();
   }
 
   BMOptimisticGuard() = delete;
@@ -56,7 +56,7 @@ public:
   JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP(BMExclusiveGuard)
 
   ~BMExclusiveGuard() {
-    mOptimisticGuard.mGuard.unlock();
+    mOptimisticGuard.mGuard.Unlock();
     JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 };
@@ -68,7 +68,8 @@ private:
 
 public:
   BMExclusiveUpgradeIfNeeded(HybridGuard& guard)
-      : mGuard(guard), was_exclusive(guard.mState == GuardState::kExclusive) {
+      : mGuard(guard),
+        was_exclusive(guard.mState == GuardState::kExclusive) {
     mGuard.TryToExclusiveMayJump();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
@@ -77,7 +78,7 @@ public:
 
   ~BMExclusiveUpgradeIfNeeded() {
     if (!was_exclusive) {
-      mGuard.unlock();
+      mGuard.Unlock();
     }
     JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP()
   }
@@ -97,7 +98,7 @@ public:
   JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP(BMSharedGuard)
 
   ~BMSharedGuard() {
-    mOptimisticGuard.mGuard.unlock();
+    mOptimisticGuard.mGuard.Unlock();
     JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP()
   }
 };

@@ -4,6 +4,7 @@
 #include "LeanStore.hpp"
 #include "WorkerThread.hpp"
 #include "concurrency-recovery/HistoryTree.hpp"
+#include "concurrency-recovery/Worker.hpp"
 
 #include <glog/logging.h>
 
@@ -26,6 +27,7 @@ CRManager::CRManager(leanstore::LeanStore* store)
     // create thread-local transaction executor on each worker thread
     workerThread->SetJob([&]() {
       Worker::sTlsWorker = std::make_unique<Worker>(workerId, mWorkers, mStore);
+      Worker::sTlsWorkerRaw = Worker::sTlsWorker.get();
       mWorkers[workerId] = Worker::sTlsWorker.get();
     });
     workerThread->Wait();

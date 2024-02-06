@@ -19,6 +19,7 @@
 namespace leanstore::cr {
 
 thread_local std::unique_ptr<Worker> Worker::sTlsWorker = nullptr;
+thread_local Worker* Worker::sTlsWorkerRaw = nullptr;
 
 Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers,
                leanstore::LeanStore* store)
@@ -96,6 +97,9 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   // Draw TXID from global counter and publish it with the TX type (i.e.
   // long-running or short-running) We have to acquire a transaction id and use
   // it for locking in ANY isolation level
+  //
+  // TODO(jian.z): Allocating transaction start ts globally heavily hurts the
+  // scalability, especially for read-only transactions
   mActiveTx.mStartTs = mStore->AllocTs();
   auto curTxId = mActiveTx.mStartTs;
   if (FLAGS_enable_long_running_transaction && mActiveTx.IsLongRunning()) {
@@ -176,7 +180,9 @@ void Worker::CommitTx() {
   }
 
   // Cleanup versions in history tree
-  cc.GarbageCollection();
+  if (!mActiveTx.mIsReadOnly) {
+    cc.GarbageCollection();
+  }
 
   // Wait transaction to be committed
   while (mLogging.TxUnCommitted(mActiveTx.mCommitTs)) {

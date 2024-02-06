@@ -216,6 +216,7 @@ public:
 
 public:
   static thread_local std::unique_ptr<Worker> sTlsWorker;
+  static thread_local Worker* sTlsWorkerRaw;
 
   static constexpr u64 kRcBit = (1ull << 63);
   static constexpr u64 kLongRunningBit = (1ull << 62);
@@ -223,7 +224,7 @@ public:
 
 public:
   inline static Worker& My() {
-    return *Worker::sTlsWorker.get();
+    return *Worker::sTlsWorkerRaw;
   }
 };
 

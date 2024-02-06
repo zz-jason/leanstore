@@ -254,7 +254,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
   //
 
   // unlock the current node firstly to avoid deadlock: P->G, G->P
-  swipGuard.unlock();
+  swipGuard.Unlock();
 
   const PID pageId = swipValue.asPageID();
   Partition& partition = GetPartition(pageId);
@@ -427,7 +427,7 @@ void BufferManager::ReadPageSync(PID pageId, void* pageBuffer) {
 BufferFrame& BufferManager::ReadPageSync(PID pageId) {
   HybridLatch dummyLatch;
   HybridGuard dummyGuard(&dummyLatch);
-  dummyGuard.toOptimisticSpin();
+  dummyGuard.ToOptimisticSpin();
 
   Swip<BufferFrame> swip;
   swip.evict(pageId);
@@ -452,7 +452,7 @@ void BufferManager::WritePageSync(BufferFrame& bf) {
   pwrite(mStore->mPageFd, &bf.page, mStore->mStoreOption.mPageSize,
          pageId * mStore->mStoreOption.mPageSize);
   bf.Reset();
-  guardedBf.unlock();
+  guardedBf.Unlock();
   partition.mFreeBfList.PushFront(bf);
 }
 
