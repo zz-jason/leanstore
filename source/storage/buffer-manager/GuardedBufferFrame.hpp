@@ -88,7 +88,7 @@ public:
   // }
 
   /// Guard a single page, usually used for latching the meta node of a BTree.
-  GuardedBufferFrame(BufferManager* bufferManager, Swip<BufferFrame> hotSwip,
+  GuardedBufferFrame(BufferManager* bufferManager, Swip& hotSwip,
                      const LatchMode latchMode = LatchMode::kOptimisticSpin)
       : mBufferManager(bufferManager),
         mBf(&hotSwip.AsBufferFrame()),
@@ -107,11 +107,10 @@ public:
   /// memory if it is evicted.
   template <typename T2>
   GuardedBufferFrame(BufferManager* bufferManager,
-                     GuardedBufferFrame<T2>& guardedParent, Swip<T>& childSwip,
+                     GuardedBufferFrame<T2>& guardedParent, Swip& childSwip,
                      const LatchMode latchMode = LatchMode::kOptimisticSpin)
       : mBufferManager(bufferManager),
-        mBf(bufferManager->TryFastResolveSwip(
-            guardedParent.mGuard, childSwip.template CastTo<BufferFrame>())),
+        mBf(bufferManager->TryFastResolveSwip(guardedParent.mGuard, childSwip)),
         mGuard(&mBf->header.mLatch),
         mKeepAlive(true) {
     latchMayJump(mGuard, latchMode);
@@ -255,8 +254,8 @@ public:
     return reinterpret_cast<T*>(mBf->page.mPayload);
   }
 
-  inline Swip<T> swip() {
-    return Swip<T>(mBf);
+  inline Swip swip() {
+    return Swip(mBf);
   }
 
   inline T* operator->() {
@@ -372,8 +371,8 @@ public:
     return GetPagePayload();
   }
 
-  inline Swip<PayloadType> swip() {
-    return Swip<PayloadType>(mRefGuard.mBf);
+  inline Swip swip() {
+    return Swip(mRefGuard.mBf);
   }
 
   inline BufferFrame* bf() {
@@ -408,8 +407,8 @@ public:
     return reinterpret_cast<T*>(mRefGuard.mBf->page.mPayload);
   }
 
-  inline Swip<T> swip() {
-    return Swip<T>(mRefGuard.mBf);
+  inline Swip swip() {
+    return Swip(mRefGuard.mBf);
   }
 
   inline T* operator->() {

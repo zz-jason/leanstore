@@ -30,7 +30,7 @@ public:
 
   /// @brief mChildSwip is the swip reference to the child who generated this
   /// ParentSwipHandler.
-  Swip<BufferFrame>& mChildSwip;
+  Swip& mChildSwip;
 
   /// @brief mPosInParent is the slot id in the parent buffer frame.
   u32 mPosInParent = std::numeric_limits<u32>::max();
@@ -42,7 +42,7 @@ public:
 
 enum class SpaceCheckResult : u8 { kNothing, kPickAnotherBf, kRestartSameBf };
 
-using ChildSwipCallback = std::function<bool(Swip<BufferFrame>&)>;
+using ChildSwipCallback = std::function<bool(Swip&)>;
 
 class BufferManagedTree {
 public:
@@ -196,9 +196,8 @@ public:
     return nullptr;
   }
 
-  inline void IterateChildSwips(
-      TREEID treeId, BufferFrame& bf,
-      std::function<bool(Swip<BufferFrame>&)> callback) {
+  inline void IterateChildSwips(TREEID treeId, BufferFrame& bf,
+                                std::function<bool(Swip&)> callback) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
     DLOG_IF(FATAL, it == mTrees.end())

@@ -4,6 +4,7 @@
 #include "BTreeIteratorInterface.hpp"
 #include "KVInterface.hpp"
 #include "shared-headers/Units.hpp"
+#include "storage/btree/core/BTreeNode.hpp"
 
 #include <glog/logging.h>
 
@@ -82,17 +83,16 @@ protected:
             WorkerCounters::MyCounters().dt_inner_page[mBTree.mTreeId]++;
           }
           mLeafPosInParent = guardedChild->lowerBound<false>(key);
-          auto* childSwip =
-              &guardedChild->GetChildIncludingRightMost(mLeafPosInParent);
+          auto& childSwip =
+              guardedChild->GetChildIncludingRightMost(mLeafPosInParent);
           mGuardedParent = std::move(guardedChild);
           if (level == mBTree.mHeight - 1) {
-            guardedChild =
-                GuardedBufferFrame(mBTree.mStore->mBufferManager.get(),
-                                   mGuardedParent, *childSwip, mode);
+            guardedChild = GuardedBufferFrame<BTreeNode>(
+                mBTree.mStore->mBufferManager.get(), mGuardedParent, childSwip,
+                mode);
           } else {
-            guardedChild =
-                GuardedBufferFrame(mBTree.mStore->mBufferManager.get(),
-                                   mGuardedParent, *childSwip);
+            guardedChild = GuardedBufferFrame<BTreeNode>(
+                mBTree.mStore->mBufferManager.get(), mGuardedParent, childSwip);
           }
         }
 
@@ -244,7 +244,7 @@ public:
             s32 nextLeafPos = mLeafPosInParent + 1;
             auto& nextLeafSwip =
                 mGuardedParent->GetChildIncludingRightMost(nextLeafPos);
-            GuardedBufferFrame guardedNextLeaf(
+            GuardedBufferFrame<BTreeNode> guardedNextLeaf(
                 mBTree.mStore->mBufferManager.get(), mGuardedParent,
                 nextLeafSwip, LatchMode::kOptimisticOrJump);
             if (mMode == LatchMode::kPessimisticExclusive) {
@@ -347,7 +347,7 @@ public:
           if ((mLeafPosInParent - 1) >= 0) {
             s32 nextLeafPos = mLeafPosInParent - 1;
             auto& nextLeafSwip = mGuardedParent->getChild(nextLeafPos);
-            GuardedBufferFrame guardedNextLeaf(
+            GuardedBufferFrame<BTreeNode> guardedNextLeaf(
                 mBTree.mStore->mBufferManager.get(), mGuardedParent,
                 nextLeafSwip, LatchMode::kOptimisticOrJump);
             if (mMode == LatchMode::kPessimisticExclusive) {

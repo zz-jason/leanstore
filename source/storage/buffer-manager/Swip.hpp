@@ -18,7 +18,7 @@ class BufferFrame;
 ///    2nd most most significant bits is 1 which marks the pointer as "COOL".
 /// 3. EVICTED. The swip represents a page id. The most most significant bit is
 ///    1 which marks the swip as "EVICTED".
-template <typename T> class Swip {
+class Swip {
 public:
   union {
     u64 mPageId;
@@ -33,9 +33,15 @@ public:
   Swip(BufferFrame* bf) : bf(bf) {
   }
 
-  /// Copy construct from another swip.
-  template <typename T2> Swip(Swip<T2>& other) : mPageId(other.mPageId) {
-  }
+  // /// Copy construct from another swip.
+  // Swip(const Swip& other) {
+  //   *this = other;
+  // }
+
+  // Swip& operator=(const Swip& other) {
+  //   mPageId = other.mPageId;
+  //   return *this;
+  // }
 
 public:
   /// Whether two swip is equal.
@@ -81,7 +87,7 @@ public:
     return mPageId;
   }
 
-  template <typename T2> void MarkHOT(T2* bf) {
+  void MarkHOT(BufferFrame* bf) {
     this->bf = bf;
   }
 
@@ -96,10 +102,6 @@ public:
 
   void evict(PID pageId) {
     this->mPageId = pageId | sEvictedBit;
-  }
-
-  template <typename T2> Swip<T2>& CastTo() {
-    return *reinterpret_cast<Swip<T2>*>(this);
   }
 
 private:

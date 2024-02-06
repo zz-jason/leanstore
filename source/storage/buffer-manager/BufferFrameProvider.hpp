@@ -334,8 +334,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         }
 
         mStore->mTreeRegistry->IterateChildSwips(
-            coolCandidate->page.mBTreeId, *coolCandidate,
-            [&](Swip<BufferFrame>& swip) {
+            coolCandidate->page.mBTreeId, *coolCandidate, [&](Swip& swip) {
               // Ignore when it has a child in the cooling stage
               allChildrenEvicted &= swip.IsEvicted();
               if (swip.IsHot()) {

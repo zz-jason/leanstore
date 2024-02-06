@@ -228,7 +228,7 @@ void BufferManager::ReclaimPage(BufferFrame& bf) {
 
 // Returns a non-latched BufguardedSwipferFrame, called by worker threads
 BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
-                                               Swip<BufferFrame>& swipValue) {
+                                               Swip& swipValue) {
   if (swipValue.IsHot()) {
     // Resolve swip from hot state
     auto* bf = &swipValue.AsBufferFrame();
@@ -429,7 +429,7 @@ BufferFrame& BufferManager::ReadPageSync(PID pageId) {
   HybridGuard dummyGuard(&dummyLatch);
   dummyGuard.ToOptimisticSpin();
 
-  Swip<BufferFrame> swip;
+  Swip swip;
   swip.evict(pageId);
 
   for (auto failCounter = 100; failCounter > 0; failCounter--) {

@@ -46,7 +46,7 @@ public:
 
   /// Owns the meta node of the tree. The right-most child of meta node is the
   /// root of the tree.
-  Swip<BufferFrame> mMetaNodeSwip;
+  Swip mMetaNodeSwip;
 
   std::atomic<u64> mHeight = 1;
 
@@ -85,9 +85,8 @@ public:
   void PrintInfo(u64 totalSize);
 
   // for buffer manager
-  virtual void IterateChildSwips(
-      BufferFrame& bf,
-      std::function<bool(Swip<BufferFrame>&)> callback) override;
+  virtual void IterateChildSwips(BufferFrame& bf,
+                                 std::function<bool(Swip&)> callback) override;
 
   virtual ParentSwipHandler FindParent(BufferFrame& childBf) override {
     return BTreeGeneric::findParentMayJump(*this, childBf);
@@ -284,18 +283,18 @@ inline void BTreeGeneric::toJsonRecursive(
 }
 
 inline void BTreeGeneric::IterateChildSwips(
-    BufferFrame& bf, std::function<bool(Swip<BufferFrame>&)> callback) {
+    BufferFrame& bf, std::function<bool(Swip&)> callback) {
   // Pre: bf is read locked
   auto& childNode = *reinterpret_cast<BTreeNode*>(bf.page.mPayload);
   if (childNode.mIsLeaf) {
     return;
   }
   for (u16 i = 0; i < childNode.mNumSeps; i++) {
-    if (!callback(childNode.getChild(i).CastTo<BufferFrame>())) {
+    if (!callback(childNode.getChild(i))) {
       return;
     }
   }
-  callback(childNode.mRightMostChildSwip.CastTo<BufferFrame>());
+  callback(childNode.mRightMostChildSwip);
 }
 
 inline SpaceCheckResult BTreeGeneric::CheckSpaceUtilization(BufferFrame& bf) {
@@ -308,8 +307,7 @@ inline SpaceCheckResult BTreeGeneric::CheckSpaceUtilization(BufferFrame& bf) {
       mStore->mBufferManager.get(), std::move(parentHandler.mParentGuard),
       parentHandler.mParentBf);
   GuardedBufferFrame<BTreeNode> guardedChild(
-      mStore->mBufferManager.get(), guardedParent,
-      parentHandler.mChildSwip.CastTo<BTreeNode>(),
+      mStore->mBufferManager.get(), guardedParent, parentHandler.mChildSwip,
       LatchMode::kOptimisticOrJump);
   auto mergeResult = XMerge(guardedParent, guardedChild, parentHandler);
   guardedParent.unlock();
@@ -361,11 +359,11 @@ inline void BTreeGeneric::FindLeafCanJump(
     DCHECK(!childSwip.IsEmpty());
     guardedParent = std::move(guardedTarget);
     if (level == mHeight - 1) {
-      guardedTarget =
-          GuardedBufferFrame(bufferManager, guardedParent, childSwip, mode);
+      guardedTarget = GuardedBufferFrame<BTreeNode>(
+          bufferManager, guardedParent, childSwip, mode);
     } else {
-      guardedTarget =
-          GuardedBufferFrame(bufferManager, guardedParent, childSwip);
+      guardedTarget = GuardedBufferFrame<BTreeNode>(bufferManager,
+                                                    guardedParent, childSwip);
     }
     level = level + 1;
   }
@@ -389,7 +387,7 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
   }
 
   // Check whether the parent buffer frame to find is root
-  Swip<BTreeNode>* childSwip = &guardedParent->mRightMostChildSwip;
+  auto* childSwip = &guardedParent->mRightMostChildSwip;
   if (&childSwip->AsBufferFrameMasked() == &bfToFind) {
     guardedParent.JumpIfModifiedByOthers();
     COUNTERS_BLOCK() {
@@ -397,7 +395,7 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
     }
     return {.mParentGuard = std::move(guardedParent.mGuard),
             .mParentBf = &btree.mMetaNodeSwip.AsBufferFrame(),
-            .mChildSwip = childSwip->CastTo<BufferFrame>()};
+            .mChildSwip = *childSwip};
   }
 
   // Check whether the root node is cool, all nodes below including the parent
@@ -430,7 +428,7 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
   // LatchMode::kOptimisticOrJump : LatchMode::kPessimisticExclusive;
   LatchMode latchMode = LatchMode::kOptimisticOrJump;
   // The parent of the bf we are looking for (bfToFind)
-  GuardedBufferFrame guardedChild(
+  GuardedBufferFrame<BTreeNode> guardedChild(
       btree.mStore->mBufferManager.get(), guardedParent,
       guardedParent->mRightMostChildSwip, latchMode);
   u16 level = 0;
@@ -442,8 +440,8 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
       }
     }
     guardedChild =
-        GuardedBufferFrame(btree.mStore->mBufferManager.get(), guardedParent,
-                           childSwip->CastTo<BTreeNode>(), latchMode);
+        GuardedBufferFrame<BTreeNode>(btree.mStore->mBufferManager.get(),
+                                      guardedParent, *childSwip, latchMode);
     level = level + 1;
   }
   guardedParent.unlock();
@@ -456,11 +454,11 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
 
   DCHECK(posInParent != std::numeric_limits<u32>::max())
       << "Invalid posInParent=" << posInParent;
-  ParentSwipHandler parentHandler = {
-      .mParentGuard = std::move(guardedChild.mGuard),
-      .mParentBf = guardedChild.mBf,
-      .mChildSwip = childSwip->CastTo<BufferFrame>(),
-      .mPosInParent = posInParent};
+  ParentSwipHandler parentHandler = {.mParentGuard =
+                                         std::move(guardedChild.mGuard),
+                                     .mParentBf = guardedChild.mBf,
+                                     .mChildSwip = *childSwip,
+                                     .mPosInParent = posInParent};
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().dt_find_parent_slow[btree.mTreeId]++;
   }
