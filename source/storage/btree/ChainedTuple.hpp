@@ -5,7 +5,7 @@
 #include "concurrency-recovery/Worker.hpp"
 #include "shared-headers/Units.hpp"
 #include "storage/btree/BasicKV.hpp"
-#include "storage/btree/core/BTreeExclusiveIterator.hpp"
+#include "storage/btree/core/BTreePessimisticExclusiveIterator.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
 
 #include <glog/logging.h>
@@ -91,7 +91,7 @@ public:
            frequentlyUpdated;
   }
 
-  void Update(BTreeExclusiveIterator& xIter, Slice key,
+  void Update(BTreePessimisticExclusiveIterator& xIter, Slice key,
               MutValCallback updateCallBack, UpdateDesc& updateDesc);
 
 public:
@@ -191,7 +191,7 @@ inline std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
   return {OpCode::kNotFound, versionsRead};
 }
 
-inline void ChainedTuple::Update(BTreeExclusiveIterator& xIter, Slice key,
+inline void ChainedTuple::Update(BTreePessimisticExclusiveIterator& xIter, Slice key,
                                  MutValCallback updateCallBack,
                                  UpdateDesc& updateDesc) {
   auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();

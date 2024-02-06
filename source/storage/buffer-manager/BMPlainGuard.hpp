@@ -1,6 +1,6 @@
 #pragma once
 
-#include "sync-primitives/HybridGuard.hpp"
+#include "sync/HybridGuard.hpp"
 #include "utils/JumpMU.hpp"
 
 namespace leanstore {
@@ -69,7 +69,7 @@ private:
 public:
   BMExclusiveUpgradeIfNeeded(HybridGuard& guard)
       : mGuard(guard),
-        was_exclusive(guard.mState == GuardState::kExclusive) {
+        was_exclusive(guard.mState == GuardState::kPessimisticExclusive) {
     mGuard.TryToExclusiveMayJump();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }

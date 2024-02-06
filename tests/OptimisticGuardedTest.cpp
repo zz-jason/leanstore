@@ -1,4 +1,4 @@
-#include "sync-primitives/OptimisticGuarded.hpp"
+#include "sync/OptimisticGuarded.hpp"
 
 #include "Config.hpp"
 #include "LeanStore.hpp"

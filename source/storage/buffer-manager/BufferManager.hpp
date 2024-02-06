@@ -108,8 +108,8 @@ public:
   ///
   /// @return The buffer frame regarding to the swip.
   inline BufferFrame* TryFastResolveSwip(HybridGuard& swipGuard,
-                                         Swip<BufferFrame>& swipValue) {
-    if (swipValue.isHOT()) {
+                                         Swip& swipValue) {
+    if (swipValue.IsHot()) {
       BufferFrame& bf = swipValue.AsBufferFrame();
       swipGuard.JumpIfModifiedByOthers();
       return &bf;
@@ -117,8 +117,7 @@ public:
     return ResolveSwipMayJump(swipGuard, swipValue);
   }
 
-  BufferFrame* ResolveSwipMayJump(HybridGuard& swipGuard,
-                                  Swip<BufferFrame>& swipValue);
+  BufferFrame* ResolveSwipMayJump(HybridGuard& swipGuard, Swip& swipValue);
 
   void ReclaimPage(BufferFrame& bf);
 

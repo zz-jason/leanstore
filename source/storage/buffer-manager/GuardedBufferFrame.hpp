@@ -5,8 +5,8 @@
 #include "shared-headers/Units.hpp"
 #include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
-#include "sync-primitives/HybridGuard.hpp"
-#include "sync-primitives/HybridLatch.hpp"
+#include "sync/HybridGuard.hpp"
+#include "sync/HybridLatch.hpp"
 
 #include <glog/logging.h>
 
@@ -16,10 +16,10 @@ namespace leanstore {
 namespace storage {
 
 enum class LatchMode : u8 {
-  kShared = 0,
-  kExclusive = 1,
-  kOptimisticOrJump = 2,
-  kOptimisticSpin = 3,
+  kOptimisticOrJump = 0,
+  kOptimisticSpin = 1,
+  kPessimisticShared = 2,
+  kPessimisticExclusive = 3,
 };
 
 template <typename T> class ExclusiveGuardedBufferFrame;
@@ -88,7 +88,7 @@ public:
   // }
 
   /// Guard a single page, usually used for latching the meta node of a BTree.
-  GuardedBufferFrame(BufferManager* bufferManager, Swip<BufferFrame> hotSwip,
+  GuardedBufferFrame(BufferManager* bufferManager, Swip& hotSwip,
                      const LatchMode latchMode = LatchMode::kOptimisticSpin)
       : mBufferManager(bufferManager),
         mBf(&hotSwip.AsBufferFrame()),
@@ -107,11 +107,10 @@ public:
   /// memory if it is evicted.
   template <typename T2>
   GuardedBufferFrame(BufferManager* bufferManager,
-                     GuardedBufferFrame<T2>& guardedParent, Swip<T>& childSwip,
+                     GuardedBufferFrame<T2>& guardedParent, Swip& childSwip,
                      const LatchMode latchMode = LatchMode::kOptimisticSpin)
       : mBufferManager(bufferManager),
-        mBf(bufferManager->TryFastResolveSwip(
-            guardedParent.mGuard, childSwip.template CastTo<BufferFrame>())),
+        mBf(bufferManager->TryFastResolveSwip(guardedParent.mGuard, childSwip)),
         mGuard(&mBf->header.mLatch),
         mKeepAlive(true) {
     latchMayJump(mGuard, latchMode);
@@ -150,7 +149,7 @@ public:
   JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP(GuardedBufferFrame)
 
   ~GuardedBufferFrame() {
-    if (mGuard.mState == GuardState::kExclusive) {
+    if (mGuard.mState == GuardState::kPessimisticExclusive) {
       if (!mKeepAlive) {
         Reclaim();
       }
@@ -214,7 +213,7 @@ public:
   inline cr::WALPayloadHandler<WT> ReserveWALPayload(u64 walSize,
                                                      Args&&... args) {
     DCHECK(cr::ActiveTx().mIsDurable);
-    DCHECK(mGuard.mState == GuardState::kExclusive);
+    DCHECK(mGuard.mState == GuardState::kPessimisticExclusive);
 
     SyncGSNBeforeWrite();
 
@@ -255,8 +254,8 @@ public:
     return reinterpret_cast<T*>(mBf->page.mPayload);
   }
 
-  inline Swip<T> swip() {
-    return Swip<T>(mBf);
+  inline Swip swip() {
+    return Swip(mBf);
   }
 
   inline T* operator->() {
@@ -296,11 +295,11 @@ protected:
       guard.ToOptimisticSpin();
       break;
     }
-    case LatchMode::kExclusive: {
+    case LatchMode::kPessimisticExclusive: {
       guard.ToOptimisticOrExclusive();
       break;
     }
-    case LatchMode::kShared: {
+    case LatchMode::kPessimisticShared: {
       guard.ToOptimisticOrShared();
       break;
     }
@@ -347,7 +346,7 @@ public:
 
   ~ExclusiveGuardedBufferFrame() {
     if (!mRefGuard.mKeepAlive &&
-        mRefGuard.mGuard.mState == GuardState::kExclusive) {
+        mRefGuard.mGuard.mState == GuardState::kPessimisticExclusive) {
       mRefGuard.Reclaim();
     } else {
       mRefGuard.unlock();
@@ -372,8 +371,8 @@ public:
     return GetPagePayload();
   }
 
-  inline Swip<PayloadType> swip() {
-    return Swip<PayloadType>(mRefGuard.mBf);
+  inline Swip swip() {
+    return Swip(mRefGuard.mBf);
   }
 
   inline BufferFrame* bf() {
@@ -408,8 +407,8 @@ public:
     return reinterpret_cast<T*>(mRefGuard.mBf->page.mPayload);
   }
 
-  inline Swip<T> swip() {
-    return Swip<T>(mRefGuard.mBf);
+  inline Swip swip() {
+    return Swip(mRefGuard.mBf);
   }
 
   inline T* operator->() {
