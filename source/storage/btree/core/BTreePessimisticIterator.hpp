@@ -4,6 +4,7 @@
 #include "BTreeIteratorInterface.hpp"
 #include "KVInterface.hpp"
 #include "shared-headers/Units.hpp"
+#include "storage/btree/core/BTreeNode.hpp"
 
 #include <glog/logging.h>
 
