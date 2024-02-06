@@ -8,7 +8,7 @@
 #include "storage/btree/ChainedTuple.hpp"
 #include "storage/btree/Tuple.hpp"
 #include "storage/btree/core/BTreeGeneric.hpp"
-#include "storage/btree/core/BTreeSharedIterator.hpp"
+#include "storage/btree/core/BTreePessimisticSharedIterator.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
 #include "utils/Defer.hpp"
 
@@ -52,7 +52,7 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
       << ", startTs=" << cr::Worker::My().mActiveTx.mStartTs;
 
   auto lookupInGraveyard = [&]() {
-    BTreeSharedIterator gIter(*static_cast<BTreeGeneric*>(mGraveyard));
+    auto gIter = mGraveyard->GetIterator();
     if (!gIter.SeekExact(key)) {
       return OpCode::kNotFound;
     }
@@ -65,7 +65,7 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
     return ret;
   };
 
-  BTreeSharedIterator iter(*static_cast<BTreeGeneric*>(this));
+  auto iter = GetIterator();
   if (!iter.SeekExact(key)) {
     // In a lookup-after-remove(other worker) scenario, the tuple may be garbage
     // collected and moved to the graveyard, check the graveyard for the key.
@@ -90,7 +90,7 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
                                     UpdateDesc& updateDesc) {
   DCHECK(cr::Worker::My().IsTxStarted());
   JUMPMU_TRY() {
-    BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
+    auto xIter = GetExclusiveIterator();
     if (!xIter.SeekExact(key)) {
       // Conflict detected, the tuple to be updated by the long-running
       // transaction is removed by newer transactions, abort it.
@@ -188,7 +188,7 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
   u16 payloadSize = val.size() + sizeof(ChainedTuple);
 
   while (true) {
-    BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
+    auto xIter = GetExclusiveIterator();
     auto ret = xIter.SeekToInsert(key);
 
     if (ret == OpCode::kDuplicated) {
@@ -256,8 +256,8 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
   }
 }
 
-void TransactionKV::insertAfterRemove(BTreeExclusiveIterator& xIter, Slice key,
-                                      Slice val) {
+void TransactionKV::insertAfterRemove(BTreePessimisticExclusiveIterator& xIter,
+                                      Slice key, Slice val) {
   auto mutRawVal = xIter.MutableVal();
   auto* chainedTuple = ChainedTuple::From(mutRawVal.Data());
   DCHECK(chainedTuple->mIsTombstone)
@@ -317,7 +317,7 @@ void TransactionKV::insertAfterRemove(BTreeExclusiveIterator& xIter, Slice key,
 OpCode TransactionKV::Remove(Slice key) {
   DCHECK(cr::Worker::My().IsTxStarted());
   JUMPMU_TRY() {
-    BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
+    auto xIter = GetExclusiveIterator();
     if (!xIter.SeekExact(key)) {
       // Conflict detected, the tuple to be removed by the long-running
       // transaction is removed by newer transactions, abort it.
@@ -447,7 +447,7 @@ void TransactionKV::undoLastInsert(const WALTxInsert* walInsert) {
   auto key = walInsert->GetKey();
   for (int retry = 0; true; retry++) {
     JUMPMU_TRY() {
-      BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
+      auto xIter = GetExclusiveIterator();
       auto succeed = xIter.SeekExact(key);
       DCHECK(succeed) << "Cannot find the inserted key in btree"
                       << ", workerId=" << cr::Worker::My().mWorkerId
@@ -498,7 +498,7 @@ void TransactionKV::undoLastUpdate(const WALTxUpdate* walUpdate) {
   auto key = walUpdate->GetKey();
   for (int retry = 0; true; retry++) {
     JUMPMU_TRY() {
-      BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
+      auto xIter = GetExclusiveIterator();
       auto succeed = xIter.SeekExact(key);
       DCHECK(succeed) << "Cannot find the updated key in btree"
                       << ", workerId=" << cr::Worker::My().mWorkerId
@@ -551,7 +551,7 @@ void TransactionKV::undoLastRemove(const WALTxRemove* walRemove) {
   Slice removedKey = walRemove->RemovedKey();
   for (int retry = 0; true; retry++) {
     JUMPMU_TRY() {
-      BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
+      auto xIter = GetExclusiveIterator();
       auto succeed = xIter.SeekExact(removedKey);
       DCHECK(succeed) << "Cannot find the tombstone of removed key"
                       << ", workerId=" << cr::Worker::My().mWorkerId
@@ -592,8 +592,8 @@ void TransactionKV::undoLastRemove(const WALTxRemove* walRemove) {
   }
 }
 
-bool TransactionKV::UpdateInFatTuple(BTreeExclusiveIterator& xIter, Slice key,
-                                     MutValCallback updateCallBack,
+bool TransactionKV::UpdateInFatTuple(BTreePessimisticExclusiveIterator& xIter,
+                                     Slice key, MutValCallback updateCallBack,
                                      UpdateDesc& updateDesc) {
   utils::Timer timer(CRCounters::MyCounters().cc_ms_fat_tuple);
   while (true) {
@@ -707,7 +707,7 @@ void TransactionKV::GarbageCollect(const u8* versionData,
                << ", removedKey=" << ToString(version.RemovedKey());
     DCHECK(version.mDanglingPointer.mBf != nullptr);
     JUMPMU_TRY() {
-      BTreeExclusiveIterator xIter(
+      BTreePessimisticExclusiveIterator xIter(
           *static_cast<BTreeGeneric*>(this), version.mDanglingPointer.mBf,
           version.mDanglingPointer.mLatchVersionShouldBe);
       auto& node = xIter.mGuardedLeaf;
@@ -739,7 +739,7 @@ void TransactionKV::GarbageCollect(const u8* versionData,
                << ", versionTxId=" << versionTxId
                << ", removedKey=" << ToString(removedKey);
     JUMPMU_TRY() {
-      BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(mGraveyard));
+      auto xIter = mGraveyard->GetExclusiveIterator();
       if (xIter.SeekExact(removedKey)) {
         auto ret = xIter.RemoveCurrent();
         DCHECK(ret == OpCode::kOK)
@@ -766,7 +766,7 @@ void TransactionKV::GarbageCollect(const u8* versionData,
   //
   // TODO(jian.z): handle corner cases in insert-after-remove scenario
   JUMPMU_TRY() {
-    BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
+    auto xIter = GetExclusiveIterator();
     if (!xIter.SeekExact(removedKey)) {
       DLOG(FATAL)
           << "Cannot find the removedKey in TransactionKV, should not happen"
@@ -820,8 +820,7 @@ void TransactionKV::GarbageCollect(const u8* versionData,
                    << ", versionTxId=" << versionTxId
                    << ", removedKey=" << ToString(removedKey);
         // insert the removed key value to graveyard
-        BTreeExclusiveIterator graveyardXIter(
-            *static_cast<BTreeGeneric*>(mGraveyard));
+        auto graveyardXIter = mGraveyard->GetExclusiveIterator();
         auto gRet = graveyardXIter.InsertKV(removedKey, xIter.value());
         DCHECK(gRet == OpCode::kOK)
             << "Failed to insert the removedKey to graveyard"
@@ -900,7 +899,7 @@ void TransactionKV::unlock(const u8* walEntryPtr) {
   }
 
   JUMPMU_TRY() {
-    BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this));
+    auto xIter = GetExclusiveIterator();
     auto succeed = xIter.SeekExact(key);
     DCHECK(succeed) << "Can not find key in the BTree"
                     << ", key=" << std::string((char*)key.data(), key.size());
@@ -925,7 +924,7 @@ OpCode TransactionKV::scan4ShortRunningTx(Slice key, ScanCallback callback) {
 
   bool keepScanning = true;
   JUMPMU_TRY() {
-    BTreeSharedIterator iter(*static_cast<BTreeGeneric*>(this));
+    auto iter = GetIterator();
 
     bool succeed = asc ? iter.Seek(key) : iter.SeekForPrev(key);
     while (succeed) {
@@ -976,10 +975,10 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
 
   bool keepScanning = true;
   JUMPMU_TRY() {
-    BTreeSharedIterator iter(*static_cast<BTreeGeneric*>(this));
+    auto iter = GetIterator();
     OpCode oRet;
 
-    BTreeSharedIterator gIter(*static_cast<BTreeGeneric*>(mGraveyard));
+    auto gIter = mGraveyard->GetIterator();
     OpCode gRet;
 
     Slice graveyardLowerBound, graveyardUpperBound;

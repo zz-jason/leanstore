@@ -5,8 +5,8 @@
 #include "shared-headers/Units.hpp"
 #include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
-#include "sync-primitives/HybridGuard.hpp"
-#include "sync-primitives/HybridLatch.hpp"
+#include "sync/HybridGuard.hpp"
+#include "sync/HybridLatch.hpp"
 
 #include <glog/logging.h>
 
@@ -16,10 +16,10 @@ namespace leanstore {
 namespace storage {
 
 enum class LatchMode : u8 {
-  kShared = 0,
-  kExclusive = 1,
-  kOptimisticOrJump = 2,
-  kOptimisticSpin = 3,
+  kOptimisticOrJump = 0,
+  kOptimisticSpin = 1,
+  kPessimisticShared = 2,
+  kPessimisticExclusive = 3,
 };
 
 template <typename T> class ExclusiveGuardedBufferFrame;
@@ -150,7 +150,7 @@ public:
   JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP(GuardedBufferFrame)
 
   ~GuardedBufferFrame() {
-    if (mGuard.mState == GuardState::kExclusive) {
+    if (mGuard.mState == GuardState::kPessimisticExclusive) {
       if (!mKeepAlive) {
         Reclaim();
       }
@@ -214,7 +214,7 @@ public:
   inline cr::WALPayloadHandler<WT> ReserveWALPayload(u64 walSize,
                                                      Args&&... args) {
     DCHECK(cr::ActiveTx().mIsDurable);
-    DCHECK(mGuard.mState == GuardState::kExclusive);
+    DCHECK(mGuard.mState == GuardState::kPessimisticExclusive);
 
     SyncGSNBeforeWrite();
 
@@ -296,11 +296,11 @@ protected:
       guard.ToOptimisticSpin();
       break;
     }
-    case LatchMode::kExclusive: {
+    case LatchMode::kPessimisticExclusive: {
       guard.ToOptimisticOrExclusive();
       break;
     }
-    case LatchMode::kShared: {
+    case LatchMode::kPessimisticShared: {
       guard.ToOptimisticOrShared();
       break;
     }
@@ -347,7 +347,7 @@ public:
 
   ~ExclusiveGuardedBufferFrame() {
     if (!mRefGuard.mKeepAlive &&
-        mRefGuard.mGuard.mState == GuardState::kExclusive) {
+        mRefGuard.mGuard.mState == GuardState::kPessimisticExclusive) {
       mRefGuard.Reclaim();
     } else {
       mRefGuard.unlock();

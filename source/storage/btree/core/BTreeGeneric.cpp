@@ -5,6 +5,8 @@
 #include "profiling/counters/WorkerCounters.hpp"
 #include "shared-headers/Units.hpp"
 #include "storage/btree/core/BTreeNode.hpp"
+#include "storage/btree/core/BTreePessimisticExclusiveIterator.hpp"
+#include "storage/btree/core/BTreePessimisticSharedIterator.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
 #include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
@@ -54,6 +56,13 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId,
 
   xGuardedRoot.SyncGSNBeforeWrite();
   xGuardedMeta.SyncGSNBeforeWrite();
+}
+
+BTreePessimisticSharedIterator BTreeGeneric::GetIterator() {
+  return BTreePessimisticSharedIterator(*this);
+}
+BTreePessimisticExclusiveIterator BTreeGeneric::GetExclusiveIterator() {
+  return BTreePessimisticExclusiveIterator(*this);
 }
 
 void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
@@ -263,7 +272,7 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
     // TODO: write WALs
     auto mergeAndReclaimLeft = [&]() {
       Swip<BTreeNode>& leftSwip = guardedParent->getChild(posInParent - 1);
-      if (!swizzleSibling && leftSwip.isEVICTED()) {
+      if (!swizzleSibling && leftSwip.IsEvicted()) {
         return false;
       }
       auto guardedLeft = GuardedBufferFrame(mStore->mBufferManager.get(),
@@ -303,7 +312,7 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
           ((posInParent + 1) == guardedParent->mNumSeps)
               ? guardedParent->mRightMostChildSwip
               : guardedParent->getChild(posInParent + 1);
-      if (!swizzleSibling && rightSwip.isEVICTED()) {
+      if (!swizzleSibling && rightSwip.IsEvicted()) {
         return false;
       }
       auto guardedRight = GuardedBufferFrame(mStore->mBufferManager.get(),
@@ -504,7 +513,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
   for (maxRight = pos + 1; (maxRight - pos) < maxMergePages &&
                            (maxRight + 1) < guardedParent->mNumSeps;
        maxRight++) {
-    if (!guardedParent->getChild(maxRight).isHOT()) {
+    if (!guardedParent->getChild(maxRight).IsHot()) {
       guardedChild = std::move(guardedNodes[0]);
       return XMergeReturnCode::kNothing;
     }

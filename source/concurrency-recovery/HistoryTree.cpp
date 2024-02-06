@@ -2,8 +2,9 @@
 
 #include "profiling/counters/CRCounters.hpp"
 #include "shared-headers/Units.hpp"
-#include "storage/btree/core/BTreeExclusiveIterator.hpp"
-#include "storage/btree/core/BTreeSharedIterator.hpp"
+#include "storage/btree/BasicKV.hpp"
+#include "storage/btree/core/BTreePessimisticExclusiveIterator.hpp"
+#include "storage/btree/core/BTreePessimisticSharedIterator.hpp"
 #include "utils/Misc.hpp"
 
 #include <functional>
@@ -35,7 +36,7 @@ void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
   }
   if (session != nullptr && session->mRightmostInited) {
     JUMPMU_TRY() {
-      BTreeExclusiveIterator xIter(
+      BTreePessimisticExclusiveIterator xIter(
           *static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)),
           session->mRightmostBf, session->mRightmostVersion);
       if (xIter.HasEnoughSpaceFor(key.size(), versionSize) &&
@@ -67,9 +68,7 @@ void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
 
   while (true) {
     JUMPMU_TRY() {
-      BTreeExclusiveIterator xIter(
-          *static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)));
-
+      auto xIter = const_cast<BasicKV*>(btree)->GetExclusiveIterator();
       OpCode ret = xIter.SeekToInsert(key);
       if (ret == OpCode::kDuplicated) {
         // remove the last inserted version for the key
@@ -119,9 +118,7 @@ bool HistoryTree::GetVersion(WORKERID prevWorkerId, TXID prevTxId,
 
   Slice key(keyBuffer, keySize);
   JUMPMU_TRY() {
-    BTreeSharedIterator iter(
-        *static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)),
-        LatchMode::kShared);
+    auto iter = const_cast<BasicKV*>(btree)->GetIterator();
     if (!iter.SeekExact(key)) {
       JUMPMU_RETURN false;
     }
@@ -157,7 +154,7 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
   auto* btree = mRemoveBTrees[workerId];
   JUMPMU_TRY() {
   restartrem : {
-    BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(btree));
+    auto xIter = btree->GetExclusiveIterator();
     xIter.SetExitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
       if (guardedLeaf->FreeSpaceAfterCompaction() >=
           BTreeNode::UnderFullSize()) {
@@ -242,7 +239,7 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
 
   while (shouldTry) {
     JUMPMU_TRY() {
-      BTreeExclusiveIterator xIter(*static_cast<BTreeGeneric*>(btree));
+      auto xIter = btree->GetExclusiveIterator();
       // check whether the page can be merged when exit a leaf
       xIter.SetExitLeafCallback(
           [&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
@@ -323,7 +320,7 @@ void HistoryTree::VisitRemovedVersions(WORKERID workerId, TXID fromTxId,
 
   JUMPMU_TRY() {
   restart : {
-    leanstore::storage::btree::BTreeExclusiveIterator xIter(
+    leanstore::storage::btree::BTreePessimisticExclusiveIterator xIter(
         *static_cast<BTreeGeneric*>(removeTree));
     while (xIter.Seek(key)) {
       // skip versions out of the transaction range

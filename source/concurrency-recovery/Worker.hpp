@@ -5,7 +5,7 @@
 #include "WALEntry.hpp"
 #include "shared-headers/Exceptions.hpp"
 #include "shared-headers/Units.hpp"
-#include "sync-primitives/OptimisticGuarded.hpp"
+#include "sync/OptimisticGuarded.hpp"
 #include "utils/Defer.hpp"
 
 #include <glog/logging.h>

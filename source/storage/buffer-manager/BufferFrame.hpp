@@ -2,7 +2,7 @@
 
 #include "Swip.hpp"
 #include "shared-headers/Units.hpp"
-#include "sync-primitives/HybridLatch.hpp"
+#include "sync/HybridLatch.hpp"
 #include "utils/Misc.hpp"
 
 #include <glog/logging.h>

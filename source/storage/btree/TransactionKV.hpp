@@ -8,7 +8,7 @@
 #include "storage/btree/BasicKV.hpp"
 #include "storage/btree/ChainedTuple.hpp"
 #include "storage/btree/Tuple.hpp"
-#include "storage/btree/core/BTreeExclusiveIterator.hpp"
+#include "storage/btree/core/BTreePessimisticExclusiveIterator.hpp"
 #include "storage/btree/core/BTreeGeneric.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
 #include "storage/buffer-manager/GuardedBufferFrame.hpp"
@@ -117,7 +117,7 @@ private:
     }
   }
 
-  void insertAfterRemove(BTreeExclusiveIterator& xIter, Slice key, Slice val);
+  void insertAfterRemove(BTreePessimisticExclusiveIterator& xIter, Slice key, Slice val);
 
   void undoLastInsert(const WALTxInsert* walInsert);
 
@@ -148,7 +148,7 @@ public:
   /// Updates the value stored in FatTuple. The former newest version value is
   /// moved to the tail.
   /// @return false to fallback to chained mode
-  static bool UpdateInFatTuple(BTreeExclusiveIterator& xIter, Slice key,
+  static bool UpdateInFatTuple(BTreePessimisticExclusiveIterator& xIter, Slice key,
                                MutValCallback updateCallBack,
                                UpdateDesc& updateDesc);
 };

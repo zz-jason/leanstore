@@ -1,7 +1,7 @@
 #pragma once
 
 #include "shared-headers/Units.hpp"
-#include "storage/btree/core/BTreeExclusiveIterator.hpp"
+#include "storage/btree/core/BTreePessimisticExclusiveIterator.hpp"
 
 #include <glog/logging.h>
 
@@ -116,7 +116,7 @@ public:
     return reinterpret_cast<const Tuple*>(buffer);
   }
 
-  static bool ToFat(BTreeExclusiveIterator& iterator);
+  static bool ToFat(BTreePessimisticExclusiveIterator& iterator);
 };
 
 // -----------------------------------------------------------------------------
@@ -308,7 +308,7 @@ struct __attribute__((packed)) DanglingPointer {
 public:
   DanglingPointer() = default;
 
-  DanglingPointer(const BTreeExclusiveIterator& xIter)
+  DanglingPointer(const BTreePessimisticExclusiveIterator& xIter)
       : mBf(xIter.mGuardedLeaf.mBf),
         mLatchVersionShouldBe(xIter.mGuardedLeaf.mGuard.mVersion),
         mHeadSlot(xIter.mSlotId) {

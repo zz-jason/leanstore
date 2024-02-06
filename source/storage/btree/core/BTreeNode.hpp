@@ -478,7 +478,9 @@ public:
       int cmpPrefix = CmpKeys(keyPrefix, lowerFencePrefix);
       if (cmpPrefix < 0) {
         return 0;
-      } else if (cmpPrefix > 0) {
+      }
+
+      if (cmpPrefix > 0) {
         return mNumSeps;
       }
     }

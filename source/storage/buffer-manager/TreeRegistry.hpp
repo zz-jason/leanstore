@@ -2,7 +2,7 @@
 
 #include "BufferFrame.hpp"
 #include "shared-headers/Units.hpp"
-#include "sync-primitives/HybridGuard.hpp"
+#include "sync/HybridGuard.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
 

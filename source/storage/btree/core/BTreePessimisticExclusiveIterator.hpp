@@ -9,15 +9,15 @@ using namespace leanstore::storage;
 
 namespace leanstore::storage::btree {
 
-class BTreeExclusiveIterator : public BTreePessimisticIterator {
+class BTreePessimisticExclusiveIterator : public BTreePessimisticIterator {
 public:
-  BTreeExclusiveIterator(BTreeGeneric& tree)
-      : BTreePessimisticIterator(tree, LatchMode::kExclusive) {
+  BTreePessimisticExclusiveIterator(BTreeGeneric& tree)
+      : BTreePessimisticIterator(tree, LatchMode::kPessimisticExclusive) {
   }
 
-  BTreeExclusiveIterator(BTreeGeneric& tree, BufferFrame* bf,
-                         const u64 bfVersion)
-      : BTreePessimisticIterator(tree, LatchMode::kExclusive) {
+  BTreePessimisticExclusiveIterator(BTreeGeneric& tree, BufferFrame* bf,
+                                    const u64 bfVersion)
+      : BTreePessimisticIterator(tree, LatchMode::kPessimisticExclusive) {
     HybridGuard optimisticGuard(bf->header.mLatch, bfVersion);
     optimisticGuard.JumpIfModifiedByOthers();
     mGuardedLeaf = GuardedBufferFrame<BTreeNode>(
@@ -73,7 +73,8 @@ public:
     while (true) {
       JUMPMU_TRY() {
         if (mSlotId == -1 || !KeyInCurrentNode(key)) {
-          mBTree.FindLeafCanJump<LatchMode::kShared>(key, mGuardedLeaf);
+          mBTree.FindLeafCanJump<LatchMode::kPessimisticShared>(key,
+                                                                mGuardedLeaf);
         }
         BufferFrame* bf = mGuardedLeaf.mBf;
         mGuardedLeaf.unlock();

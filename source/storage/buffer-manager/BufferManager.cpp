@@ -229,15 +229,15 @@ void BufferManager::ReclaimPage(BufferFrame& bf) {
 // Returns a non-latched BufguardedSwipferFrame, called by worker threads
 BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
                                                Swip<BufferFrame>& swipValue) {
-  if (swipValue.isHOT()) {
+  if (swipValue.IsHot()) {
     // Resolve swip from hot state
     auto* bf = &swipValue.AsBufferFrame();
     swipGuard.JumpIfModifiedByOthers();
     return bf;
   }
-  if (swipValue.isCOOL()) {
+  if (swipValue.IsCool()) {
     // Resolve swip from cool state
-    auto* bf = &swipValue.asBufferFrameMasked();
+    auto* bf = &swipValue.AsBufferFrameMasked();
     swipGuard.JumpIfModifiedByOthers();
     BMOptimisticGuard bfGuard(bf->header.mLatch);
     BMExclusiveUpgradeIfNeeded swipXGuard(swipGuard); // parent
@@ -256,7 +256,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
   // unlock the current node firstly to avoid deadlock: P->G, G->P
   swipGuard.Unlock();
 
-  const PID pageId = swipValue.asPageID();
+  const PID pageId = swipValue.AsPageId();
   Partition& partition = GetPartition(pageId);
   JumpScoped<std::unique_lock<std::mutex>> inflightIOGuard(
       partition.mInflightIOMutex);
@@ -361,7 +361,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
       ioFrame.bf = nullptr;
       swipValue.MarkHOT(bf);
       DCHECK(bf->header.mPageId == pageId);
-      DCHECK(swipValue.isHOT());
+      DCHECK(swipValue.IsHot());
       DCHECK(bf->header.state == STATE::LOADED);
       bf->header.state = STATE::HOT;
 

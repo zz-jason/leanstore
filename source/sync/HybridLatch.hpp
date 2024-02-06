@@ -33,8 +33,7 @@ private:
   std::shared_mutex mMutex;
 
 public:
-  template <typename... Args>
-  HybridLatch(Args&&... args) : mVersion(std::forward<Args>(args)...) {
+  HybridLatch(u64 version = 0) : mVersion(version) {
   }
 
 public:

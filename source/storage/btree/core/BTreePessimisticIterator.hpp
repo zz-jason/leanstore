@@ -3,6 +3,7 @@
 #include "BTreeGeneric.hpp"
 #include "BTreeIteratorInterface.hpp"
 #include "KVInterface.hpp"
+#include "shared-headers/Units.hpp"
 
 #include <glog/logging.h>
 
@@ -62,9 +63,8 @@ public:
 
 protected:
   // We need a custom findLeafAndLatch to track the position in parent node
-  template <LatchMode mode = LatchMode::kShared>
-  void findLeafAndLatch(GuardedBufferFrame<BTreeNode>& guardedChild,
-                        Slice key) {
+  void findLeafAndLatch(GuardedBufferFrame<BTreeNode>& guardedChild, Slice key,
+                        LatchMode mode = LatchMode::kPessimisticShared) {
     while (true) {
       mLeafPosInParent = -1;
       JUMPMU_TRY() {
@@ -97,7 +97,7 @@ protected:
         }
 
         mGuardedParent.unlock();
-        if (mode == LatchMode::kExclusive) {
+        if (mode == LatchMode::kPessimisticExclusive) {
           guardedChild.ToExclusiveMayJump();
         } else {
           guardedChild.ToSharedMayJump();
@@ -115,7 +115,7 @@ protected:
 
   void gotoPage(const Slice& key) {
     COUNTERS_BLOCK() {
-      if (mMode == LatchMode::kExclusive) {
+      if (mMode == LatchMode::kPessimisticExclusive) {
         WorkerCounters::MyCounters().dt_goto_page_exec[mBTree.mTreeId]++;
       } else {
         WorkerCounters::MyCounters().dt_goto_page_shared[mBTree.mTreeId]++;
@@ -123,18 +123,17 @@ protected:
     }
 
     // TODO: refactor when we get ride of serializability tests
-    if (mMode == LatchMode::kShared) {
-      findLeafAndLatch<LatchMode::kShared>(mGuardedLeaf, key);
-    } else if (mMode == LatchMode::kExclusive) {
-      findLeafAndLatch<LatchMode::kExclusive>(mGuardedLeaf, key);
+    if (mMode == LatchMode::kPessimisticShared ||
+        mMode == LatchMode::kPessimisticExclusive) {
+      findLeafAndLatch(mGuardedLeaf, key, mMode);
     } else {
-      UNREACHABLE();
+      DLOG(FATAL) << "Unsupported latch mode: " << u64(mMode);
     }
   }
 
 public:
   BTreePessimisticIterator(BTreeGeneric& tree,
-                           const LatchMode mode = LatchMode::kShared)
+                           const LatchMode mode = LatchMode::kPessimisticShared)
       : mBTree(tree),
         mMode(mode),
         mBuffer() {
@@ -212,7 +211,7 @@ public:
       WorkerCounters::MyCounters().dt_next_tuple[mBTree.mTreeId]++;
     }
     while (true) {
-      ENSURE(mGuardedLeaf.mGuard.mState != GuardState::kOptimistic);
+      ENSURE(mGuardedLeaf.mGuard.mState != GuardState::kOptimisticShared);
 
       // If we are not at the end of the leaf, return the next key in the leaf.
       if ((mSlotId + 1) < mGuardedLeaf->mNumSeps) {
@@ -248,7 +247,7 @@ public:
             GuardedBufferFrame guardedNextLeaf(
                 mBTree.mStore->mBufferManager.get(), mGuardedParent,
                 nextLeafSwip, LatchMode::kOptimisticOrJump);
-            if (mMode == LatchMode::kExclusive) {
+            if (mMode == LatchMode::kPessimisticExclusive) {
               guardedNextLeaf.TryToExclusiveMayJump();
             } else {
               guardedNextLeaf.TryToSharedMayJump();
@@ -307,7 +306,7 @@ public:
     }
 
     while (true) {
-      ENSURE(mGuardedLeaf.mGuard.mState != GuardState::kOptimistic);
+      ENSURE(mGuardedLeaf.mGuard.mState != GuardState::kOptimisticShared);
       // If we are not at the beginning of the leaf, return the previous key
       // in the leaf.
       if (mSlotId > 0) {
@@ -351,7 +350,7 @@ public:
             GuardedBufferFrame guardedNextLeaf(
                 mBTree.mStore->mBufferManager.get(), mGuardedParent,
                 nextLeafSwip, LatchMode::kOptimisticOrJump);
-            if (mMode == LatchMode::kExclusive) {
+            if (mMode == LatchMode::kPessimisticExclusive) {
               guardedNextLeaf.TryToExclusiveMayJump();
             } else {
               guardedNextLeaf.TryToSharedMayJump();

@@ -216,7 +216,7 @@ inline void BufferFrameProvider::evictFlushedBf(
   ParentSwipHandler parentHandler =
       mStore->mTreeRegistry->FindParent(btreeId, cooledBf);
 
-  DCHECK(parentHandler.mParentGuard.mState == GuardState::kOptimistic);
+  DCHECK(parentHandler.mParentGuard.mState == GuardState::kOptimisticShared);
   BMExclusiveUpgradeIfNeeded parentWriteGuard(parentHandler.mParentGuard);
   optimisticGuard.mGuard.ToExclusiveMayJump();
 
@@ -226,7 +226,7 @@ inline void BufferFrameProvider::evictFlushedBf(
   DCHECK(!cooledBf.isDirty());
   DCHECK(!cooledBf.header.mIsBeingWrittenBack);
   DCHECK(cooledBf.header.state == STATE::COOL);
-  DCHECK(parentHandler.mChildSwip.isCOOL());
+  DCHECK(parentHandler.mChildSwip.IsCool());
 
   parentHandler.mChildSwip.evict(cooledBf.header.mPageId);
   PID evictedPageId = cooledBf.header.mPageId;
@@ -337,8 +337,8 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
             coolCandidate->page.mBTreeId, *coolCandidate,
             [&](Swip<BufferFrame>& swip) {
               // Ignore when it has a child in the cooling stage
-              allChildrenEvicted &= swip.isEVICTED();
-              if (swip.isHOT()) {
+              allChildrenEvicted &= swip.IsEvicted();
+              if (swip.IsHot()) {
                 BufferFrame* childBf = &swip.AsBufferFrame();
                 readGuard.JumpIfModifiedByOthers();
                 pickedAChild = true;
@@ -381,7 +381,8 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         auto parentHandler =
             mStore->mTreeRegistry->FindParent(btreeId, *coolCandidate);
 
-        DCHECK(parentHandler.mParentGuard.mState == GuardState::kOptimistic);
+        DCHECK(parentHandler.mParentGuard.mState ==
+               GuardState::kOptimisticShared);
         DCHECK(parentHandler.mParentGuard.mLatch !=
                reinterpret_cast<HybridLatch*>(0x99));
         COUNTERS_BLOCK() {
@@ -422,7 +423,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
           // mark the buffer frame in cool state
           coolCandidate->header.state = STATE::COOL;
           // mark the swip to the buffer frame to cool state
-          parentHandler.mChildSwip.cool();
+          parentHandler.mChildSwip.Cool();
           DLOG(WARNING) << "Cool candidate find, state changed to COOL"
                         << ", pageId=" << coolCandidate->header.mPageId;
         }
@@ -459,7 +460,7 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
           cooledBf->header.mIsBeingWrittenBack) {
         DLOG(WARNING) << "COOLed buffer frame discarded"
                       << ", pageId=" << cooledBf->header.mPageId
-                      << ", isCOOL=" << (cooledBf->header.state == STATE::COOL)
+                      << ", IsCool=" << (cooledBf->header.state == STATE::COOL)
                       << ", isBeingWritternBack="
                       << cooledBf->header.mIsBeingWrittenBack;
         JUMPMU_CONTINUE;

@@ -109,7 +109,7 @@ public:
   /// @return The buffer frame regarding to the swip.
   inline BufferFrame* TryFastResolveSwip(HybridGuard& swipGuard,
                                          Swip<BufferFrame>& swipValue) {
-    if (swipValue.isHOT()) {
+    if (swipValue.IsHot()) {
       BufferFrame& bf = swipValue.AsBufferFrame();
       swipGuard.JumpIfModifiedByOthers();
       return &bf;
