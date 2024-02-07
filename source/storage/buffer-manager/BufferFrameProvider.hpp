@@ -228,7 +228,7 @@ inline void BufferFrameProvider::evictFlushedBf(
   DCHECK(cooledBf.header.state == STATE::COOL);
   DCHECK(parentHandler.mChildSwip.IsCool());
 
-  parentHandler.mChildSwip.evict(cooledBf.header.mPageId);
+  parentHandler.mChildSwip.Evict(cooledBf.header.mPageId);
   PID evictedPageId = cooledBf.header.mPageId;
 
   // Reclaim buffer frame

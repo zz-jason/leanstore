@@ -681,7 +681,7 @@ StringMap BTreeGeneric::Serialize() {
 void BTreeGeneric::Deserialize(StringMap map) {
   mTreeId = std::stoull(map[kTreeId]);
   mHeight = std::stoull(map[kHeight]);
-  mMetaNodeSwip.evict(std::stoull(map[kMetaPageId]));
+  mMetaNodeSwip.Evict(std::stoull(map[kMetaPageId]));
 
   // load meta node to memory
   HybridLatch dummyLatch;

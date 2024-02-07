@@ -100,7 +100,7 @@ public:
     this->mPageId = mPageId | sCoolBit;
   }
 
-  void evict(PID pageId) {
+  void Evict(PID pageId) {
     this->mPageId = pageId | sEvictedBit;
   }
 

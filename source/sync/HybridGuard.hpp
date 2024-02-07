@@ -88,13 +88,24 @@ public:
   }
 
   inline void Unlock() {
-    if (mState == GuardState::kPessimisticExclusive) {
+    switch (mState) {
+    case GuardState::kPessimisticExclusive: {
       unlockExclusive();
       DCHECK(!HasExclusiveMark(mLatch->mVersion));
-    } else if (mState == GuardState::kPessimisticShared) {
+      break;
+    }
+    case GuardState::kPessimisticShared: {
       unlockShared();
       DCHECK(!HasExclusiveMark(mLatch->mVersion));
+      break;
     }
+    default: {
+      break;
+    }
+    }
+    DCHECK(mState == GuardState::kMoved ||
+           mState == GuardState::kUninitialized ||
+           mState == GuardState::kOptimisticShared);
   }
 
   inline void ToOptimisticSpin() {
@@ -192,7 +203,6 @@ public:
     if (!mLatch->mMutex.try_lock()) {
       jumpmu::Jump();
     }
-
     if (!mLatch->mVersion.compare_exchange_strong(expected, newVersion)) {
       mLatch->mMutex.unlock();
       jumpmu::Jump();

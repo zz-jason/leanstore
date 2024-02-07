@@ -430,7 +430,7 @@ BufferFrame& BufferManager::ReadPageSync(PID pageId) {
   dummyGuard.ToOptimisticSpin();
 
   Swip swip;
-  swip.evict(pageId);
+  swip.Evict(pageId);
 
   for (auto failCounter = 100; failCounter > 0; failCounter--) {
     JUMPMU_TRY() {
