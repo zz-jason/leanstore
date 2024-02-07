@@ -15,13 +15,6 @@
 namespace leanstore {
 namespace storage {
 
-enum class LatchMode : u8 {
-  kOptimisticOrJump = 0,
-  kOptimisticSpin = 1,
-  kPessimisticShared = 2,
-  kPessimisticExclusive = 3,
-};
-
 template <typename T> class ExclusiveGuardedBufferFrame;
 template <typename T> class SharedGuardedBufferFrame;
 
