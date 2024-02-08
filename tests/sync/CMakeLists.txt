@@ -20,4 +20,4 @@ endfunction(leanstore_add_test)
 
 
 # Add tests
-leanstore_add_test(HybridGuardTest)
+leanstore_add_test(ScopedHybridGuardTest)

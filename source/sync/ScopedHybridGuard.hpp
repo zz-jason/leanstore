@@ -11,22 +11,40 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+namespace leanstore::test {
+
+class ScopedHybridGuardTest;
+
+} // namespace leanstore::test
+
 namespace leanstore {
 namespace storage {
 
+/// A scoped guard for the hybrid latch. It locks the latch in the specified
+/// mode when constructed, and unlocks the latch when destructed.
+/// The guard is movable but not copyable.
 class ScopedHybridGuard {
 private:
+  /// The latch to guard.
   HybridLatch* mLatch;
 
+  /// The latch mode.
   LatchMode mLatchMode;
 
+  /// The version of the latch when it was optimistically locked.
   uint64_t mVersionOnLock;
 
+  /// Whether the guard has encountered contention, checked when the latch is
+  /// optimistically locked.
   bool mEncounteredContention;
 
+  /// Whether the guard has locked the latch.
   bool mLocked;
 
 public:
+  /// Construct a guard for the latch, lock it immediately in the specified
+  /// latch mode. It may jump if latchMode is kOptimisticOrJump and the latch is
+  /// exclusive locked by others.
   ScopedHybridGuard(HybridLatch& latch, LatchMode latchMode)
       : mLatch(&latch),
         mLatchMode(latchMode),
@@ -36,32 +54,37 @@ public:
     Lock();
   }
 
+  /// Construct a guard for the latch, lock it in kOptimisticOrJump mode with
+  /// the specified version. It may jump if the optimistic version does not
+  /// match the current version.
   ScopedHybridGuard(HybridLatch& latch, uint64_t version)
       : mLatch(&latch),
-        mLatchMode(LatchMode::kOptimisticSpin),
+        mLatchMode(LatchMode::kOptimisticOrJump),
         mVersionOnLock(version),
         mEncounteredContention(false),
-        mLocked(true) {
+        mLocked(false) {
     // jump if the optimistic lock is invalid
     jumpIfModifiedByOthers();
+    mLocked = true;
   }
 
+  /// Destruct the guard, unlock the latch if it is locked.
   ~ScopedHybridGuard() {
     Unlock();
   }
 
-  /// no copy construct
+  /// No copy construct
   ScopedHybridGuard(const ScopedHybridGuard&) = delete;
 
-  /// no copy assign
+  /// No copy assign
   ScopedHybridGuard& operator=(const ScopedHybridGuard& other) = delete;
 
-  /// move construct
+  /// Move construct
   ScopedHybridGuard(ScopedHybridGuard&& other) {
     *this = std::move(other);
   }
 
-  /// move assign
+  /// Move assign
   ScopedHybridGuard& operator=(ScopedHybridGuard&& other) {
     Unlock();
 
@@ -74,21 +97,40 @@ public:
     return *this;
   }
 
+  /// Lock the latch in the specified mode if it is not locked.
   void Lock();
 
+  /// Unlock the latch if it is locked.
   void Unlock();
 
 private:
+  /// Lock the latch in kOptimisticOrJump mode.
   void lockOptimisticOrJump();
+
+  /// Lock the latch in kOptimisticSpin mode.
   void lockOptimisticSpin();
+
+  /// Unlock the latch in kOptimisticOrJump or kOptimisticSpin mode.
   void unlockOptimisticOrJump();
+
+  /// Jump if the latch has been modified by others.
   void jumpIfModifiedByOthers();
 
+  /// Lock the latch in kPessimisticShared mode.
   void lockPessimisticShared();
+
+  /// Unlock the latch in kPessimisticShared mode.
   void unlockPessimisticShared();
 
+  /// Lock the latch in kPessimisticExclusive mode.
   void lockPessimisticExclusive();
+
+  /// Unlock the latch in kPessimisticExclusive mode.
   void unlockPessimisticExclusive();
+
+private:
+  /// Allow the test class to access private members.
+  friend class leanstore::test::ScopedHybridGuardTest;
 };
 
 inline void ScopedHybridGuard::Lock() {
@@ -163,7 +205,7 @@ inline void ScopedHybridGuard::lockOptimisticOrJump() {
 }
 
 inline void ScopedHybridGuard::lockOptimisticSpin() {
-  DCHECK(mLatchMode == LatchMode::kOptimisticOrJump && mLatch != nullptr);
+  DCHECK(mLatchMode == LatchMode::kOptimisticSpin && mLatch != nullptr);
   mVersionOnLock = mLatch->mVersion.load();
   while (HasExclusiveMark(mVersionOnLock)) {
     mEncounteredContention = true;
@@ -197,7 +239,6 @@ inline void ScopedHybridGuard::lockPessimisticShared() {
 
 inline void ScopedHybridGuard::unlockPessimisticShared() {
   DCHECK(mLatchMode == LatchMode::kPessimisticShared && mLatch != nullptr);
-  DCHECK(mVersionOnLock == mLatch->mVersion);
   mLatch->mMutex.unlock_shared();
 }
 

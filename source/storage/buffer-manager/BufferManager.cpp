@@ -9,6 +9,8 @@
 #include "profiling/counters/WorkerCounters.hpp"
 #include "shared-headers/Exceptions.hpp"
 #include "shared-headers/Units.hpp"
+#include "sync/HybridLatch.hpp"
+#include "sync/ScopedHybridGuard.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Error.hpp"
 #include "utils/Misc.hpp"
@@ -227,23 +229,24 @@ void BufferManager::ReclaimPage(BufferFrame& bf) {
 }
 
 // Returns a non-latched BufguardedSwipferFrame, called by worker threads
-BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
-                                               Swip& swipValue) {
-  if (swipValue.IsHot()) {
+BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
+                                               Swip& childSwip) {
+  DCHECK(parentNodeGuard.mState == GuardState::kOptimisticShared);
+  if (childSwip.IsHot()) {
     // Resolve swip from hot state
-    auto* bf = &swipValue.AsBufferFrame();
-    swipGuard.JumpIfModifiedByOthers();
+    auto* bf = &childSwip.AsBufferFrame();
+    parentNodeGuard.JumpIfModifiedByOthers();
     return bf;
   }
-  if (swipValue.IsCool()) {
+  if (childSwip.IsCool()) {
     // Resolve swip from cool state
-    auto* bf = &swipValue.AsBufferFrameMasked();
-    swipGuard.JumpIfModifiedByOthers();
+    auto* bf = &childSwip.AsBufferFrameMasked();
+    parentNodeGuard.JumpIfModifiedByOthers();
     BMOptimisticGuard bfGuard(bf->header.mLatch);
-    BMExclusiveUpgradeIfNeeded swipXGuard(swipGuard); // parent
-    BMExclusiveGuard bfXGuard(bfGuard);               // child
+    BMExclusiveUpgradeIfNeeded swipXGuard(parentNodeGuard); // parent
+    BMExclusiveGuard bfXGuard(bfGuard);                     // child
     bf->header.state = STATE::HOT;
-    swipValue.MarkHOT();
+    childSwip.MarkHOT();
     return bf;
   }
 
@@ -254,13 +257,13 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
   //
 
   // unlock the current node firstly to avoid deadlock: P->G, G->P
-  swipGuard.Unlock();
+  parentNodeGuard.Unlock();
 
-  const PID pageId = swipValue.AsPageId();
+  const PID pageId = childSwip.AsPageId();
   Partition& partition = GetPartition(pageId);
   JumpScoped<std::unique_lock<std::mutex>> inflightIOGuard(
       partition.mInflightIOMutex);
-  swipGuard.JumpIfModifiedByOthers();
+  parentNodeGuard.JumpIfModifiedByOthers();
 
   auto frameHandler = partition.mInflightIOs.Lookup(pageId);
 
@@ -303,13 +306,13 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
 
     // 5. Publish the buffer frame
     JUMPMU_TRY() {
-      swipGuard.JumpIfModifiedByOthers();
+      parentNodeGuard.JumpIfModifiedByOthers();
       ioFrameGuard->unlock();
       JumpScoped<std::unique_lock<std::mutex>> inflightIOGuard(
           partition.mInflightIOMutex);
-      BMExclusiveUpgradeIfNeeded swipXGuard(swipGuard);
+      BMExclusiveUpgradeIfNeeded swipXGuard(parentNodeGuard);
 
-      swipValue.MarkHOT(&bf);
+      childSwip.MarkHOT(&bf);
       bf.header.state = STATE::HOT;
 
       if (ioFrame.readers_counter.fetch_add(-1) == 1) {
@@ -356,12 +359,12 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& swipGuard,
       DCHECK(!bf->header.mLatch.IsLockedExclusively());
       DCHECK(bf->header.state == STATE::LOADED);
       BMOptimisticGuard bfGuard(bf->header.mLatch);
-      BMExclusiveUpgradeIfNeeded swipXGuard(swipGuard);
+      BMExclusiveUpgradeIfNeeded swipXGuard(parentNodeGuard);
       BMExclusiveGuard bfXGuard(bfGuard);
       ioFrame.bf = nullptr;
-      swipValue.MarkHOT(bf);
+      childSwip.MarkHOT(bf);
       DCHECK(bf->header.mPageId == pageId);
-      DCHECK(swipValue.IsHot());
+      DCHECK(childSwip.IsHot());
       DCHECK(bf->header.state == STATE::LOADED);
       bf->header.state = STATE::HOT;
 
@@ -425,16 +428,16 @@ void BufferManager::ReadPageSync(PID pageId, void* pageBuffer) {
 }
 
 BufferFrame& BufferManager::ReadPageSync(PID pageId) {
-  HybridLatch dummyLatch;
-  HybridGuard dummyGuard(&dummyLatch);
-  dummyGuard.ToOptimisticSpin();
+  HybridLatch dummyParentLatch;
+  HybridGuard dummyParentGuard(&dummyParentLatch);
+  dummyParentGuard.ToOptimisticSpin();
 
   Swip swip;
   swip.Evict(pageId);
 
   for (auto failCounter = 100; failCounter > 0; failCounter--) {
     JUMPMU_TRY() {
-      swip = ResolveSwipMayJump(dummyGuard, swip);
+      swip = ResolveSwipMayJump(dummyParentGuard, swip);
       JUMPMU_RETURN swip.AsBufferFrame();
     }
     JUMPMU_CATCH() {
@@ -445,14 +448,13 @@ BufferFrame& BufferManager::ReadPageSync(PID pageId) {
 }
 
 void BufferManager::WritePageSync(BufferFrame& bf) {
-  HybridGuard guardedBf(&bf.header.mLatch);
-  guardedBf.ToExclusiveMayJump();
+  ScopedHybridGuard guard(bf.header.mLatch, LatchMode::kPessimisticExclusive);
   auto pageId = bf.header.mPageId;
   auto& partition = GetPartition(pageId);
   pwrite(mStore->mPageFd, &bf.page, mStore->mStoreOption.mPageSize,
          pageId * mStore->mStoreOption.mPageSize);
   bf.Reset();
-  guardedBf.Unlock();
+  guard.Unlock();
   partition.mFreeBfList.PushFront(bf);
 }
 

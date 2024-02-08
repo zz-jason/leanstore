@@ -103,7 +103,7 @@ public:
                      GuardedBufferFrame<T2>& guardedParent, Swip& childSwip,
                      const LatchMode latchMode = LatchMode::kOptimisticSpin)
       : mBufferManager(bufferManager),
-        mBf(bufferManager->TryFastResolveSwip(guardedParent.mGuard, childSwip)),
+        mBf(bufferManager->ResolveSwipMayJump(guardedParent.mGuard, childSwip)),
         mGuard(&mBf->header.mLatch),
         mKeepAlive(true) {
     latchMayJump(mGuard, latchMode);
