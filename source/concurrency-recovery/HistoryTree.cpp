@@ -3,8 +3,11 @@
 #include "profiling/counters/CRCounters.hpp"
 #include "shared-headers/Units.hpp"
 #include "storage/btree/BasicKV.hpp"
+#include "storage/btree/core/BTreeNode.hpp"
 #include "storage/btree/core/BTreePessimisticExclusiveIterator.hpp"
 #include "storage/btree/core/BTreePessimisticSharedIterator.hpp"
+#include "sync/HybridLatch.hpp"
+#include "sync/ScopedHybridGuard.hpp"
 #include "utils/Misc.hpp"
 
 #include <functional>
@@ -216,16 +219,21 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
   if (fromTxId == 0 && session->leftmost_init) {
     JUMPMU_TRY() {
       BufferFrame* bf = session->leftmost_bf;
-      HybridGuard bfGuard(bf->header.mLatch, session->leftmost_version);
-      bfGuard.JumpIfModifiedByOthers();
-      GuardedBufferFrame<BTreeNode> guardedLeaf(
-          btree->mStore->mBufferManager.get(), std::move(bfGuard), bf);
 
-      if (guardedLeaf->mLowerFence.length == 0) {
-        auto lastKeySize =
-            guardedLeaf->getFullKeyLen(guardedLeaf->mNumSeps - 1);
+      // optimistic lock, jump if invalid
+      ScopedHybridGuard bfGuard(bf->header.mLatch, session->leftmost_version);
+
+      // lock successfull, check whether the page can be purged
+      auto* leafNode = reinterpret_cast<BTreeNode*>(bf->page.mPayload);
+      if (leafNode->mLowerFence.length == 0) {
+        auto lastKeySize = leafNode->getFullKeyLen(leafNode->mNumSeps - 1);
         u8 lastKey[lastKeySize];
-        guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, lastKey);
+        leafNode->copyFullKey(leafNode->mNumSeps - 1, lastKey);
+
+        // optimistic unlock, jump if invalid
+        bfGuard.Unlock();
+
+        // now we can safely use the copied key
         TXID txIdInLastkey;
         utils::Unfold(lastKey, txIdInLastkey);
         if (txIdInLastkey > toTxId) {

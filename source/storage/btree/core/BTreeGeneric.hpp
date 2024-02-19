@@ -329,13 +329,13 @@ inline void BTreeGeneric::Checkpoint(BufferFrame& bf, void* dest) {
     for (u64 i = 0; i < destNode->mNumSeps; i++) {
       if (!destNode->getChild(i).IsEvicted()) {
         auto& childBf = destNode->getChild(i).AsBufferFrameMasked();
-        destNode->getChild(i).evict(childBf.header.mPageId);
+        destNode->getChild(i).Evict(childBf.header.mPageId);
       }
     }
     // Replace right most child swip to page id
     if (!destNode->mRightMostChildSwip.IsEvicted()) {
       auto& childBf = destNode->mRightMostChildSwip.AsBufferFrameMasked();
-      destNode->mRightMostChildSwip.evict(childBf.header.mPageId);
+      destNode->mRightMostChildSwip.Evict(childBf.header.mPageId);
     }
   }
 }

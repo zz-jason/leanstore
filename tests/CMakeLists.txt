@@ -45,3 +45,5 @@ leanstore_add_test(MvccTest)
 leanstore_add_test(AnomaliesTest)
 leanstore_add_test(AbortTest)
 leanstore_add_test(LongRunningTxTest)
+
+add_subdirectory(sync)

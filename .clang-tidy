@@ -10,7 +10,7 @@ Checks: >
   -misc-no-recursion,
   -misc-use-anonymous-namespace,
   readability-identifier-naming,
-  llvm-include-order
+  -llvm-include-order
 
 WarningsAsErrors: "*"
 

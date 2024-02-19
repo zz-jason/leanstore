@@ -6,7 +6,6 @@
 #include <glog/logging.h>
 
 namespace leanstore {
-
 namespace cr {
 
 enum class TxState { kIdle, kStarted, kCommitted, kAborted };

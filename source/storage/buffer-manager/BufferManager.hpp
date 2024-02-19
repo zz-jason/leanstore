@@ -97,27 +97,8 @@ public:
   /// exclusively locked.
   BufferFrame& AllocNewPage(TREEID treeId);
 
-  /// Resolves the buffer frame pointed by the swipValue.
-  ///
-  /// @param swipGuard The latch guard on the owner of the swip. Usually a swip
-  /// is owned by a btree node, and the node should be latched before resolve
-  /// the swips of child nodes.
-  ///
-  /// @param swipValue The swip value from which to resolve the buffer frame.
-  /// Usually a swip represents a btree node.
-  ///
-  /// @return The buffer frame regarding to the swip.
-  inline BufferFrame* TryFastResolveSwip(HybridGuard& swipGuard,
-                                         Swip& swipValue) {
-    if (swipValue.IsHot()) {
-      BufferFrame& bf = swipValue.AsBufferFrame();
-      swipGuard.JumpIfModifiedByOthers();
-      return &bf;
-    }
-    return ResolveSwipMayJump(swipGuard, swipValue);
-  }
-
-  BufferFrame* ResolveSwipMayJump(HybridGuard& swipGuard, Swip& swipValue);
+  BufferFrame* ResolveSwipMayJump(HybridGuard& parentNodeGuard,
+                                  Swip& childSwip);
 
   void ReclaimPage(BufferFrame& bf);
 

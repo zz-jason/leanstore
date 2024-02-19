@@ -1,4 +1,5 @@
 race:tzset_internal
+race:ScopedHybridGuard::GetOptimistic
 deadlock:ExclusiveGuardedBufferFrame
 race_top:OptimisticGuarded<*>::Set
 race_top:OptimisticGuarded<*>::UpdateAttribute

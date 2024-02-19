@@ -40,14 +40,10 @@ enum class Workload : u8 {
 };
 
 struct WorkloadSpec {
-  u64 mRecordCount;
-  u64 mOperationCount;
-  bool mReadAllFields;
   double mReadProportion;
   double mUpdateProportion;
   double mScanProportion;
   double mInsertProportion;
-  Distrubition mKeyDistrubition;
 };
 
 class YcsbExecutor {
@@ -63,17 +59,17 @@ public:
 inline WorkloadSpec GetWorkloadSpec(Workload workload) {
   switch (workload) {
   case Workload::kA:
-    return {100, 100000, true, 0.5, 0.5, 0.0, 0.0, Distrubition::kZipf};
+    return {0.5, 0.5, 0.0, 0.0};
   case Workload::kB:
-    return {100, 100000, true, 0.95, 0.05, 0.0, 0.0, Distrubition::kZipf};
+    return {0.95, 0.05, 0.0, 0.0};
   case Workload::kC:
-    return {100, 100000, true, 1.0, 0.0, 0.0, 0.0, Distrubition::kZipf};
+    return {1.0, 0.0, 0.0, 0.0};
   case Workload::kD:
-    return {100, 100000, true, 0.95, 0.0, 0.0, 0.05, Distrubition::kLatest};
+    return {0.95, 0.0, 0.0, 0.05};
   case Workload::kE:
-    return {100, 100000, true, 0.0, 0.0, 0.95, 0.05, Distrubition::kZipf};
+    return {0.0, 0.0, 0.95, 0.05};
   case Workload::kF:
-    return {100, 100000, true, 0.5, 0.0, 0.0, 0.5, Distrubition::kUniform};
+    return {0.5, 0.0, 0.0, 0.5};
   default:
     LOG(FATAL) << "Unknown workload: " << static_cast<u8>(workload);
   }
