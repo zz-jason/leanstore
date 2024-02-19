@@ -15,13 +15,6 @@
 namespace leanstore {
 namespace storage {
 
-enum class LatchMode : u8 {
-  kOptimisticOrJump = 0,
-  kOptimisticSpin = 1,
-  kPessimisticShared = 2,
-  kPessimisticExclusive = 3,
-};
-
 template <typename T> class ExclusiveGuardedBufferFrame;
 template <typename T> class SharedGuardedBufferFrame;
 
@@ -110,7 +103,7 @@ public:
                      GuardedBufferFrame<T2>& guardedParent, Swip& childSwip,
                      const LatchMode latchMode = LatchMode::kOptimisticSpin)
       : mBufferManager(bufferManager),
-        mBf(bufferManager->TryFastResolveSwip(guardedParent.mGuard, childSwip)),
+        mBf(bufferManager->ResolveSwipMayJump(guardedParent.mGuard, childSwip)),
         mGuard(&mBf->header.mLatch),
         mKeepAlive(true) {
     latchMayJump(mGuard, latchMode);

@@ -1,7 +1,5 @@
 #pragma once
 
-#include "shared-headers/Units.hpp"
-
 #include <glog/logging.h>
 
 #include <atomic>
@@ -12,12 +10,20 @@
 namespace leanstore {
 namespace storage {
 
-constexpr static u64 kLatchExclusiveBit = 1ull;
+enum class LatchMode : uint8_t {
+  kOptimisticOrJump = 0,
+  kOptimisticSpin = 1,
+  kPessimisticShared = 2,
+  kPessimisticExclusive = 3,
+};
 
-inline bool HasExclusiveMark(u64 version) {
+constexpr static uint64_t kLatchExclusiveBit = 1ull;
+
+inline bool HasExclusiveMark(uint64_t version) {
   return (version & kLatchExclusiveBit) == kLatchExclusiveBit;
 }
 
+class ScopedHybridGuard;
 class HybridGuard;
 
 /// An alternative to std::mutex and std::shared_mutex. A hybrid latch can be
@@ -28,19 +34,19 @@ class HybridGuard;
 ///   - latch pessimistically in exclusive mode: for high-contention scenarios.
 class alignas(64) HybridLatch {
 private:
-  std::atomic<u64> mVersion = 0;
+  std::atomic<uint64_t> mVersion = 0;
 
   std::shared_mutex mMutex;
 
 public:
-  HybridLatch(u64 version = 0) : mVersion(version) {
+  HybridLatch(uint64_t version = 0) : mVersion(version) {
   }
 
 public:
   void LockExclusively() {
     DCHECK(!IsLockedExclusively());
     mMutex.lock();
-    mVersion.fetch_add(kLatchExclusiveBit);
+    mVersion.fetch_add(kLatchExclusiveBit, std::memory_order_release);
   }
 
   void UnlockExclusively() {
@@ -49,7 +55,7 @@ public:
     mMutex.unlock();
   }
 
-  u64 GetOptimisticVersion() {
+  uint64_t GetOptimisticVersion() {
     return mVersion.load();
   }
 
@@ -59,6 +65,7 @@ public:
 
 private:
   friend class HybridGuard;
+  friend class ScopedHybridGuard;
 };
 
 static_assert(sizeof(HybridLatch) == 64, "");
