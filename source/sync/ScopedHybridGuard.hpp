@@ -6,6 +6,7 @@
 #include <glog/logging.h>
 
 #include <atomic>
+#include <functional>
 #include <shared_mutex>
 
 #include <sys/mman.h>
@@ -103,6 +104,11 @@ public:
   /// Unlock the latch if it is locked.
   void Unlock();
 
+  static void GetOptimistic(HybridLatch& latch, LatchMode latchMode,
+                            std::function<void()> copier);
+
+  static void Get(HybridLatch& latch, std::function<void()> copier);
+
 private:
   /// Lock the latch in kOptimisticOrJump mode.
   void lockOptimisticOrJump();
@@ -132,6 +138,41 @@ private:
   /// Allow the test class to access private members.
   friend class leanstore::test::ScopedHybridGuardTest;
 };
+
+inline void ScopedHybridGuard::GetOptimistic(HybridLatch& latch,
+                                             LatchMode latchMode,
+                                             std::function<void()> copier) {
+  DCHECK(latchMode == LatchMode::kOptimisticOrJump ||
+         latchMode == LatchMode::kOptimisticSpin);
+  while (true) {
+    JUMPMU_TRY() {
+      auto guard = ScopedHybridGuard(latch, latchMode);
+      copier();
+    }
+    JUMPMU_CATCH() {
+      continue;
+    }
+    return;
+  }
+}
+
+inline void ScopedHybridGuard::Get(HybridLatch& latch,
+                                   std::function<void()> copier) {
+  while (true) {
+    JUMPMU_TRY() {
+      auto guard = ScopedHybridGuard(latch, LatchMode::kOptimisticOrJump);
+      copier();
+      guard.Unlock();
+      JUMPMU_RETURN;
+    }
+    JUMPMU_CATCH() {
+      auto guard = ScopedHybridGuard(latch, LatchMode::kPessimisticShared);
+      copier();
+      guard.Unlock();
+      return;
+    }
+  }
+}
 
 inline void ScopedHybridGuard::Lock() {
   if (mLocked) {

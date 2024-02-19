@@ -417,7 +417,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
           DCHECK(coolCandidate->header.mIsBeingWrittenBack == false);
           DCHECK(parentHandler.mParentGuard.mVersion ==
                  parentHandler.mParentGuard.mLatch->GetOptimisticVersion());
-          DCHECK(parentHandler.mChildSwip.bf == coolCandidate);
+          DCHECK(parentHandler.mChildSwip.mBf == coolCandidate);
 
           // mark the buffer frame in cool state
           coolCandidate->header.state = STATE::COOL;

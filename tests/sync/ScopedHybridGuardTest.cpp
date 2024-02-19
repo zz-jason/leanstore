@@ -5,6 +5,7 @@
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "sync/HybridLatch.hpp"
 #include "utils/JumpMU.hpp"
+#include "utils/RandomGenerator.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -12,6 +13,7 @@
 #include <rapidjson/document.h>
 
 #include <atomic>
+#include <cstdint>
 #include <expected>
 #include <memory>
 #include <string>
@@ -306,7 +308,7 @@ TEST_F(ScopedHybridGuardTest, OptimisticBankTransfer) {
         EXPECT_TRUE(isLocked(guard));
 
         // transfer random amount from a to b
-        auto amount = rand() % a;
+        auto amount = utils::RandomGenerator::RandU64(0, a + 1);
         a -= amount;
         b += amount;
       }
@@ -317,7 +319,7 @@ TEST_F(ScopedHybridGuardTest, OptimisticBankTransfer) {
         EXPECT_TRUE(isLocked(guard));
 
         // transfer random amount from b to a
-        auto amount = rand() % b;
+        auto amount = utils::RandomGenerator::RandU64(0, b + 1);
         b -= amount;
         a += amount;
       }
@@ -326,42 +328,25 @@ TEST_F(ScopedHybridGuardTest, OptimisticBankTransfer) {
 
   // thread 1: check if a + b is always 100, 1000 times
   mStore->ExecAsync(1, [&]() {
+    uint64_t aCopy;
+    uint64_t bCopy;
+
     for (int i = 0; i < 1000; i++) {
       // lock optimistically, spin until the latch is not exclusively locked
-      while (true) {
-        JUMPMU_TRY() {
-          auto guard = storage::ScopedHybridGuard(
-              latch, storage::LatchMode::kOptimisticSpin);
-          EXPECT_TRUE(isLocked(guard));
-
-          auto aCopy = a;
-          auto bCopy = b;
-          guard.Unlock();
-
-          EXPECT_EQ(aCopy + bCopy, 100);
-          JUMPMU_BREAK;
-        }
-        JUMPMU_CATCH() {
-        }
-      }
+      storage::ScopedHybridGuard::GetOptimistic(
+          latch, storage::LatchMode::kOptimisticSpin, [&]() {
+            aCopy = a;
+            bCopy = b;
+          });
+      EXPECT_EQ(aCopy + bCopy, 100);
 
       // lock optimistically, jump if the latch is exclusively locked
-      while (true) {
-        JUMPMU_TRY() {
-          auto guard = storage::ScopedHybridGuard(
-              latch, storage::LatchMode::kOptimisticOrJump);
-          EXPECT_TRUE(isLocked(guard));
-
-          auto aCopy = a;
-          auto bCopy = b;
-          guard.Unlock();
-
-          EXPECT_EQ(aCopy + bCopy, 100);
-          JUMPMU_BREAK;
-        }
-        JUMPMU_CATCH() {
-        }
-      }
+      storage::ScopedHybridGuard::GetOptimistic(
+          latch, storage::LatchMode::kOptimisticOrJump, [&]() {
+            aCopy = a;
+            bCopy = b;
+          });
+      EXPECT_EQ(aCopy + bCopy, 100);
     }
   });
 
@@ -383,7 +368,7 @@ TEST_F(ScopedHybridGuardTest, PessimisticBankTransfer) {
         EXPECT_TRUE(isLocked(guard));
 
         // transfer random amount from a to b
-        auto amount = rand() % a;
+        auto amount = utils::RandomGenerator::RandU64(0, a + 1);
         a -= amount;
         b += amount;
       }
@@ -394,7 +379,7 @@ TEST_F(ScopedHybridGuardTest, PessimisticBankTransfer) {
         EXPECT_TRUE(isLocked(guard));
 
         // transfer random amount from b to a
-        auto amount = rand() % b;
+        auto amount = utils::RandomGenerator::RandU64(0, b + 1);
         b -= amount;
         a += amount;
       }

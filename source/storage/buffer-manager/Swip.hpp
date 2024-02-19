@@ -22,7 +22,7 @@ class Swip {
 public:
   union {
     u64 mPageId;
-    BufferFrame* bf;
+    BufferFrame* mBf;
   };
 
 public:
@@ -30,7 +30,7 @@ public:
   Swip() : mPageId(0){};
 
   /// Create an swip pointing to the buffer frame.
-  Swip(BufferFrame* bf) : bf(bf) {
+  Swip(BufferFrame* bf) : mBf(bf) {
   }
 
   // /// Copy construct from another swip.
@@ -75,7 +75,7 @@ public:
   /// Return the underlying buffer frame from a HOT buffer frame.
   BufferFrame& AsBufferFrame() {
     DCHECK(IsHot());
-    return *bf;
+    return *mBf;
   }
 
   /// Return the underlying buffer frame from a COOL buffer frame.
@@ -88,7 +88,7 @@ public:
   }
 
   void MarkHOT(BufferFrame* bf) {
-    this->bf = bf;
+    this->mBf = bf;
   }
 
   void MarkHOT() {
