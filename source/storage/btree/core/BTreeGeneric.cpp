@@ -118,42 +118,20 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
         ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
 
     if (mConfig.mEnableWal) {
-      // TODO: System transactions
-      xGuardedNewRoot.SyncGSNBeforeWrite();
-      xGuardedNewLeft.SyncGSNBeforeWrite();
-      xGuardedChild.SyncGSNBeforeWrite();
-    } else {
-      xGuardedNewRoot.MarkAsDirty();
-      xGuardedNewLeft.MarkAsDirty();
-      xGuardedChild.MarkAsDirty();
-    }
-
-    if (mConfig.mEnableWal) {
-      auto newRootWalHandler =
-          xGuardedNewRoot.ReserveWALPayload<WALInitPage>(0, mTreeId, false);
-      newRootWalHandler.SubmitWal();
-
-      auto newLeftWalHandler = xGuardedNewLeft.ReserveWALPayload<WALInitPage>(
-          0, mTreeId, xGuardedChild->mIsLeaf);
-      newLeftWalHandler.SubmitWal();
+      xGuardedNewRoot.WriteWal<WALInitPage>(0, mTreeId, false);
+      xGuardedNewLeft.WriteWal<WALInitPage>(0, mTreeId, xGuardedChild->mIsLeaf);
 
       auto parentPageId(xGuardedNewRoot.bf()->header.mPageId);
       auto lhsPageId(xGuardedNewLeft.bf()->header.mPageId);
       auto rhsPageId(xGuardedChild.bf()->header.mPageId);
 
-      auto curRightWalHandler =
-          xGuardedChild.ReserveWALPayload<WALLogicalSplit>(
-              0, parentPageId, lhsPageId, rhsPageId);
-      curRightWalHandler.SubmitWal();
-
-      auto rootWalHandler = xGuardedNewRoot.ReserveWALPayload<WALLogicalSplit>(
-          0, parentPageId, lhsPageId, rhsPageId);
-      rootWalHandler.SubmitWal();
-
-      auto leftWalHandler = xGuardedNewLeft.ReserveWALPayload<WALLogicalSplit>(
-          0, parentPageId, lhsPageId, rhsPageId);
-      leftWalHandler.SubmitWal();
+      xGuardedChild.WriteWal<WALLogicalSplit>(0, parentPageId, lhsPageId,
+                                              rhsPageId);
     }
+
+    xGuardedNewRoot.MarkAsDirty();
+    xGuardedNewLeft.MarkAsDirty();
+    xGuardedChild.MarkAsDirty();
 
     xGuardedNewRoot.keepAlive();
     xGuardedNewRoot.InitPayload(false);
@@ -171,7 +149,7 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
     return;
   }
 
-  // Parent is not root
+  // Parent is not meta
   const u16 spaceNeededForSeparator =
       guardedParent->spaceNeeded(sepInfo.length, sizeof(Swip));
   if (guardedParent->hasEnoughSpaceFor(spaceNeededForSeparator)) {
@@ -201,30 +179,15 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
     }
 
     if (mConfig.mEnableWal) {
-      auto newLeftWalHandler = xGuardedNewLeft.ReserveWALPayload<WALInitPage>(
-          0, mTreeId, xGuardedNewLeft->mIsLeaf);
-      newLeftWalHandler.SubmitWal();
+      xGuardedNewLeft.WriteWal<WALInitPage>(0, mTreeId, xGuardedChild->mIsLeaf);
 
       auto parentPageId = xGuardedParent.bf()->header.mPageId;
       auto lhsPageId = xGuardedNewLeft.bf()->header.mPageId;
       auto rhsPageId = xGuardedChild.bf()->header.mPageId;
 
-      auto curRightWalHandler =
-          xGuardedChild.ReserveWALPayload<WALLogicalSplit>(
-              0, parentPageId, lhsPageId, rhsPageId);
-      curRightWalHandler.SubmitWal();
-
-      auto parentWalHandler = xGuardedParent.ReserveWALPayload<WALLogicalSplit>(
-          0, parentPageId, lhsPageId, rhsPageId);
-      parentWalHandler.SubmitWal();
-
-      newLeftWalHandler = xGuardedNewLeft.ReserveWALPayload<WALInitPage>(
-          0, mTreeId, xGuardedNewLeft->mIsLeaf);
-      newLeftWalHandler.SubmitWal();
-
-      auto leftWalHandler = xGuardedNewLeft.ReserveWALPayload<WALLogicalSplit>(
-          0, parentPageId, lhsPageId, rhsPageId);
-      leftWalHandler.SubmitWal();
+      xGuardedChild.WriteWal<WALLogicalSplit>(0, parentPageId, lhsPageId,
+                                              rhsPageId);
+      xGuardedParent.SyncGSNBeforeWrite();
     }
 
     xGuardedNewLeft.InitPayload(xGuardedChild->mIsLeaf);

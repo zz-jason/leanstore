@@ -325,6 +325,13 @@ public:
         payloadSize, std::forward<Args>(args)...);
   }
 
+  template <typename WT, typename... Args>
+  void WriteWal(u64 payloadSize, Args&&... args) {
+    auto walPayloadHandler = mRefGuard.template ReserveWALPayload<WT>(
+        payloadSize, std::forward<Args>(args)...);
+    walPayloadHandler.SubmitWal();
+  }
+
   void keepAlive() {
     mRefGuard.mKeepAlive = true;
   }

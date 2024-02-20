@@ -411,7 +411,7 @@ void BTreeNode::split(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
   xGuardedLeft->setFences(GetLowerFence(), Slice(sepKey, sepLength));
 
   auto tmpNodeBuf = utils::JumpScopedArray<u8>(BTreeNode::Size());
-  auto nodeRight = BTreeNode::Init(tmpNodeBuf->get(), mIsLeaf);
+  auto* nodeRight = BTreeNode::Init(tmpNodeBuf->get(), mIsLeaf);
 
   nodeRight->setFences(Slice(sepKey, sepLength), GetUpperFence());
   auto swip = xGuardedLeft.swip();
