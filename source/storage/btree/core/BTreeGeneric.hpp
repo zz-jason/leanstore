@@ -129,6 +129,15 @@ private:
     return mMetaNodeSwip == xGuardedNode.bf();
   }
 
+  void splitRootNodeMayJump(GuardedBufferFrame<BTreeNode>& guardedParent,
+                            GuardedBufferFrame<BTreeNode>& guardedChild,
+                            BTreeNode::SeparatorInfo& sepInfo);
+
+  void splitNonRootNodeMayJump(GuardedBufferFrame<BTreeNode>& guardedParent,
+                               GuardedBufferFrame<BTreeNode>& guardedChild,
+                               BTreeNode::SeparatorInfo& sepInfo,
+                               u16 spaceNeededForSeparator);
+
   s64 iterateAllPages(BTreeNodeCallback inner, BTreeNodeCallback leaf);
 
   s64 iterateAllPagesRecursive(GuardedBufferFrame<BTreeNode>& guardedNode,

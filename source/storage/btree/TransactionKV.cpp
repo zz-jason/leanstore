@@ -11,6 +11,7 @@
 #include "storage/btree/core/BTreePessimisticSharedIterator.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
 #include "utils/Defer.hpp"
+#include "utils/JsonUtil.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -241,6 +242,11 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
 
     if (!xIter.HasEnoughSpaceFor(key.size(), payloadSize)) {
       xIter.SplitForKey(key);
+      {
+        rapidjson::Document doc(rapidjson::kObjectType);
+        BTreeGeneric::ToJson(xIter.mBTree, &doc);
+        LOG(INFO) << "btree after split: " << utils::JsonToStr(&doc);
+      }
       continue;
     }
 

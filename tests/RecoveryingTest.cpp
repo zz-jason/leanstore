@@ -12,6 +12,8 @@
 #include "glog/logging.h"
 #include <gtest/gtest.h>
 
+#include <cstddef>
+
 using namespace leanstore::storage::btree;
 
 namespace leanstore::test {
@@ -114,10 +116,10 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     };
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, expectedVal] = kvToTest[i];
-      EXPECT_EQ(
+      ASSERT_EQ(
           btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
           OpCode::kOK);
-      EXPECT_EQ(copiedValue, expectedVal);
+      ASSERT_EQ(copiedValue, expectedVal);
     }
   });
 
@@ -126,6 +128,10 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     mStore->DropTransactionKV(btreeName);
   });
+
+  mStore = nullptr;
+
+  std::cout << "I'm finsihed" << std::endl;
 }
 
 TEST_F(RecoveringTest, RecoverAfterInsert) {

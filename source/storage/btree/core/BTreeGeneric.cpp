@@ -11,6 +11,7 @@
 #include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "storage/buffer-manager/GuardedBufferFrame.hpp"
+#include "utils/JsonUtil.hpp"
 #include "utils/Misc.hpp"
 
 #include <glog/logging.h>
@@ -80,6 +81,7 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
     return;
   }
 
+  // init the separator info
   BTreeNode::SeparatorInfo sepInfo;
   if (favoredSplitPos < 0 || favoredSplitPos >= guardedChild->mNumSeps - 1) {
     if (mConfig.mUseBulkInsert) {
@@ -96,113 +98,140 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
         BTreeNode::SeparatorInfo{guardedChild->getFullKeyLen(favoredSplitPos),
                                  static_cast<u16>(favoredSplitPos), false};
   }
-  auto sepKeyBuf = utils::JumpScopedArray<u8>(sepInfo.length);
-  auto* sepKey = sepKeyBuf->get();
+
+  // split the root node
   if (isMetaNode(guardedParent)) {
-    // split the root node
-    auto xGuardedParent = ExclusiveGuardedBufferFrame(std::move(guardedParent));
-    auto xGuardedChild = ExclusiveGuardedBufferFrame(std::move(guardedChild));
-    DCHECK(mHeight == 1 || !xGuardedChild->mIsLeaf);
-
-    // create new root
-    auto* newRootBf = &mStore->mBufferManager->AllocNewPage(mTreeId);
-    auto guardedNewRoot = GuardedBufferFrame<BTreeNode>(
-        mStore->mBufferManager.get(), newRootBf, false);
-    auto xGuardedNewRoot =
-        ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewRoot));
-
-    auto* newLeftBf = &mStore->mBufferManager->AllocNewPage(mTreeId);
-    auto guardedNewLeft =
-        GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(), newLeftBf);
-    auto xGuardedNewLeft =
-        ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
-
-    if (mConfig.mEnableWal) {
-      xGuardedNewRoot.WriteWal<WALInitPage>(0, mTreeId, false);
-      xGuardedNewLeft.WriteWal<WALInitPage>(0, mTreeId, xGuardedChild->mIsLeaf);
-
-      auto parentPageId(xGuardedNewRoot.bf()->header.mPageId);
-      auto lhsPageId(xGuardedNewLeft.bf()->header.mPageId);
-      auto rhsPageId(xGuardedChild.bf()->header.mPageId);
-
-      xGuardedChild.WriteWal<WALLogicalSplit>(0, parentPageId, lhsPageId,
-                                              rhsPageId);
-    }
-
-    xGuardedNewRoot.MarkAsDirty();
-    xGuardedNewLeft.MarkAsDirty();
-    xGuardedChild.MarkAsDirty();
-
-    xGuardedNewRoot.keepAlive();
-    xGuardedNewRoot.InitPayload(false);
-    xGuardedNewRoot->mRightMostChildSwip = xGuardedChild.bf();
-    xGuardedParent->mRightMostChildSwip = xGuardedNewRoot.bf();
-
-    xGuardedNewLeft.InitPayload(xGuardedChild->mIsLeaf);
-    xGuardedChild->getSep(sepKey, sepInfo);
-    xGuardedChild->split(xGuardedNewRoot, xGuardedNewLeft, sepInfo.slot, sepKey,
-                         sepInfo.length);
-    mHeight++;
-    COUNTERS_BLOCK() {
-      WorkerCounters::MyCounters().dt_split[mTreeId]++;
-    }
+    splitRootNodeMayJump(guardedParent, guardedChild, sepInfo);
     return;
   }
 
-  // Parent is not meta
+  // calculate space needed for separator in parent node
   const u16 spaceNeededForSeparator =
-      guardedParent->spaceNeeded(sepInfo.length, sizeof(Swip));
-  if (guardedParent->hasEnoughSpaceFor(spaceNeededForSeparator)) {
-    // Is there enough space in the parent for the separator?
-    auto xGuardedParent = ExclusiveGuardedBufferFrame(std::move(guardedParent));
-    auto xGuardedChild = ExclusiveGuardedBufferFrame(std::move(guardedChild));
+      guardedParent->spaceNeeded(sepInfo.mSize, sizeof(Swip));
 
-    xGuardedParent->requestSpaceFor(spaceNeededForSeparator);
-    DCHECK(&mMetaNodeSwip.AsBufferFrame() != xGuardedParent.bf());
-    DCHECK(!xGuardedParent->mIsLeaf);
-
-    auto* newLeftBf = &mStore->mBufferManager->AllocNewPage(mTreeId);
-    auto guardedNewLeft =
-        GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(), newLeftBf);
-    auto xGuardedNewLeft =
-        ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
-
-    // Increment GSNs before writing WAL to ensure they are marked as dirty
-    if (mConfig.mEnableWal) {
-      xGuardedParent.SyncGSNBeforeWrite();
-      xGuardedNewLeft.SyncGSNBeforeWrite();
-      xGuardedChild.SyncGSNBeforeWrite();
-    } else {
-      xGuardedParent.MarkAsDirty();
-      xGuardedNewLeft.MarkAsDirty();
-      xGuardedChild.MarkAsDirty();
-    }
-
-    if (mConfig.mEnableWal) {
-      xGuardedNewLeft.WriteWal<WALInitPage>(0, mTreeId, xGuardedChild->mIsLeaf);
-
-      auto parentPageId = xGuardedParent.bf()->header.mPageId;
-      auto lhsPageId = xGuardedNewLeft.bf()->header.mPageId;
-      auto rhsPageId = xGuardedChild.bf()->header.mPageId;
-
-      xGuardedChild.WriteWal<WALLogicalSplit>(0, parentPageId, lhsPageId,
-                                              rhsPageId);
-      xGuardedParent.SyncGSNBeforeWrite();
-    }
-
-    xGuardedNewLeft.InitPayload(xGuardedChild->mIsLeaf);
-    xGuardedChild->getSep(sepKey, sepInfo);
-    xGuardedChild->split(xGuardedParent, xGuardedNewLeft, sepInfo.slot, sepKey,
-                         sepInfo.length);
-    COUNTERS_BLOCK() {
-      WorkerCounters::MyCounters().dt_split[mTreeId]++;
-    }
-  } else {
+  // split the parent node to make zoom for separator
+  if (!guardedParent->hasEnoughSpaceFor(spaceNeededForSeparator)) {
     guardedParent.unlock();
     guardedChild.unlock();
-    // Must split parent head to make space for separator
     TrySplitMayJump(*guardedParent.mBf);
+    return;
   }
+
+  // split the non-root node
+  splitNonRootNodeMayJump(guardedParent, guardedChild, sepInfo,
+                          spaceNeededForSeparator);
+}
+
+/// Split the root node, 4 nodes are involved in the split:
+/// meta(oldRoot) -> meta(newRoot(newLeft, oldRoot))
+///
+/// meta         meta
+///   |            |
+/// oldRoot      newRoot
+///              |     |
+///           newLeft oldRoot
+///
+void BTreeGeneric::splitRootNodeMayJump(
+    GuardedBufferFrame<BTreeNode>& guardedParent,
+    GuardedBufferFrame<BTreeNode>& guardedChild,
+    BTreeNode::SeparatorInfo& sepInfo) {
+  auto xGuardedParent = ExclusiveGuardedBufferFrame(std::move(guardedParent));
+  auto xGuardedChild = ExclusiveGuardedBufferFrame(std::move(guardedChild));
+
+  DCHECK(isMetaNode(guardedParent)) << "Parent should be meta node";
+  DCHECK(mHeight == 1 || !xGuardedChild->mIsLeaf);
+
+  // create new root, lock it exclusively
+  auto* newRootBf = &mStore->mBufferManager->AllocNewPage(mTreeId);
+  auto guardedNewRoot = GuardedBufferFrame<BTreeNode>(
+      mStore->mBufferManager.get(), newRootBf, false);
+  auto xGuardedNewRoot =
+      ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewRoot));
+
+  // create new left, lock it exclusively
+  auto* newLeftBf = &mStore->mBufferManager->AllocNewPage(mTreeId);
+  auto guardedNewLeft =
+      GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(), newLeftBf);
+  auto xGuardedNewLeft =
+      ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
+
+  // write wal on demand or simply mark as dirty
+  if (mConfig.mEnableWal) {
+    xGuardedParent.SyncGSNBeforeWrite();
+    xGuardedNewRoot.WriteWal<WALInitPage>(0, mTreeId, false);
+    xGuardedNewLeft.WriteWal<WALInitPage>(0, mTreeId, xGuardedChild->mIsLeaf);
+    xGuardedChild.WriteWal<WALLogicalSplit>(
+        0, xGuardedNewRoot.bf()->header.mPageId,
+        xGuardedNewLeft.bf()->header.mPageId,
+        xGuardedChild.bf()->header.mPageId);
+  } else {
+    xGuardedParent.MarkAsDirty();
+    xGuardedNewRoot.MarkAsDirty();
+    xGuardedNewLeft.MarkAsDirty();
+    xGuardedChild.MarkAsDirty();
+  }
+
+  // Update meta node
+  xGuardedParent->mRightMostChildSwip = xGuardedNewRoot.bf();
+
+  // init new root
+  xGuardedNewRoot.keepAlive();
+  xGuardedNewRoot.InitPayload(false);
+  xGuardedNewRoot->mRightMostChildSwip = xGuardedChild.bf();
+
+  xGuardedNewLeft.InitPayload(xGuardedChild->mIsLeaf);
+  xGuardedChild->Split(xGuardedNewRoot, xGuardedNewLeft, sepInfo);
+
+  // update height
+  mHeight++;
+}
+
+/// Split a non-root node, 3 nodes are involved in the split:
+/// parent(toSplit) -> parent(newLeft, toSplit)
+///
+/// parent         parent
+///   |            |   |
+/// toSplit   newLeft toSplit
+///
+void BTreeGeneric::splitNonRootNodeMayJump(
+    GuardedBufferFrame<BTreeNode>& guardedParent,
+    GuardedBufferFrame<BTreeNode>& guardedChild,
+    BTreeNode::SeparatorInfo& sepInfo, u16 spaceNeededForSeparator) {
+  auto xGuardedParent = ExclusiveGuardedBufferFrame(std::move(guardedParent));
+  auto xGuardedChild = ExclusiveGuardedBufferFrame(std::move(guardedChild));
+
+  DCHECK(!isMetaNode(guardedParent)) << "Parent should not be meta node";
+  DCHECK(!xGuardedParent->mIsLeaf) << "Parent should not be leaf node";
+
+  // make room for separator key in parent node
+  xGuardedParent->requestSpaceFor(spaceNeededForSeparator);
+
+  // alloc new left node
+  auto* newLeftBf = &mStore->mBufferManager->AllocNewPage(mTreeId);
+  auto guardedNewLeft =
+      GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(), newLeftBf);
+  auto xGuardedNewLeft =
+      ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
+
+  // write wal on demand or simply mark as dirty
+  if (mConfig.mEnableWal) {
+    xGuardedParent.SyncGSNBeforeWrite();
+    xGuardedNewLeft.WriteWal<WALInitPage>(0, mTreeId, xGuardedChild->mIsLeaf);
+    xGuardedChild.WriteWal<WALLogicalSplit>(
+        0, xGuardedParent.bf()->header.mPageId,
+        xGuardedNewLeft.bf()->header.mPageId,
+        xGuardedChild.bf()->header.mPageId);
+  } else {
+    xGuardedParent.MarkAsDirty();
+    xGuardedNewLeft.MarkAsDirty();
+    xGuardedChild.MarkAsDirty();
+  }
+
+  // init new left
+  xGuardedNewLeft.InitPayload(xGuardedChild->mIsLeaf);
+
+  // split
+  xGuardedChild->Split(xGuardedParent, xGuardedNewLeft, sepInfo);
 }
 
 bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {

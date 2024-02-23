@@ -26,9 +26,14 @@ public:
   static const u16 sHintCount = 16;
 
   struct SeparatorInfo {
-    u16 length;
-    u16 slot;
-    bool trunc; // TODO: ???
+    /// The full length of the seperator key.
+    u16 mSize;
+
+    /// The slot id of the seperator key.
+    u16 mSlotId;
+
+    // TODO: ???
+    bool trunc;
   };
 
   struct FenceKey {
@@ -544,12 +549,11 @@ public:
   void copyKeyValue(u16 srcSlot, BTreeNode* dst, u16 dstSlot);
   void insertFence(FenceKey& fk, Slice key);
   void setFences(Slice lowerKey, Slice upperKey);
-  void split(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
-             ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedNewNode,
-             u16 sepSlot, u8* sepKey, u16 sepLength);
+  void Split(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
+             ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedNewLeft,
+             BTreeNode::SeparatorInfo& sepInfo);
   u16 commonPrefix(u16 aPos, u16 bPos);
   SeparatorInfo findSep();
-  void getSep(u8* sepKeyOut, SeparatorInfo info);
   Swip& lookupInner(Slice key);
 
   // Not synchronized or todo section
@@ -563,6 +567,19 @@ public:
               rapidjson::Value::AllocatorType& allocator);
 
 private:
+  inline void generateSeparator(SeparatorInfo& sepInfo, u8* sepKey) {
+    // prefix
+    memcpy(sepKey, getLowerFenceKey(), mPrefixSize);
+
+    if (sepInfo.trunc) {
+      memcpy(sepKey + mPrefixSize, KeyDataWithoutPrefix(sepInfo.mSlotId + 1),
+             sepInfo.mSize - mPrefixSize);
+    } else {
+      memcpy(sepKey + mPrefixSize, KeyDataWithoutPrefix(sepInfo.mSlotId),
+             sepInfo.mSize - mPrefixSize);
+    }
+  }
+
   inline bool shrinkSearchRange(u16& lower, u16& upper, Slice key) {
     auto mid = ((upper - lower) / 2) + lower;
     auto cmp = CmpKeys(key, KeyWithoutPrefix(mid));

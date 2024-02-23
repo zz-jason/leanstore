@@ -68,8 +68,7 @@ public:
     std::memcpy(mGuardedLeaf->ValData(mSlotId), val.data(), val.size());
   }
 
-  virtual void SplitForKey(Slice key) {
-    volatile u64 numAttempts(0);
+  void SplitForKey(Slice key) {
     while (true) {
       JUMPMU_TRY() {
         if (mSlotId == -1 || !KeyInCurrentNode(key)) {
@@ -81,12 +80,15 @@ public:
         mSlotId = -1;
 
         mBTree.TrySplitMayJump(*bf);
+        COUNTERS_BLOCK() {
+          WorkerCounters::MyCounters().dt_split[mBTree.mTreeId]++;
+        }
         JUMPMU_BREAK;
       }
       JUMPMU_CATCH() {
-        numAttempts = numAttempts + 1;
-        LOG_IF(WARNING, (numAttempts) % 5 == 0)
-            << "SplitForKey failed for " << numAttempts << " times";
+        LOG(INFO) << "Split failed"
+                  << ", treeId=" << mBTree.mTreeId
+                  << ", pageId=" << mGuardedLeaf.mBf->header.mPageId;
       }
     }
   }
@@ -175,20 +177,28 @@ public:
       mSlotId = -1;
       JUMPMU_TRY() {
         mBTree.TrySplitMayJump(*mGuardedLeaf.mBf, splitSlot);
-        WorkerCounters::MyCounters()
-            .contention_split_succ_counter[mBTree.mTreeId]++;
-        DLOG(INFO) << "[Contention Split] contention split succeed"
+
+        DLOG(INFO) << "[Contention Split] succeed"
                    << ", pageId=" << mGuardedLeaf.mBf->header.mPageId
                    << ", contention pct=" << contentionPct
                    << ", split slot=" << splitSlot;
+
+        COUNTERS_BLOCK() {
+          WorkerCounters::MyCounters()
+              .contention_split_succ_counter[mBTree.mTreeId]++;
+          WorkerCounters::MyCounters().dt_split[mBTree.mTreeId]++;
+        }
       }
       JUMPMU_CATCH() {
-        WorkerCounters::MyCounters()
-            .contention_split_fail_counter[mBTree.mTreeId]++;
         LOG(INFO) << "[Contention Split] contention split failed"
                   << ", pageId=" << mGuardedLeaf.mBf->header.mPageId
                   << ", contention pct=" << contentionPct
                   << ", split slot=" << splitSlot;
+
+        COUNTERS_BLOCK() {
+          WorkerCounters::MyCounters()
+              .contention_split_fail_counter[mBTree.mTreeId]++;
+        }
       }
     }
   }
