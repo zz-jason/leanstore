@@ -26,9 +26,14 @@ public:
   static const u16 sHintCount = 16;
 
   struct SeparatorInfo {
-    u16 length;
-    u16 slot;
-    bool trunc; // TODO: ???
+    /// The full length of the seperator key.
+    u16 mSize;
+
+    /// The slot id of the seperator key.
+    u16 mSlotId;
+
+    // TODO: ???
+    bool trunc;
   };
 
   struct FenceKey {
@@ -200,20 +205,21 @@ public:
     return slot[slotId].mValSize;
   }
 
-  inline Swip& GetChildIncludingRightMost(u16 slotId) {
+  inline Swip* ChildSwipIncludingRightMost(u16 slotId) {
     if (slotId == mNumSeps) {
-      return mRightMostChildSwip;
-    } else {
-      return *reinterpret_cast<Swip*>(ValData(slotId));
+      return &mRightMostChildSwip;
     }
+
+    return reinterpret_cast<Swip*>(ValData(slotId));
   }
 
-  inline Swip& getChild(u16 slotId) {
-    return *reinterpret_cast<Swip*>(ValData(slotId));
+  inline Swip* ChildSwip(u16 slotId) {
+    DCHECK(slotId < mNumSeps);
+    return reinterpret_cast<Swip*>(ValData(slotId));
   }
 
-  inline u16 getKVConsumedSpace(u16 slot_id) {
-    return sizeof(Slot) + KeySizeWithoutPrefix(slot_id) + ValSize(slot_id);
+  inline u16 getKVConsumedSpace(u16 slotId) {
+    return sizeof(Slot) + KeySizeWithoutPrefix(slotId) + ValSize(slotId);
   }
 
   // Attention: the caller has to hold a copy of the existing payload
@@ -531,7 +537,7 @@ public:
   u32 mergeSpaceUpperBound(
       ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedRight);
 
-  u32 spaceUsedBySlot(u16 slot_id);
+  u32 spaceUsedBySlot(u16 slotId);
 
   bool merge(u16 slotId, ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
              ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedRight);
@@ -544,12 +550,11 @@ public:
   void copyKeyValue(u16 srcSlot, BTreeNode* dst, u16 dstSlot);
   void insertFence(FenceKey& fk, Slice key);
   void setFences(Slice lowerKey, Slice upperKey);
-  void split(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
-             ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedNewNode,
-             u16 sepSlot, u8* sepKey, u16 sepLength);
+  void Split(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
+             ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedNewLeft,
+             BTreeNode::SeparatorInfo& sepInfo);
   u16 commonPrefix(u16 aPos, u16 bPos);
   SeparatorInfo findSep();
-  void getSep(u8* sepKeyOut, SeparatorInfo info);
   Swip& lookupInner(Slice key);
 
   // Not synchronized or todo section
@@ -563,6 +568,19 @@ public:
               rapidjson::Value::AllocatorType& allocator);
 
 private:
+  inline void generateSeparator(SeparatorInfo& sepInfo, u8* sepKey) {
+    // prefix
+    memcpy(sepKey, getLowerFenceKey(), mPrefixSize);
+
+    if (sepInfo.trunc) {
+      memcpy(sepKey + mPrefixSize, KeyDataWithoutPrefix(sepInfo.mSlotId + 1),
+             sepInfo.mSize - mPrefixSize);
+    } else {
+      memcpy(sepKey + mPrefixSize, KeyDataWithoutPrefix(sepInfo.mSlotId),
+             sepInfo.mSize - mPrefixSize);
+    }
+  }
+
   inline bool shrinkSearchRange(u16& lower, u16& upper, Slice key) {
     auto mid = ((upper - lower) / 2) + lower;
     auto cmp = CmpKeys(key, KeyWithoutPrefix(mid));

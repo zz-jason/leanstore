@@ -129,6 +129,15 @@ private:
     return mMetaNodeSwip == xGuardedNode.bf();
   }
 
+  void splitRootNodeMayJump(GuardedBufferFrame<BTreeNode>& guardedParent,
+                            GuardedBufferFrame<BTreeNode>& guardedChild,
+                            BTreeNode::SeparatorInfo& sepInfo);
+
+  void splitNonRootNodeMayJump(GuardedBufferFrame<BTreeNode>& guardedParent,
+                               GuardedBufferFrame<BTreeNode>& guardedChild,
+                               BTreeNode::SeparatorInfo& sepInfo,
+                               u16 spaceNeededForSeparator);
+
   s64 iterateAllPages(BTreeNodeCallback inner, BTreeNodeCallback leaf);
 
   s64 iterateAllPagesRecursive(GuardedBufferFrame<BTreeNode>& guardedNode,
@@ -142,9 +151,9 @@ private:
 
 public:
   // Helpers
-  template <LatchMode mode = LatchMode::kPessimisticShared>
   inline void FindLeafCanJump(Slice key,
-                              GuardedBufferFrame<BTreeNode>& guardedTarget);
+                              GuardedBufferFrame<BTreeNode>& guardedTarget,
+                              LatchMode mode = LatchMode::kPessimisticShared);
 
 public:
   /// Note on Synchronization: it is called by the page provide thread which are
@@ -224,9 +233,9 @@ inline void BTreeGeneric::freeBTreeNodesRecursive(
     BTreeGeneric& btree, GuardedBufferFrame<BTreeNode>& guardedNode) {
   if (!guardedNode->mIsLeaf) {
     for (auto i = 0u; i <= guardedNode->mNumSeps; ++i) {
-      auto childSwip = guardedNode->GetChildIncludingRightMost(i);
+      auto* childSwip = guardedNode->ChildSwipIncludingRightMost(i);
       GuardedBufferFrame<BTreeNode> guardedChild(
-          btree.mStore->mBufferManager.get(), guardedNode, childSwip);
+          btree.mStore->mBufferManager.get(), guardedNode, *childSwip);
       freeBTreeNodesRecursive(btree, guardedChild);
     }
   }
@@ -256,9 +265,9 @@ inline void BTreeGeneric::toJsonRecursive(
 
   rapidjson::Value childrenJson(rapidjson::kArrayType);
   for (auto i = 0u; i < guardedNode->mNumSeps; ++i) {
-    auto childSwip = guardedNode->getChild(i);
+    auto* childSwip = guardedNode->ChildSwip(i);
     GuardedBufferFrame<BTreeNode> guardedChild(
-        btree.mStore->mBufferManager.get(), guardedNode, childSwip);
+        btree.mStore->mBufferManager.get(), guardedNode, *childSwip);
 
     rapidjson::Value childObj(rapidjson::kObjectType);
     toJsonRecursive(btree, guardedChild, &childObj, allocator);
@@ -290,7 +299,7 @@ inline void BTreeGeneric::IterateChildSwips(
     return;
   }
   for (u16 i = 0; i < childNode.mNumSeps; i++) {
-    if (!callback(childNode.getChild(i))) {
+    if (!callback(*childNode.ChildSwip(i))) {
       return;
     }
   }
@@ -327,9 +336,9 @@ inline void BTreeGeneric::Checkpoint(BufferFrame& bf, void* dest) {
   if (!destNode->mIsLeaf) {
     // Replace all child swip to their page ID
     for (u64 i = 0; i < destNode->mNumSeps; i++) {
-      if (!destNode->getChild(i).IsEvicted()) {
-        auto& childBf = destNode->getChild(i).AsBufferFrameMasked();
-        destNode->getChild(i).Evict(childBf.header.mPageId);
+      if (!destNode->ChildSwip(i)->IsEvicted()) {
+        auto& childBf = destNode->ChildSwip(i)->AsBufferFrameMasked();
+        destNode->ChildSwip(i)->Evict(childBf.header.mPageId);
       }
     }
     // Replace right most child swip to page id
@@ -340,9 +349,8 @@ inline void BTreeGeneric::Checkpoint(BufferFrame& bf, void* dest) {
   }
 }
 
-template <LatchMode mode>
 inline void BTreeGeneric::FindLeafCanJump(
-    Slice key, GuardedBufferFrame<BTreeNode>& guardedTarget) {
+    Slice key, GuardedBufferFrame<BTreeNode>& guardedTarget, LatchMode mode) {
   guardedTarget.unlock();
   auto* bufferManager = mStore->mBufferManager.get();
   GuardedBufferFrame<BTreeNode> guardedParent(bufferManager, mMetaNodeSwip);
@@ -418,7 +426,7 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
       if (posInParent == guardedNode->mNumSeps) {
         childSwip = &(guardedNode->mRightMostChildSwip);
       } else {
-        childSwip = &(guardedNode->getChild(posInParent));
+        childSwip = guardedNode->ChildSwip(posInParent);
       }
     }
     return (&childSwip->AsBufferFrameMasked() != &bfToFind);

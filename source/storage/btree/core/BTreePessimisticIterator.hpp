@@ -83,16 +83,17 @@ protected:
             WorkerCounters::MyCounters().dt_inner_page[mBTree.mTreeId]++;
           }
           mLeafPosInParent = guardedChild->lowerBound<false>(key);
-          auto& childSwip =
-              guardedChild->GetChildIncludingRightMost(mLeafPosInParent);
+          auto* childSwip =
+              guardedChild->ChildSwipIncludingRightMost(mLeafPosInParent);
           mGuardedParent = std::move(guardedChild);
           if (level == mBTree.mHeight - 1) {
             guardedChild = GuardedBufferFrame<BTreeNode>(
-                mBTree.mStore->mBufferManager.get(), mGuardedParent, childSwip,
+                mBTree.mStore->mBufferManager.get(), mGuardedParent, *childSwip,
                 mode);
           } else {
             guardedChild = GuardedBufferFrame<BTreeNode>(
-                mBTree.mStore->mBufferManager.get(), mGuardedParent, childSwip);
+                mBTree.mStore->mBufferManager.get(), mGuardedParent,
+                *childSwip);
           }
         }
 
@@ -242,11 +243,11 @@ public:
         JUMPMU_TRY() {
           if ((mLeafPosInParent + 1) <= mGuardedParent->mNumSeps) {
             s32 nextLeafPos = mLeafPosInParent + 1;
-            auto& nextLeafSwip =
-                mGuardedParent->GetChildIncludingRightMost(nextLeafPos);
+            auto* nextLeafSwip =
+                mGuardedParent->ChildSwipIncludingRightMost(nextLeafPos);
             GuardedBufferFrame<BTreeNode> guardedNextLeaf(
                 mBTree.mStore->mBufferManager.get(), mGuardedParent,
-                nextLeafSwip, LatchMode::kOptimisticOrJump);
+                *nextLeafSwip, LatchMode::kOptimisticOrJump);
             if (mMode == LatchMode::kPessimisticExclusive) {
               guardedNextLeaf.TryToExclusiveMayJump();
             } else {
@@ -346,10 +347,10 @@ public:
         JUMPMU_TRY() {
           if ((mLeafPosInParent - 1) >= 0) {
             s32 nextLeafPos = mLeafPosInParent - 1;
-            auto& nextLeafSwip = mGuardedParent->getChild(nextLeafPos);
+            auto* nextLeafSwip = mGuardedParent->ChildSwip(nextLeafPos);
             GuardedBufferFrame<BTreeNode> guardedNextLeaf(
                 mBTree.mStore->mBufferManager.get(), mGuardedParent,
-                nextLeafSwip, LatchMode::kOptimisticOrJump);
+                *nextLeafSwip, LatchMode::kOptimisticOrJump);
             if (mMode == LatchMode::kPessimisticExclusive) {
               guardedNextLeaf.TryToExclusiveMayJump();
             } else {

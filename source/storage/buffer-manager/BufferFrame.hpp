@@ -11,6 +11,7 @@
 #include <atomic>
 #include <cstring>
 #include <limits>
+#include <sstream>
 
 namespace leanstore {
 namespace storage {
@@ -133,7 +134,7 @@ public:
   /// page is "dirty" when mPSN > mFlushedPSN in the header.
   LID mPSN = 0;
 
-  /// Short for "global sequence number", increased when a page is accessed.
+  /// Short for "global sequence number", increased when a page is modified.
   /// It's used to check whether the page has been read or written by
   /// transactions in other workers.
   u64 mGSN = 0;
@@ -228,6 +229,16 @@ inline void BufferFrame::ToJson(rapidjson::Value* resultObj,
 
   // header
   rapidjson::Value headerObj(rapidjson::kObjectType);
+  {
+    // write the memory address of the buffer frame
+    rapidjson::Value member;
+    std::stringstream ss;
+    ss << (void*)this;
+    auto hexStr = ss.str();
+    member.SetString(hexStr.data(), hexStr.size(), allocator);
+    headerObj.AddMember("mAddress", member, allocator);
+  }
+
   {
     auto stateStr = header.StateString();
     rapidjson::Value member;
