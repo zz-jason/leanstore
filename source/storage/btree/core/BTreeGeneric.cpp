@@ -11,7 +11,6 @@
 #include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "storage/buffer-manager/GuardedBufferFrame.hpp"
-#include "utils/JsonUtil.hpp"
 #include "utils/Misc.hpp"
 
 #include <glog/logging.h>
@@ -54,11 +53,6 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId,
         0, mTreeId, xGuardedMeta->mIsLeaf);
     metaWalHandler.SubmitWal();
   }
-
-  xGuardedRoot.SyncGSNBeforeWrite();
-  xGuardedRoot.MarkAsDirty();
-  xGuardedMeta.SyncGSNBeforeWrite();
-  xGuardedMeta.MarkAsDirty();
 }
 
 BTreePessimisticSharedIterator BTreeGeneric::GetIterator() {

@@ -151,9 +151,9 @@ private:
 
 public:
   // Helpers
-  template <LatchMode mode = LatchMode::kPessimisticShared>
   inline void FindLeafCanJump(Slice key,
-                              GuardedBufferFrame<BTreeNode>& guardedTarget);
+                              GuardedBufferFrame<BTreeNode>& guardedTarget,
+                              LatchMode mode = LatchMode::kPessimisticShared);
 
 public:
   /// Note on Synchronization: it is called by the page provide thread which are
@@ -349,9 +349,8 @@ inline void BTreeGeneric::Checkpoint(BufferFrame& bf, void* dest) {
   }
 }
 
-template <LatchMode mode>
 inline void BTreeGeneric::FindLeafCanJump(
-    Slice key, GuardedBufferFrame<BTreeNode>& guardedTarget) {
+    Slice key, GuardedBufferFrame<BTreeNode>& guardedTarget, LatchMode mode) {
   guardedTarget.unlock();
   auto* bufferManager = mStore->mBufferManager.get();
   GuardedBufferFrame<BTreeNode> guardedParent(bufferManager, mMetaNodeSwip);

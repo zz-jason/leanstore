@@ -72,8 +72,7 @@ public:
     while (true) {
       JUMPMU_TRY() {
         if (mSlotId == -1 || !KeyInCurrentNode(key)) {
-          mBTree.FindLeafCanJump<LatchMode::kPessimisticShared>(key,
-                                                                mGuardedLeaf);
+          mBTree.FindLeafCanJump(key, mGuardedLeaf);
         }
         BufferFrame* bf = mGuardedLeaf.mBf;
         mGuardedLeaf.unlock();
