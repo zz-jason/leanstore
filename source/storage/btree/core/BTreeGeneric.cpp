@@ -56,7 +56,9 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId,
   }
 
   xGuardedRoot.SyncGSNBeforeWrite();
+  xGuardedRoot.MarkAsDirty();
   xGuardedMeta.SyncGSNBeforeWrite();
+  xGuardedMeta.MarkAsDirty();
 }
 
 BTreePessimisticSharedIterator BTreeGeneric::GetIterator() {
@@ -158,6 +160,7 @@ void BTreeGeneric::splitRootNodeMayJump(
   // write wal on demand or simply mark as dirty
   if (mConfig.mEnableWal) {
     xGuardedParent.SyncGSNBeforeWrite();
+    xGuardedParent.MarkAsDirty();
     xGuardedNewRoot.WriteWal<WALInitPage>(0, mTreeId, false);
     xGuardedNewLeft.WriteWal<WALInitPage>(0, mTreeId, xGuardedChild->mIsLeaf);
     xGuardedChild.WriteWal<WALLogicalSplit>(
@@ -216,6 +219,7 @@ void BTreeGeneric::splitNonRootNodeMayJump(
   // write wal on demand or simply mark as dirty
   if (mConfig.mEnableWal) {
     xGuardedParent.SyncGSNBeforeWrite();
+    xGuardedParent.MarkAsDirty();
     xGuardedNewLeft.WriteWal<WALInitPage>(0, mTreeId, xGuardedChild->mIsLeaf);
     xGuardedChild.WriteWal<WALLogicalSplit>(
         0, xGuardedParent.bf()->header.mPageId,

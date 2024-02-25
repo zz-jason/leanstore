@@ -171,11 +171,15 @@ public:
 
   inline void SyncGSNBeforeWrite() {
     DCHECK(mBf != nullptr);
-    DCHECK(mBf->page.mGSN <= cr::Worker::My().mLogging.GetCurrentGsn());
+    DCHECK(mBf->page.mGSN <= cr::Worker::My().mLogging.GetCurrentGsn())
+        << "Page GSN should <= worker GSN"
+        << ", pageGSN=" << mBf->page.mGSN
+        << ", workerGSN=" << cr::Worker::My().mLogging.GetCurrentGsn();
 
-    MarkAsDirty();
+    // update last writer worker
     mBf->header.mLastWriterWorker = cr::Worker::My().mWorkerId;
 
+    // increase GSN
     const auto workerGSN = cr::Worker::My().mLogging.GetCurrentGsn();
     mBf->page.mGSN = workerGSN + 1;
     cr::Worker::My().mLogging.SetCurrentGsn(workerGSN + 1);
@@ -208,17 +212,15 @@ public:
     DCHECK(cr::ActiveTx().mIsDurable);
     DCHECK(mGuard.mState == GuardState::kPessimisticExclusive);
 
-    SyncGSNBeforeWrite();
-
     const auto pageId = mBf->header.mPageId;
     const auto treeId = mBf->page.mBTreeId;
     walSize = ((walSize - 1) / 8 + 1) * 8;
-    // TODO: verify
     auto handler =
         cr::Worker::My().mLogging.ReserveWALEntryComplex<WT, Args...>(
             sizeof(WT) + walSize, pageId, mBf->page.mPSN, treeId,
             std::forward<Args>(args)...);
 
+    SyncGSNBeforeWrite();
     MarkAsDirty();
     return handler;
   }

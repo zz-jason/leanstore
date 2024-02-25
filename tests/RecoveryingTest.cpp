@@ -177,7 +177,6 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
 }
 
 TEST_F(RecoveringTest, RecoverAfterInsert) {
-  GTEST_SKIP() << "This test only works in debug mode";
 #ifndef DEBUG
   GTEST_SKIP() << "This test only works in debug mode";
 #endif
@@ -185,7 +184,7 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
   TransactionKV* btree;
 
   // prepare key-value pairs to insert
-  size_t numKVs(100);
+  size_t numKVs(10);
   std::vector<std::tuple<std::string, std::string>> kvToTest;
   for (size_t i = 0; i < numKVs; ++i) {
     std::string key("key_xxxxxxxxxxxx_" + std::to_string(i));

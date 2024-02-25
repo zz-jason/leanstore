@@ -222,9 +222,6 @@ void BufferManager::ReclaimPage(BufferFrame& bf) {
     // Do nothing ! we have a garbage collector ;-)
     bf.header.mLatch.UnlockExclusively();
   } else {
-    DLOG(INFO) << "Reclaiming page"
-               << ", address=" << (void*)&bf << ", pageId=" << bf.header.mPageId
-               << ", btreeId=" << bf.page.mBTreeId;
     bf.Reset();
     bf.header.mLatch.UnlockExclusively();
     partition.mFreeBfList.PushFront(bf);

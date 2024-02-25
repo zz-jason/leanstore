@@ -134,7 +134,7 @@ public:
   /// page is "dirty" when mPSN > mFlushedPSN in the header.
   LID mPSN = 0;
 
-  /// Short for "global sequence number", increased when a page is accessed.
+  /// Short for "global sequence number", increased when a page is modified.
   /// It's used to check whether the page has been read or written by
   /// transactions in other workers.
   u64 mGSN = 0;

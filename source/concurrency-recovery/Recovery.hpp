@@ -121,14 +121,6 @@ inline bool Recovery::Run() {
   }
 
   redo();
-  for (auto it = mResolvedPages.begin(); it != mResolvedPages.end(); ++it) {
-    if (it->second->isFree()) {
-      continue;
-    }
-    DLOG(INFO) << "Resolved page after redo"
-               << ", address: " << it->second << ", pageId: " << it->first
-               << ", btreeId: " << it->second->page.mBTreeId;
-  }
 
   // if (Undo()) {
   //   return true;
