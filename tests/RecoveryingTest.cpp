@@ -9,8 +9,11 @@
 #include "utils/JsonUtil.hpp"
 #include "utils/RandomGenerator.hpp"
 
-#include "glog/logging.h"
+#include <glog/logging.h>
 #include <gtest/gtest.h>
+
+#include <cstddef>
+#include <ostream>
 
 using namespace leanstore::storage::btree;
 
@@ -46,7 +49,7 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
   TransactionKV* btree;
 
   // prepare key-value pairs to insert
-  size_t numKVs(10);
+  size_t numKVs(100);
   std::vector<std::tuple<std::string, std::string>> kvToTest;
   for (size_t i = 0; i < numKVs; ++i) {
     std::string key("key_xxxxxxxxxxxx_" + std::to_string(i));
@@ -80,12 +83,6 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     }
   });
 
-  mStore->ExecSync(0, [&]() {
-    rapidjson::Document doc(rapidjson::kObjectType);
-    BTreeGeneric::ToJson(*btree, &doc);
-    LOG(INFO) << "btree before destroy: " << utils::JsonToStr(&doc);
-  });
-
   // meta file should be serialized during destructor.
   mStore.reset(nullptr);
 
@@ -98,12 +95,6 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
   mStore->GetTransactionKV(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
 
-  mStore->ExecSync(0, [&]() {
-    rapidjson::Document doc(rapidjson::kObjectType);
-    BTreeGeneric::ToJson(*btree, &doc);
-    LOG(INFO) << "btree after recovery: " << utils::JsonToStr(&doc);
-  });
-
   // lookup the restored btree
   mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
@@ -114,9 +105,9 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     };
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, expectedVal] = kvToTest[i];
-      EXPECT_EQ(
-          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OpCode::kOK);
+      auto opCode =
+          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut);
+      EXPECT_EQ(opCode, OpCode::kOK);
       EXPECT_EQ(copiedValue, expectedVal);
     }
   });
@@ -126,6 +117,8 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     mStore->DropTransactionKV(btreeName);
   });
+
+  mStore = nullptr;
 }
 
 TEST_F(RecoveringTest, RecoverAfterInsert) {

@@ -201,7 +201,8 @@ public:
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
     DLOG_IF(FATAL, it == mTrees.end())
-        << "BufferManagedTree not find, treeId=" << treeId;
+        << "BufferManagedTree not find"
+        << ", address=" << (void*)&bf << ", treeId=" << treeId;
     auto& [tree, treeName] = it->second;
     tree->IterateChildSwips(bf, callback);
   }
@@ -230,7 +231,9 @@ public:
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
     DLOG_IF(FATAL, it == mTrees.end())
-        << "BufferManagedTree not find, treeId=" << treeId;
+        << "BufferManagedTree not find"
+        << ", address=" << (void*)&bf << ", treeId=" << treeId
+        << ", pageId=" << bf.header.mPageId;
     auto& [tree, treeName] = it->second;
     return tree->Checkpoint(bf, dest);
   }

@@ -238,6 +238,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
     parentNodeGuard.JumpIfModifiedByOthers();
     return bf;
   }
+
   if (childSwip.IsCool()) {
     // Resolve swip from cool state
     auto* bf = &childSwip.AsBufferFrameMasked();
@@ -261,6 +262,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
 
   const PID pageId = childSwip.AsPageId();
   Partition& partition = GetPartition(pageId);
+
   JumpScoped<std::unique_lock<std::mutex>> inflightIOGuard(
       partition.mInflightIOMutex);
   parentNodeGuard.JumpIfModifiedByOthers();

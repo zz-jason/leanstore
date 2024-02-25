@@ -670,6 +670,7 @@ SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
 
   guardedNode.ToExclusiveMayJump();
   guardedNode.SyncGSNBeforeWrite();
+  guardedNode.MarkAsDirty();
 
   for (u16 i = 0; i < guardedNode->mNumSeps; i++) {
     auto& tuple = *Tuple::From(guardedNode->ValData(i));
