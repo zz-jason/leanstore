@@ -11,6 +11,12 @@
 #include <cmath>
 
 namespace leanstore {
+
+template <typename T1, typename T2> T1 DownCast(T2 ptr) {
+  DCHECK(dynamic_cast<T1>(ptr) != nullptr);
+  return static_cast<T1>(ptr);
+}
+
 namespace utils {
 
 inline u32 GetBitsNeeded(u64 input) {

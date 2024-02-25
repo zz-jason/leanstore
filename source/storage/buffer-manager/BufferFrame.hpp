@@ -11,6 +11,7 @@
 #include <atomic>
 #include <cstring>
 #include <limits>
+#include <sstream>
 
 namespace leanstore {
 namespace storage {
@@ -228,6 +229,16 @@ inline void BufferFrame::ToJson(rapidjson::Value* resultObj,
 
   // header
   rapidjson::Value headerObj(rapidjson::kObjectType);
+  {
+    // write the memory address of the buffer frame
+    rapidjson::Value member;
+    std::stringstream ss;
+    ss << (void*)this;
+    auto hexStr = ss.str();
+    member.SetString(hexStr.data(), hexStr.size(), allocator);
+    headerObj.AddMember("mAddress", member, allocator);
+  }
+
   {
     auto stateStr = header.StateString();
     rapidjson::Value member;

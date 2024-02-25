@@ -99,8 +99,36 @@ inline bool Recovery::Run() {
   bool error(false);
 
   analysis();
+  for (auto it = mResolvedPages.begin(); it != mResolvedPages.end(); ++it) {
+    if (it->second->isFree()) {
+      continue;
+    }
+    DLOG(INFO) << "Resolved page after analysis"
+               << ", address: " << it->second << ", pageId: " << it->first
+               << ", btreeId: " << it->second->page.mBTreeId;
+  }
+  // print resulting active transaction table
+  DLOG(INFO) << "Active transaction table size: " << mActiveTxTable.size();
+  for (auto it = mActiveTxTable.begin(); it != mActiveTxTable.end(); ++it) {
+    DLOG(INFO) << "Active transaction table after analysis"
+               << ", txId: " << it->first << ", offset: " << it->second;
+  }
+  // print dirty page table
+  DLOG(INFO) << "Dirty page table size: " << mDirtyPageTable.size();
+  for (auto it = mDirtyPageTable.begin(); it != mDirtyPageTable.end(); ++it) {
+    DLOG(INFO) << "Dirty page table after analysis"
+               << ", pageId: " << it->first << ", offset: " << it->second;
+  }
 
   redo();
+  for (auto it = mResolvedPages.begin(); it != mResolvedPages.end(); ++it) {
+    if (it->second->isFree()) {
+      continue;
+    }
+    DLOG(INFO) << "Resolved page after redo"
+               << ", address: " << it->second << ", pageId: " << it->first
+               << ", btreeId: " << it->second->page.mBTreeId;
+  }
 
   // if (Undo()) {
   //   return true;

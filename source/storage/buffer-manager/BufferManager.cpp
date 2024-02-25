@@ -222,6 +222,9 @@ void BufferManager::ReclaimPage(BufferFrame& bf) {
     // Do nothing ! we have a garbage collector ;-)
     bf.header.mLatch.UnlockExclusively();
   } else {
+    DLOG(INFO) << "Reclaiming page"
+               << ", address=" << (void*)&bf << ", pageId=" << bf.header.mPageId
+               << ", btreeId=" << bf.page.mBTreeId;
     bf.Reset();
     bf.header.mLatch.UnlockExclusively();
     partition.mFreeBfList.PushFront(bf);
@@ -238,6 +241,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
     parentNodeGuard.JumpIfModifiedByOthers();
     return bf;
   }
+
   if (childSwip.IsCool()) {
     // Resolve swip from cool state
     auto* bf = &childSwip.AsBufferFrameMasked();
@@ -261,6 +265,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
 
   const PID pageId = childSwip.AsPageId();
   Partition& partition = GetPartition(pageId);
+
   JumpScoped<std::unique_lock<std::mutex>> inflightIOGuard(
       partition.mInflightIOMutex);
   parentNodeGuard.JumpIfModifiedByOthers();

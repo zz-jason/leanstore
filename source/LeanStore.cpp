@@ -14,6 +14,7 @@
 #include "storage/btree/core/BTreeGeneric.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/Defer.hpp"
+#include "utils/Misc.hpp"
 #include "utils/UserThread.hpp"
 
 #include <gflags/gflags.h>
@@ -72,6 +73,10 @@ LeanStore::LeanStore() {
   mBufferManager->StartBufferFrameProviders();
 
   // create global transaction worker and group committer
+  //
+  // TODO(jian.z): Deserialize buffer manager before creating CRManager. We need
+  // to initialize nextPageId for each buffer partition before creating history
+  // tree in CRManager
   mCRManager = std::make_unique<cr::CRManager>(this);
 
   // recover from disk
@@ -680,7 +685,7 @@ void LeanStore::GetTransactionKV(const std::string& name,
 void LeanStore::DropTransactionKV(const std::string& name) {
   DCHECK(cr::Worker::My().IsTxStarted());
   auto* btree =
-      dynamic_cast<storage::btree::BTreeGeneric*>(mTreeRegistry->GetTree(name));
+      DownCast<storage::btree::BTreeGeneric*>(mTreeRegistry->GetTree(name));
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
   auto res = mTreeRegistry->UnregisterTree(name);
   if (!res) {
@@ -689,7 +694,7 @@ void LeanStore::DropTransactionKV(const std::string& name) {
   }
 
   auto graveyardName = "_" + name + "_graveyard";
-  btree = dynamic_cast<storage::btree::BTreeGeneric*>(
+  btree = DownCast<storage::btree::BTreeGeneric*>(
       mTreeRegistry->GetTree(graveyardName));
   DCHECK(btree != nullptr) << "graveyard not found";
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);

@@ -218,6 +218,8 @@ public:
         cr::Worker::My().mLogging.ReserveWALEntryComplex<WT, Args...>(
             sizeof(WT) + walSize, pageId, mBf->page.mPSN, treeId,
             std::forward<Args>(args)...);
+
+    MarkAsDirty();
     return handler;
   }
 

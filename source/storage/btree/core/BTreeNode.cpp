@@ -134,8 +134,8 @@ u32 BTreeNode::mergeSpaceUpperBound(
   return spaceUpperBound;
 }
 
-u32 BTreeNode::spaceUsedBySlot(u16 s_i) {
-  return sizeof(BTreeNode::Slot) + KeySizeWithoutPrefix(s_i) + ValSize(s_i);
+u32 BTreeNode::spaceUsedBySlot(u16 slotId) {
+  return sizeof(BTreeNode::Slot) + KeySizeWithoutPrefix(slotId) + ValSize(slotId);
 }
 // -------------------------------------------------------------------------------------
 // right survives, this gets reclaimed
@@ -381,7 +381,7 @@ Swip& BTreeNode::lookupInner(Slice key) {
   if (slotId == mNumSeps) {
     return mRightMostChildSwip;
   }
-  return getChild(slotId);
+  return *ChildSwip(slotId);
 }
 
 /// This = right
@@ -417,7 +417,8 @@ void BTreeNode::Split(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
     copyKeyValueRange(xGuardedNewLeft.GetPagePayload(), 0, 0, sepInfo.mSlotId);
     copyKeyValueRange(tmpRight, 0, xGuardedNewLeft->mNumSeps + 1,
                       mNumSeps - xGuardedNewLeft->mNumSeps - 1);
-    xGuardedNewLeft->mRightMostChildSwip = getChild(xGuardedNewLeft->mNumSeps);
+    xGuardedNewLeft->mRightMostChildSwip =
+        *ChildSwip(xGuardedNewLeft->mNumSeps);
     tmpRight->mRightMostChildSwip = mRightMostChildSwip;
   }
   xGuardedNewLeft->makeHint();

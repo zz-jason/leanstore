@@ -262,12 +262,12 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
 
     // TODO: write WALs
     auto mergeAndReclaimLeft = [&]() {
-      Swip& leftSwip = guardedParent->getChild(posInParent - 1);
-      if (!swizzleSibling && leftSwip.IsEvicted()) {
+      auto* leftSwip = guardedParent->ChildSwip(posInParent - 1);
+      if (!swizzleSibling && leftSwip->IsEvicted()) {
         return false;
       }
       auto guardedLeft = GuardedBufferFrame<BTreeNode>(
-          mStore->mBufferManager.get(), guardedParent, leftSwip);
+          mStore->mBufferManager.get(), guardedParent, *leftSwip);
       auto xGuardedParent =
           ExclusiveGuardedBufferFrame(std::move(guardedParent));
       auto xGuardedChild = ExclusiveGuardedBufferFrame(std::move(guardedChild));
@@ -299,9 +299,9 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
       return true;
     };
     auto mergeAndReclaimRight = [&]() {
-      Swip& rightSwip = ((posInParent + 1) == guardedParent->mNumSeps)
+      auto& rightSwip = ((posInParent + 1) == guardedParent->mNumSeps)
                             ? guardedParent->mRightMostChildSwip
-                            : guardedParent->getChild(posInParent + 1);
+                            : *guardedParent->ChildSwip(posInParent + 1);
       if (!swizzleSibling && rightSwip.IsEvicted()) {
         return false;
       }
@@ -503,14 +503,14 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
   for (maxRight = pos + 1; (maxRight - pos) < maxMergePages &&
                            (maxRight + 1) < guardedParent->mNumSeps;
        maxRight++) {
-    if (!guardedParent->getChild(maxRight).IsHot()) {
+    if (!guardedParent->ChildSwip(maxRight)->IsHot()) {
       guardedChild = std::move(guardedNodes[0]);
       return XMergeReturnCode::kNothing;
     }
 
     guardedNodes[maxRight - pos] = GuardedBufferFrame<BTreeNode>(
         mStore->mBufferManager.get(), guardedParent,
-        guardedParent->getChild(maxRight));
+        *guardedParent->ChildSwip(maxRight));
     fullyMerged[maxRight - pos] = false;
     totalFillFactor +=
         guardedNodes[maxRight - pos]->fillFactorAfterCompaction();
@@ -604,9 +604,9 @@ s64 BTreeGeneric::iterateAllPagesRecursive(
   }
   s64 res = inner(guardedNode.ref());
   for (u16 i = 0; i < guardedNode->mNumSeps; i++) {
-    Swip& childSwip = guardedNode->getChild(i);
+    auto* childSwip = guardedNode->ChildSwip(i);
     auto guardedChild = GuardedBufferFrame<BTreeNode>(
-        mStore->mBufferManager.get(), guardedNode, childSwip);
+        mStore->mBufferManager.get(), guardedNode, *childSwip);
     guardedChild.JumpIfModifiedByOthers();
     res += iterateAllPagesRecursive(guardedChild, inner, leaf);
   }

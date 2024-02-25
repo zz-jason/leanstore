@@ -205,20 +205,21 @@ public:
     return slot[slotId].mValSize;
   }
 
-  inline Swip& GetChildIncludingRightMost(u16 slotId) {
+  inline Swip* ChildSwipIncludingRightMost(u16 slotId) {
     if (slotId == mNumSeps) {
-      return mRightMostChildSwip;
-    } else {
-      return *reinterpret_cast<Swip*>(ValData(slotId));
+      return &mRightMostChildSwip;
     }
+
+    return reinterpret_cast<Swip*>(ValData(slotId));
   }
 
-  inline Swip& getChild(u16 slotId) {
-    return *reinterpret_cast<Swip*>(ValData(slotId));
+  inline Swip* ChildSwip(u16 slotId) {
+    DCHECK(slotId < mNumSeps);
+    return reinterpret_cast<Swip*>(ValData(slotId));
   }
 
-  inline u16 getKVConsumedSpace(u16 slot_id) {
-    return sizeof(Slot) + KeySizeWithoutPrefix(slot_id) + ValSize(slot_id);
+  inline u16 getKVConsumedSpace(u16 slotId) {
+    return sizeof(Slot) + KeySizeWithoutPrefix(slotId) + ValSize(slotId);
   }
 
   // Attention: the caller has to hold a copy of the existing payload
@@ -536,7 +537,7 @@ public:
   u32 mergeSpaceUpperBound(
       ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedRight);
 
-  u32 spaceUsedBySlot(u16 slot_id);
+  u32 spaceUsedBySlot(u16 slotId);
 
   bool merge(u16 slotId, ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
              ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedRight);
