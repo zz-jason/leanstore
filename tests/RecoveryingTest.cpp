@@ -3,7 +3,6 @@
 #include "storage/btree/BasicKV.hpp"
 #include "storage/btree/TransactionKV.hpp"
 #include "storage/btree/core/BTreeGeneric.hpp"
-#include "storage/buffer-manager/BufferFrame.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Defer.hpp"
@@ -84,20 +83,6 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     }
   });
 
-  mStore->ExecSync(0, [&]() {
-    rapidjson::Document doc(rapidjson::kObjectType);
-    BTreeGeneric::ToJson(*btree, &doc);
-    LOG(INFO) << "btree before destroy: " << utils::JsonToStr(&doc);
-  });
-
-  mStore->mBufferManager->DoWithBufferFrameIf(
-      [](BufferFrame& bf) { return !bf.isFree(); },
-      [](BufferFrame& bf) {
-        std::cout << "Busy buffer frame before 1st destroy"
-                  << ", address=" << &bf << ", pageId=" << bf.header.mPageId
-                  << ", btreeId=" << bf.page.mBTreeId << std::endl;
-      });
-
   // meta file should be serialized during destructor.
   mStore.reset(nullptr);
 
@@ -109,20 +94,6 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
   mStore = std::move(res.value());
   mStore->GetTransactionKV(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
-
-  mStore->mBufferManager->DoWithBufferFrameIf(
-      [](BufferFrame& bf) { return !bf.isFree(); },
-      [](BufferFrame& bf) {
-        std::cout << "Busy buffer frame after restore"
-                  << ", address=" << &bf << ", pageId=" << bf.header.mPageId
-                  << ", btreeId=" << bf.page.mBTreeId << std::endl;
-      });
-
-  mStore->ExecSync(0, [&]() {
-    rapidjson::Document doc(rapidjson::kObjectType);
-    BTreeGeneric::ToJson(*btree, &doc);
-    LOG(INFO) << "btree after recovery: " << utils::JsonToStr(&doc);
-  });
 
   // lookup the restored btree
   mStore->ExecSync(0, [&]() {
@@ -136,27 +107,10 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
       const auto& [key, expectedVal] = kvToTest[i];
       auto opCode =
           btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut);
-      if (opCode != OpCode::kOK) {
-        std::cout << "[zz-jason] key not found: " << key << std::endl;
-        exit(1);
-      }
       EXPECT_EQ(opCode, OpCode::kOK);
       EXPECT_EQ(copiedValue, expectedVal);
     }
   });
-
-  mStore->ExecSync(0, [&]() {
-    rapidjson::Document doc(rapidjson::kObjectType);
-    BTreeGeneric::ToJson(*btree, &doc);
-    LOG(INFO) << "btree after lookup: " << utils::JsonToStr(&doc);
-  });
-  mStore->mBufferManager->DoWithBufferFrameIf(
-      [](BufferFrame& bf) { return !bf.isFree(); },
-      [](BufferFrame& bf) {
-        std::cout << "Busy buffer frame after lookup"
-                  << ", address=" << &bf << ", pageId=" << bf.header.mPageId
-                  << ", btreeId=" << bf.page.mBTreeId << std::endl;
-      });
 
   mStore->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
@@ -164,16 +118,7 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     mStore->DropTransactionKV(btreeName);
   });
 
-  mStore->mBufferManager->DoWithBufferFrameIf(
-      [](BufferFrame& bf) { return !bf.isFree(); },
-      [](BufferFrame& bf) {
-        std::cout << "Busy buffer frame after drop btree"
-                  << ", address=" << &bf << ", pageId=" << bf.header.mPageId
-                  << ", btreeId=" << bf.page.mBTreeId << std::endl;
-      });
-
   mStore = nullptr;
-  std::cout << "I'm finsihed" << std::endl;
 }
 
 TEST_F(RecoveringTest, RecoverAfterInsert) {
