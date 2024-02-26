@@ -139,8 +139,8 @@ private:
   ///           newLeft toSplit
   ///
   void splitRootMayJump(GuardedBufferFrame<BTreeNode>& guardedParent,
-                            GuardedBufferFrame<BTreeNode>& guardedChild,
-                            BTreeNode::SeparatorInfo& sepInfo);
+                        GuardedBufferFrame<BTreeNode>& guardedChild,
+                        const BTreeNode::SeparatorInfo& sepInfo);
 
   /// Split a non-root node, 3 nodes are involved in the split:
   /// parent(toSplit) -> parent(newLeft, toSplit)
@@ -150,9 +150,9 @@ private:
   /// toSplit   newLeft toSplit
   ///
   void splitNonRootMayJump(GuardedBufferFrame<BTreeNode>& guardedParent,
-                               GuardedBufferFrame<BTreeNode>& guardedChild,
-                               BTreeNode::SeparatorInfo& sepInfo,
-                               u16 spaceNeededForSeparator);
+                           GuardedBufferFrame<BTreeNode>& guardedChild,
+                           const BTreeNode::SeparatorInfo& sepInfo,
+                           u16 spaceNeededForSeparator);
 
   s64 iterateAllPages(BTreeNodeCallback inner, BTreeNodeCallback leaf);
 

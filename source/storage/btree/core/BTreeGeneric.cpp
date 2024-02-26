@@ -115,7 +115,7 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
 
   // split the non-root node
   splitNonRootMayJump(guardedParent, guardedChild, sepInfo,
-                          spaceNeededForSeparator);
+                      spaceNeededForSeparator);
 }
 
 /// Split the root node, 4 nodes are involved in the split:
@@ -130,7 +130,7 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
 void BTreeGeneric::splitRootMayJump(
     GuardedBufferFrame<BTreeNode>& guardedParent,
     GuardedBufferFrame<BTreeNode>& guardedChild,
-    BTreeNode::SeparatorInfo& sepInfo) {
+    const BTreeNode::SeparatorInfo& sepInfo) {
   auto xGuardedParent = ExclusiveGuardedBufferFrame(std::move(guardedParent));
   auto xGuardedChild = ExclusiveGuardedBufferFrame(std::move(guardedChild));
 
@@ -157,10 +157,8 @@ void BTreeGeneric::splitRootMayJump(
     xGuardedParent.MarkAsDirty();
     xGuardedNewRoot.WriteWal<WALInitPage>(0, mTreeId, false);
     xGuardedNewLeft.WriteWal<WALInitPage>(0, mTreeId, xGuardedChild->mIsLeaf);
-    xGuardedChild.WriteWal<WalSplitNonRoot>(
-        0, xGuardedNewRoot.bf()->header.mPageId,
-        xGuardedNewLeft.bf()->header.mPageId,
-        xGuardedChild.bf()->header.mPageId);
+    xGuardedChild.WriteWal<WalSplitRoot>(0, xGuardedChild.bf()->header.mPageId,
+                                         sepInfo);
   } else {
     xGuardedParent.MarkAsDirty();
     xGuardedNewRoot.MarkAsDirty();
@@ -193,7 +191,7 @@ void BTreeGeneric::splitRootMayJump(
 void BTreeGeneric::splitNonRootMayJump(
     GuardedBufferFrame<BTreeNode>& guardedParent,
     GuardedBufferFrame<BTreeNode>& guardedChild,
-    BTreeNode::SeparatorInfo& sepInfo, u16 spaceNeededForSeparator) {
+    const BTreeNode::SeparatorInfo& sepInfo, u16 spaceNeededForSeparator) {
   auto xGuardedParent = ExclusiveGuardedBufferFrame(std::move(guardedParent));
   auto xGuardedChild = ExclusiveGuardedBufferFrame(std::move(guardedChild));
 

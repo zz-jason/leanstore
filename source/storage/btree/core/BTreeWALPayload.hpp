@@ -79,7 +79,7 @@ struct WalSplitRoot : WALPayload {
 
   bool mSeparatorTruncated;
 
-  WalSplitRoot(PID toSplit, BTreeNode::SeparatorInfo& sepInfo)
+  WalSplitRoot(PID toSplit, const BTreeNode::SeparatorInfo& sepInfo)
       : WALPayload(TYPE::kWalSplitRoot),
         mToSplit(toSplit),
         mSplitSlot(sepInfo.mSlotId),
