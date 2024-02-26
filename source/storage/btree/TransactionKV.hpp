@@ -1,18 +1,16 @@
 #pragma once
 
 #include "BasicKV.hpp"
-#include "Config.hpp"
 #include "KVInterface.hpp"
 #include "concurrency-recovery/Worker.hpp"
 #include "shared-headers/Units.hpp"
 #include "storage/btree/BasicKV.hpp"
 #include "storage/btree/ChainedTuple.hpp"
 #include "storage/btree/Tuple.hpp"
-#include "storage/btree/core/BTreePessimisticExclusiveIterator.hpp"
 #include "storage/btree/core/BTreeGeneric.hpp"
+#include "storage/btree/core/BTreePessimisticExclusiveIterator.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
 #include "storage/buffer-manager/GuardedBufferFrame.hpp"
-#include "utils/Defer.hpp"
 
 #include <glog/logging.h>
 
@@ -76,22 +74,14 @@ private:
   template <bool asc = true>
   OpCode scan4LongRunningTx(Slice key, ScanCallback callback);
 
-  inline bool VisibleForMe(WORKERID workerId, TXID txId) {
-    return cr::Worker::My().cc.VisibleForMe(workerId, txId);
-  }
-
   inline static bool triggerPageWiseGarbageCollection(
       GuardedBufferFrame<BTreeNode>& guardedNode) {
     return guardedNode->mHasGarbage;
   }
 
-  inline std::tuple<OpCode, u16> GetVisibleTuple(Slice payload,
+  inline std::tuple<OpCode, u16> getVisibleTuple(Slice payload,
                                                  ValCallback callback) {
     std::tuple<OpCode, u16> ret;
-    // SCOPED_DEFER(DCHECK(std::get<0>(ret) == OpCode::kOK ||
-    //                     std::get<0>(ret) == OpCode::kNotFound)
-    //                  << "GetVisibleTuple should return either OK or
-    //                  NotFound";);
     while (true) {
       JUMPMU_TRY() {
         const auto* const tuple = Tuple::From(payload.data());
@@ -117,7 +107,8 @@ private:
     }
   }
 
-  void insertAfterRemove(BTreePessimisticExclusiveIterator& xIter, Slice key, Slice val);
+  void insertAfterRemove(BTreePessimisticExclusiveIterator& xIter, Slice key,
+                         Slice val);
 
   void undoLastInsert(const WALTxInsert* walInsert);
 
@@ -148,8 +139,8 @@ public:
   /// Updates the value stored in FatTuple. The former newest version value is
   /// moved to the tail.
   /// @return false to fallback to chained mode
-  static bool UpdateInFatTuple(BTreePessimisticExclusiveIterator& xIter, Slice key,
-                               MutValCallback updateCallBack,
+  static bool UpdateInFatTuple(BTreePessimisticExclusiveIterator& xIter,
+                               Slice key, MutValCallback updateCallBack,
                                UpdateDesc& updateDesc);
 };
 

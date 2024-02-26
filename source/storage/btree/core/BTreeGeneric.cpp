@@ -97,7 +97,7 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
 
   // split the root node
   if (isMetaNode(guardedParent)) {
-    splitRootNodeMayJump(guardedParent, guardedChild, sepInfo);
+    splitRootMayJump(guardedParent, guardedChild, sepInfo);
     return;
   }
 
@@ -114,7 +114,7 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
   }
 
   // split the non-root node
-  splitNonRootNodeMayJump(guardedParent, guardedChild, sepInfo,
+  splitNonRootMayJump(guardedParent, guardedChild, sepInfo,
                           spaceNeededForSeparator);
 }
 
@@ -127,7 +127,7 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
 ///              |     |
 ///           newLeft oldRoot
 ///
-void BTreeGeneric::splitRootNodeMayJump(
+void BTreeGeneric::splitRootMayJump(
     GuardedBufferFrame<BTreeNode>& guardedParent,
     GuardedBufferFrame<BTreeNode>& guardedChild,
     BTreeNode::SeparatorInfo& sepInfo) {
@@ -157,7 +157,7 @@ void BTreeGeneric::splitRootNodeMayJump(
     xGuardedParent.MarkAsDirty();
     xGuardedNewRoot.WriteWal<WALInitPage>(0, mTreeId, false);
     xGuardedNewLeft.WriteWal<WALInitPage>(0, mTreeId, xGuardedChild->mIsLeaf);
-    xGuardedChild.WriteWal<WALLogicalSplit>(
+    xGuardedChild.WriteWal<WalSplitNonRoot>(
         0, xGuardedNewRoot.bf()->header.mPageId,
         xGuardedNewLeft.bf()->header.mPageId,
         xGuardedChild.bf()->header.mPageId);
@@ -190,7 +190,7 @@ void BTreeGeneric::splitRootNodeMayJump(
 ///   |            |   |
 /// toSplit   newLeft toSplit
 ///
-void BTreeGeneric::splitNonRootNodeMayJump(
+void BTreeGeneric::splitNonRootMayJump(
     GuardedBufferFrame<BTreeNode>& guardedParent,
     GuardedBufferFrame<BTreeNode>& guardedChild,
     BTreeNode::SeparatorInfo& sepInfo, u16 spaceNeededForSeparator) {
@@ -215,7 +215,7 @@ void BTreeGeneric::splitNonRootNodeMayJump(
     xGuardedParent.SyncGSNBeforeWrite();
     xGuardedParent.MarkAsDirty();
     xGuardedNewLeft.WriteWal<WALInitPage>(0, mTreeId, xGuardedChild->mIsLeaf);
-    xGuardedChild.WriteWal<WALLogicalSplit>(
+    xGuardedChild.WriteWal<WalSplitNonRoot>(
         0, xGuardedParent.bf()->header.mPageId,
         xGuardedNewLeft.bf()->header.mPageId,
         xGuardedChild.bf()->header.mPageId);

@@ -129,11 +129,27 @@ private:
     return mMetaNodeSwip == xGuardedNode.bf();
   }
 
-  void splitRootNodeMayJump(GuardedBufferFrame<BTreeNode>& guardedParent,
+  /// Split the root node, 4 nodes are involved in the split:
+  /// meta(oldRoot) -> meta(newRoot(newLeft, oldRoot))
+  ///
+  /// meta         meta
+  ///   |            |
+  /// toSplit      newRoot
+  ///              |     |
+  ///           newLeft toSplit
+  ///
+  void splitRootMayJump(GuardedBufferFrame<BTreeNode>& guardedParent,
                             GuardedBufferFrame<BTreeNode>& guardedChild,
                             BTreeNode::SeparatorInfo& sepInfo);
 
-  void splitNonRootNodeMayJump(GuardedBufferFrame<BTreeNode>& guardedParent,
+  /// Split a non-root node, 3 nodes are involved in the split:
+  /// parent(toSplit) -> parent(newLeft, toSplit)
+  ///
+  /// parent         parent
+  ///   |            |   |
+  /// toSplit   newLeft toSplit
+  ///
+  void splitNonRootMayJump(GuardedBufferFrame<BTreeNode>& guardedParent,
                                GuardedBufferFrame<BTreeNode>& guardedChild,
                                BTreeNode::SeparatorInfo& sepInfo,
                                u16 spaceNeededForSeparator);

@@ -133,7 +133,7 @@ std::expected<void, utils::Error> Recovery::redo() {
 
     auto* walPayload = reinterpret_cast<WALPayload*>(complexEntry->payload);
     switch (walPayload->mType) {
-    case WALPayload::TYPE::WALInsert: {
+    case WALPayload::TYPE::kWalInsert: {
       auto* walInsert = reinterpret_cast<WALInsert*>(complexEntry->payload);
       HybridGuard guard(&bf.header.mLatch);
       GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
@@ -146,7 +146,7 @@ std::expected<void, utils::Error> Recovery::redo() {
                                   slotId);
       break;
     }
-    case WALPayload::TYPE::WALTxInsert: {
+    case WALPayload::TYPE::kWalTxInsert: {
       auto* walInsert = reinterpret_cast<WALTxInsert*>(complexEntry->payload);
       HybridGuard guard(&bf.header.mLatch);
       GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
@@ -174,12 +174,12 @@ std::expected<void, utils::Error> Recovery::redo() {
                     << std::to_string(static_cast<u64>(walPayload->mType));
       break;
     }
-    case WALPayload::TYPE::WALLogicalSplit: {
+    case WALPayload::TYPE::kWalSplit: {
       DCHECK(false) << "Unhandled WALPayload::TYPE: "
                     << std::to_string(static_cast<u64>(walPayload->mType));
       break;
     }
-    case WALPayload::TYPE::WALInitPage: {
+    case WALPayload::TYPE::kWalInitPage: {
       auto* walInitPage = reinterpret_cast<WALInitPage*>(complexEntry->payload);
       HybridGuard guard(&bf.header.mLatch);
       GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),

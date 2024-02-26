@@ -11,6 +11,7 @@
 #include "storage/btree/core/BTreePessimisticSharedIterator.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
 #include "utils/Defer.hpp"
+#include "utils/Misc.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -56,7 +57,7 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
     if (!gIter.SeekExact(key)) {
       return OpCode::kNotFound;
     }
-    auto [ret, versionsRead] = GetVisibleTuple(gIter.value(), valCallback);
+    auto [ret, versionsRead] = getVisibleTuple(gIter.value(), valCallback);
     COUNTERS_BLOCK() {
       WorkerCounters::MyCounters().cc_read_chains[mTreeId]++;
       WorkerCounters::MyCounters().cc_read_versions_visited[mTreeId] +=
@@ -73,7 +74,7 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
                                           : OpCode::kNotFound;
   }
 
-  auto [ret, versionsRead] = GetVisibleTuple(iter.value(), valCallback);
+  auto [ret, versionsRead] = getVisibleTuple(iter.value(), valCallback);
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().cc_read_chains[mTreeId]++;
     WorkerCounters::MyCounters().cc_read_versions_visited[mTreeId] +=
@@ -108,13 +109,11 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
     while (true) {
       auto mutRawVal = xIter.MutableVal();
       auto& tuple = *Tuple::From(mutRawVal.Data());
-      auto visibleForMe = VisibleForMe(tuple.mWorkerId, tuple.mTxId);
+      auto visibleForMe =
+          cr::Worker::My().cc.VisibleForMe(tuple.mWorkerId, tuple.mTxId);
       if (tuple.IsWriteLocked() || !visibleForMe) {
-        // LOG(ERROR) << "Update failed, primary tuple is write locked or not "
-        //               "visible for me"
-        //            << ", key=" << ToString(key)
-        //            << ", writeLocked=" << tuple.IsWriteLocked()
-        //            << ", visibleForMe=" << visibleForMe;
+        // conflict detected, the tuple is write locked by other worker or not
+        // visible for me
         JUMPMU_RETURN OpCode::kAbortTx;
       }
 
@@ -204,8 +203,8 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
           << ", tupleIsRemoved=" << chainedTuple->mIsTombstone
           << ", tupleWriteLocked=" << chainedTuple->IsWriteLocked();
 
-      auto visibleForMe =
-          VisibleForMe(chainedTuple->mWorkerId, chainedTuple->mTxId);
+      auto visibleForMe = cr::Worker::My().cc.VisibleForMe(
+          chainedTuple->mWorkerId, chainedTuple->mTxId);
 
       if (chainedTuple->mIsTombstone && visibleForMe) {
         insertAfterRemove(xIter, key, val);
@@ -341,14 +340,16 @@ OpCode TransactionKV::Remove(Slice key) {
     // remove the chained tuple
     auto& chainedTuple = *static_cast<ChainedTuple*>(tuple);
     if (chainedTuple.IsWriteLocked() ||
-        !VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId)) {
+        !cr::Worker::My().cc.VisibleForMe(chainedTuple.mWorkerId,
+                                          chainedTuple.mTxId)) {
       LOG(INFO) << "Conflict detected, please abort and retry"
                 << ", workerId=" << cr::Worker::My().mWorkerId
                 << ", startTs=" << cr::Worker::My().mActiveTx.mStartTs
                 << ", tupleLastWriter=" << chainedTuple.mWorkerId
                 << ", tupleLastStartTs=" << chainedTuple.mTxId
                 << ", visibleForMe="
-                << VisibleForMe(chainedTuple.mWorkerId, chainedTuple.mTxId);
+                << cr::Worker::My().cc.VisibleForMe(chainedTuple.mWorkerId,
+                                                    chainedTuple.mTxId);
       JUMPMU_RETURN OpCode::kAbortTx;
     }
 
@@ -427,7 +428,7 @@ void TransactionKV::undo(const u8* walPayloadPtr,
                          const u64 txId [[maybe_unused]]) {
   auto& walPayload = *reinterpret_cast<const WALPayload*>(walPayloadPtr);
   switch (walPayload.mType) {
-  case WALPayload::TYPE::WALTxInsert: {
+  case WALPayload::TYPE::kWalTxInsert: {
     return undoLastInsert(static_cast<const WALTxInsert*>(&walPayload));
   }
   case WALPayload::TYPE::WALTxUpdate: {
@@ -877,7 +878,7 @@ void TransactionKV::unlock(const u8* walEntryPtr) {
   const WALPayload& entry = *reinterpret_cast<const WALPayload*>(walEntryPtr);
   Slice key;
   switch (entry.mType) {
-  case WALPayload::TYPE::WALTxInsert: {
+  case WALPayload::TYPE::kWalTxInsert: {
     // Assuming no insert after remove
     auto& walInsert = *reinterpret_cast<const WALTxInsert*>(&entry);
     key = walInsert.GetKey();
@@ -932,7 +933,7 @@ OpCode TransactionKV::scan4ShortRunningTx(Slice key, ScanCallback callback) {
       iter.AssembleKey();
       Slice scannedKey = iter.key();
       auto [opCode, versionsRead] =
-          GetVisibleTuple(iter.value(), [&](Slice scannedVal) {
+          getVisibleTuple(iter.value(), [&](Slice scannedVal) {
             COUNTERS_BLOCK() {
               WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
                   cr::ActiveTx().IsLongRunning();
@@ -1017,7 +1018,7 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
 
     gRange();
     auto takeFromOltp = [&]() {
-      GetVisibleTuple(iter.value(), [&](Slice value) {
+      getVisibleTuple(iter.value(), [&](Slice value) {
         COUNTERS_BLOCK() {
           WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
               cr::ActiveTx().IsLongRunning();
@@ -1054,7 +1055,7 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
       } else if (gRet == OpCode::kOK && oRet != OpCode::kOK) {
         gIter.AssembleKey();
         Slice gKey = gIter.key();
-        GetVisibleTuple(gIter.value(), [&](Slice value) {
+        getVisibleTuple(gIter.value(), [&](Slice value) {
           COUNTERS_BLOCK() {
             WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
                 cr::ActiveTx().IsLongRunning();
@@ -1075,7 +1076,7 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
             JUMPMU_RETURN OpCode::kOK;
           }
         } else {
-          GetVisibleTuple(gIter.value(), [&](Slice value) {
+          getVisibleTuple(gIter.value(), [&](Slice value) {
             COUNTERS_BLOCK() {
               WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
                   cr::ActiveTx().IsLongRunning();
