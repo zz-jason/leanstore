@@ -129,7 +129,7 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
   TransactionKV* btree;
 
   // prepare key-value pairs to insert
-  size_t numKVs(80);
+  size_t numKVs(100);
   std::vector<std::tuple<std::string, std::string>> kvToTest;
   for (size_t i = 0; i < numKVs; ++i) {
     std::string key("key_xxxxxxxxxxxx_" + std::to_string(i));
