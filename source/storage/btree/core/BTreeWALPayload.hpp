@@ -100,18 +100,25 @@ struct WalSplitRoot : WALPayload {
 struct WalSplitNonRoot : WALPayload {
   PID mParentPageId = -1;
 
-  PID mLhsPageId = -1;
+  PID mNewLeft = -1;
 
-  PID mRhsPageId = -1;
+  u16 mSplitSlot;
+
+  u16 mSeparatorSize;
+
+  bool mSeparatorTruncated;
 
   WalSplitNonRoot() : WALPayload(TYPE::kWalSplitNonRoot) {
   }
 
-  WalSplitNonRoot(PID parent, PID lhs, PID rhs)
+  WalSplitNonRoot(PID parent, PID newLeft,
+                  const BTreeNode::SeparatorInfo& sepInfo)
       : WALPayload(TYPE::kWalSplitNonRoot),
         mParentPageId(parent),
-        mLhsPageId(lhs),
-        mRhsPageId(rhs) {
+        mNewLeft(newLeft),
+        mSplitSlot(sepInfo.mSlotId),
+        mSeparatorSize(sepInfo.mSize),
+        mSeparatorTruncated(sepInfo.trunc) {
   }
 
   std::unique_ptr<rapidjson::Document> ToJson() override;
@@ -401,18 +408,11 @@ inline std::unique_ptr<rapidjson::Document> WalSplitNonRoot::ToJson() {
     doc->AddMember("mParentPageId", member, doc->GetAllocator());
   }
 
-  // mLhsPageId
+  // mNewLeft
   {
     rapidjson::Value member;
-    member.SetUint64(mLhsPageId);
-    doc->AddMember("mLhsPageId", member, doc->GetAllocator());
-  }
-
-  // mRhsPageId
-  {
-    rapidjson::Value member;
-    member.SetUint64(mRhsPageId);
-    doc->AddMember("mRhsPageId", member, doc->GetAllocator());
+    member.SetUint64(mNewLeft);
+    doc->AddMember("mNewLeft", member, doc->GetAllocator());
   }
 
   return doc;

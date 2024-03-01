@@ -176,11 +176,6 @@ std::expected<void, utils::Error> Recovery::redo() {
                     << std::to_string(static_cast<u64>(walPayload->mType));
       break;
     }
-    case WALPayload::TYPE::kWalSplitNonRoot: {
-      DCHECK(false) << "Unhandled WALPayload::TYPE: "
-                    << std::to_string(static_cast<u64>(walPayload->mType));
-      break;
-    }
     case WALPayload::TYPE::kWalInitPage: {
       auto* walInitPage = reinterpret_cast<WALInitPage*>(complexEntry->payload);
       HybridGuard guard(&bf.header.mLatch);
@@ -239,6 +234,44 @@ std::expected<void, utils::Error> Recovery::redo() {
       xGuardedNewRoot->mRightMostChildSwip = xGuardedOldRoot.bf();
       xGuardedOldRoot->Split(xGuardedNewRoot, xGuardedNewLeft, sepInfo);
       xGuardedMeta->mRightMostChildSwip = xGuardedNewRoot.bf();
+      break;
+    }
+    case WALPayload::TYPE::kWalSplitNonRoot: {
+      auto* wal = reinterpret_cast<WalSplitNonRoot*>(complexEntry->payload);
+
+      // Resolve the old root
+      auto childGuard = HybridGuard(&bf.header.mLatch);
+      auto guardedChild = GuardedBufferFrame<BTreeNode>(
+          mStore->mBufferManager.get(), std::move(childGuard), &bf);
+      auto xGuardedChild =
+          ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedChild));
+
+      // Resolve the new left
+      auto newLeftPageId = wal->mNewLeft;
+      auto& newLeftBf = resolvePage(newLeftPageId);
+      auto newLeftGuard = HybridGuard(&newLeftBf.header.mLatch);
+      auto guardedNewLeft = GuardedBufferFrame<BTreeNode>(
+          mStore->mBufferManager.get(), std::move(newLeftGuard), &newLeftBf);
+      auto xGuardedNewLeft =
+          ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
+
+      // Resolve the parent node
+      auto parentPageId = wal->mParentPageId;
+      auto& parentBf = resolvePage(parentPageId);
+      auto parentGuard = HybridGuard(&parentBf.header.mLatch);
+      auto guardedParent = GuardedBufferFrame<BTreeNode>(
+          mStore->mBufferManager.get(), std::move(parentGuard), &parentBf);
+      auto xGuardedParent =
+          ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedParent));
+
+      // Resolve sepInfo
+      auto sepInfo = BTreeNode::SeparatorInfo(
+          wal->mSeparatorSize, wal->mSplitSlot, wal->mSeparatorTruncated);
+
+      const u16 spaceNeededForSeparator =
+          guardedParent->spaceNeeded(sepInfo.mSize, sizeof(Swip));
+      xGuardedParent->requestSpaceFor(spaceNeededForSeparator);
+      xGuardedChild->Split(xGuardedParent, xGuardedNewLeft, sepInfo);
       break;
     }
     default: {
