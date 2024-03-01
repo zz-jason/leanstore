@@ -190,11 +190,11 @@ void BTreeGeneric::splitRootMayJump(
 }
 
 /// Split a non-root node, 3 nodes are involved in the split:
-/// parent(toSplit) -> parent(newLeft, toSplit)
+/// parent(child) -> parent(newLeft, child)
 ///
 /// parent         parent
 ///   |            |   |
-/// toSplit   newLeft toSplit
+/// child     newLeft child
 ///
 void BTreeGeneric::splitNonRootMayJump(
     GuardedBufferFrame<BTreeNode>& guardedParent,
@@ -206,35 +206,30 @@ void BTreeGeneric::splitNonRootMayJump(
   DCHECK(!isMetaNode(guardedParent)) << "Parent should not be meta node";
   DCHECK(!xGuardedParent->mIsLeaf) << "Parent should not be leaf node";
 
-  // make room for separator key in parent node
-  xGuardedParent->requestSpaceFor(spaceNeededForSeparator);
-
-  // alloc new left node
+  // 1. create new left, lock it exclusively, write wal on demand
   auto* newLeftBf = &mStore->mBufferManager->AllocNewPage(mTreeId);
   auto guardedNewLeft =
       GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(), newLeftBf);
   auto xGuardedNewLeft =
       ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
+  if (mConfig.mEnableWal) {
+    xGuardedNewLeft.WriteWal<WALInitPage>(0, mTreeId, xGuardedChild->mIsLeaf);
+  }
+  xGuardedNewLeft.InitPayload(xGuardedChild->mIsLeaf);
 
-  // write wal on demand or simply mark as dirty
+  // 2.1. write wal on demand or simply mark as dirty
   if (mConfig.mEnableWal) {
     xGuardedParent.SyncGSNBeforeWrite();
     xGuardedParent.MarkAsDirty();
-    xGuardedNewLeft.WriteWal<WALInitPage>(0, mTreeId, xGuardedChild->mIsLeaf);
     xGuardedChild.WriteWal<WalSplitNonRoot>(
         0, xGuardedParent.bf()->header.mPageId,
-        xGuardedNewLeft.bf()->header.mPageId,
-        xGuardedChild.bf()->header.mPageId);
-  } else {
-    xGuardedParent.MarkAsDirty();
-    xGuardedNewLeft.MarkAsDirty();
-    xGuardedChild.MarkAsDirty();
+        xGuardedNewLeft.bf()->header.mPageId, sepInfo);
   }
 
-  // init new left
-  xGuardedNewLeft.InitPayload(xGuardedChild->mIsLeaf);
-
-  // split
+  // 2.2. make room for separator key in parent node
+  // 2.3. move half of the old root to the new left
+  // 2.4. insert separator key into parent node
+  xGuardedParent->requestSpaceFor(spaceNeededForSeparator);
   xGuardedChild->Split(xGuardedParent, xGuardedNewLeft, sepInfo);
 }
 
