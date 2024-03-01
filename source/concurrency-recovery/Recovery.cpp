@@ -4,6 +4,8 @@
 #include "storage/btree/TransactionKV.hpp"
 #include "storage/btree/core/BTreeNode.hpp"
 #include "storage/btree/core/BTreeWALPayload.hpp"
+#include "storage/buffer-manager/GuardedBufferFrame.hpp"
+#include "sync/HybridGuard.hpp"
 
 #include <utility>
 
@@ -133,7 +135,7 @@ std::expected<void, utils::Error> Recovery::redo() {
 
     auto* walPayload = reinterpret_cast<WALPayload*>(complexEntry->payload);
     switch (walPayload->mType) {
-    case WALPayload::TYPE::WALInsert: {
+    case WALPayload::TYPE::kWalInsert: {
       auto* walInsert = reinterpret_cast<WALInsert*>(complexEntry->payload);
       HybridGuard guard(&bf.header.mLatch);
       GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
@@ -146,7 +148,7 @@ std::expected<void, utils::Error> Recovery::redo() {
                                   slotId);
       break;
     }
-    case WALPayload::TYPE::WALTxInsert: {
+    case WALPayload::TYPE::kWalTxInsert: {
       auto* walInsert = reinterpret_cast<WALTxInsert*>(complexEntry->payload);
       HybridGuard guard(&bf.header.mLatch);
       GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
@@ -174,12 +176,12 @@ std::expected<void, utils::Error> Recovery::redo() {
                     << std::to_string(static_cast<u64>(walPayload->mType));
       break;
     }
-    case WALPayload::TYPE::WALLogicalSplit: {
+    case WALPayload::TYPE::kWalSplitNonRoot: {
       DCHECK(false) << "Unhandled WALPayload::TYPE: "
                     << std::to_string(static_cast<u64>(walPayload->mType));
       break;
     }
-    case WALPayload::TYPE::WALInitPage: {
+    case WALPayload::TYPE::kWalInitPage: {
       auto* walInitPage = reinterpret_cast<WALInitPage*>(complexEntry->payload);
       HybridGuard guard(&bf.header.mLatch);
       GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
@@ -188,6 +190,55 @@ std::expected<void, utils::Error> Recovery::redo() {
           ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNode));
       xGuardedNode.InitPayload(walInitPage->mIsLeaf);
       bf.page.mBTreeId = complexEntry->mTreeId;
+      break;
+    }
+    case WALPayload::TYPE::kWalSplitRoot: {
+      auto* wal = reinterpret_cast<WalSplitRoot*>(complexEntry->payload);
+
+      // Resolve the old root
+      auto oldRootGuard = HybridGuard(&bf.header.mLatch);
+      auto guardedOldRoot = GuardedBufferFrame<BTreeNode>(
+          mStore->mBufferManager.get(), std::move(oldRootGuard), &bf);
+      auto xGuardedOldRoot =
+          ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedOldRoot));
+
+      // Resolve the new left
+      auto newLeftPageId = wal->mNewLeft;
+      auto& newLeftBf = resolvePage(newLeftPageId);
+      auto newLeftGuard = HybridGuard(&newLeftBf.header.mLatch);
+      auto guardedNewLeft = GuardedBufferFrame<BTreeNode>(
+          mStore->mBufferManager.get(), std::move(newLeftGuard), &newLeftBf);
+      auto xGuardedNewLeft =
+          ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
+
+      // Resolve the new root
+      auto newRootPageId = wal->mNewRoot;
+      auto& newRootBf = resolvePage(newRootPageId);
+      auto newRootGuard = HybridGuard(&newRootBf.header.mLatch);
+      auto guardedNewRoot = GuardedBufferFrame<BTreeNode>(
+          mStore->mBufferManager.get(), std::move(newRootGuard), &newRootBf);
+      auto xGuardedNewRoot =
+          ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewRoot));
+
+      // Resolve the meta node
+      auto metaPageId = wal->mMetaNode;
+      auto& metaBf = resolvePage(metaPageId);
+      auto metaGuard = HybridGuard(&metaBf.header.mLatch);
+      auto guardedMeta = GuardedBufferFrame<BTreeNode>(
+          mStore->mBufferManager.get(), std::move(metaGuard), &metaBf);
+      auto xGuardedMeta =
+          ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedMeta));
+
+      // Resolve sepInfo
+      auto sepInfo = BTreeNode::SeparatorInfo(
+          wal->mSeparatorSize, wal->mSplitSlot, wal->mSeparatorTruncated);
+
+      // move half of the old root to the new left,
+      // insert separator key into new root,
+      // update meta node to point to new root
+      xGuardedNewRoot->mRightMostChildSwip = xGuardedOldRoot.bf();
+      xGuardedOldRoot->Split(xGuardedNewRoot, xGuardedNewLeft, sepInfo);
+      xGuardedMeta->mRightMostChildSwip = xGuardedNewRoot.bf();
       break;
     }
     default: {
