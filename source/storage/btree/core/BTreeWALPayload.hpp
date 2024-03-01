@@ -22,7 +22,7 @@ namespace btree {
   ACTION(WALTxRemove, 6, "WALTxRemove", __VA_ARGS__)                           \
   ACTION(kWalInitPage, 10, "kWalInitPage", __VA_ARGS__)                        \
   ACTION(kWalSplitRoot, 11, "kWalSplitRoot", __VA_ARGS__)                      \
-  ACTION(kWalSplit, 12, "kWalSplit", __VA_ARGS__)                              \
+  ACTION(kWalSplitNonRoot, 12, "kWalSplitNonRoot", __VA_ARGS__)                \
   ACTION(WALUndefined, 100, "WALUndefined", __VA_ARGS__)
 
 #define DECR_TYPE(type, type_value, type_name, ...) type = type_value,
@@ -71,7 +71,11 @@ public:
 };
 
 struct WalSplitRoot : WALPayload {
-  PID mToSplit;
+  PID mNewLeft;
+
+  PID mNewRoot;
+
+  PID mMetaNode;
 
   u16 mSplitSlot;
 
@@ -79,9 +83,12 @@ struct WalSplitRoot : WALPayload {
 
   bool mSeparatorTruncated;
 
-  WalSplitRoot(PID toSplit, const BTreeNode::SeparatorInfo& sepInfo)
+  WalSplitRoot(PID newLeft, PID newRoot, PID metaNode,
+               const BTreeNode::SeparatorInfo& sepInfo)
       : WALPayload(TYPE::kWalSplitRoot),
-        mToSplit(toSplit),
+        mNewLeft(newLeft),
+        mNewRoot(newRoot),
+        mMetaNode(metaNode),
         mSplitSlot(sepInfo.mSlotId),
         mSeparatorSize(sepInfo.mSize),
         mSeparatorTruncated(sepInfo.trunc) {
@@ -97,11 +104,11 @@ struct WalSplitNonRoot : WALPayload {
 
   PID mRhsPageId = -1;
 
-  WalSplitNonRoot() : WALPayload(TYPE::kWalSplit) {
+  WalSplitNonRoot() : WALPayload(TYPE::kWalSplitNonRoot) {
   }
 
   WalSplitNonRoot(PID parent, PID lhs, PID rhs)
-      : WALPayload(TYPE::kWalSplit),
+      : WALPayload(TYPE::kWalSplitNonRoot),
         mParentPageId(parent),
         mLhsPageId(lhs),
         mRhsPageId(rhs) {
@@ -344,8 +351,20 @@ inline std::unique_ptr<rapidjson::Document> WalSplitRoot::ToJson() {
 
   {
     rapidjson::Value member;
-    member.SetUint64(mToSplit);
-    doc->AddMember("mToSplit", member, doc->GetAllocator());
+    member.SetUint64(mNewLeft);
+    doc->AddMember("mNewLeft", member, doc->GetAllocator());
+  }
+
+  {
+    rapidjson::Value member;
+    member.SetUint64(mNewRoot);
+    doc->AddMember("mNewRoot", member, doc->GetAllocator());
+  }
+
+  {
+    rapidjson::Value member;
+    member.SetUint64(mMetaNode);
+    doc->AddMember("mMetaNode", member, doc->GetAllocator());
   }
 
   {

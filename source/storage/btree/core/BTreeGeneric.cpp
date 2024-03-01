@@ -119,7 +119,8 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
 }
 
 /// Split the root node, 4 nodes are involved in the split:
-/// meta(oldRoot) -> meta(newRoot(newLeft, oldRoot))
+///
+///   meta(oldRoot) -> meta(newRoot(newLeft, oldRoot)).
 ///
 /// meta         meta
 ///   |            |
@@ -127,57 +128,64 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, s16 favoredSplitPos) {
 ///              |     |
 ///           newLeft oldRoot
 ///
+/// 3 WALs are generated, redo process:
+/// - Redo(newLeft, WalInitPage)
+///   - create new left
+/// - Redo(newRoot, WalInitPage)
+///   - create new root
+/// - Redo(oldRoot, WalSplitRoot)
+///   - move half of the old root to the new left
+///   - insert separator key into new root
+///   - update meta node to point to new root
+///
 void BTreeGeneric::splitRootMayJump(
-    GuardedBufferFrame<BTreeNode>& guardedParent,
-    GuardedBufferFrame<BTreeNode>& guardedChild,
+    GuardedBufferFrame<BTreeNode>& guardedMeta,
+    GuardedBufferFrame<BTreeNode>& guardedOldRoot,
     const BTreeNode::SeparatorInfo& sepInfo) {
-  auto xGuardedParent = ExclusiveGuardedBufferFrame(std::move(guardedParent));
-  auto xGuardedChild = ExclusiveGuardedBufferFrame(std::move(guardedChild));
+  auto xGuardedMeta = ExclusiveGuardedBufferFrame(std::move(guardedMeta));
+  auto xGuardedOldRoot = ExclusiveGuardedBufferFrame(std::move(guardedOldRoot));
+  auto* bm = mStore->mBufferManager.get();
 
-  DCHECK(isMetaNode(guardedParent)) << "Parent should be meta node";
-  DCHECK(mHeight == 1 || !xGuardedChild->mIsLeaf);
+  DCHECK(isMetaNode(guardedMeta)) << "Parent should be meta node";
+  DCHECK(mHeight == 1 || !xGuardedOldRoot->mIsLeaf);
 
-  // create new root, lock it exclusively
-  auto* newRootBf = &mStore->mBufferManager->AllocNewPage(mTreeId);
-  auto guardedNewRoot = GuardedBufferFrame<BTreeNode>(
-      mStore->mBufferManager.get(), newRootBf, false);
-  auto xGuardedNewRoot =
-      ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewRoot));
-
-  // create new left, lock it exclusively
-  auto* newLeftBf = &mStore->mBufferManager->AllocNewPage(mTreeId);
-  auto guardedNewLeft =
-      GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(), newLeftBf);
+  // 1. create new left, lock it exclusively, write wal on demand
+  auto* newLeftBf = &bm->AllocNewPage(mTreeId);
+  auto guardedNewLeft = GuardedBufferFrame<BTreeNode>(bm, newLeftBf);
   auto xGuardedNewLeft =
       ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
-
-  // write wal on demand or simply mark as dirty
   if (mConfig.mEnableWal) {
-    xGuardedParent.SyncGSNBeforeWrite();
-    xGuardedParent.MarkAsDirty();
+    xGuardedNewLeft.WriteWal<WALInitPage>(0, mTreeId, xGuardedOldRoot->mIsLeaf);
+  }
+  xGuardedNewLeft.InitPayload(xGuardedOldRoot->mIsLeaf);
+
+  // 2. create new root, lock it exclusively, write wal on demand
+  auto* newRootBf = &bm->AllocNewPage(mTreeId);
+  auto guardedNewRoot = GuardedBufferFrame<BTreeNode>(bm, newRootBf);
+  auto xGuardedNewRoot =
+      ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewRoot));
+  if (mConfig.mEnableWal) {
     xGuardedNewRoot.WriteWal<WALInitPage>(0, mTreeId, false);
-    xGuardedNewLeft.WriteWal<WALInitPage>(0, mTreeId, xGuardedChild->mIsLeaf);
-    xGuardedChild.WriteWal<WalSplitRoot>(0, xGuardedChild.bf()->header.mPageId,
-                                         sepInfo);
-  } else {
-    xGuardedParent.MarkAsDirty();
-    xGuardedNewRoot.MarkAsDirty();
-    xGuardedNewLeft.MarkAsDirty();
-    xGuardedChild.MarkAsDirty();
+  }
+  xGuardedNewRoot.InitPayload(false);
+
+  // 3.1. write wal on demand
+  if (mConfig.mEnableWal) {
+    xGuardedMeta.SyncGSNBeforeWrite();
+    xGuardedMeta.MarkAsDirty();
+    xGuardedOldRoot.WriteWal<WalSplitRoot>(
+        0, xGuardedNewLeft.bf()->header.mPageId,
+        xGuardedNewRoot.bf()->header.mPageId, xGuardedMeta.bf()->header.mPageId,
+        sepInfo);
   }
 
-  // Update meta node
-  xGuardedParent->mRightMostChildSwip = xGuardedNewRoot.bf();
+  // 3.2. move half of the old root to the new left,
+  // 3.3. insert separator key into new root,
+  xGuardedNewRoot->mRightMostChildSwip = xGuardedOldRoot.bf();
+  xGuardedOldRoot->Split(xGuardedNewRoot, xGuardedNewLeft, sepInfo);
 
-  // init new root
-  xGuardedNewRoot.keepAlive();
-  xGuardedNewRoot.InitPayload(false);
-  xGuardedNewRoot->mRightMostChildSwip = xGuardedChild.bf();
-
-  xGuardedNewLeft.InitPayload(xGuardedChild->mIsLeaf);
-  xGuardedChild->Split(xGuardedNewRoot, xGuardedNewLeft, sepInfo);
-
-  // update height
+  // 3.4. update meta node to point to new root
+  xGuardedMeta->mRightMostChildSwip = xGuardedNewRoot.bf();
   mHeight++;
 }
 

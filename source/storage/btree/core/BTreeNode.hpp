@@ -34,6 +34,12 @@ public:
 
     // TODO: ???
     bool trunc;
+
+    SeparatorInfo(u16 size = 0, u16 slotId = 0, bool trunc = false)
+        : mSize(size),
+          mSlotId(slotId),
+          trunc(trunc) {
+    }
   };
 
   struct FenceKey {
