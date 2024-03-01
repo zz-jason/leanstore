@@ -34,6 +34,12 @@ public:
 
     // TODO: ???
     bool trunc;
+
+    SeparatorInfo(u16 size = 0, u16 slotId = 0, bool trunc = false)
+        : mSize(size),
+          mSlotId(slotId),
+          trunc(trunc) {
+    }
   };
 
   struct FenceKey {
@@ -552,7 +558,7 @@ public:
   void setFences(Slice lowerKey, Slice upperKey);
   void Split(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
              ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedNewLeft,
-             BTreeNode::SeparatorInfo& sepInfo);
+             const BTreeNode::SeparatorInfo& sepInfo);
   u16 commonPrefix(u16 aPos, u16 bPos);
   SeparatorInfo findSep();
   Swip& lookupInner(Slice key);
@@ -568,7 +574,7 @@ public:
               rapidjson::Value::AllocatorType& allocator);
 
 private:
-  inline void generateSeparator(SeparatorInfo& sepInfo, u8* sepKey) {
+  inline void generateSeparator(const SeparatorInfo& sepInfo, u8* sepKey) {
     // prefix
     memcpy(sepKey, getLowerFenceKey(), mPrefixSize);
 

@@ -135,7 +135,8 @@ u32 BTreeNode::mergeSpaceUpperBound(
 }
 
 u32 BTreeNode::spaceUsedBySlot(u16 slotId) {
-  return sizeof(BTreeNode::Slot) + KeySizeWithoutPrefix(slotId) + ValSize(slotId);
+  return sizeof(BTreeNode::Slot) + KeySizeWithoutPrefix(slotId) +
+         ValSize(slotId);
 }
 // -------------------------------------------------------------------------------------
 // right survives, this gets reclaimed
@@ -390,7 +391,7 @@ Swip& BTreeNode::lookupInner(Slice key) {
 /// TODO: really ?
 void BTreeNode::Split(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
                       ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedNewLeft,
-                      BTreeNode::SeparatorInfo& sepInfo) {
+                      const BTreeNode::SeparatorInfo& sepInfo) {
   DCHECK(xGuardedParent->canInsert(sepInfo.mSize, sizeof(Swip)));
 
   // generate separator key
