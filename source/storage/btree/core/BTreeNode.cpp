@@ -6,9 +6,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-namespace leanstore {
-namespace storage {
-namespace btree {
+namespace leanstore::storage::btree {
 
 void BTreeNode::makeHint() {
   u16 dist = mNumSeps / (sHintCount + 1);
@@ -79,9 +77,9 @@ s16 BTreeNode::insertDoNotCopyPayload(Slice key, u16 valSize, s32 pos) {
 s32 BTreeNode::Insert(Slice key, Slice val) {
   DEBUG_BLOCK() {
     assert(canInsert(key.size(), val.size()));
-    s32 exact_pos = lowerBound<true>(key);
-    static_cast<void>(exact_pos);
-    assert(exact_pos == -1); // assert for duplicates
+    s32 exactPos = lowerBound<true>(key);
+    static_cast<void>(exactPos);
+    assert(exactPos == -1); // assert for duplicates
   }
 
   prepareInsert(key.size(), val.size());
@@ -93,10 +91,10 @@ s32 BTreeNode::Insert(Slice key, Slice val) {
   return slotId;
 
   DEBUG_BLOCK() {
-    s32 exact_pos = lowerBound<true>(key);
-    static_cast<void>(exact_pos);
+    s32 exactPos = lowerBound<true>(key);
+    static_cast<void>(exactPos);
     // assert for duplicates
-    assert(exact_pos == slotId);
+    assert(exactPos == slotId);
   }
 }
 
@@ -120,7 +118,7 @@ u32 BTreeNode::mergeSpaceUpperBound(
   DCHECK(xGuardedRight->mIsLeaf);
 
   auto tmpNodeBuf = utils::JumpScopedArray<u8>(BTreeNode::Size());
-  auto tmp = BTreeNode::Init(tmpNodeBuf->get(), true);
+  auto* tmp = BTreeNode::Init(tmpNodeBuf->get(), true);
 
   tmp->setFences(GetLowerFence(), xGuardedRight->GetUpperFence());
   u32 leftGrow = (mPrefixSize - tmp->mPrefixSize) * mNumSeps;
@@ -138,7 +136,7 @@ u32 BTreeNode::spaceUsedBySlot(u16 slotId) {
   return sizeof(BTreeNode::Slot) + KeySizeWithoutPrefix(slotId) +
          ValSize(slotId);
 }
-// -------------------------------------------------------------------------------------
+
 // right survives, this gets reclaimed
 // left(this) into right
 bool BTreeNode::merge(u16 slotId,
@@ -149,7 +147,7 @@ bool BTreeNode::merge(u16 slotId,
     assert(xGuardedParent->isInner());
 
     auto tmpNodeBuf = utils::JumpScopedArray<u8>(BTreeNode::Size());
-    auto tmp = BTreeNode::Init(tmpNodeBuf->get(), true);
+    auto* tmp = BTreeNode::Init(tmpNodeBuf->get(), true);
 
     tmp->setFences(GetLowerFence(), xGuardedRight->GetUpperFence());
     u16 leftGrow = (mPrefixSize - tmp->mPrefixSize) * mNumSeps;
@@ -166,48 +164,49 @@ bool BTreeNode::merge(u16 slotId,
     copyKeyValueRange(tmp, 0, 0, mNumSeps);
     xGuardedRight->copyKeyValueRange(tmp, mNumSeps, 0, xGuardedRight->mNumSeps);
     xGuardedParent->removeSlot(slotId);
-    // -------------------------------------------------------------------------------------
+
     xGuardedRight->mHasGarbage |= mHasGarbage;
-    // -------------------------------------------------------------------------------------
+
     memcpy(xGuardedRight.GetPagePayloadPtr(), tmp, BTreeNode::Size());
     xGuardedRight->makeHint();
     return true;
-  } else { // Inner node
-    assert(!xGuardedRight->mIsLeaf);
-    assert(xGuardedParent->isInner());
-
-    auto tmpNodeBuf = utils::JumpScopedArray<u8>(BTreeNode::Size());
-    auto tmp = BTreeNode::Init(tmpNodeBuf->get(), mIsLeaf);
-
-    tmp->setFences(GetLowerFence(), xGuardedRight->GetUpperFence());
-    u16 leftGrow = (mPrefixSize - tmp->mPrefixSize) * mNumSeps;
-    u16 rightGrow = (xGuardedRight->mPrefixSize - tmp->mPrefixSize) *
-                    xGuardedRight->mNumSeps;
-    u16 extraKeyLength = xGuardedParent->getFullKeyLen(slotId);
-    u16 spaceUpperBound =
-        mSpaceUsed + xGuardedRight->mSpaceUsed +
-        (reinterpret_cast<u8*>(slot + mNumSeps + xGuardedRight->mNumSeps) -
-         RawPtr()) +
-        leftGrow + rightGrow +
-        spaceNeeded(extraKeyLength, sizeof(Swip), tmp->mPrefixSize);
-    if (spaceUpperBound > BTreeNode::Size())
-      return false;
-    copyKeyValueRange(tmp, 0, 0, mNumSeps);
-    // Allocate in the stack, freed when the calling function exits.
-    auto extraKey = utils::JumpScopedArray<u8>(extraKeyLength);
-    xGuardedParent->copyFullKey(slotId, extraKey->get());
-    tmp->storeKeyValue(
-        mNumSeps, Slice(extraKey->get(), extraKeyLength),
-        Slice(reinterpret_cast<u8*>(&mRightMostChildSwip), sizeof(Swip)));
-    tmp->mNumSeps++;
-    xGuardedRight->copyKeyValueRange(tmp, tmp->mNumSeps, 0,
-                                     xGuardedRight->mNumSeps);
-    xGuardedParent->removeSlot(slotId);
-    tmp->mRightMostChildSwip = xGuardedRight->mRightMostChildSwip;
-    tmp->makeHint();
-    memcpy(xGuardedRight.GetPagePayloadPtr(), tmp, BTreeNode::Size());
-    return true;
   }
+
+  // Inner node
+  DCHECK(!xGuardedRight->mIsLeaf);
+  DCHECK(xGuardedParent->isInner());
+
+  auto tmpNodeBuf = utils::JumpScopedArray<u8>(BTreeNode::Size());
+  auto* tmp = BTreeNode::Init(tmpNodeBuf->get(), mIsLeaf);
+
+  tmp->setFences(GetLowerFence(), xGuardedRight->GetUpperFence());
+  u16 leftGrow = (mPrefixSize - tmp->mPrefixSize) * mNumSeps;
+  u16 rightGrow =
+      (xGuardedRight->mPrefixSize - tmp->mPrefixSize) * xGuardedRight->mNumSeps;
+  u16 extraKeyLength = xGuardedParent->getFullKeyLen(slotId);
+  u16 spaceUpperBound =
+      mSpaceUsed + xGuardedRight->mSpaceUsed +
+      (reinterpret_cast<u8*>(slot + mNumSeps + xGuardedRight->mNumSeps) -
+       RawPtr()) +
+      leftGrow + rightGrow +
+      spaceNeeded(extraKeyLength, sizeof(Swip), tmp->mPrefixSize);
+  if (spaceUpperBound > BTreeNode::Size())
+    return false;
+  copyKeyValueRange(tmp, 0, 0, mNumSeps);
+  // Allocate in the stack, freed when the calling function exits.
+  auto extraKey = utils::JumpScopedArray<u8>(extraKeyLength);
+  xGuardedParent->copyFullKey(slotId, extraKey->get());
+  tmp->storeKeyValue(
+      mNumSeps, Slice(extraKey->get(), extraKeyLength),
+      Slice(reinterpret_cast<u8*>(&mRightMostChildSwip), sizeof(Swip)));
+  tmp->mNumSeps++;
+  xGuardedRight->copyKeyValueRange(tmp, tmp->mNumSeps, 0,
+                                   xGuardedRight->mNumSeps);
+  xGuardedParent->removeSlot(slotId);
+  tmp->mRightMostChildSwip = xGuardedRight->mRightMostChildSwip;
+  tmp->makeHint();
+  memcpy(xGuardedRight.GetPagePayloadPtr(), tmp, BTreeNode::Size());
+  return true;
 }
 
 void BTreeNode::storeKeyValue(u16 slotId, Slice key, Slice val) {
@@ -234,25 +233,25 @@ void BTreeNode::copyKeyValueRange(BTreeNode* dst, u16 dstSlot, u16 srcSlot,
     // Fast path
     memcpy(dst->slot + dstSlot, slot + srcSlot, sizeof(Slot) * count);
     DEBUG_BLOCK() {
-      u32 total_space_used = mUpperFence.length + mLowerFence.length;
+      u32 totalSpaceUsed = mUpperFence.length + mLowerFence.length;
       for (u16 i = 0; i < this->mNumSeps; i++) {
-        total_space_used += KeySizeWithoutPrefix(i) + ValSize(i);
+        totalSpaceUsed += KeySizeWithoutPrefix(i) + ValSize(i);
       }
-      assert(total_space_used == this->mSpaceUsed);
+      assert(totalSpaceUsed == this->mSpaceUsed);
     }
     for (u16 i = 0; i < count; i++) {
-      u32 kv_size = KeySizeWithoutPrefix(srcSlot + i) + ValSize(srcSlot + i);
-      dst->mDataOffset -= kv_size;
-      dst->mSpaceUsed += kv_size;
+      u32 kvSize = KeySizeWithoutPrefix(srcSlot + i) + ValSize(srcSlot + i);
+      dst->mDataOffset -= kvSize;
+      dst->mSpaceUsed += kvSize;
       dst->slot[dstSlot + i].offset = dst->mDataOffset;
       DEBUG_BLOCK() {
-        [[maybe_unused]] s64 off_by =
+        [[maybe_unused]] s64 offBy =
             reinterpret_cast<u8*>(dst->slot + dstSlot + count) -
             (dst->RawPtr() + dst->mDataOffset);
-        assert(off_by <= 0);
+        assert(offBy <= 0);
       }
       memcpy(dst->RawPtr() + dst->mDataOffset,
-             RawPtr() + slot[srcSlot + i].offset, kv_size);
+             RawPtr() + slot[srcSlot + i].offset, kvSize);
     }
   } else {
     for (u16 i = 0; i < count; i++)
@@ -266,7 +265,7 @@ void BTreeNode::copyKeyValueRange(BTreeNode* dst, u16 dstSlot, u16 srcSlot,
 void BTreeNode::copyKeyValue(u16 srcSlot, BTreeNode* dst, u16 dstSlot) {
   u16 fullLength = getFullKeyLen(srcSlot);
   auto keyBuf = utils::JumpScopedArray<u8>(fullLength);
-  auto key = keyBuf->get();
+  auto* key = keyBuf->get();
   copyFullKey(srcSlot, key);
   dst->storeKeyValue(dstSlot, Slice(key, fullLength), Value(srcSlot));
 }
@@ -306,19 +305,19 @@ u16 BTreeNode::commonPrefix(u16 slotA, u16 slotB) {
     // Do not prefix compress if only one tuple is in to
     // avoid corner cases (e.g., SI Version)
     return 0;
-  } else {
-    // TODO: the folowing two checks work only in single threaded
-    //   assert(aPos < mNumSeps);
-    //   assert(bPos < mNumSeps);
-    u32 limit = min(slot[slotA].mKeySizeWithoutPrefix,
-                    slot[slotB].mKeySizeWithoutPrefix);
-    u8 *a = KeyDataWithoutPrefix(slotA), *b = KeyDataWithoutPrefix(slotB);
-    u32 i;
-    for (i = 0; i < limit; i++)
-      if (a[i] != b[i])
-        break;
-    return i;
   }
+
+  // TODO: the folowing two checks work only in single threaded
+  //   assert(aPos < mNumSeps);
+  //   assert(bPos < mNumSeps);
+  u32 limit =
+      min(slot[slotA].mKeySizeWithoutPrefix, slot[slotB].mKeySizeWithoutPrefix);
+  u8 *a = KeyDataWithoutPrefix(slotA), *b = KeyDataWithoutPrefix(slotB);
+  u32 i;
+  for (i = 0; i < limit; i++)
+    if (a[i] != b[i])
+      break;
+  return i;
 }
 
 BTreeNode::SeparatorInfo BTreeNode::findSep() {
@@ -510,6 +509,4 @@ void BTreeNode::ToJson(rapidjson::Value* resultObj,
   }
 }
 
-} // namespace btree
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage::btree

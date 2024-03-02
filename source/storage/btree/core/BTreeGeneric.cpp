@@ -58,6 +58,7 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId,
 BTreePessimisticSharedIterator BTreeGeneric::GetIterator() {
   return BTreePessimisticSharedIterator(*this);
 }
+
 BTreePessimisticExclusiveIterator BTreeGeneric::GetExclusiveIterator() {
   return BTreePessimisticExclusiveIterator(*this);
 }
