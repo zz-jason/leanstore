@@ -205,4 +205,115 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
   });
 }
 
+TEST_F(RecoveringTest, RecoverAfterUpdate) {
+#ifndef DEBUG
+  GTEST_SKIP() << "This test only works in debug mode";
+#endif
+
+  TransactionKV* btree;
+
+  // prepare key-value pairs to insert
+  auto valSize = 120u;
+  size_t numKVs(10);
+  std::vector<std::tuple<std::string, std::string>> kvToTest;
+  for (size_t i = 0; i < numKVs; ++i) {
+    std::string key("key_xxxxxxxxxxxx_" + std::to_string(i));
+    std::string val = utils::RandomGenerator::RandAlphString(valSize);
+    kvToTest.push_back(std::make_tuple(key, val));
+  }
+
+  // create leanstore btree for table records
+  const auto* btreeName = "testTree1";
+  auto btreeConfig = BTreeConfig{
+      .mEnableWal = FLAGS_wal,
+      .mUseBulkInsert = FLAGS_bulk_insert,
+  };
+
+  // update all the values to this newVal
+  const u64 updateDescBufSize = UpdateDesc::Size(1);
+  u8 updateDescBuf[updateDescBufSize];
+  auto* updateDesc = UpdateDesc::CreateFrom(updateDescBuf);
+  updateDesc->mNumSlots = 1;
+  updateDesc->mUpdateSlots[0].mOffset = 0;
+  updateDesc->mUpdateSlots[0].mSize = valSize;
+
+  mStore->ExecSync(0, [&]() {
+    // create btree
+    cr::Worker::My().StartTx();
+    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    EXPECT_NE(btree, nullptr);
+    cr::Worker::My().CommitTx();
+
+    // insert some values
+    for (size_t i = 0; i < numKVs; ++i) {
+      const auto& [key, val] = kvToTest[i];
+      cr::Worker::My().StartTx();
+      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
+                              Slice((const u8*)val.data(), val.size())),
+                OpCode::kOK);
+      cr::Worker::My().CommitTx();
+    }
+
+    // update all the values
+    for (size_t i = 0; i < numKVs; ++i) {
+      auto& [key, val] = kvToTest[i];
+      auto updateCallBack = [&](MutableSlice mutRawVal) {
+        std::memcpy(mutRawVal.Data(), val.data(), mutRawVal.Size());
+      };
+      // update each key 3 times
+      for (auto j = 0u; j < 3; j++) {
+        val = utils::RandomGenerator::RandAlphString(valSize);
+        cr::Worker::My().StartTx();
+        EXPECT_EQ(btree->UpdatePartial(Slice((const u8*)key.data(), key.size()),
+                                       updateCallBack, *updateDesc),
+                  OpCode::kOK);
+        cr::Worker::My().CommitTx();
+      }
+    }
+
+    rapidjson::Document doc(rapidjson::kObjectType);
+    leanstore::storage::btree::BTreeGeneric::ToJson(*btree, &doc);
+    LOG(INFO) << "BTree before destroy:\n" << leanstore::utils::JsonToStr(&doc);
+  });
+
+  // skip dumpping buffer frames on exit
+  LS_DEBUG_ENABLE(mStore, "skip_CheckpointAllBufferFrames");
+  SCOPED_DEFER(LS_DEBUG_DISABLE(mStore, "skip_CheckpointAllBufferFrames"));
+  mStore.reset(nullptr);
+
+  // recreate the store, it's expected that all the meta and pages are rebult
+  // based on the WAL entries
+  FLAGS_init = false;
+  auto res = LeanStore::Open();
+  EXPECT_TRUE(res);
+
+  mStore = std::move(res.value());
+  mStore->GetTransactionKV(btreeName, &btree);
+  EXPECT_NE(btree, nullptr);
+  mStore->ExecSync(0, [&]() {
+    cr::Worker::My().StartTx();
+    SCOPED_DEFER(cr::Worker::My().CommitTx());
+    rapidjson::Document doc(rapidjson::kObjectType);
+    BTreeGeneric::ToJson(*static_cast<BTreeGeneric*>(btree), &doc);
+    DLOG(INFO) << "TransactionKV after recovery: " << utils::JsonToStr(&doc);
+  });
+
+  // lookup the restored btree
+  mStore->ExecSync(0, [&]() {
+    cr::Worker::My().StartTx();
+    SCOPED_DEFER(cr::Worker::My().CommitTx());
+    std::string copiedValue;
+    auto copyValueOut = [&](Slice val) {
+      copiedValue = std::string((const char*)val.data(), val.size());
+    };
+    for (size_t i = 0; i < numKVs; ++i) {
+      const auto& [key, expectedVal] = kvToTest[i];
+      EXPECT_EQ(
+          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
+          OpCode::kOK);
+      EXPECT_EQ(copiedValue, expectedVal);
+    }
+  });
+}
+
 } // namespace leanstore::test
