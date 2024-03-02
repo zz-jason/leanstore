@@ -207,7 +207,6 @@ struct WALTxUpdate : WALPayload {
 
   // Xor result of old and new command id
   COMMANDID mXorCommandId;
-  COMMANDID mPrevCommandId;
 
   // Stores key, UpdateDesc, and Delta in order
   u8 mPayload[];
