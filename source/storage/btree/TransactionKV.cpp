@@ -100,7 +100,8 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
         JUMPMU_RETURN OpCode::kAbortTx;
       }
 
-      LOG(ERROR) << "Update failed, key not found, key=" << ToString(key)
+      LOG(ERROR) << "Update failed, key not found"
+                 << ", key=" << ToString(key)
                  << ", txMode=" << ToString(cr::ActiveTx().mTxMode);
       JUMPMU_RETURN OpCode::kNotFound;
     }
@@ -454,7 +455,6 @@ void TransactionKV::undoLastInsert(const WALTxInsert* walInsert) {
                       << ", workerId=" << cr::Worker::My().mWorkerId
                       << ", startTs=" << cr::Worker::My().mActiveTx.mStartTs
                       << ", key=" << ToString(key);
-
       // TODO(jian.z): write compensation wal entry
       if (walInsert->mPrevCommandId != kInvalidCommandid) {
         // only remove the inserted value and mark the chained tuple as removed
@@ -520,7 +520,7 @@ void TransactionKV::undoLastUpdate(const WALTxUpdate* walUpdate) {
         auto& chainedTuple = *ChainedTuple::From(mutRawVal.Data());
         chainedTuple.mWorkerId = walUpdate->mPrevWorkerId;
         chainedTuple.mTxId = walUpdate->mPrevTxId;
-        chainedTuple.mCommandId = walUpdate->mPrevCommandId;
+        chainedTuple.mCommandId ^= walUpdate->mXorCommandId;
         auto& updateDesc = *walUpdate->GetUpdateDesc();
         auto* xorData = walUpdate->GetDeltaPtr();
 

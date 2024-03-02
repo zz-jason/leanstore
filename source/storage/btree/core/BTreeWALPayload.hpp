@@ -205,20 +205,22 @@ struct WALTxUpdate : WALPayload {
 
   TXID mPrevTxId;
 
+  // Xor result of old and new command id
+  COMMANDID mXorCommandId;
   COMMANDID mPrevCommandId;
 
   // Stores key, UpdateDesc, and Delta in order
   u8 mPayload[];
 
   WALTxUpdate(Slice key, UpdateDesc& updateDesc, u64 sizeOfUpdateDescAndDelta,
-              WORKERID prevWorkerId, TXID prevTxId, COMMANDID prevCommandId)
+              WORKERID prevWorkerId, TXID prevTxId, COMMANDID xorCommandId)
       : WALPayload(TYPE::WALTxUpdate),
         mKeySize(key.size()),
         mUpdateDescSize(updateDesc.Size()),
         mDeltaSize(sizeOfUpdateDescAndDelta - updateDesc.Size()),
         mPrevWorkerId(prevWorkerId),
         mPrevTxId(prevTxId),
-        mPrevCommandId(prevCommandId) {
+        mXorCommandId(xorCommandId) {
     // key
     std::memcpy(mPayload, key.data(), key.size());
     // updateDesc

@@ -1,5 +1,6 @@
 #include "Recovery.hpp"
 
+#include "LeanStore.hpp"
 #include "concurrency-recovery/WALEntry.hpp"
 #include "storage/btree/TransactionKV.hpp"
 #include "storage/btree/core/BTreeNode.hpp"
@@ -162,8 +163,36 @@ std::expected<void, utils::Error> Recovery::redo() {
       break;
     }
     case WALPayload::TYPE::WALTxUpdate: {
-      DCHECK(false) << "Unhandled WALPayload::TYPE: "
-                    << std::to_string(static_cast<u64>(walPayload->mType));
+      auto* wal = reinterpret_cast<WALTxUpdate*>(complexEntry->payload);
+      HybridGuard guard(&bf.header.mLatch);
+      GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
+                                                std::move(guard), &bf);
+      auto* updateDesc = wal->GetUpdateDesc();
+      auto key = wal->GetKey();
+      auto slotId = guardedNode->lowerBound<true>(key);
+      DCHECK(slotId != -1) << "Key not found in WALTxUpdate";
+
+      auto* mutRawVal = guardedNode->ValData(slotId);
+      DCHECK(Tuple::From(mutRawVal)->mFormat == TupleFormat::kChained)
+          << "Only chained tuple is supported";
+      auto* chainedTuple = ChainedTuple::From(mutRawVal);
+
+      // update the chained tuple
+      chainedTuple->mWorkerId = complexEntry->mWorkerId;
+      chainedTuple->mTxId = complexEntry->mTxId;
+      chainedTuple->mCommandId ^= wal->mXorCommandId;
+
+      // 1. copy xor result to buff
+      auto deltaSize = wal->GetDeltaSize();
+      u8 buff[deltaSize];
+      std::memcpy(buff, wal->GetDeltaPtr(), deltaSize);
+
+      // 2. calculate new value based on xor result and old value
+      BasicKV::XorToBuffer(*updateDesc, chainedTuple->mPayload, buff);
+
+      // 3. replace with the new value
+      BasicKV::CopyToValue(*updateDesc, buff, chainedTuple->mPayload);
+
       break;
     }
     case WALPayload::TYPE::WALRemove: {

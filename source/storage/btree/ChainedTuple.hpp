@@ -191,15 +191,15 @@ inline std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
   return {OpCode::kNotFound, versionsRead};
 }
 
-inline void ChainedTuple::Update(BTreePessimisticExclusiveIterator& xIter, Slice key,
-                                 MutValCallback updateCallBack,
+inline void ChainedTuple::Update(BTreePessimisticExclusiveIterator& xIter,
+                                 Slice key, MutValCallback updateCallBack,
                                  UpdateDesc& updateDesc) {
   auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
   auto versionSize = sizeOfDescAndDelta + sizeof(UpdateVersion);
 
   // Move the newest tuple to the history version tree.
   auto treeId = xIter.mBTree.mTreeId;
-  auto commandId = cr::Worker::My().cc.PutVersion(
+  auto currCommandId = cr::Worker::My().cc.PutVersion(
       treeId, false, versionSize, [&](u8* versionBuf) {
         auto& updateVersion =
             *new (versionBuf) UpdateVersion(mWorkerId, mTxId, mCommandId, true);
@@ -214,7 +214,7 @@ inline void ChainedTuple::Update(BTreePessimisticExclusiveIterator& xIter, Slice
     updateCallBack(MutableSlice(mPayload, userValSize));
     mWorkerId = cr::Worker::My().mWorkerId;
     mTxId = cr::ActiveTx().mStartTs;
-    mCommandId = commandId;
+    mCommandId = currCommandId;
   };
 
   SCOPED_DEFER({
@@ -236,7 +236,7 @@ inline void ChainedTuple::Update(BTreePessimisticExclusiveIterator& xIter, Slice
   auto prevCommandId = mCommandId;
   auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WALTxUpdate>(
       key.size() + sizeOfDescAndDelta, key, updateDesc, sizeOfDescAndDelta,
-      prevWorkerId, prevTxId, prevCommandId);
+      prevWorkerId, prevTxId, prevCommandId ^ currCommandId);
   auto* walBuf = walHandler->GetDeltaPtr();
 
   // 1. copy old value to wal buffer
