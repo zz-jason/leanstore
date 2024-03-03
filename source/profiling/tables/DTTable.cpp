@@ -93,7 +93,7 @@ void DTTable::open() {
                mTreeId);
   });
 
-  for (u64 r_i = 0; r_i < WorkerCounters::max_researchy_counter; r_i++) {
+  for (uint64_t r_i = 0; r_i < WorkerCounters::max_researchy_counter; r_i++) {
     columns.emplace("dt_researchy_" + std::to_string(r_i),
                     [&, r_i](Column& col) {
                       col << Sum(WorkerCounters::sCounters,

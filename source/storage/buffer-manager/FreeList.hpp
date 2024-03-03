@@ -13,12 +13,12 @@ class FreeList {
 public:
   std::mutex mMutex;
   BufferFrame* mHead = nullptr;
-  std::atomic<u64> mSize = 0;
+  std::atomic<uint64_t> mSize = 0;
 
 public:
   void PushFront(BufferFrame& bf);
 
-  void PushFront(BufferFrame* head, BufferFrame* tail, u64 size);
+  void PushFront(BufferFrame* head, BufferFrame* tail, uint64_t size);
 
   BufferFrame& PopFrontMayJump();
 };
@@ -34,7 +34,7 @@ inline void FreeList::PushFront(BufferFrame& bf) {
 }
 
 inline void FreeList::PushFront(BufferFrame* head, BufferFrame* tail,
-                                u64 size) {
+                                uint64_t size) {
   JumpScoped<std::unique_lock<std::mutex>> guard(mMutex);
   tail->header.mNextFreeBf = mHead;
   mHead = head;

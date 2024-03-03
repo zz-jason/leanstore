@@ -63,22 +63,22 @@ public:
   bool mCreateFromScratch = false;
 
   /// The number of partitions. For buffer manager.
-  u32 mNumPartitions = 64;
+  uint32_t mNumPartitions = 64;
 
   /// The buffer pool size (bytes). For buffer manager.
-  u64 mBufferPoolSize = 1 * 1024 * 1024 * 1024;
+  uint64_t mBufferPoolSize = 1 * 1024 * 1024 * 1024;
 
   /// The page size (bytes). For buffer manager.
-  u64 mPageSize = 4 * 1024;
+  uint64_t mPageSize = 4 * 1024;
 
   /// The in-memory wal ring-buffer size.
-  u64 mWalRingBufferSize = 1024;
+  uint64_t mWalRingBufferSize = 1024;
 
   /// The number of transaction worker threads.
-  u32 mNumTxWorkers = 4;
+  uint32_t mNumTxWorkers = 4;
 
   /// The number of buffer provider threads.
-  u32 mNumBufferProviders = 1;
+  uint32_t mNumBufferProviders = 1;
 
   /// Whether to enable garbage collection.
   bool mEnableGc = true;
@@ -144,7 +144,8 @@ public:
 
   /// Get the total key-value pairs in a table, should be executed inside a
   /// transaction.
-  virtual std::expected<u64, utils::Error> GetTableSize(TableRef table) = 0;
+  virtual std::expected<uint64_t, utils::Error> GetTableSize(
+      TableRef table) = 0;
 };
 
 /// TableIterator is used to scan a table.

@@ -14,7 +14,7 @@ namespace cr {
 
 /// @brief Calculate the continuous free space left in the wal ring buffer.
 /// @return Size of the contiguous free space
-u32 Logging::walContiguousFreeSpace() {
+uint32_t Logging::walContiguousFreeSpace() {
   const auto flushed = mWalFlushed.load();
   if (flushed <= mWalBuffered) {
     return mWalBufferSize - mWalBuffered;
@@ -22,7 +22,7 @@ u32 Logging::walContiguousFreeSpace() {
   return flushed - mWalBuffered;
 }
 
-void Logging::ReserveContiguousBuffer(u32 bytesRequired) {
+void Logging::ReserveContiguousBuffer(uint32_t bytesRequired) {
   SCOPED_DEFER({
     DCHECK(bytesRequired <= walContiguousFreeSpace())
         << "bytesRequired=" << bytesRequired
@@ -116,7 +116,7 @@ void Logging::WriteSimpleWal(WALEntry::TYPE type) {
 /// @brief SubmitWALEntryComplex submits the wal record to group committer when
 /// it is ready to flush to disk.
 /// @param totalSize is the size of the wal record to be flush.
-void Logging::SubmitWALEntryComplex(u64 totalSize) {
+void Logging::SubmitWALEntryComplex(uint64_t totalSize) {
   if (!((mWalBuffered >= mTxWalBegin) ||
         (mWalBuffered + totalSize < mTxWalBegin))) {
     Worker::My().mActiveTx.mWalExceedBuffer = true;
@@ -144,7 +144,7 @@ void Logging::publishWalFlushReq() {
 // Called by worker, so concurrent writes on the buffer
 void Logging::IterateCurrentTxWALs(
     std::function<void(const WALEntry& entry)> callback) {
-  u64 cursor = mTxWalBegin;
+  uint64_t cursor = mTxWalBegin;
   while (cursor != mWalBuffered) {
     const WALEntry& entry = *reinterpret_cast<WALEntry*>(mWalBuffer + cursor);
     ENSURE(entry.size > 0);

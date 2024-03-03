@@ -34,11 +34,11 @@ namespace cr {
 /// 2. WALEntryComplex, whose type is COMPLEX
 class WALEntry {
 public:
-  enum class TYPE : u8 { DO_WITH_WAL_ENTRY_TYPES(DECR_WAL_ENTRY_TYPE) };
+  enum class TYPE : uint8_t { DO_WITH_WAL_ENTRY_TYPES(DECR_WAL_ENTRY_TYPE) };
 
 public:
   /// Used for debuging purpose.
-  u32 mCRC32 = 99;
+  uint32_t mCRC32 = 99;
 
   /// The log sequence number of this WALEntry. The number is globally and
   /// monotonically increased.
@@ -46,7 +46,7 @@ public:
 
   // Size of the whole WALEntry, including all the payloads. The entire WAL
   // entry stays in the WAL ring buffer of the current worker thread.
-  u16 size;
+  uint16_t size;
 
   /// Type of the WAL entry.
   TYPE type;
@@ -67,7 +67,7 @@ public:
 public:
   WALEntry() = default;
 
-  WALEntry(LID lsn, u64 size, TYPE type)
+  WALEntry(LID lsn, uint64_t size, TYPE type)
       : mCRC32(99),
         lsn(lsn),
         size(size),
@@ -85,10 +85,10 @@ public:
 
   virtual std::unique_ptr<rapidjson::Document> ToJson();
 
-  u32 ComputeCRC32() const {
+  uint32_t ComputeCRC32() const {
     // auto startOffset = offsetof(WALEntry, lsn);
     auto startOffset = ptrdiff_t(&this->lsn) - ptrdiff_t(this);
-    const auto* src = reinterpret_cast<const u8*>(this) + startOffset;
+    const auto* src = reinterpret_cast<const uint8_t*>(this) + startOffset;
     auto srcSize = size - startOffset;
     auto crc32 = utils::CRC(src, srcSize);
     return crc32;
@@ -111,7 +111,8 @@ public:
 
 class WALEntrySimple : public WALEntry {
 public:
-  WALEntrySimple(LID lsn, u64 size, TYPE type) : WALEntry(lsn, size, type) {
+  WALEntrySimple(LID lsn, uint64_t size, TYPE type)
+      : WALEntry(lsn, size, type) {
   }
 };
 
@@ -131,12 +132,12 @@ public:
 
   /// Payload of the operation on the btree node, for example, insert,
   /// remove, update, etc.
-  u8 payload[];
+  uint8_t payload[];
 
 public:
   WALEntryComplex() = default;
 
-  WALEntryComplex(LID lsn, u64 size, LID psn, TREEID treeId, PID pageId)
+  WALEntryComplex(LID lsn, uint64_t size, LID psn, TREEID treeId, PID pageId)
       : WALEntry(lsn, size, TYPE::COMPLEX),
         mPSN(psn),
         mTreeId(treeId),
@@ -148,9 +149,9 @@ public:
 
 template <typename T> class WALPayloadHandler {
 public:
-  T* entry;       // payload of the active WAL
-  u64 mTotalSize; // size of the whole WALEntry, including payloads
-  u64 lsn;
+  T* entry;            // payload of the active WAL
+  uint64_t mTotalSize; // size of the whole WALEntry, including payloads
+  uint64_t lsn;
 
 public:
   WALPayloadHandler() = default;
@@ -159,7 +160,7 @@ public:
   /// @param entry the WALPayload object, should already being initialized
   /// @param size the total size of the WALEntry
   /// @param lsn the log sequence number of the WALEntry
-  WALPayloadHandler(T* entry, u64 size, u64 lsn)
+  WALPayloadHandler(T* entry, uint64_t size, uint64_t lsn)
       : entry(entry),
         mTotalSize(size),
         lsn(lsn) {

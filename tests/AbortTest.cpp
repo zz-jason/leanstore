@@ -1,5 +1,4 @@
 #include "TxKV.hpp"
-#include "concurrency-recovery/Transaction.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include "gtest/gtest.h"
@@ -28,13 +27,13 @@ protected:
     auto curTestName = std::string(curTest->test_case_name()) + "_" +
                        std::string(curTest->name());
     std::string storeDir = "/tmp/" + curTestName;
-    u32 sessionLimit = 2;
+    uint32_t sessionLimit = 2;
     mStore = StoreFactory::NewLeanStoreMVCC(storeDir, sessionLimit);
     ASSERT_NE(mStore, nullptr);
 
     // Set transaction isolation to SI before transaction tests, get ride of
     // tests running before which changed the isolation level.
-    for (u32 i = 0; i < sessionLimit; ++i) {
+    for (uint32_t i = 0; i < sessionLimit; ++i) {
       mStore->GetSession(i)->SetIsolationLevel(
           IsolationLevel::kSnapshotIsolation);
     }
@@ -66,22 +65,22 @@ TEST_F(AbortTest, AfterInsert) {
 
   s0->StartTx();
   s1->StartTx();
-  ASSERT_TRUE(s0->Put(mTbl, ToSlice(key1), ToSlice(val1)));
+  ASSERT_TRUE(s0->Put(mTbl, key1, val1));
 
-  auto res = s0->Get(mTbl, ToSlice(key1), valRead);
+  auto res = s0->Get(mTbl, key1, valRead);
   ASSERT_TRUE(res && res.value() == 1); // got the uncommitted value
   ASSERT_EQ(valRead, val1);
 
-  res = s1->Get(mTbl, ToSlice(key1), valRead);
+  res = s1->Get(mTbl, key1, valRead);
   ASSERT_TRUE(res && res.value() == 0); // got nothing
 
   s0->AbortTx();
   s1->CommitTx();
 
-  res = s1->Get(mTbl, ToSlice(key1), valRead, true);
+  res = s1->Get(mTbl, key1, valRead, true);
   ASSERT_TRUE(res && res.value() == 0); // got nothing still
 
-  res = s0->Get(mTbl, ToSlice(key1), valRead, true);
+  res = s0->Get(mTbl, key1, valRead, true);
   ASSERT_TRUE(res && res.value() == 0); // got nothing still
 }
 
@@ -91,28 +90,28 @@ TEST_F(AbortTest, AfterUpdate) {
 
   std::string key1("1"), val1("10"), val11("11");
   std::string valRead;
-  ASSERT_TRUE(s0->Put(mTbl, ToSlice(key1), ToSlice(val1), true));
+  ASSERT_TRUE(s0->Put(mTbl, key1, ToSlice(val1), true));
 
   s0->StartTx();
   s1->StartTx();
-  ASSERT_TRUE(s0->Update(mTbl, ToSlice(key1), ToSlice(val11)));
+  ASSERT_TRUE(s0->Update(mTbl, key1, ToSlice(val11)));
 
-  auto res = s0->Get(mTbl, ToSlice(key1), valRead);
+  auto res = s0->Get(mTbl, key1, valRead);
   ASSERT_TRUE(res && res.value() == 1); // got the uncommitted value
   ASSERT_EQ(valRead, val11);
 
-  res = s1->Get(mTbl, ToSlice(key1), valRead);
+  res = s1->Get(mTbl, key1, valRead);
   ASSERT_TRUE(res && res.value() == 1); // got the old value
   ASSERT_EQ(valRead, val1);
 
   s0->AbortTx();
   s1->CommitTx();
 
-  res = s0->Get(mTbl, ToSlice(key1), valRead, true);
+  res = s0->Get(mTbl, key1, valRead, true);
   ASSERT_TRUE(res && res.value() == 1); // got the old value
   ASSERT_EQ(valRead, val1);
 
-  res = s1->Get(mTbl, ToSlice(key1), valRead, true);
+  res = s1->Get(mTbl, key1, valRead, true);
   ASSERT_TRUE(res && res.value() == 1); // got the old value
   ASSERT_EQ(valRead, val1);
 }
@@ -123,27 +122,27 @@ TEST_F(AbortTest, AfterRemove) {
 
   std::string key1("1"), val1("10"), val11("11");
   std::string valRead;
-  ASSERT_TRUE(s0->Put(mTbl, ToSlice(key1), ToSlice(val1), true));
+  ASSERT_TRUE(s0->Put(mTbl, key1, ToSlice(val1), true));
 
   s0->StartTx();
   s1->StartTx();
-  ASSERT_TRUE(s0->Delete(mTbl, ToSlice(key1)));
+  ASSERT_TRUE(s0->Delete(mTbl, key1));
 
-  auto res = s0->Get(mTbl, ToSlice(key1), valRead);
+  auto res = s0->Get(mTbl, key1, valRead);
   ASSERT_TRUE(res && res.value() == 0); // got nothing
 
-  res = s1->Get(mTbl, ToSlice(key1), valRead);
+  res = s1->Get(mTbl, key1, valRead);
   ASSERT_TRUE(res && res.value() == 1); // got the old value
   ASSERT_EQ(valRead, val1);
 
   s0->AbortTx();
   s1->CommitTx();
 
-  res = s0->Get(mTbl, ToSlice(key1), valRead, true);
+  res = s0->Get(mTbl, key1, valRead, true);
   ASSERT_TRUE(res && res.value() == 1); // got the old value
   ASSERT_EQ(valRead, val1);
 
-  res = s1->Get(mTbl, ToSlice(key1), valRead, true);
+  res = s1->Get(mTbl, key1, valRead, true);
   ASSERT_TRUE(res && res.value() == 1); // got the old value
   ASSERT_EQ(valRead, val1);
 }
@@ -154,37 +153,37 @@ TEST_F(AbortTest, AfterInsertOnRemove) {
 
   std::string key1("1"), val1("10"), val11("11");
   std::string valRead;
-  ASSERT_TRUE(s0->Put(mTbl, ToSlice(key1), ToSlice(val1), true));
+  ASSERT_TRUE(s0->Put(mTbl, key1, ToSlice(val1), true));
 
   s0->StartTx();
   s1->StartTx();
-  ASSERT_TRUE(s0->Delete(mTbl, ToSlice(key1)));
+  ASSERT_TRUE(s0->Delete(mTbl, key1));
 
-  auto res = s0->Get(mTbl, ToSlice(key1), valRead);
+  auto res = s0->Get(mTbl, key1, valRead);
   ASSERT_TRUE(res && res.value() == 0); // got nothing
 
-  res = s1->Get(mTbl, ToSlice(key1), valRead);
+  res = s1->Get(mTbl, key1, valRead);
   ASSERT_TRUE(res && res.value() == 1); // got the old value
   ASSERT_EQ(valRead, val1);
 
   // insert on removed key
-  ASSERT_TRUE(s0->Put(mTbl, ToSlice(key1), ToSlice(val11)));
-  res = s0->Get(mTbl, ToSlice(key1), valRead);
+  ASSERT_TRUE(s0->Put(mTbl, key1, ToSlice(val11)));
+  res = s0->Get(mTbl, key1, valRead);
   ASSERT_TRUE(res && res.value() == 1); // get the uncommitted value
   ASSERT_EQ(valRead, val11);
 
-  res = s1->Get(mTbl, ToSlice(key1), valRead);
+  res = s1->Get(mTbl, key1, valRead);
   ASSERT_TRUE(res && res.value() == 1); // got the old value
   ASSERT_EQ(valRead, val1);
 
   s0->AbortTx();
   s1->CommitTx();
 
-  res = s0->Get(mTbl, ToSlice(key1), valRead, true);
+  res = s0->Get(mTbl, key1, valRead, true);
   ASSERT_TRUE(res && res.value() == 1); // got the old value
   ASSERT_EQ(valRead, val1);
 
-  res = s1->Get(mTbl, ToSlice(key1), valRead, true);
+  res = s1->Get(mTbl, key1, valRead, true);
   ASSERT_TRUE(res && res.value() == 1); // got the old value
   ASSERT_EQ(valRead, val1);
 }

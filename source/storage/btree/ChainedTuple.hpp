@@ -17,14 +17,14 @@ namespace leanstore::storage::btree {
 /// Chained: only scheduled gc.
 class __attribute__((packed)) ChainedTuple : public Tuple {
 public:
-  u16 mTotalUpdates = 0;
+  uint16_t mTotalUpdates = 0;
 
-  u16 mOldestTx = 0;
+  uint16_t mOldestTx = 0;
 
-  u8 mIsTombstone = 1;
+  uint8_t mIsTombstone = 1;
 
   // latest version in-place
-  u8 mPayload[];
+  uint8_t mPayload[];
 
 public:
   /// Construct a ChainedTuple, copy the value to its payload
@@ -61,13 +61,13 @@ public:
     return Slice(mPayload, size);
   }
 
-  std::tuple<OpCode, u16> GetVisibleTuple(Slice payload,
-                                          ValCallback callback) const;
+  std::tuple<OpCode, uint16_t> GetVisibleTuple(Slice payload,
+                                               ValCallback callback) const;
 
   void UpdateStats() {
     if (cr::Worker::My().cc.VisibleForAll(mTxId) ||
         mOldestTx !=
-            static_cast<u16>(
+            static_cast<uint16_t>(
                 cr::Worker::My()
                     .mStore->mCRManager->mGlobalWmkInfo.mOldestActiveTx &
                 0xFFFF)) {
@@ -95,16 +95,16 @@ public:
               MutValCallback updateCallBack, UpdateDesc& updateDesc);
 
 public:
-  inline static const ChainedTuple* From(const u8* buffer) {
+  inline static const ChainedTuple* From(const uint8_t* buffer) {
     return reinterpret_cast<const ChainedTuple*>(buffer);
   }
 
-  inline static ChainedTuple* From(u8* buffer) {
+  inline static ChainedTuple* From(uint8_t* buffer) {
     return reinterpret_cast<ChainedTuple*>(buffer);
   }
 };
 
-inline std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
+inline std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(
     Slice payload, ValCallback callback) const {
   if (cr::Worker::My().cc.VisibleForMe(mWorkerId, mTxId)) {
     if (mIsTombstone) {
@@ -121,19 +121,19 @@ inline std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
   }
 
   // Head is not visible
-  u16 valueSize = payload.length() - sizeof(ChainedTuple);
-  auto valueBuf = std::make_unique<u8[]>(valueSize);
+  uint16_t valueSize = payload.length() - sizeof(ChainedTuple);
+  auto valueBuf = std::make_unique<uint8_t[]>(valueSize);
   std::memcpy(valueBuf.get(), this->mPayload, valueSize);
 
   WORKERID prevWorkerId = mWorkerId;
   TXID prevTxId = mTxId;
   COMMANDID prevCommandId = mCommandId;
 
-  u16 versionsRead = 1;
+  uint16_t versionsRead = 1;
   while (true) {
     bool found = cr::Worker::My().cc.GetVersion(
         prevWorkerId, prevTxId, prevCommandId,
-        [&](const u8* versionBuf, u64 versionSize) {
+        [&](const uint8_t* versionBuf, uint64_t versionSize) {
           auto& version = *reinterpret_cast<const Version*>(versionBuf);
           switch (version.mType) {
           case VersionType::kUpdate: {
@@ -145,7 +145,7 @@ inline std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
               BasicKV::CopyToValue(updateDesc, oldValOfSlots, valueBuf.get());
             } else {
               valueSize = versionSize - sizeof(UpdateVersion);
-              valueBuf = std::make_unique<u8[]>(valueSize);
+              valueBuf = std::make_unique<uint8_t[]>(valueSize);
               std::memcpy(valueBuf.get(), updateVersion.mPayload, valueSize);
             }
             break;
@@ -154,14 +154,14 @@ inline std::tuple<OpCode, u16> ChainedTuple::GetVisibleTuple(
             auto& removeVersion = *RemoveVersion::From(versionBuf);
             auto removedVal = removeVersion.RemovedVal();
             valueSize = removeVersion.mValSize;
-            valueBuf = std::make_unique<u8[]>(removedVal.size());
+            valueBuf = std::make_unique<uint8_t[]>(removedVal.size());
             std::memcpy(valueBuf.get(), removedVal.data(), removedVal.size());
             break;
           }
           case VersionType::kInsert: {
             auto& insertVersion = *InsertVersion::From(versionBuf);
             valueSize = insertVersion.mValSize;
-            valueBuf = std::make_unique<u8[]>(valueSize);
+            valueBuf = std::make_unique<uint8_t[]>(valueSize);
             std::memcpy(valueBuf.get(), insertVersion.mPayload, valueSize);
             break;
           }
@@ -200,7 +200,7 @@ inline void ChainedTuple::Update(BTreePessimisticExclusiveIterator& xIter,
   // Move the newest tuple to the history version tree.
   auto treeId = xIter.mBTree.mTreeId;
   auto currCommandId = cr::Worker::My().cc.PutVersion(
-      treeId, false, versionSize, [&](u8* versionBuf) {
+      treeId, false, versionSize, [&](uint8_t* versionBuf) {
         auto& updateVersion =
             *new (versionBuf) UpdateVersion(mWorkerId, mTxId, mCommandId, true);
         std::memcpy(updateVersion.mPayload, &updateDesc, updateDesc.Size());

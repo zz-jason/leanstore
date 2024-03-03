@@ -24,13 +24,13 @@ DECLARE_double(zipf_factor);
 
 namespace leanstore::ycsb {
 
-enum class Distrubition : u8 {
+enum class Distrubition : uint8_t {
   kUniform = 0,
   kZipf = 1,
   kLatest = 2,
 };
 
-enum class Workload : u8 {
+enum class Workload : uint8_t {
   kA = 0,
   kB = 1,
   kC = 2,
@@ -71,7 +71,7 @@ inline WorkloadSpec GetWorkloadSpec(Workload workload) {
   case Workload::kF:
     return {0.5, 0.0, 0.0, 0.5};
   default:
-    LOG(FATAL) << "Unknown workload: " << static_cast<u8>(workload);
+    LOG(FATAL) << "Unknown workload: " << static_cast<uint8_t>(workload);
   }
 }
 
@@ -85,7 +85,8 @@ inline double CalculateTps(std::chrono::high_resolution_clock::time_point begin,
   return numOperations / sec;
 }
 
-inline void GenYcsbKey(utils::ScrambledZipfGenerator& zipfRandom, u8* keyBuf) {
+inline void GenYcsbKey(utils::ScrambledZipfGenerator& zipfRandom,
+                       uint8_t* keyBuf) {
   auto zipfKey = zipfRandom.rand();
   auto zipfKeyStr = std::to_string(zipfKey);
   auto prefixSize = FLAGS_ycsb_key_size - zipfKeyStr.size() > 0

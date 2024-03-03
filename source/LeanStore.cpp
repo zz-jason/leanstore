@@ -192,7 +192,7 @@ LeanStore::~LeanStore() {
     auto& [treePtr, treeName] = it.second;
     auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(treePtr.get());
 
-    u64 numEntries(0);
+    uint64_t numEntries(0);
     ExecSync(0, [&]() { numEntries = btree->CountEntries(); });
 
     LOG(INFO) << "[TransactionKV] name=" << treeName << ", btreeId=" << treeId
@@ -247,12 +247,12 @@ std::expected<std::unique_ptr<TxWorker>, utils::Error> LeanStore::GetTxWorker(
   return std::make_unique<TxWorkerImpl>(this, workerId);
 }
 
-void LeanStore::ExecSync(u64 workerId, std::function<void()> job) {
+void LeanStore::ExecSync(uint64_t workerId, std::function<void()> job) {
   mCRManager->mWorkerThreads[workerId]->SetJob(job);
   mCRManager->mWorkerThreads[workerId]->Wait();
 }
 
-void LeanStore::ExecAsync(u64 workerId, std::function<void()> job) {
+void LeanStore::ExecAsync(uint64_t workerId, std::function<void()> job) {
   mCRManager->mWorkerThreads[workerId]->SetJob(job);
 }
 
@@ -262,7 +262,7 @@ void LeanStore::Wait(WORKERID workerId) {
 }
 
 void LeanStore::WaitAll() {
-  for (u32 i = 0; i < mStoreOption.mNumTxWorkers; i++) {
+  for (uint32_t i = 0; i < mStoreOption.mNumTxWorkers; i++) {
     mCRManager->mWorkerThreads[i]->Wait();
   }
 }
@@ -293,7 +293,7 @@ void LeanStore::StartProfilingThread() {
     } else {
       open_flags = ios::app;
     }
-    for (u64 t_i = 0; t_i < tables.size(); t_i++) {
+    for (uint64_t t_i = 0; t_i < tables.size(); t_i++) {
       tables[t_i]->open();
 
       csvs.emplace_back();
@@ -313,16 +313,16 @@ void LeanStore::StartProfilingThread() {
 
     mConfigHash = mConfigsTable.hash();
 
-    u64 seconds = 0;
+    uint64_t seconds = 0;
     while (mProfilingThreadKeepRunning) {
-      for (u64 t_i = 0; t_i < tables.size(); t_i++) {
+      for (uint64_t t_i = 0; t_i < tables.size(); t_i++) {
         tables[t_i]->next();
         if (tables[t_i]->size() == 0)
           continue;
 
         // CSV
         auto& csv = csvs[t_i];
-        for (u64 r_i = 0; r_i < tables[t_i]->size(); r_i++) {
+        for (uint64_t r_i = 0; r_i < tables[t_i]->size(); r_i++) {
           csv << seconds << "," << mConfigHash;
           for (auto& c : tables[t_i]->getColumns()) {
             csv << "," << c.second.values[r_i];
@@ -333,8 +333,8 @@ void LeanStore::StartProfilingThread() {
         // TODO: Websocket, CLI
       }
 
-      const u64 tx = std::stoull(cr_table.get("0", "tx"));
-      const u64 long_running_tx =
+      const uint64_t tx = std::stoull(cr_table.get("0", "tx"));
+      const uint64_t long_running_tx =
           std::stoull(cr_table.get("0", "long_running_tx"));
       const double tx_abort = std::stod(cr_table.get("0", "tx_abort"));
       const double tx_abort_pct = tx_abort * 100.0 / (tx_abort + tx);
@@ -374,12 +374,12 @@ void LeanStore::StartProfilingThread() {
         table.column(1).format().width(12);
 
         auto print_table = [](tabulate::Table& table,
-                              std::function<bool(u64)> predicate) {
+                              std::function<bool(uint64_t)> predicate) {
           std::stringstream ss;
           table.print(ss);
-          string str = ss.str();
-          u64 line_n = 0;
-          for (u64 i = 0; i < str.size(); i++) {
+          std::string str = ss.str();
+          uint64_t line_n = 0;
+          for (uint64_t i = 0; i < str.size(); i++) {
             if (str[i] == '\n') {
               line_n++;
             }
@@ -389,10 +389,11 @@ void LeanStore::StartProfilingThread() {
           }
         };
         if (seconds == 0) {
-          print_table(table,
-                      [](u64 line_n) { return (line_n < 3) || (line_n == 4); });
+          print_table(table, [](uint64_t line_n) {
+            return (line_n < 3) || (line_n == 4);
+          });
         } else {
-          print_table(table, [](u64 line_n) { return line_n == 4; });
+          print_table(table, [](uint64_t line_n) { return line_n == 4; });
         }
         // -------------------------------------------------------------------------------------
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -465,7 +466,7 @@ void LeanStore::serializeMeta() {
       btreeJsonName.SetString(btreeName.data(), btreeName.size(), allocator);
       btreeJsonObj.AddMember("name", btreeJsonName, allocator);
 
-      rapidjson::Value btreeJsonType(static_cast<u8>(btree->mTreeType));
+      rapidjson::Value btreeJsonType(static_cast<uint8_t>(btree->mTreeType));
       btreeJsonObj.AddMember("type", btreeJsonType, allocator);
 
       rapidjson::Value btreeJsonId(btreeId);

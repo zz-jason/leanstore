@@ -110,18 +110,6 @@ public:
     SyncGSNBeforeRead();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
 
-    PARANOID_BLOCK() {
-      TREEID parentTreeId = guardedParent.mBf->page.mBTreeId;
-      TREEID treeId = mBf->page.mBTreeId;
-      PID pageId = mBf->header.mPageId;
-      guardedParent.JumpIfModifiedByOthers();
-      JumpIfModifiedByOthers();
-      if (parentTreeId != treeId) {
-        cout << "parentTreeId != treeId" << endl;
-        leanstore::storage::Tracing::printStatus(pageId);
-      }
-    }
-
     guardedParent.JumpIfModifiedByOthers();
   }
 
@@ -207,7 +195,7 @@ public:
   }
 
   template <typename WT, typename... Args>
-  inline cr::WALPayloadHandler<WT> ReserveWALPayload(u64 walSize,
+  inline cr::WALPayloadHandler<WT> ReserveWALPayload(uint64_t walSize,
                                                      Args&&... args) {
     DCHECK(cr::ActiveTx().mIsDurable);
     DCHECK(mGuard.mState == GuardState::kPessimisticExclusive);
@@ -226,7 +214,7 @@ public:
   }
 
   template <typename WT, typename... Args>
-  inline void WriteWal(u64 walSize, Args&&... args) {
+  inline void WriteWal(uint64_t walSize, Args&&... args) {
     auto handle = ReserveWALPayload<WT>(walSize, std::forward<Args>(args)...);
     handle.SubmitWal();
   }
@@ -306,7 +294,7 @@ protected:
     }
     default: {
       DCHECK(false) << "Unhandled LatchMode: "
-                    << std::to_string(static_cast<u64>(latchMode));
+                    << std::to_string(static_cast<uint64_t>(latchMode));
     }
     }
   }
@@ -324,13 +312,14 @@ public:
   }
 
   template <typename WT, typename... Args>
-  cr::WALPayloadHandler<WT> ReserveWALPayload(u64 payloadSize, Args&&... args) {
+  cr::WALPayloadHandler<WT> ReserveWALPayload(uint64_t payloadSize,
+                                              Args&&... args) {
     return mRefGuard.template ReserveWALPayload<WT>(
         payloadSize, std::forward<Args>(args)...);
   }
 
   template <typename WT, typename... Args>
-  void WriteWal(u64 payloadSize, Args&&... args) {
+  void WriteWal(uint64_t payloadSize, Args&&... args) {
     auto walPayloadHandler = mRefGuard.template ReserveWALPayload<WT>(
         payloadSize, std::forward<Args>(args)...);
     walPayloadHandler.SubmitWal();
@@ -363,8 +352,8 @@ public:
     new (mRefGuard.mBf->page.mPayload) PayloadType(std::forward<Args>(args)...);
   }
 
-  inline u8* GetPagePayloadPtr() {
-    return reinterpret_cast<u8*>(mRefGuard.mBf->page.mPayload);
+  inline uint8_t* GetPagePayloadPtr() {
+    return reinterpret_cast<uint8_t*>(mRefGuard.mBf->page.mPayload);
   }
 
   inline PayloadType* GetPagePayload() {

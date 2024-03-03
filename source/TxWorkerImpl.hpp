@@ -164,7 +164,7 @@ public:
 
   /// Get the total key-value pairs in a table, should be executed inside a
   /// transaction.
-  virtual std::expected<u64, utils::Error> GetTableSize(
+  virtual std::expected<uint64_t, utils::Error> GetTableSize(
       TableRef table [[maybe_unused]]) override {
     return std::unexpected<utils::Error>(
         utils::Error::General("Not implemented yet"));

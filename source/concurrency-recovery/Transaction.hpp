@@ -97,7 +97,7 @@ public:
     mWalExceedBuffer = false;
   }
 
-  inline bool CanCommit(u64 minFlushedGSN, TXID minFlushedTxId) {
+  inline bool CanCommit(uint64_t minFlushedGSN, TXID minFlushedTxId) {
     return mMaxObservedGSN <= minFlushedGSN && mStartTs <= minFlushedTxId;
   }
 };

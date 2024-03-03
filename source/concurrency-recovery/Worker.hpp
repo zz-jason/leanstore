@@ -30,18 +30,18 @@ namespace leanstore::cr {
 /// thread.
 struct WalFlushReq {
   /// Used for optimistic locking.
-  u64 mVersion = 0;
+  uint64_t mVersion = 0;
 
   /// The offset in the wal ring buffer.
-  u64 mWalBuffered = 0;
+  uint64_t mWalBuffered = 0;
 
   /// GSN of the current WAL record.
-  u64 mCurrGSN = 0;
+  uint64_t mCurrGSN = 0;
 
   /// ID of the current transaction.
   TXID mCurrTxId = 0;
 
-  WalFlushReq(u64 walBuffered = 0, u64 currGSN = 0, TXID currTxId = 0)
+  WalFlushReq(uint64_t walBuffered = 0, uint64_t currGSN = 0, TXID currTxId = 0)
       : mVersion(0),
         mWalBuffered(walBuffered),
         mCurrGSN(currGSN),
@@ -93,36 +93,36 @@ public:
   /// The ring buffer of the current worker thread. All the wal entries of the
   /// current worker are writtern to this ring buffer firstly, then flushed to
   /// disk by the group commit thread.
-  alignas(512) u8* mWalBuffer;
+  alignas(512) uint8_t* mWalBuffer;
 
   /// The size of the wal ring buffer.
-  u64 mWalBufferSize;
+  uint64_t mWalBufferSize;
 
   /// Used to track the write order of wal entries.
   LID mLsnClock = 0;
 
   /// Used to track transaction dependencies.
-  u64 mGSNClock = 0;
+  uint64_t mGSNClock = 0;
 
   /// The written offset of the wal ring buffer.
-  u64 mWalBuffered = 0;
+  uint64_t mWalBuffered = 0;
 
   /// Represents the flushed offset in the wal ring buffer.  The wal ring buffer
   /// is firstly written by the worker thread then flushed to disk file by the
   /// group commit thread.
-  std::atomic<u64> mWalFlushed = 0;
+  std::atomic<uint64_t> mWalFlushed = 0;
 
   // The global min flushed GSN when transaction started. Pages whose GSN larger
   // than this value might be modified by other transactions running at the same
   // time, which cause the remote transaction dependency.
-  u64 mTxReadSnapshot;
+  uint64_t mTxReadSnapshot;
 
   /// Whether the active transaction has accessed data written by other worker
   /// transactions, i.e. dependens on the transactions on other workers.
   bool mHasRemoteDependency = false;
 
   /// The first WAL record of the current active transaction.
-  u64 mTxWalBegin;
+  uint64_t mTxWalBegin;
 
 public:
   inline void UpdateSignaledCommitTs(const LID signaledCommitTs) {
@@ -133,7 +133,7 @@ public:
     return mSignaledCommitTs.load() < dependency;
   }
 
-  void ReserveContiguousBuffer(u32 requestedSize);
+  void ReserveContiguousBuffer(uint32_t requestedSize);
 
   // Iterate over current TX entries
   void IterateCurrentTxWALs(
@@ -146,17 +146,17 @@ public:
   void WriteSimpleWal(WALEntry::TYPE type);
 
   template <typename T, typename... Args>
-  WALPayloadHandler<T> ReserveWALEntryComplex(u64 payloadSize, PID pageId,
+  WALPayloadHandler<T> ReserveWALEntryComplex(uint64_t payloadSize, PID pageId,
                                               LID gsn, TREEID treeId,
                                               Args&&... args);
 
-  void SubmitWALEntryComplex(u64 totalSize);
+  void SubmitWALEntryComplex(uint64_t totalSize);
 
-  inline u64 GetCurrentGsn() {
+  inline uint64_t GetCurrentGsn() {
     return mGSNClock;
   }
 
-  inline void SetCurrentGsn(u64 gsn) {
+  inline void SetCurrentGsn(uint64_t gsn) {
     mGSNClock = gsn;
   }
 
@@ -165,7 +165,7 @@ private:
 
   void publishWalFlushReq();
 
-  u32 walContiguousFreeSpace();
+  uint32_t walContiguousFreeSpace();
 };
 
 class Worker {
@@ -190,13 +190,13 @@ public:
   std::atomic<TXID> mActiveTxId = 0;
 
   /// ID of the current worker itself.
-  const u64 mWorkerId;
+  const uint64_t mWorkerId;
 
   /// All the workers.
   std::vector<Worker*>& mAllWorkers;
 
 public:
-  Worker(u64 workerId, std::vector<Worker*>& allWorkers,
+  Worker(uint64_t workerId, std::vector<Worker*>& allWorkers,
          leanstore::LeanStore* store);
 
   ~Worker();
@@ -218,9 +218,9 @@ public:
   static thread_local std::unique_ptr<Worker> sTlsWorker;
   static thread_local Worker* sTlsWorkerRaw;
 
-  static constexpr u64 kRcBit = (1ull << 63);
-  static constexpr u64 kLongRunningBit = (1ull << 62);
-  static constexpr u64 kCleanBitsMask = ~(kRcBit | kLongRunningBit);
+  static constexpr uint64_t kRcBit = (1ull << 63);
+  static constexpr uint64_t kLongRunningBit = (1ull << 62);
+  static constexpr uint64_t kCleanBitsMask = ~(kRcBit | kLongRunningBit);
 
 public:
   inline static Worker& My() {
@@ -262,7 +262,7 @@ template <typename T> inline void WALPayloadHandler<T>::SubmitWal() {
 //------------------------------------------------------------------------------
 
 template <typename T, typename... Args>
-WALPayloadHandler<T> Logging::ReserveWALEntryComplex(u64 payloadSize,
+WALPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payloadSize,
                                                      PID pageId, LID psn,
                                                      TREEID treeId,
                                                      Args&&... args) {

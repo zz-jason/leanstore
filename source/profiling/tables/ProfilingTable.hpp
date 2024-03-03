@@ -21,28 +21,28 @@ struct Column {
   Column(std::function<void(Column& col)>&& g) : generator(g) {
   }
 
-  std::string to_string(s8 x) {
+  std::string to_string(int8_t x) {
     return std::to_string(x);
   }
-  std::string to_string(s16 x) {
+  std::string to_string(int16_t x) {
     return std::to_string(x);
   }
-  std::string to_string(s32 x) {
+  std::string to_string(int32_t x) {
     return std::to_string(x);
   }
-  std::string to_string(s64 x) {
+  std::string to_string(int64_t x) {
     return std::to_string(x);
   }
-  std::string to_string(u8 x) {
+  std::string to_string(uint8_t x) {
     return std::to_string(x);
   }
-  std::string to_string(u16 x) {
+  std::string to_string(uint16_t x) {
     return std::to_string(x);
   }
-  std::string to_string(u32 x) {
+  std::string to_string(uint32_t x) {
     return std::to_string(x);
   }
-  std::string to_string(u64 x) {
+  std::string to_string(uint64_t x) {
     return std::to_string(x);
   }
   std::string to_string(double x) {
@@ -79,12 +79,12 @@ public:
       column.second.values.clear();
     }
   }
-  u64 size() {
+  uint64_t size() {
     return columns.begin()->second.values.size();
   }
   std::string get(std::string key, std::string column) {
     auto& c = columns.at("key");
-    for (u64 r_i = 0; r_i < size(); r_i++) {
+    for (uint64_t r_i = 0; r_i < size(); r_i++) {
       if (c.values[r_i] == key) {
         return columns.at(column).values[r_i];
       }

@@ -14,8 +14,8 @@
 // Helpers to generate a descriptor that describes which attributes are in-place
 // updating in a fixed-size value
 #define UpdateDescriptorInit(Name, Count)                                      \
-  u8 Name##_buffer[sizeof(leanstore::UpdateDesc) +                             \
-                   (sizeof(leanstore::UpdateSlotInfo) * Count)];               \
+  uint8_t Name##_buffer[sizeof(leanstore::UpdateDesc) +                        \
+                        (sizeof(leanstore::UpdateSlotInfo) * Count)];          \
   auto& Name = *reinterpret_cast<leanstore::UpdateDesc*>(Name##_buffer);       \
   Name.count = Count;
 

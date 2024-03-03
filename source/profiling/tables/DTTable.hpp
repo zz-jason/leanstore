@@ -10,7 +10,7 @@ using namespace storage;
 
 class DTTable : public ProfilingTable {
 private:
-  string dt_name;
+  std::string dt_name;
   TREEID mTreeId;
   BufferManager& bm;
 

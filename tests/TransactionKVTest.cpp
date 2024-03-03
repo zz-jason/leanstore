@@ -3,6 +3,7 @@
 #include "KVInterface.hpp"
 #include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
+#include "shared-headers/Units.hpp"
 #include "storage/btree/core/BTreeGeneric.hpp"
 #include "storage/buffer-manager/BufferManager.hpp"
 #include "utils/Defer.hpp"
@@ -123,8 +124,8 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
     cr::Worker::My().StartTx();
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
-      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
-                              Slice((const u8*)val.data(), val.size())),
+      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                              Slice((const uint8_t*)val.data(), val.size())),
                 OpCode::kOK);
     }
     cr::Worker::My().CommitTx();
@@ -140,9 +141,9 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
     };
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, expectedVal] = kvToTest[i];
-      EXPECT_EQ(
-          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OpCode::kOK);
+      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
+                              copyValueOut),
+                OpCode::kOK);
       EXPECT_EQ(copiedValue, expectedVal);
     }
   });
@@ -157,9 +158,9 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
     };
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, expectedVal] = kvToTest[i];
-      EXPECT_EQ(
-          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OpCode::kOK);
+      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
+                              copyValueOut),
+                OpCode::kOK);
       EXPECT_EQ(copiedValue, expectedVal);
     }
   });
@@ -199,8 +200,8 @@ TEST_F(TransactionKVTest, Insert1000KVs) {
       }
       uniqueKeys.insert(key);
       auto val = RandomGenerator::RandAlphString(128);
-      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
-                              Slice((const u8*)val.data(), val.size())),
+      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                              Slice((const uint8_t*)val.data(), val.size())),
                 OpCode::kOK);
     }
     cr::Worker::My().CommitTx();
@@ -239,8 +240,8 @@ TEST_F(TransactionKVTest, InsertDuplicates) {
       uniqueKeys.insert(key);
       auto val = RandomGenerator::RandAlphString(128);
       cr::Worker::My().StartTx();
-      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
-                              Slice((const u8*)val.data(), val.size())),
+      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                              Slice((const uint8_t*)val.data(), val.size())),
                 OpCode::kOK);
       cr::Worker::My().CommitTx();
     }
@@ -249,9 +250,7 @@ TEST_F(TransactionKVTest, InsertDuplicates) {
     for (auto& key : uniqueKeys) {
       auto val = RandomGenerator::RandAlphString(128);
       cr::Worker::My().StartTx();
-      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
-                              Slice((const u8*)val.data(), val.size())),
-                OpCode::kDuplicated);
+      EXPECT_EQ(btree->Insert(ToSlice(key), ToSlice(val)), OpCode::kDuplicated);
       cr::Worker::My().CommitTx();
     }
 
@@ -290,24 +289,24 @@ TEST_F(TransactionKVTest, Remove) {
       auto val = RandomGenerator::RandAlphString(128);
 
       cr::Worker::My().StartTx();
-      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
-                              Slice((const u8*)val.data(), val.size())),
+      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                              Slice((const uint8_t*)val.data(), val.size())),
                 OpCode::kOK);
       cr::Worker::My().CommitTx();
     }
 
     for (auto& key : uniqueKeys) {
       cr::Worker::My().StartTx();
-      EXPECT_EQ(btree->Remove(Slice((const u8*)key.data(), key.size())),
+      EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())),
                 OpCode::kOK);
       cr::Worker::My().CommitTx();
     }
 
     for (auto& key : uniqueKeys) {
       cr::Worker::My().StartTx();
-      EXPECT_EQ(
-          btree->Lookup(Slice((const u8*)key.data(), key.size()), [](Slice) {}),
-          OpCode::kNotFound);
+      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
+                              [](Slice) {}),
+                OpCode::kNotFound);
       cr::Worker::My().CommitTx();
     }
 
@@ -346,8 +345,8 @@ TEST_F(TransactionKVTest, RemoveNotExisted) {
       auto val = RandomGenerator::RandAlphString(128);
 
       cr::Worker::My().StartTx();
-      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
-                              Slice((const u8*)val.data(), val.size())),
+      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                              Slice((const uint8_t*)val.data(), val.size())),
                 OpCode::kOK);
       cr::Worker::My().CommitTx();
     }
@@ -362,7 +361,7 @@ TEST_F(TransactionKVTest, RemoveNotExisted) {
       uniqueKeys.insert(key);
 
       cr::Worker::My().StartTx();
-      EXPECT_EQ(btree->Remove(Slice((const u8*)key.data(), key.size())),
+      EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())),
                 OpCode::kNotFound);
       cr::Worker::My().CommitTx();
     }
@@ -402,8 +401,8 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
       auto val = RandomGenerator::RandAlphString(128);
 
       cr::Worker::My().StartTx();
-      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
-                              Slice((const u8*)val.data(), val.size())),
+      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                              Slice((const uint8_t*)val.data(), val.size())),
                 OpCode::kOK);
       cr::Worker::My().CommitTx();
     }
@@ -413,7 +412,7 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
     // remove from another worker
     for (auto& key : uniqueKeys) {
       cr::Worker::My().StartTx();
-      EXPECT_EQ(btree->Remove(Slice((const u8*)key.data(), key.size())),
+      EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())),
                 OpCode::kOK);
       cr::Worker::My().CommitTx();
     }
@@ -421,9 +420,9 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
     // should not found any keys
     for (auto& key : uniqueKeys) {
       cr::Worker::My().StartTx();
-      EXPECT_EQ(
-          btree->Lookup(Slice((const u8*)key.data(), key.size()), [](Slice) {}),
-          OpCode::kNotFound);
+      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
+                              [](Slice) {}),
+                OpCode::kNotFound);
       cr::Worker::My().CommitTx();
     }
   });
@@ -432,9 +431,9 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
     // lookup from another worker, should not found any keys
     for (auto& key : uniqueKeys) {
       cr::Worker::My().StartTx();
-      EXPECT_EQ(
-          btree->Lookup(Slice((const u8*)key.data(), key.size()), [](Slice) {}),
-          OpCode::kNotFound);
+      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
+                              [](Slice) {}),
+                OpCode::kNotFound);
       cr::Worker::My().CommitTx();
     }
   });
@@ -475,8 +474,8 @@ TEST_F(TransactionKVTest, ToJson) {
     cr::Worker::My().StartTx();
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
-      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
-                              Slice((const u8*)val.data(), val.size())),
+      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                              Slice((const uint8_t*)val.data(), val.size())),
                 OpCode::kOK);
     }
     cr::Worker::My().CommitTx();
@@ -522,8 +521,8 @@ TEST_F(TransactionKVTest, Update) {
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       cr::Worker::My().StartTx();
-      auto res = btree->Insert(Slice((const u8*)key.data(), key.size()),
-                               Slice((const u8*)val.data(), val.size()));
+      auto res = btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                               Slice((const uint8_t*)val.data(), val.size()));
       cr::Worker::My().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
     }
@@ -535,8 +534,8 @@ TEST_F(TransactionKVTest, Update) {
     };
 
     // update in the same worker
-    const u64 updateDescBufSize = UpdateDesc::Size(1);
-    u8 updateDescBuf[updateDescBufSize];
+    const uint64_t updateDescBufSize = UpdateDesc::Size(1);
+    uint8_t updateDescBuf[updateDescBufSize];
     auto* updateDesc = UpdateDesc::CreateFrom(updateDescBuf);
     updateDesc->mNumSlots = 1;
     updateDesc->mUpdateSlots[0].mOffset = 0;
@@ -544,8 +543,9 @@ TEST_F(TransactionKVTest, Update) {
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       cr::Worker::My().StartTx();
-      auto res = btree->UpdatePartial(Slice((const u8*)key.data(), key.size()),
-                                      updateCallBack, *updateDesc);
+      auto res =
+          btree->UpdatePartial(Slice((const uint8_t*)key.data(), key.size()),
+                               updateCallBack, *updateDesc);
       cr::Worker::My().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
     }
@@ -558,9 +558,9 @@ TEST_F(TransactionKVTest, Update) {
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       cr::Worker::My().StartTx();
-      EXPECT_EQ(
-          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OpCode::kOK);
+      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
+                              copyValueOut),
+                OpCode::kOK);
       cr::Worker::My().CommitTx();
       EXPECT_EQ(copiedValue, newVal);
     }
@@ -613,8 +613,8 @@ TEST_F(TransactionKVTest, ScanAsc) {
     // insert values
     for (const auto& [key, val] : kvToTest) {
       cr::Worker::My().StartTx();
-      auto res = btree->Insert(Slice((const u8*)key.data(), key.size()),
-                               Slice((const u8*)val.data(), val.size()));
+      auto res = btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                               Slice((const uint8_t*)val.data(), val.size()));
       cr::Worker::My().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
     }
@@ -630,9 +630,10 @@ TEST_F(TransactionKVTest, ScanAsc) {
     // scan from the smallest key
     copiedKVs.clear();
     cr::Worker::My().StartTx();
-    EXPECT_EQ(btree->ScanAsc(Slice((const u8*)smallest.data(), smallest.size()),
-                             scanCallBack),
-              OpCode::kOK);
+    EXPECT_EQ(
+        btree->ScanAsc(Slice((const uint8_t*)smallest.data(), smallest.size()),
+                       scanCallBack),
+        OpCode::kOK);
     cr::Worker::My().CommitTx();
     EXPECT_EQ(copiedKVs.size(), numKVs);
     for (const auto& [key, val] : copiedKVs) {
@@ -642,9 +643,10 @@ TEST_F(TransactionKVTest, ScanAsc) {
     // scan from the bigest key
     copiedKVs.clear();
     cr::Worker::My().StartTx();
-    EXPECT_EQ(btree->ScanAsc(Slice((const u8*)bigest.data(), bigest.size()),
-                             scanCallBack),
-              OpCode::kOK);
+    EXPECT_EQ(
+        btree->ScanAsc(Slice((const uint8_t*)bigest.data(), bigest.size()),
+                       scanCallBack),
+        OpCode::kOK);
     cr::Worker::My().CommitTx();
     EXPECT_EQ(copiedKVs.size(), 1u);
     EXPECT_EQ(copiedKVs[bigest], kvToTest[bigest]);
@@ -698,8 +700,8 @@ TEST_F(TransactionKVTest, ScanDesc) {
     // insert values
     for (const auto& [key, val] : kvToTest) {
       cr::Worker::My().StartTx();
-      auto res = btree->Insert(Slice((const u8*)key.data(), key.size()),
-                               Slice((const u8*)val.data(), val.size()));
+      auto res = btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                               Slice((const uint8_t*)val.data(), val.size()));
       cr::Worker::My().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
     }
@@ -715,9 +717,10 @@ TEST_F(TransactionKVTest, ScanDesc) {
     // scan from the bigest key
     copiedKVs.clear();
     cr::Worker::My().StartTx();
-    EXPECT_EQ(btree->ScanDesc(Slice((const u8*)bigest.data(), bigest.size()),
-                              scanCallBack),
-              OpCode::kOK);
+    EXPECT_EQ(
+        btree->ScanDesc(Slice((const uint8_t*)bigest.data(), bigest.size()),
+                        scanCallBack),
+        OpCode::kOK);
     cr::Worker::My().CommitTx();
     EXPECT_EQ(copiedKVs.size(), numKVs);
     for (const auto& [key, val] : copiedKVs) {
@@ -728,7 +731,7 @@ TEST_F(TransactionKVTest, ScanDesc) {
     copiedKVs.clear();
     cr::Worker::My().StartTx();
     EXPECT_EQ(
-        btree->ScanDesc(Slice((const u8*)smallest.data(), smallest.size()),
+        btree->ScanDesc(Slice((const uint8_t*)smallest.data(), smallest.size()),
                         scanCallBack),
         OpCode::kOK);
     cr::Worker::My().CommitTx();
@@ -789,8 +792,8 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
     // insert values
     for (const auto& [key, val] : kvToTest) {
       cr::Worker::My().StartTx();
-      auto res = btree->Insert(Slice((const u8*)key.data(), key.size()),
-                               Slice((const u8*)val.data(), val.size()));
+      auto res = btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                               Slice((const uint8_t*)val.data(), val.size()));
       cr::Worker::My().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
     }
@@ -801,16 +804,16 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
       cr::Worker::My().StartTx();
       SCOPED_DEFER(cr::Worker::My().CommitTx());
 
-      EXPECT_EQ(btree->Remove(Slice((const u8*)key.data(), key.size())),
+      EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())),
                 OpCode::kOK);
 
       // remove twice should got not found error
-      EXPECT_EQ(btree->Remove(Slice((const u8*)key.data(), key.size())),
+      EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())),
                 OpCode::kNotFound);
 
       // update should fail
-      const u64 updateDescBufSize = UpdateDesc::Size(1);
-      u8 updateDescBuf[updateDescBufSize];
+      const uint64_t updateDescBufSize = UpdateDesc::Size(1);
+      uint8_t updateDescBuf[updateDescBufSize];
       auto* updateDesc = UpdateDesc::CreateFrom(updateDescBuf);
       updateDesc->mNumSlots = 1;
       updateDesc->mUpdateSlots[0].mOffset = 0;
@@ -818,24 +821,26 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
       auto updateCallBack = [&](MutableSlice mutRawVal) {
         std::memcpy(mutRawVal.Data(), newVal.data(), mutRawVal.Size());
       };
-      EXPECT_EQ(btree->UpdatePartial(Slice((const u8*)key.data(), key.size()),
-                                     updateCallBack, *updateDesc),
-                OpCode::kNotFound);
-
-      // lookup should not found
       EXPECT_EQ(
-          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
+          btree->UpdatePartial(Slice((const uint8_t*)key.data(), key.size()),
+                               updateCallBack, *updateDesc),
           OpCode::kNotFound);
 
+      // lookup should not found
+      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
+                              copyValueOut),
+                OpCode::kNotFound);
+
       // insert with another val should success
-      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
-                              Slice((const u8*)newVal.data(), newVal.size())),
-                OpCode::kOK);
+      EXPECT_EQ(
+          btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                        Slice((const uint8_t*)newVal.data(), newVal.size())),
+          OpCode::kOK);
 
       // lookup the new value should success
-      EXPECT_EQ(
-          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OpCode::kOK);
+      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
+                              copyValueOut),
+                OpCode::kOK);
       EXPECT_EQ(copiedValue, newVal);
     }
   });
@@ -846,9 +851,9 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
     // lookup the new value
     cr::Worker::My().StartTx();
     for (const auto& [key, val] : kvToTest) {
-      EXPECT_EQ(
-          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OpCode::kOK);
+      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
+                              copyValueOut),
+                OpCode::kOK);
       EXPECT_EQ(copiedValue, newVal);
     }
     cr::Worker::My().CommitTx();
@@ -902,8 +907,8 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
     // insert values
     for (const auto& [key, val] : kvToTest) {
       cr::Worker::My().StartTx();
-      auto res = btree->Insert(Slice((const u8*)key.data(), key.size()),
-                               Slice((const u8*)val.data(), val.size()));
+      auto res = btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                               Slice((const uint8_t*)val.data(), val.size()));
       cr::Worker::My().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
     }
@@ -912,7 +917,7 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
     for (const auto& [key, val] : kvToTest) {
       cr::Worker::My().StartTx();
       SCOPED_DEFER(cr::Worker::My().CommitTx());
-      EXPECT_EQ(btree->Remove(Slice((const u8*)key.data(), key.size())),
+      EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())),
                 OpCode::kOK);
     }
   });
@@ -923,12 +928,12 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
       SCOPED_DEFER(cr::Worker::My().CommitTx());
 
       // remove twice should got not found error
-      EXPECT_EQ(btree->Remove(Slice((const u8*)key.data(), key.size())),
+      EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())),
                 OpCode::kNotFound);
 
       // update should fail
-      const u64 updateDescBufSize = UpdateDesc::Size(1);
-      u8 updateDescBuf[updateDescBufSize];
+      const uint64_t updateDescBufSize = UpdateDesc::Size(1);
+      uint8_t updateDescBuf[updateDescBufSize];
       auto* updateDesc = UpdateDesc::CreateFrom(updateDescBuf);
       updateDesc->mNumSlots = 1;
       updateDesc->mUpdateSlots[0].mOffset = 0;
@@ -936,24 +941,26 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
       auto updateCallBack = [&](MutableSlice mutRawVal) {
         std::memcpy(mutRawVal.Data(), newVal.data(), mutRawVal.Size());
       };
-      EXPECT_EQ(btree->UpdatePartial(Slice((const u8*)key.data(), key.size()),
-                                     updateCallBack, *updateDesc),
-                OpCode::kNotFound);
-
-      // lookup should not found
       EXPECT_EQ(
-          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
+          btree->UpdatePartial(Slice((const uint8_t*)key.data(), key.size()),
+                               updateCallBack, *updateDesc),
           OpCode::kNotFound);
 
+      // lookup should not found
+      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
+                              copyValueOut),
+                OpCode::kNotFound);
+
       // insert with another val should success
-      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
-                              Slice((const u8*)newVal.data(), newVal.size())),
-                OpCode::kOK);
+      EXPECT_EQ(
+          btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                        Slice((const uint8_t*)newVal.data(), newVal.size())),
+          OpCode::kOK);
 
       // lookup the new value should success
-      EXPECT_EQ(
-          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OpCode::kOK);
+      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
+                              copyValueOut),
+                OpCode::kOK);
       EXPECT_EQ(copiedValue, newVal);
     }
   });

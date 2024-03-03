@@ -33,14 +33,18 @@ public:
   Swip& mChildSwip;
 
   /// @brief mPosInParent is the slot id in the parent buffer frame.
-  u32 mPosInParent = std::numeric_limits<u32>::max();
+  uint32_t mPosInParent = std::numeric_limits<uint32_t>::max();
 
   /// @brief mIsChildBfUpdated records whether the child buffer frame is updated
   /// since this ParentSwipHandler was created.
   bool mIsChildBfUpdated = false;
 };
 
-enum class SpaceCheckResult : u8 { kNothing, kPickAnotherBf, kRestartSameBf };
+enum class SpaceCheckResult : uint8_t {
+  kNothing,
+  kPickAnotherBf,
+  kRestartSameBf
+};
 
 using ChildSwipCallback = std::function<bool(Swip&)>;
 
@@ -62,15 +66,15 @@ public:
     LOG(FATAL) << "BufferManagedTree::Checkpoint is unimplemented";
   }
 
-  virtual void undo(const u8*, const u64) {
+  virtual void undo(const uint8_t*, const uint64_t) {
     LOG(FATAL) << "BufferManagedTree::undo is unimplemented";
   }
 
-  virtual void GarbageCollect(const u8*, WORKERID, TXID, bool) {
+  virtual void GarbageCollect(const uint8_t*, WORKERID, TXID, bool) {
     LOG(FATAL) << "BufferManagedTree::GarbageCollect is unimplemented";
   }
 
-  virtual void unlock(const u8*) {
+  virtual void unlock(const uint8_t*) {
     LOG(FATAL) << "BufferManagedTree::unlock is unimplemented";
   }
 
@@ -87,7 +91,7 @@ public:
   }
 };
 
-using TreeAndName = std::tuple<std::unique_ptr<BufferManagedTree>, string>;
+using TreeAndName = std::tuple<std::unique_ptr<BufferManagedTree>, std::string>;
 using TreeMap = std::unordered_map<TREEID, TreeAndName>;
 using TreeIndexByName = std::unordered_map<std::string, TreeMap::iterator>;
 
@@ -239,7 +243,7 @@ public:
   }
 
   // Recovery / SI
-  inline void undo(TREEID treeId, const u8* walEntry, u64 tts) {
+  inline void undo(TREEID treeId, const uint8_t* walEntry, uint64_t tts) {
     auto it = mTrees.find(treeId);
     DLOG_IF(FATAL, it == mTrees.end())
         << "BufferManagedTree not find, treeId=" << treeId;
@@ -247,7 +251,7 @@ public:
     return tree->undo(walEntry, tts);
   }
 
-  inline void GarbageCollect(TREEID treeId, const u8* versionData,
+  inline void GarbageCollect(TREEID treeId, const uint8_t* versionData,
                              WORKERID versionWorkerId, TXID versionTxId,
                              bool calledBefore) {
     std::shared_lock sharedGuard(mMutex);
@@ -263,7 +267,7 @@ public:
                                 calledBefore);
   }
 
-  inline void unlock(TREEID treeId, const u8* entry) {
+  inline void unlock(TREEID treeId, const uint8_t* entry) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
     DLOG_IF(FATAL, it == mTrees.end())

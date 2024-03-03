@@ -8,12 +8,14 @@ namespace leanstore {
 namespace utils {
 class Parallelize {
 public:
-  static void range(u64 threads_count, u64 n,
-                    std::function<void(u64 t_i, u64 begin, u64 end)> callback);
-  static void parallelRange(u64 n, std::function<void(u64, u64)>);
+  static void range(
+      uint64_t threads_count, uint64_t n,
+      std::function<void(uint64_t t_i, uint64_t begin, uint64_t end)> callback);
+  static void parallelRange(uint64_t n,
+                            std::function<void(uint64_t, uint64_t)>);
   // [begin, end]
-  static void parallelRange(u64 begin, u64 end, u64 n_threads,
-                            std::function<void(u64)>);
+  static void parallelRange(uint64_t begin, uint64_t end, uint64_t n_threads,
+                            std::function<void(uint64_t)>);
 };
 
 } // namespace utils

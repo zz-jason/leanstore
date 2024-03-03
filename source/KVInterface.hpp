@@ -6,7 +6,7 @@
 
 namespace leanstore {
 
-enum class OpCode : u8 {
+enum class OpCode : uint8_t {
   kOK = 0,
   kNotFound = 1,
   kDuplicated = 2,
@@ -41,9 +41,9 @@ inline std::string ToString(OpCode result) {
 
 class UpdateSlotInfo {
 public:
-  u16 mOffset = 0;
+  uint16_t mOffset = 0;
 
-  u16 mSize = 0;
+  uint16_t mSize = 0;
 
 public:
   bool operator==(const UpdateSlotInfo& other) const {
@@ -57,51 +57,51 @@ public:
 /// ---------------------------
 class UpdateDesc {
 public:
-  u8 mNumSlots = 0;
+  uint8_t mNumSlots = 0;
 
   UpdateSlotInfo mUpdateSlots[];
 
 public:
-  u64 Size() const {
+  uint64_t Size() const {
     return UpdateDesc::Size(mNumSlots);
   }
 
-  u64 SizeWithDelta() const {
+  uint64_t SizeWithDelta() const {
     return Size() + deltaSize();
   }
 
 private:
-  u64 deltaSize() const {
-    u64 length = 0;
-    for (u8 i = 0; i < mNumSlots; i++) {
+  uint64_t deltaSize() const {
+    uint64_t length = 0;
+    for (uint8_t i = 0; i < mNumSlots; i++) {
       length += mUpdateSlots[i].mSize;
     }
     return length;
   }
 
 public:
-  inline static const UpdateDesc* From(const u8* buffer) {
+  inline static const UpdateDesc* From(const uint8_t* buffer) {
     return reinterpret_cast<const UpdateDesc*>(buffer);
   }
 
-  inline static UpdateDesc* From(u8* buffer) {
+  inline static UpdateDesc* From(uint8_t* buffer) {
     return reinterpret_cast<UpdateDesc*>(buffer);
   }
 
-  inline static u64 Size(u8 numSlots) {
-    u64 selfSize = sizeof(UpdateDesc);
+  inline static uint64_t Size(uint8_t numSlots) {
+    uint64_t selfSize = sizeof(UpdateDesc);
     selfSize += (numSlots * sizeof(UpdateSlotInfo));
     return selfSize;
   }
 
-  inline static UpdateDesc* CreateFrom(u8* buffer) {
+  inline static UpdateDesc* CreateFrom(uint8_t* buffer) {
     auto* updateDesc = new (buffer) UpdateDesc();
     return updateDesc;
   }
 };
 
 class MutableSlice;
-using StringU = std::basic_string<u8>;
+using StringU = std::basic_string<uint8_t>;
 using ValCallback = std::function<void(Slice val)>;
 using MutValCallback = std::function<void(MutableSlice val)>;
 using ScanCallback = std::function<bool(Slice key, Slice val)>;
@@ -131,23 +131,23 @@ public:
 
   virtual OpCode PrefixLookupForPrev(Slice, PrefixLookupCallback) = 0;
 
-  virtual u64 CountEntries() = 0;
+  virtual uint64_t CountEntries() = 0;
 };
 
 class MutableSlice {
 private:
-  u8* mData;
-  u64 mSize;
+  uint8_t* mData;
+  uint64_t mSize;
 
 public:
-  MutableSlice(u8* ptr, u64 len) : mData(ptr), mSize(len) {
+  MutableSlice(uint8_t* ptr, uint64_t len) : mData(ptr), mSize(len) {
   }
 
-  u8* Data() {
+  uint8_t* Data() {
     return mData;
   }
 
-  u64 Size() {
+  uint64_t Size() {
     return mSize;
   }
 

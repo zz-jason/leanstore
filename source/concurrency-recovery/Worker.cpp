@@ -21,7 +21,7 @@ namespace leanstore::cr {
 thread_local std::unique_ptr<Worker> Worker::sTlsWorker = nullptr;
 thread_local Worker* Worker::sTlsWorkerRaw = nullptr;
 
-Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers,
+Worker::Worker(uint64_t workerId, std::vector<Worker*>& allWorkers,
                leanstore::LeanStore* store)
     : mStore(store),
       cc(store, allWorkers.size()),
@@ -32,11 +32,12 @@ Worker::Worker(u64 workerId, std::vector<Worker*>& allWorkers,
 
   // init wal buffer
   mLogging.mWalBufferSize = mStore->mStoreOption.mWalRingBufferSize;
-  mLogging.mWalBuffer = (u8*)(std::aligned_alloc(512, mLogging.mWalBufferSize));
+  mLogging.mWalBuffer =
+      (uint8_t*)(std::aligned_alloc(512, mLogging.mWalBufferSize));
   std::memset(mLogging.mWalBuffer, 0, mLogging.mWalBufferSize);
 
-  cc.mLcbCacheVal = make_unique<u64[]>(mAllWorkers.size());
-  cc.mLcbCacheKey = make_unique<u64[]>(mAllWorkers.size());
+  cc.mLcbCacheVal = std::make_unique<uint64_t[]>(mAllWorkers.size());
+  cc.mLcbCacheKey = std::make_unique<uint64_t[]>(mAllWorkers.size());
 }
 
 Worker::~Worker() {
@@ -91,7 +92,8 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
 
   // For now, we only support SI and SSI
   if (level < IsolationLevel::kSnapshotIsolation) {
-    LOG(FATAL) << "Unsupported isolation level: " << static_cast<u64>(level);
+    LOG(FATAL) << "Unsupported isolation level: "
+               << static_cast<uint64_t>(level);
   }
 
   // Draw TXID from global counter and publish it with the TX type (i.e.
@@ -229,7 +231,7 @@ void Worker::AbortTx() {
     }
   });
 
-  const u64 txId = mActiveTx.mStartTs;
+  const uint64_t txId = mActiveTx.mStartTs;
   std::for_each(entries.rbegin(), entries.rend(), [&](const WALEntry* entry) {
     const auto& complexEntry = *reinterpret_cast<const WALEntryComplex*>(entry);
     mStore->mTreeRegistry->undo(complexEntry.mTreeId, complexEntry.payload,
@@ -238,7 +240,7 @@ void Worker::AbortTx() {
 
   cc.mHistoryTree->PurgeVersions(
       mWorkerId, mActiveTx.mStartTs, mActiveTx.mStartTs,
-      [&](const TXID, const TREEID, const u8*, u64, const bool) {});
+      [&](const TXID, const TREEID, const uint8_t*, uint64_t, const bool) {});
 
   if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
     // TODO: write compensation wal records between abort and finish

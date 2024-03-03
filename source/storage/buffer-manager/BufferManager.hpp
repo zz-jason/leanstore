@@ -55,18 +55,18 @@ public:
   leanstore::LeanStore* mStore;
 
   /// All the managed buffer frames in the memory.
-  u8* mBufferPool;
+  uint8_t* mBufferPool;
 
   /// Free Pages, reserved to to prevent segmentfaults.
-  const u8 mNumSaftyBfs = 10;
+  const uint8_t mNumSaftyBfs = 10;
 
   // total number of dram buffer frames
-  u64 mNumBfs;
+  uint64_t mNumBfs;
 
   /// For cooling and inflight io
-  u64 mNumPartitions;
+  uint64_t mNumPartitions;
 
-  u64 mPartitionsMask;
+  uint64_t mPartitionsMask;
 
   std::vector<std::unique_ptr<Partition>> mPartitions;
 
@@ -80,7 +80,7 @@ public:
 
 public:
   /// Get the partition ID of the page.
-  u64 GetPartitionID(PID);
+  uint64_t GetPartitionID(PID);
 
   /// Get the partition of the page.
   Partition& GetPartition(PID);
@@ -138,7 +138,7 @@ public:
 
   void Deserialize(StringMap map);
 
-  u64 ConsumedPages();
+  uint64_t ConsumedPages();
 
   /// Do something on all the buffer frames which satisify the condition
   void DoWithBufferFrameIf(std::function<bool(BufferFrame& bf)> condition,

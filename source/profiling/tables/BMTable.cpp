@@ -104,7 +104,7 @@ void BMTable::next() {
   local_phase_3_ms = Sum(PPCounters::sCounters, &PPCounters::mPhase3MS);
 
   local_total_free = 0;
-  for (u64 i = 0; i < bm.mNumPartitions; i++) {
+  for (uint64_t i = 0; i < bm.mNumPartitions; i++) {
     local_total_free += bm.GetPartition(i).mFreeBfList.mSize.load();
   }
   total = local_phase_1_ms + local_phase_2_ms + local_phase_3_ms;

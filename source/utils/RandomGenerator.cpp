@@ -7,7 +7,7 @@
 namespace leanstore {
 namespace utils {
 
-static std::atomic<u64> sMtCounter = 0;
+static std::atomic<uint64_t> sMtCounter = 0;
 
 MersenneTwister::MersenneTwister(uint64_t seed) : mMti(sNn + 1) {
   init(seed + (sMtCounter++));

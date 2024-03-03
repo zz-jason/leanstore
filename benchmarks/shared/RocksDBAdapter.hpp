@@ -26,7 +26,7 @@ struct RocksDB {
   static thread_local rocksdb::Transaction* txn;
   rocksdb::WriteOptions wo;
   rocksdb::ReadOptions ro;
-  enum class DB_TYPE : u8 { DB, TransactionDB, OptimisticDB };
+  enum class DB_TYPE : uint8_t { DB, TransactionDB, OptimisticDB };
   const DB_TYPE type;
   // -------------------------------------------------------------------------------------
   RocksDB(DB_TYPE type = DB_TYPE::DB) : type(type) {
@@ -84,19 +84,21 @@ struct RocksDB {
 };
 // -------------------------------------------------------------------------------------
 template <class Record> struct RocksDBAdapter : public Adapter<Record> {
-  using SEP = u32; // use 32-bits integer as separator instead of column family
+  using SEP =
+      uint32_t; // use 32-bits integer as separator instead of column family
   RocksDB& map;
   RocksDBAdapter(RocksDB& map) : map(map) {
   }
   // -------------------------------------------------------------------------------------
-  template <typename T> rocksdb::Slice RSlice(T* ptr, u64 len) {
+  template <typename T> rocksdb::Slice RSlice(T* ptr, uint64_t len) {
     return rocksdb::Slice(reinterpret_cast<const char*>(ptr), len);
   }
   // -------------------------------------------------------------------------------------
   void insert(const typename Record::Key& key, const Record& record) final {
-    u8 folded_key[Record::maxFoldLength() + sizeof(SEP)];
-    const u32 folded_key_len = Fold(folded_key, Record::id) +
-                               Record::foldKey(folded_key + sizeof(SEP), key);
+    uint8_t folded_key[Record::maxFoldLength() + sizeof(SEP)];
+    const uint32_t folded_key_len =
+        Fold(folded_key, Record::id) +
+        Record::foldKey(folded_key + sizeof(SEP), key);
     // -------------------------------------------------------------------------------------
     rocksdb::Status s;
     if (map.type == RocksDB::DB_TYPE::DB) {
@@ -115,9 +117,10 @@ template <class Record> struct RocksDBAdapter : public Adapter<Record> {
   // -------------------------------------------------------------------------------------
   void lookup1(const typename Record::Key& key,
                const std::function<void(const Record&)>& fn) final {
-    u8 folded_key[Record::maxFoldLength() + sizeof(SEP)];
-    const u32 folded_key_len = Fold(folded_key, Record::id) +
-                               Record::foldKey(folded_key + sizeof(SEP), key);
+    uint8_t folded_key[Record::maxFoldLength() + sizeof(SEP)];
+    const uint32_t folded_key_len =
+        Fold(folded_key, Record::id) +
+        Record::foldKey(folded_key + sizeof(SEP), key);
     // -------------------------------------------------------------------------------------
     rocksdb::PinnableSlice value;
     rocksdb::Status s;
@@ -144,9 +147,10 @@ template <class Record> struct RocksDBAdapter : public Adapter<Record> {
   }
   // -------------------------------------------------------------------------------------
   bool erase(const typename Record::Key& key) final {
-    u8 folded_key[Record::maxFoldLength() + sizeof(SEP)];
-    const u32 folded_key_len = Fold(folded_key, Record::id) +
-                               Record::foldKey(folded_key + sizeof(SEP), key);
+    uint8_t folded_key[Record::maxFoldLength() + sizeof(SEP)];
+    const uint32_t folded_key_len =
+        Fold(folded_key, Record::id) +
+        Record::foldKey(folded_key + sizeof(SEP), key);
     // -------------------------------------------------------------------------------------
     rocksdb::Status s;
     if (map.type == RocksDB::DB_TYPE::DB) {
@@ -175,16 +179,18 @@ template <class Record> struct RocksDBAdapter : public Adapter<Record> {
       const typename Record::Key& key,
       const std::function<bool(const typename Record::Key&, const Record&)>& fn,
       std::function<void()>) final {
-    u8 folded_key[Record::maxFoldLength() + sizeof(SEP)];
-    const u32 folded_key_len = Fold(folded_key, Record::id) +
-                               Record::foldKey(folded_key + sizeof(SEP), key);
+    uint8_t folded_key[Record::maxFoldLength() + sizeof(SEP)];
+    const uint32_t folded_key_len =
+        Fold(folded_key, Record::id) +
+        Record::foldKey(folded_key + sizeof(SEP), key);
     // -------------------------------------------------------------------------------------
     rocksdb::Iterator* it = map.db->NewIterator(map.ro);
     for (it->Seek(RSlice(folded_key, folded_key_len));
          it->Valid() && getId(it->key()) == Record::id; it->Next()) {
       typename Record::Key s_key;
       Record::unfoldKey(
-          reinterpret_cast<const u8*>(it->key().data() + sizeof(SEP)), s_key);
+          reinterpret_cast<const uint8_t*>(it->key().data() + sizeof(SEP)),
+          s_key);
       const Record& s_value =
           *reinterpret_cast<const Record*>(it->value().data());
       if (!fn(s_key, s_value))
@@ -198,16 +204,18 @@ template <class Record> struct RocksDBAdapter : public Adapter<Record> {
       const typename Record::Key& key,
       const std::function<bool(const typename Record::Key&, const Record&)>& fn,
       std::function<void()>) final {
-    u8 folded_key[Record::maxFoldLength() + sizeof(SEP)];
-    const u32 folded_key_len = Fold(folded_key, Record::id) +
-                               Record::foldKey(folded_key + sizeof(SEP), key);
+    uint8_t folded_key[Record::maxFoldLength() + sizeof(SEP)];
+    const uint32_t folded_key_len =
+        Fold(folded_key, Record::id) +
+        Record::foldKey(folded_key + sizeof(SEP), key);
     // -------------------------------------------------------------------------------------
     rocksdb::Iterator* it = map.db->NewIterator(map.ro);
     for (it->SeekForPrev(RSlice(folded_key, folded_key_len));
          it->Valid() && getId(it->key()) == Record::id; it->Prev()) {
       typename Record::Key s_key;
       Record::unfoldKey(
-          reinterpret_cast<const u8*>(it->key().data() + sizeof(SEP)), s_key);
+          reinterpret_cast<const uint8_t*>(it->key().data() + sizeof(SEP)),
+          s_key);
       const Record& s_value =
           *reinterpret_cast<const Record*>(it->value().data());
       if (!fn(s_key, s_value))

@@ -21,22 +21,22 @@ namespace storage {
 class ContentionStats {
 public:
   /// Represents the number of lock contentions encountered on the page.
-  u32 mNumContentions = 0;
+  uint32_t mNumContentions = 0;
 
   /// Represents the number of updates on the page.
-  u32 mNumUpdates = 0;
+  uint32_t mNumUpdates = 0;
 
   /// Represents the last updated slot id on the page.
-  s32 mLastUpdatedSlot = -1;
+  int32_t mLastUpdatedSlot = -1;
 
 public:
-  void Update(bool encounteredContention, s32 lastUpdatedSlot) {
+  void Update(bool encounteredContention, int32_t lastUpdatedSlot) {
     mNumContentions += encounteredContention;
     mNumUpdates++;
     mLastUpdatedSlot = lastUpdatedSlot;
   }
 
-  u32 ContentionPercentage() {
+  uint32_t ContentionPercentage() {
     return 100.0 * mNumContentions / mNumUpdates;
   }
 
@@ -49,7 +49,7 @@ public:
 
 class BufferFrame;
 
-enum class STATE : u8 { FREE = 0, HOT = 1, COOL = 2, LOADED = 3 };
+enum class STATE : uint8_t { FREE = 0, HOT = 1, COOL = 2, LOADED = 3 };
 
 class BufferFrameHeader {
 public:
@@ -72,7 +72,7 @@ public:
   /// ID of the last worker who has modified the containing page.  For remote
   /// flush avoidance (RFA), see "Rethinking Logging, Checkpoints, and Recovery
   /// for High-Performance Storage Engines, SIGMOD 2020" for details.
-  WORKERID mLastWriterWorker = std::numeric_limits<u8>::max();
+  WORKERID mLastWriterWorker = std::numeric_limits<uint8_t>::max();
 
   /// The flushed page sequence number of the containing page.
   LID mFlushedPSN = 0;
@@ -86,7 +86,7 @@ public:
 
   /// CRC checksum of the containing page.
   /// TODO(jian.z): should it be put to page?
-  u64 crc = 0;
+  uint64_t crc = 0;
 
 public:
   // Prerequisite: the buffer frame is exclusively locked
@@ -99,7 +99,7 @@ public:
     mNextFreeBf = nullptr;
 
     mPageId = std::numeric_limits<PID>::max();
-    mLastWriterWorker = std::numeric_limits<u8>::max();
+    mLastWriterWorker = std::numeric_limits<uint8_t>::max();
     mFlushedPSN = 0;
     mIsBeingWrittenBack.store(false, std::memory_order_release);
     mContentionStats.Reset();
@@ -137,19 +137,19 @@ public:
   /// Short for "global sequence number", increased when a page is modified.
   /// It's used to check whether the page has been read or written by
   /// transactions in other workers.
-  u64 mGSN = 0;
+  uint64_t mGSN = 0;
 
   /// The btree ID it belongs to.
   TREEID mBTreeId = std::numeric_limits<TREEID>::max();
 
   /// Used for debug, page id is stored in it when evicted to disk.
-  u64 mMagicDebuging;
+  uint64_t mMagicDebuging;
 
   /// The data stored in this page. The btree node content is stored here.
-  u8 mPayload[];
+  uint8_t mPayload[];
 
 public:
-  u64 CRC() {
+  uint64_t CRC() {
     return utils::CRC(mPayload, FLAGS_page_size - sizeof(Page));
   }
 };

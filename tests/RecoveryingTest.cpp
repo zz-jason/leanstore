@@ -39,9 +39,9 @@ protected:
 
   ~RecoveringTest() = default;
 
-  static u64 randomWorkerId() {
+  static uint64_t randomWorkerId() {
     auto numWorkers = FLAGS_worker_threads;
-    return utils::RandomGenerator::Rand<u64>(0, numWorkers);
+    return utils::RandomGenerator::Rand<uint64_t>(0, numWorkers);
   }
 };
 
@@ -77,8 +77,8 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
-      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
-                              Slice((const u8*)val.data(), val.size())),
+      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                              Slice((const uint8_t*)val.data(), val.size())),
                 OpCode::kOK);
     }
   });
@@ -105,8 +105,8 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     };
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, expectedVal] = kvToTest[i];
-      auto opCode =
-          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut);
+      auto opCode = btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
+                                  copyValueOut);
       EXPECT_EQ(opCode, OpCode::kOK);
       EXPECT_EQ(copiedValue, expectedVal);
     }
@@ -154,8 +154,8 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
     cr::Worker::My().StartTx();
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
-      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
-                              Slice((const u8*)val.data(), val.size())),
+      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                              Slice((const uint8_t*)val.data(), val.size())),
                 OpCode::kOK);
     }
     cr::Worker::My().CommitTx();
@@ -197,9 +197,9 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
     };
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, expectedVal] = kvToTest[i];
-      EXPECT_EQ(
-          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OpCode::kOK);
+      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
+                              copyValueOut),
+                OpCode::kOK);
       EXPECT_EQ(copiedValue, expectedVal);
     }
   });
@@ -230,8 +230,8 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
   };
 
   // update all the values to this newVal
-  const u64 updateDescBufSize = UpdateDesc::Size(1);
-  u8 updateDescBuf[updateDescBufSize];
+  const uint64_t updateDescBufSize = UpdateDesc::Size(1);
+  uint8_t updateDescBuf[updateDescBufSize];
   auto* updateDesc = UpdateDesc::CreateFrom(updateDescBuf);
   updateDesc->mNumSlots = 1;
   updateDesc->mUpdateSlots[0].mOffset = 0;
@@ -248,8 +248,8 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       cr::Worker::My().StartTx();
-      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
-                              Slice((const u8*)val.data(), val.size())),
+      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                              Slice((const uint8_t*)val.data(), val.size())),
                 OpCode::kOK);
       cr::Worker::My().CommitTx();
     }
@@ -264,9 +264,10 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
       for (auto j = 0u; j < 3; j++) {
         val = utils::RandomGenerator::RandAlphString(valSize);
         cr::Worker::My().StartTx();
-        EXPECT_EQ(btree->UpdatePartial(Slice((const u8*)key.data(), key.size()),
-                                       updateCallBack, *updateDesc),
-                  OpCode::kOK);
+        EXPECT_EQ(
+            btree->UpdatePartial(Slice((const uint8_t*)key.data(), key.size()),
+                                 updateCallBack, *updateDesc),
+            OpCode::kOK);
         cr::Worker::My().CommitTx();
       }
     }
@@ -308,9 +309,9 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
     };
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, expectedVal] = kvToTest[i];
-      EXPECT_EQ(
-          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OpCode::kOK);
+      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
+                              copyValueOut),
+                OpCode::kOK);
       EXPECT_EQ(copiedValue, expectedVal);
     }
   });
@@ -349,8 +350,8 @@ TEST_F(RecoveringTest, RecoverAfterRemove) {
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       cr::Worker::My().StartTx();
-      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
-                              Slice((const u8*)val.data(), val.size())),
+      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                              Slice((const uint8_t*)val.data(), val.size())),
                 OpCode::kOK);
       cr::Worker::My().CommitTx();
     }
@@ -359,7 +360,7 @@ TEST_F(RecoveringTest, RecoverAfterRemove) {
     for (size_t i = 0; i < numKVs; ++i) {
       auto& [key, val] = kvToTest[i];
       cr::Worker::My().StartTx();
-      EXPECT_EQ(btree->Remove(Slice((const u8*)key.data(), key.size())),
+      EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())),
                 OpCode::kOK);
       cr::Worker::My().CommitTx();
     }
@@ -401,9 +402,9 @@ TEST_F(RecoveringTest, RecoverAfterRemove) {
     };
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, expectedVal] = kvToTest[i];
-      EXPECT_EQ(
-          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OpCode::kNotFound);
+      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
+                              copyValueOut),
+                OpCode::kNotFound);
     }
   });
 }

@@ -9,15 +9,15 @@ namespace utils {
 
 class ScrambledZipfGenerator {
 public:
-  u64 min, max, n;
+  uint64_t min, max, n;
   ZipfGenerator zipf_generator;
   // 10000000000ul
   // [min, max)
-  ScrambledZipfGenerator(u64 min, u64 max, double theta)
+  ScrambledZipfGenerator(uint64_t min, uint64_t max, double theta)
       : min(min), max(max), n(max - min),
         zipf_generator((max - min) * 2, theta) {
   }
-  u64 rand();
+  uint64_t rand();
 };
 
 } // namespace utils

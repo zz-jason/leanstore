@@ -43,7 +43,7 @@ public:
   virtual OpCode RangeRemove(Slice staryKey, Slice endKey,
                              bool pageUsed) override;
 
-  virtual u64 CountEntries() override;
+  virtual uint64_t CountEntries() override;
 
 public:
   bool IsRangeEmpty(Slice startKey, Slice endKey);
@@ -60,10 +60,10 @@ public:
   /// update.
   /// @param[in] value The value to copy the slots from.
   /// @param[out] buffer The buffer to copy the slots to.
-  inline static void CopyToBuffer(const UpdateDesc& updateDesc, const u8* value,
-                                  u8* buffer) {
-    u64 bufferOffset = 0;
-    for (u64 i = 0; i < updateDesc.mNumSlots; i++) {
+  inline static void CopyToBuffer(const UpdateDesc& updateDesc,
+                                  const uint8_t* value, uint8_t* buffer) {
+    uint64_t bufferOffset = 0;
+    for (uint64_t i = 0; i < updateDesc.mNumSlots; i++) {
       const auto& slot = updateDesc.mUpdateSlots[i];
       std::memcpy(buffer + bufferOffset, value + slot.mOffset, slot.mSize);
       bufferOffset += slot.mSize;
@@ -76,34 +76,34 @@ public:
   /// update.
   /// @param[in] buffer The buffer to copy the slots from.
   /// @param[out] value The value to update the slots in.
-  inline static void CopyToValue(const UpdateDesc& updateDesc, const u8* buffer,
-                                 u8* value) {
-    u64 bufferOffset = 0;
-    for (u64 i = 0; i < updateDesc.mNumSlots; i++) {
+  inline static void CopyToValue(const UpdateDesc& updateDesc,
+                                 const uint8_t* buffer, uint8_t* value) {
+    uint64_t bufferOffset = 0;
+    for (uint64_t i = 0; i < updateDesc.mNumSlots; i++) {
       const auto& slot = updateDesc.mUpdateSlots[i];
       std::memcpy(value + slot.mOffset, buffer + bufferOffset, slot.mSize);
       bufferOffset += slot.mSize;
     }
   }
 
-  inline static void XorToBuffer(const UpdateDesc& updateDesc, const u8* value,
-                                 u8* buffer) {
-    u64 bufferOffset = 0;
-    for (u64 i = 0; i < updateDesc.mNumSlots; i++) {
+  inline static void XorToBuffer(const UpdateDesc& updateDesc,
+                                 const uint8_t* value, uint8_t* buffer) {
+    uint64_t bufferOffset = 0;
+    for (uint64_t i = 0; i < updateDesc.mNumSlots; i++) {
       const auto& slot = updateDesc.mUpdateSlots[i];
-      for (u64 j = 0; j < slot.mSize; j++) {
+      for (uint64_t j = 0; j < slot.mSize; j++) {
         buffer[bufferOffset + j] ^= value[slot.mOffset + j];
       }
       bufferOffset += slot.mSize;
     }
   }
 
-  inline static void XorToValue(const UpdateDesc& updateDesc, const u8* buffer,
-                                u8* value) {
-    u64 bufferOffset = 0;
-    for (u64 i = 0; i < updateDesc.mNumSlots; i++) {
+  inline static void XorToValue(const UpdateDesc& updateDesc,
+                                const uint8_t* buffer, uint8_t* value) {
+    uint64_t bufferOffset = 0;
+    for (uint64_t i = 0; i < updateDesc.mNumSlots; i++) {
       const auto& slot = updateDesc.mUpdateSlots[i];
-      for (u64 j = 0; j < slot.mSize; j++) {
+      for (uint64_t j = 0; j < slot.mSize; j++) {
         value[slot.mOffset + j] ^= buffer[bufferOffset + j];
       }
       bufferOffset += slot.mSize;

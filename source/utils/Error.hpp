@@ -9,7 +9,7 @@
 namespace leanstore {
 namespace utils {
 
-enum class ErrorCode : u64 {
+enum class ErrorCode : uint64_t {
   kGeneral = 1,
 
   // File related error code
@@ -70,11 +70,11 @@ public:
   }
 
   inline std::string ToString() const {
-    return std::format("ER-{}: {}", static_cast<u64>(mCode), mMessage);
+    return std::format("ER-{}: {}", static_cast<uint64_t>(mCode), mMessage);
   }
 
-  inline u64 Code() const {
-    return static_cast<u64>(mCode);
+  inline uint64_t Code() const {
+    return static_cast<uint64_t>(mCode);
   }
 
 public:

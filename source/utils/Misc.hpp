@@ -19,13 +19,13 @@ template <typename T1, typename T2> T1 DownCast(T2 ptr) {
 
 namespace utils {
 
-inline u32 GetBitsNeeded(u64 input) {
+inline uint32_t GetBitsNeeded(uint64_t input) {
   return std::max(std::floor(std::log2(input)) + 1, 1.0);
 }
 
 inline double CalculateMTPS(
     std::chrono::high_resolution_clock::time_point begin,
-    std::chrono::high_resolution_clock::time_point end, u64 factor) {
+    std::chrono::high_resolution_clock::time_point end, uint64_t factor) {
   double tps =
       ((factor * 1.0 /
         (std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
@@ -34,7 +34,7 @@ inline double CalculateMTPS(
   return (tps / 1000000.0);
 }
 
-inline void PinThisThread(const u64 workerId) {
+inline void PinThisThread(const uint64_t workerId) {
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
   CPU_SET(workerId, &cpuset);
@@ -45,80 +45,80 @@ inline void PinThisThread(const u64 workerId) {
   }
 }
 
-void PrintBackTrace();
-
-inline u64 AlignUp(u64 x) {
+inline uint64_t AlignUp(uint64_t x) {
   return (x + 511) & ~511ul;
 }
 
-inline u64 AlignDown(u64 x) {
+inline uint64_t AlignDown(uint64_t x) {
   return x - (x & 511);
 }
 
-u32 CRC(const u8* src, u64 size);
+uint32_t CRC(const uint8_t* src, uint64_t size);
 
 // Fold functions convert integers to a lexicographical comparable format
-inline u64 Fold(u8* writer, const u64& x) {
-  *reinterpret_cast<u64*>(writer) = __builtin_bswap64(x);
+inline uint64_t Fold(uint8_t* writer, const uint64_t& x) {
+  *reinterpret_cast<uint64_t*>(writer) = __builtin_bswap64(x);
   return sizeof(x);
 }
 
-inline u64 Fold(u8* writer, const u32& x) {
-  *reinterpret_cast<u32*>(writer) = __builtin_bswap32(x);
+inline uint64_t Fold(uint8_t* writer, const uint32_t& x) {
+  *reinterpret_cast<uint32_t*>(writer) = __builtin_bswap32(x);
   return sizeof(x);
 }
 
-inline u64 Fold(u8* writer, const u16& x) {
-  *reinterpret_cast<u16*>(writer) = __builtin_bswap16(x);
+inline uint64_t Fold(uint8_t* writer, const uint16_t& x) {
+  *reinterpret_cast<uint16_t*>(writer) = __builtin_bswap16(x);
   return sizeof(x);
 }
 
-inline u64 Fold(u8* writer, const u8& x) {
-  *reinterpret_cast<u8*>(writer) = x;
+inline uint64_t Fold(uint8_t* writer, const uint8_t& x) {
+  *reinterpret_cast<uint8_t*>(writer) = x;
   return sizeof(x);
 }
 
-inline u64 Unfold(const u8* input, u64& x) {
-  x = __builtin_bswap64(*reinterpret_cast<const u64*>(input));
+inline uint64_t Unfold(const uint8_t* input, uint64_t& x) {
+  x = __builtin_bswap64(*reinterpret_cast<const uint64_t*>(input));
   return sizeof(x);
 }
 
-inline u64 Unfold(const u8* input, u32& x) {
-  x = __builtin_bswap32(*reinterpret_cast<const u32*>(input));
+inline uint64_t Unfold(const uint8_t* input, uint32_t& x) {
+  x = __builtin_bswap32(*reinterpret_cast<const uint32_t*>(input));
   return sizeof(x);
 }
 
-inline u64 Unfold(const u8* input, u16& x) {
-  x = __builtin_bswap16(*reinterpret_cast<const u16*>(input));
+inline uint64_t Unfold(const uint8_t* input, uint16_t& x) {
+  x = __builtin_bswap16(*reinterpret_cast<const uint16_t*>(input));
   return sizeof(x);
 }
 
-inline u64 Unfold(const u8* input, u8& x) {
-  x = *reinterpret_cast<const u8*>(input);
+inline uint64_t Unfold(const uint8_t* input, uint8_t& x) {
+  x = *reinterpret_cast<const uint8_t*>(input);
   return sizeof(x);
 }
 
-inline u64 Fold(u8* writer, const s32& x) {
-  *reinterpret_cast<u32*>(writer) = __builtin_bswap32(x ^ (1ul << 31));
+inline uint64_t Fold(uint8_t* writer, const int32_t& x) {
+  *reinterpret_cast<uint32_t*>(writer) = __builtin_bswap32(x ^ (1ul << 31));
   return sizeof(x);
 }
 
-inline u64 Unfold(const u8* input, s32& x) {
-  x = __builtin_bswap32(*reinterpret_cast<const u32*>(input)) ^ (1ul << 31);
+inline uint64_t Unfold(const uint8_t* input, int32_t& x) {
+  x = __builtin_bswap32(*reinterpret_cast<const uint32_t*>(input)) ^
+      (1ul << 31);
   return sizeof(x);
 }
 
-inline u64 Fold(u8* writer, const s64& x) {
-  *reinterpret_cast<u64*>(writer) = __builtin_bswap64(x ^ (1ull << 63));
+inline uint64_t Fold(uint8_t* writer, const int64_t& x) {
+  *reinterpret_cast<uint64_t*>(writer) = __builtin_bswap64(x ^ (1ull << 63));
   return sizeof(x);
 }
 
-inline u64 Unfold(const u8* input, s64& x) {
-  x = __builtin_bswap64(*reinterpret_cast<const u64*>(input)) ^ (1ul << 63);
+inline uint64_t Unfold(const uint8_t* input, int64_t& x) {
+  x = __builtin_bswap64(*reinterpret_cast<const uint64_t*>(input)) ^
+      (1ul << 63);
   return sizeof(x);
 }
 
-inline std::string ToHex(const u8* buf, size_t size) {
+inline std::string ToHex(const uint8_t* buf, size_t size) {
   static const char kSHexDigits[] = "0123456789ABCDEF";
   std::string output;
   output.reserve(size * 2);
@@ -130,7 +130,7 @@ inline std::string ToHex(const u8* buf, size_t size) {
 }
 
 inline std::string StringToHex(const std::string& input) {
-  return ToHex((u8*)input.data(), input.size());
+  return ToHex((uint8_t*)input.data(), input.size());
 }
 
 template <typename T> std::unique_ptr<T[]> ScopedArray(size_t size) {
@@ -144,11 +144,12 @@ JumpScoped<std::unique_ptr<T[]>> JumpScopedArray(size_t size) {
 
 template <size_t Alignment = 512> class AlignedBuffer {
 public:
-  alignas(Alignment) u8* mBuffer;
+  alignas(Alignment) uint8_t* mBuffer;
 
 public:
   AlignedBuffer(size_t size)
-      : mBuffer(reinterpret_cast<u8*>(std::aligned_alloc(Alignment, size))) {
+      : mBuffer(
+            reinterpret_cast<uint8_t*>(std::aligned_alloc(Alignment, size))) {
   }
 
   ~AlignedBuffer() {
@@ -159,7 +160,7 @@ public:
   }
 
 public:
-  u8* Get() {
+  uint8_t* Get() {
     return mBuffer;
   }
 
@@ -169,11 +170,11 @@ public:
 };
 
 struct Timer {
-  std::atomic<u64>& mTimeCounterUS;
+  std::atomic<uint64_t>& mTimeCounterUS;
 
   std::chrono::high_resolution_clock::time_point mStartTimePoint;
 
-  Timer(std::atomic<u64>& timeCounterUS) : mTimeCounterUS(timeCounterUS) {
+  Timer(std::atomic<uint64_t>& timeCounterUS) : mTimeCounterUS(timeCounterUS) {
     if (FLAGS_measure_time) {
       mStartTimePoint = std::chrono::high_resolution_clock::now();
     }
@@ -182,7 +183,7 @@ struct Timer {
   ~Timer() {
     if (FLAGS_measure_time) {
       auto endTimePoint = std::chrono::high_resolution_clock::now();
-      const u64 duration =
+      const uint64_t duration =
           std::chrono::duration_cast<std::chrono::microseconds>(endTimePoint -
                                                                 mStartTimePoint)
               .count();
