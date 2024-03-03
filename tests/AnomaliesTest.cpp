@@ -1,5 +1,4 @@
 #include "TxKV.hpp"
-#include "concurrency-recovery/Transaction.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <gtest/gtest.h>
@@ -27,13 +26,13 @@ protected:
     auto curTestName = std::string(curTest->test_case_name()) + "_" +
                        std::string(curTest->name());
     std::string storeDir = "/tmp/" + curTestName;
-    u32 sessionLimit = 4;
+    uint32_t sessionLimit = 4;
     mStore = StoreFactory::NewLeanStoreMVCC(storeDir, sessionLimit);
     ASSERT_NE(mStore, nullptr);
 
     // Set transaction isolation to SI before transaction tests, get ride of
     // tests running before which changed the isolation level.
-    for (u32 i = 0; i < sessionLimit; ++i) {
+    for (uint32_t i = 0; i < sessionLimit; ++i) {
       mStore->GetSession(i)->SetIsolationLevel(
           IsolationLevel::kSnapshotIsolation);
     }
@@ -49,8 +48,8 @@ protected:
     // Insert 2 key-values as the test base.
     std::string key1("1"), val1("10");
     std::string key2("2"), val2("20");
-    ASSERT_TRUE(s0->Put(mTbl, ToSlice(key1), ToSlice(val1), true));
-    ASSERT_TRUE(s0->Put(mTbl, ToSlice(key2), ToSlice(val2), true));
+    ASSERT_TRUE(s0->Put(mTbl, key1, ToSlice(val1), true));
+    ASSERT_TRUE(s0->Put(mTbl, key2, ToSlice(val2), true));
   }
 
   void TearDown() override {
@@ -79,20 +78,20 @@ TEST_F(AnomaliesTest, NoG0) {
   s2->SetIsolationLevel(IsolationLevel::kSnapshotIsolation);
   s1->StartTx();
   s2->StartTx();
-  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
-  EXPECT_FALSE(s2->Update(mTbl, ToSlice(key1), ToSlice(newVal12)));
-  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key2), ToSlice(newVal21)));
+  EXPECT_TRUE(s1->Update(mTbl, key1, ToSlice(newVal11)));
+  EXPECT_FALSE(s2->Update(mTbl, key1, ToSlice(newVal12)));
+  EXPECT_TRUE(s1->Update(mTbl, key2, ToSlice(newVal21)));
   s1->CommitTx();
-  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key1), res, true));
+  EXPECT_TRUE(s1->Get(mTbl, key1, res, true));
   EXPECT_EQ(res, newVal11);
-  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key2), res, true));
+  EXPECT_TRUE(s1->Get(mTbl, key2, res, true));
   EXPECT_EQ(res, newVal21);
 
-  EXPECT_FALSE(s2->Update(mTbl, ToSlice(key2), ToSlice(newVal22)));
+  EXPECT_FALSE(s2->Update(mTbl, key2, ToSlice(newVal22)));
   s2->CommitTx();
-  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res, true));
+  EXPECT_TRUE(s2->Get(mTbl, key1, res, true));
   EXPECT_EQ(res, newVal11);
-  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key2), res, true));
+  EXPECT_TRUE(s2->Get(mTbl, key2, res, true));
   EXPECT_EQ(res, newVal21);
 
   // Serializable can prevent G0
@@ -100,20 +99,20 @@ TEST_F(AnomaliesTest, NoG0) {
   s2->SetIsolationLevel(IsolationLevel::kSerializable);
   s1->StartTx();
   s2->StartTx();
-  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
-  EXPECT_FALSE(s2->Update(mTbl, ToSlice(key1), ToSlice(newVal12)));
-  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key2), ToSlice(newVal21)));
+  EXPECT_TRUE(s1->Update(mTbl, key1, ToSlice(newVal11)));
+  EXPECT_FALSE(s2->Update(mTbl, key1, ToSlice(newVal12)));
+  EXPECT_TRUE(s1->Update(mTbl, key2, ToSlice(newVal21)));
   s1->CommitTx();
-  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key1), res, true));
+  EXPECT_TRUE(s1->Get(mTbl, key1, res, true));
   EXPECT_EQ(res, newVal11);
-  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key2), res, true));
+  EXPECT_TRUE(s1->Get(mTbl, key2, res, true));
   EXPECT_EQ(res, newVal21);
 
-  EXPECT_FALSE(s2->Update(mTbl, ToSlice(key2), ToSlice(newVal22)));
+  EXPECT_FALSE(s2->Update(mTbl, key2, ToSlice(newVal22)));
   s2->CommitTx();
-  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res, true));
+  EXPECT_TRUE(s2->Get(mTbl, key1, res, true));
   EXPECT_EQ(res, newVal11);
-  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key2), res, true));
+  EXPECT_TRUE(s2->Get(mTbl, key2, res, true));
   EXPECT_EQ(res, newVal21);
 }
 
@@ -131,11 +130,11 @@ TEST_F(AnomaliesTest, NoG1a) {
 
   s1->StartTx();
   s2->StartTx();
-  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
-  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res));
+  EXPECT_TRUE(s1->Update(mTbl, key1, ToSlice(newVal11)));
+  EXPECT_TRUE(s2->Get(mTbl, key1, res));
   EXPECT_EQ(res, "10");
   s1->AbortTx();
-  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res));
+  EXPECT_TRUE(s2->Get(mTbl, key1, res));
   EXPECT_EQ(res, "10");
   s2->CommitTx();
 }
@@ -154,11 +153,11 @@ TEST_F(AnomaliesTest, NoG1b) {
 
   s1->StartTx();
   s2->StartTx();
-  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
-  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res));
+  EXPECT_TRUE(s1->Update(mTbl, key1, ToSlice(newVal11)));
+  EXPECT_TRUE(s2->Get(mTbl, key1, res));
   EXPECT_EQ(res, "10");
   s1->CommitTx();
-  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res));
+  EXPECT_TRUE(s2->Get(mTbl, key1, res));
   EXPECT_EQ(res, "10");
   s2->CommitTx();
 }
@@ -177,15 +176,15 @@ TEST_F(AnomaliesTest, NoG1c) {
 
   s1->StartTx();
   s2->StartTx();
-  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
-  EXPECT_TRUE(s2->Update(mTbl, ToSlice(key2), ToSlice(newVal22)));
+  EXPECT_TRUE(s1->Update(mTbl, key1, ToSlice(newVal11)));
+  EXPECT_TRUE(s2->Update(mTbl, key2, ToSlice(newVal22)));
 
-  auto res = s1->Get(mTbl, ToSlice(key2), valRead);
+  auto res = s1->Get(mTbl, key2, valRead);
   EXPECT_TRUE(res);
   EXPECT_TRUE(res.value() == 1);
   EXPECT_EQ(valRead, "20");
 
-  res = s2->Get(mTbl, ToSlice(key1), valRead);
+  res = s2->Get(mTbl, key1, valRead);
   EXPECT_TRUE(res);
   EXPECT_TRUE(res.value() == 1);
   EXPECT_EQ(valRead, "10");
@@ -210,21 +209,21 @@ TEST_F(AnomaliesTest, NoOTV) {
   s1->StartTx();
   s2->StartTx();
   s3->StartTx();
-  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
-  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key2), ToSlice(newVal21)));
+  EXPECT_TRUE(s1->Update(mTbl, key1, ToSlice(newVal11)));
+  EXPECT_TRUE(s1->Update(mTbl, key2, ToSlice(newVal21)));
   // update conflict
-  EXPECT_FALSE(s2->Update(mTbl, ToSlice(key1), ToSlice(newVal12)));
+  EXPECT_FALSE(s2->Update(mTbl, key1, ToSlice(newVal12)));
   s1->CommitTx();
-  EXPECT_TRUE(s3->Get(mTbl, ToSlice(key1), res));
+  EXPECT_TRUE(s3->Get(mTbl, key1, res));
   EXPECT_EQ(res, "10");
   // update conflict
-  EXPECT_FALSE(s2->Update(mTbl, ToSlice(key2), ToSlice(newVal22)));
-  EXPECT_TRUE(s3->Get(mTbl, ToSlice(key2), res));
+  EXPECT_FALSE(s2->Update(mTbl, key2, ToSlice(newVal22)));
+  EXPECT_TRUE(s3->Get(mTbl, key2, res));
   EXPECT_EQ(res, "20");
   s2->CommitTx();
-  EXPECT_TRUE(s3->Get(mTbl, ToSlice(key1), res));
+  EXPECT_TRUE(s3->Get(mTbl, key1, res));
   EXPECT_EQ(res, "10");
-  EXPECT_TRUE(s3->Get(mTbl, ToSlice(key2), res));
+  EXPECT_TRUE(s3->Get(mTbl, key2, res));
   EXPECT_EQ(res, "20");
   s3->CommitTx();
 }
@@ -264,12 +263,12 @@ TEST_F(AnomaliesTest, NoP4) {
 
   s1->StartTx();
   s2->StartTx();
-  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key1), res));
+  EXPECT_TRUE(s1->Get(mTbl, key1, res));
   EXPECT_EQ(res, "10");
-  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res));
+  EXPECT_TRUE(s2->Get(mTbl, key1, res));
   EXPECT_EQ(res, "10");
-  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
-  EXPECT_FALSE(s2->Update(mTbl, ToSlice(key1), ToSlice(newVal12)));
+  EXPECT_TRUE(s1->Update(mTbl, key1, ToSlice(newVal11)));
+  EXPECT_FALSE(s2->Update(mTbl, key1, ToSlice(newVal12)));
   s1->CommitTx();
   s2->AbortTx();
 }
@@ -286,16 +285,16 @@ TEST_F(AnomaliesTest, NoGSingle) {
 
   s1->StartTx();
   s2->StartTx();
-  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key1), res));
+  EXPECT_TRUE(s1->Get(mTbl, key1, res));
   EXPECT_EQ(res, "10");
-  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res));
+  EXPECT_TRUE(s2->Get(mTbl, key1, res));
   EXPECT_EQ(res, "10");
-  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key2), res));
+  EXPECT_TRUE(s2->Get(mTbl, key2, res));
   EXPECT_EQ(res, "20");
-  EXPECT_TRUE(s2->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
-  EXPECT_TRUE(s2->Update(mTbl, ToSlice(key2), ToSlice(newVal21)));
+  EXPECT_TRUE(s2->Update(mTbl, key1, ToSlice(newVal11)));
+  EXPECT_TRUE(s2->Update(mTbl, key2, ToSlice(newVal21)));
   s2->CommitTx();
-  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key2), res));
+  EXPECT_TRUE(s1->Get(mTbl, key2, res));
   EXPECT_EQ(res, "20");
   s1->CommitTx();
 }
@@ -312,18 +311,18 @@ TEST_F(AnomaliesTest, G2Item) {
   s1->StartTx();
   s2->StartTx();
 
-  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key1), res));
+  EXPECT_TRUE(s1->Get(mTbl, key1, res));
   EXPECT_EQ(res, "10");
-  EXPECT_TRUE(s1->Get(mTbl, ToSlice(key2), res));
+  EXPECT_TRUE(s1->Get(mTbl, key2, res));
   EXPECT_EQ(res, "20");
 
-  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key1), res));
+  EXPECT_TRUE(s2->Get(mTbl, key1, res));
   EXPECT_EQ(res, "10");
-  EXPECT_TRUE(s2->Get(mTbl, ToSlice(key2), res));
+  EXPECT_TRUE(s2->Get(mTbl, key2, res));
   EXPECT_EQ(res, "20");
 
-  EXPECT_TRUE(s1->Update(mTbl, ToSlice(key1), ToSlice(newVal11)));
-  EXPECT_TRUE(s2->Update(mTbl, ToSlice(key2), ToSlice(newVal21)));
+  EXPECT_TRUE(s1->Update(mTbl, key1, ToSlice(newVal11)));
+  EXPECT_TRUE(s2->Update(mTbl, key2, ToSlice(newVal21)));
 
   s1->CommitTx();
   s2->CommitTx();

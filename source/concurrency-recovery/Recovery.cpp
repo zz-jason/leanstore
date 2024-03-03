@@ -20,10 +20,10 @@ using namespace leanstore::storage::btree;
 std::expected<void, utils::Error> Recovery::analysis() {
   // asume that each WALEntry is smaller than the page size
   utils::AlignedBuffer<512> alignedBuffer(mStore->mStoreOption.mPageSize);
-  u8* walEntryPtr = alignedBuffer.Get();
-  u64 walEntrySize = sizeof(WALEntry);
+  uint8_t* walEntryPtr = alignedBuffer.Get();
+  uint64_t walEntrySize = sizeof(WALEntry);
   for (auto offset = mWalStartOffset; offset < mWalSize;) {
-    u64 bytesRead = 0;
+    uint64_t bytesRead = 0;
     if (auto res = readWalEntry(offset, walEntrySize, walEntryPtr); !res) {
       return std::unexpected(res.error());
     }
@@ -98,8 +98,8 @@ std::expected<void, utils::Error> Recovery::analysis() {
 std::expected<void, utils::Error> Recovery::redo() {
   // asume that each WALEntry is smaller than the page size
   utils::AlignedBuffer<512> alignedBuffer(mStore->mStoreOption.mPageSize);
-  u8* walEntryPtr = alignedBuffer.Get();
-  u64 walEntrySize = sizeof(WALEntry);
+  uint8_t* walEntryPtr = alignedBuffer.Get();
+  uint64_t walEntrySize = sizeof(WALEntry);
 
   for (auto offset = mWalStartOffset; offset < mWalSize;) {
     auto bytesRead = 0;
@@ -142,7 +142,7 @@ std::expected<void, utils::Error> Recovery::redo() {
       GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
                                                 std::move(guard), &bf);
 
-      s32 slotId = -1;
+      int32_t slotId = -1;
       TransactionKV::InsertToNode(guardedNode, walInsert->GetKey(),
                                   walInsert->GetVal(), complexEntry->mWorkerId,
                                   complexEntry->mTxId, complexEntry->mTxMode,
@@ -155,7 +155,7 @@ std::expected<void, utils::Error> Recovery::redo() {
       GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
                                                 std::move(guard), &bf);
 
-      s32 slotId = -1;
+      int32_t slotId = -1;
       TransactionKV::InsertToNode(guardedNode, walInsert->GetKey(),
                                   walInsert->GetVal(), complexEntry->mWorkerId,
                                   complexEntry->mTxId, complexEntry->mTxMode,
@@ -184,7 +184,7 @@ std::expected<void, utils::Error> Recovery::redo() {
 
       // 1. copy xor result to buff
       auto deltaSize = wal->GetDeltaSize();
-      u8 buff[deltaSize];
+      uint8_t buff[deltaSize];
       std::memcpy(buff, wal->GetDeltaPtr(), deltaSize);
 
       // 2. calculate new value based on xor result and old value
@@ -197,7 +197,7 @@ std::expected<void, utils::Error> Recovery::redo() {
     }
     case WALPayload::TYPE::WALRemove: {
       DCHECK(false) << "Unhandled WALPayload::TYPE: "
-                    << std::to_string(static_cast<u64>(walPayload->mType));
+                    << std::to_string(static_cast<uint64_t>(walPayload->mType));
       break;
     }
     case WALPayload::TYPE::WALTxRemove: {
@@ -318,7 +318,7 @@ std::expected<void, utils::Error> Recovery::redo() {
       auto sepInfo = BTreeNode::SeparatorInfo(
           wal->mSeparatorSize, wal->mSplitSlot, wal->mSeparatorTruncated);
 
-      const u16 spaceNeededForSeparator =
+      const uint16_t spaceNeededForSeparator =
           guardedParent->spaceNeeded(sepInfo.mSize, sizeof(Swip));
       xGuardedParent->requestSpaceFor(spaceNeededForSeparator);
       xGuardedChild->Split(xGuardedParent, xGuardedNewLeft, sepInfo);
@@ -326,7 +326,7 @@ std::expected<void, utils::Error> Recovery::redo() {
     }
     default: {
       DCHECK(false) << "Unhandled WALPayload::TYPE: "
-                    << std::to_string(static_cast<u64>(walPayload->mType));
+                    << std::to_string(static_cast<uint64_t>(walPayload->mType));
     }
     }
 

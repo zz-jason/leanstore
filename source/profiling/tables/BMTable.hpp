@@ -15,19 +15,19 @@ class BMTable : public ProfilingTable {
 private:
   leanstore::storage::BufferManager& bm;
 
-  s64 local_phase_1_ms = 0;
+  int64_t local_phase_1_ms = 0;
 
-  s64 local_phase_2_ms = 0;
+  int64_t local_phase_2_ms = 0;
 
-  s64 local_phase_3_ms = 0;
+  int64_t local_phase_3_ms = 0;
 
-  s64 local_poll_ms = 0;
+  int64_t local_poll_ms = 0;
 
-  s64 total;
+  int64_t total;
 
-  u64 local_total_free;
+  uint64_t local_total_free;
 
-  s64 local_total_cool;
+  int64_t local_total_cool;
 
 public:
   BMTable(leanstore::storage::BufferManager& bm);

@@ -17,13 +17,13 @@ using namespace leanstore::storage::btree;
 namespace leanstore::cr {
 
 void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
-                             TREEID treeId, bool isRemove, u64 versionSize,
-                             std::function<void(u8*)> insertCallBack,
+                             TREEID treeId, bool isRemove, uint64_t versionSize,
+                             std::function<void(uint8_t*)> insertCallBack,
                              bool sameThread) {
   // Compose the key to be inserted
   auto keySize = sizeof(txId) + sizeof(commandId);
-  u8 keyBuffer[keySize];
-  u64 offset = 0;
+  uint8_t keyBuffer[keySize];
+  uint64_t offset = 0;
   offset += utils::Fold(keyBuffer + offset, txId);
   offset += utils::Fold(keyBuffer + offset, commandId);
   Slice key(keyBuffer, keySize);
@@ -110,12 +110,12 @@ void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
 bool HistoryTree::GetVersion(WORKERID prevWorkerId, TXID prevTxId,
                              COMMANDID prevCommandId,
                              const bool isRemoveCommand,
-                             std::function<void(const u8*, u64)> cb) {
+                             std::function<void(const uint8_t*, uint64_t)> cb) {
   volatile BasicKV* btree = (isRemoveCommand) ? mRemoveBTrees[prevWorkerId]
                                               : mUpdateBTrees[prevWorkerId];
-  const u64 keySize = sizeof(prevTxId) + sizeof(prevCommandId);
-  u8 keyBuffer[keySize];
-  u64 offset = 0;
+  const uint64_t keySize = sizeof(prevTxId) + sizeof(prevCommandId);
+  uint8_t keyBuffer[keySize];
+  uint64_t offset = 0;
   offset += utils::Fold(keyBuffer + offset, prevTxId);
   offset += utils::Fold(keyBuffer + offset, prevCommandId);
 
@@ -143,15 +143,15 @@ bool HistoryTree::GetVersion(WORKERID prevWorkerId, TXID prevTxId,
 
 void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
                                 RemoveVersionCallback onRemoveVersion,
-                                [[maybe_unused]] const u64 limit) {
+                                [[maybe_unused]] const uint64_t limit) {
   auto keySize = sizeof(toTxId);
-  u8 keyBuffer[FLAGS_page_size];
+  uint8_t keyBuffer[FLAGS_page_size];
   utils::Fold(keyBuffer, fromTxId);
   Slice key(keyBuffer, keySize);
 
-  u8 payload[FLAGS_page_size];
-  u16 payloadSize;
-  u64 versionsRemoved = 0;
+  uint8_t payload[FLAGS_page_size];
+  uint16_t payloadSize;
+  uint64_t versionsRemoved = 0;
 
   // purge remove versions
   auto* btree = mRemoveBTrees[workerId];
@@ -227,7 +227,7 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
       auto* leafNode = reinterpret_cast<BTreeNode*>(bf->page.mPayload);
       if (leafNode->mLowerFence.length == 0) {
         auto lastKeySize = leafNode->getFullKeyLen(leafNode->mNumSeps - 1);
-        u8 lastKey[lastKeySize];
+        uint8_t lastKey[lastKeySize];
         leafNode->copyFullKey(leafNode->mNumSeps - 1, lastKey);
 
         // optimistic unlock, jump if invalid
@@ -273,7 +273,7 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
 
             // get the transaction id in the first key
             auto firstKeySize = guardedLeaf->getFullKeyLen(0);
-            u8 firstKey[firstKeySize];
+            uint8_t firstKey[firstKeySize];
             guardedLeaf->copyFullKey(0, firstKey);
             TXID txIdInFirstKey;
             utils::Unfold(firstKey, txIdInFirstKey);
@@ -281,7 +281,7 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
             // get the transaction id in the last key
             auto lastKeySize =
                 guardedLeaf->getFullKeyLen(guardedLeaf->mNumSeps - 1);
-            u8 lastKey[lastKeySize];
+            uint8_t lastKey[lastKeySize];
             guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, lastKey);
             TXID txIdInLastKey;
             utils::Unfold(lastKey, txIdInLastKey);
@@ -318,13 +318,13 @@ void HistoryTree::VisitRemovedVersions(WORKERID workerId, TXID fromTxId,
                                        RemoveVersionCallback onRemoveVersion) {
   auto* removeTree = mRemoveBTrees[workerId];
   auto keySize = sizeof(toTxId);
-  u8 keyBuffer[FLAGS_page_size];
+  uint8_t keyBuffer[FLAGS_page_size];
 
-  u64 offset = 0;
+  uint64_t offset = 0;
   offset += utils::Fold(keyBuffer + offset, fromTxId);
   Slice key(keyBuffer, keySize);
-  u8 payload[FLAGS_page_size];
-  u16 payloadSize;
+  uint8_t payload[FLAGS_page_size];
+  uint16_t payloadSize;
 
   JUMPMU_TRY() {
   restart : {

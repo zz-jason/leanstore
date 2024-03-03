@@ -32,7 +32,7 @@ namespace btree {
 
 class WALPayload {
 public:
-  enum class TYPE : u8 { DO_WITH_TYPES(DECR_TYPE) };
+  enum class TYPE : uint8_t { DO_WITH_TYPES(DECR_TYPE) };
 
 public:
   /// Type of WALPayload
@@ -77,9 +77,9 @@ struct WalSplitRoot : WALPayload {
 
   PID mMetaNode;
 
-  u16 mSplitSlot;
+  uint16_t mSplitSlot;
 
-  u16 mSeparatorSize;
+  uint16_t mSeparatorSize;
 
   bool mSeparatorTruncated;
 
@@ -102,9 +102,9 @@ struct WalSplitNonRoot : WALPayload {
 
   PID mNewLeft = -1;
 
-  u16 mSplitSlot;
+  uint16_t mSplitSlot;
 
-  u16 mSeparatorSize;
+  uint16_t mSeparatorSize;
 
   bool mSeparatorTruncated;
 
@@ -125,11 +125,11 @@ struct WalSplitNonRoot : WALPayload {
 };
 
 struct WALInsert : WALPayload {
-  u16 mKeySize;
+  uint16_t mKeySize;
 
-  u16 mValSize;
+  uint16_t mValSize;
 
-  u8 mPayload[];
+  uint8_t mPayload[];
 
   WALInsert(Slice key, Slice val)
       : WALPayload(TYPE::kWalInsert),
@@ -151,9 +151,9 @@ struct WALInsert : WALPayload {
 };
 
 struct WALTxInsert : WALPayload {
-  u16 mKeySize;
+  uint16_t mKeySize;
 
-  u16 mValSize;
+  uint16_t mValSize;
 
   WORKERID mPrevWorkerId;
 
@@ -161,7 +161,7 @@ struct WALTxInsert : WALPayload {
 
   COMMANDID mPrevCommandId;
 
-  u8 mPayload[];
+  uint8_t mPayload[];
 
   WALTxInsert(Slice key, Slice val, WORKERID prevWorkerId, TXID prevTxId,
               COMMANDID prevCommandId)
@@ -187,19 +187,19 @@ struct WALTxInsert : WALPayload {
 };
 
 struct WALUpdate : WALPayload {
-  u16 mKeySize;
+  uint16_t mKeySize;
 
-  u16 mDeltaLength;
+  uint16_t mDeltaLength;
 
-  u8 mPayload[];
+  uint8_t mPayload[];
 };
 
 struct WALTxUpdate : WALPayload {
-  u16 mKeySize;
+  uint16_t mKeySize;
 
-  u64 mUpdateDescSize;
+  uint64_t mUpdateDescSize;
 
-  u64 mDeltaSize;
+  uint64_t mDeltaSize;
 
   WORKERID mPrevWorkerId;
 
@@ -209,10 +209,11 @@ struct WALTxUpdate : WALPayload {
   COMMANDID mXorCommandId;
 
   // Stores key, UpdateDesc, and Delta in order
-  u8 mPayload[];
+  uint8_t mPayload[];
 
-  WALTxUpdate(Slice key, UpdateDesc& updateDesc, u64 sizeOfUpdateDescAndDelta,
-              WORKERID prevWorkerId, TXID prevTxId, COMMANDID xorCommandId)
+  WALTxUpdate(Slice key, UpdateDesc& updateDesc,
+              uint64_t sizeOfUpdateDescAndDelta, WORKERID prevWorkerId,
+              TXID prevTxId, COMMANDID xorCommandId)
       : WALPayload(TYPE::WALTxUpdate),
         mKeySize(key.size()),
         mUpdateDescSize(updateDesc.Size()),
@@ -239,25 +240,25 @@ struct WALTxUpdate : WALPayload {
     return updateDesc;
   }
 
-  inline u8* GetDeltaPtr() {
+  inline uint8_t* GetDeltaPtr() {
     return mPayload + mKeySize + mUpdateDescSize;
   }
 
-  inline const u8* GetDeltaPtr() const {
+  inline const uint8_t* GetDeltaPtr() const {
     return mPayload + mKeySize + mUpdateDescSize;
   }
 
-  u64 GetDeltaSize() const {
+  uint64_t GetDeltaSize() const {
     return mDeltaSize;
   }
 };
 
 struct WALRemove : WALPayload {
-  u16 mKeySize;
+  uint16_t mKeySize;
 
-  u16 mValSize;
+  uint16_t mValSize;
 
-  u8 mPayload[];
+  uint8_t mPayload[];
 
   WALRemove(Slice key, Slice val)
       : WALPayload(TYPE::WALRemove),
@@ -269,9 +270,9 @@ struct WALRemove : WALPayload {
 };
 
 struct WALTxRemove : WALPayload {
-  u16 mKeySize;
+  uint16_t mKeySize;
 
-  u16 mValSize;
+  uint16_t mValSize;
 
   WORKERID mPrevWorkerId;
 
@@ -279,7 +280,7 @@ struct WALTxRemove : WALPayload {
 
   COMMANDID mPrevCommandId;
 
-  u8 mPayload[];
+  uint8_t mPayload[];
 
   WALTxRemove(Slice key, Slice val, WORKERID prevWorkerId, TXID prevTxId,
               COMMANDID prevCommandId)

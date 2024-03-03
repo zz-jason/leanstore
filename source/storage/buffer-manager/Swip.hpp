@@ -21,7 +21,7 @@ class BufferFrame;
 class Swip {
 public:
   union {
-    u64 mPageId;
+    uint64_t mPageId;
     BufferFrame* mBf;
   };
 
@@ -67,7 +67,7 @@ public:
     return mPageId == 0;
   }
 
-  u64 AsPageId() {
+  uint64_t AsPageId() {
     DCHECK(IsEvicted());
     return mPageId & sEvictedMask;
   }
@@ -83,7 +83,7 @@ public:
     return *reinterpret_cast<BufferFrame*>(mPageId & sHotMask);
   }
 
-  u64 Raw() const {
+  uint64_t Raw() const {
     return mPageId;
   }
 
@@ -109,11 +109,11 @@ private:
   // 01xxxxxxxxxxx cool
   // 00xxxxxxxxxxx hot
 
-  static const u64 sEvictedBit = u64(1) << 63;
-  static const u64 sEvictedMask = ~(u64(1) << 63);
-  static const u64 sCoolBit = u64(1) << 62;
-  static const u64 sCoolMask = ~(u64(1) << 62);
-  static const u64 sHotMask = ~(u64(3) << 62);
+  static const uint64_t sEvictedBit = uint64_t(1) << 63;
+  static const uint64_t sEvictedMask = ~(uint64_t(1) << 63);
+  static const uint64_t sCoolBit = uint64_t(1) << 62;
+  static const uint64_t sCoolMask = ~(uint64_t(1) << 62);
+  static const uint64_t sHotMask = ~(uint64_t(3) << 62);
 
   static_assert(sEvictedBit == 0x8000000000000000, "");
   static_assert(sEvictedMask == 0x7FFFFFFFFFFFFFFF, "");

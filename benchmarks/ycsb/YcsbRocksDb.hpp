@@ -58,14 +58,14 @@ public:
 
     utils::Parallelize::range(
         FLAGS_worker_threads, FLAGS_ycsb_record_count,
-        [&](u64, u64 begin, u64 end) {
-          for (u64 i = begin; i < end; i++) {
+        [&](uint64_t, uint64_t begin, uint64_t end) {
+          for (uint64_t i = begin; i < end; i++) {
             // generate key
-            u8 key[FLAGS_ycsb_key_size];
+            uint8_t key[FLAGS_ycsb_key_size];
             GenYcsbKey(zipfRandom, key);
 
             // generate value
-            u8 val[FLAGS_ycsb_val_size];
+            uint8_t val[FLAGS_ycsb_val_size];
             utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
 
             auto status =
@@ -86,8 +86,8 @@ public:
     auto zipfRandom = utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count,
                                                     FLAGS_zipf_factor);
     std::atomic<bool> keepRunning = true;
-    std::vector<std::atomic<u64>> threadCommitted(FLAGS_worker_threads);
-    std::vector<std::atomic<u64>> threadAborted(FLAGS_worker_threads);
+    std::vector<std::atomic<uint64_t>> threadCommitted(FLAGS_worker_threads);
+    std::vector<std::atomic<uint64_t>> threadAborted(FLAGS_worker_threads);
     // init counters
     for (auto& c : threadCommitted) {
       c = 0;
@@ -96,9 +96,9 @@ public:
       a = 0;
     }
 
-    for (u64 workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
+    for (uint64_t workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
       std::thread([&, workerId]() {
-        u8 key[FLAGS_ycsb_key_size];
+        uint8_t key[FLAGS_ycsb_key_size];
         std::string valRead;
         while (keepRunning) {
           switch (workloadType) {
@@ -131,7 +131,7 @@ public:
           }
           default: {
             LOG(FATAL) << "Unsupported workload type: "
-                       << static_cast<u8>(workloadType);
+                       << static_cast<uint8_t>(workloadType);
           }
           }
           threadCommitted[workerId]++;
@@ -140,7 +140,7 @@ public:
     }
 
     auto reportPeriod = 1;
-    for (u64 i = 0; i < FLAGS_ycsb_run_for_seconds; i += reportPeriod) {
+    for (uint64_t i = 0; i < FLAGS_ycsb_run_for_seconds; i += reportPeriod) {
       sleep(reportPeriod);
       auto committed = 0;
       auto aborted = 0;

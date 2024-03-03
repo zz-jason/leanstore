@@ -8,7 +8,6 @@
 #include "LeanStore.hpp"
 #include "Partition.hpp"
 #include "Swip.hpp"
-#include "Tracing.hpp"
 #include "TreeRegistry.hpp"
 #include "profiling/counters/CPUCounters.hpp"
 #include "profiling/counters/PPCounters.hpp"
@@ -24,7 +23,6 @@
 #include <glog/logging.h>
 
 #include <mutex>
-#include <unordered_map>
 
 #include <fcntl.h>
 #include <sys/resource.h>
@@ -41,7 +39,7 @@ private:
 
   BufferFrame* mLast = nullptr;
 
-  u64 mSize = 0;
+  uint64_t mSize = 0;
 
 public:
   void Reset() {
@@ -55,7 +53,7 @@ public:
     Reset();
   }
 
-  u64 Size() {
+  uint64_t Size() {
     return mSize;
   }
 
@@ -73,11 +71,11 @@ public:
 class BufferFrameProvider : public utils::UserThread {
 public:
   leanstore::LeanStore* mStore;
-  const u64 mNumBfs;
-  u8* mBufferPool;
+  const uint64_t mNumBfs;
+  uint8_t* mBufferPool;
 
-  const u64 mNumPartitions;
-  const u64 mPartitionsMask;
+  const uint64_t mNumPartitions;
+  const uint64_t mPartitionsMask;
   std::vector<std::unique_ptr<Partition>>& mPartitions;
 
   const int mFD;
@@ -89,8 +87,9 @@ public:
 
 public:
   BufferFrameProvider(leanstore::LeanStore* store,
-                      const std::string& threadName, u64 runningCPU, u64 numBfs,
-                      u8* bfs, u64 numPartitions, u64 partitionMask,
+                      const std::string& threadName, uint64_t runningCPU,
+                      uint64_t numBfs, uint8_t* bfs, uint64_t numPartitions,
+                      uint64_t partitionMask,
                       std::vector<std::unique_ptr<Partition>>& partitions)
       : utils::UserThread(threadName, runningCPU),
         mStore(store),
@@ -152,7 +151,7 @@ protected:
 private:
   inline void randomBufferFramesToCoolOrEvict() {
     mCoolCandidateBfs.clear();
-    for (u64 i = 0; i < FLAGS_buffer_frame_recycle_batch_size; i++) {
+    for (uint64_t i = 0; i < FLAGS_buffer_frame_recycle_batch_size; i++) {
       auto* randomBf = randomBufferFrame();
       DO_NOT_OPTIMIZE(randomBf->header.state);
       mCoolCandidateBfs.push_back(randomBf);
@@ -160,17 +159,17 @@ private:
   }
 
   inline BufferFrame* randomBufferFrame() {
-    auto i = utils::RandomGenerator::Rand<u64>(0, mNumBfs);
+    auto i = utils::RandomGenerator::Rand<uint64_t>(0, mNumBfs);
     auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
     return reinterpret_cast<BufferFrame*>(bfAddr);
   }
 
   inline Partition& randomPartition() {
-    auto i = utils::RandomGenerator::Rand<u64>(0, mNumPartitions);
+    auto i = utils::RandomGenerator::Rand<uint64_t>(0, mNumPartitions);
     return *mPartitions[i];
   }
 
-  inline u64 getPartitionId(PID pageId) {
+  inline uint64_t getPartitionId(PID pageId) {
     return pageId & mPartitionsMask;
   }
 
@@ -229,7 +228,6 @@ inline void BufferFrameProvider::evictFlushedBf(
   DCHECK(parentHandler.mChildSwip.IsCool());
 
   parentHandler.mChildSwip.Evict(cooledBf.header.mPageId);
-  PID evictedPageId = cooledBf.header.mPageId;
 
   // Reclaim buffer frame
   cooledBf.Reset();
@@ -237,18 +235,8 @@ inline void BufferFrameProvider::evictFlushedBf(
 
   mFreeBfList.PushFront(cooledBf);
   if (mFreeBfList.Size() <=
-      std::min<u64>(mStore->mStoreOption.mNumTxWorkers, 128)) {
+      std::min<uint64_t>(mStore->mStoreOption.mNumTxWorkers, 128)) {
     mFreeBfList.PopTo(targetPartition);
-  }
-
-  if (FLAGS_pid_tracing) {
-    Tracing::mutex.lock();
-    if (Tracing::ht.contains(evictedPageId)) {
-      std::get<1>(Tracing::ht[evictedPageId])++;
-    } else {
-      Tracing::ht[evictedPageId] = {btreeId, 1};
-    }
-    Tracing::mutex.unlock();
   }
 
   COUNTERS_BLOCK() {
@@ -280,7 +268,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
 
   // [corner cases]: prevent starving when free list is empty and cooling to
   // the required level can not be achieved
-  u64 failedAttempts = 0;
+  uint64_t failedAttempts = 0;
   if (targetPartition.NeedMoreFreeBfs() && failedAttempts < 10) {
     randomBufferFramesToCoolOrEvict();
     while (mCoolCandidateBfs.size() > 0) {
@@ -465,7 +453,7 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
         JUMPMU_CONTINUE;
       }
       const PID cooledPageId = cooledBf->header.mPageId;
-      const u64 partitionId = getPartitionId(cooledPageId);
+      const uint64_t partitionId = getPartitionId(cooledPageId);
 
       // Prevent evicting a page that already has an IO Frame with (possibly)
       // threads working on it.
@@ -530,9 +518,9 @@ inline void BufferFrameProvider::FlushAndRecycleBufferFrames(
   SCOPED_DEFER(DLOG(INFO) << "Phase3: FlushAndRecycleBufferFrames ended");
 
   if (mAsyncWriteBuffer.SubmitIORequest()) {
-    const u32 numFlushedBfs = mAsyncWriteBuffer.WaitIORequestToComplete();
+    const uint32_t numFlushedBfs = mAsyncWriteBuffer.WaitIORequestToComplete();
     mAsyncWriteBuffer.IterateFlushedBfs(
-        [&](BufferFrame& writtenBf, u64 flushPSN) {
+        [&](BufferFrame& writtenBf, uint64_t flushPSN) {
           JUMPMU_TRY() {
             // When the written back page is being exclusively locked, we should
             // rather waste the write and move on to another page Instead of

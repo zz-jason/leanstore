@@ -67,7 +67,7 @@ bool BasicKV::IsRangeEmpty(Slice startKey, Slice endKey) {
 
       if ((guardedLeaf->mUpperFence.offset == 0 || endKey <= upperFence) &&
           guardedLeaf->mNumSeps == 0) {
-        s32 pos = guardedLeaf->lowerBound<false>(startKey);
+        int32_t pos = guardedLeaf->lowerBound<false>(startKey);
         if (pos == guardedLeaf->mNumSeps) {
           guardedLeaf.JumpIfModifiedByOthers();
           JUMPMU_RETURN true;
@@ -163,7 +163,7 @@ OpCode BasicKV::PrefixLookup(Slice key, PrefixLookupCallback callback) {
       FindLeafCanJump(key, guardedLeaf);
 
       bool isEqual = false;
-      s16 cur = guardedLeaf->lowerBound<false>(key, &isEqual);
+      int16_t cur = guardedLeaf->lowerBound<false>(key, &isEqual);
       if (isEqual) {
         callback(key, guardedLeaf->Value(cur));
         guardedLeaf.JumpIfModifiedByOthers();
@@ -172,7 +172,7 @@ OpCode BasicKV::PrefixLookup(Slice key, PrefixLookupCallback callback) {
 
       if (cur < guardedLeaf->mNumSeps) {
         auto fullKeySize = guardedLeaf->getFullKeyLen(cur);
-        auto fullKeyBuf = utils::JumpScopedArray<u8>(fullKeySize);
+        auto fullKeyBuf = utils::JumpScopedArray<uint8_t>(fullKeySize);
         guardedLeaf->copyFullKey(cur, fullKeyBuf->get());
         guardedLeaf.JumpIfModifiedByOthers();
 
@@ -205,7 +205,7 @@ OpCode BasicKV::PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
       FindLeafCanJump(key, guardedLeaf);
 
       bool isEqual = false;
-      s16 cur = guardedLeaf->lowerBound<false>(key, &isEqual);
+      int16_t cur = guardedLeaf->lowerBound<false>(key, &isEqual);
       if (isEqual == true) {
         callback(key, guardedLeaf->Value(cur));
         guardedLeaf.JumpIfModifiedByOthers();
@@ -215,7 +215,7 @@ OpCode BasicKV::PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
       if (cur > 0) {
         cur -= 1;
         auto fullKeySize = guardedLeaf->getFullKeyLen(cur);
-        auto fullKeyBuf = utils::JumpScopedArray<u8>(fullKeySize);
+        auto fullKeyBuf = utils::JumpScopedArray<uint8_t>(fullKeySize);
         guardedLeaf->copyFullKey(cur, fullKeyBuf->get());
         guardedLeaf.JumpIfModifiedByOthers();
 
@@ -361,13 +361,13 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
 
       // page start key
       auto firstKeySize = guardedLeaf->getFullKeyLen(0);
-      auto firstKey = utils::JumpScopedArray<u8>(firstKeySize);
+      auto firstKey = utils::JumpScopedArray<uint8_t>(firstKeySize);
       guardedLeaf->copyFullKey(0, firstKey->get());
       Slice pageStartKey(firstKey->get(), firstKeySize);
 
       // page end key
       auto lastKeySize = guardedLeaf->getFullKeyLen(guardedLeaf->mNumSeps - 1);
-      auto lastKey = utils::JumpScopedArray<u8>(lastKeySize);
+      auto lastKey = utils::JumpScopedArray<uint8_t>(lastKeySize);
       guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, lastKey->get());
       Slice pageEndKey(lastKey->get(), lastKeySize);
 
@@ -398,7 +398,7 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
   return OpCode::kOK;
 }
 
-u64 BasicKV::CountEntries() {
+uint64_t BasicKV::CountEntries() {
   return BTreeGeneric::CountEntries();
 }
 

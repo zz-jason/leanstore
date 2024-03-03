@@ -112,14 +112,14 @@ std::optional<std::pair<TXID, TXID>> CommitTree::lcbNoLatch(TXID startTs) {
 // ConcurrencyControl
 //------------------------------------------------------------------------------
 
-COMMANDID ConcurrencyControl::PutVersion(TREEID treeId, bool isRemoveCommand,
-                                         u64 versionSize,
-                                         std::function<void(u8*)> putCallBack) {
+COMMANDID ConcurrencyControl::PutVersion(
+    TREEID treeId, bool isRemoveCommand, uint64_t versionSize,
+    std::function<void(uint8_t*)> putCallBack) {
   utils::Timer timer(CRCounters::MyCounters().cc_ms_history_tree_insert);
   auto& curWorker = Worker::My();
   auto commandId = curWorker.mCommandId++;
   if (isRemoveCommand) {
-    commandId |= TYPE_MSB(COMMANDID);
+    commandId |= kRemoveCommandMark;
   }
   mHistoryTree->PutVersion(curWorker.mWorkerId, curWorker.mActiveTx.mStartTs,
                            commandId, treeId, isRemoveCommand, versionSize,
@@ -171,7 +171,7 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, TXID txId) {
   }
   default: {
     DLOG(FATAL) << "Unsupported isolation level: "
-                << static_cast<u64>(ActiveTx().mTxIsolationLevel);
+                << static_cast<uint64_t>(ActiveTx().mTxIsolationLevel);
   }
   }
   return false;
@@ -201,8 +201,9 @@ void ConcurrencyControl::GarbageCollection() {
                << ", mCleanedWmkOfShortTx=" << mCleanedWmkOfShortTx;
     mStore->mCRManager->mHistoryTreePtr->PurgeVersions(
         Worker::My().mWorkerId, 0, mLocalWmkOfAllTx,
-        [&](const TXID versionTxId, const TREEID treeId, const u8* versionData,
-            u64 versionSize [[maybe_unused]], const bool calledBefore) {
+        [&](const TXID versionTxId, const TREEID treeId,
+            const uint8_t* versionData, uint64_t versionSize [[maybe_unused]],
+            const bool calledBefore) {
           mStore->mTreeRegistry->GarbageCollect(treeId, versionData,
                                                 Worker::My().mWorkerId,
                                                 versionTxId, calledBefore);
@@ -230,8 +231,8 @@ void ConcurrencyControl::GarbageCollection() {
                << ", toTxId(mLocalWmkOfShortTx)=" << mLocalWmkOfShortTx;
     mStore->mCRManager->mHistoryTreePtr->VisitRemovedVersions(
         Worker::My().mWorkerId, mCleanedWmkOfShortTx, mLocalWmkOfShortTx,
-        [&](const TXID versionTxId, const TREEID treeId, const u8* versionData,
-            u64, const bool calledBefore) {
+        [&](const TXID versionTxId, const TREEID treeId,
+            const uint8_t* versionData, uint64_t, const bool calledBefore) {
           mStore->mTreeRegistry->GarbageCollect(treeId, versionData,
                                                 Worker::My().mWorkerId,
                                                 versionTxId, calledBefore);
@@ -400,7 +401,7 @@ void ConcurrencyControl::updateLocalWatermarks() {
                           << ", mLocalWmkOfAllTx=" << mLocalWmkOfAllTx
                           << ", mLocalWmkOfShortTx=" << mLocalWmkOfShortTx);
   while (true) {
-    u64 version = mWmkVersion.load();
+    uint64_t version = mWmkVersion.load();
 
     // spin until the latch is free
     while ((version = mWmkVersion.load()) & 1) {

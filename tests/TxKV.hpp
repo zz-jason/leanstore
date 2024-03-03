@@ -25,7 +25,7 @@ class Store;
 class StoreFactory {
 public:
   static std::unique_ptr<Store> NewLeanStoreMVCC(const std::string& storeDir,
-                                                 u32 sessionLimit);
+                                                 uint32_t sessionLimit);
 
   inline static Store* GetLeanStoreSingleVersion() {
     return nullptr;
@@ -72,15 +72,15 @@ public:
 
   [[nodiscard]] virtual auto Update(TableRef* tbl, Slice key, Slice val,
                                     bool implicitTx = false)
-      -> std::expected<u64, utils::Error> = 0;
+      -> std::expected<uint64_t, utils::Error> = 0;
 
   [[nodiscard]] virtual auto Get(TableRef* tbl, Slice key, std::string& val,
                                  bool implicitTx = false)
-      -> std::expected<u64, utils::Error> = 0;
+      -> std::expected<uint64_t, utils::Error> = 0;
 
   [[nodiscard]] virtual auto Delete(TableRef* tbl, Slice key,
                                     bool implicitTx = false)
-      -> std::expected<u64, utils::Error> = 0;
+      -> std::expected<uint64_t, utils::Error> = 0;
 };
 
 class TableRef {
@@ -91,10 +91,10 @@ class LeanStoreMVCCSession;
 class LeanStoreMVCC : public Store {
 public:
   std::unique_ptr<leanstore::LeanStore> mLeanStore = nullptr;
-  std::unordered_map<u64, LeanStoreMVCCSession> mSessions;
+  std::unordered_map<uint64_t, LeanStoreMVCCSession> mSessions;
 
 public:
-  LeanStoreMVCC(const std::string& storeDir, u32 sessionLimit) {
+  LeanStoreMVCC(const std::string& storeDir, uint32_t sessionLimit) {
     FLAGS_init = true;
     FLAGS_logtostdout = true;
     FLAGS_data_dir = storeDir;
@@ -148,14 +148,14 @@ public:
 
   [[nodiscard]] auto Get(TableRef* tbl, Slice key, std::string& val,
                          bool implicitTx = false)
-      -> std::expected<u64, utils::Error> override;
+      -> std::expected<uint64_t, utils::Error> override;
 
   [[nodiscard]] auto Update(TableRef* tbl, Slice key, Slice val,
                             bool implicitTx = false)
-      -> std::expected<u64, utils::Error> override;
+      -> std::expected<uint64_t, utils::Error> override;
 
   [[nodiscard]] auto Delete(TableRef* tbl, Slice key, bool implicitTx = false)
-      -> std::expected<u64, utils::Error> override;
+      -> std::expected<uint64_t, utils::Error> override;
 };
 
 class LeanStoreMVCCTableRef : public TableRef {
@@ -167,7 +167,7 @@ public:
 // StoreFactory
 //------------------------------------------------------------------------------
 inline std::unique_ptr<Store> StoreFactory::NewLeanStoreMVCC(
-    const std::string& storeDir, u32 sessionLimit) {
+    const std::string& storeDir, uint32_t sessionLimit) {
   return std::make_unique<LeanStoreMVCC>(storeDir, sessionLimit);
 }
 
@@ -268,8 +268,8 @@ inline auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
       }
     });
 
-    res = btree->Insert(Slice((const u8*)key.data(), key.size()),
-                        Slice((const u8*)val.data(), val.size()));
+    res = btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                        Slice((const uint8_t*)val.data(), val.size()));
   });
   if (res != OpCode::kOK) {
     return std::unexpected<utils::Error>(
@@ -280,7 +280,7 @@ inline auto LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
 
 inline auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key,
                                       std::string& val, bool implicitTx)
-    -> std::expected<u64, utils::Error> {
+    -> std::expected<uint64_t, utils::Error> {
   auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
   OpCode res;
   auto copyValueOut = [&](Slice res) {
@@ -300,7 +300,8 @@ inline auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key,
       }
     });
 
-    res = btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut);
+    res = btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
+                        copyValueOut);
   });
   if (res == OpCode::kOK) {
     return 1;
@@ -314,7 +315,7 @@ inline auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key,
 
 inline auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
                                          bool implicitTx)
-    -> std::expected<u64, utils::Error> {
+    -> std::expected<uint64_t, utils::Error> {
   auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
   OpCode res;
   auto updateCallBack = [&](MutableSlice toUpdate) {
@@ -332,13 +333,13 @@ inline auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
       }
     });
 
-    const u64 updateDescBufSize = UpdateDesc::Size(1);
-    u8 updateDescBuf[updateDescBufSize];
+    const uint64_t updateDescBufSize = UpdateDesc::Size(1);
+    uint8_t updateDescBuf[updateDescBufSize];
     auto* updateDesc = UpdateDesc::CreateFrom(updateDescBuf);
     updateDesc->mNumSlots = 1;
     updateDesc->mUpdateSlots[0].mOffset = 0;
     updateDesc->mUpdateSlots[0].mSize = val.size();
-    res = btree->UpdatePartial(Slice((const u8*)key.data(), key.size()),
+    res = btree->UpdatePartial(Slice((const uint8_t*)key.data(), key.size()),
                                updateCallBack, *updateDesc);
   });
   if (res == OpCode::kOK) {
@@ -353,7 +354,7 @@ inline auto LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
 
 inline auto LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key,
                                          bool implicitTx)
-    -> std::expected<u64, utils::Error> {
+    -> std::expected<uint64_t, utils::Error> {
   auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
   OpCode res;
   mStore->mLeanStore->ExecSync(mWorkerId, [&]() {
@@ -368,7 +369,7 @@ inline auto LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key,
       }
     });
 
-    res = btree->Remove(Slice((const u8*)key.data(), key.size()));
+    res = btree->Remove(Slice((const uint8_t*)key.data(), key.size()));
   });
   if (res == OpCode::kOK) {
     return 1;

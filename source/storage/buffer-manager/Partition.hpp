@@ -14,7 +14,7 @@ namespace leanstore {
 namespace storage {
 
 struct IOFrame {
-  enum class STATE : u8 {
+  enum class STATE : uint8_t {
     READING = 0,
     READY = 1,
     TO_DELETE = 2,
@@ -27,15 +27,15 @@ struct IOFrame {
   // Everything in CIOFrame is protected by partition lock
   // except the following counter which is decremented outside to determine
   // whether it is time to remove it
-  std::atomic<s64> readers_counter = 0;
+  std::atomic<int64_t> readers_counter = 0;
 };
 
 struct HashTable {
   struct Entry {
-    u64 key;
+    uint64_t key;
     Entry* next;
     IOFrame value;
-    Entry(u64 key);
+    Entry(uint64_t key);
   };
 
   struct Handler {
@@ -49,23 +49,23 @@ struct HashTable {
     }
   };
 
-  u64 mask;
+  uint64_t mask;
 
   Entry** entries;
 
-  u64 hashKey(u64 k);
+  uint64_t hashKey(uint64_t k);
 
-  IOFrame& Insert(u64 key);
+  IOFrame& Insert(uint64_t key);
 
-  Handler Lookup(u64 key);
+  Handler Lookup(uint64_t key);
 
   void Remove(Handler& handler);
 
-  void Remove(u64 key);
+  void Remove(uint64_t key);
 
-  bool has(u64 key); // for debugging
+  bool has(uint64_t key); // for debugging
 
-  HashTable(u64 size_in_bits);
+  HashTable(uint64_t size_in_bits);
 };
 
 class Partition {
@@ -75,7 +75,7 @@ public:
 
   HashTable mInflightIOs;
 
-  const u64 mFreeBfsLimit;
+  const uint64_t mFreeBfsLimit;
 
   /// @brief mFreeBfList stores all the free buffer frames in the partition.
   FreeList mFreeBfList;
@@ -87,15 +87,16 @@ public:
   /// is removed and reclaimed, its page id can be reused for new pages.
   std::vector<PID> mReclaimedPageIds;
 
-  u64 mNextPageId;
+  uint64_t mNextPageId;
 
-  const u64 mPageIdDistance;
+  const uint64_t mPageIdDistance;
 
 public:
   //---------------------------------------------------------------------------
   // Constructor and Destructors
   //---------------------------------------------------------------------------
-  Partition(u64 firstPageId, u64 pageIdDistance, u64 freeBfsLimit)
+  Partition(uint64_t firstPageId, uint64_t pageIdDistance,
+            uint64_t freeBfsLimit)
       : mInflightIOs(utils::GetBitsNeeded(freeBfsLimit)),
         mFreeBfsLimit(freeBfsLimit),
         mNextPageId(firstPageId),
@@ -113,12 +114,12 @@ public:
   inline PID NextPageId() {
     std::unique_lock<std::mutex> guard(mReclaimedPageIdsMutex);
     if (mReclaimedPageIds.size()) {
-      const u64 pageId = mReclaimedPageIds.back();
+      const uint64_t pageId = mReclaimedPageIds.back();
       mReclaimedPageIds.pop_back();
       return pageId;
     }
 
-    const u64 pageId = mNextPageId;
+    const uint64_t pageId = mNextPageId;
     mNextPageId += mPageIdDistance;
     return pageId;
   }
@@ -128,11 +129,11 @@ public:
     mReclaimedPageIds.push_back(pageId);
   }
 
-  inline u64 NumAllocatedPages() {
+  inline uint64_t NumAllocatedPages() {
     return mNextPageId / mPageIdDistance;
   }
 
-  inline u64 NumReclaimedPages() {
+  inline uint64_t NumReclaimedPages() {
     std::unique_lock<std::mutex> guard(mReclaimedPageIdsMutex);
     return mReclaimedPageIds.size();
   }

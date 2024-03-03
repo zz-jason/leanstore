@@ -13,8 +13,8 @@ class ConfigsTable : public ProfilingTable
    virtual std::string getName() override;
    virtual void open() override;
    virtual void next() override;
-   u64 hash();
-   void add(string name, string value);
+   uint64_t hash();
+   void add(std::string name, std::string value);
 };
 }  // namespace profiling
 }  // namespace leanstore

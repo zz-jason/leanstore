@@ -9,12 +9,9 @@
 #include <gflags/gflags.h>
 #include <rapidjson/document.h>
 
-
 #include <atomic>
 #include <expected>
 #include <memory>
-
-
 
 namespace leanstore::storage::btree {
 
@@ -42,7 +39,7 @@ class CRManager;
 namespace leanstore {
 
 struct GlobalStats {
-  u64 mAccumulatedTxCounter = 0;
+  uint64_t mAccumulatedTxCounter = 0;
 };
 
 class LeanStore {
@@ -54,18 +51,18 @@ public:
   StoreOption mStoreOption;
 
   /// The file descriptor for pages
-  s32 mPageFd;
+  int32_t mPageFd;
 
   /// The file descriptor for write-ahead log
-  s32 mWalFd;
+  int32_t mWalFd;
 
-  std::atomic<u64> mNumProfilingThreads = 0;
+  std::atomic<uint64_t> mNumProfilingThreads = 0;
 
   std::atomic<bool> mProfilingThreadKeepRunning = true;
 
   profiling::ConfigsTable mConfigsTable;
 
-  u64 mConfigHash = 0;
+  uint64_t mConfigHash = 0;
 
   GlobalStats mGlobalStats;
 
@@ -81,7 +78,7 @@ public:
   /// The global timestamp oracle, used to generate start and commit timestamps
   /// for all transactions in the store. Start from a positive number, 0
   /// indicates invalid timestamp
-  std::atomic<u64> mTimestampOracle = 1;
+  std::atomic<uint64_t> mTimestampOracle = 1;
 
 #ifdef DEBUG
   utils::DebugFlagsRegistry mDebugFlagsRegistry;
@@ -133,7 +130,7 @@ public:
   void DropTransactionKV(const std::string& name);
 
   /// Alloc a new timestamp from the timestamp oracle
-  u64 AllocTs() {
+  uint64_t AllocTs() {
     return mTimestampOracle.fetch_add(1);
   }
 
@@ -143,12 +140,12 @@ public:
   /// Execute a custom user function on a worker thread.
   /// @param workerId worker to compute job
   /// @param job job
-  void ExecSync(u64 workerId, std::function<void()> fn);
+  void ExecSync(uint64_t workerId, std::function<void()> fn);
 
   /// Execute a custom user function on a worker thread asynchronously.
   /// @param workerId worker to compute job
   /// @param job job
-  void ExecAsync(u64 workerId, std::function<void()> fn);
+  void ExecAsync(uint64_t workerId, std::function<void()> fn);
 
   /// Waits for the worker to complete.
   void Wait(WORKERID workerId);
@@ -159,7 +156,7 @@ public:
   void StartProfilingThread();
 
 private:
-  u64 getConfigHash() {
+  uint64_t getConfigHash() {
     return mConfigHash;
   }
 

@@ -1,6 +1,5 @@
 #include "AsyncWriteBuffer.hpp"
 
-#include "Tracing.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "shared-headers/Exceptions.hpp"
 
@@ -11,15 +10,16 @@
 namespace leanstore {
 namespace storage {
 
-AsyncWriteBuffer::AsyncWriteBuffer(int fd, u64 pageSize, u64 maxBatchSize)
+AsyncWriteBuffer::AsyncWriteBuffer(int fd, uint64_t pageSize,
+                                   uint64_t maxBatchSize)
     : fd(fd),
       page_size(pageSize),
       batch_max_size(maxBatchSize),
       mWriteBuffer(pageSize * maxBatchSize) {
-  write_buffer_commands = make_unique<WriteCommand[]>(maxBatchSize);
-  iocbs = make_unique<struct iocb[]>(maxBatchSize);
-  iocbs_ptr = make_unique<struct iocb*[]>(maxBatchSize);
-  events = make_unique<struct io_event[]>(maxBatchSize);
+  write_buffer_commands = std::make_unique<WriteCommand[]>(maxBatchSize);
+  iocbs = std::make_unique<struct iocb[]>(maxBatchSize);
+  iocbs_ptr = std::make_unique<struct iocb*[]>(maxBatchSize);
+  events = std::make_unique<struct io_event[]>(maxBatchSize);
 
   memset(&aio_context, 0, sizeof(aio_context));
   const int ret = io_setup(maxBatchSize, &aio_context);
@@ -38,21 +38,10 @@ bool AsyncWriteBuffer::full() {
 
 void AsyncWriteBuffer::AddToIOBatch(BufferFrame& bf, PID pageId) {
   DCHECK(!full());
-  DCHECK(u64(&bf.page) % 512 == 0);
+  DCHECK(uint64_t(&bf.page) % 512 == 0);
   DCHECK(pending_requests <= batch_max_size);
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().dt_page_writes[bf.page.mBTreeId]++;
-  }
-
-  PARANOID_BLOCK() {
-    if (FLAGS_pid_tracing && !FLAGS_reclaim_page_ids) {
-      Tracing::mutex.lock();
-      if (Tracing::ht.contains(pageId)) {
-        auto& entry = Tracing::ht[pageId];
-        DCHECK(std::get<0>(entry) == bf.page.mBTreeId);
-      }
-      Tracing::mutex.unlock();
-    }
   }
 
   auto slot = pending_requests++;
@@ -68,22 +57,22 @@ void AsyncWriteBuffer::AddToIOBatch(BufferFrame& bf, PID pageId) {
   iocbs_ptr[slot] = &iocbs[slot];
 }
 
-u64 AsyncWriteBuffer::SubmitIORequest() {
+uint64_t AsyncWriteBuffer::SubmitIORequest() {
   if (pending_requests > 0) {
     int retCode = io_submit(aio_context, pending_requests, iocbs_ptr.get());
-    DCHECK(retCode == s32(pending_requests));
+    DCHECK(retCode == int32_t(pending_requests));
     return pending_requests;
   }
   return 0;
 }
 
-u64 AsyncWriteBuffer::WaitIORequestToComplete() {
+uint64_t AsyncWriteBuffer::WaitIORequestToComplete() {
   if (pending_requests > 0) {
     const int doneRequests = io_getevents(
         /* ctx */ aio_context, /* min_nr */ pending_requests,
         /* nr */ pending_requests, /* io_event */ events.get(),
         /* timeout */ NULL);
-    LOG_IF(FATAL, u32(doneRequests) != pending_requests)
+    LOG_IF(FATAL, uint32_t(doneRequests) != pending_requests)
         << "Failed to complete all the IO requests"
         << ", expected=" << pending_requests << ", completed=" << doneRequests;
     pending_requests = 0;
@@ -93,10 +82,11 @@ u64 AsyncWriteBuffer::WaitIORequestToComplete() {
 }
 
 void AsyncWriteBuffer::IterateFlushedBfs(
-    std::function<void(BufferFrame&, u64)> callback, u64 numFlushedBfs) {
-  for (u64 i = 0; i < numFlushedBfs; i++) {
+    std::function<void(BufferFrame&, uint64_t)> callback,
+    uint64_t numFlushedBfs) {
+  for (uint64_t i = 0; i < numFlushedBfs; i++) {
     const auto slot =
-        (u64(events[i].data) - u64(mWriteBuffer.Get())) / page_size;
+        (uint64_t(events[i].data) - uint64_t(mWriteBuffer.Get())) / page_size;
 
     DCHECK(events[i].res == page_size);
     explainIfNot(events[i].res2 == 0);

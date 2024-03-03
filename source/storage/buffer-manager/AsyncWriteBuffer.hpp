@@ -21,9 +21,9 @@ private:
 public:
   io_context_t aio_context;
   int fd;
-  u64 page_size;
-  u64 batch_max_size;
-  u64 pending_requests = 0;
+  uint64_t page_size;
+  uint64_t batch_max_size;
+  uint64_t pending_requests = 0;
 
   utils::AlignedBuffer<512> mWriteBuffer;
   std::unique_ptr<WriteCommand[]> write_buffer_commands;
@@ -31,22 +31,22 @@ public:
   std::unique_ptr<struct iocb*[]> iocbs_ptr;
   std::unique_ptr<struct io_event[]> events;
 
-  AsyncWriteBuffer(int fd, u64 page_size, u64 batch_max_size);
+  AsyncWriteBuffer(int fd, uint64_t page_size, uint64_t batch_max_size);
 
   bool full();
 
-  u8* GetWriteBuffer(u64 slot) {
+  uint8_t* GetWriteBuffer(uint64_t slot) {
     return &mWriteBuffer.Get()[slot * page_size];
   }
 
   void AddToIOBatch(BufferFrame& bf, PID pageId);
 
-  u64 SubmitIORequest();
+  uint64_t SubmitIORequest();
 
-  u64 WaitIORequestToComplete();
+  uint64_t WaitIORequestToComplete();
 
-  void IterateFlushedBfs(std::function<void(BufferFrame&, u64)> callback,
-                         u64 n_events);
+  void IterateFlushedBfs(std::function<void(BufferFrame&, uint64_t)> callback,
+                         uint64_t n_events);
 };
 
 } // namespace storage

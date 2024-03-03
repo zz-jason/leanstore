@@ -13,33 +13,33 @@ namespace cr {
 struct __attribute__((packed)) VersionMeta {
   bool called_before = false;
   TREEID mTreeId;
-  u8 payload[];
+  uint8_t payload[];
 
 public:
-  inline static const VersionMeta* From(const u8* buffer) {
+  inline static const VersionMeta* From(const uint8_t* buffer) {
     return reinterpret_cast<const VersionMeta*>(buffer);
   }
 
-  inline static VersionMeta* From(u8* buffer) {
+  inline static VersionMeta* From(uint8_t* buffer) {
     return reinterpret_cast<VersionMeta*>(buffer);
   }
 };
 
 using BasicKV = leanstore::storage::btree::BasicKV;
 
-static constexpr u16 kWorkerLimit = std::numeric_limits<WORKERID>::max();
+static constexpr uint16_t kWorkerLimit = std::numeric_limits<WORKERID>::max();
 
 class HistoryTree : public HistoryTreeInterface {
 private:
   struct alignas(64) Session {
     bool mRightmostInited = false;
     BufferFrame* mRightmostBf = nullptr;
-    u64 mRightmostVersion = 0;
-    s64 mRightmostPos = -1;
+    uint64_t mRightmostVersion = 0;
+    int64_t mRightmostPos = -1;
 
     bool leftmost_init = false;
     BufferFrame* leftmost_bf = nullptr;
-    u64 leftmost_version = 0;
+    uint64_t leftmost_version = 0;
 
     TXID mLastTxId = 0;
   };
@@ -53,17 +53,17 @@ public:
   virtual ~HistoryTree() = default;
 
   virtual void PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
-                          TREEID treeId, bool isRemove, u64 payloadLength,
-                          std::function<void(u8*)> cb,
+                          TREEID treeId, bool isRemove, uint64_t payloadLength,
+                          std::function<void(uint8_t*)> cb,
                           bool sameThread) override;
 
   virtual bool GetVersion(
       WORKERID workerId, TXID txId, COMMANDID commandId, const bool isRemove,
-      std::function<void(const u8*, u64 payloadLength)> cb) override;
+      std::function<void(const uint8_t*, uint64_t payloadLength)> cb) override;
 
   virtual void PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
                              RemoveVersionCallback cb,
-                             const u64 limit) override;
+                             const uint64_t limit) override;
 
   // [from, to]
   virtual void VisitRemovedVersions(WORKERID workerId, TXID fromTxId,

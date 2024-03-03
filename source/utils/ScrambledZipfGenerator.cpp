@@ -5,8 +5,8 @@
 namespace leanstore {
 namespace utils {
 // -------------------------------------------------------------------------------------
-u64 ScrambledZipfGenerator::rand() {
-  u64 zipfValue = zipf_generator.rand();
+uint64_t ScrambledZipfGenerator::rand() {
+  uint64_t zipfValue = zipf_generator.rand();
   return min + (FNV::hash(zipfValue) % n);
 }
 // -------------------------------------------------------------------------------------

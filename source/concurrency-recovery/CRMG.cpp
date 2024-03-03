@@ -20,7 +20,8 @@ CRManager::CRManager(leanstore::LeanStore* store)
   // start all worker threads
   mWorkers.resize(storeOption.mNumTxWorkers);
   mWorkerThreads.reserve(storeOption.mNumTxWorkers);
-  for (u64 workerId = 0; workerId < storeOption.mNumTxWorkers; workerId++) {
+  for (uint64_t workerId = 0; workerId < storeOption.mNumTxWorkers;
+       workerId++) {
     auto workerThread = std::make_unique<WorkerThread>(workerId, workerId);
     workerThread->Start();
 
@@ -45,7 +46,8 @@ CRManager::CRManager(leanstore::LeanStore* store)
   // create history tree for each worker
   mWorkerThreads[0]->SetJob([&]() { setupHistoryTree(); });
   mWorkerThreads[0]->Wait();
-  for (u64 workerId = 0; workerId < storeOption.mNumTxWorkers; workerId++) {
+  for (uint64_t workerId = 0; workerId < storeOption.mNumTxWorkers;
+       workerId++) {
     mWorkers[workerId]->cc.mHistoryTree = mHistoryTreePtr.get();
   }
 }
@@ -66,7 +68,7 @@ void CRManager::setupHistoryTree() {
   historyTree->mRemoveBTrees = std::make_unique<storage::btree::BasicKV*[]>(
       mStore->mStoreOption.mNumTxWorkers);
 
-  for (u64 i = 0; i < mStore->mStoreOption.mNumTxWorkers; i++) {
+  for (uint64_t i = 0; i < mStore->mStoreOption.mNumTxWorkers; i++) {
     std::string name = "_history_tree_" + std::to_string(i);
     storage::btree::BTreeConfig config = {.mEnableWal = false,
                                           .mUseBulkInsert = true};
@@ -101,14 +103,14 @@ constexpr char kKeyGlobalLogicalClock[] = "global_logical_clock";
 
 StringMap CRManager::Serialize() {
   StringMap map;
-  u64 val = mStore->mTimestampOracle.load();
+  uint64_t val = mStore->mTimestampOracle.load();
   map[kKeyWalSize] = std::to_string(mGroupCommitter->mWalSize);
   map[kKeyGlobalLogicalClock] = std::to_string(val);
   return map;
 }
 
 void CRManager::Deserialize(StringMap map) {
-  u64 val = std::stoull(map[kKeyGlobalLogicalClock]);
+  uint64_t val = std::stoull(map[kKeyGlobalLogicalClock]);
   mStore->mTimestampOracle = val;
   mStore->mCRManager->mGlobalWmkInfo.mWmkOfAllTx = val;
   mGroupCommitter->mWalSize = std::stoull(map[kKeyWalSize]);

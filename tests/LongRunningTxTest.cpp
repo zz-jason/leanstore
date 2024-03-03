@@ -3,7 +3,6 @@
 #include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
 #include "concurrency-recovery/HistoryTree.hpp"
-#include "concurrency-recovery/Transaction.hpp"
 #include "concurrency-recovery/Worker.hpp"
 #include "storage/btree/BasicKV.hpp"
 #include "storage/btree/TransactionKV.hpp"
@@ -96,11 +95,11 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
   // Insert 2 key-values as the test base.
   mStore->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
-    EXPECT_EQ(mKv->Insert(ToSlice(key1), ToSlice(val1)), OpCode::kOK);
+    EXPECT_EQ(mKv->Insert(key1, ToSlice(val1)), OpCode::kOK);
     cr::Worker::My().CommitTx();
 
     cr::Worker::My().StartTx();
-    EXPECT_EQ(mKv->Insert(ToSlice(key2), ToSlice(val2)), OpCode::kOK);
+    EXPECT_EQ(mKv->Insert(key2, ToSlice(val2)), OpCode::kOK);
     cr::Worker::My().CommitTx();
   });
 
@@ -110,25 +109,25 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
     cr::Worker::My().StartTx(TxMode::kLongRunning);
 
     // get the old value in worker 2
-    EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
+    EXPECT_EQ(mKv->Lookup(key1, copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val1);
 
-    EXPECT_EQ(mKv->Lookup(ToSlice(key2), copyValue), OpCode::kOK);
+    EXPECT_EQ(mKv->Lookup(key2, copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val2);
   });
 
   // remove the key in worker 1
   mStore->ExecSync(1, [&]() {
-    EXPECT_EQ(mKv->Remove(ToSlice(key1)), OpCode::kOK);
-    EXPECT_EQ(mKv->Remove(ToSlice(key2)), OpCode::kOK);
+    EXPECT_EQ(mKv->Remove(key1), OpCode::kOK);
+    EXPECT_EQ(mKv->Remove(key2), OpCode::kOK);
   });
 
   // get the old value in worker 2
   mStore->ExecSync(2, [&]() {
-    EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
+    EXPECT_EQ(mKv->Lookup(key1, copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val1);
 
-    EXPECT_EQ(mKv->Lookup(ToSlice(key2), copyValue), OpCode::kOK);
+    EXPECT_EQ(mKv->Lookup(key2, copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val2);
   });
 
@@ -141,10 +140,10 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
 
   // lookup from graveyard, still get the old value in worker 2
   mStore->ExecSync(2, [&]() {
-    EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
+    EXPECT_EQ(mKv->Lookup(key1, copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val1);
 
-    EXPECT_EQ(mKv->Lookup(ToSlice(key2), copyValue), OpCode::kOK);
+    EXPECT_EQ(mKv->Lookup(key2, copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val2);
 
     // commit the transaction in worker 2
@@ -157,8 +156,8 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
                              IsolationLevel::kSnapshotIsolation, false);
     SCOPED_DEFER(cr::Worker::My().CommitTx());
 
-    EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kNotFound);
-    EXPECT_EQ(mKv->Lookup(ToSlice(key2), copyValue), OpCode::kNotFound);
+    EXPECT_EQ(mKv->Lookup(key1, copyValue), OpCode::kNotFound);
+    EXPECT_EQ(mKv->Lookup(key2, copyValue), OpCode::kNotFound);
   });
 }
 
@@ -175,11 +174,11 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
   // Work 1, insert 2 key-values as the test base
   mStore->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
-    EXPECT_EQ(mKv->Insert(ToSlice(key1), ToSlice(val1)), OpCode::kOK);
+    EXPECT_EQ(mKv->Insert(key1, ToSlice(val1)), OpCode::kOK);
     cr::Worker::My().CommitTx();
 
     cr::Worker::My().StartTx();
-    EXPECT_EQ(mKv->Insert(ToSlice(key2), ToSlice(val2)), OpCode::kOK);
+    EXPECT_EQ(mKv->Insert(key2, ToSlice(val2)), OpCode::kOK);
     cr::Worker::My().CommitTx();
   });
 
@@ -190,10 +189,10 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
   mStore->ExecSync(2, [&]() {
     cr::Worker::My().StartTx(TxMode::kLongRunning);
 
-    EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
+    EXPECT_EQ(mKv->Lookup(key1, copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val1);
 
-    EXPECT_EQ(mKv->Lookup(ToSlice(key2), copyValue), OpCode::kOK);
+    EXPECT_EQ(mKv->Lookup(key2, copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val2);
   });
 
@@ -201,7 +200,7 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
   std::string newVal;
   mStore->ExecSync(1, [&]() {
     auto updateDescBufSize = UpdateDesc::Size(1);
-    u8 updateDescBuf[updateDescBufSize];
+    uint8_t updateDescBuf[updateDescBufSize];
     auto* updateDesc = UpdateDesc::CreateFrom(updateDescBuf);
     updateDesc->mNumSlots = 1;
     updateDesc->mUpdateSlots[0].mOffset = 0;
@@ -214,17 +213,17 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
     };
 
     for (size_t i = 0; i < 100; ++i) {
-      EXPECT_EQ(mKv->UpdatePartial(ToSlice(key1), updateCallBack, *updateDesc),
+      EXPECT_EQ(mKv->UpdatePartial(key1, updateCallBack, *updateDesc),
                 OpCode::kOK);
     }
   });
 
   // Worker 2, lookup, get the old value
   mStore->ExecSync(2, [&]() {
-    EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
+    EXPECT_EQ(mKv->Lookup(key1, copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val1);
 
-    EXPECT_EQ(mKv->Lookup(ToSlice(key2), copyValue), OpCode::kOK);
+    EXPECT_EQ(mKv->Lookup(key2, copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val2);
   });
 
@@ -244,10 +243,10 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
 
   // Worker 2, lookup, skip the update versions, still get old values, commit
   mStore->ExecSync(2, [&]() {
-    EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
+    EXPECT_EQ(mKv->Lookup(key1, copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val1);
 
-    EXPECT_EQ(mKv->Lookup(ToSlice(key2), copyValue), OpCode::kOK);
+    EXPECT_EQ(mKv->Lookup(key2, copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val2);
 
     // commit the transaction in worker 2
@@ -260,10 +259,10 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
                              IsolationLevel::kSnapshotIsolation, false);
     SCOPED_DEFER(cr::Worker::My().CommitTx());
 
-    EXPECT_EQ(mKv->Lookup(ToSlice(key1), copyValue), OpCode::kOK);
+    EXPECT_EQ(mKv->Lookup(key1, copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, newVal);
 
-    EXPECT_EQ(mKv->Lookup(ToSlice(key2), copyValue), OpCode::kOK);
+    EXPECT_EQ(mKv->Lookup(key2, copyValue), OpCode::kOK);
     EXPECT_EQ(copiedVal, val2);
   });
 }
@@ -293,7 +292,7 @@ TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
     for (const auto& [key, val] : kvToTest) {
       cr::Worker::My().StartTx();
       SCOPED_DEFER(cr::Worker::My().CommitTx());
-      EXPECT_EQ(mKv->Insert(ToSlice(key), ToSlice(val)), OpCode::kOK);
+      EXPECT_EQ(mKv->Insert(key, ToSlice(val)), OpCode::kOK);
     }
   });
 
@@ -315,7 +314,7 @@ TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
   mStore->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
     for (const auto& [key, val] : kvToTest) {
-      EXPECT_EQ(mKv->Remove(ToSlice(key)), OpCode::kOK);
+      EXPECT_EQ(mKv->Remove(key), OpCode::kOK);
     }
   });
 

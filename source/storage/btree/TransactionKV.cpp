@@ -101,7 +101,7 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
       }
 
       LOG(ERROR) << "Update failed, key not found"
-                 << ", key=" << ToString(key)
+                 << ", key=" << key.ToString()
                  << ", txMode=" << ToString(cr::ActiveTx().mTxMode);
       JUMPMU_RETURN OpCode::kNotFound;
     }
@@ -185,7 +185,7 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
 
 OpCode TransactionKV::Insert(Slice key, Slice val) {
   DCHECK(cr::Worker::My().IsTxStarted());
-  u16 payloadSize = val.size() + sizeof(ChainedTuple);
+  uint16_t payloadSize = val.size() + sizeof(ChainedTuple);
 
   while (true) {
     auto xIter = GetExclusiveIterator();
@@ -272,7 +272,7 @@ void TransactionKV::insertAfterRemove(BTreePessimisticExclusiveIterator& xIter,
   // create an insert version
   auto versionSize = sizeof(InsertVersion) + val.size() + key.size();
   auto commandId = cr::Worker::My().cc.PutVersion(
-      mTreeId, false, versionSize, [&](u8* versionBuf) {
+      mTreeId, false, versionSize, [&](uint8_t* versionBuf) {
         new (versionBuf)
             InsertVersion(chainedTuple->mWorkerId, chainedTuple->mTxId,
                           chainedTuple->mCommandId, key, val);
@@ -370,7 +370,7 @@ OpCode TransactionKV::Remove(Slice key) {
     auto val = chainedTuple.GetValue(valSize);
     auto versionSize = sizeof(RemoveVersion) + val.size() + key.size();
     auto commandId = cr::Worker::My().cc.PutVersion(
-        mTreeId, true, versionSize, [&](u8* versionBuf) {
+        mTreeId, true, versionSize, [&](uint8_t* versionBuf) {
           new (versionBuf)
               RemoveVersion(chainedTuple.mWorkerId, chainedTuple.mTxId,
                             chainedTuple.mCommandId, key, val, danglingPointer);
@@ -421,8 +421,8 @@ OpCode TransactionKV::ScanAsc(Slice startKey, ScanCallback callback) {
   return scan4ShortRunningTx<true>(startKey, callback);
 }
 
-void TransactionKV::undo(const u8* walPayloadPtr,
-                         const u64 txId [[maybe_unused]]) {
+void TransactionKV::undo(const uint8_t* walPayloadPtr,
+                         const uint64_t txId [[maybe_unused]]) {
   auto& walPayload = *reinterpret_cast<const WALPayload*>(walPayloadPtr);
   switch (walPayload.mType) {
   case WALPayload::TYPE::kWalTxInsert: {
@@ -435,7 +435,7 @@ void TransactionKV::undo(const u8* walPayloadPtr,
     return undoLastRemove(static_cast<const WALTxRemove*>(&walPayload));
   }
   default: {
-    LOG(ERROR) << "Unknown wal payload type: " << (u64)walPayload.mType;
+    LOG(ERROR) << "Unknown wal payload type: " << (uint64_t)walPayload.mType;
   }
   }
 }
@@ -474,7 +474,7 @@ void TransactionKV::undoLastInsert(const WALTxInsert* walInsert) {
             << "Undo last insert failed, failed to remove current key"
             << ", workerId=" << cr::Worker::My().mWorkerId
             << ", startTs=" << cr::Worker::My().mActiveTx.mStartTs
-            << ", key=" << ToString(key) << ", ret=" << ToString(ret);
+            << ", key=" << key.ToString() << ", ret=" << ToString(ret);
       }
 
       xIter.MarkAsDirty();
@@ -522,7 +522,7 @@ void TransactionKV::undoLastUpdate(const WALTxUpdate* walUpdate) {
 
         // 1. copy the new value to buffer
         auto deltaSize = walUpdate->GetDeltaSize();
-        u8 buff[deltaSize];
+        uint8_t buff[deltaSize];
         std::memcpy(buff, xorData, deltaSize);
 
         // 2. calculate the old value based on xor result and old value
@@ -669,11 +669,11 @@ SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
   guardedNode.SyncGSNBeforeWrite();
   guardedNode.MarkAsDirty();
 
-  for (u16 i = 0; i < guardedNode->mNumSeps; i++) {
+  for (uint16_t i = 0; i < guardedNode->mNumSeps; i++) {
     auto& tuple = *Tuple::From(guardedNode->ValData(i));
     if (tuple.mFormat == TupleFormat::kFat) {
       auto& fatTuple = *FatTuple::From(guardedNode->ValData(i));
-      const u32 newLength = fatTuple.mValSize + sizeof(ChainedTuple);
+      const uint32_t newLength = fatTuple.mValSize + sizeof(ChainedTuple);
       fatTuple.ConvertToChained(mTreeId);
       DCHECK(newLength < guardedNode->ValSize(i));
       guardedNode->shortenPayload(i, newLength);
@@ -691,7 +691,7 @@ SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
 }
 
 // Only point-gc and for removed tuples
-void TransactionKV::GarbageCollect(const u8* versionData,
+void TransactionKV::GarbageCollect(const uint8_t* versionData,
                                    WORKERID versionWorkerId, TXID versionTxId,
                                    bool calledBefore) {
   const auto& version = *RemoveVersion::From(versionData);
@@ -870,7 +870,7 @@ void TransactionKV::GarbageCollect(const u8* versionData,
   }
 }
 
-void TransactionKV::unlock(const u8* walEntryPtr) {
+void TransactionKV::unlock(const uint8_t* walEntryPtr) {
   const WALPayload& entry = *reinterpret_cast<const WALPayload*>(walEntryPtr);
   Slice key;
   switch (entry.mType) {
@@ -1031,7 +1031,7 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
       oRet = iter.Next() ? OpCode::kOK : OpCode::kNotFound;
       if (isLastOne) {
         if (iter.mBuffer.size() < iter.mFenceSize + 1u) {
-          std::basic_string<u8> newBuffer(iter.mBuffer.size() + 1, 0);
+          std::basic_string<uint8_t> newBuffer(iter.mBuffer.size() + 1, 0);
           memcpy(newBuffer.data(), iter.mBuffer.data(), iter.mFenceSize);
           iter.mBuffer = std::move(newBuffer);
         }

@@ -52,8 +52,8 @@ static void BenchUpdateInsert(benchmark::State& state) {
       for (size_t i = 0; i < 16; i++) {
         key = utils::RandomGenerator::RandAlphString(24);
         val = utils::RandomGenerator::RandAlphString(128);
-        btree->Insert(Slice((const u8*)key.data(), key.size()),
-                      Slice((const u8*)val.data(), val.size()));
+        btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                      Slice((const uint8_t*)val.data(), val.size()));
       }
       cr::Worker::My().CommitTx();
     });

@@ -69,8 +69,8 @@ TEST_F(MvccTest, LookupWhileInsert) {
   auto val0 = RandomGenerator::RandAlphString(151);
   mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
-    auto res = mBTree->Insert(Slice((const u8*)key0.data(), key0.size()),
-                              Slice((const u8*)val0.data(), val0.size()));
+    auto res = mBTree->Insert(Slice((const uint8_t*)key0.data(), key0.size()),
+                              Slice((const uint8_t*)val0.data(), val0.size()));
     cr::Worker::My().CommitTx();
     EXPECT_EQ(res, OpCode::kOK);
   });
@@ -80,8 +80,8 @@ TEST_F(MvccTest, LookupWhileInsert) {
   auto val1 = RandomGenerator::RandAlphString(131);
   mStore->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
-    auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
-                              Slice((const u8*)val1.data(), val1.size()));
+    auto res = mBTree->Insert(Slice((const uint8_t*)key1.data(), key1.size()),
+                              Slice((const uint8_t*)val1.data(), val1.size()));
     EXPECT_EQ(res, OpCode::kOK);
   });
 
@@ -94,7 +94,7 @@ TEST_F(MvccTest, LookupWhileInsert) {
     };
     cr::Worker::My().StartTx(TxMode::kShortRunning,
                              IsolationLevel::kSnapshotIsolation, true);
-    EXPECT_EQ(mBTree->Lookup(Slice((const u8*)key0.data(), key0.size()),
+    EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key0.data(), key0.size()),
                              copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val0);
@@ -108,7 +108,7 @@ TEST_F(MvccTest, LookupWhileInsert) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
 
-    EXPECT_EQ(mBTree->Lookup(Slice((const u8*)key1.data(), key1.size()),
+    EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key1.data(), key1.size()),
                              copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val1);
@@ -123,7 +123,7 @@ TEST_F(MvccTest, LookupWhileInsert) {
     };
     cr::Worker::My().StartTx(TxMode::kShortRunning,
                              IsolationLevel::kSnapshotIsolation, true);
-    EXPECT_EQ(mBTree->Lookup(Slice((const u8*)key1.data(), key1.size()),
+    EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key1.data(), key1.size()),
                              copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val1);
@@ -137,8 +137,8 @@ TEST_F(MvccTest, InsertConflict) {
   auto val0 = RandomGenerator::RandAlphString(151);
   mStore->ExecSync(0, [&]() {
     cr::Worker::My().StartTx();
-    auto res = mBTree->Insert(Slice((const u8*)key0.data(), key0.size()),
-                              Slice((const u8*)val0.data(), val0.size()));
+    auto res = mBTree->Insert(Slice((const uint8_t*)key0.data(), key0.size()),
+                              Slice((const uint8_t*)val0.data(), val0.size()));
     cr::Worker::My().CommitTx();
     EXPECT_EQ(res, OpCode::kOK);
   });
@@ -148,16 +148,16 @@ TEST_F(MvccTest, InsertConflict) {
   auto val1 = val0;
   mStore->ExecSync(1, [&]() {
     cr::Worker::My().StartTx();
-    auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
-                              Slice((const u8*)val1.data(), val1.size()));
+    auto res = mBTree->Insert(Slice((const uint8_t*)key1.data(), key1.size()),
+                              Slice((const uint8_t*)val1.data(), val1.size()));
     EXPECT_EQ(res, OpCode::kOK);
   });
 
   // start another transaction to insert the same key
   mStore->ExecSync(2, [&]() {
     cr::Worker::My().StartTx();
-    auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
-                              Slice((const u8*)val1.data(), val1.size()));
+    auto res = mBTree->Insert(Slice((const uint8_t*)key1.data(), key1.size()),
+                              Slice((const uint8_t*)val1.data(), val1.size()));
     EXPECT_EQ(res, OpCode::kAbortTx);
     cr::Worker::My().AbortTx();
   });
@@ -167,8 +167,8 @@ TEST_F(MvccTest, InsertConflict) {
   auto val2 = val0;
   mStore->ExecSync(2, [&]() {
     cr::Worker::My().StartTx();
-    auto res = mBTree->Insert(Slice((const u8*)key1.data(), key1.size()),
-                              Slice((const u8*)val1.data(), val1.size()));
+    auto res = mBTree->Insert(Slice((const uint8_t*)key1.data(), key1.size()),
+                              Slice((const uint8_t*)val1.data(), val1.size()));
     EXPECT_EQ(res, OpCode::kAbortTx);
     cr::Worker::My().AbortTx();
   });
@@ -180,7 +180,7 @@ TEST_F(MvccTest, InsertConflict) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
 
-    EXPECT_EQ(mBTree->Lookup(Slice((const u8*)key1.data(), key1.size()),
+    EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key1.data(), key1.size()),
                              copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val1);
@@ -195,7 +195,7 @@ TEST_F(MvccTest, InsertConflict) {
     };
     cr::Worker::My().StartTx(TxMode::kShortRunning,
                              IsolationLevel::kSnapshotIsolation, true);
-    EXPECT_EQ(mBTree->Lookup(Slice((const u8*)key1.data(), key1.size()),
+    EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key1.data(), key1.size()),
                              copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val1);

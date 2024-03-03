@@ -19,23 +19,23 @@ namespace storage {
 namespace btree {
 
 class BTreeNode;
-using HeadType = u32;
+using HeadType = uint32_t;
 
 class BTreeNodeHeader {
 public:
-  static const u16 sHintCount = 16;
+  static const uint16_t sHintCount = 16;
 
   struct SeparatorInfo {
     /// The full length of the seperator key.
-    u16 mSize;
+    uint16_t mSize;
 
     /// The slot id of the seperator key.
-    u16 mSlotId;
+    uint16_t mSlotId;
 
     // TODO: ???
     bool trunc;
 
-    SeparatorInfo(u16 size = 0, u16 slotId = 0, bool trunc = false)
+    SeparatorInfo(uint16_t size = 0, uint16_t slotId = 0, bool trunc = false)
         : mSize(size),
           mSlotId(slotId),
           trunc(trunc) {
@@ -43,8 +43,8 @@ public:
   };
 
   struct FenceKey {
-    u16 offset;
-    u16 length;
+    uint16_t offset;
+    uint16_t length;
   };
 
 public:
@@ -60,14 +60,14 @@ public:
   /// The number of seperators. #slots = #seps + 1.
   /// The first mNumSeps children are stored in the payload, while the last
   /// child are stored in upper.
-  u16 mNumSeps = 0;
+  uint16_t mNumSeps = 0;
 
   /// Indicates whether this node is leaf node without any child.
   bool mIsLeaf;
 
   /// Indicates the space used for the node.
   /// @note !!! does not include the header, but includes fences !!!
-  u16 mSpaceUsed = 0;
+  uint16_t mSpaceUsed = 0;
 
   /// Data offset of the current slot in the BTreeNode. The BTreeNode is
   /// organized as follows:
@@ -76,25 +76,27 @@ public:
   ///
   /// It's initialized to the total size of the btree node, reduced and assigned
   /// to each slot when the number of slots is increasing.
-  u16 mDataOffset;
+  uint16_t mDataOffset;
 
-  u16 mPrefixSize = 0;
+  uint16_t mPrefixSize = 0;
 
-  u32 hint[sHintCount];
+  uint32_t hint[sHintCount];
 
   /// Needed for GC
   bool mHasGarbage = false;
 
 public:
-  BTreeNodeHeader(bool isLeaf, u16 size) : mIsLeaf(isLeaf), mDataOffset(size) {
+  BTreeNodeHeader(bool isLeaf, uint16_t size)
+      : mIsLeaf(isLeaf),
+        mDataOffset(size) {
   }
 
   ~BTreeNodeHeader() {
   }
 
 public:
-  inline u8* RawPtr() {
-    return reinterpret_cast<u8*>(this);
+  inline uint8_t* RawPtr() {
+    return reinterpret_cast<uint8_t*>(this);
   }
 
   inline bool isInner() {
@@ -105,7 +107,7 @@ public:
     return Slice(getLowerFenceKey(), mLowerFence.length);
   }
 
-  inline u8* getLowerFenceKey() {
+  inline uint8_t* getLowerFenceKey() {
     return mLowerFence.offset ? RawPtr() + mLowerFence.offset : nullptr;
   }
 
@@ -113,7 +115,7 @@ public:
     return Slice(getUpperFenceKey(), mUpperFence.length);
   }
 
-  inline u8* getUpperFenceKey() {
+  inline uint8_t* getUpperFenceKey() {
     return mUpperFence.offset ? RawPtr() + mUpperFence.offset : nullptr;
   }
 
@@ -130,12 +132,12 @@ class BTreeNode : public BTreeNodeHeader {
 public:
   struct __attribute__((packed)) Slot {
     // Layout:  key wihtout prefix | Payload
-    u16 offset;
-    u16 mKeySizeWithoutPrefix;
-    u16 mValSize;
+    uint16_t offset;
+    uint16_t mKeySizeWithoutPrefix;
+    uint16_t mValSize;
     union {
       HeadType head;
-      u8 mHeadBytes[4];
+      uint8_t mHeadBytes[4];
     };
   };
 
@@ -156,26 +158,28 @@ public:
   }
 
 public:
-  u16 freeSpace() {
-    return mDataOffset - (reinterpret_cast<u8*>(slot + mNumSeps) - RawPtr());
+  uint16_t freeSpace() {
+    return mDataOffset -
+           (reinterpret_cast<uint8_t*>(slot + mNumSeps) - RawPtr());
   }
 
-  u16 FreeSpaceAfterCompaction() {
+  uint16_t FreeSpaceAfterCompaction() {
     return BTreeNode::Size() -
-           (reinterpret_cast<u8*>(slot + mNumSeps) - RawPtr()) - mSpaceUsed;
+           (reinterpret_cast<uint8_t*>(slot + mNumSeps) - RawPtr()) -
+           mSpaceUsed;
   }
 
   double fillFactorAfterCompaction() {
     return (1 - (FreeSpaceAfterCompaction() * 1.0 / BTreeNode::Size()));
   }
 
-  bool hasEnoughSpaceFor(u32 space_needed) {
+  bool hasEnoughSpaceFor(uint32_t space_needed) {
     return (space_needed <= freeSpace() ||
             space_needed <= FreeSpaceAfterCompaction());
   }
 
   // ATTENTION: this method has side effects !
-  bool requestSpaceFor(u16 spaceNeeded) {
+  bool requestSpaceFor(uint16_t spaceNeeded) {
     if (spaceNeeded <= freeSpace())
       return true;
     if (spaceNeeded <= FreeSpaceAfterCompaction()) {
@@ -185,33 +189,33 @@ public:
     return false;
   }
 
-  inline Slice KeyWithoutPrefix(u16 slotId) {
+  inline Slice KeyWithoutPrefix(uint16_t slotId) {
     return Slice(KeyDataWithoutPrefix(slotId), KeySizeWithoutPrefix(slotId));
   }
 
-  inline u8* KeyDataWithoutPrefix(u16 slotId) {
+  inline uint8_t* KeyDataWithoutPrefix(uint16_t slotId) {
     return RawPtr() + slot[slotId].offset;
   }
 
-  inline u16 KeySizeWithoutPrefix(u16 slotId) {
+  inline uint16_t KeySizeWithoutPrefix(uint16_t slotId) {
     return slot[slotId].mKeySizeWithoutPrefix;
   }
 
-  inline Slice Value(u16 slotId) {
+  inline Slice Value(uint16_t slotId) {
     return Slice(ValData(slotId), ValSize(slotId));
   }
 
   // Each slot is composed of:
   // key (mKeySizeWithoutPrefix), payload (mValSize)
-  inline u8* ValData(u16 slotId) {
+  inline uint8_t* ValData(uint16_t slotId) {
     return RawPtr() + slot[slotId].offset + slot[slotId].mKeySizeWithoutPrefix;
   }
 
-  inline u16 ValSize(u16 slotId) {
+  inline uint16_t ValSize(uint16_t slotId) {
     return slot[slotId].mValSize;
   }
 
-  inline Swip* ChildSwipIncludingRightMost(u16 slotId) {
+  inline Swip* ChildSwipIncludingRightMost(uint16_t slotId) {
     if (slotId == mNumSeps) {
       return &mRightMostChildSwip;
     }
@@ -219,48 +223,48 @@ public:
     return reinterpret_cast<Swip*>(ValData(slotId));
   }
 
-  inline Swip* ChildSwip(u16 slotId) {
+  inline Swip* ChildSwip(uint16_t slotId) {
     DCHECK(slotId < mNumSeps);
     return reinterpret_cast<Swip*>(ValData(slotId));
   }
 
-  inline u16 getKVConsumedSpace(u16 slotId) {
+  inline uint16_t getKVConsumedSpace(uint16_t slotId) {
     return sizeof(Slot) + KeySizeWithoutPrefix(slotId) + ValSize(slotId);
   }
 
   // Attention: the caller has to hold a copy of the existing payload
-  inline void shortenPayload(u16 slotId, u16 targetSize) {
+  inline void shortenPayload(uint16_t slotId, uint16_t targetSize) {
     DCHECK(targetSize <= slot[slotId].mValSize);
-    const u16 freeSpace = slot[slotId].mValSize - targetSize;
+    const uint16_t freeSpace = slot[slotId].mValSize - targetSize;
     mSpaceUsed -= freeSpace;
     slot[slotId].mValSize = targetSize;
   }
 
-  inline bool CanExtendPayload(u16 slotId, u16 targetSize) {
+  inline bool CanExtendPayload(uint16_t slotId, uint16_t targetSize) {
     DCHECK(targetSize > ValSize(slotId))
         << "Target size must be larger than current size"
         << ", targetSize=" << targetSize << ", currentSize=" << ValSize(slotId);
 
-    const u16 extraSpaceNeeded = targetSize - ValSize(slotId);
+    const uint16_t extraSpaceNeeded = targetSize - ValSize(slotId);
     return FreeSpaceAfterCompaction() >= extraSpaceNeeded;
   }
 
   // Move key | payload to a new location
-  void ExtendPayload(u16 slotId, u16 targetSize) {
+  void ExtendPayload(uint16_t slotId, uint16_t targetSize) {
     DCHECK(CanExtendPayload(slotId, targetSize))
         << "ExtendPayload failed, not enough space in the current node"
         << ", slotId=" << slotId << ", targetSize=" << targetSize
         << ", freeSpace=" << FreeSpaceAfterCompaction()
         << ", currentSize=" << ValSize(slotId);
-    // const u16 extraSpaceNeeded = targetSize - ValSize(slotId);
+    // const uint16_t extraSpaceNeeded = targetSize - ValSize(slotId);
     // requestSpaceFor(extraSpaceNeeded);
 
     auto keySizeWithoutPrefix = KeySizeWithoutPrefix(slotId);
-    const u16 oldTotalSize = keySizeWithoutPrefix + ValSize(slotId);
-    const u16 newTotalSize = keySizeWithoutPrefix + targetSize;
+    const uint16_t oldTotalSize = keySizeWithoutPrefix + ValSize(slotId);
+    const uint16_t newTotalSize = keySizeWithoutPrefix + targetSize;
 
     // store the keyWithoutPrefix temporarily before moving the payload
-    u8 copiedKey[keySizeWithoutPrefix];
+    uint8_t copiedKey[keySizeWithoutPrefix];
     std::memcpy(copiedKey, KeyDataWithoutPrefix(slotId), keySizeWithoutPrefix);
 
     // release the old space occupied by the payload (keyWithoutPrefix + value)
@@ -285,30 +289,30 @@ public:
     return Slice(getLowerFenceKey(), mPrefixSize);
   }
 
-  inline u8* getPrefix() {
+  inline uint8_t* getPrefix() {
     return getLowerFenceKey();
   }
 
-  inline void copyPrefix(u8* out) {
+  inline void copyPrefix(uint8_t* out) {
     memcpy(out, getLowerFenceKey(), mPrefixSize);
   }
 
-  inline void copyKeyWithoutPrefix(u16 slotId, u8* out_after_prefix) {
+  inline void copyKeyWithoutPrefix(uint16_t slotId, uint8_t* out_after_prefix) {
     auto key = KeyWithoutPrefix(slotId);
     memcpy(out_after_prefix, key.data(), key.size());
   }
 
-  inline u16 getFullKeyLen(u16 slotId) {
+  inline uint16_t getFullKeyLen(uint16_t slotId) {
     return mPrefixSize + KeySizeWithoutPrefix(slotId);
   }
 
-  inline void copyFullKey(u16 slotId, u8* out) {
+  inline void copyFullKey(uint16_t slotId, uint8_t* out) {
     memcpy(out, getPrefix(), mPrefixSize);
     auto remaining = KeyWithoutPrefix(slotId);
     memcpy(out + mPrefixSize, remaining.data(), remaining.size());
   }
 
-  inline static s32 CmpKeys(Slice lhs, Slice rhs) {
+  inline static int32_t CmpKeys(Slice lhs, Slice rhs) {
     auto minLength = min(lhs.size(), rhs.size());
     if (minLength < 4) {
       for (size_t i = 0; i < minLength; ++i) {
@@ -332,37 +336,39 @@ public:
       return 0;
     }
     case 1: {
-      return static_cast<u32>(key[0]) << 24;
+      return static_cast<uint32_t>(key[0]) << 24;
     }
     case 2: {
-      const u16 bigEndianVal = *reinterpret_cast<const u16*>(key.data());
-      const u16 littleEndianVal = __builtin_bswap16(bigEndianVal);
-      return static_cast<u32>(littleEndianVal) << 16;
+      const uint16_t bigEndianVal =
+          *reinterpret_cast<const uint16_t*>(key.data());
+      const uint16_t littleEndianVal = __builtin_bswap16(bigEndianVal);
+      return static_cast<uint32_t>(littleEndianVal) << 16;
     }
     case 3: {
-      const u16 bigEndianVal = *reinterpret_cast<const u16*>(key.data());
-      const u16 littleEndianVal = __builtin_bswap16(bigEndianVal);
-      return (static_cast<u32>(littleEndianVal) << 16) |
-             (static_cast<u32>(key[2]) << 8);
+      const uint16_t bigEndianVal =
+          *reinterpret_cast<const uint16_t*>(key.data());
+      const uint16_t littleEndianVal = __builtin_bswap16(bigEndianVal);
+      return (static_cast<uint32_t>(littleEndianVal) << 16) |
+             (static_cast<uint32_t>(key[2]) << 8);
     }
     default: {
-      return __builtin_bswap32(*reinterpret_cast<const u32*>(key.data()));
+      return __builtin_bswap32(*reinterpret_cast<const uint32_t*>(key.data()));
     }
     }
 
-    return __builtin_bswap32(*reinterpret_cast<const u32*>(key.data()));
+    return __builtin_bswap32(*reinterpret_cast<const uint32_t*>(key.data()));
   }
 
   void makeHint();
 
-  s32 compareKeyWithBoundaries(Slice key);
+  int32_t compareKeyWithBoundaries(Slice key);
 
-  void searchHint(HeadType key_head, u16& lower_out, u16& upper_out) {
+  void searchHint(HeadType key_head, uint16_t& lower_out, uint16_t& upper_out) {
     if (mNumSeps > sHintCount * 2) {
       if (FLAGS_btree_hints == 2) {
 #ifdef __AVX512F__
-        const u16 dist = mNumSeps / (sHintCount + 1);
-        u16 pos, pos2;
+        const uint16_t dist = mNumSeps / (sHintCount + 1);
+        uint16_t pos, pos2;
         __m512i key_head_reg = _mm512_set1_epi32(key_head);
         __m512i chunk = _mm512_loadu_si512(hint);
         __mmask16 compareMask = _mm512_cmpge_epu32_mask(chunk, key_head_reg);
@@ -383,8 +389,8 @@ public:
         LOG(ERROR) << "Search hint with AVX512 failed: __AVX512F__ not found";
 #endif
       } else if (FLAGS_btree_hints == 1) {
-        const u16 dist = mNumSeps / (sHintCount + 1);
-        u16 pos, pos2;
+        const uint16_t dist = mNumSeps / (sHintCount + 1);
+        uint16_t pos, pos2;
 
         for (pos = 0; pos < sHintCount; pos++) {
           if (hint[pos] >= key_head) {
@@ -417,7 +423,8 @@ public:
   }
 
   template <bool equality_only = false>
-  s16 linearSearchWithBias(Slice key, u16 start_pos, bool higher = true) {
+  int16_t linearSearchWithBias(Slice key, uint16_t start_pos,
+                               bool higher = true) {
     // EXP
     if (key.size() < mPrefixSize ||
         (bcmp(key.data(), getLowerFenceKey(), mPrefixSize) != 0)) {
@@ -430,7 +437,7 @@ public:
     key.remove_prefix(mPrefixSize);
 
     if (higher) {
-      s32 cur = start_pos + 1;
+      int32_t cur = start_pos + 1;
       for (; cur < mNumSeps; cur++) {
         int cmp = CmpKeys(key, KeyWithoutPrefix(cur));
         if (cmp == 0) {
@@ -445,7 +452,7 @@ public:
         return cur;
       }
     } else {
-      s32 cur = start_pos - 1;
+      int32_t cur = start_pos - 1;
       for (; cur >= 0; cur--) {
         int cmp = CmpKeys(key, KeyWithoutPrefix(cur));
         if (cmp == 0) {
@@ -472,7 +479,7 @@ public:
    * (2) (2) (2)
    */
   template <bool equalityOnly = false>
-  s16 lowerBound(Slice key, bool* isEqual = nullptr) {
+  int16_t lowerBound(Slice key, bool* isEqual = nullptr) {
     if (isEqual != nullptr && mIsLeaf) {
       *isEqual = false;
     }
@@ -484,7 +491,7 @@ public:
         return -1;
       }
     } else if (mPrefixSize != 0) {
-      Slice keyPrefix(key.data(), min<u16>(key.size(), mPrefixSize));
+      Slice keyPrefix(key.data(), min<uint16_t>(key.size(), mPrefixSize));
       Slice lowerFencePrefix(getLowerFenceKey(), mPrefixSize);
       int cmpPrefix = CmpKeys(keyPrefix, lowerFencePrefix);
       if (cmpPrefix < 0) {
@@ -498,8 +505,8 @@ public:
 
     // the compared key has the same prefix
     key.remove_prefix(mPrefixSize);
-    u16 lower = 0;
-    u16 upper = mNumSeps;
+    uint16_t lower = 0;
+    uint16_t upper = mNumSeps;
     HeadType keyHead = head(key);
     searchHint(keyHead, lower, upper);
     while (lower < upper) {
@@ -523,48 +530,51 @@ public:
     return lower;
   }
 
-  void updateHint(u16 slotId);
+  void updateHint(uint16_t slotId);
 
-  s16 insertDoNotCopyPayload(Slice key, u16 valSize, s32 pos = -1);
+  int16_t insertDoNotCopyPayload(Slice key, uint16_t valSize, int32_t pos = -1);
 
-  s32 Insert(Slice key, Slice val);
+  int32_t Insert(Slice key, Slice val);
 
-  static u16 spaceNeeded(u16 keySize, u16 valSize, u16 prefixLength);
+  static uint16_t spaceNeeded(uint16_t keySize, uint16_t valSize,
+                              uint16_t prefixLength);
 
-  u16 spaceNeeded(u16 keySize, u16 valSize);
+  uint16_t spaceNeeded(uint16_t keySize, uint16_t valSize);
 
-  bool canInsert(u16 keySize, u16 valSize);
+  bool canInsert(uint16_t keySize, uint16_t valSize);
 
-  bool prepareInsert(u16 keySize, u16 valSize);
+  bool prepareInsert(uint16_t keySize, uint16_t valSize);
 
   void compactify();
 
   // merge right node into this node
-  u32 mergeSpaceUpperBound(
+  uint32_t mergeSpaceUpperBound(
       ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedRight);
 
-  u32 spaceUsedBySlot(u16 slotId);
+  uint32_t spaceUsedBySlot(uint16_t slotId);
 
-  bool merge(u16 slotId, ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
+  bool merge(uint16_t slotId,
+             ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
              ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedRight);
 
   // store key/value pair at slotId
-  void storeKeyValue(u16 slotId, Slice key, Slice val);
+  void storeKeyValue(uint16_t slotId, Slice key, Slice val);
 
   // ATTENTION: dstSlot then srcSlot !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  void copyKeyValueRange(BTreeNode* dst, u16 dstSlot, u16 srcSlot, u16 count);
-  void copyKeyValue(u16 srcSlot, BTreeNode* dst, u16 dstSlot);
+  void copyKeyValueRange(BTreeNode* dst, uint16_t dstSlot, uint16_t srcSlot,
+                         uint16_t count);
+  void copyKeyValue(uint16_t srcSlot, BTreeNode* dst, uint16_t dstSlot);
   void insertFence(FenceKey& fk, Slice key);
   void setFences(Slice lowerKey, Slice upperKey);
   void Split(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
              ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedNewLeft,
              const BTreeNode::SeparatorInfo& sepInfo);
-  u16 commonPrefix(u16 aPos, u16 bPos);
+  uint16_t commonPrefix(uint16_t aPos, uint16_t bPos);
   SeparatorInfo findSep();
   Swip& lookupInner(Slice key);
 
   // Not synchronized or todo section
-  bool removeSlot(u16 slotId);
+  bool removeSlot(uint16_t slotId);
 
   bool Remove(Slice key);
 
@@ -574,7 +584,7 @@ public:
               rapidjson::Value::AllocatorType& allocator);
 
 private:
-  inline void generateSeparator(const SeparatorInfo& sepInfo, u8* sepKey) {
+  inline void generateSeparator(const SeparatorInfo& sepInfo, uint8_t* sepKey) {
     // prefix
     memcpy(sepKey, getLowerFenceKey(), mPrefixSize);
 
@@ -587,7 +597,7 @@ private:
     }
   }
 
-  inline bool shrinkSearchRange(u16& lower, u16& upper, Slice key) {
+  inline bool shrinkSearchRange(uint16_t& lower, uint16_t& upper, Slice key) {
     auto mid = ((upper - lower) / 2) + lower;
     auto cmp = CmpKeys(key, KeyWithoutPrefix(mid));
     if (cmp < 0) {
@@ -605,8 +615,8 @@ private:
     return true;
   }
 
-  inline bool shrinkSearchRangeWithHead(u16& lower, u16& upper, Slice key,
-                                        HeadType keyHead) {
+  inline bool shrinkSearchRangeWithHead(uint16_t& lower, uint16_t& upper,
+                                        Slice key, HeadType keyHead) {
     auto mid = ((upper - lower) / 2) + lower;
     auto midHead = slot[mid].head;
     auto midSize = slot[mid].mKeySizeWithoutPrefix;
@@ -640,11 +650,11 @@ public:
     return new (addr) BTreeNode(std::forward<Args>(args)...);
   }
 
-  inline static u16 Size() {
-    return static_cast<u16>(FLAGS_page_size - sizeof(Page));
+  inline static uint16_t Size() {
+    return static_cast<uint16_t>(FLAGS_page_size - sizeof(Page));
   }
 
-  inline static u16 UnderFullSize() {
+  inline static uint16_t UnderFullSize() {
     return BTreeNode::Size() * 0.6;
   }
 };

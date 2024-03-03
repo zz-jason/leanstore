@@ -110,8 +110,8 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
     cr::Worker::My().StartTx();
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
-      EXPECT_EQ(btree->Insert(Slice((const u8*)key.data(), key.size()),
-                              Slice((const u8*)val.data(), val.size())),
+      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                              Slice((const uint8_t*)val.data(), val.size())),
                 OpCode::kOK);
     }
     cr::Worker::My().CommitTx();
@@ -127,9 +127,9 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
     };
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, expectedVal] = kvToTest[i];
-      EXPECT_EQ(
-          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OpCode::kOK);
+      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
+                              copyValueOut),
+                OpCode::kOK);
       EXPECT_EQ(copiedValue, expectedVal);
     }
   });
@@ -144,9 +144,9 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
     };
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, expectedVal] = kvToTest[i];
-      EXPECT_EQ(
-          btree->Lookup(Slice((const u8*)key.data(), key.size()), copyValueOut),
-          OpCode::kOK);
+      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
+                              copyValueOut),
+                OpCode::kOK);
       EXPECT_EQ(copiedValue, expectedVal);
     }
   });

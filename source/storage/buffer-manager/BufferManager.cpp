@@ -34,7 +34,7 @@ namespace storage {
 
 BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
   mNumBfs = mStore->mStoreOption.mBufferPoolSize / BufferFrame::Size();
-  const u64 totalMemSize = BufferFrame::Size() * (mNumBfs + mNumSaftyBfs);
+  const uint64_t totalMemSize = BufferFrame::Size() * (mNumBfs + mNumSaftyBfs);
 
   // Init buffer pool with zero-initialized buffer frames. Use mmap with flags
   // MAP_PRIVATE and MAP_ANONYMOUS, no underlying file desciptor to allocate
@@ -46,25 +46,25 @@ BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
       << ", bufferPoolSize=" << mStore->mStoreOption.mBufferPoolSize
       << ", totalMemSize=" << totalMemSize;
 
-  mBufferPool = reinterpret_cast<u8*>(underlyingBuf);
+  mBufferPool = reinterpret_cast<uint8_t*>(underlyingBuf);
   madvise(mBufferPool, totalMemSize, MADV_HUGEPAGE);
   madvise(mBufferPool, totalMemSize, MADV_DONTFORK);
 
   // Initialize mPartitions
   mNumPartitions = mStore->mStoreOption.mNumPartitions;
   mPartitionsMask = mNumPartitions - 1;
-  const u64 freeBfsLimitPerPartition =
+  const uint64_t freeBfsLimitPerPartition =
       std::ceil((FLAGS_free_pct * 1.0 * mNumBfs / 100.0) /
                 static_cast<double>(mNumPartitions));
-  for (u64 i = 0; i < mNumPartitions; i++) {
+  for (uint64_t i = 0; i < mNumPartitions; i++) {
     mPartitions.push_back(std::make_unique<Partition>(
         i, mNumPartitions, freeBfsLimitPerPartition));
   }
 
   // spread these buffer frames to all the partitions
-  utils::Parallelize::parallelRange(mNumBfs, [&](u64 begin, u64 end) {
-    u64 partitionId = 0;
-    for (u64 i = begin; i < end; i++) {
+  utils::Parallelize::parallelRange(mNumBfs, [&](uint64_t begin, uint64_t end) {
+    uint64_t partitionId = 0;
+    for (uint64_t i = begin; i < end; i++) {
       auto& partition = GetPartition(partitionId);
       auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
       partition.mFreeBfList.PushFront(*new (bfAddr) BufferFrame());
@@ -103,7 +103,7 @@ StringMap BufferManager::Serialize() {
   // TODO: correctly serialize ranges of used pages
   StringMap map;
   PID maxPageId = 0;
-  for (u64 i = 0; i < mNumPartitions; i++) {
+  for (uint64_t i = 0; i < mNumPartitions; i++) {
     maxPageId = std::max<PID>(GetPartition(i).mNextPageId, maxPageId);
   }
   map["max_pid"] = std::to_string(maxPageId);
@@ -113,7 +113,7 @@ StringMap BufferManager::Serialize() {
 void BufferManager::Deserialize(StringMap map) {
   PID maxPageId = std::stoull(map["max_pid"]);
   maxPageId = (maxPageId + (mNumPartitions - 1)) & ~(mNumPartitions - 1);
-  for (u64 i = 0; i < mNumPartitions; i++) {
+  for (uint64_t i = 0; i < mNumPartitions; i++) {
     GetPartition(i).mNextPageId = maxPageId + i;
   }
 }
@@ -125,10 +125,10 @@ void BufferManager::CheckpointAllBufferFrames() {
   });
 
   StopBufferFrameProviders();
-  utils::Parallelize::parallelRange(mNumBfs, [&](u64 begin, u64 end) {
+  utils::Parallelize::parallelRange(mNumBfs, [&](uint64_t begin, uint64_t end) {
     utils::AlignedBuffer<512> alignedBuffer(mStore->mStoreOption.mPageSize);
     auto* buffer = alignedBuffer.Get();
-    for (u64 i = begin; i < end; i++) {
+    for (uint64_t i = begin; i < end; i++) {
       auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
       auto& bf = *reinterpret_cast<BufferFrame*>(bfAddr);
       bf.header.mLatch.LockExclusively();
@@ -137,7 +137,7 @@ void BufferManager::CheckpointAllBufferFrames() {
         auto ret =
             pwrite(mStore->mPageFd, buffer, mStore->mStoreOption.mPageSize,
                    bf.header.mPageId * mStore->mStoreOption.mPageSize);
-        DCHECK_EQ(ret, (s64)mStore->mStoreOption.mPageSize);
+        DCHECK_EQ(ret, (int64_t)mStore->mStoreOption.mPageSize);
       }
       bf.header.mLatch.UnlockExclusively();
     }
@@ -146,7 +146,7 @@ void BufferManager::CheckpointAllBufferFrames() {
 
 auto BufferManager::CheckpointBufferFrame(BufferFrame& bf)
     -> std::expected<void, utils::Error> {
-  alignas(512) u8 buffer[mStore->mStoreOption.mPageSize];
+  alignas(512) uint8_t buffer[mStore->mStoreOption.mPageSize];
   bf.header.mLatch.LockExclusively();
   if (!bf.isFree()) {
     mStore->mTreeRegistry->Checkpoint(bf.page.mBTreeId, bf, buffer);
@@ -156,7 +156,7 @@ auto BufferManager::CheckpointBufferFrame(BufferFrame& bf)
       return std::unexpected<utils::Error>(
           utils::Error::FileWrite(GetDBFilePath(), errno, strerror(errno)));
     }
-    if ((u64)ret < mStore->mStoreOption.mPageSize) {
+    if ((uint64_t)ret < mStore->mStoreOption.mPageSize) {
       return std::unexpected<utils::Error>(utils::Error::General(
           "Write incomplete, only " + std::to_string(ret) + " bytes written"));
     }
@@ -171,10 +171,10 @@ void BufferManager::RecoverFromDisk() {
   recovery->Run();
 }
 
-u64 BufferManager::ConsumedPages() {
-  u64 totalUsedBfs = 0;
-  u64 totalFreeBfs = 0;
-  for (u64 i = 0; i < mNumPartitions; i++) {
+uint64_t BufferManager::ConsumedPages() {
+  uint64_t totalUsedBfs = 0;
+  uint64_t totalFreeBfs = 0;
+  for (uint64_t i = 0; i < mNumPartitions; i++) {
     totalFreeBfs += GetPartition(i).NumReclaimedPages();
     totalUsedBfs += GetPartition(i).NumAllocatedPages();
   }
@@ -184,12 +184,12 @@ u64 BufferManager::ConsumedPages() {
 // Buffer Frames Management
 
 Partition& BufferManager::RandomPartition() {
-  auto randOrdinal = utils::RandomGenerator::Rand<u64>(0, mNumPartitions);
+  auto randOrdinal = utils::RandomGenerator::Rand<uint64_t>(0, mNumPartitions);
   return GetPartition(randOrdinal);
 }
 
 BufferFrame& BufferManager::RandomBufferFrame() {
-  auto i = utils::RandomGenerator::Rand<u64>(0, mNumBfs);
+  auto i = utils::RandomGenerator::Rand<uint64_t>(0, mNumBfs);
   auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
   return *reinterpret_cast<BufferFrame*>(bfAddr);
 }
@@ -289,12 +289,6 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
     //     << "Failed to read page, page corrupted";
     COUNTERS_BLOCK() {
       WorkerCounters::MyCounters().dt_page_reads[bf.page.mBTreeId]++;
-      if (FLAGS_trace_dt_id >= 0 &&
-          bf.page.mBTreeId == static_cast<TREEID>(FLAGS_trace_dt_id) &&
-          utils::RandomGenerator::Rand<u64>(
-              0, FLAGS_trace_trigger_probability) == 0) {
-        utils::PrintBackTrace();
-      }
     }
 
     // 4. Intialize the buffer frame header
@@ -396,12 +390,12 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
 }
 
 void BufferManager::ReadPageSync(PID pageId, void* pageBuffer) {
-  DCHECK(u64(pageBuffer) % 512 == 0);
-  s64 bytesLeft = mStore->mStoreOption.mPageSize;
+  DCHECK(uint64_t(pageBuffer) % 512 == 0);
+  int64_t bytesLeft = mStore->mStoreOption.mPageSize;
   while (bytesLeft > 0) {
     auto totalRead = mStore->mStoreOption.mPageSize - bytesLeft;
     auto curOffset = pageId * mStore->mStoreOption.mPageSize + totalRead;
-    auto* curBuffer = reinterpret_cast<u8*>(pageBuffer) + totalRead;
+    auto* curBuffer = reinterpret_cast<uint8_t*>(pageBuffer) + totalRead;
     auto bytesRead = pread(mStore->mPageFd, curBuffer, bytesLeft, curOffset);
 
     // read error, return a zero-initialized pageBuffer frame
@@ -464,12 +458,12 @@ void BufferManager::SyncAllPageWrites() {
   fdatasync(mStore->mPageFd);
 }
 
-u64 BufferManager::GetPartitionID(PID pageId) {
+uint64_t BufferManager::GetPartitionID(PID pageId) {
   return pageId & mPartitionsMask;
 }
 
 Partition& BufferManager::GetPartition(PID pageId) {
-  const u64 partitionId = GetPartitionID(pageId);
+  const uint64_t partitionId = GetPartitionID(pageId);
   return *mPartitions[partitionId];
 }
 
@@ -479,17 +473,17 @@ void BufferManager::StopBufferFrameProviders() {
 
 BufferManager::~BufferManager() {
   StopBufferFrameProviders();
-  u64 totalMemSize = BufferFrame::Size() * (mNumBfs + mNumSaftyBfs);
+  uint64_t totalMemSize = BufferFrame::Size() * (mNumBfs + mNumSaftyBfs);
   munmap(mBufferPool, totalMemSize);
 }
 
 void BufferManager::DoWithBufferFrameIf(
     std::function<bool(BufferFrame& bf)> condition,
     std::function<void(BufferFrame& bf)> action) {
-  utils::Parallelize::parallelRange(mNumBfs, [&](u64 begin, u64 end) {
+  utils::Parallelize::parallelRange(mNumBfs, [&](uint64_t begin, uint64_t end) {
     DCHECK(condition != nullptr);
     DCHECK(action != nullptr);
-    for (u64 i = begin; i < end; i++) {
+    for (uint64_t i = begin; i < end; i++) {
       auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
       auto& bf = *reinterpret_cast<BufferFrame*>(bfAddr);
       bf.header.mLatch.LockExclusively();

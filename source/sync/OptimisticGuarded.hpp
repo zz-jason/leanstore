@@ -19,7 +19,7 @@ private:
   /// the value is being modified. The version is increased by 2 when the value
   /// is modified, which can be used to check whether the value is modified
   /// since the last read.
-  std::atomic<u64> mVersion = 0;
+  std::atomic<uint64_t> mVersion = 0;
 
   /// The guarded value.
   T mValue;
@@ -36,7 +36,7 @@ public:
   /// guaranteed to be even.
   /// @param copiedVal The copied value.
   /// @return The version of the value.
-  [[nodiscard]] u64 Get(T& copiedVal);
+  [[nodiscard]] uint64_t Get(T& copiedVal);
 
   /// Stores the given value. Only one thread can call this function at a time.
   /// @param newVal The value to store.
@@ -49,7 +49,7 @@ public:
 
 template <typename T>
   requires std::is_trivially_copy_assignable_v<T>
-inline u64 OptimisticGuarded<T>::Get(T& copiedVal) {
+inline uint64_t OptimisticGuarded<T>::Get(T& copiedVal) {
   while (true) {
     auto version = mVersion.load();
     while (version & 1) {

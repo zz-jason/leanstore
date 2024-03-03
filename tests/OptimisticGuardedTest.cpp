@@ -14,8 +14,8 @@ namespace leanstore::test {
 class OptimisticGuardedTest : public ::testing::Test {
 protected:
   struct TestPayload {
-    s64 mA;
-    s64 mB;
+    int64_t mA;
+    int64_t mB;
   };
 
   std::unique_ptr<LeanStore> mStore;
@@ -44,7 +44,7 @@ TEST_F(OptimisticGuardedTest, Set) {
 
   // Worker 0, set the guardedVal 100 times
   mStore->ExecSync(0, [&]() {
-    for (s64 i = 0; i < 100; i++) {
+    for (int64_t i = 0; i < 100; i++) {
       guardedVal.Set(TestPayload{i, 100 - i});
     }
   });
@@ -53,7 +53,7 @@ TEST_F(OptimisticGuardedTest, Set) {
   mStore->ExecSync(1, [&]() {
     TestPayload copiedVal;
     auto version = guardedVal.Get(copiedVal);
-    for (s64 i = 0; i < 200; i++) {
+    for (int64_t i = 0; i < 200; i++) {
       auto currVersion = guardedVal.Get(copiedVal);
       if (currVersion != version) {
         EXPECT_EQ(copiedVal.mA + copiedVal.mB, 100);
@@ -72,7 +72,7 @@ TEST_F(OptimisticGuardedTest, UpdateAttribute) {
 
   // Worker 0, update the guardedVal 100 times
   mStore->ExecSync(0, [&]() {
-    for (s64 i = 0; i < 100; i++) {
+    for (int64_t i = 0; i < 100; i++) {
       guardedVal.UpdateAttribute(&TestPayload::mA, i);
     }
   });
@@ -81,7 +81,7 @@ TEST_F(OptimisticGuardedTest, UpdateAttribute) {
   mStore->ExecSync(1, [&]() {
     TestPayload copiedVal;
     auto version = guardedVal.Get(copiedVal);
-    for (s64 i = 0; i < 200; i++) {
+    for (int64_t i = 0; i < 200; i++) {
       auto currVersion = guardedVal.Get(copiedVal);
       if (currVersion != version) {
         EXPECT_EQ(copiedVal.mB, 100);

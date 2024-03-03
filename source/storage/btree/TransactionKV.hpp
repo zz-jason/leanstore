@@ -60,12 +60,12 @@ public:
 
   // This undo implementation works only for rollback and not for undo
   // operations during recovery
-  void undo(const u8* walEntryPtr, const u64) override;
+  void undo(const uint8_t* walEntryPtr, const uint64_t) override;
 
-  void GarbageCollect(const u8* entryPtr, WORKERID versionWorkerId,
+  void GarbageCollect(const uint8_t* entryPtr, WORKERID versionWorkerId,
                       TXID versionTxId, bool calledBefore) override;
 
-  void unlock(const u8* walEntryPtr) override;
+  void unlock(const uint8_t* walEntryPtr) override;
 
 private:
   template <bool asc = true>
@@ -79,9 +79,9 @@ private:
     return guardedNode->mHasGarbage;
   }
 
-  inline std::tuple<OpCode, u16> getVisibleTuple(Slice payload,
-                                                 ValCallback callback) {
-    std::tuple<OpCode, u16> ret;
+  inline std::tuple<OpCode, uint16_t> getVisibleTuple(Slice payload,
+                                                      ValCallback callback) {
+    std::tuple<OpCode, uint16_t> ret;
     while (true) {
       JUMPMU_TRY() {
         const auto* const tuple = Tuple::From(payload.data());
@@ -124,7 +124,8 @@ public:
   inline static void InsertToNode(GuardedBufferFrame<BTreeNode>& guardedNode,
                                   Slice key, Slice val, WORKERID workerId,
                                   TXID txStartTs,
-                                  TxMode txMode [[maybe_unused]], s32& slotId) {
+                                  TxMode txMode [[maybe_unused]],
+                                  int32_t& slotId) {
     auto totalValSize = sizeof(ChainedTuple) + val.size();
     slotId = guardedNode->insertDoNotCopyPayload(key, totalValSize, slotId);
     auto* tupleAddr = guardedNode->ValData(slotId);
@@ -132,7 +133,7 @@ public:
     guardedNode.MarkAsDirty();
   }
 
-  inline static u64 ConvertToFatTupleThreshold() {
+  inline static uint64_t ConvertToFatTupleThreshold() {
     return cr::Worker::My().mStore->mStoreOption.mNumTxWorkers;
   }
 
