@@ -52,7 +52,6 @@ DECLARE_int64(btree_hints);
 DECLARE_bool(btree_heads);
 DECLARE_bool(bulk_insert);
 // -------------------------------------------------------------------------------------
-DECLARE_int64(trace_dt_id);
 DECLARE_int64(trace_trigger_probability);
 DECLARE_bool(pid_tracing);
 DECLARE_string(tag);

@@ -18,13 +18,13 @@ void* MallocHuge(size_t size) {
 HashTable::Entry::Entry(PID key) : key(key) {
 }
 
-HashTable::HashTable(u64 sizeInBits) {
+HashTable::HashTable(uint64_t sizeInBits) {
   uint64_t size = (1ull << sizeInBits);
   mask = size - 1;
   entries = (Entry**)MallocHuge(size * sizeof(Entry*));
 }
 
-u64 HashTable::hashKey(PID k) {
+uint64_t HashTable::hashKey(PID k) {
   // MurmurHash64A
   const uint64_t m = 0xc6a4a7935bd1e995ull;
   const int r = 47;
@@ -67,13 +67,13 @@ void HashTable::Remove(HashTable::Handler& handler) {
   delete toDelete;
 }
 
-void HashTable::Remove(u64 key) {
+void HashTable::Remove(uint64_t key) {
   auto handler = Lookup(key);
   assert(handler);
   Remove(handler);
 }
 
-bool HashTable::has(u64 key) {
+bool HashTable::has(uint64_t key) {
   uint64_t pos = hashKey(key) & mask;
   auto* e = entries[pos];
   while (e) {

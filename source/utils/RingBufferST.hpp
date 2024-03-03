@@ -11,24 +11,24 @@ namespace utils {
 class RingBufferST {
 private:
   struct Entry {
-    u8 is_cr : 1;
-    u64 length : 63;
-    u8 payload[];
+    uint8_t is_cr : 1;
+    uint64_t length : 63;
+    uint8_t payload[];
   };
 
-  static_assert(sizeof(Entry) == sizeof(u64), "");
+  static_assert(sizeof(Entry) == sizeof(uint64_t), "");
 
-  const u64 buffer_size;
-  std::unique_ptr<u8[]> buffer;
-  u64 write_cursor = 0;
-  u64 read_cursor = 0;
+  const uint64_t buffer_size;
+  std::unique_ptr<uint8_t[]> buffer;
+  uint64_t write_cursor = 0;
+  uint64_t read_cursor = 0;
 
-  u64 continguousFreeSpace() {
+  uint64_t continguousFreeSpace() {
     return (read_cursor > write_cursor) ? read_cursor - write_cursor
                                         : buffer_size - write_cursor;
   }
 
-  u64 freeSpace() {
+  uint64_t freeSpace() {
     // A , B , C : a - b + c % c
     if (write_cursor == read_cursor) {
       return buffer_size;
@@ -45,26 +45,26 @@ private:
   }
 
 public:
-  RingBufferST(u64 size) : buffer_size(size) {
-    buffer = std::make_unique<u8[]>(buffer_size);
+  RingBufferST(uint64_t size) : buffer_size(size) {
+    buffer = std::make_unique<uint8_t[]>(buffer_size);
   }
 
-  bool canInsert(u64 payload_size) {
-    const u64 total_size = payload_size + sizeof(Entry);
-    const u64 contiguous_free_space = continguousFreeSpace();
+  bool canInsert(uint64_t payload_size) {
+    const uint64_t total_size = payload_size + sizeof(Entry);
+    const uint64_t contiguous_free_space = continguousFreeSpace();
     if (contiguous_free_space >= total_size) {
       return true;
     } else {
-      const u64 free_space = freeSpace();
-      const u64 free_space_beginning = free_space - contiguous_free_space;
+      const uint64_t free_space = freeSpace();
+      const uint64_t free_space_beginning = free_space - contiguous_free_space;
       return free_space_beginning >= total_size;
     }
   }
 
-  u8* pushBack(u64 payload_length) {
+  uint8_t* pushBack(uint64_t payload_length) {
     ENSURE(canInsert(payload_length));
-    const u64 total_size = payload_length + sizeof(Entry);
-    const u64 contiguous_free_space = continguousFreeSpace();
+    const uint64_t total_size = payload_length + sizeof(Entry);
+    const uint64_t contiguous_free_space = continguousFreeSpace();
     if (contiguous_free_space < total_size) {
       carriageReturn();
     }
@@ -75,11 +75,11 @@ public:
     entry.length = payload_length;
     return entry.payload;
   }
-  void iterateUntilTail(u8* start_payload_ptr,
-                        std::function<void(u8* entry)> cb) {
+  void iterateUntilTail(uint8_t* start_payload_ptr,
+                        std::function<void(uint8_t* entry)> cb) {
     cb(start_payload_ptr);
     start_payload_ptr -= sizeof(Entry);
-    u64 cursor = start_payload_ptr - buffer.get();
+    uint64_t cursor = start_payload_ptr - buffer.get();
     while (cursor != write_cursor) {
       auto entry = reinterpret_cast<Entry*>(buffer.get() + cursor);
       if (entry->is_cr) {
@@ -94,7 +94,7 @@ public:
   bool empty() {
     return write_cursor == read_cursor;
   }
-  u8* front() {
+  uint8_t* front() {
     auto entry = reinterpret_cast<Entry*>(buffer.get() + read_cursor);
     if (entry->is_cr) {
       read_cursor = 0;
@@ -111,24 +111,24 @@ public:
 // -------------------------------------------------------------------------------------
 class FRingBufferST {
 private:
-  std::list<std::unique_ptr<u8[]>> entries;
-  std::list<std::unique_ptr<u8[]>>::iterator iter;
+  std::list<std::unique_ptr<uint8_t[]>> entries;
+  std::list<std::unique_ptr<uint8_t[]>>::iterator iter;
 
 public:
-  FRingBufferST(u64) {
+  FRingBufferST(uint64_t) {
     iter = entries.end();
   }
-  bool canInsert(u64) {
+  bool canInsert(uint64_t) {
     return true;
   }
-  u8* pushBack(u64 payload_length) {
-    entries.emplace_back(std::make_unique<u8[]>(payload_length));
+  uint8_t* pushBack(uint64_t payload_length) {
+    entries.emplace_back(std::make_unique<uint8_t[]>(payload_length));
     if (iter == entries.end()) {
       iter = std::prev(entries.end());
     }
     return entries.back().get();
   }
-  void iterateUntilTail(u8*, std::function<void(u8* entry)> cb) {
+  void iterateUntilTail(uint8_t*, std::function<void(uint8_t* entry)> cb) {
     while (iter != entries.end()) {
       cb((*iter).get());
       iter++;
@@ -138,7 +138,7 @@ public:
   bool empty() {
     return entries.empty();
   }
-  u8* front() {
+  uint8_t* front() {
     return entries.front().get();
   }
   void popFront() {

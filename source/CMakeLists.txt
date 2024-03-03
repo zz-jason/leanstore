@@ -11,7 +11,7 @@ file(GLOB_RECURSE LEANSTORE_SRC **.cpp **/**.cpp **.cc **/**.cc **.hpp **/**.hpp
 add_library(leanstore STATIC ${LEANSTORE_SRC})
 
 # dependencies
-set(leanstore_deps aio tabulate::tabulate rapidjson gflags::gflags glog::glog)
+set(leanstore_deps aio tabulate::tabulate rapidjson gflags::gflags glog::glog Crc32c::crc32c)
 target_link_libraries(leanstore PUBLIC ${leanstore_deps})
 
 # include dirs

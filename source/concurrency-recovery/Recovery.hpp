@@ -20,23 +20,23 @@ private:
   leanstore::LeanStore* mStore;
 
   /// The offset of WAL in the underlying data file.
-  u64 mWalStartOffset;
+  uint64_t mWalStartOffset;
 
   /// Size of the written WAL file.
-  u64 mWalSize;
+  uint64_t mWalSize;
 
   /// Stores the dirty page ID and the offset to the first WALEntry that caused
   /// that page to become dirty.
-  std::map<PID, u64> mDirtyPageTable;
+  std::map<PID, uint64_t> mDirtyPageTable;
 
   /// Stores the active transaction and the offset to the last created WALEntry.
-  std::map<TXID, u64> mActiveTxTable;
+  std::map<TXID, uint64_t> mActiveTxTable;
 
   /// Stores all the pages read from disk during the recovery process.
   std::map<PID, storage::BufferFrame*> mResolvedPages;
 
 public:
-  Recovery(leanstore::LeanStore* store, u64 offset, u64 size)
+  Recovery(leanstore::LeanStore* store, uint64_t offset, uint64_t size)
       : mStore(store),
         mWalStartOffset(offset),
         mWalSize(size) {
@@ -90,7 +90,7 @@ private:
   /// Return the buffer frame containing the required dirty page
   storage::BufferFrame& resolvePage(PID pageId);
 
-  std::expected<void, utils::Error> readWalEntry(s64 entryOffset,
+  std::expected<void, utils::Error> readWalEntry(int64_t entryOffset,
                                                  size_t entrySize,
                                                  void* destination);
 };
@@ -146,7 +146,8 @@ inline storage::BufferFrame& Recovery::resolvePage(PID pageId) {
   return bf;
 }
 
-inline auto Recovery::readWalEntry(s64 offset, size_t nbytes, void* destination)
+inline auto Recovery::readWalEntry(int64_t offset, size_t nbytes,
+                                   void* destination)
     -> std::expected<void, utils::Error> {
   auto fileName = GetWALFilePath();
   FILE* fp = fopen(fileName.c_str(), "rb");

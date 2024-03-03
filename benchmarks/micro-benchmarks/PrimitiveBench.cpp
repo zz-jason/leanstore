@@ -35,11 +35,12 @@ static void BenchPageDirectly(benchmark::State& state) {
 }
 
 static void BenchStdArray(benchmark::State& state) {
-  static std::array<std::atomic<u64>, 8> sTmpArray;
+  static std::array<std::atomic<uint64_t>, 8> sTmpArray;
   for (auto _ : state) {
     for (auto counter = 0; counter < 1000; counter++) {
       auto i = RandomGenerator::Rand(0, 8);
-      auto val = RandomGenerator::Rand((u64)0, std::numeric_limits<u64>::max());
+      auto val = RandomGenerator::Rand((uint64_t)0,
+                                       std::numeric_limits<uint64_t>::max());
       sTmpArray[i].store(val, std::memory_order_release);
       // rawArray[i].store(val, std::memory_order_release);
     }
@@ -47,23 +48,25 @@ static void BenchStdArray(benchmark::State& state) {
 }
 
 static void BenchVecArray(benchmark::State& state) {
-  static std::vector<std::atomic<u64>> sTmpArray2(8);
+  static std::vector<std::atomic<uint64_t>> sTmpArray2(8);
   for (auto _ : state) {
     for (auto counter = 0; counter < 1000; counter++) {
       auto i = RandomGenerator::Rand(0, 8);
-      auto val = RandomGenerator::Rand((u64)0, std::numeric_limits<u64>::max());
+      auto val = RandomGenerator::Rand((uint64_t)0,
+                                       std::numeric_limits<uint64_t>::max());
       sTmpArray2[i].store(val, std::memory_order_release);
     }
   }
 }
 
 static void BenchRawArray(benchmark::State& state) {
-  static std::unique_ptr<std::atomic<u64>[]> sTmpArray3 =
-      std::make_unique<std::atomic<u64>[]>(8);
+  static std::unique_ptr<std::atomic<uint64_t>[]> sTmpArray3 =
+      std::make_unique<std::atomic<uint64_t>[]>(8);
   for (auto _ : state) {
     for (auto counter = 0; counter < 1000; counter++) {
       auto i = RandomGenerator::Rand(0, 8);
-      auto val = RandomGenerator::Rand((u64)0, std::numeric_limits<u64>::max());
+      auto val = RandomGenerator::Rand((uint64_t)0,
+                                       std::numeric_limits<uint64_t>::max());
       sTmpArray3[i].store(val, std::memory_order_release);
     }
   }

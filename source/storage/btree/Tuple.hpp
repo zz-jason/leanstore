@@ -39,7 +39,7 @@ static constexpr COMMANDID kInvalidCommandid =
 // TupleFormat
 // -----------------------------------------------------------------------------
 
-enum class TupleFormat : u8 {
+enum class TupleFormat : uint8_t {
   kChained = 0,
   kFat = 1,
 };
@@ -108,11 +108,11 @@ public:
   }
 
 public:
-  inline static Tuple* From(u8* buffer) {
+  inline static Tuple* From(uint8_t* buffer) {
     return reinterpret_cast<Tuple*>(buffer);
   }
 
-  inline static const Tuple* From(const u8* buffer) {
+  inline static const Tuple* From(const uint8_t* buffer) {
     return reinterpret_cast<const Tuple*>(buffer);
   }
 
@@ -145,13 +145,13 @@ public:
   COMMANDID mCommandId = kInvalidCommandid;
 
   /// Descriptor + Delta
-  u8 mPayload[];
+  uint8_t mPayload[];
 
 public:
   FatTupleDelta() = default;
 
   FatTupleDelta(WORKERID workerId, TXID txId, COMMANDID commandId,
-                const u8* buf, u32 size)
+                const uint8_t* buf, uint32_t size)
       : mWorkerId(workerId),
         mTxId(txId),
         mCommandId(commandId) {
@@ -167,15 +167,15 @@ public:
     return *reinterpret_cast<const UpdateDesc*>(mPayload);
   }
 
-  inline u8* GetDeltaPtr() {
+  inline uint8_t* GetDeltaPtr() {
     return mPayload + GetUpdateDesc().Size();
   }
 
-  inline const u8* GetDeltaPtr() const {
+  inline const uint8_t* GetDeltaPtr() const {
     return mPayload + GetUpdateDesc().Size();
   }
 
-  inline u32 TotalSize() {
+  inline uint32_t TotalSize() {
     const auto& updateDesc = GetUpdateDesc();
     return sizeof(FatTupleDelta) + updateDesc.SizeWithDelta();
   }
@@ -192,36 +192,37 @@ public:
 class __attribute__((packed)) FatTuple : public Tuple {
 public:
   /// Size of the newest value.
-  u16 mValSize = 0;
+  uint16_t mValSize = 0;
 
   /// Capacity of the payload
-  u32 mPayloadCapacity = 0;
+  uint32_t mPayloadCapacity = 0;
 
   /// Space used of the payload
-  u32 mPayloadSize = 0;
+  uint32_t mPayloadSize = 0;
 
-  u32 mDataOffset = 0;
+  uint32_t mDataOffset = 0;
 
-  u16 mNumDeltas = 0; // Attention: coupled with mPayloadSize
+  uint16_t mNumDeltas = 0; // Attention: coupled with mPayloadSize
 
   // value, FatTupleDelta+Descriptor+Delta[] O2N
-  u8 mPayload[];
+  uint8_t mPayload[];
 
 public:
-  FatTuple(u32 payloadCapacity)
+  FatTuple(uint32_t payloadCapacity)
       : Tuple(TupleFormat::kFat, 0, 0),
         mPayloadCapacity(payloadCapacity),
         mDataOffset(payloadCapacity) {
   }
 
-  FatTuple(u32 payloadCapacity, u32 valSize, const ChainedTuple& chainedTuple);
+  FatTuple(uint32_t payloadCapacity, uint32_t valSize,
+           const ChainedTuple& chainedTuple);
 
   bool HasSpaceFor(const UpdateDesc&);
 
   void Append(UpdateDesc&);
 
   template <typename... Args>
-  FatTupleDelta& NewDelta(u32 totalDeltaSize, Args&&... args);
+  FatTupleDelta& NewDelta(uint32_t totalDeltaSize, Args&&... args);
 
   void GarbageCollection();
 
@@ -235,11 +236,11 @@ public:
     return Slice(GetValPtr(), mValSize);
   }
 
-  inline u8* GetValPtr() {
+  inline uint8_t* GetValPtr() {
     return mPayload;
   }
 
-  inline const u8* GetValPtr() const {
+  inline const uint8_t* GetValPtr() const {
     return mPayload;
   }
 
@@ -247,7 +248,7 @@ public:
   /// callback if the newest visible tuple is found.
   ///
   /// @return whether the tuple is found, and the number of visited versions
-  std::tuple<OpCode, u16> GetVisibleTuple(ValCallback valCallback) const;
+  std::tuple<OpCode, uint16_t> GetVisibleTuple(ValCallback valCallback) const;
 
   void ConvertToChained(TREEID treeId);
 
@@ -263,33 +264,33 @@ public:
   }
 
 private:
-  void resize(u32 newSize);
+  void resize(uint32_t newSize);
 
-  inline FatTupleDelta& getDelta(u16 i) {
+  inline FatTupleDelta& getDelta(uint16_t i) {
     DCHECK(i < mNumDeltas);
     return *reinterpret_cast<FatTupleDelta*>(mPayload + getDeltaOffsets()[i]);
   }
 
-  inline const FatTupleDelta& getDelta(u16 i) const {
+  inline const FatTupleDelta& getDelta(uint16_t i) const {
     DCHECK(i < mNumDeltas);
     return *reinterpret_cast<const FatTupleDelta*>(mPayload +
                                                    getDeltaOffsets()[i]);
   }
 
-  inline u16* getDeltaOffsets() {
-    return reinterpret_cast<u16*>(mPayload + mValSize);
+  inline uint16_t* getDeltaOffsets() {
+    return reinterpret_cast<uint16_t*>(mPayload + mValSize);
   }
 
-  inline const u16* getDeltaOffsets() const {
-    return reinterpret_cast<const u16*>(mPayload + mValSize);
+  inline const uint16_t* getDeltaOffsets() const {
+    return reinterpret_cast<const uint16_t*>(mPayload + mValSize);
   }
 
 public:
-  inline static FatTuple* From(u8* buffer) {
+  inline static FatTuple* From(uint8_t* buffer) {
     return reinterpret_cast<FatTuple*>(buffer);
   }
 
-  inline static const FatTuple* From(const u8* buffer) {
+  inline static const FatTuple* From(const uint8_t* buffer) {
     return reinterpret_cast<const FatTuple*>(buffer);
   }
 };
@@ -301,9 +302,9 @@ public:
 struct __attribute__((packed)) DanglingPointer {
   BufferFrame* mBf = nullptr;
 
-  u64 mLatchVersionShouldBe = -1;
+  uint64_t mLatchVersionShouldBe = -1;
 
-  s32 mHeadSlot = -1;
+  int32_t mHeadSlot = -1;
 
 public:
   DanglingPointer() = default;
@@ -319,7 +320,7 @@ public:
 // Version
 // -----------------------------------------------------------------------------
 
-enum class VersionType : u8 { kUpdate, kInsert, kRemove };
+enum class VersionType : uint8_t { kUpdate, kInsert, kRemove };
 
 struct __attribute__((packed)) Version {
 public:
@@ -344,9 +345,9 @@ public:
 // -----------------------------------------------------------------------------
 
 struct __attribute__((packed)) UpdateVersion : Version {
-  u8 mIsDelta = 1;
+  uint8_t mIsDelta = 1;
 
-  u8 mPayload[]; // UpdateDescriptor + Delta
+  uint8_t mPayload[]; // UpdateDescriptor + Delta
 
 public:
   UpdateVersion(WORKERID workerId, TXID txId, COMMANDID commandId, bool isDelta)
@@ -354,7 +355,7 @@ public:
         mIsDelta(isDelta) {
   }
 
-  UpdateVersion(const FatTupleDelta& delta, u64 deltaPayloadSize)
+  UpdateVersion(const FatTupleDelta& delta, uint64_t deltaPayloadSize)
       : Version(VersionType::kUpdate, delta.mWorkerId, delta.mTxId,
                 delta.mCommandId),
         mIsDelta(true) {
@@ -362,23 +363,23 @@ public:
   }
 
 public:
-  inline static const UpdateVersion* From(const u8* buffer) {
+  inline static const UpdateVersion* From(const uint8_t* buffer) {
     return reinterpret_cast<const UpdateVersion*>(buffer);
   }
 };
 
 struct __attribute__((packed)) InsertVersion : Version {
 public:
-  u16 mKeySize;
+  uint16_t mKeySize;
 
-  u16 mValSize;
+  uint16_t mValSize;
 
   // Key + Value
-  u8 mPayload[];
+  uint8_t mPayload[];
 
 public:
-  InsertVersion(WORKERID workerId, TXID txId, COMMANDID commandId, u16 keySize,
-                u16 valSize)
+  InsertVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
+                uint16_t keySize, uint16_t valSize)
       : Version(VersionType::kInsert, workerId, txId, commandId),
         mKeySize(keySize),
         mValSize(valSize) {
@@ -402,7 +403,7 @@ public:
   }
 
 public:
-  inline static const InsertVersion* From(const u8* buffer) {
+  inline static const InsertVersion* From(const uint8_t* buffer) {
     return reinterpret_cast<const InsertVersion*>(buffer);
   }
 };
@@ -413,18 +414,18 @@ public:
 
 struct __attribute__((packed)) RemoveVersion : Version {
 public:
-  u16 mKeySize;
+  uint16_t mKeySize;
 
-  u16 mValSize;
+  uint16_t mValSize;
 
   DanglingPointer mDanglingPointer;
 
   // Key + Value
-  u8 mPayload[];
+  uint8_t mPayload[];
 
 public:
-  RemoveVersion(WORKERID workerId, TXID txId, COMMANDID commandId, u16 keySize,
-                u16 valSize)
+  RemoveVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
+                uint16_t keySize, uint16_t valSize)
       : Version(VersionType::kRemove, workerId, txId, commandId),
         mKeySize(keySize),
         mValSize(valSize) {
@@ -449,7 +450,7 @@ public:
   }
 
 public:
-  inline static const RemoveVersion* From(const u8* buffer) {
+  inline static const RemoveVersion* From(const uint8_t* buffer) {
     return reinterpret_cast<const RemoveVersion*>(buffer);
   }
 };

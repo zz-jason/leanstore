@@ -3,16 +3,16 @@
 namespace leanstore {
 
 std::mutex CPUCounters::mutex;
-u64 CPUCounters::id = 0;
-std::unordered_map<u64, CPUCounters> CPUCounters::threads;
+uint64_t CPUCounters::id = 0;
+std::unordered_map<uint64_t, CPUCounters> CPUCounters::threads;
 
-u64 CPUCounters::registerThread(string name, bool perfInherit) {
+uint64_t CPUCounters::registerThread(std::string name, bool perfInherit) {
   std::unique_lock guard(mutex);
   threads[id] = {.e = std::make_unique<PerfEvent>(perfInherit), .name = name};
   return id++;
 }
 
-void CPUCounters::removeThread(u64 id) {
+void CPUCounters::removeThread(uint64_t id) {
   std::unique_lock guard(mutex);
   threads.erase(id);
 }

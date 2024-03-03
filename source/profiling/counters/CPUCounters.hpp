@@ -12,17 +12,17 @@ namespace leanstore {
 struct CPUCounters {
   std::unique_ptr<PerfEvent> e;
 
-  string name;
+  std::string name;
 
-  static u64 id;
+  static uint64_t id;
 
-  static std::unordered_map<u64, CPUCounters> threads;
+  static std::unordered_map<uint64_t, CPUCounters> threads;
 
   static std::mutex mutex;
 
-  static u64 registerThread(string name, bool perf_inherit = false);
+  static uint64_t registerThread(std::string name, bool perf_inherit = false);
 
-  static void removeThread(u64 id);
+  static void removeThread(uint64_t id);
 };
 
 } // namespace leanstore

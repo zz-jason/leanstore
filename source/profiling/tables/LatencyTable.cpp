@@ -28,7 +28,7 @@ void LatencyTable::next() {
     if (tls->mWorkerId.load() != -1) {
       return;
     }
-    for (u64 i = 0; i < CRCounters::latency_tx_capacity; i++) {
+    for (uint64_t i = 0; i < CRCounters::latency_tx_capacity; i++) {
       columns.at("key") << tls->mWorkerId.load();
       columns.at("i") << i;
       columns.at("cc_ms_precommit_latency")

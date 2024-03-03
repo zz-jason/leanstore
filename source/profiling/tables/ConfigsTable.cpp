@@ -9,7 +9,7 @@ std::string ConfigsTable::getName() {
   return "configs";
 }
 
-void ConfigsTable::add(string name, string value) {
+void ConfigsTable::add(std::string name, std::string value) {
   columns.emplace(name, [&, value](Column& col) { col << value; });
 }
 
@@ -72,7 +72,7 @@ void ConfigsTable::open() {
   }
 }
 
-u64 ConfigsTable::hash() {
+uint64_t ConfigsTable::hash() {
   std::stringstream configConcatenation;
   for (const auto& c : columns) {
     configConcatenation << c.second.values[0];

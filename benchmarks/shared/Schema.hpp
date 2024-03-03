@@ -32,8 +32,8 @@ public:
   };
 };
 
-template <u64 size> struct BytesPayload {
-  u8 value[size];
+template <uint64_t size> struct BytesPayload {
+  uint8_t value[size];
 
   BytesPayload() {
   }

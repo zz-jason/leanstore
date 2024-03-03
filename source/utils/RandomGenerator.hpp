@@ -43,30 +43,30 @@ class RandomGenerator {
 public:
   /// Get a random number between min inclusive and max exclusive, i.e. in the
   /// range [min, max)
-  static u64 RandU64(u64 min, u64 max) {
-    u64 rand = min + (tlsMtGenerator.Rand() % (max - min));
+  static uint64_t RandU64(uint64_t min, uint64_t max) {
+    uint64_t rand = min + (tlsMtGenerator.Rand() % (max - min));
     DCHECK(min <= rand && rand < max)
         << "Random number should be in range [min, max)"
         << ", min=" << min << ", max=" << max << ", rand=" << rand;
     return rand;
   }
 
-  static u64 RandU64() {
+  static uint64_t RandU64() {
     return tlsMtGenerator.Rand();
   }
 
-  static u64 RandU64Std(u64 min, u64 max) {
-    std::uniform_int_distribution<u64> distribution(min, max - 1);
+  static uint64_t RandU64Std(uint64_t min, uint64_t max) {
+    std::uniform_int_distribution<uint64_t> distribution(min, max - 1);
     return distribution(tlsStdGenerator);
   }
 
   template <typename T> inline static T Rand(T min, T max) {
-    u64 rand = RandU64(min, max);
+    uint64_t rand = RandU64(min, max);
     return static_cast<T>(rand);
   }
 
-  static void RandString(u8* dst, u64 size) {
-    for (u64 i = 0; i < size; i++) {
+  static void RandString(uint8_t* dst, uint64_t size) {
+    for (uint64_t i = 0; i < size; i++) {
       dst[i] = Rand(48, 123);
     }
   }

@@ -15,7 +15,7 @@
 namespace leanstore {
 namespace storage {
 
-enum class GuardState : u8 {
+enum class GuardState : uint8_t {
   kUninitialized = 0,
   kOptimisticShared = 1,
   kPessimisticShared = 2,
@@ -33,7 +33,7 @@ public:
 
   GuardState mState = GuardState::kUninitialized;
 
-  u64 mVersion;
+  uint64_t mVersion;
 
   bool mEncounteredContention = false;
 
@@ -44,7 +44,7 @@ public:
   }
 
   // Manually construct a guard from a snapshot. Use with caution!
-  HybridGuard(HybridLatch& latch, const u64 lastSeenVersion)
+  HybridGuard(HybridLatch& latch, const uint64_t lastSeenVersion)
       : mLatch(&latch),
         mState(GuardState::kOptimisticShared),
         mVersion(lastSeenVersion),
@@ -161,8 +161,8 @@ public:
     }
 
     if (mState == GuardState::kOptimisticShared) {
-      const u64 newVersion = mVersion + kLatchExclusiveBit;
-      u64 expected = mVersion;
+      const uint64_t newVersion = mVersion + kLatchExclusiveBit;
+      uint64_t expected = mVersion;
       // changed from try_lock because of possible retries b/c lots of readers
       mLatch->mMutex.lock();
       if (!mLatch->mVersion.compare_exchange_strong(expected, newVersion)) {
@@ -197,8 +197,8 @@ public:
   // For buffer management
   inline void TryToExclusiveMayJump() {
     DCHECK(mState == GuardState::kOptimisticShared);
-    const u64 newVersion = mVersion + kLatchExclusiveBit;
-    u64 expected = mVersion;
+    const uint64_t newVersion = mVersion + kLatchExclusiveBit;
+    uint64_t expected = mVersion;
 
     if (!mLatch->mMutex.try_lock()) {
       jumpmu::Jump();

@@ -30,7 +30,7 @@ public:
   }
 };
 
-template <class CountersT, class CounterT, typename SumT = u64>
+template <class CountersT, class CounterT, typename SumT = uint64_t>
 inline static SumT Sum(EnumerableThreadLocal<CountersT>& counters,
                        CounterT CountersT::*c) {
   std::shared_lock<std::shared_mutex> guard(
@@ -42,9 +42,9 @@ inline static SumT Sum(EnumerableThreadLocal<CountersT>& counters,
   return result;
 }
 
-template <class CountersT, class CounterT, typename SumT = u64>
+template <class CountersT, class CounterT, typename SumT = uint64_t>
 inline static SumT Sum(EnumerableThreadLocal<CountersT>& counters,
-                       CounterT CountersT::*c, u64 row) {
+                       CounterT CountersT::*c, uint64_t row) {
   std::shared_lock<std::shared_mutex> guard(
       EnumerableThreadLocal<CountersT>::sMutex);
   SumT result = 0;
@@ -54,9 +54,9 @@ inline static SumT Sum(EnumerableThreadLocal<CountersT>& counters,
   return result;
 }
 
-template <class CountersT, class CounterT, typename SumT = u64>
+template <class CountersT, class CounterT, typename SumT = uint64_t>
 inline static SumT Sum(EnumerableThreadLocal<CountersT>& counters,
-                       CounterT CountersT::*c, u64 row, u64 col) {
+                       CounterT CountersT::*c, uint64_t row, uint64_t col) {
   std::shared_lock<std::shared_mutex> guard(
       EnumerableThreadLocal<CountersT>::sMutex);
   SumT result = 0;
@@ -66,9 +66,9 @@ inline static SumT Sum(EnumerableThreadLocal<CountersT>& counters,
   return result;
 }
 
-template <class CountersT, class CounterT, typename SumT = u64>
+template <class CountersT, class CounterT, typename SumT = uint64_t>
 inline static SumT Max(EnumerableThreadLocal<CountersT>& counters,
-                       CounterT CountersT::*c, u64 row) {
+                       CounterT CountersT::*c, uint64_t row) {
   std::shared_lock<std::shared_mutex> guard(
       EnumerableThreadLocal<CountersT>::sMutex);
   SumT result = 0;

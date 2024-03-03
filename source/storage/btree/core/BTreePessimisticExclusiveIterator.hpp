@@ -16,7 +16,7 @@ public:
   }
 
   BTreePessimisticExclusiveIterator(BTreeGeneric& tree, BufferFrame* bf,
-                                    const u64 bfVersion)
+                                    const uint64_t bfVersion)
       : BTreePessimisticIterator(tree, LatchMode::kPessimisticExclusive) {
     HybridGuard optimisticGuard(bf->header.mLatch, bfVersion);
     optimisticGuard.JumpIfModifiedByOthers();
@@ -50,11 +50,12 @@ public:
     return OpCode::kOK;
   }
 
-  virtual bool HasEnoughSpaceFor(const u16 keySize, const u16 valSize) {
+  virtual bool HasEnoughSpaceFor(const uint16_t keySize,
+                                 const uint16_t valSize) {
     return mGuardedLeaf->canInsert(keySize, valSize);
   }
 
-  virtual void InsertToCurrentNode(Slice key, u16 valSize) {
+  virtual void InsertToCurrentNode(Slice key, uint16_t valSize) {
     DCHECK(KeyInCurrentNode(key));
     DCHECK(HasEnoughSpaceFor(key.size(), valSize));
     mSlotId = mGuardedLeaf->insertDoNotCopyPayload(key, valSize, mSlotId);
@@ -111,11 +112,11 @@ public:
 
   // The caller must retain the payload when using any of the following payload
   // resize functions
-  virtual void ShortenWithoutCompaction(const u16 targetSize) {
+  virtual void ShortenWithoutCompaction(const uint16_t targetSize) {
     mGuardedLeaf->shortenPayload(mSlotId, targetSize);
   }
 
-  bool ExtendPayload(const u16 targetSize) {
+  bool ExtendPayload(const uint16_t targetSize) {
     if (targetSize >= BTreeNode::Size()) {
       return false;
     }
@@ -146,7 +147,7 @@ public:
     if (!FLAGS_contention_split) {
       return;
     }
-    const u64 randomNumber = utils::RandomGenerator::RandU64();
+    const uint64_t randomNumber = utils::RandomGenerator::RandU64();
 
     // haven't met the contention stats update probability
     if ((randomNumber &
@@ -170,7 +171,7 @@ public:
     if (lastUpdatedSlot != mSlotId &&
         contentionPct >= FLAGS_contention_split_threshold_pct &&
         mGuardedLeaf->mNumSeps > 2) {
-      s16 splitSlot = std::min<s16>(lastUpdatedSlot, mSlotId);
+      int16_t splitSlot = std::min<int16_t>(lastUpdatedSlot, mSlotId);
       mGuardedLeaf.unlock();
 
       mSlotId = -1;

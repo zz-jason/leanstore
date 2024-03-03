@@ -39,7 +39,7 @@ public:
 
   /// The slot id of the current key in the leaf.
   /// Reset after every leaf change.
-  s32 mSlotId = -1;
+  int32_t mSlotId = -1;
 
   /// Indicates whether the prefix is copied in mBuffer
   bool mIsPrefixCopied = false;
@@ -51,13 +51,13 @@ public:
   GuardedBufferFrame<BTreeNode> mGuardedParent;
 
   /// The slot id in mGuardedParent of mGuardedLeaf.
-  s32 mLeafPosInParent = -1;
+  int32_t mLeafPosInParent = -1;
 
   /// Used to buffer the key at mSlotId or lower/upper fence keys.
-  std::basic_string<u8> mBuffer;
+  std::basic_string<uint8_t> mBuffer;
 
   /// The length of the lower or upper fence key.
-  u16 mFenceSize = 0;
+  uint16_t mFenceSize = 0;
 
   /// Tndicates whether the mFenceSize is for lower or upper fence key.
   bool mIsUsingUpperFence;
@@ -78,7 +78,7 @@ protected:
             mBTree.mStore->mBufferManager.get(), mGuardedParent,
             mGuardedParent->mRightMostChildSwip);
 
-        for (u16 level = 0; !guardedChild->mIsLeaf; level++) {
+        for (uint16_t level = 0; !guardedChild->mIsLeaf; level++) {
           COUNTERS_BLOCK() {
             WorkerCounters::MyCounters().dt_inner_page[mBTree.mTreeId]++;
           }
@@ -128,7 +128,7 @@ protected:
         mMode == LatchMode::kPessimisticExclusive) {
       findLeafAndLatch(mGuardedLeaf, key, mMode);
     } else {
-      DLOG(FATAL) << "Unsupported latch mode: " << u64(mMode);
+      DLOG(FATAL) << "Unsupported latch mode: " << uint64_t(mMode);
     }
   }
 
@@ -242,7 +242,7 @@ public:
       if (FLAGS_optimistic_scan && mLeafPosInParent != -1) {
         JUMPMU_TRY() {
           if ((mLeafPosInParent + 1) <= mGuardedParent->mNumSeps) {
-            s32 nextLeafPos = mLeafPosInParent + 1;
+            int32_t nextLeafPos = mLeafPosInParent + 1;
             auto* nextLeafSwip =
                 mGuardedParent->ChildSwipIncludingRightMost(nextLeafPos);
             GuardedBufferFrame<BTreeNode> guardedNextLeaf(
@@ -346,7 +346,7 @@ public:
       if (FLAGS_optimistic_scan && mLeafPosInParent != -1) {
         JUMPMU_TRY() {
           if ((mLeafPosInParent - 1) >= 0) {
-            s32 nextLeafPos = mLeafPosInParent - 1;
+            int32_t nextLeafPos = mLeafPosInParent - 1;
             auto* nextLeafSwip = mGuardedParent->ChildSwip(nextLeafPos);
             GuardedBufferFrame<BTreeNode> guardedNextLeaf(
                 mBTree.mStore->mBufferManager.get(), mGuardedParent,

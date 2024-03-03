@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
 
 namespace leanstore {
 namespace cr {
@@ -14,11 +15,11 @@ namespace cr {
 void GroupCommitter::runImpl() {
   CPUCounters::registerThread(mThreadName, false);
 
-  s32 numIOCBs = 0;
-  u64 minFlushedGSN = std::numeric_limits<u64>::max();
-  u64 maxFlushedGSN = 0;
+  int32_t numIOCBs = 0;
+  uint64_t minFlushedGSN = std::numeric_limits<uint64_t>::max();
+  uint64_t maxFlushedGSN = 0;
   TXID minFlushedTxId = std::numeric_limits<TXID>::max();
-  std::vector<u64> numRfaTxs(mWorkers.size(), 0);
+  std::vector<uint64_t> numRfaTxs(mWorkers.size(), 0);
   std::vector<WalFlushReq> walFlushReqCopies(mWorkers.size());
 
   /// write WAL records from every worker thread to SSD.
@@ -39,9 +40,9 @@ void GroupCommitter::runImpl() {
   }
 }
 
-void GroupCommitter::prepareIOCBs(s32& numIOCBs, u64& minFlushedGSN,
-                                  u64& maxFlushedGSN, TXID& minFlushedTxId,
-                                  std::vector<u64>& numRfaTxs,
+void GroupCommitter::prepareIOCBs(int32_t& numIOCBs, uint64_t& minFlushedGSN,
+                                  uint64_t& maxFlushedGSN, TXID& minFlushedTxId,
+                                  std::vector<uint64_t>& numRfaTxs,
                                   std::vector<WalFlushReq>& walFlushReqCopies) {
   /// counters
   leanstore::utils::SteadyTimer phase1Timer [[maybe_unused]];
@@ -55,11 +56,11 @@ void GroupCommitter::prepareIOCBs(s32& numIOCBs, u64& minFlushedGSN,
   });
 
   numIOCBs = 0;
-  minFlushedGSN = std::numeric_limits<u64>::max();
+  minFlushedGSN = std::numeric_limits<uint64_t>::max();
   maxFlushedGSN = 0;
   minFlushedTxId = std::numeric_limits<TXID>::max();
 
-  for (u32 workerId = 0; workerId < mWorkers.size(); workerId++) {
+  for (uint32_t workerId = 0; workerId < mWorkers.size(); workerId++) {
     auto& logging = mWorkers[workerId]->mLogging;
     // collect logging info
     std::unique_lock<std::mutex> guard(logging.mRfaTxToCommitMutex);
@@ -76,17 +77,17 @@ void GroupCommitter::prepareIOCBs(s32& numIOCBs, u64& minFlushedGSN,
     }
 
     // update GSN and commitTS info
-    maxFlushedGSN = std::max<u64>(maxFlushedGSN, reqCopy.mCurrGSN);
-    minFlushedGSN = std::min<u64>(minFlushedGSN, reqCopy.mCurrGSN);
+    maxFlushedGSN = std::max<uint64_t>(maxFlushedGSN, reqCopy.mCurrGSN);
+    minFlushedGSN = std::min<uint64_t>(minFlushedGSN, reqCopy.mCurrGSN);
     minFlushedTxId = std::min<TXID>(minFlushedTxId, reqCopy.mCurrTxId);
     DLOG_IF(INFO, reqCopy.mCurrGSN == 27 || reqCopy.mCurrGSN == 28)
         << "minFlushedGSN=" << minFlushedGSN
         << ", workerGSN=" << reqCopy.mCurrGSN << ", workerId=" << workerId;
 
     // prepare IOCBs on demand
-    const u64 buffered = reqCopy.mWalBuffered;
-    const u64 flushed = logging.mWalFlushed;
-    const u64 bufferEnd = FLAGS_wal_buffer_size;
+    const uint64_t buffered = reqCopy.mWalBuffered;
+    const uint64_t flushed = logging.mWalFlushed;
+    const uint64_t bufferEnd = FLAGS_wal_buffer_size;
     if (buffered > flushed) {
       setUpIOCB(numIOCBs, logging.mWalBuffer, flushed, buffered);
       numIOCBs++;
@@ -99,7 +100,7 @@ void GroupCommitter::prepareIOCBs(s32& numIOCBs, u64& minFlushedGSN,
   }
 }
 
-void GroupCommitter::writeIOCBs(s32 numIOCBs) {
+void GroupCommitter::writeIOCBs(int32_t numIOCBs) {
   DCHECK(numIOCBs > 0) << "should have at least 1 IOCB to write";
 
   // counter
@@ -115,28 +116,41 @@ void GroupCommitter::writeIOCBs(s32 numIOCBs) {
   // submit all log writes using a single system call.
   for (auto left = numIOCBs; left > 0;) {
     auto* iocbToSubmit = mIOCBPtrs.get() + numIOCBs - left;
-    s32 submitted = io_submit(mIOContext, left, iocbToSubmit);
-    LOG_IF(ERROR, submitted < 0)
-        << "io_submit failed, error=" << submitted << ", mWalFd=" << mWalFd;
+    int32_t submitted = io_submit(mIOContext, left, iocbToSubmit);
+    if (submitted < 0) {
+      LOG(ERROR) << "io_submit failed"
+                 << ", mWalFd=" << mWalFd << ", numIOCBs=" << numIOCBs
+                 << ", left=" << left << ", errorCode=" << -submitted
+                 << ", errorMsg=" << strerror(-submitted);
+      return;
+    }
     left -= submitted;
   }
 
   auto numCompleted =
       io_getevents(mIOContext, numIOCBs, numIOCBs, mIOEvents.get(), nullptr);
-  LOG_IF(ERROR, numCompleted < 0)
-      << "io_getevents failed, error=" << numCompleted << ", mWalFd=" << mWalFd;
+  if (numCompleted < 0) {
+    LOG(ERROR) << "io_getevents failed"
+               << ", mWalFd=" << mWalFd << ", numIOCBs=" << numIOCBs
+               << ", errorCode=" << -numCompleted
+               << ", errorMsg=" << strerror(-numCompleted);
+    return;
+  }
 
   if (FLAGS_wal_fsync) {
-    fdatasync(mWalFd);
+    auto failed = fdatasync(mWalFd);
+    LOG_IF(ERROR, failed) << "fdatasync failed"
+                          << ", mWalFd=" << mWalFd << ", errorCode=" << errno
+                          << ", errorMsg=" << strerror(errno);
   }
 }
 
 void GroupCommitter::commitTXs(
-    u64 minFlushedGSN, u64 maxFlushedGSN, TXID minFlushedTxId,
-    const std::vector<u64>& numRfaTxs,
+    uint64_t minFlushedGSN, uint64_t maxFlushedGSN, TXID minFlushedTxId,
+    const std::vector<uint64_t>& numRfaTxs,
     const std::vector<WalFlushReq>& walFlushReqCopies) {
   // commited transactions
-  u64 numCommitted = 0;
+  uint64_t numCommitted = 0;
 
   // counter
   leanstore::utils::SteadyTimer phase2Timer [[maybe_unused]];
@@ -160,7 +174,7 @@ void GroupCommitter::commitTXs(
     TXID maxCommitTs = 0;
     {
       std::unique_lock<std::mutex> g(logging.mTxToCommitMutex);
-      u64 i = 0;
+      uint64_t i = 0;
       for (; i < logging.mTxToCommit.size(); ++i) {
         auto& tx = logging.mTxToCommit[i];
         if (!tx.CanCommit(minFlushedGSN, minFlushedTxId)) {
@@ -187,7 +201,7 @@ void GroupCommitter::commitTXs(
     TXID maxCommitTsRfa = 0;
     {
       std::unique_lock<std::mutex> g(logging.mRfaTxToCommitMutex);
-      u64 i = 0;
+      uint64_t i = 0;
       for (; i < numRfaTxs[workerId]; ++i) {
         auto& tx = logging.mRfaTxToCommit[i];
         maxCommitTsRfa = std::max<TXID>(maxCommitTsRfa, tx.mCommitTs);
@@ -221,7 +235,7 @@ void GroupCommitter::commitTXs(
     }
   }
 
-  if (minFlushedGSN < std::numeric_limits<u64>::max()) {
+  if (minFlushedGSN < std::numeric_limits<uint64_t>::max()) {
     DLOG(INFO) << "Update globalMinFlushedGSN=" << minFlushedGSN
                << ", globalMaxFlushedGSN=" << maxFlushedGSN;
     mGlobalMinFlushedGSN.store(minFlushedGSN, std::memory_order_release);
@@ -229,14 +243,15 @@ void GroupCommitter::commitTXs(
   }
 }
 
-void GroupCommitter::setUpIOCB(s32 ioSlot, u8* buf, u64 lower, u64 upper) {
+void GroupCommitter::setUpIOCB(int32_t ioSlot, uint8_t* buf, uint64_t lower,
+                               uint64_t upper) {
   auto lowerAligned = utils::AlignDown(lower);
   auto upperAligned = utils::AlignUp(upper);
   auto* bufAligned = buf + lowerAligned;
   auto countAligned = upperAligned - lowerAligned;
   auto offsetAligned = utils::AlignDown(mWalSize);
 
-  DCHECK(u64(bufAligned) % 512 == 0);
+  DCHECK(uint64_t(bufAligned) % 512 == 0);
   DCHECK(countAligned % 512 == 0);
   DCHECK(offsetAligned % 512 == 0);
 

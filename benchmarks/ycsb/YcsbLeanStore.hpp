@@ -93,15 +93,15 @@ public:
 
     utils::Parallelize::range(
         FLAGS_worker_threads, FLAGS_ycsb_record_count,
-        [&](u64 workerId, u64 begin, u64 end) {
+        [&](uint64_t workerId, uint64_t begin, uint64_t end) {
           mStore->ExecAsync(workerId, [&, begin, end]() {
-            for (u64 i = begin; i < end; i++) {
+            for (uint64_t i = begin; i < end; i++) {
               // generate key
-              u8 key[FLAGS_ycsb_key_size];
+              uint8_t key[FLAGS_ycsb_key_size];
               GenYcsbKey(zipfRandom, key);
 
               // generate value
-              u8 val[FLAGS_ycsb_val_size];
+              uint8_t val[FLAGS_ycsb_val_size];
               utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
 
               cr::Worker::My().StartTx();
@@ -121,8 +121,8 @@ public:
     auto zipfRandom = utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count,
                                                     FLAGS_zipf_factor);
     atomic<bool> keepRunning = true;
-    std::vector<std::atomic<u64>> threadCommitted(FLAGS_worker_threads);
-    std::vector<std::atomic<u64>> threadAborted(FLAGS_worker_threads);
+    std::vector<std::atomic<uint64_t>> threadCommitted(FLAGS_worker_threads);
+    std::vector<std::atomic<uint64_t>> threadAborted(FLAGS_worker_threads);
     // init counters
     for (auto& c : threadCommitted) {
       c = 0;
@@ -131,9 +131,9 @@ public:
       a = 0;
     }
 
-    for (u64 workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
+    for (uint64_t workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
       mStore->ExecAsync(workerId, [&]() {
-        u8 key[FLAGS_ycsb_key_size];
+        uint8_t key[FLAGS_ycsb_key_size];
         std::string valRead;
         auto copyValue = [&](Slice val) {
           valRead.resize(val.size(), 0);
@@ -141,7 +141,7 @@ public:
         };
 
         auto updateDescBufSize = UpdateDesc::Size(1);
-        u8 updateDescBuf[updateDescBufSize];
+        uint8_t updateDescBuf[updateDescBufSize];
         auto* updateDesc = UpdateDesc::CreateFrom(updateDescBuf);
         updateDesc->mNumSlots = 1;
         updateDesc->mUpdateSlots[0].mOffset = 0;
@@ -181,7 +181,7 @@ public:
             }
             default: {
               LOG(FATAL) << "Unsupported workload type: "
-                         << static_cast<u8>(workloadType);
+                         << static_cast<uint8_t>(workloadType);
             }
             }
             threadCommitted[cr::Worker::My().mWorkerId]++;
@@ -202,7 +202,7 @@ public:
     }
 
     auto reportPeriod = 1;
-    for (u64 i = 0; i < FLAGS_ycsb_run_for_seconds; i += reportPeriod) {
+    for (uint64_t i = 0; i < FLAGS_ycsb_run_for_seconds; i += reportPeriod) {
       sleep(reportPeriod);
       auto committed = 0;
       auto aborted = 0;

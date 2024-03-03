@@ -29,14 +29,14 @@ public:
   std::shared_mutex mMutex;
 
   /// The capacity of the commit log. Commit log is compacted when full.
-  u64 mCapacity;
+  uint64_t mCapacity;
 
   /// The vector to store all the (commitTs, startTs) pairs.
   std::vector<std::pair<TXID, TXID>> mCommitLog;
 
 public:
   /// Constructor.
-  CommitTree(const u64 numWorkers) : mCapacity(numWorkers + 1) {
+  CommitTree(const uint64_t numWorkers) : mCapacity(numWorkers + 1) {
     mCommitLog.reserve(mCapacity);
   }
 
@@ -128,7 +128,7 @@ struct WaterMarkInfo {
 /// visibility check are stored here.
 class ConcurrencyControl {
 public:
-  ConcurrencyControl(leanstore::LeanStore* store, u64 numWorkers)
+  ConcurrencyControl(leanstore::LeanStore* store, uint64_t numWorkers)
       : mStore(store),
         mHistoryTree(nullptr),
         mCommitTree(numWorkers) {
@@ -146,10 +146,10 @@ public:
   CommitTree mCommitTree;
 
   /// The start timestamp used to calculate the LCB of the target worker.
-  unique_ptr<TXID[]> mLcbCacheKey;
+  std::unique_ptr<TXID[]> mLcbCacheKey;
 
   /// The LCB of the target worker on the LCB cache key.
-  unique_ptr<TXID[]> mLcbCacheVal;
+  std::unique_ptr<TXID[]> mLcbCacheVal;
 
   /// The optismistic latch to guard mWmkOfShortTx and mWmkOfAllTx. There is at
   /// most one writer at a time, we can safely check whether the version is odd
@@ -208,9 +208,9 @@ public:
   /// @return: true if the version is found, false otherwise.
   inline bool GetVersion(
       WORKERID prevWorkerId, TXID prevTxId, COMMANDID prevCommandId,
-      std::function<void(const u8*, u64 versionSize)> getCallback) {
+      std::function<void(const uint8_t*, uint64_t versionSize)> getCallback) {
     utils::Timer timer(CRCounters::MyCounters().cc_ms_history_tree_retrieve);
-    auto isRemoveCommand = prevCommandId & TYPE_MSB(COMMANDID);
+    auto isRemoveCommand = prevCommandId & kRemoveCommandMark;
     return mHistoryTree->GetVersion(prevWorkerId, prevTxId, prevCommandId,
                                     isRemoveCommand, getCallback);
   }
@@ -218,8 +218,9 @@ public:
   /// Put a version to the version storage. The callback function is called with
   /// the version data when the version is inserted, usually used to initialize
   /// the actual version payload.
-  COMMANDID PutVersion(TREEID treeId, bool isRemoveCommand, u64 versionSize,
-                       std::function<void(u8*)> putCallback);
+  COMMANDID PutVersion(TREEID treeId, bool isRemoveCommand,
+                       uint64_t versionSize,
+                       std::function<void(uint8_t*)> putCallback);
 
   /// Whether a tuple written by workerId in txId is visible for the current
   /// active transaction.

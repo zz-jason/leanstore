@@ -8,9 +8,9 @@
 #include <limits>
 #include <string>
 // -------------------------------------------------------------------------------------
-using UInteger = u32;
-using Integer = s32;
-using Timestamp = s64;
+using UInteger = uint32_t;
+using Integer = int32_t;
+using Timestamp = int64_t;
 using Numeric = double;
 static constexpr Integer minUInteger = std::numeric_limits<UInteger>::min();
 static constexpr Integer minInteger = std::numeric_limits<Integer>::min();
@@ -71,53 +71,55 @@ template <int maxLength> struct Varchar {
 };
 // -------------------------------------------------------------------------------------
 // Fold functions convert integers to a lexicographical comparable format
-unsigned Fold(u8* writer, const Integer& x) {
-  *reinterpret_cast<u32*>(writer) = __builtin_bswap32(x ^ (1ul << 31));
+unsigned Fold(uint8_t* writer, const Integer& x) {
+  *reinterpret_cast<uint32_t*>(writer) = __builtin_bswap32(x ^ (1ul << 31));
   return sizeof(x);
 }
 // -------------------------------------------------------------------------------------
-unsigned Fold(u8* writer, const Timestamp& x) {
-  *reinterpret_cast<u64*>(writer) = __builtin_bswap64(x ^ (1ull << 63));
+unsigned Fold(uint8_t* writer, const Timestamp& x) {
+  *reinterpret_cast<uint64_t*>(writer) = __builtin_bswap64(x ^ (1ull << 63));
   return sizeof(x);
 }
 // -------------------------------------------------------------------------------------
-unsigned Fold(u8* writer, const u32& x) {
-  *reinterpret_cast<u32*>(writer) = __builtin_bswap32(x);
+unsigned Fold(uint8_t* writer, const uint32_t& x) {
+  *reinterpret_cast<uint32_t*>(writer) = __builtin_bswap32(x);
   return sizeof(x);
 }
 // -------------------------------------------------------------------------------------
-unsigned Fold(u8* writer, const u64& x) {
-  *reinterpret_cast<u64*>(writer) = __builtin_bswap64(x);
+unsigned Fold(uint8_t* writer, const uint64_t& x) {
+  *reinterpret_cast<uint64_t*>(writer) = __builtin_bswap64(x);
   return sizeof(x);
 }
 // -------------------------------------------------------------------------------------
-template <int len> unsigned Fold(u8* writer, const Varchar<len>& x) {
+template <int len> unsigned Fold(uint8_t* writer, const Varchar<len>& x) {
   memcpy(writer, x.data, x.length);
   writer[x.length] = 0;
   return x.length + 1;
 }
 // -------------------------------------------------------------------------------------
-unsigned Unfold(const u8* input, Integer& x) {
-  x = __builtin_bswap32(*reinterpret_cast<const u32*>(input)) ^ (1ul << 31);
+unsigned Unfold(const uint8_t* input, Integer& x) {
+  x = __builtin_bswap32(*reinterpret_cast<const uint32_t*>(input)) ^
+      (1ul << 31);
   return sizeof(x);
 }
 // -------------------------------------------------------------------------------------
-unsigned Unfold(const u8* input, Timestamp& x) {
-  x = __builtin_bswap64(*reinterpret_cast<const u64*>(input)) ^ (1ul << 63);
+unsigned Unfold(const uint8_t* input, Timestamp& x) {
+  x = __builtin_bswap64(*reinterpret_cast<const uint64_t*>(input)) ^
+      (1ul << 63);
   return sizeof(x);
 }
 // -------------------------------------------------------------------------------------
-unsigned Unfold(const u8* input, u32& x) {
-  x = __builtin_bswap32(*reinterpret_cast<const u32*>(input));
+unsigned Unfold(const uint8_t* input, uint32_t& x) {
+  x = __builtin_bswap32(*reinterpret_cast<const uint32_t*>(input));
   return sizeof(x);
 }
 // -------------------------------------------------------------------------------------
-unsigned Unfold(const u8* input, u64& x) {
-  x = __builtin_bswap64(*reinterpret_cast<const u64*>(input));
+unsigned Unfold(const uint8_t* input, uint64_t& x) {
+  x = __builtin_bswap64(*reinterpret_cast<const uint64_t*>(input));
   return sizeof(x);
 }
 // -------------------------------------------------------------------------------------
-template <int len> unsigned Unfold(const u8* input, Varchar<len>& x) {
+template <int len> unsigned Unfold(const uint8_t* input, Varchar<len>& x) {
   int l = strlen(reinterpret_cast<const char*>(input));
   assert(l <= len);
   memcpy(x.data, input, l);

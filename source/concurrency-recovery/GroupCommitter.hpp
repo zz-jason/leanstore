@@ -22,20 +22,20 @@ class WalFlushReq;
 class GroupCommitter : public leanstore::utils::UserThread {
 public:
   /// File descriptor of the underlying WAL file.
-  const s32 mWalFd;
+  const int32_t mWalFd;
 
   /// Start file offset of the next WALEntry.
-  u64 mWalSize;
+  uint64_t mWalSize;
 
   /// The minimum flushed GSN among all worker threads. Transactions whose max
   /// observed GSN not larger than it can be committed safely.
-  std::atomic<u64> mGlobalMinFlushedGSN;
+  std::atomic<uint64_t> mGlobalMinFlushedGSN;
 
   /// The maximum flushed GSN among all worker threads in each group commit
   /// round. It is updated by the group commit thread and used to update the GCN
   /// counter of the current worker thread to prevent GSN from skewing and
   /// undermining RFA.
-  std::atomic<u64> mGlobalMaxFlushedGSN;
+  std::atomic<uint64_t> mGlobalMaxFlushedGSN;
 
   /// All the workers.
   std::vector<Worker*>& mWorkers;
@@ -53,7 +53,7 @@ public:
   std::unique_ptr<io_event[]> mIOEvents;
 
 public:
-  GroupCommitter(s32 walFd, std::vector<Worker*>& workers, int cpu)
+  GroupCommitter(int32_t walFd, std::vector<Worker*>& workers, int cpu)
       : UserThread("GroupCommitter", cpu),
         mWalFd(walFd),
         mWalSize(0),
@@ -86,14 +86,15 @@ private:
   /// @param[out] minFlushedTxId the min flushed transaction ID
   /// @param[out] numRfaTxs number of transactions without dependency
   /// @param[out] walFlushReqCopies snapshot of the flush requests
-  void prepareIOCBs(s32& numIOCBs, u64& minFlushedGSN, u64& maxFlushedGSN,
-                    TXID& minFlushedTxId, std::vector<u64>& numRfaTxs,
+  void prepareIOCBs(int32_t& numIOCBs, uint64_t& minFlushedGSN,
+                    uint64_t& maxFlushedGSN, TXID& minFlushedTxId,
+                    std::vector<uint64_t>& numRfaTxs,
                     std::vector<WalFlushReq>& walFlushReqCopies);
 
   /// Phase 2: write all the prepared IOCBs
   ///
   /// @param[in] numIOCBs number of IOCBs to write
-  void writeIOCBs(s32 numIOCBs);
+  void writeIOCBs(int32_t numIOCBs);
 
   /// Phase 3: commit transactions
   ///
@@ -102,11 +103,11 @@ private:
   /// @param[in] minFlushedTxId the min flushed transaction ID
   /// @param[in] numRfaTxs number of transactions without dependency
   /// @param[in] walFlushReqCopies snapshot of the flush requests
-  void commitTXs(u64 minFlushedGSN, u64 maxFlushedGSN, TXID minFlushedTxId,
-                 const std::vector<u64>& numRfaTxs,
+  void commitTXs(uint64_t minFlushedGSN, uint64_t maxFlushedGSN,
+                 TXID minFlushedTxId, const std::vector<uint64_t>& numRfaTxs,
                  const std::vector<WalFlushReq>& walFlushReqCopies);
 
-  void setUpIOCB(s32 ioSlot, u8* buf, u64 lower, u64 upper);
+  void setUpIOCB(int32_t ioSlot, uint8_t* buf, uint64_t lower, uint64_t upper);
 };
 
 } // namespace cr

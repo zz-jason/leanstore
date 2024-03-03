@@ -13,17 +13,17 @@ namespace utils {
 // Billion-Record..."
 class ZipfGenerator {
 private:
-  u64 n;
+  uint64_t n;
   double theta;
 
   double alpha, zetan, eta;
 
-  double zeta(u64 n, double theta);
+  double zeta(uint64_t n, double theta);
 
 public:
   // [0, n)
   ZipfGenerator(uint64_t ex_n, double theta);
-  // uint64_t rand(u64 new_n);
+  // uint64_t rand(uint64_t new_n);
   uint64_t rand();
 };
 

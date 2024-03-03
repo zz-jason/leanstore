@@ -79,8 +79,6 @@ DEFINE_int64(btree_hints, 1, "0: disabled, 1: serial, 2: AVX512");
 // -------------------------------------------------------------------------------------
 DEFINE_bool(bulk_insert, false, "");
 // -------------------------------------------------------------------------------------
-DEFINE_int64(trace_dt_id, -1,
-             "Print a stack trace for page reads for this DT ID");
 DEFINE_int64(trace_trigger_probability, 100, "");
 DEFINE_bool(pid_tracing, false, "");
 // -------------------------------------------------------------------------------------
