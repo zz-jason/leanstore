@@ -201,8 +201,29 @@ std::expected<void, utils::Error> Recovery::redo() {
       break;
     }
     case WALPayload::TYPE::WALTxRemove: {
-      DCHECK(false) << "Unhandled WALPayload::TYPE: "
-                    << std::to_string(static_cast<u64>(walPayload->mType));
+      auto* wal = reinterpret_cast<WALTxRemove*>(complexEntry->payload);
+      HybridGuard guard(&bf.header.mLatch);
+      GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
+                                                std::move(guard), &bf);
+      auto key = wal->RemovedKey();
+      auto slotId = guardedNode->lowerBound<true>(key);
+      DCHECK(slotId != -1) << "Key not found, key="
+                           << std::string((char*)key.data(), key.size());
+
+      auto* mutRawVal = guardedNode->ValData(slotId);
+      DCHECK(Tuple::From(mutRawVal)->mFormat == TupleFormat::kChained)
+          << "Only chained tuple is supported";
+      auto* chainedTuple = ChainedTuple::From(mutRawVal);
+
+      // remove the chained tuple
+      if (guardedNode->ValSize(slotId) > sizeof(ChainedTuple)) {
+        guardedNode->shortenPayload(slotId, sizeof(ChainedTuple));
+      }
+      chainedTuple->mWorkerId = complexEntry->mWorkerId;
+      chainedTuple->mTxId = complexEntry->mTxId;
+      chainedTuple->mCommandId ^= wal->mPrevCommandId;
+      chainedTuple->mIsTombstone = true;
+
       break;
     }
     case WALPayload::TYPE::kWalInitPage: {
