@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
 
 namespace leanstore {
 namespace cr {
@@ -116,18 +117,31 @@ void GroupCommitter::writeIOCBs(s32 numIOCBs) {
   for (auto left = numIOCBs; left > 0;) {
     auto* iocbToSubmit = mIOCBPtrs.get() + numIOCBs - left;
     s32 submitted = io_submit(mIOContext, left, iocbToSubmit);
-    LOG_IF(ERROR, submitted < 0)
-        << "io_submit failed, error=" << submitted << ", mWalFd=" << mWalFd;
+    if (submitted < 0) {
+      LOG(ERROR) << "io_submit failed"
+                 << ", mWalFd=" << mWalFd << ", numIOCBs=" << numIOCBs
+                 << ", left=" << left << ", errorCode=" << -submitted
+                 << ", errorMsg=" << strerror(-submitted);
+      return;
+    }
     left -= submitted;
   }
 
   auto numCompleted =
       io_getevents(mIOContext, numIOCBs, numIOCBs, mIOEvents.get(), nullptr);
-  LOG_IF(ERROR, numCompleted < 0)
-      << "io_getevents failed, error=" << numCompleted << ", mWalFd=" << mWalFd;
+  if (numCompleted < 0) {
+    LOG(ERROR) << "io_getevents failed"
+               << ", mWalFd=" << mWalFd << ", numIOCBs=" << numIOCBs
+               << ", errorCode=" << -numCompleted
+               << ", errorMsg=" << strerror(-numCompleted);
+    return;
+  }
 
   if (FLAGS_wal_fsync) {
-    fdatasync(mWalFd);
+    auto failed = fdatasync(mWalFd);
+    LOG_IF(ERROR, failed) << "fdatasync failed"
+                          << ", mWalFd=" << mWalFd << ", errorCode=" << errno
+                          << ", errorMsg=" << strerror(errno);
   }
 }
 
