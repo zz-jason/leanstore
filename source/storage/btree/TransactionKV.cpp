@@ -364,7 +364,7 @@ OpCode TransactionKV::Remove(Slice key) {
           << "Tuple should be write unlocked after remove";
     });
 
-    // insert to the version chain
+    // 1. move current (key, value) pair to the version storage
     DanglingPointer danglingPointer(xIter);
     auto valSize = xIter.value().size() - sizeof(ChainedTuple);
     auto val = chainedTuple.GetValue(valSize);
@@ -376,7 +376,7 @@ OpCode TransactionKV::Remove(Slice key) {
                             chainedTuple.mCommandId, key, val, danglingPointer);
         });
 
-    // WAL
+    // 2. write wal
     auto prevWorkerId = chainedTuple.mWorkerId;
     auto prevTxId = chainedTuple.mTxId;
     auto prevCommandId = chainedTuple.mCommandId;
@@ -384,20 +384,16 @@ OpCode TransactionKV::Remove(Slice key) {
                                              prevWorkerId, prevTxId,
                                              prevCommandId);
 
-    // remove the tuple in the btree
+    // 3. remove the tuple, leave a tombsone
     if (mutRawVal.Size() > sizeof(ChainedTuple)) {
       xIter.ShortenWithoutCompaction(sizeof(ChainedTuple));
     }
-
-    // mark as removed
     chainedTuple.mIsTombstone = true;
     chainedTuple.mWorkerId = cr::Worker::My().mWorkerId;
     chainedTuple.mTxId = cr::ActiveTx().mStartTs;
     chainedTuple.mCommandId = commandId;
 
     chainedTuple.WriteUnlock();
-    xIter.MarkAsDirty();
-
     JUMPMU_RETURN OpCode::kOK;
   }
   JUMPMU_CATCH() {
