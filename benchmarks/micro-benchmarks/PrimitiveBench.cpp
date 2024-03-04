@@ -1,5 +1,5 @@
-#include "shared-headers/Units.hpp"
-#include "storage/buffer-manager/BufferFrame.hpp"
+#include "leanstore/Units.hpp"
+#include "buffer-manager/BufferFrame.hpp"
 #include "sync/OptimisticGuarded.hpp"
 #include "utils/Misc.hpp"
 #include "utils/RandomGenerator.hpp"
