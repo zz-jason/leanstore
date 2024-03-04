@@ -293,15 +293,11 @@ void BTreeNode::setFences(Slice lowerKey, Slice upperKey) {
   DCHECK(getLowerFenceKey() == nullptr || getUpperFenceKey() == nullptr ||
          *getLowerFenceKey() <= *getUpperFenceKey());
 
-  if (FLAGS_btree_prefix_compression) {
-    for (mPrefixSize = 0;
-         (mPrefixSize < min(lowerKey.size(), upperKey.size())) &&
-         (lowerKey[mPrefixSize] == upperKey[mPrefixSize]);
-         mPrefixSize++)
-      ;
-  } else {
-    mPrefixSize = 0;
-  }
+  // prefix compression
+  for (mPrefixSize = 0; (mPrefixSize < min(lowerKey.size(), upperKey.size())) &&
+                        (lowerKey[mPrefixSize] == upperKey[mPrefixSize]);
+       mPrefixSize++)
+    ;
 }
 
 uint16_t BTreeNode::commonPrefix(uint16_t slotA, uint16_t slotB) {

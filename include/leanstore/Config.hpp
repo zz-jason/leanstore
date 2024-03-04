@@ -15,7 +15,6 @@ DECLARE_bool(enable_long_running_transaction);
 
 DECLARE_uint32(worker_threads);
 DECLARE_bool(cpu_counters);
-DECLARE_bool(smt);
 DECLARE_string(csv_path);
 DECLARE_bool(csv_truncate);
 DECLARE_uint32(free_pct);
@@ -40,19 +39,11 @@ DECLARE_double(xmerge_target_pct);
 DECLARE_bool(optimistic_scan);
 DECLARE_bool(measure_time);
 // -------------------------------------------------------------------------------------
-DECLARE_double(target_gib);
-DECLARE_uint64(run_for_seconds);
-DECLARE_uint64(warmup_for_seconds);
 
-DECLARE_bool(btree_prefix_compression);
 DECLARE_int64(btree_hints);
 DECLARE_bool(btree_heads);
 DECLARE_bool(bulk_insert);
-// -------------------------------------------------------------------------------------
-DECLARE_int64(trace_trigger_probability);
-DECLARE_bool(pid_tracing);
-DECLARE_string(tag);
-// -------------------------------------------------------------------------------------
+
 DECLARE_uint64(buffer_frame_recycle_batch_size);
 DECLARE_bool(reclaim_page_ids);
 

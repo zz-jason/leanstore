@@ -14,10 +14,8 @@ void ConfigsTable::add(std::string name, std::string value) {
 }
 
 void ConfigsTable::open() {
-  columns.emplace("c_tag", [&](Column& col) { col << FLAGS_tag; });
   columns.emplace("c_worker_threads",
                   [&](Column& col) { col << FLAGS_worker_threads; });
-  columns.emplace("c_smt", [&](Column& col) { col << FLAGS_smt; });
 
   columns.emplace("c_free_pct", [&](Column& col) { col << FLAGS_free_pct; });
   columns.emplace("c_pp_threads",
@@ -26,10 +24,6 @@ void ConfigsTable::open() {
                   [&](Column& col) { col << FLAGS_partition_bits; });
   columns.emplace("c_buffer_pool_size",
                   [&](Column& col) { col << FLAGS_buffer_pool_size; });
-  columns.emplace("c_target_gib",
-                  [&](Column& col) { col << FLAGS_target_gib; });
-  columns.emplace("c_run_for_seconds",
-                  [&](Column& col) { col << FLAGS_run_for_seconds; });
   columns.emplace("c_bulk_insert",
                   [&](Column& col) { col << FLAGS_bulk_insert; });
 
@@ -47,8 +41,6 @@ void ConfigsTable::open() {
   columns.emplace("c_xmerge", [&](Column& col) { col << FLAGS_xmerge; });
   columns.emplace("c_xmerge_target_pct",
                   [&](Column& col) { col << FLAGS_xmerge_target_pct; });
-  columns.emplace("c_btree_prefix_compression",
-                  [&](Column& col) { col << FLAGS_btree_prefix_compression; });
   columns.emplace("c_btree_heads",
                   [&](Column& col) { col << FLAGS_btree_heads; });
   columns.emplace("c_btree_hints",

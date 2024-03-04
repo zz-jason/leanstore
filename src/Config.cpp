@@ -41,18 +41,9 @@ DEFINE_bool(crc_check, false, "");
 DEFINE_uint32(worker_threads, 4, "");
 DEFINE_bool(cpu_counters, true,
             "Disable if HW does not have enough counters for all threads");
-DEFINE_bool(smt, true, "Simultaneous multithreading");
 // -------------------------------------------------------------------------------------
 DEFINE_bool(root, false, "does this process have root rights ?");
-// -------------------------------------------------------------------------------------
-// -------------------------------------------------------------------------------------
-DEFINE_double(
-    target_gib, 0.0,
-    "size of dataset in gib (exact interpretation depends on the driver)");
-DEFINE_uint64(run_for_seconds, 10, "Keep the experiment running for x seconds");
-DEFINE_uint64(warmup_for_seconds, 10, "Warmup for x seconds");
 
-// -------------------------------------------------------------------------------------
 DEFINE_bool(contention_split, true, "Whether contention split is enabled");
 DEFINE_uint64(contention_split_sample_probability, 7,
               "Contention stats sample probability, as exponent of 2");
@@ -69,18 +60,11 @@ DEFINE_bool(
     "Jump to next leaf directly if the pointer in the parent has not changed");
 DEFINE_bool(measure_time, false, "");
 
-DEFINE_bool(btree_prefix_compression, true, "");
 DEFINE_bool(btree_heads, true,
             "Enable heads optimization in lowerBound search");
 DEFINE_int64(btree_hints, 1, "0: disabled, 1: serial, 2: AVX512");
 // -------------------------------------------------------------------------------------
 DEFINE_bool(bulk_insert, false, "");
-// -------------------------------------------------------------------------------------
-DEFINE_int64(trace_trigger_probability, 100, "");
-DEFINE_bool(pid_tracing, false, "");
-// -------------------------------------------------------------------------------------
-DEFINE_string(tag, "",
-              "Unique identifier for this, will be appended to each line csv");
 
 // -----------------------------------------------------------------------------
 // buffer manager, buffer frame provider
