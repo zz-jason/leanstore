@@ -1,6 +1,6 @@
-#include "Config.hpp"
 #include "Ycsb.hpp"
-#include "shared-headers/Units.hpp"
+#include "leanstore/Config.hpp"
+#include "leanstore/Units.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -56,7 +56,7 @@ public:
                 << std::endl;
     });
 
-    utils::Parallelize::range(
+    utils::Parallelize::Range(
         FLAGS_worker_threads, FLAGS_ycsb_record_count,
         [&](uint64_t, uint64_t begin, uint64_t end) {
           for (uint64_t i = begin; i < end; i++) {

@@ -1,10 +1,10 @@
-#include "Config.hpp"
-#include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
-#include "storage/btree/BasicKV.hpp"
-#include "storage/btree/TransactionKV.hpp"
-#include "storage/btree/core/BTreeGeneric.hpp"
-#include "storage/buffer-manager/BufferManager.hpp"
+#include "leanstore/Config.hpp"
+#include "leanstore/LeanStore.hpp"
+#include "btree/BasicKV.hpp"
+#include "btree/TransactionKV.hpp"
+#include "btree/core/BTreeGeneric.hpp"
+#include "buffer-manager/BufferManager.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <benchmark/benchmark.h>

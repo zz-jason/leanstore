@@ -1,6 +1,8 @@
 #pragma once
 
-#include "shared-headers/Units.hpp"
+#include "leanstore/Slice.hpp"
+#include "leanstore/Units.hpp"
+#include "leanstore/KVInterface.hpp"
 #include "utils/Error.hpp"
 
 #include <expected>
