@@ -1,9 +1,9 @@
 #pragma once
 
-#include "KVInterface.hpp"
 #include "Types.hpp"
-#include "shared-headers/Exceptions.hpp"
-#include "storage/btree/core/WALMacros.hpp"
+#include "leanstore/Exceptions.hpp"
+#include "leanstore/KVInterface.hpp"
+#include "btree/core/WALMacros.hpp"
 
 #include <cassert>
 #include <cstdint>

@@ -1,11 +1,11 @@
 #pragma once
 
-#include "KVInterface.hpp"
-#include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
-#include "shared-headers/Units.hpp"
-#include "storage/btree/TransactionKV.hpp"
-#include "storage/btree/core/BTreeGeneric.hpp"
+#include "leanstore/KVInterface.hpp"
+#include "leanstore/LeanStore.hpp"
+#include "leanstore/Units.hpp"
+#include "btree/TransactionKV.hpp"
+#include "btree/core/BTreeGeneric.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
 

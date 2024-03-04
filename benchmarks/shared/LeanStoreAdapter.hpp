@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Adapter.hpp"
-#include "Config.hpp"
-#include "LeanStore.hpp"
-#include "storage/btree/core/BTreeGeneric.hpp"
+#include "leanstore/Config.hpp"
+#include "leanstore/LeanStore.hpp"
+#include "btree/core/BTreeGeneric.hpp"
 
 #include <glog/logging.h>
 

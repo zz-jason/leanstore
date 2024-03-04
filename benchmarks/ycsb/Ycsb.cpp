@@ -1,7 +1,7 @@
 #include "Ycsb.hpp"
 
-#include "Config.hpp"
 #include "YcsbLeanStore.hpp"
+#include "leanstore/Config.hpp"
 #include "utils/Defer.hpp"
 
 #include <gflags/gflags.h>

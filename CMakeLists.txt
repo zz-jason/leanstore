@@ -74,7 +74,7 @@ find_package(Crc32c CONFIG REQUIRED)
 # Project build targets
 # ------------------------------------------------------------------------------
 
-add_subdirectory(source)
+add_subdirectory(src)
 add_subdirectory(benchmarks)
 
 # tests

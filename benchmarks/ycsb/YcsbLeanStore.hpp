@@ -1,12 +1,12 @@
-#include "Config.hpp"
-#include "KVInterface.hpp"
-#include "LeanStore.hpp"
 #include "Ycsb.hpp"
+#include "btree/TransactionKV.hpp"
+#include "btree/core/BTreeGeneric.hpp"
 #include "concurrency-recovery/CRMG.hpp"
 #include "concurrency-recovery/Worker.hpp"
-#include "shared-headers/Units.hpp"
-#include "storage/btree/TransactionKV.hpp"
-#include "storage/btree/core/BTreeGeneric.hpp"
+#include "leanstore/Config.hpp"
+#include "leanstore/KVInterface.hpp"
+#include "leanstore/LeanStore.hpp"
+#include "leanstore/Units.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -91,7 +91,7 @@ public:
                 << std::endl;
     });
 
-    utils::Parallelize::range(
+    utils::Parallelize::Range(
         FLAGS_worker_threads, FLAGS_ycsb_record_count,
         [&](uint64_t workerId, uint64_t begin, uint64_t end) {
           mStore->ExecAsync(workerId, [&, begin, end]() {

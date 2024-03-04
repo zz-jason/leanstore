@@ -4,7 +4,7 @@
 // -------------------------------------------------------------------------------------
 #include "leanstore/Config.hpp"
 #include "leanstore/KVInterface.hpp"
-#include "leanstore/storage/btree/core/WALMacros.hpp"
+#include "leanstore/btree/core/WALMacros.hpp"
 #include "leanstore/utils/JumpMU.hpp"
 #include "lmdb++.hpp" // Using C++ Wrapper from LMDB
 // -------------------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-#include "storage/buffer-manager/BufferFrame.hpp"
+#include "buffer-manager/BufferFrame.hpp"
 
 #include <gtest/gtest.h>
 

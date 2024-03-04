@@ -1,8 +1,8 @@
 #include "sync/ScopedHybridGuard.hpp"
 
-#include "LeanStore.hpp"
 #include "concurrency-recovery/CRMG.hpp"
-#include "storage/buffer-manager/BufferManager.hpp"
+#include "leanstore/LeanStore.hpp"
+#include "buffer-manager/BufferManager.hpp"
 #include "sync/HybridLatch.hpp"
 #include "utils/JumpMU.hpp"
 #include "utils/RandomGenerator.hpp"
