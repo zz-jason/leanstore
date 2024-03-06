@@ -1,9 +1,10 @@
-#include "concurrency-recovery/CRMG.hpp"
-#include "leanstore/LeanStore.hpp"
 #include "btree/BasicKV.hpp"
 #include "btree/TransactionKV.hpp"
 #include "btree/core/BTreeGeneric.hpp"
 #include "buffer-manager/BufferManager.hpp"
+#include "concurrency-recovery/CRMG.hpp"
+#include "leanstore/KVInterface.hpp"
+#include "leanstore/LeanStore.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Defer.hpp"
 #include "utils/JsonUtil.hpp"
@@ -13,7 +14,9 @@
 #include <gtest/gtest.h>
 
 #include <cstddef>
+#include <format>
 #include <ostream>
+#include <string>
 
 using namespace leanstore::storage::btree;
 
@@ -77,9 +80,7 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
-      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
-                              Slice((const uint8_t*)val.data(), val.size())),
-                OpCode::kOK);
+      EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
     }
   });
 
@@ -105,8 +106,7 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     };
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, expectedVal] = kvToTest[i];
-      auto opCode = btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
-                                  copyValueOut);
+      auto opCode = btree->Lookup(key, copyValueOut);
       EXPECT_EQ(opCode, OpCode::kOK);
       EXPECT_EQ(copiedValue, expectedVal);
     }
@@ -154,9 +154,7 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
     cr::Worker::My().StartTx();
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
-      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
-                              Slice((const uint8_t*)val.data(), val.size())),
-                OpCode::kOK);
+      EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
     }
     cr::Worker::My().CommitTx();
 
@@ -197,12 +195,21 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
     };
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, expectedVal] = kvToTest[i];
-      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
-                              copyValueOut),
-                OpCode::kOK);
+      EXPECT_EQ(btree->Lookup(key, copyValueOut), OpCode::kOK);
       EXPECT_EQ(copiedValue, expectedVal);
     }
   });
+}
+
+// generate value in the {}-{} format
+static std::string GenerateValue(int ordinalPrefix, size_t valSize) {
+  auto prefix = std::format("{}-", ordinalPrefix);
+  if (prefix.size() >= valSize) {
+    return prefix.substr(0, valSize);
+  }
+
+  return prefix +
+         utils::RandomGenerator::RandAlphString(valSize - prefix.size());
 }
 
 TEST_F(RecoveringTest, RecoverAfterUpdate) {
@@ -214,11 +221,11 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
 
   // prepare key-value pairs to insert
   auto valSize = 120u;
-  size_t numKVs(10);
+  size_t numKVs(20);
   std::vector<std::tuple<std::string, std::string>> kvToTest;
   for (size_t i = 0; i < numKVs; ++i) {
     std::string key("key_xxxxxxxxxxxx_" + std::to_string(i));
-    std::string val = utils::RandomGenerator::RandAlphString(valSize);
+    std::string val = GenerateValue(0, valSize);
     kvToTest.push_back(std::make_tuple(key, val));
   }
 
@@ -248,9 +255,7 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       cr::Worker::My().StartTx();
-      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
-                              Slice((const uint8_t*)val.data(), val.size())),
-                OpCode::kOK);
+      EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
       cr::Worker::My().CommitTx();
     }
 
@@ -261,13 +266,11 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
         std::memcpy(mutRawVal.Data(), val.data(), mutRawVal.Size());
       };
       // update each key 3 times
-      for (auto j = 0u; j < 3; j++) {
-        val = utils::RandomGenerator::RandAlphString(valSize);
+      for (auto j = 1u; j <= 3; j++) {
+        val = GenerateValue(j, valSize);
         cr::Worker::My().StartTx();
-        EXPECT_EQ(
-            btree->UpdatePartial(Slice((const uint8_t*)key.data(), key.size()),
-                                 updateCallBack, *updateDesc),
-            OpCode::kOK);
+        EXPECT_EQ(btree->UpdatePartial(key, updateCallBack, *updateDesc),
+                  OpCode::kOK);
         cr::Worker::My().CommitTx();
       }
     }
@@ -304,14 +307,11 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
     cr::Worker::My().StartTx();
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     std::string copiedValue;
-    auto copyValueOut = [&](Slice val) {
-      copiedValue = std::string((const char*)val.data(), val.size());
-    };
+    auto copyValueOut = [&](Slice val) { copiedValue = val.ToString(); };
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, expectedVal] = kvToTest[i];
-      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
-                              copyValueOut),
-                OpCode::kOK);
+      auto retCode = btree->Lookup(key, copyValueOut);
+      EXPECT_EQ(retCode, OpCode::kOK);
       EXPECT_EQ(copiedValue, expectedVal);
     }
   });
@@ -350,9 +350,7 @@ TEST_F(RecoveringTest, RecoverAfterRemove) {
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       cr::Worker::My().StartTx();
-      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
-                              Slice((const uint8_t*)val.data(), val.size())),
-                OpCode::kOK);
+      EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
       cr::Worker::My().CommitTx();
     }
 
@@ -360,8 +358,7 @@ TEST_F(RecoveringTest, RecoverAfterRemove) {
     for (size_t i = 0; i < numKVs; ++i) {
       auto& [key, val] = kvToTest[i];
       cr::Worker::My().StartTx();
-      EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())),
-                OpCode::kOK);
+      EXPECT_EQ(btree->Remove(key), OpCode::kOK);
       cr::Worker::My().CommitTx();
     }
 
@@ -384,13 +381,6 @@ TEST_F(RecoveringTest, RecoverAfterRemove) {
   mStore = std::move(res.value());
   mStore->GetTransactionKV(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
-  // mStore->ExecSync(0, [&]() {
-  //   cr::Worker::My().StartTx();
-  //   SCOPED_DEFER(cr::Worker::My().CommitTx());
-  //   rapidjson::Document doc(rapidjson::kObjectType);
-  //   BTreeGeneric::ToJson(*static_cast<BTreeGeneric*>(btree), &doc);
-  //   DLOG(INFO) << "TransactionKV after recovery: " << utils::JsonToStr(&doc);
-  // });
 
   // lookup the restored btree
   mStore->ExecSync(0, [&]() {
@@ -402,9 +392,7 @@ TEST_F(RecoveringTest, RecoverAfterRemove) {
     };
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, expectedVal] = kvToTest[i];
-      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
-                              copyValueOut),
-                OpCode::kNotFound);
+      EXPECT_EQ(btree->Lookup(key, copyValueOut), OpCode::kNotFound);
     }
   });
 }

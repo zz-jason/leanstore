@@ -1,7 +1,7 @@
 #pragma once
 
-#include "leanstore/KVInterface.hpp"
 #include "btree/core/BTreeGeneric.hpp"
+#include "leanstore/KVInterface.hpp"
 #include "utils/Error.hpp"
 
 #include <expected>
@@ -12,8 +12,9 @@ namespace leanstore {
 
 class LeanStore;
 
-namespace storage {
-namespace btree {
+} // namespace leanstore
+
+namespace leanstore::storage::btree {
 
 class BasicKV : public KVInterface, public BTreeGeneric {
 public:
@@ -111,6 +112,4 @@ public:
   }
 };
 
-} // namespace btree
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage::btree

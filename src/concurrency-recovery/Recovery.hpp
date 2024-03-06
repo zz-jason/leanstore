@@ -1,9 +1,10 @@
 #pragma once
 
-#include "leanstore/LeanStore.hpp"
-#include "leanstore/Units.hpp"
 #include "buffer-manager/BufferFrame.hpp"
 #include "buffer-manager/BufferManager.hpp"
+#include "concurrency-recovery/WALEntry.hpp"
+#include "leanstore/LeanStore.hpp"
+#include "leanstore/Units.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
 
@@ -81,6 +82,28 @@ private:
   /// read from disk and redone from the first log record that makes them dirty.
   std::expected<void, utils::Error> redo();
 
+  std::expected<bool, utils::Error> nextWalComplexToRedo(
+      uint64_t& offset, WALEntryComplex* walEntryPtr);
+
+  void redoInsert(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+
+  void redoTxInsert(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+
+  void redoUpdate(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+
+  void redoTxUpdate(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+
+  void redoRemove(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+
+  void redoTxRemove(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+
+  void redoInitPage(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+
+  void redoSplitRoot(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+
+  void redoSplitNonRoot(storage::BufferFrame& bf,
+                        WALEntryComplex* complexEntry);
+
   /// During the undo phase, the TT is used to undo the transactions still
   /// active at crash time. In the case of an aborted transaction, it’s possible
   /// to traverse the log file in reverse order using the previous sequence
@@ -90,9 +113,9 @@ private:
   /// Return the buffer frame containing the required dirty page
   storage::BufferFrame& resolvePage(PID pageId);
 
-  std::expected<void, utils::Error> readWalEntry(int64_t entryOffset,
-                                                 size_t entrySize,
-                                                 void* destination);
+  std::expected<void, utils::Error> readFromWalFile(int64_t entryOffset,
+                                                    size_t entrySize,
+                                                    void* destination);
 };
 
 inline bool Recovery::Run() {
@@ -146,8 +169,8 @@ inline storage::BufferFrame& Recovery::resolvePage(PID pageId) {
   return bf;
 }
 
-inline auto Recovery::readWalEntry(int64_t offset, size_t nbytes,
-                                   void* destination)
+inline auto Recovery::readFromWalFile(int64_t offset, size_t nbytes,
+                                      void* destination)
     -> std::expected<void, utils::Error> {
   auto fileName = GetWALFilePath();
   FILE* fp = fopen(fileName.c_str(), "rb");
