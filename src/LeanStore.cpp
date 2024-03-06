@@ -9,10 +9,6 @@
 #include "leanstore/Config.hpp"
 #include "leanstore/Store.hpp"
 #include "profiling/tables/BMTable.hpp"
-#include "profiling/tables/CPUTable.hpp"
-#include "profiling/tables/CRTable.hpp"
-#include "profiling/tables/DTTable.hpp"
-#include "profiling/tables/LatencyTable.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Misc.hpp"
 #include "utils/UserThread.hpp"
@@ -233,11 +229,6 @@ LeanStore::~LeanStore() {
   } else {
     LOG(INFO) << "WAL file closed";
   }
-
-  // // destroy profiling threads
-  // mProfilingThreadKeepRunning = false;
-  // while (mNumProfilingThreads) {
-  // }
 }
 
 std::expected<std::unique_ptr<TxWorker>, utils::Error> LeanStore::GetTxWorker(
@@ -263,95 +254,6 @@ void LeanStore::WaitAll() {
   for (uint32_t i = 0; i < mStoreOption.mNumTxWorkers; i++) {
     mCRManager->mWorkerThreads[i]->Wait();
   }
-}
-
-void LeanStore::StartProfilingThread() {
-  std::thread profilingThread([&]() {
-    utils::PinThisThread(mStoreOption.mNumTxWorkers + FLAGS_wal +
-                         FLAGS_pp_threads);
-    if (FLAGS_root) {
-      POSIX_CHECK(setpriority(PRIO_PROCESS, 0, -20) == 0);
-    }
-
-    profiling::BMTable bm_table(*mBufferManager);
-    profiling::DTTable dt_table(*mBufferManager);
-    profiling::CPUTable cpu_table;
-    profiling::CRTable cr_table;
-    profiling::LatencyTable latency_table;
-    std::vector<profiling::ProfilingTable*> tables = {
-        &mConfigsTable, &bm_table, &dt_table, &cpu_table, &cr_table};
-    if (FLAGS_profile_latency) {
-      tables.push_back(&latency_table);
-    }
-
-    std::vector<std::ofstream> csvs;
-    std::ofstream::openmode open_flags;
-    if (FLAGS_csv_truncate) {
-      open_flags = ios::trunc;
-    } else {
-      open_flags = ios::app;
-    }
-    for (uint64_t t_i = 0; t_i < tables.size(); t_i++) {
-      tables[t_i]->open();
-
-      csvs.emplace_back();
-      auto& csv = csvs.back();
-      csv.open(FLAGS_csv_path + "_" + tables[t_i]->getName() + ".csv",
-               open_flags);
-      csv.seekp(0, ios::end);
-      csv << std::setprecision(2) << std::fixed;
-      if (csv.tellp() == 0) {
-        csv << "t,c_hash";
-        for (auto& c : tables[t_i]->getColumns()) {
-          csv << "," << c.first;
-        }
-        csv << endl;
-      }
-    }
-
-    mConfigHash = mConfigsTable.hash();
-
-    uint64_t seconds = 0;
-    while (mProfilingThreadKeepRunning) {
-      for (uint64_t t_i = 0; t_i < tables.size(); t_i++) {
-        tables[t_i]->next();
-        if (tables[t_i]->size() == 0)
-          continue;
-
-        // CSV
-        auto& csv = csvs[t_i];
-        for (uint64_t r_i = 0; r_i < tables[t_i]->size(); r_i++) {
-          csv << seconds << "," << mConfigHash;
-          for (auto& c : tables[t_i]->getColumns()) {
-            csv << "," << c.second.values[r_i];
-          }
-          csv << endl;
-        }
-
-        // TODO: Websocket, CLI
-      }
-
-      const uint64_t tx = std::stoull(cr_table.get("0", "tx"));
-      const uint64_t long_running_tx =
-          std::stoull(cr_table.get("0", "long_running_tx"));
-      const double tx_abort = std::stod(cr_table.get("0", "tx_abort"));
-      const double tx_abort_pct = tx_abort * 100.0 / (tx_abort + tx);
-      const double rfa_pct =
-          std::stod(cr_table.get("0", "rfa_committed_tx")) * 100.0 / tx;
-      const double remote_flushes_pct = 100.0 - rfa_pct;
-      mGlobalStats.mAccumulatedTxCounter += tx;
-
-      // Console
-      const double instr_per_tx = cpu_table.workers_agg_events["instr"] / tx;
-      const double cycles_per_tx = cpu_table.workers_agg_events["cycle"] / tx;
-      const double l1_per_tx = cpu_table.workers_agg_events["L1-miss"] / tx;
-      const double llc_per_tx = cpu_table.workers_agg_events["LLC-miss"] / tx;
-      // using RowType = std::vector<variant<std::string, const char*, Table>>;
-    }
-    mNumProfilingThreads--;
-  });
-  mNumProfilingThreads++;
-  profilingThread.detach();
 }
 
 #define META_KEY_CR_MANAGER "cr_manager"

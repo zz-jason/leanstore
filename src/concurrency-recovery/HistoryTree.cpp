@@ -1,11 +1,11 @@
 #include "HistoryTree.hpp"
 
-#include "leanstore/Units.hpp"
-#include "profiling/counters/CRCounters.hpp"
 #include "btree/BasicKV.hpp"
 #include "btree/core/BTreeNode.hpp"
 #include "btree/core/BTreePessimisticExclusiveIterator.hpp"
 #include "btree/core/BTreePessimisticSharedIterator.hpp"
+#include "leanstore/Units.hpp"
+#include "profiling/counters/CRCounters.hpp"
 #include "sync/HybridLatch.hpp"
 #include "sync/ScopedHybridGuard.hpp"
 #include "utils/Misc.hpp"
@@ -37,7 +37,7 @@ void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
     session =
         (isRemove) ? &mRemoveSessions[workerId] : &mUpdateSessions[workerId];
   }
-  if (session != nullptr && session->mRightmostInited) {
+  if (session != nullptr && session->mRightmostBf != nullptr) {
     JUMPMU_TRY() {
       BTreePessimisticExclusiveIterator xIter(
           *static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)),
@@ -56,7 +56,7 @@ void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
 
         auto& versionMeta = *new (xIter.MutableVal().Data()) VersionMeta();
         versionMeta.mTreeId = treeId;
-        insertCallBack(versionMeta.payload);
+        insertCallBack(versionMeta.mPayload);
         xIter.MarkAsDirty();
         COUNTERS_BLOCK() {
           WorkerCounters::MyCounters().cc_versions_space_inserted_opt[treeId]++;
@@ -86,11 +86,10 @@ void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
       xIter.InsertToCurrentNode(key, versionSize);
       auto& versionMeta = *new (xIter.MutableVal().Data()) VersionMeta();
       versionMeta.mTreeId = treeId;
-      insertCallBack(versionMeta.payload);
+      insertCallBack(versionMeta.mPayload);
       xIter.MarkAsDirty();
 
       if (session != nullptr) {
-        session->mRightmostInited = true;
         session->mRightmostBf = xIter.mGuardedLeaf.mBf;
         session->mRightmostVersion = xIter.mGuardedLeaf.mGuard.mVersion + 1;
         session->mRightmostPos = xIter.mSlotId + 1;
@@ -127,7 +126,7 @@ bool HistoryTree::GetVersion(WORKERID prevWorkerId, TXID prevTxId,
     }
     Slice payload = iter.value();
     const auto& versionContainer = *VersionMeta::From(payload.data());
-    cb(versionContainer.payload, payload.length() - sizeof(VersionMeta));
+    cb(versionContainer.mPayload, payload.length() - sizeof(VersionMeta));
     JUMPMU_RETURN true;
   }
   JUMPMU_CATCH() {
@@ -182,8 +181,8 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
       auto& versionContainer =
           *reinterpret_cast<VersionMeta*>(xIter.MutableVal().Data());
       const TREEID treeId = versionContainer.mTreeId;
-      const bool calledBefore = versionContainer.called_before;
-      versionContainer.called_before = true;
+      const bool calledBefore = versionContainer.mCalledBefore;
+      versionContainer.mCalledBefore = true;
 
       // set the next key to be seeked
       keySize = xIter.key().size();
@@ -192,7 +191,7 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
 
       // get the remove version
       payloadSize = xIter.value().size() - sizeof(VersionMeta);
-      std::memcpy(payload, versionContainer.payload, payloadSize);
+      std::memcpy(payload, versionContainer.mPayload, payloadSize);
 
       // remove the version from history
       xIter.RemoveCurrent();
@@ -216,12 +215,12 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
   // Attention: no cross worker gc in sync
   Session* volatile session = &mUpdateSessions[workerId];
   volatile bool shouldTry = true;
-  if (fromTxId == 0 && session->leftmost_init) {
+  if (fromTxId == 0 && session->mLeftMostBf != nullptr) {
     JUMPMU_TRY() {
-      BufferFrame* bf = session->leftmost_bf;
+      BufferFrame* bf = session->mLeftMostBf;
 
       // optimistic lock, jump if invalid
-      ScopedHybridGuard bfGuard(bf->header.mLatch, session->leftmost_version);
+      ScopedHybridGuard bfGuard(bf->header.mLatch, session->mLeftMostVersion);
 
       // lock successfull, check whether the page can be purged
       auto* leafNode = reinterpret_cast<BTreeNode*>(bf->page.mPayload);
@@ -299,9 +298,8 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
         isFullPagePurged = false;
         JUMPMU_CONTINUE;
       }
-      session->leftmost_bf = xIter.mGuardedLeaf.mBf;
-      session->leftmost_version = xIter.mGuardedLeaf.mGuard.mVersion + 1;
-      session->leftmost_init = true;
+      session->mLeftMostBf = xIter.mGuardedLeaf.mBf;
+      session->mLeftMostVersion = xIter.mGuardedLeaf.mGuard.mVersion + 1;
       JUMPMU_BREAK;
     }
     JUMPMU_CATCH() {
@@ -340,13 +338,13 @@ void HistoryTree::VisitRemovedVersions(WORKERID workerId, TXID fromTxId,
 
       auto& versionContainer = *VersionMeta::From(xIter.MutableVal().Data());
       const TREEID treeId = versionContainer.mTreeId;
-      const bool calledBefore = versionContainer.called_before;
+      const bool calledBefore = versionContainer.mCalledBefore;
       DCHECK(calledBefore == false)
           << "Each remove version should be visited only once"
           << ", workerId=" << workerId << ", treeId=" << treeId
           << ", txId=" << curTxId;
 
-      versionContainer.called_before = true;
+      versionContainer.mCalledBefore = true;
 
       // set the next key to be seeked
       keySize = xIter.key().length();
@@ -355,7 +353,7 @@ void HistoryTree::VisitRemovedVersions(WORKERID workerId, TXID fromTxId,
 
       // get the remove version
       payloadSize = xIter.value().length() - sizeof(VersionMeta);
-      std::memcpy(payload, versionContainer.payload, payloadSize);
+      std::memcpy(payload, versionContainer.mPayload, payloadSize);
       if (!calledBefore) {
         xIter.MarkAsDirty();
       }
