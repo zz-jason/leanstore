@@ -101,8 +101,15 @@ std::expected<void, utils::Error> Recovery::redo() {
   auto* complexEntry = reinterpret_cast<WALEntryComplex*>(alignedBuffer.Get());
 
   for (auto offset = mWalStartOffset; offset < mWalSize;) {
-    if (auto res = nextWalComplexToRedo(offset, complexEntry); !res) {
+    auto res = nextWalComplexToRedo(offset, complexEntry);
+    if (!res) {
+      // met error
       return std::unexpected(res.error());
+    }
+
+    if (!res.value()) {
+      // no more complex entry to redo
+      break;
     }
 
     // get a buffer frame for the corresponding dirty page
@@ -152,8 +159,6 @@ std::expected<void, utils::Error> Recovery::redo() {
                     << std::to_string(static_cast<uint64_t>(walPayload->mType));
     }
     }
-
-    continue;
   }
 
   // Write all the resolved pages to disk
@@ -164,7 +169,7 @@ std::expected<void, utils::Error> Recovery::redo() {
   return {};
 }
 
-std::expected<void, utils::Error> Recovery::nextWalComplexToRedo(
+std::expected<bool, utils::Error> Recovery::nextWalComplexToRedo(
     uint64_t& offset, WALEntryComplex* complexEntry) {
   const uint64_t walEntrySize = sizeof(WALEntry);
   auto* buff = reinterpret_cast<uint8_t*>(complexEntry);
@@ -205,10 +210,12 @@ std::expected<void, utils::Error> Recovery::nextWalComplexToRedo(
       continue;
     }
 
-    return {};
+    // found a complex entry to redo
+    return true;
   }
 
-  return {};
+  // no more complex entry to redo
+  return false;
 }
 
 void Recovery::redoInsert(storage::BufferFrame& bf,

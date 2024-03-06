@@ -82,7 +82,7 @@ private:
   /// read from disk and redone from the first log record that makes them dirty.
   std::expected<void, utils::Error> redo();
 
-  std::expected<void, utils::Error> nextWalComplexToRedo(
+  std::expected<bool, utils::Error> nextWalComplexToRedo(
       uint64_t& offset, WALEntryComplex* walEntryPtr);
 
   void redoInsert(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
