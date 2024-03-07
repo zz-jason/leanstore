@@ -37,7 +37,7 @@ endfunction(leanstore_add_test_without_gtest_main)
 
 # Add tests
 leanstore_add_test(BasicKVTest)
-leanstore_add_test(RecoveryingTest)
+leanstore_add_test(RecoveryTest)
 leanstore_add_test(BufferFrameTest)
 leanstore_add_test(OptimisticGuardedTest)
 leanstore_add_test(TransactionKVTest)

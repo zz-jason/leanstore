@@ -1,11 +1,11 @@
 #include "BasicKV.hpp"
 
-#include "leanstore/KVInterface.hpp"
-#include "leanstore/LeanStore.hpp"
 #include "btree/core/BTreeGeneric.hpp"
 #include "btree/core/BTreePessimisticExclusiveIterator.hpp"
 #include "btree/core/BTreePessimisticSharedIterator.hpp"
 #include "btree/core/BTreeWALPayload.hpp"
+#include "leanstore/KVInterface.hpp"
+#include "leanstore/LeanStore.hpp"
 #include "utils/Misc.hpp"
 
 #include <gflags/gflags.h>
@@ -27,7 +27,7 @@ auto BasicKV::Create(leanstore::LeanStore* store, const std::string& treeName,
     return std::unexpected<utils::Error>(
         utils::Error::General("Tree name has been taken"));
   }
-  auto* tree = dynamic_cast<BasicKV*>(treePtr);
+  auto* tree = DownCast<BasicKV*>(treePtr);
   tree->Init(store, treeId, config);
   return tree;
 }

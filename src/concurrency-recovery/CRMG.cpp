@@ -9,6 +9,7 @@
 #include <glog/logging.h>
 
 #include <memory>
+#include <vector>
 
 namespace leanstore::cr {
 
@@ -62,11 +63,8 @@ CRManager::~CRManager() {
 }
 
 void CRManager::setupHistoryTree() {
-  auto historyTree = std::make_unique<HistoryTree>();
-  historyTree->mUpdateBTrees = std::make_unique<storage::btree::BasicKV*[]>(
-      mStore->mStoreOption.mNumTxWorkers);
-  historyTree->mRemoveBTrees = std::make_unique<storage::btree::BasicKV*[]>(
-      mStore->mStoreOption.mNumTxWorkers);
+  auto historyTree =
+      std::make_unique<HistoryTree>(mStore->mStoreOption.mNumTxWorkers);
 
   for (uint64_t i = 0; i < mStore->mStoreOption.mNumTxWorkers; i++) {
     std::string name = "_history_tree_" + std::to_string(i);
