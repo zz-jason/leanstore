@@ -1,12 +1,13 @@
 #pragma once
 
-#include "HistoryTreeInterface.hpp"
+#include "concurrency-recovery/HistoryStorage.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "profiling/counters/CRCounters.hpp"
 #include "utils/Misc.hpp"
 
 #include <atomic>
+#include <memory>
 #include <optional>
 #include <shared_mutex>
 #include <utility>
@@ -130,17 +131,17 @@ class ConcurrencyControl {
 public:
   ConcurrencyControl(leanstore::LeanStore* store, uint64_t numWorkers)
       : mStore(store),
-        mHistoryTree(nullptr),
         mCommitTree(numWorkers) {
   }
 
 public:
+  /// The LeanStore it belongs to.
   leanstore::LeanStore* mStore;
 
-  /// The history tree of the current worker thread. All the history versions of
-  /// transaction removes and updates are stored here. It's the version storage
-  /// of the chained tuple. Used for MVCC.
-  HistoryTreeInterface* mHistoryTree;
+  /// The history storage of current worker thread. All history versions of
+  /// transaction removes and updates executed by current worker are stored
+  /// here. It's the version storage of the chained tuple. Used for MVCC.
+  HistoryStorage mHistoryStorage;
 
   /// The commit log on the current worker. Used for MVCC visibility check.
   CommitTree mCommitTree;
@@ -193,26 +194,26 @@ public:
   TXID mGlobalWmkOfAllTx = 0;
 
 public:
-  /// Get the next version in the version storage according to the given
-  /// (prevWorkerId, prevTxId, prevCommandId). The callback function is called
-  /// with the version data when the version is found.
+  /// Get the older version in version storage according to the given
+  /// (newerWorkerId, newerTxId, newerCommandId). The callback function is
+  /// called with the version data when the version is found.
   ///
-  /// NOTE:Version is retrieved from newest to oldest. Previous version is the
-  /// newer one.
+  /// NOTE: Version is retrieved from newest to oldest.
   ///
-  /// @param prevWorkerId: the worker id of the previous version.
-  /// @param prevTxId: the transaction id of the previous version.
-  /// @param prevCommandId: the command id of the previous version.
+  /// @param newerWorkerId: the worker id of the newer version.
+  /// @param newerTxId: the transaction id of the newer version.
+  /// @param newerCommandId: the command id of the newer version.
   /// @param getCallback: the callback function to be called when the
   /// version is found.
   /// @return: true if the version is found, false otherwise.
   inline bool GetVersion(
-      WORKERID prevWorkerId, TXID prevTxId, COMMANDID prevCommandId,
+      WORKERID newerWorkerId, TXID newerTxId, COMMANDID newerCommandId,
       std::function<void(const uint8_t*, uint64_t versionSize)> getCallback) {
     utils::Timer timer(CRCounters::MyCounters().cc_ms_history_tree_retrieve);
-    auto isRemoveCommand = prevCommandId & kRemoveCommandMark;
-    return mHistoryTree->GetVersion(prevWorkerId, prevTxId, prevCommandId,
-                                    isRemoveCommand, getCallback);
+    auto isRemoveCommand = newerCommandId & kRemoveCommandMark;
+    return Other(newerWorkerId)
+        .mHistoryStorage.GetVersion(newerTxId, newerCommandId, isRemoveCommand,
+                                    getCallback);
   }
 
   /// Put a version to the version storage. The callback function is called with

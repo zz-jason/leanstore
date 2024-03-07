@@ -2,11 +2,11 @@
 
 #include "CRMG.hpp"
 #include "Worker.hpp"
+#include "buffer-manager/TreeRegistry.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "leanstore/Units.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
-#include "buffer-manager/TreeRegistry.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Misc.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -121,9 +121,8 @@ COMMANDID ConcurrencyControl::PutVersion(
   if (isRemoveCommand) {
     commandId |= kRemoveCommandMark;
   }
-  mHistoryTree->PutVersion(curWorker.mWorkerId, curWorker.mActiveTx.mStartTs,
-                           commandId, treeId, isRemoveCommand, versionSize,
-                           putCallBack);
+  mHistoryStorage.PutVersion(curWorker.mActiveTx.mStartTs, commandId, treeId,
+                             isRemoveCommand, versionSize, putCallBack);
   return commandId;
 }
 
@@ -199,8 +198,8 @@ void ConcurrencyControl::GarbageCollection() {
                << ", workerId=" << Worker::My().mWorkerId << ", fromTxId=" << 0
                << ", toTxId(mLocalWmkOfAllTx)=" << mLocalWmkOfAllTx
                << ", mCleanedWmkOfShortTx=" << mCleanedWmkOfShortTx;
-    mStore->mCRManager->mHistoryTreePtr->PurgeVersions(
-        Worker::My().mWorkerId, 0, mLocalWmkOfAllTx,
+    mHistoryStorage.PurgeVersions(
+        0, mLocalWmkOfAllTx,
         [&](const TXID versionTxId, const TREEID treeId,
             const uint8_t* versionData, uint64_t versionSize [[maybe_unused]],
             const bool calledBefore) {
@@ -229,8 +228,8 @@ void ConcurrencyControl::GarbageCollection() {
                << ", workerId=" << Worker::My().mWorkerId
                << ", fromTxId=" << mCleanedWmkOfShortTx
                << ", toTxId(mLocalWmkOfShortTx)=" << mLocalWmkOfShortTx;
-    mStore->mCRManager->mHistoryTreePtr->VisitRemovedVersions(
-        Worker::My().mWorkerId, mCleanedWmkOfShortTx, mLocalWmkOfShortTx,
+    mHistoryStorage.VisitRemovedVersions(
+        mCleanedWmkOfShortTx, mLocalWmkOfShortTx,
         [&](const TXID versionTxId, const TREEID treeId,
             const uint8_t* versionData, uint64_t, const bool calledBefore) {
           mStore->mTreeRegistry->GarbageCollect(treeId, versionData,
