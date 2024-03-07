@@ -2,7 +2,6 @@
 
 #include "leanstore/Store.hpp"
 #include "leanstore/Units.hpp"
-#include "profiling/tables/ConfigsTable.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Error.hpp"
 
@@ -38,10 +37,6 @@ class CRManager;
 
 namespace leanstore {
 
-struct GlobalStats {
-  uint64_t mAccumulatedTxCounter = 0;
-};
-
 class LeanStore {
 public:
   static std::expected<std::unique_ptr<LeanStore>, utils::Error> Open();
@@ -55,16 +50,6 @@ public:
 
   /// The file descriptor for write-ahead log
   int32_t mWalFd;
-
-  std::atomic<uint64_t> mNumProfilingThreads = 0;
-
-  std::atomic<bool> mProfilingThreadKeepRunning = true;
-
-  profiling::ConfigsTable mConfigsTable;
-
-  uint64_t mConfigHash = 0;
-
-  GlobalStats mGlobalStats;
 
   /// The tree registry
   std::unique_ptr<storage::TreeRegistry> mTreeRegistry;
@@ -153,17 +138,7 @@ public:
   /// Waits for all Workers to complete.
   void WaitAll();
 
-  void StartProfilingThread();
-
 private:
-  uint64_t getConfigHash() {
-    return mConfigHash;
-  }
-
-  GlobalStats getGlobalStats() {
-    return mGlobalStats;
-  }
-
   /// serializeMeta serializes all the metadata about concurrent resources,
   /// buffer manager, btrees, and flags
   void serializeMeta();

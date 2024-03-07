@@ -6,7 +6,6 @@
 #include "leanstore/Config.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/Units.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -84,11 +83,11 @@ public:
       auto duration =
           std::chrono::duration_cast<std::chrono::microseconds>(end - start)
               .count();
-      std::cout << "Done inserting"
-                << ", time elapsed: " << duration / 1000000.0 << " seconds"
-                << ", throughput: "
-                << CalculateTps(start, end, FLAGS_ycsb_record_count) << " tps"
-                << std::endl;
+      auto summary = std::format(
+          "Done inserting, time elapsed={:.2f} seconds, throughput={:.2f} tps",
+          duration / 1000000.0,
+          CalculateTps(start, end, FLAGS_ycsb_record_count));
+      std::cout << summary << std::endl;
     });
 
     utils::Parallelize::Range(
@@ -135,10 +134,7 @@ public:
       mStore->ExecAsync(workerId, [&]() {
         uint8_t key[FLAGS_ycsb_key_size];
         std::string valRead;
-        auto copyValue = [&](Slice val) {
-          valRead.resize(val.size(), 0);
-          std::memcpy(valRead.data(), val.data(), val.size());
-        };
+        auto copyValue = [&](Slice val) { valRead = val.ToString(); };
 
         auto updateDescBufSize = UpdateDesc::Size(1);
         uint8_t updateDescBuf[updateDescBufSize];
@@ -213,12 +209,12 @@ public:
         aborted += a.exchange(0);
       }
       auto abortRate = (aborted)*1.0 / (committed + aborted);
-      std::cout << "[" << i << "s] "
-                << " [tps=" << committed * 1.0 / reportPeriod << "]" // tps
-                << " [committed=" << committed << "]"     // committed count
-                << " [conflicted=" << aborted << "]"      // aborted count
-                << " [conflict rate=" << abortRate << "]" // abort rate
-                << std::endl;
+      auto summary = std::format("[{} thds] [{}s] [tps={:.2f}] [committed={}] "
+                                 "[conflicted={}] [conflict rate={:.2f}]",
+                                 FLAGS_worker_threads, i,
+                                 (committed + aborted) * 1.0 / reportPeriod,
+                                 committed, aborted, abortRate);
+      std::cout << summary << std::endl;
     }
 
     // Shutdown threads

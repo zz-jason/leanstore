@@ -90,12 +90,10 @@ public:
     switch (mState) {
     case GuardState::kPessimisticExclusive: {
       unlockExclusive();
-      DCHECK(!HasExclusiveMark(mLatch->mVersion));
       break;
     }
     case GuardState::kPessimisticShared: {
       unlockShared();
-      DCHECK(!HasExclusiveMark(mLatch->mVersion));
       break;
     }
     default: {
