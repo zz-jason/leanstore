@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <vector>
 
 namespace leanstore {
 namespace cr {
@@ -47,14 +48,19 @@ private:
     TXID mLastTxId = 0;
   };
 
-  Session mUpdateSessions[leanstore::cr::kWorkerLimit];
-
-  Session mRemoveSessions[leanstore::cr::kWorkerLimit];
+  std::vector<Session> mUpdateSessions;
+  std::vector<Session> mRemoveSessions;
 
 public:
-  std::unique_ptr<BasicKV*[]> mUpdateBTrees;
+  std::vector<BasicKV*> mUpdateBTrees;
+  std::vector<BasicKV*> mRemoveBTrees;
 
-  std::unique_ptr<BasicKV*[]> mRemoveBTrees;
+  HistoryTree(WORKERID numWorkers)
+      : mUpdateSessions(numWorkers),
+        mRemoveSessions(numWorkers),
+        mUpdateBTrees(numWorkers, nullptr),
+        mRemoveBTrees(numWorkers, nullptr) {
+  }
 
   virtual ~HistoryTree() = default;
 
