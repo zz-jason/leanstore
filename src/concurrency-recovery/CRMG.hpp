@@ -1,6 +1,5 @@
 #pragma once
 
-#include "HistoryTreeInterface.hpp"
 #include "Worker.hpp"
 #include "WorkerThread.hpp"
 #include "leanstore/Units.hpp"
@@ -30,10 +29,6 @@ public:
   /// All the thread-local worker references
   std::vector<Worker*> mWorkers;
 
-  /// History tree should be created after worker thread and group committer are
-  /// started.
-  std::unique_ptr<HistoryTreeInterface> mHistoryTreePtr;
-
   WaterMarkInfo mGlobalWmkInfo;
 
   /// The group committer thread, created and started if WAL is enabled when the
@@ -59,7 +54,7 @@ public:
   void Stop();
 
 private:
-  void setupHistoryTree();
+  void setupHistoryStorage4EachWorker();
 };
 
 } // namespace cr

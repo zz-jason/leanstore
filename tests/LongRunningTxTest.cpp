@@ -2,7 +2,7 @@
 #include "btree/TransactionKV.hpp"
 #include "buffer-manager/BufferManager.hpp"
 #include "concurrency-recovery/CRMG.hpp"
-#include "concurrency-recovery/HistoryTree.hpp"
+#include "concurrency-recovery/HistoryStorage.hpp"
 #include "concurrency-recovery/Worker.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/KVInterface.hpp"
@@ -233,10 +233,8 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
     cr::Worker::My().CommitTx();
 
     EXPECT_EQ(mKv->mGraveyard->CountEntries(), 0u);
-    auto* historyTree = static_cast<cr::HistoryTree*>(
-        mStore->mCRManager->mHistoryTreePtr.get());
-    auto* updateTree = historyTree->mUpdateBTrees[1];
-    auto* removeTree = historyTree->mRemoveBTrees[1];
+    auto* updateTree = cr::Worker::My().cc.mHistoryStorage.GetUpdateIndex();
+    auto* removeTree = cr::Worker::My().cc.mHistoryStorage.GetRemoveIndex();
     EXPECT_EQ(updateTree->CountEntries(), 100u);
     EXPECT_EQ(removeTree->CountEntries(), 0u);
   });

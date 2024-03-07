@@ -1,13 +1,13 @@
 #include "Worker.hpp"
 
 #include "CRMG.hpp"
+#include "buffer-manager/TreeRegistry.hpp"
 #include "concurrency-recovery/GroupCommitter.hpp"
 #include "concurrency-recovery/Transaction.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "profiling/counters/CRCounters.hpp"
-#include "buffer-manager/TreeRegistry.hpp"
 #include "utils/Defer.hpp"
 
 #include <glog/logging.h>
@@ -238,9 +238,10 @@ void Worker::AbortTx() {
                                 txId);
   });
 
-  cc.mHistoryTree->PurgeVersions(
-      mWorkerId, mActiveTx.mStartTs, mActiveTx.mStartTs,
-      [&](const TXID, const TREEID, const uint8_t*, uint64_t, const bool) {});
+  cc.mHistoryStorage.PurgeVersions(
+      mActiveTx.mStartTs, mActiveTx.mStartTs,
+      [&](const TXID, const TREEID, const uint8_t*, uint64_t, const bool) {},
+      0);
 
   if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
     // TODO: write compensation wal records between abort and finish

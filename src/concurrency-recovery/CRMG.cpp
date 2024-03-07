@@ -2,7 +2,8 @@
 
 #include "GroupCommitter.hpp"
 #include "WorkerThread.hpp"
-#include "concurrency-recovery/HistoryTree.hpp"
+#include "btree/BasicKV.hpp"
+#include "concurrency-recovery/HistoryStorage.hpp"
 #include "concurrency-recovery/Worker.hpp"
 #include "leanstore/LeanStore.hpp"
 
@@ -15,7 +16,6 @@ namespace leanstore::cr {
 
 CRManager::CRManager(leanstore::LeanStore* store)
     : mStore(store),
-      mHistoryTreePtr(nullptr),
       mGroupCommitter(nullptr) {
   auto& storeOption = store->mStoreOption;
   // start all worker threads
@@ -44,13 +44,11 @@ CRManager::CRManager(leanstore::LeanStore* store)
     mGroupCommitter->Start();
   }
 
-  // create history tree for each worker
-  mWorkerThreads[0]->SetJob([&]() { setupHistoryTree(); });
+  // create history storage for each worker
+  // History tree should be created after worker thread and group committer are
+  // started.
+  mWorkerThreads[0]->SetJob([&]() { setupHistoryStorage4EachWorker(); });
   mWorkerThreads[0]->Wait();
-  for (uint64_t workerId = 0; workerId < storeOption.mNumTxWorkers;
-       workerId++) {
-    mWorkers[workerId]->cc.mHistoryTree = mHistoryTreePtr.get();
-  }
 }
 
 void CRManager::Stop() {
@@ -62,38 +60,32 @@ CRManager::~CRManager() {
   Stop();
 }
 
-void CRManager::setupHistoryTree() {
-  auto historyTree =
-      std::make_unique<HistoryTree>(mStore->mStoreOption.mNumTxWorkers);
-
+void CRManager::setupHistoryStorage4EachWorker() {
   for (uint64_t i = 0; i < mStore->mStoreOption.mNumTxWorkers; i++) {
-    std::string name = "_history_tree_" + std::to_string(i);
     storage::btree::BTreeConfig config = {.mEnableWal = false,
                                           .mUseBulkInsert = true};
     // setup update tree
-    std::string updateBtreeName = name + "_updates";
+    std::string updateBtreeName = std::format("_history_tree_{}_updates", i);
     auto res = storage::btree::BasicKV::Create(mStore, updateBtreeName, config);
     if (!res) {
-      LOG(FATAL) << "Failed to set up _updates tree"
-                 << ", treeName=" << name
+      LOG(FATAL) << "Failed to set up update history tree"
                  << ", updateBTreeName=" << updateBtreeName
-                 << ", workerId=" << i << ", error=" << res.error().ToString();
+                 << ", error=" << res.error().ToString();
     }
-    historyTree->mUpdateBTrees[i] = res.value();
+    auto* updateIndex = res.value();
 
     // setup delete tree
-    std::string removeBtreeName = name + "_removes";
+    std::string removeBtreeName = std::format("_history_tree_{}_removes", i);
     res = storage::btree::BasicKV::Create(mStore, removeBtreeName, config);
     if (!res) {
-      LOG(FATAL) << "Failed to set up _removes tree"
-                 << ", treeName=" << name
+      LOG(FATAL) << "Failed to set up remove history tree"
                  << ", removeBtreeName=" << removeBtreeName
-                 << ", workerId=" << i << ", error=" << res.error().ToString();
+                 << ", error=" << res.error().ToString();
     }
-    historyTree->mRemoveBTrees[i] = res.value();
+    auto* removeIndex = res.value();
+    mWorkers[i]->cc.mHistoryStorage.SetUpdateIndex(updateIndex);
+    mWorkers[i]->cc.mHistoryStorage.SetRemoveIndex(removeIndex);
   }
-
-  mHistoryTreePtr = std::move(historyTree);
 }
 
 constexpr char kKeyWalSize[] = "wal_size";

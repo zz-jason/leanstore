@@ -1,12 +1,12 @@
 #pragma once
 
 #include "Tuple.hpp"
-#include "concurrency-recovery/CRMG.hpp"
-#include "concurrency-recovery/Worker.hpp"
-#include "leanstore/Units.hpp"
 #include "btree/BasicKV.hpp"
 #include "btree/core/BTreePessimisticExclusiveIterator.hpp"
 #include "btree/core/BTreeWALPayload.hpp"
+#include "concurrency-recovery/CRMG.hpp"
+#include "concurrency-recovery/Worker.hpp"
+#include "leanstore/Units.hpp"
 
 #include <glog/logging.h>
 
@@ -125,14 +125,14 @@ inline std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(
   auto valueBuf = std::make_unique<uint8_t[]>(valueSize);
   std::memcpy(valueBuf.get(), this->mPayload, valueSize);
 
-  WORKERID prevWorkerId = mWorkerId;
-  TXID prevTxId = mTxId;
-  COMMANDID prevCommandId = mCommandId;
+  WORKERID newerWorkerId = mWorkerId;
+  TXID newerTxId = mTxId;
+  COMMANDID newerCommandId = mCommandId;
 
   uint16_t versionsRead = 1;
   while (true) {
     bool found = cr::Worker::My().cc.GetVersion(
-        prevWorkerId, prevTxId, prevCommandId,
+        newerWorkerId, newerTxId, newerCommandId,
         [&](const uint8_t* versionBuf, uint64_t versionSize) {
           auto& version = *reinterpret_cast<const Version*>(versionBuf);
           switch (version.mType) {
@@ -167,22 +167,22 @@ inline std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(
           }
           }
 
-          prevWorkerId = version.mWorkerId;
-          prevTxId = version.mTxId;
-          prevCommandId = version.mCommandId;
+          newerWorkerId = version.mWorkerId;
+          newerTxId = version.mTxId;
+          newerCommandId = version.mCommandId;
         });
     if (!found) {
       LOG(ERROR) << "Not found in the version tree"
                  << ", workerId=" << cr::Worker::My().mWorkerId
                  << ", startTs=" << cr::ActiveTx().mStartTs
                  << ", versionsRead=" << versionsRead
-                 << ", prevWorkerId=" << prevWorkerId
-                 << ", prevTxId=" << prevTxId
-                 << ", prevCommandId=" << prevCommandId;
+                 << ", newerWorkerId=" << newerWorkerId
+                 << ", newerTxId=" << newerTxId
+                 << ", newerCommandId=" << newerCommandId;
       return {OpCode::kNotFound, versionsRead};
     }
 
-    if (cr::Worker::My().cc.VisibleForMe(prevWorkerId, prevTxId)) {
+    if (cr::Worker::My().cc.VisibleForMe(newerWorkerId, newerTxId)) {
       callback(Slice(valueBuf.get(), valueSize));
       return {OpCode::kOK, versionsRead};
     }

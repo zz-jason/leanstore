@@ -1,11 +1,11 @@
 #include "Tuple.hpp"
 
 #include "TransactionKV.hpp"
-#include "concurrency-recovery/CRMG.hpp"
-#include "concurrency-recovery/Worker.hpp"
 #include "btree/BasicKV.hpp"
 #include "btree/ChainedTuple.hpp"
 #include "btree/core/BTreeNode.hpp"
+#include "concurrency-recovery/CRMG.hpp"
+#include "concurrency-recovery/Worker.hpp"
 #include "utils/Misc.hpp"
 
 #include <gflags/gflags.h>
@@ -57,22 +57,22 @@ bool Tuple::ToFat(BTreePessimisticExclusiveIterator& xIter) {
   auto* fatTuple =
       new (tmpBuf->get()) FatTuple(payloadSize, valSize, chainedTuple);
 
-  auto prevWorkerId = chainedTuple.mWorkerId;
-  auto prevTxId = chainedTuple.mTxId;
-  auto prevCommandId = chainedTuple.mCommandId;
+  auto newerWorkerId = chainedTuple.mWorkerId;
+  auto newerTxId = chainedTuple.mTxId;
+  auto newerCommandId = chainedTuple.mCommandId;
 
   // TODO: check for mPayloadSize overflow
   bool abortConversion = false;
   uint16_t numDeltasToReplace = 0;
   while (!abortConversion) {
-    if (cr::Worker::My().cc.VisibleForAll(prevTxId)) {
+    if (cr::Worker::My().cc.VisibleForAll(newerTxId)) {
       // No need to convert versions that are visible for all to the FatTuple,
       // these old version can be GCed. Pruning versions space might get delayed
       break;
     }
 
     if (!cr::Worker::My().cc.GetVersion(
-            prevWorkerId, prevTxId, prevCommandId,
+            newerWorkerId, newerTxId, newerCommandId,
             [&](const uint8_t* version, uint64_t) {
               numDeltasToReplace++;
               const auto& chainedDelta = *UpdateVersion::From(version);
@@ -96,9 +96,9 @@ bool Tuple::ToFat(BTreePessimisticExclusiveIterator& xIter) {
                                  chainedDelta.mTxId, chainedDelta.mCommandId,
                                  reinterpret_cast<const uint8_t*>(&updateDesc),
                                  sizeOfDescAndDelta);
-              prevWorkerId = chainedDelta.mWorkerId;
-              prevTxId = chainedDelta.mTxId;
-              prevCommandId = chainedDelta.mCommandId;
+              newerWorkerId = chainedDelta.mWorkerId;
+              newerTxId = chainedDelta.mTxId;
+              newerCommandId = chainedDelta.mCommandId;
             })) {
       // no more old versions
       break;
@@ -434,12 +434,14 @@ void FatTuple::ConvertToChained(TREEID treeId) {
     auto& updateDesc = delta.GetUpdateDesc();
     auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
     auto versionSize = sizeOfDescAndDelta + sizeof(UpdateVersion);
-    cr::Worker::My().cc.mHistoryTree->PutVersion(
-        prevWorkerId, prevTxId, prevCommandId, treeId, false, versionSize,
-        [&](uint8_t* versionBuf) {
-          new (versionBuf) UpdateVersion(delta, sizeOfDescAndDelta);
-        },
-        false);
+    cr::Worker::My()
+        .cc.Other(prevWorkerId)
+        .mHistoryStorage.PutVersion(
+            prevTxId, prevCommandId, treeId, false, versionSize,
+            [&](uint8_t* versionBuf) {
+              new (versionBuf) UpdateVersion(delta, sizeOfDescAndDelta);
+            },
+            false);
     prevWorkerId = delta.mWorkerId;
     prevTxId = delta.mTxId;
     prevCommandId = delta.mCommandId;

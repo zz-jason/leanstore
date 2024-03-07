@@ -172,7 +172,7 @@ public:
     cr::Worker::My().mLogging.SetCurrentGsn(workerGSN + 1);
   }
 
-  // TODO: don't sync on temporary table pages like HistoryTree
+  // TODO: don't sync on temporary table pages like history trees
   inline void SyncGSNBeforeRead() {
     if (!cr::Worker::My().mLogging.mHasRemoteDependency &&
         mBf->page.mGSN > cr::Worker::My().mLogging.mTxReadSnapshot &&
