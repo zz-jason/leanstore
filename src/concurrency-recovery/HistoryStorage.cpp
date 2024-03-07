@@ -1,4 +1,4 @@
-#include "HistoryTree.hpp"
+#include "HistoryStorage.hpp"
 
 #include "btree/BasicKV.hpp"
 #include "btree/core/BTreeNode.hpp"
@@ -16,10 +16,10 @@ using namespace leanstore::storage::btree;
 
 namespace leanstore::cr {
 
-void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
-                             TREEID treeId, bool isRemove, uint64_t versionSize,
-                             std::function<void(uint8_t*)> insertCallBack,
-                             bool sameThread) {
+void HistoryStorage::PutVersion(TXID txId, COMMANDID commandId, TREEID treeId,
+                                bool isRemove, uint64_t versionSize,
+                                std::function<void(uint8_t*)> insertCallBack,
+                                bool sameThread) {
   // Compose the key to be inserted
   auto keySize = sizeof(txId) + sizeof(commandId);
   uint8_t keyBuffer[keySize];
@@ -30,12 +30,10 @@ void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
 
   versionSize += sizeof(VersionMeta);
 
-  volatile auto* btree =
-      (isRemove) ? mRemoveBTrees[workerId] : mUpdateBTrees[workerId];
+  volatile auto* btree = (isRemove) ? mRemoveIndex : mUpdateIndex;
   Session* session = nullptr;
   if (sameThread) {
-    session =
-        (isRemove) ? &mRemoveSessions[workerId] : &mUpdateSessions[workerId];
+    session = (isRemove) ? &mRemoveSession : &mUpdateSession;
   }
   if (session != nullptr && session->mRightmostBf != nullptr) {
     JUMPMU_TRY() {
@@ -106,17 +104,15 @@ void HistoryTree::PutVersion(WORKERID workerId, TXID txId, COMMANDID commandId,
   }
 }
 
-bool HistoryTree::GetVersion(WORKERID prevWorkerId, TXID prevTxId,
-                             COMMANDID prevCommandId,
-                             const bool isRemoveCommand,
-                             std::function<void(const uint8_t*, uint64_t)> cb) {
-  volatile BasicKV* btree = (isRemoveCommand) ? mRemoveBTrees[prevWorkerId]
-                                              : mUpdateBTrees[prevWorkerId];
-  const uint64_t keySize = sizeof(prevTxId) + sizeof(prevCommandId);
+bool HistoryStorage::GetVersion(
+    TXID newerTxId, COMMANDID newerCommandId, const bool isRemoveCommand,
+    std::function<void(const uint8_t*, uint64_t)> cb) {
+  volatile BasicKV* btree = (isRemoveCommand) ? mRemoveIndex : mUpdateIndex;
+  const uint64_t keySize = sizeof(newerTxId) + sizeof(newerCommandId);
   uint8_t keyBuffer[keySize];
   uint64_t offset = 0;
-  offset += utils::Fold(keyBuffer + offset, prevTxId);
-  offset += utils::Fold(keyBuffer + offset, prevCommandId);
+  offset += utils::Fold(keyBuffer + offset, newerTxId);
+  offset += utils::Fold(keyBuffer + offset, newerCommandId);
 
   Slice key(keyBuffer, keySize);
   JUMPMU_TRY() {
@@ -130,19 +126,18 @@ bool HistoryTree::GetVersion(WORKERID prevWorkerId, TXID prevTxId,
     JUMPMU_RETURN true;
   }
   JUMPMU_CATCH() {
-    LOG(ERROR) << "Can not retrieve version"
-               << ", prevWorkerId: " << prevWorkerId
-               << ", prevTxId: " << prevTxId
-               << ", prevCommandId: " << prevCommandId
+    LOG(ERROR) << "Can not retrieve older version"
+               << ", newerTxId: " << newerTxId
+               << ", newerCommandId: " << newerCommandId
                << ", isRemoveCommand: " << isRemoveCommand;
   }
   UNREACHABLE();
   return false;
 }
 
-void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
-                                RemoveVersionCallback onRemoveVersion,
-                                [[maybe_unused]] const uint64_t limit) {
+void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
+                                   RemoveVersionCallback onRemoveVersion,
+                                   [[maybe_unused]] const uint64_t limit) {
   auto keySize = sizeof(toTxId);
   uint8_t keyBuffer[FLAGS_page_size];
   utils::Fold(keyBuffer, fromTxId);
@@ -153,7 +148,7 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
   uint64_t versionsRemoved = 0;
 
   // purge remove versions
-  auto* btree = mRemoveBTrees[workerId];
+  auto* btree = mRemoveIndex;
   JUMPMU_TRY() {
   restartrem : {
     auto xIter = btree->GetExclusiveIterator();
@@ -209,11 +204,11 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
   }
 
   // purge update versions
-  btree = mUpdateBTrees[workerId];
+  btree = mUpdateIndex;
   utils::Fold(keyBuffer, fromTxId);
 
   // Attention: no cross worker gc in sync
-  Session* volatile session = &mUpdateSessions[workerId];
+  Session* volatile session = &mUpdateSession;
   volatile bool shouldTry = true;
   if (fromTxId == 0 && session->mLeftMostBf != nullptr) {
     JUMPMU_TRY() {
@@ -311,10 +306,9 @@ void HistoryTree::PurgeVersions(WORKERID workerId, TXID fromTxId, TXID toTxId,
   }
 }
 
-void HistoryTree::VisitRemovedVersions(WORKERID workerId, TXID fromTxId,
-                                       TXID toTxId,
-                                       RemoveVersionCallback onRemoveVersion) {
-  auto* removeTree = mRemoveBTrees[workerId];
+void HistoryStorage::VisitRemovedVersions(
+    TXID fromTxId, TXID toTxId, RemoveVersionCallback onRemoveVersion) {
+  auto* removeTree = mRemoveIndex;
   auto keySize = sizeof(toTxId);
   uint8_t keyBuffer[FLAGS_page_size];
 
@@ -341,8 +335,7 @@ void HistoryTree::VisitRemovedVersions(WORKERID workerId, TXID fromTxId,
       const bool calledBefore = versionContainer.mCalledBefore;
       DCHECK(calledBefore == false)
           << "Each remove version should be visited only once"
-          << ", workerId=" << workerId << ", treeId=" << treeId
-          << ", txId=" << curTxId;
+          << ", treeId=" << treeId << ", txId=" << curTxId;
 
       versionContainer.mCalledBefore = true;
 
