@@ -1,6 +1,6 @@
 #pragma once
 
-#include "concurrency-recovery/Worker.hpp"
+#include "concurrency/Worker.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Store.hpp"
 #include "leanstore/Units.hpp"

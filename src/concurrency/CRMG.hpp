@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Worker.hpp"
-#include "WorkerThread.hpp"
+#include "concurrency/Worker.hpp"
+#include "concurrency/WorkerThread.hpp"
 #include "leanstore/Units.hpp"
 
 #include <memory>

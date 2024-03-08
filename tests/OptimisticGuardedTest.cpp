@@ -1,6 +1,6 @@
 #include "sync/OptimisticGuarded.hpp"
 
-#include "concurrency-recovery/CRMG.hpp"
+#include "concurrency/CRMG.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "buffer-manager/BufferManager.hpp"

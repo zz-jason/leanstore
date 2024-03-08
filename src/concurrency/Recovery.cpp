@@ -1,10 +1,10 @@
-#include "Recovery.hpp"
+#include "concurrency/Recovery.hpp"
 
 #include "btree/TransactionKV.hpp"
 #include "btree/core/BTreeNode.hpp"
 #include "btree/core/BTreeWALPayload.hpp"
 #include "buffer-manager/GuardedBufferFrame.hpp"
-#include "concurrency-recovery/WALEntry.hpp"
+#include "concurrency/WALEntry.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "sync/HybridGuard.hpp"
 
@@ -30,39 +30,39 @@ std::expected<void, utils::Error> Recovery::analysis() {
     bytesRead += walEntrySize;
 
     auto* walEntry = reinterpret_cast<WALEntry*>(walEntryPtr);
-    switch (walEntry->type) {
-    case WALEntry::TYPE::TX_START: {
-      DCHECK_EQ(bytesRead, walEntry->size);
+    switch (walEntry->mType) {
+    case WALEntry::Type::kTxStart: {
+      DCHECK_EQ(bytesRead, walEntry->mSize);
       DCHECK(mActiveTxTable.find(walEntry->mTxId) == mActiveTxTable.end());
       auto txId = walEntry->mTxId;
       mActiveTxTable.emplace(txId, offset);
       offset += bytesRead;
       continue;
     }
-    case WALEntry::TYPE::TX_COMMIT: {
-      DCHECK_EQ(bytesRead, walEntry->size);
+    case WALEntry::Type::kTxCommit: {
+      DCHECK_EQ(bytesRead, walEntry->mSize);
       DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
       mActiveTxTable[walEntry->mTxId] = offset;
       offset += bytesRead;
       continue;
     }
-    case WALEntry::TYPE::TX_ABORT: {
-      DCHECK_EQ(bytesRead, walEntry->size);
+    case WALEntry::Type::kTxAbort: {
+      DCHECK_EQ(bytesRead, walEntry->mSize);
       DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
       mActiveTxTable[walEntry->mTxId] = offset;
       offset += bytesRead;
       continue;
     }
-    case WALEntry::TYPE::TX_FINISH: {
-      DCHECK_EQ(bytesRead, walEntry->size);
+    case WALEntry::Type::kTxFinish: {
+      DCHECK_EQ(bytesRead, walEntry->mSize);
       DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
       mActiveTxTable.erase(walEntry->mTxId);
       offset += bytesRead;
       continue;
     }
-    case WALEntry::TYPE::COMPLEX: {
+    case WALEntry::Type::kComplex: {
       auto leftOffset = offset + bytesRead;
-      auto leftSize = walEntry->size - bytesRead;
+      auto leftSize = walEntry->mSize - bytesRead;
       auto* leftDest = walEntryPtr + bytesRead;
       if (auto res = readFromWalFile(leftOffset, leftSize, leftDest); !res) {
         return std::unexpected(res.error());
@@ -70,7 +70,7 @@ std::expected<void, utils::Error> Recovery::analysis() {
       bytesRead += leftSize;
 
       auto* complexEntry = reinterpret_cast<WALEntryComplex*>(walEntryPtr);
-      DCHECK_EQ(bytesRead, complexEntry->size);
+      DCHECK_EQ(bytesRead, complexEntry->mSize);
       DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
       mActiveTxTable[walEntry->mTxId] = offset;
 
@@ -116,46 +116,46 @@ std::expected<void, utils::Error> Recovery::redo() {
     auto& bf = resolvePage(complexEntry->mPageId);
     SCOPED_DEFER(bf.header.mKeepInMemory = false);
 
-    auto* walPayload = reinterpret_cast<WALPayload*>(complexEntry->payload);
+    auto* walPayload = reinterpret_cast<WALPayload*>(complexEntry->mPayload);
     switch (walPayload->mType) {
-    case WALPayload::TYPE::kWalInsert: {
+    case WALPayload::Type::kWalInsert: {
       redoInsert(bf, complexEntry);
       break;
     }
-    case WALPayload::TYPE::kWalTxInsert: {
+    case WALPayload::Type::kWalTxInsert: {
       redoTxInsert(bf, complexEntry);
       break;
     }
-    case WALPayload::TYPE::WALUpdate: {
+    case WALPayload::Type::kWalUpdate: {
       redoUpdate(bf, complexEntry);
       break;
     }
-    case WALPayload::TYPE::WALTxUpdate: {
+    case WALPayload::Type::kWalTxUpdate: {
       redoTxUpdate(bf, complexEntry);
       break;
     }
-    case WALPayload::TYPE::WALRemove: {
+    case WALPayload::Type::kWalRemove: {
       redoRemove(bf, complexEntry);
       break;
     }
-    case WALPayload::TYPE::WALTxRemove: {
+    case WALPayload::Type::kWalTxRemove: {
       redoTxRemove(bf, complexEntry);
       break;
     }
-    case WALPayload::TYPE::kWalInitPage: {
+    case WALPayload::Type::kWalInitPage: {
       redoInitPage(bf, complexEntry);
       break;
     }
-    case WALPayload::TYPE::kWalSplitRoot: {
+    case WALPayload::Type::kWalSplitRoot: {
       redoSplitRoot(bf, complexEntry);
       break;
     }
-    case WALPayload::TYPE::kWalSplitNonRoot: {
+    case WALPayload::Type::kWalSplitNonRoot: {
       redoSplitNonRoot(bf, complexEntry);
       break;
     }
     default: {
-      DCHECK(false) << "Unhandled WALPayload::TYPE: "
+      DCHECK(false) << "Unhandled WALPayload::Type: "
                     << std::to_string(static_cast<uint64_t>(walPayload->mType));
     }
     }
@@ -185,24 +185,24 @@ std::expected<bool, utils::Error> Recovery::nextWalComplexToRedo(
 
     // skip if not a complex entry
     auto* walEntry = reinterpret_cast<WALEntry*>(buff);
-    if (walEntry->type != WALEntry::TYPE::COMPLEX) {
+    if (walEntry->mType != WALEntry::Type::kComplex) {
       offset += bytesRead;
       continue;
     }
 
     // read the rest of the complex entry
     auto leftOffset = offset + bytesRead;
-    auto leftSize = walEntry->size - bytesRead;
+    auto leftSize = walEntry->mSize - bytesRead;
     auto* leftDest = buff + bytesRead;
     if (auto res = readFromWalFile(leftOffset, leftSize, leftDest); !res) {
       return std::unexpected(res.error());
     }
     bytesRead += leftSize;
     offset += bytesRead;
-    DCHECK(bytesRead == complexEntry->size)
-        << "bytesRead should be equal to complexEntry->size"
+    DCHECK(bytesRead == complexEntry->mSize)
+        << "bytesRead should be equal to complexEntry->mSize"
         << ", offset=" << offset << ", bytesRead=" << bytesRead
-        << ", complexEntry->size=" << complexEntry->size;
+        << ", complexEntry->mSize=" << complexEntry->mSize;
 
     // skip if the page is not dirty
     if (mDirtyPageTable.find(complexEntry->mPageId) == mDirtyPageTable.end() ||
@@ -220,7 +220,7 @@ std::expected<bool, utils::Error> Recovery::nextWalComplexToRedo(
 
 void Recovery::redoInsert(storage::BufferFrame& bf,
                           WALEntryComplex* complexEntry) {
-  auto* walInsert = reinterpret_cast<WALInsert*>(complexEntry->payload);
+  auto* walInsert = reinterpret_cast<WALInsert*>(complexEntry->mPayload);
   HybridGuard guard(&bf.header.mLatch);
   GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
                                             std::move(guard), &bf);
@@ -234,7 +234,7 @@ void Recovery::redoInsert(storage::BufferFrame& bf,
 
 void Recovery::redoTxInsert(storage::BufferFrame& bf,
                             WALEntryComplex* complexEntry) {
-  auto* walInsert = reinterpret_cast<WALTxInsert*>(complexEntry->payload);
+  auto* walInsert = reinterpret_cast<WALTxInsert*>(complexEntry->mPayload);
   HybridGuard guard(&bf.header.mLatch);
   GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
                                             std::move(guard), &bf);
@@ -253,14 +253,14 @@ void Recovery::redoUpdate(storage::BufferFrame& bf [[maybe_unused]],
 
 void Recovery::redoTxUpdate(storage::BufferFrame& bf,
                             WALEntryComplex* complexEntry) {
-  auto* wal = reinterpret_cast<WALTxUpdate*>(complexEntry->payload);
+  auto* wal = reinterpret_cast<WalTxUpdate*>(complexEntry->mPayload);
   HybridGuard guard(&bf.header.mLatch);
   GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
                                             std::move(guard), &bf);
   auto* updateDesc = wal->GetUpdateDesc();
   auto key = wal->GetKey();
   auto slotId = guardedNode->lowerBound<true>(key);
-  DCHECK(slotId != -1) << "Key not found in WALTxUpdate";
+  DCHECK(slotId != -1) << "Key not found in WalTxUpdate";
 
   auto* mutRawVal = guardedNode->ValData(slotId);
   DCHECK(Tuple::From(mutRawVal)->mFormat == TupleFormat::kChained)
@@ -291,7 +291,7 @@ void Recovery::redoRemove(storage::BufferFrame& bf [[maybe_unused]],
 
 void Recovery::redoTxRemove(storage::BufferFrame& bf,
                             WALEntryComplex* complexEntry) {
-  auto* wal = reinterpret_cast<WALTxRemove*>(complexEntry->payload);
+  auto* wal = reinterpret_cast<WalTxRemove*>(complexEntry->mPayload);
   HybridGuard guard(&bf.header.mLatch);
   GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
                                             std::move(guard), &bf);
@@ -317,7 +317,7 @@ void Recovery::redoTxRemove(storage::BufferFrame& bf,
 
 void Recovery::redoInitPage(storage::BufferFrame& bf,
                             WALEntryComplex* complexEntry) {
-  auto* walInitPage = reinterpret_cast<WALInitPage*>(complexEntry->payload);
+  auto* walInitPage = reinterpret_cast<WALInitPage*>(complexEntry->mPayload);
   HybridGuard guard(&bf.header.mLatch);
   GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
                                             std::move(guard), &bf);
@@ -329,7 +329,7 @@ void Recovery::redoInitPage(storage::BufferFrame& bf,
 
 void Recovery::redoSplitRoot(storage::BufferFrame& bf,
                              WALEntryComplex* complexEntry) {
-  auto* wal = reinterpret_cast<WalSplitRoot*>(complexEntry->payload);
+  auto* wal = reinterpret_cast<WalSplitRoot*>(complexEntry->mPayload);
 
   // Resolve the old root
   auto oldRootGuard = HybridGuard(&bf.header.mLatch);
@@ -379,7 +379,7 @@ void Recovery::redoSplitRoot(storage::BufferFrame& bf,
 
 void Recovery::redoSplitNonRoot(storage::BufferFrame& bf,
                                 WALEntryComplex* complexEntry) {
-  auto* wal = reinterpret_cast<WalSplitNonRoot*>(complexEntry->payload);
+  auto* wal = reinterpret_cast<WalSplitNonRoot*>(complexEntry->mPayload);
 
   // Resolve the old root
   auto childGuard = HybridGuard(&bf.header.mLatch);

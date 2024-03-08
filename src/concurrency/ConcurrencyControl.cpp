@@ -1,8 +1,8 @@
-#include "ConcurrencyControl.hpp"
+#include "concurrency/ConcurrencyControl.hpp"
 
-#include "CRMG.hpp"
-#include "Worker.hpp"
 #include "buffer-manager/TreeRegistry.hpp"
+#include "concurrency/CRMG.hpp"
+#include "concurrency/Worker.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "leanstore/Units.hpp"

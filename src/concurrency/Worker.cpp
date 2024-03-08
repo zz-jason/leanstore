@@ -1,9 +1,11 @@
-#include "Worker.hpp"
+#include "concurrency/Worker.hpp"
 
-#include "CRMG.hpp"
 #include "buffer-manager/TreeRegistry.hpp"
-#include "concurrency-recovery/GroupCommitter.hpp"
-#include "concurrency-recovery/Transaction.hpp"
+#include "concurrency/CRMG.hpp"
+#include "concurrency/GroupCommitter.hpp"
+#include "concurrency/Logging.hpp"
+#include "concurrency/Transaction.hpp"
+#include "concurrency/WALEntry.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "leanstore/LeanStore.hpp"
@@ -63,7 +65,7 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
                << ", globalMaxFlushedGSN="
                << mStore->mCRManager->mGroupCommitter->mGlobalMaxFlushedGSN;
     if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
-      mLogging.WriteSimpleWal(WALEntry::TYPE::TX_START);
+      mLogging.WriteSimpleWal(WALEntry::Type::kTxStart);
     }
   });
 
@@ -150,8 +152,8 @@ void Worker::CommitTx() {
   mActiveTxId.store(0, std::memory_order_release);
 
   if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
-    mLogging.WriteSimpleWal(WALEntry::TYPE::TX_COMMIT);
-    mLogging.WriteSimpleWal(WALEntry::TYPE::TX_FINISH);
+    mLogging.WriteSimpleWal(WALEntry::Type::kTxCommit);
+    mLogging.WriteSimpleWal(WALEntry::Type::kTxFinish);
   } else if (mActiveTx.mIsReadOnly) {
     DCHECK(!mActiveTx.mHasWrote)
         << "Read-only transaction should not have writes"
@@ -226,7 +228,7 @@ void Worker::AbortTx() {
 
   std::vector<const WALEntry*> entries;
   mLogging.IterateCurrentTxWALs([&](const WALEntry& entry) {
-    if (entry.type == WALEntry::TYPE::COMPLEX) {
+    if (entry.mType == WALEntry::Type::kComplex) {
       entries.push_back(&entry);
     }
   });
@@ -234,7 +236,7 @@ void Worker::AbortTx() {
   const uint64_t txId = mActiveTx.mStartTs;
   std::for_each(entries.rbegin(), entries.rend(), [&](const WALEntry* entry) {
     const auto& complexEntry = *reinterpret_cast<const WALEntryComplex*>(entry);
-    mStore->mTreeRegistry->undo(complexEntry.mTreeId, complexEntry.payload,
+    mStore->mTreeRegistry->undo(complexEntry.mTreeId, complexEntry.mPayload,
                                 txId);
   });
 
@@ -245,8 +247,8 @@ void Worker::AbortTx() {
 
   if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
     // TODO: write compensation wal records between abort and finish
-    mLogging.WriteSimpleWal(WALEntry::TYPE::TX_ABORT);
-    mLogging.WriteSimpleWal(WALEntry::TYPE::TX_FINISH);
+    mLogging.WriteSimpleWal(WALEntry::Type::kTxAbort);
+    mLogging.WriteSimpleWal(WALEntry::Type::kTxFinish);
   }
 }
 

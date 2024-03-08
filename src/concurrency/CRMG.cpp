@@ -1,10 +1,10 @@
-#include "CRMG.hpp"
+#include "concurrency/CRMG.hpp"
 
-#include "GroupCommitter.hpp"
-#include "WorkerThread.hpp"
 #include "btree/BasicKV.hpp"
-#include "concurrency-recovery/HistoryStorage.hpp"
-#include "concurrency-recovery/Worker.hpp"
+#include "concurrency/GroupCommitter.hpp"
+#include "concurrency/HistoryStorage.hpp"
+#include "concurrency/Worker.hpp"
+#include "concurrency/WorkerThread.hpp"
 #include "leanstore/LeanStore.hpp"
 
 #include <glog/logging.h>

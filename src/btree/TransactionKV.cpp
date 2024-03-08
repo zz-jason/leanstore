@@ -6,7 +6,7 @@
 #include "btree/core/BTreeGeneric.hpp"
 #include "btree/core/BTreePessimisticSharedIterator.hpp"
 #include "btree/core/BTreeWALPayload.hpp"
-#include "concurrency-recovery/Worker.hpp"
+#include "concurrency/Worker.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
@@ -380,7 +380,7 @@ OpCode TransactionKV::Remove(Slice key) {
     auto prevWorkerId = chainedTuple.mWorkerId;
     auto prevTxId = chainedTuple.mTxId;
     auto prevCommandId = chainedTuple.mCommandId;
-    xIter.mGuardedLeaf.WriteWal<WALTxRemove>(key.size() + val.size(), key, val,
+    xIter.mGuardedLeaf.WriteWal<WalTxRemove>(key.size() + val.size(), key, val,
                                              prevWorkerId, prevTxId,
                                              prevCommandId);
 
@@ -425,14 +425,14 @@ void TransactionKV::undo(const uint8_t* walPayloadPtr,
                          const uint64_t txId [[maybe_unused]]) {
   auto& walPayload = *reinterpret_cast<const WALPayload*>(walPayloadPtr);
   switch (walPayload.mType) {
-  case WALPayload::TYPE::kWalTxInsert: {
+  case WALPayload::Type::kWalTxInsert: {
     return undoLastInsert(static_cast<const WALTxInsert*>(&walPayload));
   }
-  case WALPayload::TYPE::WALTxUpdate: {
-    return undoLastUpdate(static_cast<const WALTxUpdate*>(&walPayload));
+  case WALPayload::Type::kWalTxUpdate: {
+    return undoLastUpdate(static_cast<const WalTxUpdate*>(&walPayload));
   }
-  case WALPayload::TYPE::WALTxRemove: {
-    return undoLastRemove(static_cast<const WALTxRemove*>(&walPayload));
+  case WALPayload::Type::kWalTxRemove: {
+    return undoLastRemove(static_cast<const WalTxRemove*>(&walPayload));
   }
   default: {
     LOG(ERROR) << "Unknown wal payload type: " << (uint64_t)walPayload.mType;
@@ -491,7 +491,7 @@ void TransactionKV::undoLastInsert(const WALTxInsert* walInsert) {
   }
 }
 
-void TransactionKV::undoLastUpdate(const WALTxUpdate* walUpdate) {
+void TransactionKV::undoLastUpdate(const WalTxUpdate* walUpdate) {
   auto key = walUpdate->GetKey();
   for (int retry = 0; true; retry++) {
     JUMPMU_TRY() {
@@ -544,7 +544,7 @@ void TransactionKV::undoLastUpdate(const WALTxUpdate* walUpdate) {
   }
 }
 
-void TransactionKV::undoLastRemove(const WALTxRemove* walRemove) {
+void TransactionKV::undoLastRemove(const WalTxRemove* walRemove) {
   Slice removedKey = walRemove->RemovedKey();
   for (int retry = 0; true; retry++) {
     JUMPMU_TRY() {
@@ -630,7 +630,7 @@ bool TransactionKV::UpdateInFatTuple(BTreePessimisticExclusiveIterator& xIter,
     auto prevWorkerId = fatTuple->mWorkerId;
     auto prevTxId = fatTuple->mTxId;
     auto prevCommandId = fatTuple->mCommandId;
-    auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WALTxUpdate>(
+    auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WalTxUpdate>(
         key.size() + sizeOfDescAndDelta, key, updateDesc, sizeOfDescAndDelta,
         prevWorkerId, prevTxId, prevCommandId);
     auto* walBuf = walHandler->GetDeltaPtr();
@@ -874,19 +874,19 @@ void TransactionKV::unlock(const uint8_t* walEntryPtr) {
   const WALPayload& entry = *reinterpret_cast<const WALPayload*>(walEntryPtr);
   Slice key;
   switch (entry.mType) {
-  case WALPayload::TYPE::kWalTxInsert: {
+  case WALPayload::Type::kWalTxInsert: {
     // Assuming no insert after remove
     auto& walInsert = *reinterpret_cast<const WALTxInsert*>(&entry);
     key = walInsert.GetKey();
     break;
   }
-  case WALPayload::TYPE::WALTxUpdate: {
-    auto& walUpdate = *reinterpret_cast<const WALTxUpdate*>(&entry);
+  case WALPayload::Type::kWalTxUpdate: {
+    auto& walUpdate = *reinterpret_cast<const WalTxUpdate*>(&entry);
     key = walUpdate.GetKey();
     break;
   }
-  case WALPayload::TYPE::WALTxRemove: {
-    auto& removeEntry = *reinterpret_cast<const WALTxRemove*>(&entry);
+  case WALPayload::Type::kWalTxRemove: {
+    auto& removeEntry = *reinterpret_cast<const WalTxRemove*>(&entry);
     key = removeEntry.RemovedKey();
     break;
   }

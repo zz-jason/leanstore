@@ -2,8 +2,9 @@
 
 #include "buffer-manager/BufferFrame.hpp"
 #include "buffer-manager/BufferManager.hpp"
-#include "concurrency-recovery/WALEntry.hpp"
-#include "concurrency-recovery/Worker.hpp"
+#include "concurrency/LoggingImpl.hpp"
+#include "concurrency/WALPayloadHandler.hpp"
+#include "concurrency/Worker.hpp"
 #include "sync/HybridGuard.hpp"
 #include "sync/HybridLatch.hpp"
 

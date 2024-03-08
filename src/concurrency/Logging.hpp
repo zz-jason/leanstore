@@ -1,12 +1,9 @@
 #pragma once
 
-#include "ConcurrencyControl.hpp"
-#include "Transaction.hpp"
-#include "WALEntry.hpp"
-#include "leanstore/Exceptions.hpp"
+#include "concurrency/Transaction.hpp"
+#include "concurrency/WALEntry.hpp"
 #include "leanstore/Units.hpp"
 #include "sync/OptimisticGuarded.hpp"
-#include "utils/Defer.hpp"
 
 #include <glog/logging.h>
 #include <rapidjson/stringbuffer.h>
@@ -14,15 +11,8 @@
 
 #include <atomic>
 #include <functional>
-#include <memory>
 #include <mutex>
 #include <vector>
-
-namespace leanstore {
-
-class LeanStore;
-
-} // namespace leanstore
 
 namespace leanstore::cr {
 
@@ -48,6 +38,8 @@ struct WalFlushReq {
         mCurrTxId(currTxId) {
   }
 };
+
+template <typename T> class WALPayloadHandler;
 
 /// Helps to transaction concurrenct control and write-ahead logging.
 class Logging {
@@ -139,11 +131,11 @@ public:
   void IterateCurrentTxWALs(
       std::function<void(const WALEntry& entry)> callback);
 
-  WALEntrySimple& ReserveWALEntrySimple(WALEntry::TYPE type);
+  WALEntrySimple& ReserveWALEntrySimple(WALEntry::Type type);
 
   void SubmitWALEntrySimple();
 
-  void WriteSimpleWal(WALEntry::TYPE type);
+  void WriteSimpleWal(WALEntry::Type type);
 
   template <typename T, typename... Args>
   WALPayloadHandler<T> ReserveWALEntryComplex(uint64_t payloadSize, PID pageId,
@@ -167,121 +159,5 @@ private:
 
   uint32_t walContiguousFreeSpace();
 };
-
-class Worker {
-public:
-  /// The store it belongs to.
-  leanstore::LeanStore* mStore = nullptr;
-
-  /// The write-ahead logging component.
-  Logging mLogging;
-
-  ConcurrencyControl cc;
-
-  /// The ID of the current command in the current transaction.
-  COMMANDID mCommandId = 0;
-
-  /// The current running transaction.
-  Transaction mActiveTx;
-
-  /// The ID of the current transaction. It's set by the current worker thread
-  /// and read by the garbage collection process to determine the lower
-  /// watermarks of the transactions.
-  std::atomic<TXID> mActiveTxId = 0;
-
-  /// ID of the current worker itself.
-  const uint64_t mWorkerId;
-
-  /// All the workers.
-  std::vector<Worker*>& mAllWorkers;
-
-public:
-  Worker(uint64_t workerId, std::vector<Worker*>& allWorkers,
-         leanstore::LeanStore* store);
-
-  ~Worker();
-
-public:
-  bool IsTxStarted() {
-    return mActiveTx.mState == TxState::kStarted;
-  }
-
-  void StartTx(TxMode mode = TxMode::kShortRunning,
-               IsolationLevel level = IsolationLevel::kSnapshotIsolation,
-               bool isReadOnly = false);
-
-  void CommitTx();
-
-  void AbortTx();
-
-public:
-  static thread_local std::unique_ptr<Worker> sTlsWorker;
-  static thread_local Worker* sTlsWorkerRaw;
-
-  static constexpr uint64_t kRcBit = (1ull << 63);
-  static constexpr uint64_t kLongRunningBit = (1ull << 62);
-  static constexpr uint64_t kCleanBitsMask = ~(kRcBit | kLongRunningBit);
-
-public:
-  inline static Worker& My() {
-    return *Worker::sTlsWorkerRaw;
-  }
-};
-
-// Shortcuts
-inline Transaction& ActiveTx() {
-  return cr::Worker::My().mActiveTx;
-}
-
-//------------------------------------------------------------------------------
-// WALPayloadHandler
-//------------------------------------------------------------------------------
-
-template <typename T> inline void WALPayloadHandler<T>::SubmitWal() {
-  SCOPED_DEFER(DEBUG_BLOCK() {
-    auto walDoc = cr::Worker::My().mLogging.mActiveWALEntryComplex->ToJson();
-    auto entry = reinterpret_cast<T*>(
-        cr::Worker::My().mLogging.mActiveWALEntryComplex->payload);
-    auto payloadDoc = entry->ToJson();
-    walDoc->AddMember("payload", *payloadDoc, walDoc->GetAllocator());
-    rapidjson::StringBuffer buffer;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-    walDoc->Accept(writer);
-    LOG(INFO) << "SubmitWal"
-              << ", workerId=" << Worker::My().mWorkerId
-              << ", startTs=" << Worker::My().mActiveTx.mStartTs
-              << ", curGSN=" << Worker::My().mLogging.GetCurrentGsn()
-              << ", walJson=" << buffer.GetString();
-  });
-
-  cr::Worker::My().mLogging.SubmitWALEntryComplex(mTotalSize);
-}
-
-//------------------------------------------------------------------------------
-// Logging
-//------------------------------------------------------------------------------
-
-template <typename T, typename... Args>
-WALPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payloadSize,
-                                                     PID pageId, LID psn,
-                                                     TREEID treeId,
-                                                     Args&&... args) {
-  SCOPED_DEFER(mPrevLSN = mActiveWALEntryComplex->lsn);
-
-  auto entryLSN = mLsnClock++;
-  auto* entryPtr = mWalBuffer + mWalBuffered;
-  auto entrySize = sizeof(WALEntryComplex) + payloadSize;
-  ReserveContiguousBuffer(entrySize);
-
-  mActiveWALEntryComplex =
-      new (entryPtr) WALEntryComplex(entryLSN, entrySize, psn, treeId, pageId);
-  mActiveWALEntryComplex->mPrevLSN = mPrevLSN;
-  auto& curWorker = leanstore::cr::Worker::My();
-  mActiveWALEntryComplex->InitTxInfo(&curWorker.mActiveTx, curWorker.mWorkerId);
-
-  auto* payloadPtr = mActiveWALEntryComplex->payload;
-  auto walPayload = new (payloadPtr) T(std::forward<Args>(args)...);
-  return {walPayload, entrySize, entryLSN};
-}
 
 } // namespace leanstore::cr

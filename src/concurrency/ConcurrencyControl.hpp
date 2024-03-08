@@ -1,6 +1,6 @@
 #pragma once
 
-#include "concurrency-recovery/HistoryStorage.hpp"
+#include "concurrency/HistoryStorage.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "profiling/counters/CRCounters.hpp"

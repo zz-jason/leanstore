@@ -2,7 +2,7 @@
 
 #include "buffer-manager/BufferFrame.hpp"
 #include "buffer-manager/BufferManager.hpp"
-#include "concurrency-recovery/WALEntry.hpp"
+#include "concurrency/WALEntry.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "utils/Defer.hpp"

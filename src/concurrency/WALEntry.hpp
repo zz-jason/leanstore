@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Transaction.hpp"
+#include "concurrency/Transaction.hpp"
 #include "leanstore/Units.hpp"
 #include "utils/Misc.hpp"
 
@@ -17,24 +17,24 @@ namespace leanstore {
 namespace cr {
 
 #define DO_WITH_WAL_ENTRY_TYPES(ACTION, ...)                                   \
-  ACTION(TX_START, "TX_START", __VA_ARGS__)                                    \
-  ACTION(TX_COMMIT, "TX_COMMIT", __VA_ARGS__)                                  \
-  ACTION(TX_ABORT, "TX_ABORT", __VA_ARGS__)                                    \
-  ACTION(TX_FINISH, "TX_FINISH", __VA_ARGS__)                                  \
-  ACTION(COMPLEX, "COMPLEX", __VA_ARGS__)                                      \
-  ACTION(CARRIAGE_RETURN, "CARRIAGE_RETURN", __VA_ARGS__)
+  ACTION(kTxStart, "kTxStart", __VA_ARGS__)                                    \
+  ACTION(kTxCommit, "kTxCommit", __VA_ARGS__)                                  \
+  ACTION(kTxAbort, "kTxAbort", __VA_ARGS__)                                    \
+  ACTION(kTxFinish, "kTxFinish", __VA_ARGS__)                                  \
+  ACTION(kComplex, "kComplex", __VA_ARGS__)                                      \
+  ACTION(kCarriageReturn, "kCarriageReturn", __VA_ARGS__)
 
 #define DECR_WAL_ENTRY_TYPE(type, type_name, ...) type,
 #define WAL_ENTRY_TYPE_NAME(type, type_name, ...)                              \
-  case TYPE::type:                                                             \
+  case Type::type:                                                             \
     return type_name;
 
 /// The basic WAL record representation, there are two kinds of WAL entries:
-/// 1. WALEntrySimple, whose type might be: TX_START, TX_COMMIT, TX_ABORT
-/// 2. WALEntryComplex, whose type is COMPLEX
+/// 1. WALEntrySimple, whose type might be: kTxStart, kTxCommit, kTxAbort
+/// 2. WALEntryComplex, whose type is kComplex
 class WALEntry {
 public:
-  enum class TYPE : uint8_t { DO_WITH_WAL_ENTRY_TYPES(DECR_WAL_ENTRY_TYPE) };
+  enum class Type : uint8_t { DO_WITH_WAL_ENTRY_TYPES(DECR_WAL_ENTRY_TYPE) };
 
 public:
   /// Used for debuging purpose.
@@ -42,14 +42,14 @@ public:
 
   /// The log sequence number of this WALEntry. The number is globally and
   /// monotonically increased.
-  LID lsn;
+  LID mLsn;
 
   // Size of the whole WALEntry, including all the payloads. The entire WAL
   // entry stays in the WAL ring buffer of the current worker thread.
-  uint16_t size;
+  uint16_t mSize;
 
   /// Type of the WAL entry.
-  TYPE type;
+  Type mType;
 
   /// ID of the transaction who creates this WALEntry.
   TXID mTxId;
@@ -67,11 +67,11 @@ public:
 public:
   WALEntry() = default;
 
-  WALEntry(LID lsn, uint64_t size, TYPE type)
+  WALEntry(LID lsn, uint64_t size, Type type)
       : mCRC32(99),
-        lsn(lsn),
-        size(size),
-        type(type) {
+        mLsn(lsn),
+        mSize(size),
+        mType(type) {
   }
 
 public:
@@ -87,9 +87,9 @@ public:
 
   uint32_t ComputeCRC32() const {
     // auto startOffset = offsetof(WALEntry, lsn);
-    auto startOffset = ptrdiff_t(&this->lsn) - ptrdiff_t(this);
+    auto startOffset = ptrdiff_t(&mLsn) - ptrdiff_t(this);
     const auto* src = reinterpret_cast<const uint8_t*>(this) + startOffset;
-    auto srcSize = size - startOffset;
+    auto srcSize = mSize - startOffset;
     auto crc32 = utils::CRC(src, srcSize);
     return crc32;
   }
@@ -111,7 +111,7 @@ public:
 
 class WALEntrySimple : public WALEntry {
 public:
-  WALEntrySimple(LID lsn, uint64_t size, TYPE type)
+  WALEntrySimple(LID lsn, uint64_t size, Type type)
       : WALEntry(lsn, size, type) {
   }
 };
@@ -132,13 +132,13 @@ public:
 
   /// Payload of the operation on the btree node, for example, insert,
   /// remove, update, etc.
-  uint8_t payload[];
+  uint8_t mPayload[];
 
 public:
   WALEntryComplex() = default;
 
   WALEntryComplex(LID lsn, uint64_t size, LID psn, TREEID treeId, PID pageId)
-      : WALEntry(lsn, size, TYPE::COMPLEX),
+      : WALEntry(lsn, size, Type::kComplex),
         mPSN(psn),
         mTreeId(treeId),
         mPageId(pageId) {
@@ -147,43 +147,12 @@ public:
   virtual std::unique_ptr<rapidjson::Document> ToJson() override;
 };
 
-template <typename T> class WALPayloadHandler {
-public:
-  T* entry;            // payload of the active WAL
-  uint64_t mTotalSize; // size of the whole WALEntry, including payloads
-  uint64_t lsn;
-
-public:
-  WALPayloadHandler() = default;
-
-  /// @brief Initialize a WALPayloadHandler
-  /// @param entry the WALPayload object, should already being initialized
-  /// @param size the total size of the WALEntry
-  /// @param lsn the log sequence number of the WALEntry
-  WALPayloadHandler(T* entry, uint64_t size, uint64_t lsn)
-      : entry(entry),
-        mTotalSize(size),
-        lsn(lsn) {
-  }
-
-public:
-  inline T* operator->() {
-    return entry;
-  }
-
-  inline T& operator*() {
-    return *entry;
-  }
-
-  void SubmitWal();
-};
-
 // -----------------------------------------------------------------------------
 // WALEntry
 // -----------------------------------------------------------------------------
 
 inline std::string WALEntry::TypeName() {
-  switch (type) {
+  switch (mType) {
     DO_WITH_WAL_ENTRY_TYPES(WAL_ENTRY_TYPE_NAME);
   default:
     return "Unknow WAL entry type";
@@ -204,14 +173,14 @@ inline std::unique_ptr<rapidjson::Document> WALEntry::ToJson() {
   // lsn
   {
     rapidjson::Value member;
-    member.SetUint64(lsn);
+    member.SetUint64(mLsn);
     doc->AddMember("LSN", member, doc->GetAllocator());
   }
 
   // size
   {
     rapidjson::Value member;
-    member.SetUint64(size);
+    member.SetUint64(mSize);
     doc->AddMember("size", member, doc->GetAllocator());
   }
 

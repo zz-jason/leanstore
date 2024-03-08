@@ -4,8 +4,8 @@
 #include "btree/BasicKV.hpp"
 #include "btree/ChainedTuple.hpp"
 #include "btree/core/BTreeNode.hpp"
-#include "concurrency-recovery/CRMG.hpp"
-#include "concurrency-recovery/Worker.hpp"
+#include "concurrency/CRMG.hpp"
+#include "concurrency/Worker.hpp"
 #include "utils/Misc.hpp"
 
 #include <gflags/gflags.h>

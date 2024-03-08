@@ -64,12 +64,13 @@ public:
 class BMExclusiveUpgradeIfNeeded {
 private:
   HybridGuard& mGuard;
-  const bool was_exclusive;
+
+  const bool mWasExclusive;
 
 public:
   BMExclusiveUpgradeIfNeeded(HybridGuard& guard)
       : mGuard(guard),
-        was_exclusive(guard.mState == GuardState::kPessimisticExclusive) {
+        mWasExclusive(guard.mState == GuardState::kPessimisticExclusive) {
     mGuard.TryToExclusiveMayJump();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
@@ -77,7 +78,7 @@ public:
   JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP(BMExclusiveUpgradeIfNeeded)
 
   ~BMExclusiveUpgradeIfNeeded() {
-    if (!was_exclusive) {
+    if (!mWasExclusive) {
       mGuard.Unlock();
     }
     JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP()

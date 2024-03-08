@@ -4,8 +4,8 @@
 #include "btree/BasicKV.hpp"
 #include "btree/core/BTreePessimisticExclusiveIterator.hpp"
 #include "btree/core/BTreeWALPayload.hpp"
-#include "concurrency-recovery/CRMG.hpp"
-#include "concurrency-recovery/Worker.hpp"
+#include "concurrency/CRMG.hpp"
+#include "concurrency/Worker.hpp"
 #include "leanstore/Units.hpp"
 
 #include <glog/logging.h>
@@ -234,7 +234,7 @@ inline void ChainedTuple::Update(BTreePessimisticExclusiveIterator& xIter,
   auto prevWorkerId = mWorkerId;
   auto prevTxId = mTxId;
   auto prevCommandId = mCommandId;
-  auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WALTxUpdate>(
+  auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WalTxUpdate>(
       key.size() + sizeOfDescAndDelta, key, updateDesc, sizeOfDescAndDelta,
       prevWorkerId, prevTxId, prevCommandId ^ currCommandId);
   auto* walBuf = walHandler->GetDeltaPtr();

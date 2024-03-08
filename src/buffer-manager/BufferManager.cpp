@@ -1,9 +1,9 @@
 #include "BufferManager.hpp"
 
 #include "BufferFrame.hpp"
-#include "concurrency-recovery/CRMG.hpp"
-#include "concurrency-recovery/GroupCommitter.hpp"
-#include "concurrency-recovery/Recovery.hpp"
+#include "concurrency/CRMG.hpp"
+#include "concurrency/GroupCommitter.hpp"
+#include "concurrency/Recovery.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "profiling/counters/WorkerCounters.hpp"

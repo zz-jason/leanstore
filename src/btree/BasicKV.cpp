@@ -252,9 +252,9 @@ OpCode BasicKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
     if (mConfig.mEnableWal) {
       DCHECK(updateDesc.mNumSlots > 0);
       auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
-      auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WALUpdate>(
+      auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WalUpdate>(
           key.length() + sizeOfDescAndDelta);
-      walHandler->mType = WALPayload::TYPE::WALUpdate;
+      walHandler->mType = WALPayload::Type::kWalUpdate;
       walHandler->mKeySize = key.length();
       walHandler->mDeltaLength = sizeOfDescAndDelta;
       auto* walPtr = walHandler->mPayload;
@@ -296,7 +296,7 @@ OpCode BasicKV::Remove(Slice key) {
 
     Slice value = xIter.value();
     if (mConfig.mEnableWal) {
-      auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WALRemove>(
+      auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WalRemove>(
           key.size() + value.size(), key, value);
       walHandler.SubmitWal();
     }

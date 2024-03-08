@@ -1,4 +1,6 @@
-#include "Worker.hpp"
+#include "concurrency/Logging.hpp"
+
+#include "concurrency/Worker.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "utils/Defer.hpp"
@@ -37,7 +39,7 @@ void Logging::ReserveContiguousBuffer(uint32_t bytesRequired) {
       // carraige return, consume the last bytes from mWalBuffered to the end
       if (mWalBufferSize - mWalBuffered < bytesRequired) {
         auto entrySize = mWalBufferSize - mWalBuffered;
-        auto entryType = WALEntry::TYPE::CARRIAGE_RETURN;
+        auto entryType = WALEntry::Type::kCarriageReturn;
         auto* entryPtr = mWalBuffer + mWalBuffered;
         auto* entry = new (entryPtr) WALEntrySimple(0, entrySize, entryType);
         entry->mCRC32 = entry->ComputeCRC32();
@@ -60,8 +62,8 @@ void Logging::ReserveContiguousBuffer(uint32_t bytesRequired) {
 /// Reserve space and initialize a WALEntrySimple when a transaction is started,
 /// committed, or aborted.
 /// TODO(jian.z): set previous LSN for the WALEntry.
-WALEntrySimple& Logging::ReserveWALEntrySimple(WALEntry::TYPE type) {
-  SCOPED_DEFER(mPrevLSN = mActiveWALEntrySimple->lsn;);
+WALEntrySimple& Logging::ReserveWALEntrySimple(WALEntry::Type type) {
+  SCOPED_DEFER(mPrevLSN = mActiveWALEntrySimple->mLsn;);
 
   ReserveContiguousBuffer(sizeof(WALEntrySimple));
   auto* entryPtr = mWalBuffer + mWalBuffered;
@@ -71,7 +73,7 @@ WALEntrySimple& Logging::ReserveWALEntrySimple(WALEntry::TYPE type) {
       new (entryPtr) WALEntrySimple(mLsnClock++, entrySize, type);
 
   // set previous LSN on demand.
-  if (type != WALEntry::TYPE::TX_START) {
+  if (type != WALEntry::Type::kTxStart) {
     mActiveWALEntrySimple->mPrevLSN = mPrevLSN;
   }
   auto& curWorker = leanstore::cr::Worker::My();
@@ -108,7 +110,7 @@ void Logging::SubmitWALEntrySimple() {
   publishWalFlushReq();
 }
 
-void Logging::WriteSimpleWal(WALEntry::TYPE type) {
+void Logging::WriteSimpleWal(WALEntry::Type type) {
   ReserveWALEntrySimple(type);
   SubmitWALEntrySimple();
 }
@@ -117,6 +119,18 @@ void Logging::WriteSimpleWal(WALEntry::TYPE type) {
 /// it is ready to flush to disk.
 /// @param totalSize is the size of the wal record to be flush.
 void Logging::SubmitWALEntryComplex(uint64_t totalSize) {
+  SCOPED_DEFER(DEBUG_BLOCK() {
+    auto walDoc = cr::Worker::My().mLogging.mActiveWALEntryComplex->ToJson();
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    walDoc->Accept(writer);
+    LOG(INFO) << "SubmitWal"
+              << ", workerId=" << Worker::My().mWorkerId
+              << ", startTs=" << Worker::My().mActiveTx.mStartTs
+              << ", curGSN=" << Worker::My().mLogging.GetCurrentGsn()
+              << ", walJson=" << buffer.GetString();
+  });
+
   if (!((mWalBuffered >= mTxWalBegin) ||
         (mWalBuffered + totalSize < mTxWalBegin))) {
     Worker::My().mActiveTx.mWalExceedBuffer = true;
@@ -147,16 +161,16 @@ void Logging::IterateCurrentTxWALs(
   uint64_t cursor = mTxWalBegin;
   while (cursor != mWalBuffered) {
     const WALEntry& entry = *reinterpret_cast<WALEntry*>(mWalBuffer + cursor);
-    ENSURE(entry.size > 0);
+    ENSURE(entry.mSize > 0);
     DEBUG_BLOCK() {
-      if (entry.type != WALEntry::TYPE::CARRIAGE_RETURN)
+      if (entry.mType != WALEntry::Type::kCarriageReturn)
         entry.CheckCRC();
     }
-    if (entry.type == WALEntry::TYPE::CARRIAGE_RETURN) {
+    if (entry.mType == WALEntry::Type::kCarriageReturn) {
       cursor = 0;
     } else {
       callback(entry);
-      cursor += entry.size;
+      cursor += entry.mSize;
     }
   }
 }
