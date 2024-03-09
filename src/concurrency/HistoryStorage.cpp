@@ -21,16 +21,15 @@ void HistoryStorage::PutVersion(TXID txId, COMMANDID commandId, TREEID treeId,
                                 std::function<void(uint8_t*)> insertCallBack,
                                 bool sameThread) {
   // Compose the key to be inserted
+  auto* btree = isRemove ? mRemoveIndex : mUpdateIndex;
   auto keySize = sizeof(txId) + sizeof(commandId);
   uint8_t keyBuffer[keySize];
   uint64_t offset = 0;
   offset += utils::Fold(keyBuffer + offset, txId);
   offset += utils::Fold(keyBuffer + offset, commandId);
   Slice key(keyBuffer, keySize);
-
   versionSize += sizeof(VersionMeta);
 
-  volatile auto* btree = (isRemove) ? mRemoveIndex : mUpdateIndex;
   Session* session = nullptr;
   if (sameThread) {
     session = (isRemove) ? &mRemoveSession : &mUpdateSession;

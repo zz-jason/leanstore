@@ -63,8 +63,7 @@ public:
   }
 
   void StartTx(TxMode mode = TxMode::kShortRunning,
-               IsolationLevel level = IsolationLevel::kSnapshotIsolation,
-               bool isReadOnly = false);
+               IsolationLevel level = IsolationLevel::kSnapshotIsolation);
 
   void CommitTx();
 

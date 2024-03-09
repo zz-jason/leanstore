@@ -42,7 +42,7 @@ void Logging::ReserveContiguousBuffer(uint32_t bytesRequired) {
         auto entryType = WalEntry::Type::kCarriageReturn;
         auto* entryPtr = mWalBuffer + mWalBuffered;
         auto* entry = new (entryPtr) WalEntrySimple(0, entrySize, entryType);
-        entry->mCRC32 = entry->ComputeCRC32();
+        entry->mCrc32 = entry->ComputeCRC32();
         mWalBuffered = 0;
         publishWalBufferedOffset();
         continue;
@@ -104,7 +104,7 @@ void Logging::SubmitWALEntrySimple() {
         (mWalBuffered + sizeof(WalEntrySimple) < mTxWalBegin))) {
     Worker::My().mActiveTx.mWalExceedBuffer = true;
   }
-  mActiveWALEntrySimple->mCRC32 = mActiveWALEntrySimple->ComputeCRC32();
+  mActiveWALEntrySimple->mCrc32 = mActiveWALEntrySimple->ComputeCRC32();
   mWalBuffered += sizeof(WalEntrySimple);
   publishWalFlushReq();
 }
@@ -114,8 +114,7 @@ void Logging::WriteSimpleWal(WalEntry::Type type) {
   SubmitWALEntrySimple();
 }
 
-/// @brief SubmitWALEntryComplex submits the wal record to group committer when
-/// it is ready to flush to disk.
+/// Submits the wal record to group committer when it is ready to flush to disk.
 /// @param totalSize is the size of the wal record to be flush.
 void Logging::SubmitWALEntryComplex(uint64_t totalSize) {
   SCOPED_DEFER(DEBUG_BLOCK() {
@@ -134,10 +133,9 @@ void Logging::SubmitWALEntryComplex(uint64_t totalSize) {
         (mWalBuffered + totalSize < mTxWalBegin))) {
     Worker::My().mActiveTx.mWalExceedBuffer = true;
   }
-  mActiveWALEntryComplex->mCRC32 = mActiveWALEntryComplex->ComputeCRC32();
+  mActiveWALEntryComplex->mCrc32 = mActiveWALEntryComplex->ComputeCRC32();
   mWalBuffered += totalSize;
   publishWalFlushReq();
-  Worker::My().mActiveTx.MarkAsWrite();
 
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().wal_write_bytes += totalSize;

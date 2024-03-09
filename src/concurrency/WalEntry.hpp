@@ -38,7 +38,7 @@ public:
 
 public:
   /// Used for debuging purpose.
-  uint32_t mCRC32 = 99;
+  uint32_t mCrc32 = 99;
 
   /// The log sequence number of this WalEntry. The number is globally and
   /// monotonically increased.
@@ -68,7 +68,7 @@ public:
   WalEntry() = default;
 
   WalEntry(LID lsn, uint64_t size, Type type)
-      : mCRC32(99),
+      : mCrc32(99),
         mLsn(lsn),
         mSize(size),
         mType(type) {
@@ -96,14 +96,14 @@ public:
 
   void CheckCRC() const {
     auto actualCRC = ComputeCRC32();
-    if (mCRC32 != actualCRC) {
+    if (mCrc32 != actualCRC) {
       auto doc = const_cast<WalEntry*>(this)->ToJson();
       rapidjson::StringBuffer buffer;
       rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
       doc->Accept(writer);
       LOG(FATAL) << "CRC32 mismatch"
                  << ", this=" << (void*)this << ", actual=" << actualCRC
-                 << ", expected=" << mCRC32
+                 << ", expected=" << mCrc32
                  << ", walJson=" << buffer.GetString();
     }
   }
@@ -166,7 +166,7 @@ inline std::unique_ptr<rapidjson::Document> WalEntry::ToJson() {
   // crc
   {
     rapidjson::Value member;
-    member.SetUint(mCRC32);
+    member.SetUint(mCrc32);
     doc->AddMember("CRC", member, doc->GetAllocator());
   }
 

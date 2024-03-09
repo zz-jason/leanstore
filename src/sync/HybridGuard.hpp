@@ -39,7 +39,8 @@ public:
 public:
   HybridGuard(HybridLatch* latch)
       : mLatch(latch),
-        mState(GuardState::kUninitialized) {
+        mState(GuardState::kUninitialized),
+        mVersion(0) {
   }
 
   // Manually construct a guard from a snapshot. Use with caution!

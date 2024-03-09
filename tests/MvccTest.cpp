@@ -1,9 +1,9 @@
-#include "concurrency/CRManager.hpp"
-#include "leanstore/LeanStore.hpp"
 #include "btree/BasicKV.hpp"
 #include "btree/TransactionKV.hpp"
 #include "btree/core/BTreeGeneric.hpp"
 #include "buffer-manager/BufferManager.hpp"
+#include "concurrency/CRManager.hpp"
+#include "leanstore/LeanStore.hpp"
 #include "utils/Defer.hpp"
 #include "utils/RandomGenerator.hpp"
 
@@ -92,8 +92,7 @@ TEST_F(MvccTest, LookupWhileInsert) {
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
-    cr::Worker::My().StartTx(TxMode::kShortRunning,
-                             IsolationLevel::kSnapshotIsolation, true);
+    cr::Worker::My().StartTx();
     EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key0.data(), key0.size()),
                              copyValueOut),
               OpCode::kOK);
@@ -121,8 +120,7 @@ TEST_F(MvccTest, LookupWhileInsert) {
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
-    cr::Worker::My().StartTx(TxMode::kShortRunning,
-                             IsolationLevel::kSnapshotIsolation, true);
+    cr::Worker::My().StartTx();
     EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key1.data(), key1.size()),
                              copyValueOut),
               OpCode::kOK);
@@ -193,8 +191,7 @@ TEST_F(MvccTest, InsertConflict) {
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
-    cr::Worker::My().StartTx(TxMode::kShortRunning,
-                             IsolationLevel::kSnapshotIsolation, true);
+    cr::Worker::My().StartTx();
     EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key1.data(), key1.size()),
                              copyValueOut),
               OpCode::kOK);

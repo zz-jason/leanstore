@@ -114,7 +114,8 @@ public:
 
   /// Write page to disk.
   /// usually called by recovery.
-  void WritePageSync(BufferFrame&);
+  [[nodiscard]] auto WritePageSync(BufferFrame&)
+      -> std::expected<void, utils::Error>;
 
   /// Sync all the data written to disk, harden all the writes on mPageFd
   void SyncAllPageWrites();
