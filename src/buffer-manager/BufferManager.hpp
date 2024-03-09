@@ -1,10 +1,10 @@
 #pragma once
 
-#include "BufferFrameProvider.hpp"
-#include "Partition.hpp"
-#include "Swip.hpp"
-#include "profiling/tables/BMTable.hpp"
+#include "buffer-manager/BufferFrameProvider.hpp"
+#include "buffer-manager/Partition.hpp"
+#include "buffer-manager/Swip.hpp"
 #include "leanstore/Units.hpp"
+#include "profiling/tables/BMTable.hpp"
 #include "utils/Error.hpp"
 
 #include <expected>

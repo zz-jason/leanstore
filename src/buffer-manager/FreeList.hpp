@@ -1,6 +1,6 @@
 #pragma once
 
-#include "BufferFrame.hpp"
+#include "buffer-manager/BufferFrame.hpp"
 #include "leanstore/Exceptions.hpp"
 
 #include <mutex>
@@ -23,11 +23,11 @@ public:
 };
 
 inline void FreeList::PushFront(BufferFrame& bf) {
-  PARANOID(bf.header.state == STATE::FREE);
-  assert(!bf.header.mLatch.IsLockedExclusively());
+  PARANOID(bf.mHeader.mState == State::kFree);
+  assert(!bf.mHeader.mLatch.IsLockedExclusively());
 
   JumpScoped<std::unique_lock<std::mutex>> guard(mMutex);
-  bf.header.mNextFreeBf = mHead;
+  bf.mHeader.mNextFreeBf = mHead;
   mHead = &bf;
   mSize++;
 }
@@ -35,7 +35,7 @@ inline void FreeList::PushFront(BufferFrame& bf) {
 inline void FreeList::PushFront(BufferFrame* head, BufferFrame* tail,
                                 uint64_t size) {
   JumpScoped<std::unique_lock<std::mutex>> guard(mMutex);
-  tail->header.mNextFreeBf = mHead;
+  tail->mHeader.mNextFreeBf = mHead;
   mHead = head;
   mSize += size;
 }
@@ -46,9 +46,9 @@ inline BufferFrame& FreeList::PopFrontMayJump() {
   if (mHead == nullptr) {
     jumpmu::Jump();
   } else {
-    mHead = mHead->header.mNextFreeBf;
+    mHead = mHead->mHeader.mNextFreeBf;
     mSize--;
-    PARANOID(freeBf->header.state == STATE::FREE);
+    PARANOID(freeBf->mHeader.mState == State::kFree);
   }
   return *freeBf;
 }

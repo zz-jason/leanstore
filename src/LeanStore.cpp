@@ -5,7 +5,7 @@
 #include "btree/TransactionKV.hpp"
 #include "btree/core/BTreeGeneric.hpp"
 #include "buffer-manager/BufferManager.hpp"
-#include "concurrency-recovery/CRMG.hpp"
+#include "concurrency/CRManager.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/Store.hpp"
 #include "profiling/tables/BMTable.hpp"

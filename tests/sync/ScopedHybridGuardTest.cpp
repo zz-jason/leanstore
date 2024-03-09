@@ -1,6 +1,6 @@
 #include "sync/ScopedHybridGuard.hpp"
 
-#include "concurrency-recovery/CRMG.hpp"
+#include "concurrency/CRManager.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "buffer-manager/BufferManager.hpp"
 #include "sync/HybridLatch.hpp"

@@ -2,7 +2,7 @@
 
 #include "buffer-manager/BufferFrame.hpp"
 #include "buffer-manager/BufferManager.hpp"
-#include "concurrency-recovery/WALEntry.hpp"
+#include "concurrency/WalEntry.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "utils/Defer.hpp"
@@ -26,11 +26,11 @@ private:
   /// Size of the written WAL file.
   uint64_t mWalSize;
 
-  /// Stores the dirty page ID and the offset to the first WALEntry that caused
+  /// Stores the dirty page ID and the offset to the first WalEntry that caused
   /// that page to become dirty.
   std::map<PID, uint64_t> mDirtyPageTable;
 
-  /// Stores the active transaction and the offset to the last created WALEntry.
+  /// Stores the active transaction and the offset to the last created WalEntry.
   std::map<TXID, uint64_t> mActiveTxTable;
 
   /// Stores all the pages read from disk during the recovery process.
@@ -83,26 +83,26 @@ private:
   std::expected<void, utils::Error> redo();
 
   std::expected<bool, utils::Error> nextWalComplexToRedo(
-      uint64_t& offset, WALEntryComplex* walEntryPtr);
+      uint64_t& offset, WalEntryComplex* walEntryPtr);
 
-  void redoInsert(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+  void redoInsert(storage::BufferFrame& bf, WalEntryComplex* complexEntry);
 
-  void redoTxInsert(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+  void redoTxInsert(storage::BufferFrame& bf, WalEntryComplex* complexEntry);
 
-  void redoUpdate(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+  void redoUpdate(storage::BufferFrame& bf, WalEntryComplex* complexEntry);
 
-  void redoTxUpdate(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+  void redoTxUpdate(storage::BufferFrame& bf, WalEntryComplex* complexEntry);
 
-  void redoRemove(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+  void redoRemove(storage::BufferFrame& bf, WalEntryComplex* complexEntry);
 
-  void redoTxRemove(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+  void redoTxRemove(storage::BufferFrame& bf, WalEntryComplex* complexEntry);
 
-  void redoInitPage(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+  void redoInitPage(storage::BufferFrame& bf, WalEntryComplex* complexEntry);
 
-  void redoSplitRoot(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+  void redoSplitRoot(storage::BufferFrame& bf, WalEntryComplex* complexEntry);
 
   void redoSplitNonRoot(storage::BufferFrame& bf,
-                        WALEntryComplex* complexEntry);
+                        WalEntryComplex* complexEntry);
 
   /// During the undo phase, the TT is used to undo the transactions still
   /// active at crash time. In the case of an aborted transaction, it’s possible
@@ -123,12 +123,12 @@ inline bool Recovery::Run() {
 
   analysis();
   for (auto it = mResolvedPages.begin(); it != mResolvedPages.end(); ++it) {
-    if (it->second->isFree()) {
+    if (it->second->IsFree()) {
       continue;
     }
     DLOG(INFO) << "Resolved page after analysis"
                << ", address: " << it->second << ", pageId: " << it->first
-               << ", btreeId: " << it->second->page.mBTreeId;
+               << ", btreeId: " << it->second->mPage.mBTreeId;
   }
   // print resulting active transaction table
   DLOG(INFO) << "Active transaction table size: " << mActiveTxTable.size();
@@ -164,7 +164,7 @@ inline storage::BufferFrame& Recovery::resolvePage(PID pageId) {
 
   auto& bf = mStore->mBufferManager->ReadPageSync(pageId);
   // prevent the buffer frame from being evicted by buffer frame providers
-  bf.header.mKeepInMemory = true;
+  bf.mHeader.mKeepInMemory = true;
   mResolvedPages.emplace(pageId, &bf);
   return bf;
 }

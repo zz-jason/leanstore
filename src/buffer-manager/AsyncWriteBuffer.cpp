@@ -1,4 +1,4 @@
-#include "AsyncWriteBuffer.hpp"
+#include "buffer-manager/AsyncWriteBuffer.hpp"
 
 #include "leanstore/Exceptions.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
@@ -38,18 +38,18 @@ bool AsyncWriteBuffer::full() {
 
 void AsyncWriteBuffer::AddToIOBatch(BufferFrame& bf, PID pageId) {
   DCHECK(!full());
-  DCHECK(uint64_t(&bf.page) % 512 == 0);
+  DCHECK(uint64_t(&bf.mPage) % 512 == 0);
   DCHECK(pending_requests <= batch_max_size);
   COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().dt_page_writes[bf.page.mBTreeId]++;
+    WorkerCounters::MyCounters().dt_page_writes[bf.mPage.mBTreeId]++;
   }
 
   auto slot = pending_requests++;
   write_buffer_commands[slot].bf = &bf;
   write_buffer_commands[slot].mPageId = pageId;
-  bf.page.mMagicDebuging = pageId;
+  bf.mPage.mMagicDebuging = pageId;
   void* writeBufferSlotPtr = GetWriteBuffer(slot);
-  std::memcpy(writeBufferSlotPtr, &bf.page, page_size);
+  std::memcpy(writeBufferSlotPtr, &bf.mPage, page_size);
   io_prep_pwrite(/* iocb */ &iocbs[slot], /* fd */ fd,
                  /* buf */ writeBufferSlotPtr, /* count */ page_size,
                  /* offset */ page_size * pageId);

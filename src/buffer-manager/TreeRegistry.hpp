@@ -1,6 +1,6 @@
 #pragma once
 
-#include "BufferFrame.hpp"
+#include "buffer-manager/BufferFrame.hpp"
 #include "leanstore/Units.hpp"
 #include "sync/HybridGuard.hpp"
 #include "utils/Defer.hpp"
@@ -237,7 +237,7 @@ public:
     DLOG_IF(FATAL, it == mTrees.end())
         << "BufferManagedTree not find"
         << ", address=" << (void*)&bf << ", treeId=" << treeId
-        << ", pageId=" << bf.header.mPageId;
+        << ", pageId=" << bf.mHeader.mPageId;
     auto& [tree, treeName] = it->second;
     return tree->Checkpoint(bf, dest);
   }

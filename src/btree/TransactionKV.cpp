@@ -6,7 +6,7 @@
 #include "btree/core/BTreeGeneric.hpp"
 #include "btree/core/BTreePessimisticSharedIterator.hpp"
 #include "btree/core/BTreeWALPayload.hpp"
-#include "concurrency-recovery/Worker.hpp"
+#include "concurrency/Worker.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
@@ -111,7 +111,7 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
       auto mutRawVal = xIter.MutableVal();
       auto& tuple = *Tuple::From(mutRawVal.Data());
       auto visibleForMe =
-          cr::Worker::My().cc.VisibleForMe(tuple.mWorkerId, tuple.mTxId);
+          cr::Worker::My().mCc.VisibleForMe(tuple.mWorkerId, tuple.mTxId);
       if (tuple.IsWriteLocked() || !visibleForMe) {
         // conflict detected, the tuple is write locked by other worker or not
         // visible for me
@@ -204,7 +204,7 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
           << ", tupleIsRemoved=" << chainedTuple->mIsTombstone
           << ", tupleWriteLocked=" << chainedTuple->IsWriteLocked();
 
-      auto visibleForMe = cr::Worker::My().cc.VisibleForMe(
+      auto visibleForMe = cr::Worker::My().mCc.VisibleForMe(
           chainedTuple->mWorkerId, chainedTuple->mTxId);
 
       if (chainedTuple->mIsTombstone && visibleForMe) {
@@ -245,7 +245,7 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
     }
 
     // WAL
-    xIter.mGuardedLeaf.WriteWal<WALTxInsert>(key.size() + val.size(), key, val,
+    xIter.mGuardedLeaf.WriteWal<WalTxInsert>(key.size() + val.size(), key, val,
                                              0, 0, kInvalidCommandid);
 
     // insert
@@ -271,7 +271,7 @@ void TransactionKV::insertAfterRemove(BTreePessimisticExclusiveIterator& xIter,
 
   // create an insert version
   auto versionSize = sizeof(InsertVersion) + val.size() + key.size();
-  auto commandId = cr::Worker::My().cc.PutVersion(
+  auto commandId = cr::Worker::My().mCc.PutVersion(
       mTreeId, false, versionSize, [&](uint8_t* versionBuf) {
         new (versionBuf)
             InsertVersion(chainedTuple->mWorkerId, chainedTuple->mTxId,
@@ -282,7 +282,7 @@ void TransactionKV::insertAfterRemove(BTreePessimisticExclusiveIterator& xIter,
   auto prevWorkerId = chainedTuple->mWorkerId;
   auto prevTxId = chainedTuple->mTxId;
   auto prevCommandId = chainedTuple->mCommandId;
-  xIter.mGuardedLeaf.WriteWal<WALTxInsert>(
+  xIter.mGuardedLeaf.WriteWal<WalTxInsert>(
       key.size() + val.size(), key, val, prevWorkerId, prevTxId, prevCommandId);
 
   // store the old chained tuple update stats
@@ -341,16 +341,16 @@ OpCode TransactionKV::Remove(Slice key) {
     // remove the chained tuple
     auto& chainedTuple = *static_cast<ChainedTuple*>(tuple);
     if (chainedTuple.IsWriteLocked() ||
-        !cr::Worker::My().cc.VisibleForMe(chainedTuple.mWorkerId,
-                                          chainedTuple.mTxId)) {
+        !cr::Worker::My().mCc.VisibleForMe(chainedTuple.mWorkerId,
+                                           chainedTuple.mTxId)) {
       LOG(INFO) << "Conflict detected, please abort and retry"
                 << ", workerId=" << cr::Worker::My().mWorkerId
                 << ", startTs=" << cr::Worker::My().mActiveTx.mStartTs
                 << ", tupleLastWriter=" << chainedTuple.mWorkerId
                 << ", tupleLastStartTs=" << chainedTuple.mTxId
                 << ", visibleForMe="
-                << cr::Worker::My().cc.VisibleForMe(chainedTuple.mWorkerId,
-                                                    chainedTuple.mTxId);
+                << cr::Worker::My().mCc.VisibleForMe(chainedTuple.mWorkerId,
+                                                     chainedTuple.mTxId);
       JUMPMU_RETURN OpCode::kAbortTx;
     }
 
@@ -369,7 +369,7 @@ OpCode TransactionKV::Remove(Slice key) {
     auto valSize = xIter.value().size() - sizeof(ChainedTuple);
     auto val = chainedTuple.GetValue(valSize);
     auto versionSize = sizeof(RemoveVersion) + val.size() + key.size();
-    auto commandId = cr::Worker::My().cc.PutVersion(
+    auto commandId = cr::Worker::My().mCc.PutVersion(
         mTreeId, true, versionSize, [&](uint8_t* versionBuf) {
           new (versionBuf)
               RemoveVersion(chainedTuple.mWorkerId, chainedTuple.mTxId,
@@ -380,7 +380,7 @@ OpCode TransactionKV::Remove(Slice key) {
     auto prevWorkerId = chainedTuple.mWorkerId;
     auto prevTxId = chainedTuple.mTxId;
     auto prevCommandId = chainedTuple.mCommandId;
-    xIter.mGuardedLeaf.WriteWal<WALTxRemove>(key.size() + val.size(), key, val,
+    xIter.mGuardedLeaf.WriteWal<WalTxRemove>(key.size() + val.size(), key, val,
                                              prevWorkerId, prevTxId,
                                              prevCommandId);
 
@@ -423,16 +423,16 @@ OpCode TransactionKV::ScanAsc(Slice startKey, ScanCallback callback) {
 
 void TransactionKV::undo(const uint8_t* walPayloadPtr,
                          const uint64_t txId [[maybe_unused]]) {
-  auto& walPayload = *reinterpret_cast<const WALPayload*>(walPayloadPtr);
+  auto& walPayload = *reinterpret_cast<const WalPayload*>(walPayloadPtr);
   switch (walPayload.mType) {
-  case WALPayload::TYPE::kWalTxInsert: {
-    return undoLastInsert(static_cast<const WALTxInsert*>(&walPayload));
+  case WalPayload::Type::kWalTxInsert: {
+    return undoLastInsert(static_cast<const WalTxInsert*>(&walPayload));
   }
-  case WALPayload::TYPE::WALTxUpdate: {
-    return undoLastUpdate(static_cast<const WALTxUpdate*>(&walPayload));
+  case WalPayload::Type::kWalTxUpdate: {
+    return undoLastUpdate(static_cast<const WalTxUpdate*>(&walPayload));
   }
-  case WALPayload::TYPE::WALTxRemove: {
-    return undoLastRemove(static_cast<const WALTxRemove*>(&walPayload));
+  case WalPayload::Type::kWalTxRemove: {
+    return undoLastRemove(static_cast<const WalTxRemove*>(&walPayload));
   }
   default: {
     LOG(ERROR) << "Unknown wal payload type: " << (uint64_t)walPayload.mType;
@@ -440,7 +440,7 @@ void TransactionKV::undo(const uint8_t* walPayloadPtr,
   }
 }
 
-void TransactionKV::undoLastInsert(const WALTxInsert* walInsert) {
+void TransactionKV::undoLastInsert(const WalTxInsert* walInsert) {
   // Assuming no insert after remove
   auto key = walInsert->GetKey();
   for (int retry = 0; true; retry++) {
@@ -491,7 +491,7 @@ void TransactionKV::undoLastInsert(const WALTxInsert* walInsert) {
   }
 }
 
-void TransactionKV::undoLastUpdate(const WALTxUpdate* walUpdate) {
+void TransactionKV::undoLastUpdate(const WalTxUpdate* walUpdate) {
   auto key = walUpdate->GetKey();
   for (int retry = 0; true; retry++) {
     JUMPMU_TRY() {
@@ -544,7 +544,7 @@ void TransactionKV::undoLastUpdate(const WALTxUpdate* walUpdate) {
   }
 }
 
-void TransactionKV::undoLastRemove(const WALTxRemove* walRemove) {
+void TransactionKV::undoLastRemove(const WalTxRemove* walRemove) {
   Slice removedKey = walRemove->RemovedKey();
   for (int retry = 0; true; retry++) {
     JUMPMU_TRY() {
@@ -630,7 +630,7 @@ bool TransactionKV::UpdateInFatTuple(BTreePessimisticExclusiveIterator& xIter,
     auto prevWorkerId = fatTuple->mWorkerId;
     auto prevTxId = fatTuple->mTxId;
     auto prevCommandId = fatTuple->mCommandId;
-    auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WALTxUpdate>(
+    auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WalTxUpdate>(
         key.size() + sizeOfDescAndDelta, key, updateDesc, sizeOfDescAndDelta,
         prevWorkerId, prevTxId, prevCommandId);
     auto* walBuf = walHandler->GetDeltaPtr();
@@ -653,9 +653,9 @@ SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
     return SpaceCheckResult::kNothing;
   }
 
-  HybridGuard bfGuard(&bf.header.mLatch);
+  HybridGuard bfGuard(&bf.mHeader.mLatch);
   bfGuard.ToOptimisticOrJump();
-  if (bf.page.mBTreeId != mTreeId) {
+  if (bf.mPage.mBTreeId != mTreeId) {
     jumpmu::Jump();
   }
 
@@ -696,10 +696,10 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData,
                                    bool calledBefore) {
   const auto& version = *RemoveVersion::From(versionData);
 
-  // Delete tombstones caused by transactions below cc.mLocalWmkOfAllTx.
-  if (versionTxId <= cr::Worker::My().cc.mLocalWmkOfAllTx) {
+  // Delete tombstones caused by transactions below mCc.mLocalWmkOfAllTx.
+  if (versionTxId <= cr::Worker::My().mCc.mLocalWmkOfAllTx) {
     DLOG(INFO) << "Delete tombstones caused by transactions below "
-               << "cc.mLocalWmkOfAllTx"
+               << "mCc.mLocalWmkOfAllTx"
                << ", versionWorkerId=" << versionWorkerId
                << ", versionTxId=" << versionTxId
                << ", removedKey=" << ToString(version.RemovedKey());
@@ -723,7 +723,7 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData,
     JUMPMU_CATCH() {
       DLOG(INFO)
           << "Delete tombstones caused by transactions below "
-          << "cc.mLocalWmkOfAllTx page has been modified since last delete";
+          << "mCc.mLocalWmkOfAllTx page has been modified since last delete";
     }
     return;
   }
@@ -796,13 +796,13 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData,
     if (chainedTuple.mWorkerId == versionWorkerId &&
         chainedTuple.mTxId == versionTxId && chainedTuple.mIsTombstone) {
 
-      DCHECK(chainedTuple.mTxId > cr::Worker::My().cc.mLocalWmkOfAllTx)
-          << "The removedKey is under cc.mLocalWmkOfAllTx, should not happen"
-          << ", cc.mLocalWmkOfAllTx=" << cr::Worker::My().cc.mLocalWmkOfAllTx
+      DCHECK(chainedTuple.mTxId > cr::Worker::My().mCc.mLocalWmkOfAllTx)
+          << "The removedKey is under mCc.mLocalWmkOfAllTx, should not happen"
+          << ", mCc.mLocalWmkOfAllTx=" << cr::Worker::My().mCc.mLocalWmkOfAllTx
           << ", versionWorkerId=" << versionWorkerId
           << ", versionTxId=" << versionTxId
           << ", removedKey=" << ToString(removedKey);
-      // if (chainedTuple.mTxId <= cr::Worker::My().cc.mLocalWmkOfAllTx) {
+      // if (chainedTuple.mTxId <= cr::Worker::My().mCc.mLocalWmkOfAllTx) {
       //   // remove the tombsone completely
       //   auto ret = xIter.RemoveCurrent();
       //   xIter.MarkAsDirty();
@@ -812,7 +812,7 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData,
       //     WorkerCounters::MyCounters().cc_todo_removed[mTreeId]++;
       //   }
       // }
-      if (chainedTuple.mTxId <= cr::Worker::My().cc.mLocalWmkOfShortTx) {
+      if (chainedTuple.mTxId <= cr::Worker::My().mCc.mLocalWmkOfShortTx) {
         DLOG(INFO) << "Move the removedKey to graveyard"
                    << ", versionWorkerId=" << versionWorkerId
                    << ", versionTxId=" << versionTxId
@@ -844,9 +844,9 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData,
         }
       } else {
         DLOG(FATAL) << "Meet a remove version upper than "
-                       "cc.mLocalWmkOfShortTx, should not happen"
-                    << ", cc.mLocalWmkOfShortTx="
-                    << cr::Worker::My().cc.mLocalWmkOfShortTx
+                       "mCc.mLocalWmkOfShortTx, should not happen"
+                    << ", mCc.mLocalWmkOfShortTx="
+                    << cr::Worker::My().mCc.mLocalWmkOfShortTx
                     << ", versionWorkerId=" << versionWorkerId
                     << ", versionTxId=" << versionTxId
                     << ", removedKey=" << ToString(removedKey);
@@ -871,22 +871,22 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData,
 }
 
 void TransactionKV::unlock(const uint8_t* walEntryPtr) {
-  const WALPayload& entry = *reinterpret_cast<const WALPayload*>(walEntryPtr);
+  const WalPayload& entry = *reinterpret_cast<const WalPayload*>(walEntryPtr);
   Slice key;
   switch (entry.mType) {
-  case WALPayload::TYPE::kWalTxInsert: {
+  case WalPayload::Type::kWalTxInsert: {
     // Assuming no insert after remove
-    auto& walInsert = *reinterpret_cast<const WALTxInsert*>(&entry);
+    auto& walInsert = *reinterpret_cast<const WalTxInsert*>(&entry);
     key = walInsert.GetKey();
     break;
   }
-  case WALPayload::TYPE::WALTxUpdate: {
-    auto& walUpdate = *reinterpret_cast<const WALTxUpdate*>(&entry);
+  case WalPayload::Type::kWalTxUpdate: {
+    auto& walUpdate = *reinterpret_cast<const WalTxUpdate*>(&entry);
     key = walUpdate.GetKey();
     break;
   }
-  case WALPayload::TYPE::WALTxRemove: {
-    auto& removeEntry = *reinterpret_cast<const WALTxRemove*>(&entry);
+  case WalPayload::Type::kWalTxRemove: {
+    auto& removeEntry = *reinterpret_cast<const WalTxRemove*>(&entry);
     key = removeEntry.RemovedKey();
     break;
   }

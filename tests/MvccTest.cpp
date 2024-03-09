@@ -1,4 +1,4 @@
-#include "concurrency-recovery/CRMG.hpp"
+#include "concurrency/CRManager.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "btree/BasicKV.hpp"
 #include "btree/TransactionKV.hpp"

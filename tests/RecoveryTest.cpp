@@ -2,7 +2,7 @@
 #include "btree/TransactionKV.hpp"
 #include "btree/core/BTreeGeneric.hpp"
 #include "buffer-manager/BufferManager.hpp"
-#include "concurrency-recovery/CRMG.hpp"
+#include "concurrency/CRManager.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "utils/DebugFlags.hpp"

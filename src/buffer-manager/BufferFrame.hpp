@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Swip.hpp"
+#include "buffer-manager/Swip.hpp"
 #include "leanstore/Units.hpp"
 #include "sync/HybridLatch.hpp"
 #include "utils/Misc.hpp"
@@ -49,12 +49,12 @@ public:
 
 class BufferFrame;
 
-enum class STATE : uint8_t { FREE = 0, HOT = 1, COOL = 2, LOADED = 3 };
+enum class State : uint8_t { kFree = 0, kHot = 1, kCool = 2, kLoaded = 3 };
 
 class BufferFrameHeader {
 public:
   /// The state of the buffer frame.
-  STATE state = STATE::FREE;
+  State mState = State::kFree;
 
   /// Latch of the buffer frame. The optismitic version in the latch is nerer
   /// decreased.
@@ -85,8 +85,7 @@ public:
   ContentionStats mContentionStats;
 
   /// CRC checksum of the containing page.
-  /// TODO(jian.z): should it be put to page?
-  uint64_t crc = 0;
+  uint64_t mCrc = 0;
 
 public:
   // Prerequisite: the buffer frame is exclusively locked
@@ -94,7 +93,7 @@ public:
     DCHECK(!mIsBeingWrittenBack);
     DCHECK(mLatch.IsLockedExclusively());
 
-    state = STATE::FREE;
+    mState = State::kFree;
     mKeepInMemory = false;
     mNextFreeBf = nullptr;
 
@@ -103,22 +102,22 @@ public:
     mFlushedPSN = 0;
     mIsBeingWrittenBack.store(false, std::memory_order_release);
     mContentionStats.Reset();
-    crc = 0;
+    mCrc = 0;
   }
 
   std::string StateString() {
-    switch (state) {
-    case STATE::FREE: {
-      return "FREE";
+    switch (mState) {
+    case State::kFree: {
+      return "kFree";
     }
-    case STATE::HOT: {
-      return "HOT";
+    case State::kHot: {
+      return "kHot";
     }
-    case STATE::COOL: {
-      return "COOL";
+    case State::kCool: {
+      return "kCool";
     }
-    case STATE::LOADED: {
-      return "LOADED";
+    case State::kLoaded: {
+      return "kLoaded";
     }
     }
     return "unknown state";
@@ -131,7 +130,7 @@ public:
 class Page {
 public:
   /// Short for "page sequence number", increased when a page is modified. A
-  /// page is "dirty" when mPSN > mFlushedPSN in the header.
+  /// page is "dirty" when mPSN > mFlushedPSN in the mHeader.
   LID mPSN = 0;
 
   /// Short for "global sequence number", increased when a page is modified.
@@ -167,13 +166,13 @@ class BufferFrame {
 public:
   /// The control part. Information used by buffer manager, concurrent
   /// transaction control, etc. are stored here.
-  alignas(512) BufferFrameHeader header;
+  alignas(512) BufferFrameHeader mHeader;
 
   // The persisted data part. Each page maps to a underlying disk page. It's
   // persisted to disk when the checkpoint happens, or when the storage is
   // shutdown. It should be recovered based on the old page content and the
   // write-ahead log of the page.
-  alignas(512) Page page;
+  alignas(512) Page mPage;
 
 public:
   BufferFrame() {
@@ -183,32 +182,32 @@ public:
     return this == &other;
   }
 
-  inline bool isDirty() const {
-    return page.mPSN != header.mFlushedPSN;
+  inline bool IsDirty() const {
+    return mPage.mPSN != mHeader.mFlushedPSN;
   }
 
-  inline bool isFree() const {
-    return header.state == STATE::FREE;
+  inline bool IsFree() const {
+    return mHeader.mState == State::kFree;
   }
 
   inline bool ShouldRemainInMem() {
-    return header.mKeepInMemory || header.mIsBeingWrittenBack ||
-           header.mLatch.IsLockedExclusively();
+    return mHeader.mKeepInMemory || mHeader.mIsBeingWrittenBack ||
+           mHeader.mLatch.IsLockedExclusively();
   }
 
   inline void Init(PID pageId) {
-    DCHECK(header.state == STATE::FREE);
-    header.mPageId = pageId;
-    header.state = STATE::HOT;
-    header.mFlushedPSN = 0;
+    DCHECK(mHeader.mState == State::kFree);
+    mHeader.mPageId = pageId;
+    mHeader.mState = State::kHot;
+    mHeader.mFlushedPSN = 0;
 
-    page.mPSN = 0;
-    page.mGSN = 0;
+    mPage.mPSN = 0;
+    mPage.mGSN = 0;
   }
 
   // Pre: bf is exclusively locked
   void Reset() {
-    header.Reset();
+    mHeader.Reset();
   }
 
   void ToJson(rapidjson::Value* resultObj,
@@ -240,7 +239,7 @@ inline void BufferFrame::ToJson(rapidjson::Value* resultObj,
   }
 
   {
-    auto stateStr = header.StateString();
+    auto stateStr = mHeader.StateString();
     rapidjson::Value member;
     member.SetString(stateStr.data(), stateStr.size(), allocator);
     headerObj.AddMember("mState", member, allocator);
@@ -248,31 +247,31 @@ inline void BufferFrame::ToJson(rapidjson::Value* resultObj,
 
   {
     rapidjson::Value member;
-    member.SetBool(header.mKeepInMemory);
+    member.SetBool(mHeader.mKeepInMemory);
     headerObj.AddMember("mKeepInMemory", member, allocator);
   }
 
   {
     rapidjson::Value member;
-    member.SetUint64(header.mPageId);
+    member.SetUint64(mHeader.mPageId);
     headerObj.AddMember("mPageId", member, allocator);
   }
 
   {
     rapidjson::Value member;
-    member.SetUint64(header.mLastWriterWorker);
+    member.SetUint64(mHeader.mLastWriterWorker);
     headerObj.AddMember("mLastWriterWorker", member, allocator);
   }
 
   {
     rapidjson::Value member;
-    member.SetUint64(header.mFlushedPSN);
+    member.SetUint64(mHeader.mFlushedPSN);
     headerObj.AddMember("mFlushedPSN", member, allocator);
   }
 
   {
     rapidjson::Value member;
-    member.SetBool(header.mIsBeingWrittenBack);
+    member.SetBool(mHeader.mIsBeingWrittenBack);
     headerObj.AddMember("mIsBeingWrittenBack", member, allocator);
   }
 
@@ -282,22 +281,22 @@ inline void BufferFrame::ToJson(rapidjson::Value* resultObj,
   rapidjson::Value pageMetaObj(rapidjson::kObjectType);
   {
     rapidjson::Value member;
-    member.SetUint64(page.mPSN);
+    member.SetUint64(mPage.mPSN);
     pageMetaObj.AddMember("mPSN", member, allocator);
   }
   {
     rapidjson::Value member;
-    member.SetUint64(page.mGSN);
+    member.SetUint64(mPage.mGSN);
     pageMetaObj.AddMember("mGSN", member, allocator);
   }
   {
     rapidjson::Value member;
-    member.SetUint64(page.mBTreeId);
+    member.SetUint64(mPage.mBTreeId);
     pageMetaObj.AddMember("mBTreeId", member, allocator);
   }
   {
     rapidjson::Value member;
-    member.SetUint64(page.mMagicDebuging);
+    member.SetUint64(mPage.mMagicDebuging);
     pageMetaObj.AddMember("mMagicDebuging", member, allocator);
   }
   resultObj->AddMember("pageWithoutPayload", pageMetaObj, allocator);

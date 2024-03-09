@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Worker.hpp"
-#include "WorkerThread.hpp"
+#include "concurrency/Worker.hpp"
+#include "concurrency/WorkerThread.hpp"
 #include "leanstore/Units.hpp"
 
 #include <memory>
@@ -16,8 +16,7 @@ namespace cr {
 struct WaterMarkInfo;
 class GroupCommitter;
 
-/// Manages a fixed number of worker threads, each one gets a partition. CR is
-/// short for "concurrent resource"
+/// Manages a fixed number of worker threads and group committer threads.
 class CRManager {
 public:
   /// The LeanStore instance.

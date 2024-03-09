@@ -4,8 +4,8 @@
 #include "btree/BasicKV.hpp"
 #include "btree/ChainedTuple.hpp"
 #include "btree/core/BTreeNode.hpp"
-#include "concurrency-recovery/CRMG.hpp"
-#include "concurrency-recovery/Worker.hpp"
+#include "concurrency/CRManager.hpp"
+#include "concurrency/Worker.hpp"
 #include "utils/Misc.hpp"
 
 #include <gflags/gflags.h>
@@ -65,13 +65,13 @@ bool Tuple::ToFat(BTreePessimisticExclusiveIterator& xIter) {
   bool abortConversion = false;
   uint16_t numDeltasToReplace = 0;
   while (!abortConversion) {
-    if (cr::Worker::My().cc.VisibleForAll(newerTxId)) {
+    if (cr::Worker::My().mCc.VisibleForAll(newerTxId)) {
       // No need to convert versions that are visible for all to the FatTuple,
       // these old version can be GCed. Pruning versions space might get delayed
       break;
     }
 
-    if (!cr::Worker::My().cc.GetVersion(
+    if (!cr::Worker::My().mCc.GetVersion(
             newerWorkerId, newerTxId, newerCommandId,
             [&](const uint8_t* version, uint64_t) {
               numDeltasToReplace++;
@@ -197,7 +197,7 @@ void FatTuple::GarbageCollection() {
   };
 
   // Delete for all visible deltas, atm using cheap visibility check
-  if (cr::Worker::My().cc.VisibleForAll(mTxId)) {
+  if (cr::Worker::My().mCc.VisibleForAll(mTxId)) {
     mNumDeltas = 0;
     mDataOffset = mPayloadCapacity;
     mPayloadSize = mValSize;
@@ -207,7 +207,7 @@ void FatTuple::GarbageCollection() {
   uint16_t deltasVisibleForAll = 0;
   for (int32_t i = mNumDeltas - 1; i >= 1; i--) {
     auto& delta = getDelta(i);
-    if (cr::Worker::My().cc.VisibleForAll(delta.mTxId)) {
+    if (cr::Worker::My().mCc.VisibleForAll(delta.mTxId)) {
       deltasVisibleForAll = i - 1;
       break;
     }
@@ -366,7 +366,7 @@ std::tuple<OpCode, uint16_t> FatTuple::GetVisibleTuple(
     ValCallback valCallback) const {
 
   // Latest version is visible
-  if (cr::Worker::My().cc.VisibleForMe(mWorkerId, mTxId)) {
+  if (cr::Worker::My().mCc.VisibleForMe(mWorkerId, mTxId)) {
     valCallback(GetValue());
     return {OpCode::kOK, 1};
   }
@@ -383,7 +383,7 @@ std::tuple<OpCode, uint16_t> FatTuple::GetVisibleTuple(
       const auto& updateDesc = delta.GetUpdateDesc();
       auto* xorData = delta.GetDeltaPtr();
       BasicKV::CopyToValue(updateDesc, xorData, copiedVal->get());
-      if (cr::Worker::My().cc.VisibleForMe(delta.mWorkerId, delta.mTxId)) {
+      if (cr::Worker::My().mCc.VisibleForMe(delta.mWorkerId, delta.mTxId)) {
         valCallback(Slice(copiedVal->get(), mValSize));
         return {OpCode::kOK, numVisitedVersions};
       }
@@ -435,7 +435,7 @@ void FatTuple::ConvertToChained(TREEID treeId) {
     auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
     auto versionSize = sizeOfDescAndDelta + sizeof(UpdateVersion);
     cr::Worker::My()
-        .cc.Other(prevWorkerId)
+        .mCc.Other(prevWorkerId)
         .mHistoryStorage.PutVersion(
             prevTxId, prevCommandId, treeId, false, versionSize,
             [&](uint8_t* versionBuf) {

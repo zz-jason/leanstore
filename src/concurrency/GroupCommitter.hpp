@@ -24,7 +24,7 @@ public:
   /// File descriptor of the underlying WAL file.
   const int32_t mWalFd;
 
-  /// Start file offset of the next WALEntry.
+  /// Start file offset of the next WalEntry.
   uint64_t mWalSize;
 
   /// The minimum flushed GSN among all worker threads. Transactions whose max
