@@ -30,12 +30,10 @@ void HistoryStorage::PutVersion(TXID txId, COMMANDID commandId, TREEID treeId,
   Slice key(keyBuffer, keySize);
   versionSize += sizeof(VersionMeta);
 
-  // BasicKV* btree = isRemove ? mRemoveIndex : mUpdateIndex;
   Session* session = nullptr;
   if (sameThread) {
     session = (isRemove) ? &mRemoveSession : &mUpdateSession;
   }
-
   if (session != nullptr && session->mRightmostBf != nullptr) {
     JUMPMU_TRY() {
       BTreePessimisticExclusiveIterator xIter(
