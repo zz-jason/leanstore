@@ -2,7 +2,7 @@
 
 #include "concurrency/GroupCommitter.hpp"
 #include "concurrency/Transaction.hpp"
-#include "concurrency/WALEntry.hpp"
+#include "concurrency/WalEntry.hpp"
 #include "concurrency/Worker.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "utils/Defer.hpp"
@@ -16,21 +16,21 @@
 
 namespace leanstore::cr {
 
-template <typename T> class WALPayloadHandler {
+template <typename T> class WalPayloadHandler {
 public:
   // payload of the active WAL
   T* mWalPayload;
 
-  // size of the whole WALEntry, including payloads
+  // size of the whole WalEntry, including payloads
   uint64_t mTotalSize;
 
 public:
-  WALPayloadHandler() = default;
+  WalPayloadHandler() = default;
 
-  /// @brief Initialize a WALPayloadHandler
+  /// @brief Initialize a WalPayloadHandler
   /// @param walPayload the WalPayload object, should already being initialized
-  /// @param size the total size of the WALEntry
-  WALPayloadHandler(T* walPayload, uint64_t size)
+  /// @param size the total size of the WalEntry
+  WalPayloadHandler(T* walPayload, uint64_t size)
       : mWalPayload(walPayload),
         mTotalSize(size) {
   }
@@ -47,7 +47,7 @@ public:
   void SubmitWal();
 };
 
-template <typename T> inline void WALPayloadHandler<T>::SubmitWal() {
+template <typename T> inline void WalPayloadHandler<T>::SubmitWal() {
   SCOPED_DEFER(DEBUG_BLOCK() {
     auto walDoc = cr::Worker::My().mLogging.mActiveWALEntryComplex->ToJson();
     auto entry = reinterpret_cast<T*>(

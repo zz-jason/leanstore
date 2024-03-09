@@ -39,7 +39,7 @@ void Logging::ReserveContiguousBuffer(uint32_t bytesRequired) {
       // carraige return, consume the last bytes from mWalBuffered to the end
       if (mWalBufferSize - mWalBuffered < bytesRequired) {
         auto entrySize = mWalBufferSize - mWalBuffered;
-        auto entryType = WALEntry::Type::kCarriageReturn;
+        auto entryType = WalEntry::Type::kCarriageReturn;
         auto* entryPtr = mWalBuffer + mWalBuffered;
         auto* entry = new (entryPtr) WALEntrySimple(0, entrySize, entryType);
         entry->mCRC32 = entry->ComputeCRC32();
@@ -61,8 +61,7 @@ void Logging::ReserveContiguousBuffer(uint32_t bytesRequired) {
 
 /// Reserve space and initialize a WALEntrySimple when a transaction is started,
 /// committed, or aborted.
-/// TODO(jian.z): set previous LSN for the WALEntry.
-WALEntrySimple& Logging::ReserveWALEntrySimple(WALEntry::Type type) {
+WALEntrySimple& Logging::ReserveWALEntrySimple(WalEntry::Type type) {
   SCOPED_DEFER(mPrevLSN = mActiveWALEntrySimple->mLsn;);
 
   ReserveContiguousBuffer(sizeof(WALEntrySimple));
@@ -73,7 +72,7 @@ WALEntrySimple& Logging::ReserveWALEntrySimple(WALEntry::Type type) {
       new (entryPtr) WALEntrySimple(mLsnClock++, entrySize, type);
 
   // set previous LSN on demand.
-  if (type != WALEntry::Type::kTxStart) {
+  if (type != WalEntry::Type::kTxStart) {
     mActiveWALEntrySimple->mPrevLSN = mPrevLSN;
   }
   auto& curWorker = leanstore::cr::Worker::My();
@@ -110,7 +109,7 @@ void Logging::SubmitWALEntrySimple() {
   publishWalFlushReq();
 }
 
-void Logging::WriteSimpleWal(WALEntry::Type type) {
+void Logging::WriteSimpleWal(WalEntry::Type type) {
   ReserveWALEntrySimple(type);
   SubmitWALEntrySimple();
 }
@@ -157,16 +156,16 @@ void Logging::publishWalFlushReq() {
 
 // Called by worker, so concurrent writes on the buffer
 void Logging::IterateCurrentTxWALs(
-    std::function<void(const WALEntry& entry)> callback) {
+    std::function<void(const WalEntry& entry)> callback) {
   uint64_t cursor = mTxWalBegin;
   while (cursor != mWalBuffered) {
-    const WALEntry& entry = *reinterpret_cast<WALEntry*>(mWalBuffer + cursor);
+    const WalEntry& entry = *reinterpret_cast<WalEntry*>(mWalBuffer + cursor);
     ENSURE(entry.mSize > 0);
     DEBUG_BLOCK() {
-      if (entry.mType != WALEntry::Type::kCarriageReturn)
+      if (entry.mType != WalEntry::Type::kCarriageReturn)
         entry.CheckCRC();
     }
-    if (entry.mType == WALEntry::Type::kCarriageReturn) {
+    if (entry.mType == WalEntry::Type::kCarriageReturn) {
       cursor = 0;
     } else {
       callback(entry);

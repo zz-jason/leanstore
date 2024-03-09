@@ -3,7 +3,7 @@
 #include "buffer-manager/BufferFrame.hpp"
 #include "buffer-manager/BufferManager.hpp"
 #include "concurrency/LoggingImpl.hpp"
-#include "concurrency/WALPayloadHandler.hpp"
+#include "concurrency/WalPayloadHandler.hpp"
 #include "concurrency/Worker.hpp"
 #include "sync/HybridGuard.hpp"
 #include "sync/HybridLatch.hpp"
@@ -183,7 +183,7 @@ public:
   }
 
   template <typename WT, typename... Args>
-  inline cr::WALPayloadHandler<WT> ReserveWALPayload(uint64_t walSize,
+  inline cr::WalPayloadHandler<WT> ReserveWALPayload(uint64_t walSize,
                                                      Args&&... args) {
     DCHECK(cr::ActiveTx().mIsDurable);
     DCHECK(mGuard.mState == GuardState::kPessimisticExclusive);
@@ -300,7 +300,7 @@ public:
   }
 
   template <typename WT, typename... Args>
-  cr::WALPayloadHandler<WT> ReserveWALPayload(uint64_t payloadSize,
+  cr::WalPayloadHandler<WT> ReserveWALPayload(uint64_t payloadSize,
                                               Args&&... args) {
     return mRefGuard.template ReserveWALPayload<WT>(
         payloadSize, std::forward<Args>(args)...);

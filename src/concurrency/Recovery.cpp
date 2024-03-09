@@ -4,7 +4,7 @@
 #include "btree/core/BTreeNode.hpp"
 #include "btree/core/BTreeWALPayload.hpp"
 #include "buffer-manager/GuardedBufferFrame.hpp"
-#include "concurrency/WALEntry.hpp"
+#include "concurrency/WalEntry.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "sync/HybridGuard.hpp"
 
@@ -18,10 +18,10 @@ using namespace leanstore::utils;
 using namespace leanstore::storage::btree;
 
 std::expected<void, utils::Error> Recovery::analysis() {
-  // asume that each WALEntry is smaller than the page size
+  // asume that each WalEntry is smaller than the page size
   utils::AlignedBuffer<512> alignedBuffer(mStore->mStoreOption.mPageSize);
   uint8_t* walEntryPtr = alignedBuffer.Get();
-  uint64_t walEntrySize = sizeof(WALEntry);
+  uint64_t walEntrySize = sizeof(WalEntry);
   for (auto offset = mWalStartOffset; offset < mWalSize;) {
     uint64_t bytesRead = 0;
     if (auto res = readFromWalFile(offset, walEntrySize, walEntryPtr); !res) {
@@ -29,9 +29,9 @@ std::expected<void, utils::Error> Recovery::analysis() {
     }
     bytesRead += walEntrySize;
 
-    auto* walEntry = reinterpret_cast<WALEntry*>(walEntryPtr);
+    auto* walEntry = reinterpret_cast<WalEntry*>(walEntryPtr);
     switch (walEntry->mType) {
-    case WALEntry::Type::kTxStart: {
+    case WalEntry::Type::kTxStart: {
       DCHECK_EQ(bytesRead, walEntry->mSize);
       DCHECK(mActiveTxTable.find(walEntry->mTxId) == mActiveTxTable.end());
       auto txId = walEntry->mTxId;
@@ -39,28 +39,28 @@ std::expected<void, utils::Error> Recovery::analysis() {
       offset += bytesRead;
       continue;
     }
-    case WALEntry::Type::kTxCommit: {
+    case WalEntry::Type::kTxCommit: {
       DCHECK_EQ(bytesRead, walEntry->mSize);
       DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
       mActiveTxTable[walEntry->mTxId] = offset;
       offset += bytesRead;
       continue;
     }
-    case WALEntry::Type::kTxAbort: {
+    case WalEntry::Type::kTxAbort: {
       DCHECK_EQ(bytesRead, walEntry->mSize);
       DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
       mActiveTxTable[walEntry->mTxId] = offset;
       offset += bytesRead;
       continue;
     }
-    case WALEntry::Type::kTxFinish: {
+    case WalEntry::Type::kTxFinish: {
       DCHECK_EQ(bytesRead, walEntry->mSize);
       DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
       mActiveTxTable.erase(walEntry->mTxId);
       offset += bytesRead;
       continue;
     }
-    case WALEntry::Type::kComplex: {
+    case WalEntry::Type::kComplex: {
       auto leftOffset = offset + bytesRead;
       auto leftSize = walEntry->mSize - bytesRead;
       auto* leftDest = walEntryPtr + bytesRead;
@@ -79,7 +79,7 @@ std::expected<void, utils::Error> Recovery::analysis() {
       if (complexEntry->mPSN >= bf.mPage.mPSN &&
           mDirtyPageTable.find(complexEntry->mPageId) ==
               mDirtyPageTable.end()) {
-        // record the first WALEntry that makes the page dirty
+        // record the first WalEntry that makes the page dirty
         auto pageId = complexEntry->mPageId;
         mDirtyPageTable.emplace(pageId, offset);
       }
@@ -88,7 +88,7 @@ std::expected<void, utils::Error> Recovery::analysis() {
       continue;
     }
     default: {
-      LOG(FATAL) << "Unrecognized WALEntry type: " << walEntry->TypeName();
+      LOG(FATAL) << "Unrecognized WalEntry type: " << walEntry->TypeName();
     }
     }
   }
@@ -96,7 +96,7 @@ std::expected<void, utils::Error> Recovery::analysis() {
 }
 
 std::expected<void, utils::Error> Recovery::redo() {
-  // asume that each WALEntry is smaller than the page size
+  // asume that each WalEntry is smaller than the page size
   utils::AlignedBuffer<512> alignedBuffer(mStore->mStoreOption.mPageSize);
   auto* complexEntry = reinterpret_cast<WALEntryComplex*>(alignedBuffer.Get());
 
@@ -171,7 +171,7 @@ std::expected<void, utils::Error> Recovery::redo() {
 
 std::expected<bool, utils::Error> Recovery::nextWalComplexToRedo(
     uint64_t& offset, WALEntryComplex* complexEntry) {
-  const uint64_t walEntrySize = sizeof(WALEntry);
+  const uint64_t walEntrySize = sizeof(WalEntry);
   auto* buff = reinterpret_cast<uint8_t*>(complexEntry);
 
   while (offset < mWalSize) {
@@ -184,8 +184,8 @@ std::expected<bool, utils::Error> Recovery::nextWalComplexToRedo(
     bytesRead += walEntrySize;
 
     // skip if not a complex entry
-    auto* walEntry = reinterpret_cast<WALEntry*>(buff);
-    if (walEntry->mType != WALEntry::Type::kComplex) {
+    auto* walEntry = reinterpret_cast<WalEntry*>(buff);
+    if (walEntry->mType != WalEntry::Type::kComplex) {
       offset += bytesRead;
       continue;
     }

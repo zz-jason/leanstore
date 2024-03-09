@@ -5,7 +5,7 @@
 #include "concurrency/GroupCommitter.hpp"
 #include "concurrency/Logging.hpp"
 #include "concurrency/Transaction.hpp"
-#include "concurrency/WALEntry.hpp"
+#include "concurrency/WalEntry.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "leanstore/LeanStore.hpp"
@@ -65,7 +65,7 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
                << ", globalMaxFlushedGSN="
                << mStore->mCRManager->mGroupCommitter->mGlobalMaxFlushedGSN;
     if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
-      mLogging.WriteSimpleWal(WALEntry::Type::kTxStart);
+      mLogging.WriteSimpleWal(WalEntry::Type::kTxStart);
     }
   });
 
@@ -152,8 +152,8 @@ void Worker::CommitTx() {
   mActiveTxId.store(0, std::memory_order_release);
 
   if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
-    mLogging.WriteSimpleWal(WALEntry::Type::kTxCommit);
-    mLogging.WriteSimpleWal(WALEntry::Type::kTxFinish);
+    mLogging.WriteSimpleWal(WalEntry::Type::kTxCommit);
+    mLogging.WriteSimpleWal(WalEntry::Type::kTxFinish);
   } else if (mActiveTx.mIsReadOnly) {
     DCHECK(!mActiveTx.mHasWrote)
         << "Read-only transaction should not have writes"
@@ -226,15 +226,15 @@ void Worker::AbortTx() {
   DCHECK(!mActiveTx.mWalExceedBuffer)
       << "Aborting from WAL file is not supported yet";
 
-  std::vector<const WALEntry*> entries;
-  mLogging.IterateCurrentTxWALs([&](const WALEntry& entry) {
-    if (entry.mType == WALEntry::Type::kComplex) {
+  std::vector<const WalEntry*> entries;
+  mLogging.IterateCurrentTxWALs([&](const WalEntry& entry) {
+    if (entry.mType == WalEntry::Type::kComplex) {
       entries.push_back(&entry);
     }
   });
 
   const uint64_t txId = mActiveTx.mStartTs;
-  std::for_each(entries.rbegin(), entries.rend(), [&](const WALEntry* entry) {
+  std::for_each(entries.rbegin(), entries.rend(), [&](const WalEntry* entry) {
     const auto& complexEntry = *reinterpret_cast<const WALEntryComplex*>(entry);
     mStore->mTreeRegistry->undo(complexEntry.mTreeId, complexEntry.mPayload,
                                 txId);
@@ -247,8 +247,8 @@ void Worker::AbortTx() {
 
   if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
     // TODO: write compensation wal records between abort and finish
-    mLogging.WriteSimpleWal(WALEntry::Type::kTxAbort);
-    mLogging.WriteSimpleWal(WALEntry::Type::kTxFinish);
+    mLogging.WriteSimpleWal(WalEntry::Type::kTxAbort);
+    mLogging.WriteSimpleWal(WalEntry::Type::kTxFinish);
   }
 }
 

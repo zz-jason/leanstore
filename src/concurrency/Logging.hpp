@@ -1,7 +1,7 @@
 #pragma once
 
 #include "concurrency/Transaction.hpp"
-#include "concurrency/WALEntry.hpp"
+#include "concurrency/WalEntry.hpp"
 #include "leanstore/Units.hpp"
 #include "sync/OptimisticGuarded.hpp"
 
@@ -39,21 +39,21 @@ struct WalFlushReq {
   }
 };
 
-template <typename T> class WALPayloadHandler;
+template <typename T> class WalPayloadHandler;
 
 /// Helps to transaction concurrenct control and write-ahead logging.
 class Logging {
 public:
   LID mPrevLSN;
 
-  /// The active simple WALEntry for the current transaction, usually used for
+  /// The active simple WalEntry for the current transaction, usually used for
   /// transaction start, commit, or abort.
   ///
   /// NOTE: Either mActiveWALEntrySimple or mActiveWALEntryComplex is effective
   /// during transaction processing.
   WALEntrySimple* mActiveWALEntrySimple;
 
-  /// The active complex WALEntry for the current transaction, usually used for
+  /// The active complex WalEntry for the current transaction, usually used for
   /// insert, update, delete, or btree related operations.
   ///
   /// NOTE: Either mActiveWALEntrySimple or mActiveWALEntryComplex is effective
@@ -129,16 +129,16 @@ public:
 
   // Iterate over current TX entries
   void IterateCurrentTxWALs(
-      std::function<void(const WALEntry& entry)> callback);
+      std::function<void(const WalEntry& entry)> callback);
 
-  WALEntrySimple& ReserveWALEntrySimple(WALEntry::Type type);
+  WALEntrySimple& ReserveWALEntrySimple(WalEntry::Type type);
 
   void SubmitWALEntrySimple();
 
-  void WriteSimpleWal(WALEntry::Type type);
+  void WriteSimpleWal(WalEntry::Type type);
 
   template <typename T, typename... Args>
-  WALPayloadHandler<T> ReserveWALEntryComplex(uint64_t payloadSize, PID pageId,
+  WalPayloadHandler<T> ReserveWALEntryComplex(uint64_t payloadSize, PID pageId,
                                               LID gsn, TREEID treeId,
                                               Args&&... args);
 

@@ -2,7 +2,7 @@
 
 #include "buffer-manager/BufferFrame.hpp"
 #include "buffer-manager/BufferManager.hpp"
-#include "concurrency/WALEntry.hpp"
+#include "concurrency/WalEntry.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "utils/Defer.hpp"
@@ -26,11 +26,11 @@ private:
   /// Size of the written WAL file.
   uint64_t mWalSize;
 
-  /// Stores the dirty page ID and the offset to the first WALEntry that caused
+  /// Stores the dirty page ID and the offset to the first WalEntry that caused
   /// that page to become dirty.
   std::map<PID, uint64_t> mDirtyPageTable;
 
-  /// Stores the active transaction and the offset to the last created WALEntry.
+  /// Stores the active transaction and the offset to the last created WalEntry.
   std::map<TXID, uint64_t> mActiveTxTable;
 
   /// Stores all the pages read from disk during the recovery process.

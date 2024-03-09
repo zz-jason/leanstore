@@ -1,6 +1,6 @@
 #include "concurrency/Logging.hpp"
-#include "concurrency/WALEntry.hpp"
-#include "concurrency/WALPayloadHandler.hpp"
+#include "concurrency/WalEntry.hpp"
+#include "concurrency/WalPayloadHandler.hpp"
 #include "concurrency/Worker.hpp"
 #include "leanstore/Units.hpp"
 #include "utils/Defer.hpp"
@@ -8,7 +8,7 @@
 namespace leanstore::cr {
 
 template <typename T, typename... Args>
-WALPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payloadSize,
+WalPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payloadSize,
                                                      PID pageId, LID psn,
                                                      TREEID treeId,
                                                      Args&&... args) {

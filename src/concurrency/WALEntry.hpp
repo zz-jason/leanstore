@@ -32,7 +32,7 @@ namespace cr {
 /// The basic WAL record representation, there are two kinds of WAL entries:
 /// 1. WALEntrySimple, whose type might be: kTxStart, kTxCommit, kTxAbort
 /// 2. WALEntryComplex, whose type is kComplex
-class WALEntry {
+class WalEntry {
 public:
   enum class Type : uint8_t { DO_WITH_WAL_ENTRY_TYPES(DECR_WAL_ENTRY_TYPE) };
 
@@ -40,34 +40,34 @@ public:
   /// Used for debuging purpose.
   uint32_t mCRC32 = 99;
 
-  /// The log sequence number of this WALEntry. The number is globally and
+  /// The log sequence number of this WalEntry. The number is globally and
   /// monotonically increased.
   LID mLsn;
 
-  // Size of the whole WALEntry, including all the payloads. The entire WAL
+  // Size of the whole WalEntry, including all the payloads. The entire WAL
   // entry stays in the WAL ring buffer of the current worker thread.
   uint16_t mSize;
 
   /// Type of the WAL entry.
   Type mType;
 
-  /// ID of the transaction who creates this WALEntry.
+  /// ID of the transaction who creates this WalEntry.
   TXID mTxId;
 
   /// Transaction mode.
   TxMode mTxMode;
 
-  /// ID of the worker who executes the transaction and records the WALEntry.
+  /// ID of the worker who executes the transaction and records the WalEntry.
   WORKERID mWorkerId;
 
-  /// Log sequence number for the previous WALEntry of the same transaction. 0
+  /// Log sequence number for the previous WalEntry of the same transaction. 0
   /// if it's the first WAL entry in the transaction.
   LID mPrevLSN = 0;
 
 public:
-  WALEntry() = default;
+  WalEntry() = default;
 
-  WALEntry(LID lsn, uint64_t size, Type type)
+  WalEntry(LID lsn, uint64_t size, Type type)
       : mCRC32(99),
         mLsn(lsn),
         mSize(size),
@@ -86,7 +86,7 @@ public:
   virtual std::unique_ptr<rapidjson::Document> ToJson();
 
   uint32_t ComputeCRC32() const {
-    // auto startOffset = offsetof(WALEntry, lsn);
+    // auto startOffset = offsetof(WalEntry, lsn);
     auto startOffset = ptrdiff_t(&mLsn) - ptrdiff_t(this);
     const auto* src = reinterpret_cast<const uint8_t*>(this) + startOffset;
     auto srcSize = mSize - startOffset;
@@ -97,7 +97,7 @@ public:
   void CheckCRC() const {
     auto actualCRC = ComputeCRC32();
     if (mCRC32 != actualCRC) {
-      auto doc = const_cast<WALEntry*>(this)->ToJson();
+      auto doc = const_cast<WalEntry*>(this)->ToJson();
       rapidjson::StringBuffer buffer;
       rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
       doc->Accept(writer);
@@ -109,24 +109,24 @@ public:
   }
 };
 
-class WALEntrySimple : public WALEntry {
+class WALEntrySimple : public WalEntry {
 public:
   WALEntrySimple(LID lsn, uint64_t size, Type type)
-      : WALEntry(lsn, size, type) {
+      : WalEntry(lsn, size, type) {
   }
 };
 
-class WALEntryComplex : public WALEntry {
+class WALEntryComplex : public WalEntry {
 public:
-  /// Page sequence number of the WALEntry, indicate the page version this WAL
+  /// Page sequence number of the WalEntry, indicate the page version this WAL
   /// entry is based on.
   LID mPSN;
 
-  /// The btree ID of the WALEntry, used to identify the btree node together
+  /// The btree ID of the WalEntry, used to identify the btree node together
   /// with page ID.
   TREEID mTreeId;
 
-  /// The page ID of the WALEntry, used to identify the btree node together with
+  /// The page ID of the WalEntry, used to identify the btree node together with
   /// btree ID
   PID mPageId;
 
@@ -138,7 +138,7 @@ public:
   WALEntryComplex() = default;
 
   WALEntryComplex(LID lsn, uint64_t size, LID psn, TREEID treeId, PID pageId)
-      : WALEntry(lsn, size, Type::kComplex),
+      : WalEntry(lsn, size, Type::kComplex),
         mPSN(psn),
         mTreeId(treeId),
         mPageId(pageId) {
@@ -148,10 +148,10 @@ public:
 };
 
 // -----------------------------------------------------------------------------
-// WALEntry
+// WalEntry
 // -----------------------------------------------------------------------------
 
-inline std::string WALEntry::TypeName() {
+inline std::string WalEntry::TypeName() {
   switch (mType) {
     DO_WITH_WAL_ENTRY_TYPES(WAL_ENTRY_TYPE_NAME);
   default:
@@ -159,7 +159,7 @@ inline std::string WALEntry::TypeName() {
   }
 }
 
-inline std::unique_ptr<rapidjson::Document> WALEntry::ToJson() {
+inline std::unique_ptr<rapidjson::Document> WalEntry::ToJson() {
   auto doc = std::make_unique<rapidjson::Document>();
   doc->SetObject();
 
@@ -232,7 +232,7 @@ inline std::unique_ptr<rapidjson::Document> WALEntry::ToJson() {
 // -----------------------------------------------------------------------------
 
 inline std::unique_ptr<rapidjson::Document> WALEntryComplex::ToJson() {
-  auto doc = WALEntry::ToJson();
+  auto doc = WalEntry::ToJson();
 
   // psn
   {
