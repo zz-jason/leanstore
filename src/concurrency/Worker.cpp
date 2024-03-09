@@ -47,7 +47,7 @@ Worker::~Worker() {
   mLogging.mWalBuffer = nullptr;
 }
 
-void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
+void Worker::StartTx(TxMode mode, IsolationLevel level) {
   utils::Timer timer(CRCounters::MyCounters().cc_ms_start_tx);
   Transaction prevTx = mActiveTx;
   DCHECK(prevTx.mState != TxState::kStarted)
@@ -64,12 +64,9 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
                << mStore->mCRManager->mGroupCommitter->mGlobalMinFlushedGSN
                << ", globalMaxFlushedGSN="
                << mStore->mCRManager->mGroupCommitter->mGlobalMaxFlushedGSN;
-    if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
-      mLogging.WriteSimpleWal(WalEntry::Type::kTxStart);
-    }
   });
 
-  mActiveTx.Start(mode, level, isReadOnly);
+  mActiveTx.Start(mode, level);
 
   if (!mActiveTx.mIsDurable) {
     return;
@@ -151,16 +148,16 @@ void Worker::CommitTx() {
   // transaction watermarks and garbage collect the unused versions.
   mActiveTxId.store(0, std::memory_order_release);
 
-  if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
-    mLogging.WriteSimpleWal(WalEntry::Type::kTxCommit);
-    mLogging.WriteSimpleWal(WalEntry::Type::kTxFinish);
-  } else if (mActiveTx.mIsReadOnly) {
-    DCHECK(!mActiveTx.mHasWrote)
-        << "Read-only transaction should not have writes"
-        << ", workerId=" << mWorkerId << ", startTs=" << mActiveTx.mStartTs;
+  if (!mActiveTx.mHasWrote) {
+    return;
   }
 
-  if (mActiveTx.mHasWrote && mLogging.mHasRemoteDependency) {
+  if (mActiveTx.mIsDurable) {
+    mLogging.WriteSimpleWal(WalEntry::Type::kTxCommit);
+    mLogging.WriteSimpleWal(WalEntry::Type::kTxFinish);
+  }
+
+  if (mLogging.mHasRemoteDependency) {
     // for group commit
     mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
     std::unique_lock<std::mutex> g(mLogging.mTxToCommitMutex);
@@ -170,7 +167,7 @@ void Worker::CommitTx() {
                << ", startTs=" << mActiveTx.mStartTs
                << ", commitTs=" << mActiveTx.mCommitTs
                << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
-  } else if (mActiveTx.mHasWrote) {
+  } else {
     // for group commit
     mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
     std::unique_lock<std::mutex> g(mLogging.mRfaTxToCommitMutex);
@@ -184,9 +181,7 @@ void Worker::CommitTx() {
   }
 
   // Cleanup versions in history tree
-  if (!mActiveTx.mIsReadOnly) {
-    mCc.GarbageCollection();
-  }
+  mCc.GarbageCollection();
 
   // Wait transaction to be committed
   while (mLogging.TxUnCommitted(mActiveTx.mCommitTs)) {
@@ -245,7 +240,7 @@ void Worker::AbortTx() {
       [&](const TXID, const TREEID, const uint8_t*, uint64_t, const bool) {},
       0);
 
-  if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
+  if (mActiveTx.mHasWrote && mActiveTx.mIsDurable) {
     // TODO: write compensation wal records between abort and finish
     mLogging.WriteSimpleWal(WalEntry::Type::kTxAbort);
     mLogging.WriteSimpleWal(WalEntry::Type::kTxFinish);

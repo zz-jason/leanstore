@@ -56,10 +56,6 @@ public:
   /// mTxIsolationLevel is the isolation level for the current transaction.
   IsolationLevel mTxIsolationLevel = IsolationLevel::kSnapshotIsolation;
 
-  /// Whether the transaction is assumed to be read-only. Read-only transactions
-  /// should not have any data writes during the transaction processing.
-  bool mIsReadOnly = false;
-
   /// Whether the transaction has any data writes. Transaction writes can be
   /// detected once it generates a WAL entry.
   bool mHasWrote = false;
@@ -79,20 +75,14 @@ public:
     return mTxIsolationLevel >= IsolationLevel::kSnapshotIsolation;
   }
 
-  inline void MarkAsWrite() {
-    DCHECK(mIsReadOnly == false);
-    mHasWrote = true;
-  }
-
   // Start a new transaction, initialize all fields
-  inline void Start(TxMode mode, IsolationLevel level, bool isReadOnly) {
+  inline void Start(TxMode mode, IsolationLevel level) {
     mState = TxState::kStarted;
     mStartTs = 0;
     mCommitTs = 0;
     mMaxObservedGSN = 0;
     mTxMode = mode;
     mTxIsolationLevel = level;
-    mIsReadOnly = isReadOnly;
     mHasWrote = false;
     mIsDurable = FLAGS_wal;
     mWalExceedBuffer = false;

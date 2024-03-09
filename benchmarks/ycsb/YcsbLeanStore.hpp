@@ -159,9 +159,7 @@ public:
               if (readProbability <= workload.mReadProportion * 100) {
                 // generate key for read
                 GenYcsbKey(zipfRandom, key);
-                cr::Worker::My().StartTx(TxMode::kShortRunning,
-                                         IsolationLevel::kSnapshotIsolation,
-                                         true);
+                cr::Worker::My().StartTx();
                 table->Lookup(Slice(key, FLAGS_ycsb_key_size), copyValue);
                 cr::Worker::My().CommitTx();
               } else {

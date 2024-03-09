@@ -434,7 +434,7 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
                           << mAsyncWriteBuffer.pending_requests);
 
   mFreeBfList.Reset();
-  for (const volatile auto& cooledBf : mEvictCandidateBfs) {
+  for (auto* cooledBf : mEvictCandidateBfs) {
     JUMPMU_TRY() {
       BMOptimisticGuard optimisticGuard(cooledBf->mHeader.mLatch);
       // Check if the BF got swizzled in or unswizzle another time in another

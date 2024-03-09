@@ -1,10 +1,10 @@
 #pragma once
 
+#include "btree/core/BTreeGeneric.hpp"
 #include "concurrency/Worker.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Store.hpp"
 #include "leanstore/Units.hpp"
-#include "btree/core/BTreeGeneric.hpp"
 #include "utils/Error.hpp"
 
 #include <expected>
@@ -29,16 +29,15 @@ public:
   virtual ~TxWorkerImpl() = default;
 
   /// Start a transaction.
-  virtual std::expected<void, utils::Error> StartTx(TxMode mode,
-                                                    IsolationLevel level,
-                                                    bool isReadOnly) override {
+  virtual std::expected<void, utils::Error> StartTx(
+      TxMode mode, IsolationLevel level) override {
     bool txAlreadyStarted = false;
     mStore->ExecSync(mWorkerId, [&]() {
       if (cr::Worker::My().mActiveTx.mState == cr::TxState::kStarted) {
         txAlreadyStarted = true;
         return;
       }
-      cr::Worker::My().StartTx(mode, level, isReadOnly);
+      cr::Worker::My().StartTx(mode, level);
     });
 
     if (txAlreadyStarted) {
@@ -81,7 +80,7 @@ public:
 
       if (autoCommit) {
         cr::Worker::My().StartTx(TxMode::kShortRunning,
-                                 IsolationLevel::kSerializable, false);
+                                 IsolationLevel::kSerializable);
       }
       mStore->CreateTransactionKV(name, config, &table);
       if (autoCommit) {
