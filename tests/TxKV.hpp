@@ -1,6 +1,6 @@
 #pragma once
 
-#include "concurrency/CRMG.hpp"
+#include "concurrency/CRManager.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"

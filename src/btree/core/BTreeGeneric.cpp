@@ -1,9 +1,5 @@
 #include "BTreeGeneric.hpp"
 
-#include "leanstore/Config.hpp"
-#include "leanstore/LeanStore.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
-#include "leanstore/Units.hpp"
 #include "btree/core/BTreeNode.hpp"
 #include "btree/core/BTreePessimisticExclusiveIterator.hpp"
 #include "btree/core/BTreePessimisticSharedIterator.hpp"
@@ -11,6 +7,10 @@
 #include "buffer-manager/BufferFrame.hpp"
 #include "buffer-manager/BufferManager.hpp"
 #include "buffer-manager/GuardedBufferFrame.hpp"
+#include "leanstore/Config.hpp"
+#include "leanstore/LeanStore.hpp"
+#include "leanstore/Units.hpp"
+#include "profiling/counters/WorkerCounters.hpp"
 #include "utils/Misc.hpp"
 
 #include <glog/logging.h>
@@ -26,8 +26,8 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId,
   this->mConfig = config;
 
   mMetaNodeSwip = &mStore->mBufferManager->AllocNewPage(btreeId);
-  mMetaNodeSwip.AsBufferFrame().header.mKeepInMemory = true;
-  DCHECK(mMetaNodeSwip.AsBufferFrame().header.mLatch.GetOptimisticVersion() ==
+  mMetaNodeSwip.AsBufferFrame().mHeader.mKeepInMemory = true;
+  DCHECK(mMetaNodeSwip.AsBufferFrame().mHeader.mLatch.GetOptimisticVersion() ==
          0);
 
   auto guardedRoot = GuardedBufferFrame<BTreeNode>(
@@ -73,7 +73,7 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit,
       mStore->mBufferManager.get(), guardedParent, parentHandler.mChildSwip);
   if (guardedChild->mNumSeps <= 1) {
     DLOG(WARNING) << "Split failed, not enough separators in node"
-                  << ", toSplit.header.mPageId=" << toSplit.header.mPageId
+                  << ", toSplit.mHeader.mPageId=" << toSplit.mHeader.mPageId
                   << ", favoredSplitPos=" << favoredSplitPos
                   << ", guardedChild->mNumSeps=" << guardedChild->mNumSeps;
     return;
@@ -176,9 +176,9 @@ void BTreeGeneric::splitRootMayJump(
     xGuardedMeta.SyncGSNBeforeWrite();
     xGuardedMeta.MarkAsDirty();
     xGuardedOldRoot.WriteWal<WalSplitRoot>(
-        0, xGuardedNewLeft.bf()->header.mPageId,
-        xGuardedNewRoot.bf()->header.mPageId, xGuardedMeta.bf()->header.mPageId,
-        sepInfo);
+        0, xGuardedNewLeft.bf()->mHeader.mPageId,
+        xGuardedNewRoot.bf()->mHeader.mPageId,
+        xGuardedMeta.bf()->mHeader.mPageId, sepInfo);
   }
 
   // 3.2. move half of the old root to the new left,
@@ -224,8 +224,8 @@ void BTreeGeneric::splitNonRootMayJump(
     xGuardedParent.SyncGSNBeforeWrite();
     xGuardedParent.MarkAsDirty();
     xGuardedChild.WriteWal<WalSplitNonRoot>(
-        0, xGuardedParent.bf()->header.mPageId,
-        xGuardedNewLeft.bf()->header.mPageId, sepInfo);
+        0, xGuardedParent.bf()->mHeader.mPageId,
+        xGuardedNewLeft.bf()->mHeader.mPageId, sepInfo);
   }
 
   // 2.2. make room for separator key in parent node
@@ -661,9 +661,9 @@ void BTreeGeneric::PrintInfo(uint64_t totalSize) {
 }
 
 StringMap BTreeGeneric::Serialize() {
-  DCHECK(mMetaNodeSwip.AsBufferFrame().page.mBTreeId == mTreeId);
+  DCHECK(mMetaNodeSwip.AsBufferFrame().mPage.mBTreeId == mTreeId);
   auto& metaBf = mMetaNodeSwip.AsBufferFrame();
-  auto metaPageId = metaBf.header.mPageId;
+  auto metaPageId = metaBf.mHeader.mPageId;
   auto res = mStore->mBufferManager->CheckpointBufferFrame(metaBf);
   DLOG_IF(FATAL, !res) << "Failed to checkpoint meta node: "
                        << res.error().ToString();
@@ -694,8 +694,8 @@ void BTreeGeneric::Deserialize(StringMap map) {
       LOG_IF(FATAL, failcounter >= 100) << "Failed to load MetaNode";
     }
   }
-  mMetaNodeSwip.AsBufferFrame().header.mKeepInMemory = true;
-  DCHECK(mMetaNodeSwip.AsBufferFrame().page.mBTreeId == mTreeId);
+  mMetaNodeSwip.AsBufferFrame().mHeader.mKeepInMemory = true;
+  DCHECK(mMetaNodeSwip.AsBufferFrame().mPage.mBTreeId == mTreeId);
 }
 
 } // namespace leanstore::storage::btree

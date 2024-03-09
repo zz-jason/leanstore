@@ -1,7 +1,7 @@
 #include "concurrency/ConcurrencyControl.hpp"
 
 #include "buffer-manager/TreeRegistry.hpp"
-#include "concurrency/CRMG.hpp"
+#include "concurrency/CRManager.hpp"
 #include "concurrency/Worker.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/Exceptions.hpp"
@@ -11,7 +11,7 @@
 #include "utils/Misc.hpp"
 #include "utils/RandomGenerator.hpp"
 
-#include "glog/logging.h"
+#include <glog/logging.h>
 
 #include <atomic>
 #include <mutex>
@@ -250,7 +250,7 @@ void ConcurrencyControl::GarbageCollection() {
 }
 
 ConcurrencyControl& ConcurrencyControl::Other(WORKERID otherWorkerId) {
-  return Worker::My().mAllWorkers[otherWorkerId]->cc;
+  return Worker::My().mAllWorkers[otherWorkerId]->mCc;
 }
 
 // It calculates and updates the global oldest running transaction id and the
@@ -328,13 +328,13 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
   TXID globalWmkOfAllTx = std::numeric_limits<TXID>::max();
   TXID globalWmkOfShortTx = std::numeric_limits<TXID>::max();
   for (WORKERID i = 0; i < Worker::My().mAllWorkers.size(); i++) {
-    ConcurrencyControl& cc = Other(i);
-    if (cc.mUpdatedLatestCommitTs == cc.mLatestCommitTs) {
+    ConcurrencyControl& mCc = Other(i);
+    if (mCc.mUpdatedLatestCommitTs == mCc.mLatestCommitTs) {
       DLOG(INFO) << "Skip updating watermarks for worker " << i
                  << ", no transaction committed since last round"
-                 << ", mLatestCommitTs=" << cc.mLatestCommitTs;
-      TXID wmkOfAllTx = cc.mWmkOfAllTx;
-      TXID wmkOfShortTx = cc.mWmkOfShortTx;
+                 << ", mLatestCommitTs=" << mCc.mLatestCommitTs;
+      TXID wmkOfAllTx = mCc.mWmkOfAllTx;
+      TXID wmkOfShortTx = mCc.mWmkOfShortTx;
       if (wmkOfAllTx > 0 || wmkOfShortTx > 0) {
         globalWmkOfAllTx = std::min(wmkOfAllTx, globalWmkOfAllTx);
         globalWmkOfShortTx = std::min(wmkOfShortTx, globalWmkOfShortTx);
@@ -343,19 +343,22 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
     }
 
     TXID wmkOfAllTx =
-        cc.mCommitTree.Lcb(mStore->mCRManager->mGlobalWmkInfo.mOldestActiveTx);
-    TXID wmkOfShortTx = cc.mCommitTree.Lcb(
+        mCc.mCommitTree.Lcb(mStore->mCRManager->mGlobalWmkInfo.mOldestActiveTx);
+    TXID wmkOfShortTx = mCc.mCommitTree.Lcb(
         mStore->mCRManager->mGlobalWmkInfo.mOldestActiveShortTx);
 
-    cc.mWmkVersion.store(cc.mWmkVersion.load() + 1, std::memory_order_release);
-    cc.mWmkOfAllTx.store(wmkOfAllTx, std::memory_order_release);
-    cc.mWmkOfShortTx.store(wmkOfShortTx, std::memory_order_release);
-    cc.mWmkVersion.store(cc.mWmkVersion.load() + 1, std::memory_order_release);
-    cc.mUpdatedLatestCommitTs.store(cc.mLatestCommitTs,
-                                    std::memory_order_release);
+    mCc.mWmkVersion.store(mCc.mWmkVersion.load() + 1,
+                          std::memory_order_release);
+    mCc.mWmkOfAllTx.store(wmkOfAllTx, std::memory_order_release);
+    mCc.mWmkOfShortTx.store(wmkOfShortTx, std::memory_order_release);
+    mCc.mWmkVersion.store(mCc.mWmkVersion.load() + 1,
+                          std::memory_order_release);
+    mCc.mUpdatedLatestCommitTs.store(mCc.mLatestCommitTs,
+                                     std::memory_order_release);
     DLOG(INFO) << "Watermarks updated for worker " << i << ", mWmkOfAllTx=LCB("
-               << wmkOfAllTx << ")=" << cc.mWmkOfAllTx << ", mWmkOfShortTx=LCB("
-               << wmkOfShortTx << ")=" << cc.mWmkOfShortTx;
+               << wmkOfAllTx << ")=" << mCc.mWmkOfAllTx
+               << ", mWmkOfShortTx=LCB(" << wmkOfShortTx
+               << ")=" << mCc.mWmkOfShortTx;
 
     // The lower watermarks of current worker only matters when there are
     // transactions started before global oldestActiveTx

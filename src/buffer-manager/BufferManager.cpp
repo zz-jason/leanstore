@@ -1,14 +1,14 @@
-#include "BufferManager.hpp"
+#include "buffer-manager/BufferManager.hpp"
 
-#include "BufferFrame.hpp"
-#include "concurrency/CRMG.hpp"
+#include "buffer-manager/BufferFrame.hpp"
+#include "concurrency/CRManager.hpp"
 #include "concurrency/GroupCommitter.hpp"
 #include "concurrency/Recovery.hpp"
 #include "leanstore/Config.hpp"
-#include "leanstore/LeanStore.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
 #include "leanstore/Exceptions.hpp"
+#include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
+#include "profiling/counters/WorkerCounters.hpp"
 #include "sync/HybridLatch.hpp"
 #include "sync/ScopedHybridGuard.hpp"
 #include "utils/DebugFlags.hpp"
@@ -131,15 +131,15 @@ void BufferManager::CheckpointAllBufferFrames() {
     for (uint64_t i = begin; i < end; i++) {
       auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
       auto& bf = *reinterpret_cast<BufferFrame*>(bfAddr);
-      bf.header.mLatch.LockExclusively();
-      if (!bf.isFree()) {
-        mStore->mTreeRegistry->Checkpoint(bf.page.mBTreeId, bf, buffer);
+      bf.mHeader.mLatch.LockExclusively();
+      if (!bf.IsFree()) {
+        mStore->mTreeRegistry->Checkpoint(bf.mPage.mBTreeId, bf, buffer);
         auto ret =
             pwrite(mStore->mPageFd, buffer, mStore->mStoreOption.mPageSize,
-                   bf.header.mPageId * mStore->mStoreOption.mPageSize);
+                   bf.mHeader.mPageId * mStore->mStoreOption.mPageSize);
         DCHECK_EQ(ret, (int64_t)mStore->mStoreOption.mPageSize);
       }
-      bf.header.mLatch.UnlockExclusively();
+      bf.mHeader.mLatch.UnlockExclusively();
     }
   });
 }
@@ -147,11 +147,11 @@ void BufferManager::CheckpointAllBufferFrames() {
 auto BufferManager::CheckpointBufferFrame(BufferFrame& bf)
     -> std::expected<void, utils::Error> {
   alignas(512) uint8_t buffer[mStore->mStoreOption.mPageSize];
-  bf.header.mLatch.LockExclusively();
-  if (!bf.isFree()) {
-    mStore->mTreeRegistry->Checkpoint(bf.page.mBTreeId, bf, buffer);
+  bf.mHeader.mLatch.LockExclusively();
+  if (!bf.IsFree()) {
+    mStore->mTreeRegistry->Checkpoint(bf.mPage.mBTreeId, bf, buffer);
     auto ret = pwrite(mStore->mPageFd, buffer, mStore->mStoreOption.mPageSize,
-                      bf.header.mPageId * mStore->mStoreOption.mPageSize);
+                      bf.mHeader.mPageId * mStore->mStoreOption.mPageSize);
     if (ret < 0) {
       return std::unexpected<utils::Error>(
           utils::Error::FileWrite(GetDBFilePath(), errno, strerror(errno)));
@@ -161,7 +161,7 @@ auto BufferManager::CheckpointBufferFrame(BufferFrame& bf)
           "Write incomplete, only " + std::to_string(ret) + " bytes written"));
     }
   }
-  bf.header.mLatch.UnlockExclusively();
+  bf.mHeader.mLatch.UnlockExclusively();
   return {};
 }
 
@@ -205,25 +205,25 @@ BufferFrame& BufferManager::AllocNewPage(TREEID treeId) {
     WorkerCounters::MyCounters().allocate_operations_counter++;
   }
 
-  freeBf.page.mBTreeId = treeId;
-  freeBf.page.mPSN++; // mark as dirty
+  freeBf.mPage.mBTreeId = treeId;
+  freeBf.mPage.mPSN++; // mark as dirty
   return freeBf;
 }
 
 // Pre: bf is exclusively locked
 // ATTENTION: this function unlocks it !!
 void BufferManager::ReclaimPage(BufferFrame& bf) {
-  Partition& partition = GetPartition(bf.header.mPageId);
+  Partition& partition = GetPartition(bf.mHeader.mPageId);
   if (FLAGS_reclaim_page_ids) {
-    partition.ReclaimPageId(bf.header.mPageId);
+    partition.ReclaimPageId(bf.mHeader.mPageId);
   }
 
-  if (bf.header.mIsBeingWrittenBack) {
+  if (bf.mHeader.mIsBeingWrittenBack) {
     // Do nothing ! we have a garbage collector ;-)
-    bf.header.mLatch.UnlockExclusively();
+    bf.mHeader.mLatch.UnlockExclusively();
   } else {
     bf.Reset();
-    bf.header.mLatch.UnlockExclusively();
+    bf.mHeader.mLatch.UnlockExclusively();
     partition.mFreeBfList.PushFront(bf);
   }
 }
@@ -243,10 +243,10 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
     // Resolve swip from cool state
     auto* bf = &childSwip.AsBufferFrameMasked();
     parentNodeGuard.JumpIfModifiedByOthers();
-    BMOptimisticGuard bfGuard(bf->header.mLatch);
+    BMOptimisticGuard bfGuard(bf->mHeader.mLatch);
     BMExclusiveUpgradeIfNeeded swipXGuard(parentNodeGuard); // parent
     BMExclusiveGuard bfXGuard(bfGuard);                     // child
-    bf->header.state = STATE::HOT;
+    bf->mHeader.mState = State::kHot;
     childSwip.MarkHOT();
     return bf;
   }
@@ -273,31 +273,29 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
   if (!frameHandler) {
     // 1. Randomly get a buffer frame from partitions
     BufferFrame& bf = RandomPartition().mFreeBfList.PopFrontMayJump();
-    DCHECK(!bf.header.mLatch.IsLockedExclusively());
-    DCHECK(bf.header.state == STATE::FREE);
+    DCHECK(!bf.mHeader.mLatch.IsLockedExclusively());
+    DCHECK(bf.mHeader.mState == State::kFree);
 
     // 2. Create an IO frame in the current partition
     IOFrame& ioFrame = partition.mInflightIOs.Insert(pageId);
-    ioFrame.state = IOFrame::STATE::READING;
+    ioFrame.state = IOFrame::State::kReading;
     ioFrame.readers_counter = 1;
     JumpScoped<std::unique_lock<std::mutex>> ioFrameGuard(ioFrame.mutex);
     inflightIOGuard->unlock();
 
     // 3. Read page at pageId to the target buffer frame
-    ReadPageSync(pageId, &bf.page);
-    // DLOG_IF(FATAL, bf.page.mMagicDebuging != pageId)
-    //     << "Failed to read page, page corrupted";
+    ReadPageSync(pageId, &bf.mPage);
     COUNTERS_BLOCK() {
-      WorkerCounters::MyCounters().dt_page_reads[bf.page.mBTreeId]++;
+      WorkerCounters::MyCounters().dt_page_reads[bf.mPage.mBTreeId]++;
     }
 
     // 4. Intialize the buffer frame header
-    DCHECK(!bf.header.mIsBeingWrittenBack);
-    bf.header.mFlushedPSN = bf.page.mPSN;
-    bf.header.state = STATE::LOADED;
-    bf.header.mPageId = pageId;
+    DCHECK(!bf.mHeader.mIsBeingWrittenBack);
+    bf.mHeader.mFlushedPSN = bf.mPage.mPSN;
+    bf.mHeader.mState = State::kLoaded;
+    bf.mHeader.mPageId = pageId;
     if (FLAGS_crc_check) {
-      bf.header.crc = bf.page.CRC();
+      bf.mHeader.mCrc = bf.mPage.CRC();
     }
 
     // 5. Publish the buffer frame
@@ -309,7 +307,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
       BMExclusiveUpgradeIfNeeded swipXGuard(parentNodeGuard);
 
       childSwip.MarkHOT(&bf);
-      bf.header.state = STATE::HOT;
+      bf.mHeader.mState = State::kHot;
 
       if (ioFrame.readers_counter.fetch_add(-1) == 1) {
         partition.mInflightIOs.Remove(pageId);
@@ -321,7 +319,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
       // Change state to ready if contention is encountered
       inflightIOGuard->lock();
       ioFrame.bf = &bf;
-      ioFrame.state = IOFrame::STATE::READY;
+      ioFrame.state = IOFrame::State::kReady;
       inflightIOGuard->unlock();
       ioFrameGuard->unlock();
       jumpmu::Jump();
@@ -330,7 +328,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
 
   IOFrame& ioFrame = frameHandler.frame();
   switch (ioFrame.state) {
-  case IOFrame::STATE::READING: {
+  case IOFrame::State::kReading: {
     ioFrame.readers_counter++; // incremented while holding partition lock
     inflightIOGuard->unlock();
 
@@ -347,33 +345,33 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
     jumpmu::Jump(); // why jump?
     break;
   }
-  case IOFrame::STATE::READY: {
+  case IOFrame::State::kReady: {
     BufferFrame* bf = ioFrame.bf;
     {
       // We have to exclusively lock the bf because the page provider thread
       // will try to evict them when its IO is done
-      DCHECK(!bf->header.mLatch.IsLockedExclusively());
-      DCHECK(bf->header.state == STATE::LOADED);
-      BMOptimisticGuard bfGuard(bf->header.mLatch);
+      DCHECK(!bf->mHeader.mLatch.IsLockedExclusively());
+      DCHECK(bf->mHeader.mState == State::kLoaded);
+      BMOptimisticGuard bfGuard(bf->mHeader.mLatch);
       BMExclusiveUpgradeIfNeeded swipXGuard(parentNodeGuard);
       BMExclusiveGuard bfXGuard(bfGuard);
       ioFrame.bf = nullptr;
       childSwip.MarkHOT(bf);
-      DCHECK(bf->header.mPageId == pageId);
+      DCHECK(bf->mHeader.mPageId == pageId);
       DCHECK(childSwip.IsHot());
-      DCHECK(bf->header.state == STATE::LOADED);
-      bf->header.state = STATE::HOT;
+      DCHECK(bf->mHeader.mState == State::kLoaded);
+      bf->mHeader.mState = State::kHot;
 
       if (ioFrame.readers_counter.fetch_add(-1) == 1) {
         partition.mInflightIOs.Remove(pageId);
       } else {
-        ioFrame.state = IOFrame::STATE::TO_DELETE;
+        ioFrame.state = IOFrame::State::kToDelete;
       }
       inflightIOGuard->unlock();
       return bf;
     }
   }
-  case IOFrame::STATE::TO_DELETE: {
+  case IOFrame::State::kToDelete: {
     if (ioFrame.readers_counter == 0) {
       partition.mInflightIOs.Remove(pageId);
     }
@@ -444,10 +442,10 @@ BufferFrame& BufferManager::ReadPageSync(PID pageId) {
 }
 
 void BufferManager::WritePageSync(BufferFrame& bf) {
-  ScopedHybridGuard guard(bf.header.mLatch, LatchMode::kPessimisticExclusive);
-  auto pageId = bf.header.mPageId;
+  ScopedHybridGuard guard(bf.mHeader.mLatch, LatchMode::kPessimisticExclusive);
+  auto pageId = bf.mHeader.mPageId;
   auto& partition = GetPartition(pageId);
-  pwrite(mStore->mPageFd, &bf.page, mStore->mStoreOption.mPageSize,
+  pwrite(mStore->mPageFd, &bf.mPage, mStore->mStoreOption.mPageSize,
          pageId * mStore->mStoreOption.mPageSize);
   bf.Reset();
   guard.Unlock();
@@ -486,11 +484,11 @@ void BufferManager::DoWithBufferFrameIf(
     for (uint64_t i = begin; i < end; i++) {
       auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
       auto& bf = *reinterpret_cast<BufferFrame*>(bfAddr);
-      bf.header.mLatch.LockExclusively();
+      bf.mHeader.mLatch.LockExclusively();
       if (condition(bf)) {
         action(bf);
       }
-      bf.header.mLatch.UnlockExclusively();
+      bf.mHeader.mLatch.UnlockExclusively();
     }
   });
 }

@@ -1,12 +1,12 @@
 #pragma once
 
 #include "BTreeNode.hpp"
-#include "leanstore/Config.hpp"
-#include "leanstore/LeanStore.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
-#include "leanstore/Units.hpp"
 #include "buffer-manager/BufferManager.hpp"
 #include "buffer-manager/GuardedBufferFrame.hpp"
+#include "leanstore/Config.hpp"
+#include "leanstore/LeanStore.hpp"
+#include "leanstore/Units.hpp"
+#include "profiling/counters/WorkerCounters.hpp"
 
 #include "glog/logging.h"
 
@@ -315,7 +315,7 @@ inline void BTreeGeneric::toJsonRecursive(
 inline void BTreeGeneric::IterateChildSwips(
     BufferFrame& bf, std::function<bool(Swip&)> callback) {
   // Pre: bf is read locked
-  auto& childNode = *reinterpret_cast<BTreeNode*>(bf.page.mPayload);
+  auto& childNode = *reinterpret_cast<BTreeNode*>(bf.mPage.mPayload);
   if (childNode.mIsLeaf) {
     return;
   }
@@ -350,7 +350,7 @@ inline SpaceCheckResult BTreeGeneric::CheckSpaceUtilization(BufferFrame& bf) {
 }
 
 inline void BTreeGeneric::Checkpoint(BufferFrame& bf, void* dest) {
-  std::memcpy(dest, &bf.page, mStore->mStoreOption.mPageSize);
+  std::memcpy(dest, &bf.mPage, mStore->mStoreOption.mPageSize);
   auto* destPage = reinterpret_cast<Page*>(dest);
   auto* destNode = reinterpret_cast<BTreeNode*>(destPage->mPayload);
 
@@ -359,13 +359,13 @@ inline void BTreeGeneric::Checkpoint(BufferFrame& bf, void* dest) {
     for (uint64_t i = 0; i < destNode->mNumSeps; i++) {
       if (!destNode->ChildSwip(i)->IsEvicted()) {
         auto& childBf = destNode->ChildSwip(i)->AsBufferFrameMasked();
-        destNode->ChildSwip(i)->Evict(childBf.header.mPageId);
+        destNode->ChildSwip(i)->Evict(childBf.mHeader.mPageId);
       }
     }
     // Replace right most child swip to page id
     if (!destNode->mRightMostChildSwip.IsEvicted()) {
       auto& childBf = destNode->mRightMostChildSwip.AsBufferFrameMasked();
-      destNode->mRightMostChildSwip.Evict(childBf.header.mPageId);
+      destNode->mRightMostChildSwip.Evict(childBf.mHeader.mPageId);
     }
   }
 }
@@ -410,7 +410,7 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
   // Check whether search on the wrong tree or the root node is evicted
   GuardedBufferFrame<BTreeNode> guardedParent(
       btree.mStore->mBufferManager.get(), btree.mMetaNodeSwip);
-  if (btree.mTreeId != bfToFind.page.mBTreeId ||
+  if (btree.mTreeId != bfToFind.mPage.mBTreeId ||
       guardedParent->mRightMostChildSwip.IsEvicted()) {
     jumpmu::Jump();
   }
@@ -433,7 +433,7 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
     jumpmu::Jump();
   }
 
-  auto& nodeToFind = *reinterpret_cast<BTreeNode*>(bfToFind.page.mPayload);
+  auto& nodeToFind = *reinterpret_cast<BTreeNode*>(bfToFind.mPage.mPayload);
   const auto isInfinity = nodeToFind.mUpperFence.offset == 0;
   const auto keyToFind = nodeToFind.GetUpperFence();
 

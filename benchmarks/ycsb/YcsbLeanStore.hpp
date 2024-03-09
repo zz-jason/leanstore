@@ -1,7 +1,7 @@
 #include "Ycsb.hpp"
 #include "btree/TransactionKV.hpp"
 #include "btree/core/BTreeGeneric.hpp"
-#include "concurrency/CRMG.hpp"
+#include "concurrency/CRManager.hpp"
 #include "concurrency/Worker.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/KVInterface.hpp"

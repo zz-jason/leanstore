@@ -76,7 +76,7 @@ std::expected<void, utils::Error> Recovery::analysis() {
 
       auto& bf = resolvePage(complexEntry->mPageId);
 
-      if (complexEntry->mPSN >= bf.page.mPSN &&
+      if (complexEntry->mPSN >= bf.mPage.mPSN &&
           mDirtyPageTable.find(complexEntry->mPageId) ==
               mDirtyPageTable.end()) {
         // record the first WALEntry that makes the page dirty
@@ -114,7 +114,7 @@ std::expected<void, utils::Error> Recovery::redo() {
 
     // get a buffer frame for the corresponding dirty page
     auto& bf = resolvePage(complexEntry->mPageId);
-    SCOPED_DEFER(bf.header.mKeepInMemory = false);
+    SCOPED_DEFER(bf.mHeader.mKeepInMemory = false);
 
     auto* walPayload = reinterpret_cast<WALPayload*>(complexEntry->mPayload);
     switch (walPayload->mType) {
@@ -221,7 +221,7 @@ std::expected<bool, utils::Error> Recovery::nextWalComplexToRedo(
 void Recovery::redoInsert(storage::BufferFrame& bf,
                           WALEntryComplex* complexEntry) {
   auto* walInsert = reinterpret_cast<WALInsert*>(complexEntry->mPayload);
-  HybridGuard guard(&bf.header.mLatch);
+  HybridGuard guard(&bf.mHeader.mLatch);
   GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
                                             std::move(guard), &bf);
 
@@ -235,7 +235,7 @@ void Recovery::redoInsert(storage::BufferFrame& bf,
 void Recovery::redoTxInsert(storage::BufferFrame& bf,
                             WALEntryComplex* complexEntry) {
   auto* walInsert = reinterpret_cast<WALTxInsert*>(complexEntry->mPayload);
-  HybridGuard guard(&bf.header.mLatch);
+  HybridGuard guard(&bf.mHeader.mLatch);
   GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
                                             std::move(guard), &bf);
 
@@ -254,7 +254,7 @@ void Recovery::redoUpdate(storage::BufferFrame& bf [[maybe_unused]],
 void Recovery::redoTxUpdate(storage::BufferFrame& bf,
                             WALEntryComplex* complexEntry) {
   auto* wal = reinterpret_cast<WalTxUpdate*>(complexEntry->mPayload);
-  HybridGuard guard(&bf.header.mLatch);
+  HybridGuard guard(&bf.mHeader.mLatch);
   GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
                                             std::move(guard), &bf);
   auto* updateDesc = wal->GetUpdateDesc();
@@ -292,7 +292,7 @@ void Recovery::redoRemove(storage::BufferFrame& bf [[maybe_unused]],
 void Recovery::redoTxRemove(storage::BufferFrame& bf,
                             WALEntryComplex* complexEntry) {
   auto* wal = reinterpret_cast<WalTxRemove*>(complexEntry->mPayload);
-  HybridGuard guard(&bf.header.mLatch);
+  HybridGuard guard(&bf.mHeader.mLatch);
   GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
                                             std::move(guard), &bf);
   auto key = wal->RemovedKey();
@@ -318,13 +318,13 @@ void Recovery::redoTxRemove(storage::BufferFrame& bf,
 void Recovery::redoInitPage(storage::BufferFrame& bf,
                             WALEntryComplex* complexEntry) {
   auto* walInitPage = reinterpret_cast<WALInitPage*>(complexEntry->mPayload);
-  HybridGuard guard(&bf.header.mLatch);
+  HybridGuard guard(&bf.mHeader.mLatch);
   GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
                                             std::move(guard), &bf);
   auto xGuardedNode =
       ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNode));
   xGuardedNode.InitPayload(walInitPage->mIsLeaf);
-  bf.page.mBTreeId = complexEntry->mTreeId;
+  bf.mPage.mBTreeId = complexEntry->mTreeId;
 }
 
 void Recovery::redoSplitRoot(storage::BufferFrame& bf,
@@ -332,7 +332,7 @@ void Recovery::redoSplitRoot(storage::BufferFrame& bf,
   auto* wal = reinterpret_cast<WalSplitRoot*>(complexEntry->mPayload);
 
   // Resolve the old root
-  auto oldRootGuard = HybridGuard(&bf.header.mLatch);
+  auto oldRootGuard = HybridGuard(&bf.mHeader.mLatch);
   auto guardedOldRoot = GuardedBufferFrame<BTreeNode>(
       mStore->mBufferManager.get(), std::move(oldRootGuard), &bf);
   auto xGuardedOldRoot =
@@ -341,7 +341,7 @@ void Recovery::redoSplitRoot(storage::BufferFrame& bf,
   // Resolve the new left
   auto newLeftPageId = wal->mNewLeft;
   auto& newLeftBf = resolvePage(newLeftPageId);
-  auto newLeftGuard = HybridGuard(&newLeftBf.header.mLatch);
+  auto newLeftGuard = HybridGuard(&newLeftBf.mHeader.mLatch);
   auto guardedNewLeft = GuardedBufferFrame<BTreeNode>(
       mStore->mBufferManager.get(), std::move(newLeftGuard), &newLeftBf);
   auto xGuardedNewLeft =
@@ -350,7 +350,7 @@ void Recovery::redoSplitRoot(storage::BufferFrame& bf,
   // Resolve the new root
   auto newRootPageId = wal->mNewRoot;
   auto& newRootBf = resolvePage(newRootPageId);
-  auto newRootGuard = HybridGuard(&newRootBf.header.mLatch);
+  auto newRootGuard = HybridGuard(&newRootBf.mHeader.mLatch);
   auto guardedNewRoot = GuardedBufferFrame<BTreeNode>(
       mStore->mBufferManager.get(), std::move(newRootGuard), &newRootBf);
   auto xGuardedNewRoot =
@@ -359,7 +359,7 @@ void Recovery::redoSplitRoot(storage::BufferFrame& bf,
   // Resolve the meta node
   auto metaPageId = wal->mMetaNode;
   auto& metaBf = resolvePage(metaPageId);
-  auto metaGuard = HybridGuard(&metaBf.header.mLatch);
+  auto metaGuard = HybridGuard(&metaBf.mHeader.mLatch);
   auto guardedMeta = GuardedBufferFrame<BTreeNode>(
       mStore->mBufferManager.get(), std::move(metaGuard), &metaBf);
   auto xGuardedMeta =
@@ -382,7 +382,7 @@ void Recovery::redoSplitNonRoot(storage::BufferFrame& bf,
   auto* wal = reinterpret_cast<WalSplitNonRoot*>(complexEntry->mPayload);
 
   // Resolve the old root
-  auto childGuard = HybridGuard(&bf.header.mLatch);
+  auto childGuard = HybridGuard(&bf.mHeader.mLatch);
   auto guardedChild = GuardedBufferFrame<BTreeNode>(
       mStore->mBufferManager.get(), std::move(childGuard), &bf);
   auto xGuardedChild =
@@ -391,7 +391,7 @@ void Recovery::redoSplitNonRoot(storage::BufferFrame& bf,
   // Resolve the new left
   auto newLeftPageId = wal->mNewLeft;
   auto& newLeftBf = resolvePage(newLeftPageId);
-  auto newLeftGuard = HybridGuard(&newLeftBf.header.mLatch);
+  auto newLeftGuard = HybridGuard(&newLeftBf.mHeader.mLatch);
   auto guardedNewLeft = GuardedBufferFrame<BTreeNode>(
       mStore->mBufferManager.get(), std::move(newLeftGuard), &newLeftBf);
   auto xGuardedNewLeft =
@@ -400,7 +400,7 @@ void Recovery::redoSplitNonRoot(storage::BufferFrame& bf,
   // Resolve the parent node
   auto parentPageId = wal->mParentPageId;
   auto& parentBf = resolvePage(parentPageId);
-  auto parentGuard = HybridGuard(&parentBf.header.mLatch);
+  auto parentGuard = HybridGuard(&parentBf.mHeader.mLatch);
   auto guardedParent = GuardedBufferFrame<BTreeNode>(
       mStore->mBufferManager.get(), std::move(parentGuard), &parentBf);
   auto xGuardedParent =

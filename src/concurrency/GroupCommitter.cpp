@@ -1,6 +1,6 @@
 #include "concurrency/GroupCommitter.hpp"
 
-#include "concurrency/CRMG.hpp"
+#include "concurrency/CRManager.hpp"
 #include "concurrency/Worker.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "profiling/counters/CPUCounters.hpp"

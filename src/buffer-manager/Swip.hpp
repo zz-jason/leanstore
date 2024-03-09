@@ -1,6 +1,6 @@
 #pragma once
 
-#include "BufferFrame.hpp"
+#include "buffer-manager/BufferFrame.hpp"
 #include "leanstore/Units.hpp"
 
 #include <glog/logging.h>
@@ -12,11 +12,11 @@ class BufferFrame;
 
 /// Swip represents either the page id or the pointer to the buffer frame
 /// which contains the page. It can be the following 3 stats:
-/// 1. HOT. The swip represents the memory pointer to a buffer frame. The 2 most
+/// 1. hot. the swip represents the memory pointer to a buffer frame. the 2 most
 ///    significant bits are both 0s.
-/// 2. COOL. The swip represents the memory pointer to a buffer frame. But the
-///    2nd most most significant bits is 1 which marks the pointer as "COOL".
-/// 3. EVICTED. The swip represents a page id. The most most significant bit is
+/// 2. cool. the swip represents the memory pointer to a buffer frame. but the
+///    2nd most most significant bits is 1 which marks the pointer as "cool".
+/// 3. evicted. the swip represents a page id. the most most significant bit is
 ///    1 which marks the swip as "EVICTED".
 class Swip {
 public:
@@ -72,13 +72,13 @@ public:
     return mPageId & sEvictedMask;
   }
 
-  /// Return the underlying buffer frame from a HOT buffer frame.
+  /// return the underlying buffer frame from a hot buffer frame.
   BufferFrame& AsBufferFrame() {
     DCHECK(IsHot());
     return *mBf;
   }
 
-  /// Return the underlying buffer frame from a COOL buffer frame.
+  /// Return the underlying buffer frame from a cool buffer frame.
   BufferFrame& AsBufferFrameMasked() {
     return *reinterpret_cast<BufferFrame*>(mPageId & sHotMask);
   }

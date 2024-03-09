@@ -1,7 +1,7 @@
 #include "concurrency/Worker.hpp"
 
 #include "buffer-manager/TreeRegistry.hpp"
-#include "concurrency/CRMG.hpp"
+#include "concurrency/CRManager.hpp"
 #include "concurrency/GroupCommitter.hpp"
 #include "concurrency/Logging.hpp"
 #include "concurrency/Transaction.hpp"
@@ -26,7 +26,7 @@ thread_local Worker* Worker::sTlsWorkerRaw = nullptr;
 Worker::Worker(uint64_t workerId, std::vector<Worker*>& allWorkers,
                leanstore::LeanStore* store)
     : mStore(store),
-      cc(store, allWorkers.size()),
+      mCc(store, allWorkers.size()),
       mActiveTxId(0),
       mWorkerId(workerId),
       mAllWorkers(allWorkers) {
@@ -38,8 +38,8 @@ Worker::Worker(uint64_t workerId, std::vector<Worker*>& allWorkers,
       (uint8_t*)(std::aligned_alloc(512, mLogging.mWalBufferSize));
   std::memset(mLogging.mWalBuffer, 0, mLogging.mWalBufferSize);
 
-  cc.mLcbCacheVal = std::make_unique<uint64_t[]>(mAllWorkers.size());
-  cc.mLcbCacheKey = std::make_unique<uint64_t[]>(mAllWorkers.size());
+  mCc.mLcbCacheVal = std::make_unique<uint64_t[]>(mAllWorkers.size());
+  mCc.mLcbCacheKey = std::make_unique<uint64_t[]>(mAllWorkers.size());
 }
 
 Worker::~Worker() {
@@ -113,10 +113,10 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
 
   // Publish the transaction id
   mActiveTxId.store(curTxId, std::memory_order_release);
-  cc.mGlobalWmkOfAllTx = mStore->mCRManager->mGlobalWmkInfo.mWmkOfAllTx.load();
+  mCc.mGlobalWmkOfAllTx = mStore->mCRManager->mGlobalWmkInfo.mWmkOfAllTx.load();
 
   // Cleanup commit log if necessary
-  cc.mCommitTree.CompactCommitLog();
+  mCc.mCommitTree.CompactCommitLog();
 }
 
 void Worker::CommitTx() {
@@ -138,8 +138,8 @@ void Worker::CommitTx() {
   mCommandId = 0;
   if (mActiveTx.mHasWrote) {
     mActiveTx.mCommitTs = mStore->AllocTs();
-    cc.mCommitTree.AppendCommitLog(mActiveTx.mStartTs, mActiveTx.mCommitTs);
-    cc.mLatestCommitTs.store(mActiveTx.mCommitTs, std::memory_order_release);
+    mCc.mCommitTree.AppendCommitLog(mActiveTx.mStartTs, mActiveTx.mCommitTs);
+    mCc.mLatestCommitTs.store(mActiveTx.mCommitTs, std::memory_order_release);
   } else {
     DLOG(INFO) << "Transaction has no writes, skip assigning commitTs, append "
                   "log to commit tree, and group commit"
@@ -185,7 +185,7 @@ void Worker::CommitTx() {
 
   // Cleanup versions in history tree
   if (!mActiveTx.mIsReadOnly) {
-    cc.GarbageCollection();
+    mCc.GarbageCollection();
   }
 
   // Wait transaction to be committed
@@ -240,7 +240,7 @@ void Worker::AbortTx() {
                                 txId);
   });
 
-  cc.mHistoryStorage.PurgeVersions(
+  mCc.mHistoryStorage.PurgeVersions(
       mActiveTx.mStartTs, mActiveTx.mStartTs,
       [&](const TXID, const TREEID, const uint8_t*, uint64_t, const bool) {},
       0);

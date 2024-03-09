@@ -4,7 +4,7 @@
 #include "btree/BasicKV.hpp"
 #include "btree/core/BTreePessimisticExclusiveIterator.hpp"
 #include "btree/core/BTreeWALPayload.hpp"
-#include "concurrency/CRMG.hpp"
+#include "concurrency/CRManager.hpp"
 #include "concurrency/Worker.hpp"
 #include "leanstore/Units.hpp"
 
@@ -65,7 +65,7 @@ public:
                                                ValCallback callback) const;
 
   void UpdateStats() {
-    if (cr::Worker::My().cc.VisibleForAll(mTxId) ||
+    if (cr::Worker::My().mCc.VisibleForAll(mTxId) ||
         mOldestTx !=
             static_cast<uint16_t>(
                 cr::Worker::My()
@@ -106,7 +106,7 @@ public:
 
 inline std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(
     Slice payload, ValCallback callback) const {
-  if (cr::Worker::My().cc.VisibleForMe(mWorkerId, mTxId)) {
+  if (cr::Worker::My().mCc.VisibleForMe(mWorkerId, mTxId)) {
     if (mIsTombstone) {
       return {OpCode::kNotFound, 1};
     }
@@ -131,7 +131,7 @@ inline std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(
 
   uint16_t versionsRead = 1;
   while (true) {
-    bool found = cr::Worker::My().cc.GetVersion(
+    bool found = cr::Worker::My().mCc.GetVersion(
         newerWorkerId, newerTxId, newerCommandId,
         [&](const uint8_t* versionBuf, uint64_t versionSize) {
           auto& version = *reinterpret_cast<const Version*>(versionBuf);
@@ -182,7 +182,7 @@ inline std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(
       return {OpCode::kNotFound, versionsRead};
     }
 
-    if (cr::Worker::My().cc.VisibleForMe(newerWorkerId, newerTxId)) {
+    if (cr::Worker::My().mCc.VisibleForMe(newerWorkerId, newerTxId)) {
       callback(Slice(valueBuf.get(), valueSize));
       return {OpCode::kOK, versionsRead};
     }
@@ -199,7 +199,7 @@ inline void ChainedTuple::Update(BTreePessimisticExclusiveIterator& xIter,
 
   // Move the newest tuple to the history version tree.
   auto treeId = xIter.mBTree.mTreeId;
-  auto currCommandId = cr::Worker::My().cc.PutVersion(
+  auto currCommandId = cr::Worker::My().mCc.PutVersion(
       treeId, false, versionSize, [&](uint8_t* versionBuf) {
         auto& updateVersion =
             *new (versionBuf) UpdateVersion(mWorkerId, mTxId, mCommandId, true);

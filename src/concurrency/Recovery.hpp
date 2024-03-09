@@ -123,12 +123,12 @@ inline bool Recovery::Run() {
 
   analysis();
   for (auto it = mResolvedPages.begin(); it != mResolvedPages.end(); ++it) {
-    if (it->second->isFree()) {
+    if (it->second->IsFree()) {
       continue;
     }
     DLOG(INFO) << "Resolved page after analysis"
                << ", address: " << it->second << ", pageId: " << it->first
-               << ", btreeId: " << it->second->page.mBTreeId;
+               << ", btreeId: " << it->second->mPage.mBTreeId;
   }
   // print resulting active transaction table
   DLOG(INFO) << "Active transaction table size: " << mActiveTxTable.size();
@@ -164,7 +164,7 @@ inline storage::BufferFrame& Recovery::resolvePage(PID pageId) {
 
   auto& bf = mStore->mBufferManager->ReadPageSync(pageId);
   // prevent the buffer frame from being evicted by buffer frame providers
-  bf.header.mKeepInMemory = true;
+  bf.mHeader.mKeepInMemory = true;
   mResolvedPages.emplace(pageId, &bf);
   return bf;
 }

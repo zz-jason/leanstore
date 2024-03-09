@@ -32,7 +32,7 @@ public:
   /// The write-ahead logging component.
   Logging mLogging;
 
-  ConcurrencyControl cc;
+  ConcurrencyControl mCc;
 
   /// The ID of the current command in the current transaction.
   COMMANDID mCommandId = 0;

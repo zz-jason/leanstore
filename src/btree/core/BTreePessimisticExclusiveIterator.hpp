@@ -18,7 +18,7 @@ public:
   BTreePessimisticExclusiveIterator(BTreeGeneric& tree, BufferFrame* bf,
                                     const uint64_t bfVersion)
       : BTreePessimisticIterator(tree, LatchMode::kPessimisticExclusive) {
-    HybridGuard optimisticGuard(bf->header.mLatch, bfVersion);
+    HybridGuard optimisticGuard(bf->mHeader.mLatch, bfVersion);
     optimisticGuard.JumpIfModifiedByOthers();
     mGuardedLeaf = GuardedBufferFrame<BTreeNode>(
         tree.mStore->mBufferManager.get(), std::move(optimisticGuard), bf);
@@ -88,7 +88,7 @@ public:
       JUMPMU_CATCH() {
         LOG(INFO) << "Split failed"
                   << ", treeId=" << mBTree.mTreeId
-                  << ", pageId=" << mGuardedLeaf.mBf->header.mPageId;
+                  << ", pageId=" << mGuardedLeaf.mBf->mHeader.mPageId;
       }
     }
   }
@@ -154,11 +154,11 @@ public:
          ((1ull << FLAGS_contention_split_sample_probability) - 1)) != 0) {
       return;
     }
-    auto& contentionStats = mGuardedLeaf.mBf->header.mContentionStats;
+    auto& contentionStats = mGuardedLeaf.mBf->mHeader.mContentionStats;
     auto lastUpdatedSlot = contentionStats.mLastUpdatedSlot;
     contentionStats.Update(mGuardedLeaf.EncounteredContention(), mSlotId);
     DLOG(INFO) << "[Contention Split] ContentionStats updated"
-               << ", pageId=" << mGuardedLeaf.mBf->header.mPageId
+               << ", pageId=" << mGuardedLeaf.mBf->mHeader.mPageId
                << ", slot=" << mSlotId << ", encountered contention="
                << mGuardedLeaf.EncounteredContention();
 
@@ -179,7 +179,7 @@ public:
         mBTree.TrySplitMayJump(*mGuardedLeaf.mBf, splitSlot);
 
         DLOG(INFO) << "[Contention Split] succeed"
-                   << ", pageId=" << mGuardedLeaf.mBf->header.mPageId
+                   << ", pageId=" << mGuardedLeaf.mBf->mHeader.mPageId
                    << ", contention pct=" << contentionPct
                    << ", split slot=" << splitSlot;
 
@@ -191,7 +191,7 @@ public:
       }
       JUMPMU_CATCH() {
         LOG(INFO) << "[Contention Split] contention split failed"
-                  << ", pageId=" << mGuardedLeaf.mBf->header.mPageId
+                  << ", pageId=" << mGuardedLeaf.mBf->mHeader.mPageId
                   << ", contention pct=" << contentionPct
                   << ", split slot=" << splitSlot;
 
@@ -207,7 +207,7 @@ public:
     if (!(mGuardedLeaf.mBf != nullptr && mSlotId >= 0 &&
           mSlotId < mGuardedLeaf->mNumSeps)) {
       DCHECK(false) << "RemoveCurrent failed"
-                    << ", pageId=" << mGuardedLeaf.mBf->header.mPageId
+                    << ", pageId=" << mGuardedLeaf.mBf->mHeader.mPageId
                     << ", slotId=" << mSlotId;
       return OpCode::kOther;
     }
@@ -226,7 +226,7 @@ public:
       }
       JUMPMU_CATCH() {
         DLOG(INFO) << "TryMergeIfNeeded failed"
-                   << ", pageId=" << mGuardedLeaf.mBf->header.mPageId;
+                   << ", pageId=" << mGuardedLeaf.mBf->mHeader.mPageId;
       }
       return true;
     }

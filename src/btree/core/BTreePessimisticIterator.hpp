@@ -2,9 +2,9 @@
 
 #include "BTreeGeneric.hpp"
 #include "BTreeIteratorInterface.hpp"
+#include "btree/core/BTreeNode.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/Units.hpp"
-#include "btree/core/BTreeNode.hpp"
 
 #include <glog/logging.h>
 
@@ -448,7 +448,7 @@ public:
   }
 
   PID CurrentPageID() {
-    return mGuardedLeaf.mBf->header.mPageId;
+    return mGuardedLeaf.mBf->mHeader.mPageId;
   }
 
 private:
