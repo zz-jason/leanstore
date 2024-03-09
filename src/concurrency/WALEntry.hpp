@@ -4,10 +4,10 @@
 #include "leanstore/Units.hpp"
 #include "utils/Misc.hpp"
 
-#include "rapidjson/document.h"
-#include "rapidjson/stringbuffer.h"
-#include "rapidjson/writer.h"
 #include <glog/logging.h>
+#include <rapidjson/document.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 
 #include <cstddef>
 #include <iostream>
@@ -21,7 +21,7 @@ namespace cr {
   ACTION(kTxCommit, "kTxCommit", __VA_ARGS__)                                  \
   ACTION(kTxAbort, "kTxAbort", __VA_ARGS__)                                    \
   ACTION(kTxFinish, "kTxFinish", __VA_ARGS__)                                  \
-  ACTION(kComplex, "kComplex", __VA_ARGS__)                                      \
+  ACTION(kComplex, "kComplex", __VA_ARGS__)                                    \
   ACTION(kCarriageReturn, "kCarriageReturn", __VA_ARGS__)
 
 #define DECR_WAL_ENTRY_TYPE(type, type_name, ...) type,
