@@ -235,7 +235,7 @@ void Worker::AbortTx() {
 
   const uint64_t txId = mActiveTx.mStartTs;
   std::for_each(entries.rbegin(), entries.rend(), [&](const WalEntry* entry) {
-    const auto& complexEntry = *reinterpret_cast<const WALEntryComplex*>(entry);
+    const auto& complexEntry = *reinterpret_cast<const WalEntryComplex*>(entry);
     mStore->mTreeRegistry->undo(complexEntry.mTreeId, complexEntry.mPayload,
                                 txId);
   });

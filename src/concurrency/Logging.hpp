@@ -51,14 +51,14 @@ public:
   ///
   /// NOTE: Either mActiveWALEntrySimple or mActiveWALEntryComplex is effective
   /// during transaction processing.
-  WALEntrySimple* mActiveWALEntrySimple;
+  WalEntrySimple* mActiveWALEntrySimple;
 
   /// The active complex WalEntry for the current transaction, usually used for
   /// insert, update, delete, or btree related operations.
   ///
   /// NOTE: Either mActiveWALEntrySimple or mActiveWALEntryComplex is effective
   /// during transaction processing.
-  WALEntryComplex* mActiveWALEntryComplex;
+  WalEntryComplex* mActiveWALEntryComplex;
 
   /// Protects mTxToCommit
   std::mutex mTxToCommitMutex;
@@ -131,7 +131,7 @@ public:
   void IterateCurrentTxWALs(
       std::function<void(const WalEntry& entry)> callback);
 
-  WALEntrySimple& ReserveWALEntrySimple(WalEntry::Type type);
+  WalEntrySimple& ReserveWALEntrySimple(WalEntry::Type type);
 
   void SubmitWALEntrySimple();
 

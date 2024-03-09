@@ -30,8 +30,8 @@ namespace cr {
     return type_name;
 
 /// The basic WAL record representation, there are two kinds of WAL entries:
-/// 1. WALEntrySimple, whose type might be: kTxStart, kTxCommit, kTxAbort
-/// 2. WALEntryComplex, whose type is kComplex
+/// 1. WalEntrySimple, whose type might be: kTxStart, kTxCommit, kTxAbort
+/// 2. WalEntryComplex, whose type is kComplex
 class WalEntry {
 public:
   enum class Type : uint8_t { DO_WITH_WAL_ENTRY_TYPES(DECR_WAL_ENTRY_TYPE) };
@@ -109,14 +109,14 @@ public:
   }
 };
 
-class WALEntrySimple : public WalEntry {
+class WalEntrySimple : public WalEntry {
 public:
-  WALEntrySimple(LID lsn, uint64_t size, Type type)
+  WalEntrySimple(LID lsn, uint64_t size, Type type)
       : WalEntry(lsn, size, type) {
   }
 };
 
-class WALEntryComplex : public WalEntry {
+class WalEntryComplex : public WalEntry {
 public:
   /// Page sequence number of the WalEntry, indicate the page version this WAL
   /// entry is based on.
@@ -135,9 +135,9 @@ public:
   uint8_t mPayload[];
 
 public:
-  WALEntryComplex() = default;
+  WalEntryComplex() = default;
 
-  WALEntryComplex(LID lsn, uint64_t size, LID psn, TREEID treeId, PID pageId)
+  WalEntryComplex(LID lsn, uint64_t size, LID psn, TREEID treeId, PID pageId)
       : WalEntry(lsn, size, Type::kComplex),
         mPSN(psn),
         mTreeId(treeId),
@@ -228,10 +228,10 @@ inline std::unique_ptr<rapidjson::Document> WalEntry::ToJson() {
 #undef WAL_ENTRY_TYPE_NAME
 
 // -----------------------------------------------------------------------------
-// WALEntryComplex
+// WalEntryComplex
 // -----------------------------------------------------------------------------
 
-inline std::unique_ptr<rapidjson::Document> WALEntryComplex::ToJson() {
+inline std::unique_ptr<rapidjson::Document> WalEntryComplex::ToJson() {
   auto doc = WalEntry::ToJson();
 
   // psn

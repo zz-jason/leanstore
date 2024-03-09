@@ -16,11 +16,11 @@ WalPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payloadSize,
 
   auto entryLSN = mLsnClock++;
   auto* entryPtr = mWalBuffer + mWalBuffered;
-  auto entrySize = sizeof(WALEntryComplex) + payloadSize;
+  auto entrySize = sizeof(WalEntryComplex) + payloadSize;
   ReserveContiguousBuffer(entrySize);
 
   mActiveWALEntryComplex =
-      new (entryPtr) WALEntryComplex(entryLSN, entrySize, psn, treeId, pageId);
+      new (entryPtr) WalEntryComplex(entryLSN, entrySize, psn, treeId, pageId);
   mActiveWALEntryComplex->mPrevLSN = mPrevLSN;
   auto& curWorker = leanstore::cr::Worker::My();
   mActiveWALEntryComplex->InitTxInfo(&curWorker.mActiveTx, curWorker.mWorkerId);

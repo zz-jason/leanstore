@@ -83,26 +83,26 @@ private:
   std::expected<void, utils::Error> redo();
 
   std::expected<bool, utils::Error> nextWalComplexToRedo(
-      uint64_t& offset, WALEntryComplex* walEntryPtr);
+      uint64_t& offset, WalEntryComplex* walEntryPtr);
 
-  void redoInsert(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+  void redoInsert(storage::BufferFrame& bf, WalEntryComplex* complexEntry);
 
-  void redoTxInsert(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+  void redoTxInsert(storage::BufferFrame& bf, WalEntryComplex* complexEntry);
 
-  void redoUpdate(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+  void redoUpdate(storage::BufferFrame& bf, WalEntryComplex* complexEntry);
 
-  void redoTxUpdate(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+  void redoTxUpdate(storage::BufferFrame& bf, WalEntryComplex* complexEntry);
 
-  void redoRemove(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+  void redoRemove(storage::BufferFrame& bf, WalEntryComplex* complexEntry);
 
-  void redoTxRemove(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+  void redoTxRemove(storage::BufferFrame& bf, WalEntryComplex* complexEntry);
 
-  void redoInitPage(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+  void redoInitPage(storage::BufferFrame& bf, WalEntryComplex* complexEntry);
 
-  void redoSplitRoot(storage::BufferFrame& bf, WALEntryComplex* complexEntry);
+  void redoSplitRoot(storage::BufferFrame& bf, WalEntryComplex* complexEntry);
 
   void redoSplitNonRoot(storage::BufferFrame& bf,
-                        WALEntryComplex* complexEntry);
+                        WalEntryComplex* complexEntry);
 
   /// During the undo phase, the TT is used to undo the transactions still
   /// active at crash time. In the case of an aborted transaction, it’s possible

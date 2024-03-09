@@ -69,7 +69,7 @@ std::expected<void, utils::Error> Recovery::analysis() {
       }
       bytesRead += leftSize;
 
-      auto* complexEntry = reinterpret_cast<WALEntryComplex*>(walEntryPtr);
+      auto* complexEntry = reinterpret_cast<WalEntryComplex*>(walEntryPtr);
       DCHECK_EQ(bytesRead, complexEntry->mSize);
       DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
       mActiveTxTable[walEntry->mTxId] = offset;
@@ -98,7 +98,7 @@ std::expected<void, utils::Error> Recovery::analysis() {
 std::expected<void, utils::Error> Recovery::redo() {
   // asume that each WalEntry is smaller than the page size
   utils::AlignedBuffer<512> alignedBuffer(mStore->mStoreOption.mPageSize);
-  auto* complexEntry = reinterpret_cast<WALEntryComplex*>(alignedBuffer.Get());
+  auto* complexEntry = reinterpret_cast<WalEntryComplex*>(alignedBuffer.Get());
 
   for (auto offset = mWalStartOffset; offset < mWalSize;) {
     auto res = nextWalComplexToRedo(offset, complexEntry);
@@ -170,7 +170,7 @@ std::expected<void, utils::Error> Recovery::redo() {
 }
 
 std::expected<bool, utils::Error> Recovery::nextWalComplexToRedo(
-    uint64_t& offset, WALEntryComplex* complexEntry) {
+    uint64_t& offset, WalEntryComplex* complexEntry) {
   const uint64_t walEntrySize = sizeof(WalEntry);
   auto* buff = reinterpret_cast<uint8_t*>(complexEntry);
 
@@ -219,7 +219,7 @@ std::expected<bool, utils::Error> Recovery::nextWalComplexToRedo(
 }
 
 void Recovery::redoInsert(storage::BufferFrame& bf,
-                          WALEntryComplex* complexEntry) {
+                          WalEntryComplex* complexEntry) {
   auto* walInsert = reinterpret_cast<WalInsert*>(complexEntry->mPayload);
   HybridGuard guard(&bf.mHeader.mLatch);
   GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
@@ -233,7 +233,7 @@ void Recovery::redoInsert(storage::BufferFrame& bf,
 }
 
 void Recovery::redoTxInsert(storage::BufferFrame& bf,
-                            WALEntryComplex* complexEntry) {
+                            WalEntryComplex* complexEntry) {
   auto* walInsert = reinterpret_cast<WalTxInsert*>(complexEntry->mPayload);
   HybridGuard guard(&bf.mHeader.mLatch);
   GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
@@ -247,12 +247,12 @@ void Recovery::redoTxInsert(storage::BufferFrame& bf,
 }
 
 void Recovery::redoUpdate(storage::BufferFrame& bf [[maybe_unused]],
-                          WALEntryComplex* complexEntry [[maybe_unused]]) {
+                          WalEntryComplex* complexEntry [[maybe_unused]]) {
   DCHECK(false) << "Unsupported";
 }
 
 void Recovery::redoTxUpdate(storage::BufferFrame& bf,
-                            WALEntryComplex* complexEntry) {
+                            WalEntryComplex* complexEntry) {
   auto* wal = reinterpret_cast<WalTxUpdate*>(complexEntry->mPayload);
   HybridGuard guard(&bf.mHeader.mLatch);
   GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
@@ -285,12 +285,12 @@ void Recovery::redoTxUpdate(storage::BufferFrame& bf,
 }
 
 void Recovery::redoRemove(storage::BufferFrame& bf [[maybe_unused]],
-                          WALEntryComplex* complexEntry [[maybe_unused]]) {
+                          WalEntryComplex* complexEntry [[maybe_unused]]) {
   DCHECK(false) << "Unsupported";
 }
 
 void Recovery::redoTxRemove(storage::BufferFrame& bf,
-                            WALEntryComplex* complexEntry) {
+                            WalEntryComplex* complexEntry) {
   auto* wal = reinterpret_cast<WalTxRemove*>(complexEntry->mPayload);
   HybridGuard guard(&bf.mHeader.mLatch);
   GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
@@ -316,7 +316,7 @@ void Recovery::redoTxRemove(storage::BufferFrame& bf,
 }
 
 void Recovery::redoInitPage(storage::BufferFrame& bf,
-                            WALEntryComplex* complexEntry) {
+                            WalEntryComplex* complexEntry) {
   auto* walInitPage = reinterpret_cast<WalInitPage*>(complexEntry->mPayload);
   HybridGuard guard(&bf.mHeader.mLatch);
   GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
@@ -328,7 +328,7 @@ void Recovery::redoInitPage(storage::BufferFrame& bf,
 }
 
 void Recovery::redoSplitRoot(storage::BufferFrame& bf,
-                             WALEntryComplex* complexEntry) {
+                             WalEntryComplex* complexEntry) {
   auto* wal = reinterpret_cast<WalSplitRoot*>(complexEntry->mPayload);
 
   // Resolve the old root
@@ -378,7 +378,7 @@ void Recovery::redoSplitRoot(storage::BufferFrame& bf,
 }
 
 void Recovery::redoSplitNonRoot(storage::BufferFrame& bf,
-                                WALEntryComplex* complexEntry) {
+                                WalEntryComplex* complexEntry) {
   auto* wal = reinterpret_cast<WalSplitNonRoot*>(complexEntry->mPayload);
 
   // Resolve the old root
