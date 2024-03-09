@@ -1,10 +1,10 @@
 #pragma once
 
+#include "btree/core/BTreeNode.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/Units.hpp"
-#include "btree/core/BTreeNode.hpp"
 
-#include "glog/logging.h"
+#include <glog/logging.h>
 #include <rapidjson/document.h>
 
 #include <string>
@@ -16,52 +16,52 @@ namespace btree {
 #define DO_WITH_TYPES(ACTION, ...)                                             \
   ACTION(kWalInsert, 1, "kWalInsert", __VA_ARGS__)                             \
   ACTION(kWalTxInsert, 2, "kWalTxInsert", __VA_ARGS__)                         \
-  ACTION(WALUpdate, 3, "WALUpdate", __VA_ARGS__)                               \
-  ACTION(WALTxUpdate, 4, "WALTxUpdate", __VA_ARGS__)                           \
-  ACTION(WALRemove, 5, "WALRemove", __VA_ARGS__)                               \
-  ACTION(WALTxRemove, 6, "WALTxRemove", __VA_ARGS__)                           \
+  ACTION(kWalUpdate, 3, "kWalUpdate", __VA_ARGS__)                             \
+  ACTION(kWalTxUpdate, 4, "kWalTxUpdate", __VA_ARGS__)                         \
+  ACTION(kWalRemove, 5, "kWalRemove", __VA_ARGS__)                             \
+  ACTION(kWalTxRemove, 6, "kWalTxRemove", __VA_ARGS__)                         \
   ACTION(kWalInitPage, 10, "kWalInitPage", __VA_ARGS__)                        \
   ACTION(kWalSplitRoot, 11, "kWalSplitRoot", __VA_ARGS__)                      \
   ACTION(kWalSplitNonRoot, 12, "kWalSplitNonRoot", __VA_ARGS__)                \
-  ACTION(WALUndefined, 100, "WALUndefined", __VA_ARGS__)
+  ACTION(kWalUndefined, 100, "kWalUndefined", __VA_ARGS__)
 
 #define DECR_TYPE(type, type_value, type_name, ...) type = type_value,
 #define TYPE_NAME(type, type_value, type_name, ...)                            \
-  case TYPE::type:                                                             \
+  case Type::type:                                                             \
     return type_name;
 
-class WALPayload {
+class WalPayload {
 public:
-  enum class TYPE : uint8_t { DO_WITH_TYPES(DECR_TYPE) };
+  enum class Type : uint8_t { DO_WITH_TYPES(DECR_TYPE) };
 
 public:
-  /// Type of WALPayload
-  TYPE mType = TYPE::WALUndefined;
+  /// Type of WalPayload
+  Type mType = Type::kWalUndefined;
 
 public:
-  WALPayload() = default;
+  WalPayload() = default;
 
-  WALPayload(TYPE type) : mType(type) {
+  WalPayload(Type type) : mType(type) {
   }
 
   virtual std::unique_ptr<rapidjson::Document> ToJson();
 
-  inline std::string WalLogTypeName(TYPE type);
+  inline std::string WalLogTypeName(Type type);
 
-  inline static const WALPayload* From(const void* data) {
-    return reinterpret_cast<const WALPayload*>(const_cast<void*>(data));
+  inline static const WalPayload* From(const void* data) {
+    return reinterpret_cast<const WalPayload*>(const_cast<void*>(data));
   }
 };
 
-class WALInitPage : WALPayload {
+class WalInitPage : WalPayload {
 public:
   TREEID mTreeId;
 
   bool mIsLeaf;
 
 public:
-  WALInitPage(TREEID treeId, bool isLeaf)
-      : WALPayload(TYPE::kWalInitPage),
+  WalInitPage(TREEID treeId, bool isLeaf)
+      : WalPayload(Type::kWalInitPage),
         mTreeId(treeId),
         mIsLeaf(isLeaf) {
   }
@@ -70,7 +70,7 @@ public:
   std::unique_ptr<rapidjson::Document> ToJson() override;
 };
 
-struct WalSplitRoot : WALPayload {
+struct WalSplitRoot : WalPayload {
   PID mNewLeft;
 
   PID mNewRoot;
@@ -85,7 +85,7 @@ struct WalSplitRoot : WALPayload {
 
   WalSplitRoot(PID newLeft, PID newRoot, PID metaNode,
                const BTreeNode::SeparatorInfo& sepInfo)
-      : WALPayload(TYPE::kWalSplitRoot),
+      : WalPayload(Type::kWalSplitRoot),
         mNewLeft(newLeft),
         mNewRoot(newRoot),
         mMetaNode(metaNode),
@@ -97,7 +97,7 @@ struct WalSplitRoot : WALPayload {
   std::unique_ptr<rapidjson::Document> ToJson() override;
 };
 
-struct WalSplitNonRoot : WALPayload {
+struct WalSplitNonRoot : WalPayload {
   PID mParentPageId = -1;
 
   PID mNewLeft = -1;
@@ -108,12 +108,12 @@ struct WalSplitNonRoot : WALPayload {
 
   bool mSeparatorTruncated;
 
-  WalSplitNonRoot() : WALPayload(TYPE::kWalSplitNonRoot) {
+  WalSplitNonRoot() : WalPayload(Type::kWalSplitNonRoot) {
   }
 
   WalSplitNonRoot(PID parent, PID newLeft,
                   const BTreeNode::SeparatorInfo& sepInfo)
-      : WALPayload(TYPE::kWalSplitNonRoot),
+      : WalPayload(Type::kWalSplitNonRoot),
         mParentPageId(parent),
         mNewLeft(newLeft),
         mSplitSlot(sepInfo.mSlotId),
@@ -124,15 +124,15 @@ struct WalSplitNonRoot : WALPayload {
   std::unique_ptr<rapidjson::Document> ToJson() override;
 };
 
-struct WALInsert : WALPayload {
+struct WalInsert : WalPayload {
   uint16_t mKeySize;
 
   uint16_t mValSize;
 
   uint8_t mPayload[];
 
-  WALInsert(Slice key, Slice val)
-      : WALPayload(TYPE::kWalInsert),
+  WalInsert(Slice key, Slice val)
+      : WalPayload(Type::kWalInsert),
         mKeySize(key.size()),
         mValSize(val.size()) {
     std::memcpy(mPayload, key.data(), mKeySize);
@@ -150,7 +150,7 @@ struct WALInsert : WALPayload {
   std::unique_ptr<rapidjson::Document> ToJson() override;
 };
 
-struct WALTxInsert : WALPayload {
+struct WalTxInsert : WalPayload {
   uint16_t mKeySize;
 
   uint16_t mValSize;
@@ -163,9 +163,9 @@ struct WALTxInsert : WALPayload {
 
   uint8_t mPayload[];
 
-  WALTxInsert(Slice key, Slice val, WORKERID prevWorkerId, TXID prevTxId,
+  WalTxInsert(Slice key, Slice val, WORKERID prevWorkerId, TXID prevTxId,
               COMMANDID prevCommandId)
-      : WALPayload(TYPE::kWalTxInsert),
+      : WalPayload(Type::kWalTxInsert),
         mKeySize(key.size()),
         mValSize(val.size()),
         mPrevWorkerId(prevWorkerId),
@@ -186,7 +186,7 @@ struct WALTxInsert : WALPayload {
   std::unique_ptr<rapidjson::Document> ToJson() override;
 };
 
-struct WALUpdate : WALPayload {
+struct WalUpdate : WalPayload {
   uint16_t mKeySize;
 
   uint16_t mDeltaLength;
@@ -194,7 +194,7 @@ struct WALUpdate : WALPayload {
   uint8_t mPayload[];
 };
 
-struct WALTxUpdate : WALPayload {
+struct WalTxUpdate : WalPayload {
   uint16_t mKeySize;
 
   uint64_t mUpdateDescSize;
@@ -211,10 +211,10 @@ struct WALTxUpdate : WALPayload {
   // Stores key, UpdateDesc, and Delta in order
   uint8_t mPayload[];
 
-  WALTxUpdate(Slice key, UpdateDesc& updateDesc,
+  WalTxUpdate(Slice key, UpdateDesc& updateDesc,
               uint64_t sizeOfUpdateDescAndDelta, WORKERID prevWorkerId,
               TXID prevTxId, COMMANDID xorCommandId)
-      : WALPayload(TYPE::WALTxUpdate),
+      : WalPayload(Type::kWalTxUpdate),
         mKeySize(key.size()),
         mUpdateDescSize(updateDesc.Size()),
         mDeltaSize(sizeOfUpdateDescAndDelta - updateDesc.Size()),
@@ -234,7 +234,7 @@ struct WALTxUpdate : WALPayload {
   inline const UpdateDesc* GetUpdateDesc() const {
     auto* updateDesc = UpdateDesc::From(mPayload + mKeySize);
     DCHECK(updateDesc->Size() == mUpdateDescSize)
-        << "Malformed WALTxUpdate: updateDesc->Size() != mUpdateDescSize"
+        << "Malformed WalTxUpdate: updateDesc->Size() != mUpdateDescSize"
         << ", updateDesc->Size() = " << updateDesc->Size()
         << ", mUpdateDescSize = " << mUpdateDescSize;
     return updateDesc;
@@ -253,15 +253,15 @@ struct WALTxUpdate : WALPayload {
   }
 };
 
-struct WALRemove : WALPayload {
+struct WalRemove : WalPayload {
   uint16_t mKeySize;
 
   uint16_t mValSize;
 
   uint8_t mPayload[];
 
-  WALRemove(Slice key, Slice val)
-      : WALPayload(TYPE::WALRemove),
+  WalRemove(Slice key, Slice val)
+      : WalPayload(Type::kWalRemove),
         mKeySize(key.size()),
         mValSize(val.size()) {
     std::memcpy(mPayload, key.data(), key.size());
@@ -269,7 +269,7 @@ struct WALRemove : WALPayload {
   }
 };
 
-struct WALTxRemove : WALPayload {
+struct WalTxRemove : WalPayload {
   uint16_t mKeySize;
 
   uint16_t mValSize;
@@ -282,9 +282,9 @@ struct WALTxRemove : WALPayload {
 
   uint8_t mPayload[];
 
-  WALTxRemove(Slice key, Slice val, WORKERID prevWorkerId, TXID prevTxId,
+  WalTxRemove(Slice key, Slice val, WORKERID prevWorkerId, TXID prevTxId,
               COMMANDID prevCommandId)
-      : WALPayload(TYPE::WALTxRemove),
+      : WalPayload(Type::kWalTxRemove),
         mKeySize(key.size()),
         mValSize(val.size()),
         mPrevWorkerId(prevWorkerId),
@@ -304,9 +304,9 @@ struct WALTxRemove : WALPayload {
 };
 
 //------------------------------------------------------------------------------
-// WALPayload
+// WalPayload
 //------------------------------------------------------------------------------
-inline std::unique_ptr<rapidjson::Document> WALPayload::ToJson() {
+inline std::unique_ptr<rapidjson::Document> WalPayload::ToJson() {
   auto doc = std::make_unique<rapidjson::Document>();
   doc->SetObject();
 
@@ -321,7 +321,7 @@ inline std::unique_ptr<rapidjson::Document> WALPayload::ToJson() {
   return doc;
 }
 
-inline std::string WALPayload::WalLogTypeName(TYPE type) {
+inline std::string WalPayload::WalLogTypeName(Type type) {
   switch (type) {
     DO_WITH_TYPES(TYPE_NAME);
   default:
@@ -330,10 +330,10 @@ inline std::string WALPayload::WalLogTypeName(TYPE type) {
 }
 
 //------------------------------------------------------------------------------
-// WALInitPage
+// WalInitPage
 //------------------------------------------------------------------------------
-inline std::unique_ptr<rapidjson::Document> WALInitPage::ToJson() {
-  auto doc = WALPayload::ToJson();
+inline std::unique_ptr<rapidjson::Document> WalInitPage::ToJson() {
+  auto doc = WalPayload::ToJson();
 
   // mTreeId
   {
@@ -356,7 +356,7 @@ inline std::unique_ptr<rapidjson::Document> WALInitPage::ToJson() {
 // WalSplitRoot
 //------------------------------------------------------------------------------
 inline std::unique_ptr<rapidjson::Document> WalSplitRoot::ToJson() {
-  auto doc = WALPayload::ToJson();
+  auto doc = WalPayload::ToJson();
 
   {
     rapidjson::Value member;
@@ -401,7 +401,7 @@ inline std::unique_ptr<rapidjson::Document> WalSplitRoot::ToJson() {
 // WalSplitNonRoot
 //------------------------------------------------------------------------------
 inline std::unique_ptr<rapidjson::Document> WalSplitNonRoot::ToJson() {
-  auto doc = WALPayload::ToJson();
+  auto doc = WalPayload::ToJson();
 
   // mParentPageId
   {
@@ -421,10 +421,10 @@ inline std::unique_ptr<rapidjson::Document> WalSplitNonRoot::ToJson() {
 }
 
 //------------------------------------------------------------------------------
-// WALInsert
+// WalInsert
 //------------------------------------------------------------------------------
-inline std::unique_ptr<rapidjson::Document> WALInsert::ToJson() {
-  auto doc = WALPayload::ToJson();
+inline std::unique_ptr<rapidjson::Document> WalInsert::ToJson() {
+  auto doc = WalPayload::ToJson();
 
   // mKeySize
   {
@@ -460,10 +460,10 @@ inline std::unique_ptr<rapidjson::Document> WALInsert::ToJson() {
 }
 
 //------------------------------------------------------------------------------
-// WALTxInsert
+// WalTxInsert
 //------------------------------------------------------------------------------
-inline std::unique_ptr<rapidjson::Document> WALTxInsert::ToJson() {
-  auto doc = WALPayload::ToJson();
+inline std::unique_ptr<rapidjson::Document> WalTxInsert::ToJson() {
+  auto doc = WalPayload::ToJson();
 
   // mKeySize
   {

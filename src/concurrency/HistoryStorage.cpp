@@ -1,4 +1,4 @@
-#include "HistoryStorage.hpp"
+#include "concurrency/HistoryStorage.hpp"
 
 #include "btree/BasicKV.hpp"
 #include "btree/core/BTreeNode.hpp"
@@ -215,10 +215,10 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
       BufferFrame* bf = session->mLeftMostBf;
 
       // optimistic lock, jump if invalid
-      ScopedHybridGuard bfGuard(bf->header.mLatch, session->mLeftMostVersion);
+      ScopedHybridGuard bfGuard(bf->mHeader.mLatch, session->mLeftMostVersion);
 
       // lock successfull, check whether the page can be purged
-      auto* leafNode = reinterpret_cast<BTreeNode*>(bf->page.mPayload);
+      auto* leafNode = reinterpret_cast<BTreeNode*>(bf->mPage.mPayload);
       if (leafNode->mLowerFence.length == 0) {
         auto lastKeySize = leafNode->getFullKeyLen(leafNode->mNumSeps - 1);
         uint8_t lastKey[lastKeySize];

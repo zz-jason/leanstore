@@ -1,7 +1,7 @@
 #pragma once
 
 #include "BasicKV.hpp"
-#include "concurrency-recovery/Worker.hpp"
+#include "concurrency/Worker.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/Units.hpp"
 #include "btree/BasicKV.hpp"
@@ -110,11 +110,11 @@ private:
   void insertAfterRemove(BTreePessimisticExclusiveIterator& xIter, Slice key,
                          Slice val);
 
-  void undoLastInsert(const WALTxInsert* walInsert);
+  void undoLastInsert(const WalTxInsert* walInsert);
 
-  void undoLastUpdate(const WALTxUpdate* walUpdate);
+  void undoLastUpdate(const WalTxUpdate* walUpdate);
 
-  void undoLastRemove(const WALTxRemove* walRemove);
+  void undoLastRemove(const WalTxRemove* walRemove);
 
 public:
   static TransactionKV* Create(leanstore::LeanStore* store,

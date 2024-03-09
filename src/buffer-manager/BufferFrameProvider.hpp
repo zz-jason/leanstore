@@ -1,20 +1,18 @@
 #pragma once
 
-#include "AsyncWriteBuffer.hpp"
-#include "BMPlainGuard.hpp"
-#include "BufferFrame.hpp"
-#include "FreeList.hpp"
-#include "Partition.hpp"
-#include "Swip.hpp"
-#include "TreeRegistry.hpp"
+#include "buffer-manager/AsyncWriteBuffer.hpp"
+#include "buffer-manager/BMPlainGuard.hpp"
+#include "buffer-manager/BufferFrame.hpp"
+#include "buffer-manager/FreeList.hpp"
+#include "buffer-manager/Partition.hpp"
+#include "buffer-manager/Swip.hpp"
+#include "buffer-manager/TreeRegistry.hpp"
 #include "leanstore/Config.hpp"
+#include "leanstore/Exceptions.hpp"
 #include "leanstore/LeanStore.hpp"
+#include "leanstore/Units.hpp"
 #include "profiling/counters/CPUCounters.hpp"
 #include "profiling/counters/PPCounters.hpp"
-#include "leanstore/Exceptions.hpp"
-#include "leanstore/Units.hpp"
-#include "buffer-manager/AsyncWriteBuffer.hpp"
-#include "buffer-manager/BufferFrame.hpp"
 #include "utils/Defer.hpp"
 #include "utils/RandomGenerator.hpp"
 #include "utils/UserThread.hpp"
@@ -58,7 +56,7 @@ public:
   }
 
   void PushFront(BufferFrame& bf) {
-    bf.header.mNextFreeBf = mFirst;
+    bf.mHeader.mNextFreeBf = mFirst;
     mFirst = &bf;
     mSize++;
     if (mLast == nullptr) {
@@ -121,24 +119,22 @@ public:
   }
 
 public:
-  /**
-   * @brief PickBufferFramesToCool randomly picks a batch of buffer frames from
-   * the whole memory, gather the COOL buffer frames for the next round to
-   * evict, cools the HOT buffer frames if all their children are evicted.
-   *
-   * @note:
-   * 1. Only buffer frames that are COOL are added in the eviction batch and
-   *    being evicted in the next phase.
-   *
-   * 2. Only buffer frames that are HOT and all the children are evicted
-   *    can be cooled at this phase. Buffer frames cooled at this phase won't
-   *    be evicted in the next phase directly, they will be added to the
-   *    eviction batch in the future round of PickBufferFramesToCool() if they
-   *    stay COOL at that time.
-   *
-   * @param targetPartition the target partition which needs more buffer frames
-   * to load pages for worker threads.
-   */
+  /// Randomly picks a batch of buffer frames from the whole memory, gather the
+  /// cool buffer frames for the next round to evict, cools the hot buffer
+  /// frames if all their children are evicted.
+  ///
+  /// NOTE:
+  /// 1. Only buffer frames that are cool are added in the eviction batch and
+  ///    being evicted in the next phase.
+  ///
+  /// 2. Only buffer frames that are hot and all the children are evicted
+  ///    can be cooled at this phase. Buffer frames cooled at this phase won't
+  ///    be evicted in the next phase directly, they will be added to the
+  ///    eviction batch in the future round of PickBufferFramesToCool() if they
+  ///    stay cool at that time.
+  ///
+  /// @param targetPartition the target partition which needs more buffer frames
+  /// to load pages for worker threads.
   void PickBufferFramesToCool(Partition& targetPartition);
 
   void PrepareAsyncWriteBuffer(Partition& targetPartition);
@@ -153,7 +149,7 @@ private:
     mCoolCandidateBfs.clear();
     for (uint64_t i = 0; i < FLAGS_buffer_frame_recycle_batch_size; i++) {
       auto* randomBf = randomBufferFrame();
-      DO_NOT_OPTIMIZE(randomBf->header.state);
+      DO_NOT_OPTIMIZE(randomBf->mHeader.mState);
       mCoolCandidateBfs.push_back(randomBf);
     }
   }
@@ -210,7 +206,7 @@ inline void BufferFrameProvider::runImpl() {
 inline void BufferFrameProvider::evictFlushedBf(
     BufferFrame& cooledBf, BMOptimisticGuard& optimisticGuard,
     Partition& targetPartition) {
-  TREEID btreeId = cooledBf.page.mBTreeId;
+  TREEID btreeId = cooledBf.mPage.mBTreeId;
   optimisticGuard.JumpIfModifiedByOthers();
   ParentSwipHandler parentHandler =
       mStore->mTreeRegistry->FindParent(btreeId, cooledBf);
@@ -219,19 +215,19 @@ inline void BufferFrameProvider::evictFlushedBf(
   BMExclusiveUpgradeIfNeeded parentWriteGuard(parentHandler.mParentGuard);
   optimisticGuard.mGuard.ToExclusiveMayJump();
 
-  if (FLAGS_crc_check && cooledBf.header.crc) {
-    DCHECK(cooledBf.page.CRC() == cooledBf.header.crc);
+  if (FLAGS_crc_check && cooledBf.mHeader.mCrc) {
+    DCHECK(cooledBf.mPage.CRC() == cooledBf.mHeader.mCrc);
   }
-  DCHECK(!cooledBf.isDirty());
-  DCHECK(!cooledBf.header.mIsBeingWrittenBack);
-  DCHECK(cooledBf.header.state == STATE::COOL);
+  DCHECK(!cooledBf.IsDirty());
+  DCHECK(!cooledBf.mHeader.mIsBeingWrittenBack);
+  DCHECK(cooledBf.mHeader.mState == State::kCool);
   DCHECK(parentHandler.mChildSwip.IsCool());
 
-  parentHandler.mChildSwip.Evict(cooledBf.header.mPageId);
+  parentHandler.mChildSwip.Evict(cooledBf.mHeader.mPageId);
 
   // Reclaim buffer frame
   cooledBf.Reset();
-  cooledBf.header.mLatch.UnlockExclusively();
+  cooledBf.mHeader.mLatch.UnlockExclusively();
 
   mFreeBfList.PushFront(cooledBf);
   if (mFreeBfList.Size() <=
@@ -245,9 +241,9 @@ inline void BufferFrameProvider::evictFlushedBf(
 };
 
 // phase 1: find cool candidates and cool them
-// HOT and all the children are evicted: COOL it
-// HOT but one of the chidren is COOL: choose the child and restart
-// COOL: EVICT it
+// hot and all the children are evicted: cool it
+// hot but one of the chidren is cool: choose the child and restart
+// cool: evict it
 inline void BufferFrameProvider::PickBufferFramesToCool(
     Partition& targetPartition) {
   DLOG(INFO) << "Phase1: PickBufferFramesToCool begins";
@@ -278,30 +274,30 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         PPCounters::MyCounters().phase_1_counter++;
       }
       JUMPMU_TRY() {
-        BMOptimisticGuard readGuard(coolCandidate->header.mLatch);
+        BMOptimisticGuard readGuard(coolCandidate->mHeader.mLatch);
         if (coolCandidate->ShouldRemainInMem()) {
           failedAttempts = failedAttempts + 1;
           DLOG(WARNING) << "Cool candidate discarded, should remain in memory"
-                        << ", pageId=" << coolCandidate->header.mPageId;
+                        << ", pageId=" << coolCandidate->mHeader.mPageId;
           JUMPMU_CONTINUE;
         }
         readGuard.JumpIfModifiedByOthers();
 
-        if (coolCandidate->header.state == STATE::COOL) {
+        if (coolCandidate->mHeader.mState == State::kCool) {
           mEvictCandidateBfs.push_back(coolCandidate);
-          LOG(INFO) << "Find a COOL buffer frame, added to mEvictCandidateBfs"
-                    << ", pageId=" << coolCandidate->header.mPageId;
+          LOG(INFO) << "Find a cool buffer frame, added to mEvictCandidateBfs"
+                    << ", pageId=" << coolCandidate->mHeader.mPageId;
           // TODO: maybe without failedAttempts?
           failedAttempts = failedAttempts + 1;
           DLOG(WARNING) << "Cool candidate discarded, it's already cool"
-                        << ", pageId=" << coolCandidate->header.mPageId;
+                        << ", pageId=" << coolCandidate->mHeader.mPageId;
           JUMPMU_CONTINUE;
         }
 
-        if (coolCandidate->header.state != STATE::HOT) {
+        if (coolCandidate->mHeader.mState != State::kHot) {
           failedAttempts = failedAttempts + 1;
           DLOG(WARNING) << "Cool candidate discarded, it's not hot"
-                        << ", pageId=" << coolCandidate->header.mPageId;
+                        << ", pageId=" << coolCandidate->mHeader.mPageId;
           JUMPMU_CONTINUE;
         }
         readGuard.JumpIfModifiedByOthers();
@@ -322,7 +318,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         }
 
         mStore->mTreeRegistry->IterateChildSwips(
-            coolCandidate->page.mBTreeId, *coolCandidate, [&](Swip& swip) {
+            coolCandidate->mPage.mBTreeId, *coolCandidate, [&](Swip& swip) {
               // Ignore when it has a child in the cooling stage
               allChildrenEvicted &= swip.IsEvicted();
               if (swip.IsHot()) {
@@ -332,8 +328,8 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
                 mCoolCandidateBfs.push_back(childBf);
                 DLOG(WARNING)
                     << "Cool candidate discarded, one of its child is hot"
-                    << ", pageId=" << coolCandidate->header.mPageId
-                    << ", hotChildPageId=" << childBf->header.mPageId
+                    << ", pageId=" << coolCandidate->mHeader.mPageId
+                    << ", hotChildPageId=" << childBf->mHeader.mPageId
                     << ", the hot child is picked as the next cool candidate";
                 return false;
               }
@@ -351,7 +347,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         if (!allChildrenEvicted || pickedAChild) {
           DLOG(WARNING)
               << "Cool candidate discarded, not all the children are evicted"
-              << ", pageId=" << coolCandidate->header.mPageId
+              << ", pageId=" << coolCandidate->mHeader.mPageId
               << ", allChildrenEvicted=" << allChildrenEvicted
               << ", pickedAChild=" << pickedAChild;
           failedAttempts = failedAttempts + 1;
@@ -363,7 +359,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         COUNTERS_BLOCK() {
           findParentBegin = std::chrono::high_resolution_clock::now();
         }
-        TREEID btreeId = coolCandidate->page.mBTreeId;
+        TREEID btreeId = coolCandidate->mPage.mBTreeId;
         readGuard.JumpIfModifiedByOthers();
         auto parentHandler =
             mStore->mTreeRegistry->FindParent(btreeId, *coolCandidate);
@@ -381,18 +377,18 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         }
         readGuard.JumpIfModifiedByOthers();
         auto checkResult = mStore->mTreeRegistry->CheckSpaceUtilization(
-            coolCandidate->page.mBTreeId, *coolCandidate);
+            coolCandidate->mPage.mBTreeId, *coolCandidate);
         if (checkResult == SpaceCheckResult::kRestartSameBf ||
             checkResult == SpaceCheckResult::kPickAnotherBf) {
           DLOG(WARNING) << "Cool candidate discarded, space check failed"
-                        << ", pageId=" << coolCandidate->header.mPageId
+                        << ", pageId=" << coolCandidate->mHeader.mPageId
                         << ", checkResult is kRestartSameBf || kPickAnotherBf";
           JUMPMU_CONTINUE;
         }
         readGuard.JumpIfModifiedByOthers();
 
         // Suitable page founds, lets cool
-        const PID pageId = coolCandidate->header.mPageId;
+        const PID pageId = coolCandidate->mHeader.mPageId;
         {
           // writeGuard can only be acquired and released while the partition
           // mutex is locked
@@ -400,19 +396,19 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
               parentHandler.mParentGuard);
           BMExclusiveGuard writeGuard(readGuard);
 
-          DCHECK(coolCandidate->header.mPageId == pageId);
-          DCHECK(coolCandidate->header.state == STATE::HOT);
-          DCHECK(coolCandidate->header.mIsBeingWrittenBack == false);
+          DCHECK(coolCandidate->mHeader.mPageId == pageId);
+          DCHECK(coolCandidate->mHeader.mState == State::kHot);
+          DCHECK(coolCandidate->mHeader.mIsBeingWrittenBack == false);
           DCHECK(parentHandler.mParentGuard.mVersion ==
                  parentHandler.mParentGuard.mLatch->GetOptimisticVersion());
           DCHECK(parentHandler.mChildSwip.mBf == coolCandidate);
 
           // mark the buffer frame in cool state
-          coolCandidate->header.state = STATE::COOL;
+          coolCandidate->mHeader.mState = State::kCool;
           // mark the swip to the buffer frame to cool state
           parentHandler.mChildSwip.Cool();
-          DLOG(WARNING) << "Cool candidate find, state changed to COOL"
-                        << ", pageId=" << coolCandidate->header.mPageId;
+          DLOG(WARNING) << "Cool candidate find, state changed to cool"
+                        << ", pageId=" << coolCandidate->mHeader.mPageId;
         }
 
         COUNTERS_BLOCK() {
@@ -424,7 +420,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         DLOG(WARNING)
             << "Cool candidate discarded, optimistic latch failed, someone has "
                "modified the buffer frame during cool validateion"
-            << ", pageId=" << coolCandidate->header.mPageId;
+            << ", pageId=" << coolCandidate->mHeader.mPageId;
       }
     }
   }
@@ -440,19 +436,19 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
   mFreeBfList.Reset();
   for (const volatile auto& cooledBf : mEvictCandidateBfs) {
     JUMPMU_TRY() {
-      BMOptimisticGuard optimisticGuard(cooledBf->header.mLatch);
+      BMOptimisticGuard optimisticGuard(cooledBf->mHeader.mLatch);
       // Check if the BF got swizzled in or unswizzle another time in another
       // partition
-      if (cooledBf->header.state != STATE::COOL ||
-          cooledBf->header.mIsBeingWrittenBack) {
+      if (cooledBf->mHeader.mState != State::kCool ||
+          cooledBf->mHeader.mIsBeingWrittenBack) {
         DLOG(WARNING) << "COOLed buffer frame discarded"
-                      << ", pageId=" << cooledBf->header.mPageId
-                      << ", IsCool=" << (cooledBf->header.state == STATE::COOL)
+                      << ", pageId=" << cooledBf->mHeader.mPageId << ", IsCool="
+                      << (cooledBf->mHeader.mState == State::kCool)
                       << ", isBeingWritternBack="
-                      << cooledBf->header.mIsBeingWrittenBack;
+                      << cooledBf->mHeader.mIsBeingWrittenBack;
         JUMPMU_CONTINUE;
       }
-      const PID cooledPageId = cooledBf->header.mPageId;
+      const PID cooledPageId = cooledBf->mHeader.mPageId;
       const uint64_t partitionId = getPartitionId(cooledPageId);
 
       // Prevent evicting a page that already has an IO Frame with (possibly)
@@ -462,17 +458,17 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
           partition.mInflightIOMutex);
       if (partition.mInflightIOs.Lookup(cooledPageId)) {
         DLOG(WARNING) << "COOLed buffer frame discarded, already in IO stage"
-                      << ", pageId=" << cooledBf->header.mPageId
+                      << ", pageId=" << cooledBf->mHeader.mPageId
                       << ", partitionId=" << partitionId;
         JUMPMU_CONTINUE;
       }
 
       // Evict clean pages. They can be safely cleared in memory without
       // writing any bytes back to the underlying disk.
-      if (!cooledBf->isDirty()) {
+      if (!cooledBf->IsDirty()) {
         evictFlushedBf(*cooledBf, optimisticGuard, targetPartition);
         DLOG(INFO) << "COOLed buffer frame is not dirty, reclaim directly"
-                   << ", pageId=" << cooledBf->header.mPageId;
+                   << ", pageId=" << cooledBf->mHeader.mPageId;
         JUMPMU_CONTINUE;
       }
 
@@ -486,26 +482,26 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
       }
 
       BMExclusiveGuard exclusiveGuard(optimisticGuard);
-      DCHECK(!cooledBf->header.mIsBeingWrittenBack);
-      cooledBf->header.mIsBeingWrittenBack.store(true,
-                                                 std::memory_order_release);
+      DCHECK(!cooledBf->mHeader.mIsBeingWrittenBack);
+      cooledBf->mHeader.mIsBeingWrittenBack.store(true,
+                                                  std::memory_order_release);
 
       // performs crc check if necessary
       if (FLAGS_crc_check) {
-        cooledBf->header.crc = cooledBf->page.CRC();
+        cooledBf->mHeader.mCrc = cooledBf->mPage.CRC();
       }
 
       // TODO: preEviction callback according to TREEID
       mAsyncWriteBuffer.AddToIOBatch(*cooledBf, cooledPageId);
       DLOG(INFO) << "COOLed buffer frame is added to async write buffer"
-                 << ", pageId=" << cooledBf->header.mPageId
+                 << ", pageId=" << cooledBf->mHeader.mPageId
                  << ", bufferSize=" << mAsyncWriteBuffer.pending_requests;
     }
     JUMPMU_CATCH() {
       DLOG(WARNING) << "COOLed buffer frame discarded, optimistic latch "
                        "failed, someone has modified the buffer frame during "
                        "cool validateion"
-                    << ", pageId=" << cooledBf->header.mPageId;
+                    << ", pageId=" << cooledBf->mHeader.mPageId;
     }
   }
 
@@ -527,26 +523,27 @@ inline void BufferFrameProvider::FlushAndRecycleBufferFrames(
             // waiting on its latch because of the likelihood that a data
             // structure implementation keeps holding a parent latch while
             // trying to acquire a new page
-            BMOptimisticGuard optimisticGuard(writtenBf.header.mLatch);
+            BMOptimisticGuard optimisticGuard(writtenBf.mHeader.mLatch);
             BMExclusiveGuard exclusiveGuard(optimisticGuard);
-            DCHECK(writtenBf.header.mIsBeingWrittenBack);
-            DCHECK(writtenBf.header.mFlushedPSN < flushPSN);
+            DCHECK(writtenBf.mHeader.mIsBeingWrittenBack);
+            DCHECK(writtenBf.mHeader.mFlushedPSN < flushPSN);
 
             // For recovery, so much has to be done here...
-            writtenBf.header.mFlushedPSN = flushPSN;
-            writtenBf.header.mIsBeingWrittenBack = false;
+            writtenBf.mHeader.mFlushedPSN = flushPSN;
+            writtenBf.mHeader.mIsBeingWrittenBack = false;
             PPCounters::MyCounters().flushed_pages_counter++;
           }
           JUMPMU_CATCH() {
-            writtenBf.header.crc = 0;
-            writtenBf.header.mIsBeingWrittenBack.store(
+            writtenBf.mHeader.mCrc = 0;
+            writtenBf.mHeader.mIsBeingWrittenBack.store(
                 false, std::memory_order_release);
           }
 
           JUMPMU_TRY() {
-            BMOptimisticGuard optimisticGuard(writtenBf.header.mLatch);
-            if (writtenBf.header.state == STATE::COOL &&
-                !writtenBf.header.mIsBeingWrittenBack && !writtenBf.isDirty()) {
+            BMOptimisticGuard optimisticGuard(writtenBf.mHeader.mLatch);
+            if (writtenBf.mHeader.mState == State::kCool &&
+                !writtenBf.mHeader.mIsBeingWrittenBack &&
+                !writtenBf.IsDirty()) {
               evictFlushedBf(writtenBf, optimisticGuard, targetPartition);
             }
           }

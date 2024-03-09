@@ -1,6 +1,6 @@
 #pragma once
 
-#include "BufferFrame.hpp"
+#include "buffer-manager/BufferFrame.hpp"
 #include "leanstore/Units.hpp"
 #include "utils/Misc.hpp"
 

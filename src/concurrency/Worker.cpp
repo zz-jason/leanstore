@@ -1,9 +1,11 @@
-#include "Worker.hpp"
+#include "concurrency/Worker.hpp"
 
-#include "CRMG.hpp"
 #include "buffer-manager/TreeRegistry.hpp"
-#include "concurrency-recovery/GroupCommitter.hpp"
-#include "concurrency-recovery/Transaction.hpp"
+#include "concurrency/CRManager.hpp"
+#include "concurrency/GroupCommitter.hpp"
+#include "concurrency/Logging.hpp"
+#include "concurrency/Transaction.hpp"
+#include "concurrency/WalEntry.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "leanstore/LeanStore.hpp"
@@ -24,7 +26,7 @@ thread_local Worker* Worker::sTlsWorkerRaw = nullptr;
 Worker::Worker(uint64_t workerId, std::vector<Worker*>& allWorkers,
                leanstore::LeanStore* store)
     : mStore(store),
-      cc(store, allWorkers.size()),
+      mCc(store, allWorkers.size()),
       mActiveTxId(0),
       mWorkerId(workerId),
       mAllWorkers(allWorkers) {
@@ -36,8 +38,8 @@ Worker::Worker(uint64_t workerId, std::vector<Worker*>& allWorkers,
       (uint8_t*)(std::aligned_alloc(512, mLogging.mWalBufferSize));
   std::memset(mLogging.mWalBuffer, 0, mLogging.mWalBufferSize);
 
-  cc.mLcbCacheVal = std::make_unique<uint64_t[]>(mAllWorkers.size());
-  cc.mLcbCacheKey = std::make_unique<uint64_t[]>(mAllWorkers.size());
+  mCc.mLcbCacheVal = std::make_unique<uint64_t[]>(mAllWorkers.size());
+  mCc.mLcbCacheKey = std::make_unique<uint64_t[]>(mAllWorkers.size());
 }
 
 Worker::~Worker() {
@@ -63,7 +65,7 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
                << ", globalMaxFlushedGSN="
                << mStore->mCRManager->mGroupCommitter->mGlobalMaxFlushedGSN;
     if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
-      mLogging.WriteSimpleWal(WALEntry::TYPE::TX_START);
+      mLogging.WriteSimpleWal(WalEntry::Type::kTxStart);
     }
   });
 
@@ -111,10 +113,10 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
 
   // Publish the transaction id
   mActiveTxId.store(curTxId, std::memory_order_release);
-  cc.mGlobalWmkOfAllTx = mStore->mCRManager->mGlobalWmkInfo.mWmkOfAllTx.load();
+  mCc.mGlobalWmkOfAllTx = mStore->mCRManager->mGlobalWmkInfo.mWmkOfAllTx.load();
 
   // Cleanup commit log if necessary
-  cc.mCommitTree.CompactCommitLog();
+  mCc.mCommitTree.CompactCommitLog();
 }
 
 void Worker::CommitTx() {
@@ -136,8 +138,8 @@ void Worker::CommitTx() {
   mCommandId = 0;
   if (mActiveTx.mHasWrote) {
     mActiveTx.mCommitTs = mStore->AllocTs();
-    cc.mCommitTree.AppendCommitLog(mActiveTx.mStartTs, mActiveTx.mCommitTs);
-    cc.mLatestCommitTs.store(mActiveTx.mCommitTs, std::memory_order_release);
+    mCc.mCommitTree.AppendCommitLog(mActiveTx.mStartTs, mActiveTx.mCommitTs);
+    mCc.mLatestCommitTs.store(mActiveTx.mCommitTs, std::memory_order_release);
   } else {
     DLOG(INFO) << "Transaction has no writes, skip assigning commitTs, append "
                   "log to commit tree, and group commit"
@@ -150,8 +152,8 @@ void Worker::CommitTx() {
   mActiveTxId.store(0, std::memory_order_release);
 
   if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
-    mLogging.WriteSimpleWal(WALEntry::TYPE::TX_COMMIT);
-    mLogging.WriteSimpleWal(WALEntry::TYPE::TX_FINISH);
+    mLogging.WriteSimpleWal(WalEntry::Type::kTxCommit);
+    mLogging.WriteSimpleWal(WalEntry::Type::kTxFinish);
   } else if (mActiveTx.mIsReadOnly) {
     DCHECK(!mActiveTx.mHasWrote)
         << "Read-only transaction should not have writes"
@@ -183,7 +185,7 @@ void Worker::CommitTx() {
 
   // Cleanup versions in history tree
   if (!mActiveTx.mIsReadOnly) {
-    cc.GarbageCollection();
+    mCc.GarbageCollection();
   }
 
   // Wait transaction to be committed
@@ -224,29 +226,29 @@ void Worker::AbortTx() {
   DCHECK(!mActiveTx.mWalExceedBuffer)
       << "Aborting from WAL file is not supported yet";
 
-  std::vector<const WALEntry*> entries;
-  mLogging.IterateCurrentTxWALs([&](const WALEntry& entry) {
-    if (entry.type == WALEntry::TYPE::COMPLEX) {
+  std::vector<const WalEntry*> entries;
+  mLogging.IterateCurrentTxWALs([&](const WalEntry& entry) {
+    if (entry.mType == WalEntry::Type::kComplex) {
       entries.push_back(&entry);
     }
   });
 
   const uint64_t txId = mActiveTx.mStartTs;
-  std::for_each(entries.rbegin(), entries.rend(), [&](const WALEntry* entry) {
-    const auto& complexEntry = *reinterpret_cast<const WALEntryComplex*>(entry);
-    mStore->mTreeRegistry->undo(complexEntry.mTreeId, complexEntry.payload,
+  std::for_each(entries.rbegin(), entries.rend(), [&](const WalEntry* entry) {
+    const auto& complexEntry = *reinterpret_cast<const WalEntryComplex*>(entry);
+    mStore->mTreeRegistry->undo(complexEntry.mTreeId, complexEntry.mPayload,
                                 txId);
   });
 
-  cc.mHistoryStorage.PurgeVersions(
+  mCc.mHistoryStorage.PurgeVersions(
       mActiveTx.mStartTs, mActiveTx.mStartTs,
       [&](const TXID, const TREEID, const uint8_t*, uint64_t, const bool) {},
       0);
 
   if (!mActiveTx.mIsReadOnly && mActiveTx.mIsDurable) {
     // TODO: write compensation wal records between abort and finish
-    mLogging.WriteSimpleWal(WALEntry::TYPE::TX_ABORT);
-    mLogging.WriteSimpleWal(WALEntry::TYPE::TX_FINISH);
+    mLogging.WriteSimpleWal(WalEntry::Type::kTxAbort);
+    mLogging.WriteSimpleWal(WalEntry::Type::kTxFinish);
   }
 }
 

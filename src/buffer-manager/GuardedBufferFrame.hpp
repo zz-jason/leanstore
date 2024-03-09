@@ -2,8 +2,9 @@
 
 #include "buffer-manager/BufferFrame.hpp"
 #include "buffer-manager/BufferManager.hpp"
-#include "concurrency-recovery/WALEntry.hpp"
-#include "concurrency-recovery/Worker.hpp"
+#include "concurrency/LoggingImpl.hpp"
+#include "concurrency/WalPayloadHandler.hpp"
+#include "concurrency/Worker.hpp"
 #include "sync/HybridGuard.hpp"
 #include "sync/HybridLatch.hpp"
 
@@ -61,30 +62,18 @@ public:
                      bool keepAlive = true)
       : mBufferManager(bufferManager),
         mBf(bf),
-        mGuard(mBf->header.mLatch, GuardState::kUninitialized),
+        mGuard(mBf->mHeader.mLatch, GuardState::kUninitialized),
         mKeepAlive(keepAlive) {
-    DCHECK(!HasExclusiveMark(mBf->header.mLatch.GetOptimisticVersion()));
+    DCHECK(!HasExclusiveMark(mBf->mHeader.mLatch.GetOptimisticVersion()));
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
-
-  // GuardedBufferFrame(BufferManager* bufferManager, TREEID treeId,
-  //                    bool keepAlive = true)
-  //     : mBufferManager(bufferManager),
-  //       mBf(&bufferManager->AllocNewPage(treeId)),
-  //       mGuard(&mBf->header.mLatch),
-  //       mKeepAlive(keepAlive) {
-  //   latchMayJump(mGuard, LatchMode::kOptimisticSpin);
-  //   SyncGSNBeforeRead();
-  //   DCHECK(HasExclusiveMark(mBf->header.mLatch.GetOptimisticVersion()));
-  //   JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
-  // }
 
   /// Guard a single page, usually used for latching the meta node of a BTree.
   GuardedBufferFrame(BufferManager* bufferManager, Swip& hotSwip,
                      const LatchMode latchMode = LatchMode::kOptimisticSpin)
       : mBufferManager(bufferManager),
         mBf(&hotSwip.AsBufferFrame()),
-        mGuard(&mBf->header.mLatch),
+        mGuard(&mBf->mHeader.mLatch),
         mKeepAlive(true) {
     latchMayJump(mGuard, latchMode);
     SyncGSNBeforeRead();
@@ -103,7 +92,7 @@ public:
                      const LatchMode latchMode = LatchMode::kOptimisticSpin)
       : mBufferManager(bufferManager),
         mBf(bufferManager->ResolveSwipMayJump(guardedParent.mGuard, childSwip)),
-        mGuard(&mBf->header.mLatch),
+        mGuard(&mBf->mHeader.mLatch),
         mKeepAlive(true) {
     latchMayJump(mGuard, latchMode);
     SyncGSNBeforeRead();
@@ -153,58 +142,58 @@ public:
 
 public:
   inline void MarkAsDirty() {
-    mBf->page.mPSN++;
+    mBf->mPage.mPSN++;
   }
 
   inline void SyncGSNBeforeWrite() {
     DCHECK(mBf != nullptr);
-    DCHECK(mBf->page.mGSN <= cr::Worker::My().mLogging.GetCurrentGsn())
+    DCHECK(mBf->mPage.mGSN <= cr::Worker::My().mLogging.GetCurrentGsn())
         << "Page GSN should <= worker GSN"
-        << ", pageGSN=" << mBf->page.mGSN
+        << ", pageGSN=" << mBf->mPage.mGSN
         << ", workerGSN=" << cr::Worker::My().mLogging.GetCurrentGsn();
 
     // update last writer worker
-    mBf->header.mLastWriterWorker = cr::Worker::My().mWorkerId;
+    mBf->mHeader.mLastWriterWorker = cr::Worker::My().mWorkerId;
 
     // increase GSN
     const auto workerGSN = cr::Worker::My().mLogging.GetCurrentGsn();
-    mBf->page.mGSN = workerGSN + 1;
+    mBf->mPage.mGSN = workerGSN + 1;
     cr::Worker::My().mLogging.SetCurrentGsn(workerGSN + 1);
   }
 
   // TODO: don't sync on temporary table pages like history trees
   inline void SyncGSNBeforeRead() {
     if (!cr::Worker::My().mLogging.mHasRemoteDependency &&
-        mBf->page.mGSN > cr::Worker::My().mLogging.mTxReadSnapshot &&
-        mBf->header.mLastWriterWorker != cr::Worker::My().mWorkerId) {
+        mBf->mPage.mGSN > cr::Worker::My().mLogging.mTxReadSnapshot &&
+        mBf->mHeader.mLastWriterWorker != cr::Worker::My().mWorkerId) {
       cr::Worker::My().mLogging.mHasRemoteDependency = true;
       DLOG(INFO) << "Detected remote dependency"
                  << ", workerId=" << cr::Worker::My().mWorkerId
                  << ", txReadSnapshot(GSN)="
                  << cr::Worker::My().mLogging.mTxReadSnapshot
-                 << ", pageLastWriterWorker=" << mBf->header.mLastWriterWorker
-                 << ", pageGSN=" << mBf->page.mGSN;
+                 << ", pageLastWriterWorker=" << mBf->mHeader.mLastWriterWorker
+                 << ", pageGSN=" << mBf->mPage.mGSN;
     }
 
     const auto workerGSN = cr::Worker::My().mLogging.GetCurrentGsn();
-    const auto pageGSN = mBf->page.mGSN;
+    const auto pageGSN = mBf->mPage.mGSN;
     if (workerGSN < pageGSN) {
       cr::Worker::My().mLogging.SetCurrentGsn(pageGSN);
     }
   }
 
   template <typename WT, typename... Args>
-  inline cr::WALPayloadHandler<WT> ReserveWALPayload(uint64_t walSize,
+  inline cr::WalPayloadHandler<WT> ReserveWALPayload(uint64_t walSize,
                                                      Args&&... args) {
     DCHECK(cr::ActiveTx().mIsDurable);
     DCHECK(mGuard.mState == GuardState::kPessimisticExclusive);
 
-    const auto pageId = mBf->header.mPageId;
-    const auto treeId = mBf->page.mBTreeId;
+    const auto pageId = mBf->mHeader.mPageId;
+    const auto treeId = mBf->mPage.mBTreeId;
     walSize = ((walSize - 1) / 8 + 1) * 8;
     auto handler =
         cr::Worker::My().mLogging.ReserveWALEntryComplex<WT, Args...>(
-            sizeof(WT) + walSize, pageId, mBf->page.mPSN, treeId,
+            sizeof(WT) + walSize, pageId, mBf->mPage.mPSN, treeId,
             std::forward<Args>(args)...);
 
     SyncGSNBeforeWrite();
@@ -231,11 +220,11 @@ public:
   }
 
   inline T& ref() {
-    return *reinterpret_cast<T*>(mBf->page.mPayload);
+    return *reinterpret_cast<T*>(mBf->mPage.mPayload);
   }
 
   inline T* ptr() {
-    return reinterpret_cast<T*>(mBf->page.mPayload);
+    return reinterpret_cast<T*>(mBf->mPage.mPayload);
   }
 
   inline Swip swip() {
@@ -243,7 +232,7 @@ public:
   }
 
   inline T* operator->() {
-    return reinterpret_cast<T*>(mBf->page.mPayload);
+    return reinterpret_cast<T*>(mBf->mPage.mPayload);
   }
 
   // Use with caution!
@@ -311,7 +300,7 @@ public:
   }
 
   template <typename WT, typename... Args>
-  cr::WALPayloadHandler<WT> ReserveWALPayload(uint64_t payloadSize,
+  cr::WalPayloadHandler<WT> ReserveWALPayload(uint64_t payloadSize,
                                               Args&&... args) {
     return mRefGuard.template ReserveWALPayload<WT>(
         payloadSize, std::forward<Args>(args)...);
@@ -348,15 +337,16 @@ public:
   /// Initialize the payload data structure (i.e. BTreeNode), usually used when
   /// the buffer frame is used to serve a new page.
   template <typename... Args> void InitPayload(Args&&... args) {
-    new (mRefGuard.mBf->page.mPayload) PayloadType(std::forward<Args>(args)...);
+    new (mRefGuard.mBf->mPage.mPayload)
+        PayloadType(std::forward<Args>(args)...);
   }
 
   inline uint8_t* GetPagePayloadPtr() {
-    return reinterpret_cast<uint8_t*>(mRefGuard.mBf->page.mPayload);
+    return reinterpret_cast<uint8_t*>(mRefGuard.mBf->mPage.mPayload);
   }
 
   inline PayloadType* GetPagePayload() {
-    return reinterpret_cast<PayloadType*>(mRefGuard.mBf->page.mPayload);
+    return reinterpret_cast<PayloadType*>(mRefGuard.mBf->mPage.mPayload);
   }
 
   inline PayloadType* operator->() {
@@ -392,11 +382,11 @@ public:
   }
 
   inline T& ref() {
-    return *reinterpret_cast<T*>(mRefGuard.mBf->page.mPayload);
+    return *reinterpret_cast<T*>(mRefGuard.mBf->mPage.mPayload);
   }
 
   inline T* ptr() {
-    return reinterpret_cast<T*>(mRefGuard.mBf->page.mPayload);
+    return reinterpret_cast<T*>(mRefGuard.mBf->mPage.mPayload);
   }
 
   inline Swip swip() {
@@ -404,7 +394,7 @@ public:
   }
 
   inline T* operator->() {
-    return reinterpret_cast<T*>(mRefGuard.mBf->page.mPayload);
+    return reinterpret_cast<T*>(mRefGuard.mBf->mPage.mPayload);
   }
 };
 

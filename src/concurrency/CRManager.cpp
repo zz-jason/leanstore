@@ -1,10 +1,10 @@
-#include "CRMG.hpp"
+#include "concurrency/CRManager.hpp"
 
-#include "GroupCommitter.hpp"
-#include "WorkerThread.hpp"
 #include "btree/BasicKV.hpp"
-#include "concurrency-recovery/HistoryStorage.hpp"
-#include "concurrency-recovery/Worker.hpp"
+#include "concurrency/GroupCommitter.hpp"
+#include "concurrency/HistoryStorage.hpp"
+#include "concurrency/Worker.hpp"
+#include "concurrency/WorkerThread.hpp"
 #include "leanstore/LeanStore.hpp"
 
 #include <glog/logging.h>
@@ -83,8 +83,8 @@ void CRManager::setupHistoryStorage4EachWorker() {
                  << ", error=" << res.error().ToString();
     }
     auto* removeIndex = res.value();
-    mWorkers[i]->cc.mHistoryStorage.SetUpdateIndex(updateIndex);
-    mWorkers[i]->cc.mHistoryStorage.SetRemoveIndex(removeIndex);
+    mWorkers[i]->mCc.mHistoryStorage.SetUpdateIndex(updateIndex);
+    mWorkers[i]->mCc.mHistoryStorage.SetRemoveIndex(removeIndex);
   }
 }
 

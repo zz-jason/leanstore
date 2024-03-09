@@ -1,7 +1,7 @@
 #pragma once
 
-#include "BufferFrame.hpp"
-#include "FreeList.hpp"
+#include "buffer-manager/BufferFrame.hpp"
+#include "buffer-manager/FreeList.hpp"
 #include "leanstore/Units.hpp"
 #include "utils/Misc.hpp"
 
@@ -13,14 +13,14 @@ namespace leanstore {
 namespace storage {
 
 struct IOFrame {
-  enum class STATE : uint8_t {
-    READING = 0,
-    READY = 1,
-    TO_DELETE = 2,
-    UNDEFINED = 3 // for debugging
+  enum class State : uint8_t {
+    kReading = 0,
+    kReady = 1,
+    kToDelete = 2,
+    kUndefined = 3 // for debugging
   };
   std::mutex mutex;
-  STATE state = STATE::UNDEFINED;
+  State state = State::kUndefined;
   BufferFrame* bf = nullptr;
 
   // Everything in CIOFrame is protected by partition lock
