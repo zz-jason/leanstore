@@ -245,7 +245,7 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
     }
 
     // WAL
-    xIter.mGuardedLeaf.WriteWal<WALTxInsert>(key.size() + val.size(), key, val,
+    xIter.mGuardedLeaf.WriteWal<WalTxInsert>(key.size() + val.size(), key, val,
                                              0, 0, kInvalidCommandid);
 
     // insert
@@ -282,7 +282,7 @@ void TransactionKV::insertAfterRemove(BTreePessimisticExclusiveIterator& xIter,
   auto prevWorkerId = chainedTuple->mWorkerId;
   auto prevTxId = chainedTuple->mTxId;
   auto prevCommandId = chainedTuple->mCommandId;
-  xIter.mGuardedLeaf.WriteWal<WALTxInsert>(
+  xIter.mGuardedLeaf.WriteWal<WalTxInsert>(
       key.size() + val.size(), key, val, prevWorkerId, prevTxId, prevCommandId);
 
   // store the old chained tuple update stats
@@ -423,15 +423,15 @@ OpCode TransactionKV::ScanAsc(Slice startKey, ScanCallback callback) {
 
 void TransactionKV::undo(const uint8_t* walPayloadPtr,
                          const uint64_t txId [[maybe_unused]]) {
-  auto& walPayload = *reinterpret_cast<const WALPayload*>(walPayloadPtr);
+  auto& walPayload = *reinterpret_cast<const WalPayload*>(walPayloadPtr);
   switch (walPayload.mType) {
-  case WALPayload::Type::kWalTxInsert: {
-    return undoLastInsert(static_cast<const WALTxInsert*>(&walPayload));
+  case WalPayload::Type::kWalTxInsert: {
+    return undoLastInsert(static_cast<const WalTxInsert*>(&walPayload));
   }
-  case WALPayload::Type::kWalTxUpdate: {
+  case WalPayload::Type::kWalTxUpdate: {
     return undoLastUpdate(static_cast<const WalTxUpdate*>(&walPayload));
   }
-  case WALPayload::Type::kWalTxRemove: {
+  case WalPayload::Type::kWalTxRemove: {
     return undoLastRemove(static_cast<const WalTxRemove*>(&walPayload));
   }
   default: {
@@ -440,7 +440,7 @@ void TransactionKV::undo(const uint8_t* walPayloadPtr,
   }
 }
 
-void TransactionKV::undoLastInsert(const WALTxInsert* walInsert) {
+void TransactionKV::undoLastInsert(const WalTxInsert* walInsert) {
   // Assuming no insert after remove
   auto key = walInsert->GetKey();
   for (int retry = 0; true; retry++) {
@@ -871,21 +871,21 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData,
 }
 
 void TransactionKV::unlock(const uint8_t* walEntryPtr) {
-  const WALPayload& entry = *reinterpret_cast<const WALPayload*>(walEntryPtr);
+  const WalPayload& entry = *reinterpret_cast<const WalPayload*>(walEntryPtr);
   Slice key;
   switch (entry.mType) {
-  case WALPayload::Type::kWalTxInsert: {
+  case WalPayload::Type::kWalTxInsert: {
     // Assuming no insert after remove
-    auto& walInsert = *reinterpret_cast<const WALTxInsert*>(&entry);
+    auto& walInsert = *reinterpret_cast<const WalTxInsert*>(&entry);
     key = walInsert.GetKey();
     break;
   }
-  case WALPayload::Type::kWalTxUpdate: {
+  case WalPayload::Type::kWalTxUpdate: {
     auto& walUpdate = *reinterpret_cast<const WalTxUpdate*>(&entry);
     key = walUpdate.GetKey();
     break;
   }
-  case WALPayload::Type::kWalTxRemove: {
+  case WalPayload::Type::kWalTxRemove: {
     auto& removeEntry = *reinterpret_cast<const WalTxRemove*>(&entry);
     key = removeEntry.RemovedKey();
     break;

@@ -116,46 +116,46 @@ std::expected<void, utils::Error> Recovery::redo() {
     auto& bf = resolvePage(complexEntry->mPageId);
     SCOPED_DEFER(bf.mHeader.mKeepInMemory = false);
 
-    auto* walPayload = reinterpret_cast<WALPayload*>(complexEntry->mPayload);
+    auto* walPayload = reinterpret_cast<WalPayload*>(complexEntry->mPayload);
     switch (walPayload->mType) {
-    case WALPayload::Type::kWalInsert: {
+    case WalPayload::Type::kWalInsert: {
       redoInsert(bf, complexEntry);
       break;
     }
-    case WALPayload::Type::kWalTxInsert: {
+    case WalPayload::Type::kWalTxInsert: {
       redoTxInsert(bf, complexEntry);
       break;
     }
-    case WALPayload::Type::kWalUpdate: {
+    case WalPayload::Type::kWalUpdate: {
       redoUpdate(bf, complexEntry);
       break;
     }
-    case WALPayload::Type::kWalTxUpdate: {
+    case WalPayload::Type::kWalTxUpdate: {
       redoTxUpdate(bf, complexEntry);
       break;
     }
-    case WALPayload::Type::kWalRemove: {
+    case WalPayload::Type::kWalRemove: {
       redoRemove(bf, complexEntry);
       break;
     }
-    case WALPayload::Type::kWalTxRemove: {
+    case WalPayload::Type::kWalTxRemove: {
       redoTxRemove(bf, complexEntry);
       break;
     }
-    case WALPayload::Type::kWalInitPage: {
+    case WalPayload::Type::kWalInitPage: {
       redoInitPage(bf, complexEntry);
       break;
     }
-    case WALPayload::Type::kWalSplitRoot: {
+    case WalPayload::Type::kWalSplitRoot: {
       redoSplitRoot(bf, complexEntry);
       break;
     }
-    case WALPayload::Type::kWalSplitNonRoot: {
+    case WalPayload::Type::kWalSplitNonRoot: {
       redoSplitNonRoot(bf, complexEntry);
       break;
     }
     default: {
-      DCHECK(false) << "Unhandled WALPayload::Type: "
+      DCHECK(false) << "Unhandled WalPayload::Type: "
                     << std::to_string(static_cast<uint64_t>(walPayload->mType));
     }
     }
@@ -220,7 +220,7 @@ std::expected<bool, utils::Error> Recovery::nextWalComplexToRedo(
 
 void Recovery::redoInsert(storage::BufferFrame& bf,
                           WALEntryComplex* complexEntry) {
-  auto* walInsert = reinterpret_cast<WALInsert*>(complexEntry->mPayload);
+  auto* walInsert = reinterpret_cast<WalInsert*>(complexEntry->mPayload);
   HybridGuard guard(&bf.mHeader.mLatch);
   GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
                                             std::move(guard), &bf);
@@ -234,7 +234,7 @@ void Recovery::redoInsert(storage::BufferFrame& bf,
 
 void Recovery::redoTxInsert(storage::BufferFrame& bf,
                             WALEntryComplex* complexEntry) {
-  auto* walInsert = reinterpret_cast<WALTxInsert*>(complexEntry->mPayload);
+  auto* walInsert = reinterpret_cast<WalTxInsert*>(complexEntry->mPayload);
   HybridGuard guard(&bf.mHeader.mLatch);
   GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
                                             std::move(guard), &bf);
@@ -317,7 +317,7 @@ void Recovery::redoTxRemove(storage::BufferFrame& bf,
 
 void Recovery::redoInitPage(storage::BufferFrame& bf,
                             WALEntryComplex* complexEntry) {
-  auto* walInitPage = reinterpret_cast<WALInitPage*>(complexEntry->mPayload);
+  auto* walInitPage = reinterpret_cast<WalInitPage*>(complexEntry->mPayload);
   HybridGuard guard(&bf.mHeader.mLatch);
   GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
                                             std::move(guard), &bf);

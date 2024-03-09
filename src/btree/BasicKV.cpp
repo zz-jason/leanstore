@@ -144,7 +144,7 @@ OpCode BasicKV::Insert(Slice key, Slice val) {
     ENSURE(ret == OpCode::kOK);
     if (mConfig.mEnableWal) {
       auto walSize = key.length() + val.length();
-      xIter.mGuardedLeaf.WriteWal<WALInsert>(walSize, key, val);
+      xIter.mGuardedLeaf.WriteWal<WalInsert>(walSize, key, val);
     } else {
       xIter.MarkAsDirty();
     }
@@ -254,7 +254,7 @@ OpCode BasicKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
       auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
       auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WalUpdate>(
           key.length() + sizeOfDescAndDelta);
-      walHandler->mType = WALPayload::Type::kWalUpdate;
+      walHandler->mType = WalPayload::Type::kWalUpdate;
       walHandler->mKeySize = key.length();
       walHandler->mDeltaLength = sizeOfDescAndDelta;
       auto* walPtr = walHandler->mPayload;

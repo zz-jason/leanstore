@@ -110,7 +110,7 @@ private:
   void insertAfterRemove(BTreePessimisticExclusiveIterator& xIter, Slice key,
                          Slice val);
 
-  void undoLastInsert(const WALTxInsert* walInsert);
+  void undoLastInsert(const WalTxInsert* walInsert);
 
   void undoLastUpdate(const WalTxUpdate* walUpdate);
 

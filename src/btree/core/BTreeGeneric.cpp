@@ -45,11 +45,11 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId,
 
   // Record WAL
   if (mConfig.mEnableWal) {
-    auto rootWalHandler = xGuardedRoot.ReserveWALPayload<WALInitPage>(
+    auto rootWalHandler = xGuardedRoot.ReserveWALPayload<WalInitPage>(
         0, mTreeId, xGuardedRoot->mIsLeaf);
     rootWalHandler.SubmitWal();
 
-    auto metaWalHandler = xGuardedMeta.ReserveWALPayload<WALInitPage>(
+    auto metaWalHandler = xGuardedMeta.ReserveWALPayload<WalInitPage>(
         0, mTreeId, xGuardedMeta->mIsLeaf);
     metaWalHandler.SubmitWal();
   }
@@ -157,7 +157,7 @@ void BTreeGeneric::splitRootMayJump(
   auto xGuardedNewLeft =
       ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
   if (mConfig.mEnableWal) {
-    xGuardedNewLeft.WriteWal<WALInitPage>(0, mTreeId, xGuardedOldRoot->mIsLeaf);
+    xGuardedNewLeft.WriteWal<WalInitPage>(0, mTreeId, xGuardedOldRoot->mIsLeaf);
   }
   xGuardedNewLeft.InitPayload(xGuardedOldRoot->mIsLeaf);
 
@@ -167,7 +167,7 @@ void BTreeGeneric::splitRootMayJump(
   auto xGuardedNewRoot =
       ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewRoot));
   if (mConfig.mEnableWal) {
-    xGuardedNewRoot.WriteWal<WALInitPage>(0, mTreeId, false);
+    xGuardedNewRoot.WriteWal<WalInitPage>(0, mTreeId, false);
   }
   xGuardedNewRoot.InitPayload(false);
 
@@ -215,7 +215,7 @@ void BTreeGeneric::splitNonRootMayJump(
   auto xGuardedNewLeft =
       ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
   if (mConfig.mEnableWal) {
-    xGuardedNewLeft.WriteWal<WALInitPage>(0, mTreeId, xGuardedChild->mIsLeaf);
+    xGuardedNewLeft.WriteWal<WalInitPage>(0, mTreeId, xGuardedChild->mIsLeaf);
   }
   xGuardedNewLeft.InitPayload(xGuardedChild->mIsLeaf);
 

@@ -28,7 +28,7 @@ public:
   WALPayloadHandler() = default;
 
   /// @brief Initialize a WALPayloadHandler
-  /// @param walPayload the WALPayload object, should already being initialized
+  /// @param walPayload the WalPayload object, should already being initialized
   /// @param size the total size of the WALEntry
   WALPayloadHandler(T* walPayload, uint64_t size)
       : mWalPayload(walPayload),
