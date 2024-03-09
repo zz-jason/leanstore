@@ -1,8 +1,8 @@
 #pragma once
 
+#include "leanstore/KVInterface.hpp"
 #include "leanstore/Slice.hpp"
 #include "leanstore/Units.hpp"
-#include "leanstore/KVInterface.hpp"
 #include "utils/Error.hpp"
 
 #include <expected>
@@ -98,8 +98,7 @@ public:
 
   /// Start a transaction.
   virtual std::expected<void, utils::Error> StartTx(TxMode mode,
-                                                    IsolationLevel level,
-                                                    bool isReadOnly) = 0;
+                                                    IsolationLevel level) = 0;
 
   /// Commit a transaction.
   virtual std::expected<void, utils::Error> CommitTx() = 0;

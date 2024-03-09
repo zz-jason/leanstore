@@ -429,7 +429,7 @@ BufferFrame& BufferManager::ReadPageSync(PID pageId) {
   Swip swip;
   swip.Evict(pageId);
 
-  for (auto failCounter = 100; failCounter > 0; failCounter--) {
+  while (true) {
     JUMPMU_TRY() {
       swip = ResolveSwipMayJump(dummyParentGuard, swip);
       JUMPMU_RETURN swip.AsBufferFrame();
@@ -437,19 +437,23 @@ BufferFrame& BufferManager::ReadPageSync(PID pageId) {
     JUMPMU_CATCH() {
     }
   }
-
-  LOG(FATAL) << "Failed to read page, pageId=" << pageId;
 }
 
-void BufferManager::WritePageSync(BufferFrame& bf) {
+auto BufferManager::WritePageSync(BufferFrame& bf)
+    -> std::expected<void, utils::Error> {
   ScopedHybridGuard guard(bf.mHeader.mLatch, LatchMode::kPessimisticExclusive);
   auto pageId = bf.mHeader.mPageId;
   auto& partition = GetPartition(pageId);
-  pwrite(mStore->mPageFd, &bf.mPage, mStore->mStoreOption.mPageSize,
-         pageId * mStore->mStoreOption.mPageSize);
+  auto ret = pwrite(mStore->mPageFd, &bf.mPage, mStore->mStoreOption.mPageSize,
+                    pageId * mStore->mStoreOption.mPageSize);
+  if (ret < 0) {
+    return std::unexpected<utils::Error>(
+        utils::Error::FileWrite(GetDBFilePath(), errno, strerror(errno)));
+  }
   bf.Reset();
   guard.Unlock();
   partition.mFreeBfList.PushFront(bf);
+  return {};
 }
 
 void BufferManager::SyncAllPageWrites() {

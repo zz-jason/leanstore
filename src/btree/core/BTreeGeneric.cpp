@@ -11,6 +11,7 @@
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "utils/Defer.hpp"
 #include "utils/Misc.hpp"
 
 #include <glog/logging.h>
@@ -236,8 +237,6 @@ void BTreeGeneric::splitNonRootMayJump(
 }
 
 bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
-  // pos == guardedParent->mNumSeps means that the current node is the upper
-  // swip in parent
   auto parentHandler = findParentEager(*this, toMerge);
   GuardedBufferFrame<BTreeNode> guardedParent(
       mStore->mBufferManager.get(), std::move(parentHandler.mParentGuard),
@@ -252,118 +251,112 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
     return false;
   }
 
-  bool succeed = false;
-  if (guardedParent->mNumSeps > 1) {
-    DCHECK(posInParent <= guardedParent->mNumSeps)
-        << "Invalid position in parent"
-        << ", posInParent=" << posInParent
-        << ", childSizeOfParent=" << guardedParent->mNumSeps;
-    guardedParent.JumpIfModifiedByOthers();
-    guardedChild.JumpIfModifiedByOthers();
-
-    // TODO: write WALs
-    auto mergeAndReclaimLeft = [&]() {
-      auto* leftSwip = guardedParent->ChildSwip(posInParent - 1);
-      if (!swizzleSibling && leftSwip->IsEvicted()) {
-        return false;
-      }
-      auto guardedLeft = GuardedBufferFrame<BTreeNode>(
-          mStore->mBufferManager.get(), guardedParent, *leftSwip);
-      auto xGuardedParent =
-          ExclusiveGuardedBufferFrame(std::move(guardedParent));
-      auto xGuardedChild = ExclusiveGuardedBufferFrame(std::move(guardedChild));
-      auto xGuardedLeft = ExclusiveGuardedBufferFrame(std::move(guardedLeft));
-
-      DCHECK(xGuardedChild->mIsLeaf == xGuardedLeft->mIsLeaf);
-
-      if (!xGuardedLeft->merge(posInParent - 1, xGuardedParent,
-                               xGuardedChild)) {
-        guardedParent = std::move(xGuardedParent);
-        guardedChild = std::move(xGuardedChild);
-        guardedLeft = std::move(xGuardedLeft);
-        return false;
-      }
-
-      if (mConfig.mEnableWal) {
-        guardedParent.SyncGSNBeforeWrite();
-        guardedChild.SyncGSNBeforeWrite();
-        guardedLeft.SyncGSNBeforeWrite();
-      } else {
-        guardedParent.MarkAsDirty();
-        guardedChild.MarkAsDirty();
-        guardedLeft.MarkAsDirty();
-      }
-
-      xGuardedLeft.Reclaim();
-      guardedParent = std::move(xGuardedParent);
-      guardedChild = std::move(xGuardedChild);
-      return true;
-    };
-    auto mergeAndReclaimRight = [&]() {
-      auto& rightSwip = ((posInParent + 1) == guardedParent->mNumSeps)
-                            ? guardedParent->mRightMostChildSwip
-                            : *guardedParent->ChildSwip(posInParent + 1);
-      if (!swizzleSibling && rightSwip.IsEvicted()) {
-        return false;
-      }
-      auto guardedRight = GuardedBufferFrame<BTreeNode>(
-          mStore->mBufferManager.get(), guardedParent, rightSwip);
-      auto xGuardedParent =
-          ExclusiveGuardedBufferFrame(std::move(guardedParent));
-      auto xGuardedChild = ExclusiveGuardedBufferFrame(std::move(guardedChild));
-      auto xGuardedRight = ExclusiveGuardedBufferFrame(std::move(guardedRight));
-
-      DCHECK(xGuardedChild->mIsLeaf == xGuardedRight->mIsLeaf);
-
-      if (!xGuardedChild->merge(posInParent, xGuardedParent, xGuardedRight)) {
-        guardedParent = std::move(xGuardedParent);
-        guardedChild = std::move(xGuardedChild);
-        guardedRight = std::move(xGuardedRight);
-        return false;
-      }
-
-      if (mConfig.mEnableWal) {
-        guardedParent.SyncGSNBeforeWrite();
-        guardedChild.SyncGSNBeforeWrite();
-        guardedRight.SyncGSNBeforeWrite();
-      } else {
-        guardedParent.MarkAsDirty();
-        guardedChild.MarkAsDirty();
-        guardedRight.MarkAsDirty();
-      }
-
-      xGuardedChild.Reclaim();
-      guardedParent = std::move(xGuardedParent);
-      guardedRight = std::move(xGuardedRight);
-      return true;
-    };
-
-    // ATTENTION: don't use guardedChild without making sure it was not
-    // reclaimed
-    if (posInParent > 0) {
-      succeed = succeed | mergeAndReclaimLeft();
-    }
-
-    if (!succeed && posInParent < guardedParent->mNumSeps) {
-      succeed = succeed | mergeAndReclaimRight();
-    }
+  if (guardedParent->mNumSeps <= 1) {
+    return false;
   }
 
-  JUMPMU_TRY() {
-    GuardedBufferFrame<BTreeNode> guardedMeta(mStore->mBufferManager.get(),
-                                              mMetaNodeSwip);
+  DCHECK(posInParent <= guardedParent->mNumSeps)
+      << "Invalid position in parent"
+      << ", posInParent=" << posInParent
+      << ", childSizeOfParent=" << guardedParent->mNumSeps;
+  guardedParent.JumpIfModifiedByOthers();
+  guardedChild.JumpIfModifiedByOthers();
+
+  // TODO: write WALs
+  auto mergeAndReclaimLeft = [&]() {
+    auto* leftSwip = guardedParent->ChildSwip(posInParent - 1);
+    if (!swizzleSibling && leftSwip->IsEvicted()) {
+      return false;
+    }
+    auto guardedLeft = GuardedBufferFrame<BTreeNode>(
+        mStore->mBufferManager.get(), guardedParent, *leftSwip);
+    auto xGuardedParent = ExclusiveGuardedBufferFrame(std::move(guardedParent));
+    auto xGuardedChild = ExclusiveGuardedBufferFrame(std::move(guardedChild));
+    auto xGuardedLeft = ExclusiveGuardedBufferFrame(std::move(guardedLeft));
+
+    DCHECK(xGuardedChild->mIsLeaf == xGuardedLeft->mIsLeaf);
+
+    if (!xGuardedLeft->merge(posInParent - 1, xGuardedParent, xGuardedChild)) {
+      guardedParent = std::move(xGuardedParent);
+      guardedChild = std::move(xGuardedChild);
+      guardedLeft = std::move(xGuardedLeft);
+      return false;
+    }
+
+    if (mConfig.mEnableWal) {
+      guardedParent.SyncGSNBeforeWrite();
+      guardedChild.SyncGSNBeforeWrite();
+      guardedLeft.SyncGSNBeforeWrite();
+    } else {
+      guardedParent.MarkAsDirty();
+      guardedChild.MarkAsDirty();
+      guardedLeft.MarkAsDirty();
+    }
+
+    xGuardedLeft.Reclaim();
+    guardedParent = std::move(xGuardedParent);
+    guardedChild = std::move(xGuardedChild);
+    return true;
+  };
+  auto mergeAndReclaimRight = [&]() {
+    auto& rightSwip = ((posInParent + 1) == guardedParent->mNumSeps)
+                          ? guardedParent->mRightMostChildSwip
+                          : *guardedParent->ChildSwip(posInParent + 1);
+    if (!swizzleSibling && rightSwip.IsEvicted()) {
+      return false;
+    }
+    auto guardedRight = GuardedBufferFrame<BTreeNode>(
+        mStore->mBufferManager.get(), guardedParent, rightSwip);
+    auto xGuardedParent = ExclusiveGuardedBufferFrame(std::move(guardedParent));
+    auto xGuardedChild = ExclusiveGuardedBufferFrame(std::move(guardedChild));
+    auto xGuardedRight = ExclusiveGuardedBufferFrame(std::move(guardedRight));
+
+    DCHECK(xGuardedChild->mIsLeaf == xGuardedRight->mIsLeaf);
+
+    if (!xGuardedChild->merge(posInParent, xGuardedParent, xGuardedRight)) {
+      guardedParent = std::move(xGuardedParent);
+      guardedChild = std::move(xGuardedChild);
+      guardedRight = std::move(xGuardedRight);
+      return false;
+    }
+
+    if (mConfig.mEnableWal) {
+      guardedParent.SyncGSNBeforeWrite();
+      guardedChild.SyncGSNBeforeWrite();
+      guardedRight.SyncGSNBeforeWrite();
+    } else {
+      guardedParent.MarkAsDirty();
+      guardedChild.MarkAsDirty();
+      guardedRight.MarkAsDirty();
+    }
+
+    xGuardedChild.Reclaim();
+    guardedParent = std::move(xGuardedParent);
+    guardedRight = std::move(xGuardedRight);
+    return true;
+  };
+
+  SCOPED_DEFER({
     if (!isMetaNode(guardedParent) &&
         guardedParent->FreeSpaceAfterCompaction() >=
             BTreeNode::UnderFullSize()) {
-      if (TryMergeMayJump(*guardedParent.mBf, true)) {
-        WorkerCounters::MyCounters().dt_merge_parent_succ[mTreeId]++;
-      } else {
-        WorkerCounters::MyCounters().dt_merge_parent_fail[mTreeId]++;
+      JUMPMU_TRY() {
+        TryMergeMayJump(*guardedParent.mBf, true);
+      }
+      JUMPMU_CATCH() {
+        COUNTERS_BLOCK() {
+          WorkerCounters::MyCounters().dt_merge_fail[mTreeId]++;
+        }
       }
     }
+  });
+
+  bool succeed = false;
+  if (posInParent > 0) {
+    succeed = mergeAndReclaimLeft();
   }
-  JUMPMU_CATCH() {
-    WorkerCounters::MyCounters().dt_merge_fail[mTreeId]++;
+  if (!succeed && posInParent < guardedParent->mNumSeps) {
+    succeed = mergeAndReclaimRight();
   }
 
   COUNTERS_BLOCK() {
@@ -373,6 +366,7 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
       WorkerCounters::MyCounters().dt_merge_fail[mTreeId]++;
     }
   }
+
   return succeed;
 }
 

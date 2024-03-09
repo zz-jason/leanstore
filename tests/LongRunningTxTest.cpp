@@ -153,7 +153,7 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
   // now worker 2 can not get the old value
   mStore->ExecSync(2, [&]() {
     cr::Worker::My().StartTx(TxMode::kLongRunning,
-                             IsolationLevel::kSnapshotIsolation, false);
+                             IsolationLevel::kSnapshotIsolation);
     SCOPED_DEFER(cr::Worker::My().CommitTx());
 
     EXPECT_EQ(mKv->Lookup(key1, copyValue), OpCode::kNotFound);
@@ -253,8 +253,7 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
 
   // Worker 2, now get the updated new value
   mStore->ExecSync(2, [&]() {
-    cr::Worker::My().StartTx(TxMode::kLongRunning,
-                             IsolationLevel::kSnapshotIsolation, false);
+    cr::Worker::My().StartTx(TxMode::kLongRunning);
     SCOPED_DEFER(cr::Worker::My().CommitTx());
 
     EXPECT_EQ(mKv->Lookup(key1, copyValue), OpCode::kOK);
@@ -303,8 +302,7 @@ TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
     return true;
   };
   mStore->ExecSync(2, [&]() {
-    cr::Worker::My().StartTx(TxMode::kLongRunning,
-                             IsolationLevel::kSnapshotIsolation, false);
+    cr::Worker::My().StartTx(TxMode::kLongRunning);
     EXPECT_EQ(mKv->ScanAsc(ToSlice(smallestKey), copyKeyVal), OpCode::kOK);
   });
 
@@ -338,8 +336,7 @@ TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
 
   // now worker 2 can not get the old values
   mStore->ExecSync(2, [&]() {
-    cr::Worker::My().StartTx(TxMode::kLongRunning,
-                             IsolationLevel::kSnapshotIsolation, false);
+    cr::Worker::My().StartTx(TxMode::kLongRunning);
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     EXPECT_EQ(mKv->ScanAsc(ToSlice(smallestKey), copyKeyVal), OpCode::kOK);
   });

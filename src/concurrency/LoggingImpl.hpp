@@ -12,6 +12,13 @@ WalPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payloadSize,
                                                      PID pageId, LID psn,
                                                      TREEID treeId,
                                                      Args&&... args) {
+  // write transaction start on demand
+  if (!ActiveTx().mHasWrote) {
+    WriteSimpleWal(WalEntry::Type::kTxStart);
+    ActiveTx().mHasWrote = true;
+  }
+
+  // update prev lsn in the end
   SCOPED_DEFER(mPrevLSN = mActiveWALEntryComplex->mLsn);
 
   auto entryLSN = mLsnClock++;

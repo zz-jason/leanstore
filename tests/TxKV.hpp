@@ -1,11 +1,11 @@
 #pragma once
 
+#include "btree/TransactionKV.hpp"
+#include "btree/core/BTreeGeneric.hpp"
 #include "concurrency/CRManager.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
-#include "btree/TransactionKV.hpp"
-#include "btree/core/BTreeGeneric.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
 
@@ -290,7 +290,7 @@ inline auto LeanStoreMVCCSession::Get(TableRef* tbl, Slice key,
 
   mStore->mLeanStore->ExecSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::My().StartTx(mTxMode, mIsolationLevel, true);
+      cr::Worker::My().StartTx(mTxMode, mIsolationLevel);
     }
     SCOPED_DEFER(if (implicitTx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
