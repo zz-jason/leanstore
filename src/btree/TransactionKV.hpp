@@ -1,9 +1,6 @@
 #pragma once
 
 #include "BasicKV.hpp"
-#include "concurrency/Worker.hpp"
-#include "leanstore/KVInterface.hpp"
-#include "leanstore/Units.hpp"
 #include "btree/BasicKV.hpp"
 #include "btree/ChainedTuple.hpp"
 #include "btree/Tuple.hpp"
@@ -11,6 +8,9 @@
 #include "btree/core/BTreePessimisticExclusiveIterator.hpp"
 #include "btree/core/BTreeWALPayload.hpp"
 #include "buffer-manager/GuardedBufferFrame.hpp"
+#include "concurrency/Worker.hpp"
+#include "leanstore/KVInterface.hpp"
+#include "leanstore/Units.hpp"
 
 #include <glog/logging.h>
 
@@ -123,14 +123,11 @@ public:
 
   inline static void InsertToNode(GuardedBufferFrame<BTreeNode>& guardedNode,
                                   Slice key, Slice val, WORKERID workerId,
-                                  TXID txStartTs,
-                                  TxMode txMode [[maybe_unused]],
-                                  int32_t& slotId) {
+                                  TXID txStartTs, int32_t& slotId) {
     auto totalValSize = sizeof(ChainedTuple) + val.size();
     slotId = guardedNode->insertDoNotCopyPayload(key, totalValSize, slotId);
     auto* tupleAddr = guardedNode->ValData(slotId);
     new (tupleAddr) ChainedTuple(workerId, txStartTs, val);
-    guardedNode.MarkAsDirty();
   }
 
   inline static uint64_t ConvertToFatTupleThreshold() {

@@ -132,7 +132,6 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
       switch (tuple.mFormat) {
       case TupleFormat::kFat: {
         auto succeed = UpdateInFatTuple(xIter, key, updateCallBack, updateDesc);
-        xIter.MarkAsDirty();
         xIter.UpdateContentionStats();
         Tuple::From(mutRawVal.Data())->WriteUnlock();
         if (!succeed) {
@@ -249,9 +248,9 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
                                              0, 0, kInvalidCommandid);
 
     // insert
-    TransactionKV::InsertToNode(
-        xIter.mGuardedLeaf, key, val, cr::Worker::My().mWorkerId,
-        cr::ActiveTx().mStartTs, cr::ActiveTx().mTxMode, xIter.mSlotId);
+    TransactionKV::InsertToNode(xIter.mGuardedLeaf, key, val,
+                                cr::Worker::My().mWorkerId,
+                                cr::ActiveTx().mStartTs, xIter.mSlotId);
     return OpCode::kOK;
   }
 }
@@ -477,7 +476,6 @@ void TransactionKV::undoLastInsert(const WalTxInsert* walInsert) {
             << ", key=" << key.ToString() << ", ret=" << ToString(ret);
       }
 
-      xIter.MarkAsDirty();
       xIter.TryMergeIfNeeded();
       JUMPMU_RETURN;
     }
@@ -531,7 +529,6 @@ void TransactionKV::undoLastUpdate(const WalTxUpdate* walUpdate) {
         // 3. replace new value with old value
         BasicKV::CopyToValue(updateDesc, buff, chainedTuple.mPayload);
       }
-      xIter.MarkAsDirty();
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
@@ -576,7 +573,6 @@ void TransactionKV::undoLastRemove(const WalTxRemove* walRemove) {
           ChainedTuple(walRemove->mPrevWorkerId, walRemove->mPrevTxId,
                        walRemove->mPrevCommandId, walRemove->RemovedVal());
 
-      xIter.MarkAsDirty();
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
@@ -667,7 +663,6 @@ SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
 
   guardedNode.ToExclusiveMayJump();
   guardedNode.SyncGSNBeforeWrite();
-  guardedNode.MarkAsDirty();
 
   for (uint16_t i = 0; i < guardedNode->mNumSeps; i++) {
     auto& tuple = *Tuple::From(guardedNode->ValData(i));
@@ -716,7 +711,6 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData,
              chainedTuple.mWorkerId == versionWorkerId &&
              chainedTuple.mTxId == versionTxId && chainedTuple.mIsTombstone);
       node->removeSlot(version.mDanglingPointer.mHeadSlot);
-      xIter.MarkAsDirty();
       xIter.TryMergeIfNeeded();
       JUMPMU_RETURN;
     }
@@ -746,7 +740,6 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData,
             << ", versionWorkerId=" << versionWorkerId
             << ", versionTxId=" << versionTxId
             << ", removedKey=" << ToString(removedKey);
-        xIter.MarkAsDirty();
       } else {
         DLOG(FATAL) << "Cannot find the removedKey in graveyard"
                     << ", versionWorkerId=" << versionWorkerId
@@ -805,7 +798,6 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData,
       // if (chainedTuple.mTxId <= cr::Worker::My().mCc.mLocalWmkOfAllTx) {
       //   // remove the tombsone completely
       //   auto ret = xIter.RemoveCurrent();
-      //   xIter.MarkAsDirty();
       //   ENSURE(ret == OpCode::kOK);
       //   xIter.TryMergeIfNeeded();
       //   COUNTERS_BLOCK() {
@@ -827,7 +819,6 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData,
             << ", versionTxId=" << versionTxId
             << ", removedKey=" << ToString(removedKey)
             << ", removedVal=" << ToString(xIter.value());
-        graveyardXIter.MarkAsDirty();
 
         // remove the tombsone from main tree
         auto ret = xIter.RemoveCurrent();
@@ -837,7 +828,6 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData,
             << ", versionWorkerId=" << versionWorkerId
             << ", versionTxId=" << versionTxId
             << ", removedKey=" << ToString(removedKey);
-        xIter.MarkAsDirty();
         xIter.TryMergeIfNeeded();
         COUNTERS_BLOCK() {
           WorkerCounters::MyCounters().cc_todo_moved_gy[mTreeId]++;

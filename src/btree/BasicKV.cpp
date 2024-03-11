@@ -145,8 +145,6 @@ OpCode BasicKV::Insert(Slice key, Slice val) {
     if (mConfig.mEnableWal) {
       auto walSize = key.length() + val.length();
       xIter.mGuardedLeaf.WriteWal<WalInsert>(walSize, key, val);
-    } else {
-      xIter.MarkAsDirty();
     }
     JUMPMU_RETURN OpCode::kOK;
   }
@@ -277,7 +275,6 @@ OpCode BasicKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
       updateCallBack(currentVal);
     }
 
-    xIter.MarkAsDirty();
     xIter.UpdateContentionStats();
     JUMPMU_RETURN OpCode::kOK;
   }
@@ -300,7 +297,6 @@ OpCode BasicKV::Remove(Slice key) {
           key.size() + value.size(), key, value);
       walHandler.SubmitWal();
     }
-    xIter.MarkAsDirty();
     auto ret = xIter.RemoveCurrent();
     ENSURE(ret == OpCode::kOK);
     xIter.TryMergeIfNeeded();
@@ -342,7 +338,6 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
           }
           auto ret = xIter.RemoveCurrent();
           ENSURE(ret == OpCode::kOK);
-          xIter.MarkAsDirty();
           if (xIter.mSlotId == xIter.mGuardedLeaf->mNumSeps) {
             ret = xIter.Next() ? OpCode::kOK : OpCode::kNotFound;
           }
@@ -378,7 +373,6 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
               guardedLeaf->mNumSeps;
         }
         guardedLeaf->Reset();
-        xIter.MarkAsDirty();
         didPurgeFullPage = true;
       }
     });

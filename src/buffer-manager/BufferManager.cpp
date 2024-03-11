@@ -206,7 +206,7 @@ BufferFrame& BufferManager::AllocNewPage(TREEID treeId) {
   }
 
   freeBf.mPage.mBTreeId = treeId;
-  freeBf.mPage.mPSN++; // mark as dirty
+  freeBf.mPage.mGSN++; // mark as dirty
   return freeBf;
 }
 
@@ -291,7 +291,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
 
     // 4. Intialize the buffer frame header
     DCHECK(!bf.mHeader.mIsBeingWrittenBack);
-    bf.mHeader.mFlushedPSN = bf.mPage.mPSN;
+    bf.mHeader.mFlushedGsn = bf.mPage.mGSN;
     bf.mHeader.mState = State::kLoaded;
     bf.mHeader.mPageId = pageId;
     if (FLAGS_crc_check) {

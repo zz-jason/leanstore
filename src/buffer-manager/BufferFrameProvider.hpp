@@ -516,7 +516,7 @@ inline void BufferFrameProvider::FlushAndRecycleBufferFrames(
   if (mAsyncWriteBuffer.SubmitIORequest()) {
     const uint32_t numFlushedBfs = mAsyncWriteBuffer.WaitIORequestToComplete();
     mAsyncWriteBuffer.IterateFlushedBfs(
-        [&](BufferFrame& writtenBf, uint64_t flushPSN) {
+        [&](BufferFrame& writtenBf, uint64_t flushedGsn) {
           JUMPMU_TRY() {
             // When the written back page is being exclusively locked, we should
             // rather waste the write and move on to another page Instead of
@@ -526,10 +526,10 @@ inline void BufferFrameProvider::FlushAndRecycleBufferFrames(
             BMOptimisticGuard optimisticGuard(writtenBf.mHeader.mLatch);
             BMExclusiveGuard exclusiveGuard(optimisticGuard);
             DCHECK(writtenBf.mHeader.mIsBeingWrittenBack);
-            DCHECK(writtenBf.mHeader.mFlushedPSN < flushPSN);
+            DCHECK(writtenBf.mHeader.mFlushedGsn < flushedGsn);
 
             // For recovery, so much has to be done here...
-            writtenBf.mHeader.mFlushedPSN = flushPSN;
+            writtenBf.mHeader.mFlushedGsn = flushedGsn;
             writtenBf.mHeader.mIsBeingWrittenBack = false;
             PPCounters::MyCounters().flushed_pages_counter++;
           }

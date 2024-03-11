@@ -91,9 +91,9 @@ void AsyncWriteBuffer::IterateFlushedBfs(
     DCHECK(events[i].res == page_size);
     explainIfNot(events[i].res2 == 0);
     auto* flushedPage = reinterpret_cast<Page*>(GetWriteBuffer(slot));
-    auto flushedLSN = flushedPage->mPSN;
+    auto flushedGsn = flushedPage->mGSN;
     auto* flushedBf = write_buffer_commands[slot].bf;
-    callback(*flushedBf, flushedLSN);
+    callback(*flushedBf, flushedGsn);
   }
 }
 

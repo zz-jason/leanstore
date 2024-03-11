@@ -47,3 +47,4 @@ leanstore_add_test(AbortTest)
 leanstore_add_test(LongRunningTxTest)
 
 add_subdirectory(sync)
+add_subdirectory(concurrency)

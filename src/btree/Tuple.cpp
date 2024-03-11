@@ -142,7 +142,6 @@ bool Tuple::ToFat(BTreePessimisticExclusiveIterator& xIter) {
 
   // Copy the FatTuple back to the underlying value buffer.
   std::memcpy(mutRawVal.Data(), tmpBuf->get(), fatTupleSize);
-  xIter.MarkAsDirty();
   return true;
 }
 

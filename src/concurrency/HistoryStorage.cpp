@@ -54,7 +54,6 @@ void HistoryStorage::PutVersion(TXID txId, COMMANDID commandId, TREEID treeId,
         auto& versionMeta = *new (xIter.MutableVal().Data()) VersionMeta();
         versionMeta.mTreeId = treeId;
         insertCallBack(versionMeta.mPayload);
-        xIter.MarkAsDirty();
         COUNTERS_BLOCK() {
           WorkerCounters::MyCounters().cc_versions_space_inserted_opt[treeId]++;
         }
@@ -84,7 +83,6 @@ void HistoryStorage::PutVersion(TXID txId, COMMANDID commandId, TREEID treeId,
       auto& versionMeta = *new (xIter.MutableVal().Data()) VersionMeta();
       versionMeta.mTreeId = treeId;
       insertCallBack(versionMeta.mPayload);
-      xIter.MarkAsDirty();
 
       if (session != nullptr) {
         session->mRightmostBf = xIter.mGuardedLeaf.mBf;
@@ -190,7 +188,6 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
       // remove the version from history
       xIter.RemoveCurrent();
       versionsRemoved = versionsRemoved + 1;
-      xIter.MarkAsDirty();
       xIter.Reset();
 
       onRemoveVersion(curTxId, treeId, payload, payloadSize, calledBefore);
@@ -346,9 +343,6 @@ void HistoryStorage::VisitRemovedVersions(
       // get the remove version
       payloadSize = xIter.value().length() - sizeof(VersionMeta);
       std::memcpy(payload, versionContainer.mPayload, payloadSize);
-      if (!calledBefore) {
-        xIter.MarkAsDirty();
-      }
 
       xIter.Reset();
       onRemoveVersion(curTxId, treeId, payload, payloadSize, calledBefore);

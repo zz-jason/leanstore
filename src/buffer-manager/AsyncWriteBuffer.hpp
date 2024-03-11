@@ -45,8 +45,9 @@ public:
 
   uint64_t WaitIORequestToComplete();
 
-  void IterateFlushedBfs(std::function<void(BufferFrame&, uint64_t)> callback,
-                         uint64_t n_events);
+  void IterateFlushedBfs(
+      std::function<void(BufferFrame& flushedBf, uint64_t flushedGsn)> callback,
+      uint64_t numFlushedBfs);
 };
 
 } // namespace storage
