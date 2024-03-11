@@ -175,7 +175,6 @@ void BTreeGeneric::splitRootMayJump(
   // 3.1. write wal on demand
   if (mConfig.mEnableWal) {
     xGuardedMeta.SyncGSNBeforeWrite();
-    xGuardedMeta.MarkAsDirty();
     xGuardedOldRoot.WriteWal<WalSplitRoot>(
         0, xGuardedNewLeft.bf()->mHeader.mPageId,
         xGuardedNewRoot.bf()->mHeader.mPageId,
@@ -223,7 +222,6 @@ void BTreeGeneric::splitNonRootMayJump(
   // 2.1. write wal on demand or simply mark as dirty
   if (mConfig.mEnableWal) {
     xGuardedParent.SyncGSNBeforeWrite();
-    xGuardedParent.MarkAsDirty();
     xGuardedChild.WriteWal<WalSplitNonRoot>(
         0, xGuardedParent.bf()->mHeader.mPageId,
         xGuardedNewLeft.bf()->mHeader.mPageId, sepInfo);
@@ -287,10 +285,6 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
       guardedParent.SyncGSNBeforeWrite();
       guardedChild.SyncGSNBeforeWrite();
       guardedLeft.SyncGSNBeforeWrite();
-    } else {
-      guardedParent.MarkAsDirty();
-      guardedChild.MarkAsDirty();
-      guardedLeft.MarkAsDirty();
     }
 
     xGuardedLeft.Reclaim();
@@ -324,10 +318,6 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
       guardedParent.SyncGSNBeforeWrite();
       guardedChild.SyncGSNBeforeWrite();
       guardedRight.SyncGSNBeforeWrite();
-    } else {
-      guardedParent.MarkAsDirty();
-      guardedChild.MarkAsDirty();
-      guardedRight.MarkAsDirty();
     }
 
     xGuardedChild.Reclaim();

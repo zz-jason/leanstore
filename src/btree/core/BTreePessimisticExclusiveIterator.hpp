@@ -25,10 +25,6 @@ public:
     mGuardedLeaf.ToExclusiveMayJump();
   }
 
-  void MarkAsDirty() {
-    mGuardedLeaf.MarkAsDirty();
-  }
-
   virtual OpCode SeekToInsertWithHint(Slice key, bool higher = true) {
     ENSURE(mSlotId != -1);
     mSlotId = mGuardedLeaf->linearSearchWithBias(key, mSlotId, higher);

@@ -141,10 +141,6 @@ public:
   }
 
 public:
-  inline void MarkAsDirty() {
-    mBf->mPage.mPSN++;
-  }
-
   inline void SyncGSNBeforeWrite() {
     DCHECK(mBf != nullptr);
     DCHECK(mBf->mPage.mGSN <= cr::Worker::My().mLogging.GetCurrentGsn())
@@ -193,11 +189,10 @@ public:
     walSize = ((walSize - 1) / 8 + 1) * 8;
     auto handler =
         cr::Worker::My().mLogging.ReserveWALEntryComplex<WT, Args...>(
-            sizeof(WT) + walSize, pageId, mBf->mPage.mPSN, treeId,
+            sizeof(WT) + walSize, pageId, mBf->mPage.mGSN, treeId,
             std::forward<Args>(args)...);
 
     SyncGSNBeforeWrite();
-    MarkAsDirty();
     return handler;
   }
 
@@ -315,10 +310,6 @@ public:
 
   void keepAlive() {
     mRefGuard.mKeepAlive = true;
-  }
-
-  void MarkAsDirty() {
-    mRefGuard.MarkAsDirty();
   }
 
   void SyncGSNBeforeWrite() {
