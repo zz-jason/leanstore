@@ -37,12 +37,16 @@ public:
   enum class Type : uint8_t { DO_WITH_WAL_ENTRY_TYPES(DECR_WAL_ENTRY_TYPE) };
 
 public:
-  /// Used for debuging purpose.
-  uint32_t mCrc32 = 99;
+  /// Crc of the whole WalEntry, including all the payloads.
+  uint32_t mCrc32 = 0;
 
   /// The log sequence number of this WalEntry. The number is globally and
   /// monotonically increased.
   LID mLsn;
+
+  /// Log sequence number for the previous WalEntry of the same transaction. 0
+  /// if it's the first WAL entry in the transaction.
+  LID mPrevLSN = 0;
 
   // Size of the whole WalEntry, including all the payloads. The entire WAL
   // entry stays in the WAL ring buffer of the current worker thread.
@@ -51,24 +55,17 @@ public:
   /// Type of the WAL entry.
   Type mType;
 
-  /// ID of the transaction who creates this WalEntry.
-  TXID mTxId;
-
-  /// Transaction mode.
-  TxMode mTxMode;
-
   /// ID of the worker who executes the transaction and records the WalEntry.
   WORKERID mWorkerId;
 
-  /// Log sequence number for the previous WalEntry of the same transaction. 0
-  /// if it's the first WAL entry in the transaction.
-  LID mPrevLSN = 0;
+  /// ID of the transaction who creates this WalEntry.
+  TXID mTxId;
 
 public:
   WalEntry() = default;
 
   WalEntry(LID lsn, uint64_t size, Type type)
-      : mCrc32(99),
+      : mCrc32(0),
         mLsn(lsn),
         mSize(size),
         mType(type) {
@@ -79,7 +76,6 @@ public:
 
   void InitTxInfo(Transaction* tx, WORKERID workerId) {
     mTxId = tx->mStartTs;
-    mTxMode = tx->mTxMode;
     mWorkerId = workerId;
   }
 
@@ -122,13 +118,13 @@ public:
   /// entry is based on.
   LID mPSN;
 
-  /// The btree ID of the WalEntry, used to identify the btree node together
-  /// with page ID.
-  TREEID mTreeId;
-
   /// The page ID of the WalEntry, used to identify the btree node together with
   /// btree ID
   PID mPageId;
+
+  /// The btree ID of the WalEntry, used to identify the btree node together
+  /// with page ID.
+  TREEID mTreeId;
 
   /// Payload of the operation on the btree node, for example, insert,
   /// remove, update, etc.
@@ -140,8 +136,8 @@ public:
   WalEntryComplex(LID lsn, uint64_t size, LID psn, TREEID treeId, PID pageId)
       : WalEntry(lsn, size, Type::kComplex),
         mPSN(psn),
-        mTreeId(treeId),
-        mPageId(pageId) {
+        mPageId(pageId),
+        mTreeId(treeId) {
   }
 
   virtual std::unique_ptr<rapidjson::Document> ToJson() override;
@@ -197,14 +193,6 @@ inline std::unique_ptr<rapidjson::Document> WalEntry::ToJson() {
     rapidjson::Value member;
     member.SetUint64(mTxId);
     doc->AddMember("mTxId", member, doc->GetAllocator());
-  }
-
-  // txMode
-  {
-    rapidjson::Value member;
-    auto txModeStr = ToString(mTxMode);
-    member.SetString(txModeStr.data(), txModeStr.size(), doc->GetAllocator());
-    doc->AddMember("mTxMode", member, doc->GetAllocator());
   }
 
   // workerId

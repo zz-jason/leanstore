@@ -249,9 +249,9 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
                                              0, 0, kInvalidCommandid);
 
     // insert
-    TransactionKV::InsertToNode(
-        xIter.mGuardedLeaf, key, val, cr::Worker::My().mWorkerId,
-        cr::ActiveTx().mStartTs, cr::ActiveTx().mTxMode, xIter.mSlotId);
+    TransactionKV::InsertToNode(xIter.mGuardedLeaf, key, val,
+                                cr::Worker::My().mWorkerId,
+                                cr::ActiveTx().mStartTs, xIter.mSlotId);
     return OpCode::kOK;
   }
 }

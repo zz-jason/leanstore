@@ -231,8 +231,7 @@ void Recovery::redoInsert(storage::BufferFrame& bf,
   int32_t slotId = -1;
   TransactionKV::InsertToNode(guardedNode, walInsert->GetKey(),
                               walInsert->GetVal(), complexEntry->mWorkerId,
-                              complexEntry->mTxId, complexEntry->mTxMode,
-                              slotId);
+                              complexEntry->mTxId, slotId);
 }
 
 void Recovery::redoTxInsert(storage::BufferFrame& bf,
@@ -245,8 +244,7 @@ void Recovery::redoTxInsert(storage::BufferFrame& bf,
   int32_t slotId = -1;
   TransactionKV::InsertToNode(guardedNode, walInsert->GetKey(),
                               walInsert->GetVal(), complexEntry->mWorkerId,
-                              complexEntry->mTxId, complexEntry->mTxMode,
-                              slotId);
+                              complexEntry->mTxId, slotId);
 }
 
 void Recovery::redoUpdate(storage::BufferFrame& bf [[maybe_unused]],
