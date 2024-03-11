@@ -219,7 +219,6 @@ inline void ChainedTuple::Update(BTreePessimisticExclusiveIterator& xIter,
 
   SCOPED_DEFER({
     WriteUnlock();
-    xIter.MarkAsDirty();
     xIter.UpdateContentionStats();
     COUNTERS_BLOCK() {
       WorkerCounters::MyCounters().cc_update_versions_created[treeId]++;

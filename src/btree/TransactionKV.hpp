@@ -128,7 +128,6 @@ public:
     slotId = guardedNode->insertDoNotCopyPayload(key, totalValSize, slotId);
     auto* tupleAddr = guardedNode->ValData(slotId);
     new (tupleAddr) ChainedTuple(workerId, txStartTs, val);
-    guardedNode.MarkAsDirty();
   }
 
   inline static uint64_t ConvertToFatTupleThreshold() {

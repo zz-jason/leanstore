@@ -76,7 +76,7 @@ std::expected<void, utils::Error> Recovery::analysis() {
 
       auto& bf = resolvePage(complexEntry->mPageId);
 
-      if (complexEntry->mPSN >= bf.mPage.mPSN &&
+      if (complexEntry->mGsn >= bf.mPage.mGSN &&
           mDirtyPageTable.find(complexEntry->mPageId) ==
               mDirtyPageTable.end()) {
         // record the first WalEntry that makes the page dirty

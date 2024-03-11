@@ -74,8 +74,9 @@ public:
   /// for High-Performance Storage Engines, SIGMOD 2020" for details.
   WORKERID mLastWriterWorker = std::numeric_limits<uint8_t>::max();
 
-  /// The flushed page sequence number of the containing page.
-  LID mFlushedPSN = 0;
+  /// The flushed global sequence number of the containing page. Initialized to
+  /// the page GSN when loaded from disk.
+  uint64_t mFlushedGsn = 0;
 
   /// Whether the containing page is being written back to disk.
   std::atomic<bool> mIsBeingWrittenBack = false;
@@ -99,7 +100,7 @@ public:
 
     mPageId = std::numeric_limits<PID>::max();
     mLastWriterWorker = std::numeric_limits<uint8_t>::max();
-    mFlushedPSN = 0;
+    mFlushedGsn = 0;
     mIsBeingWrittenBack.store(false, std::memory_order_release);
     mContentionStats.Reset();
     mCrc = 0;
@@ -129,13 +130,10 @@ public:
 /// explicitly.
 class Page {
 public:
-  /// Short for "page sequence number", increased when a page is modified. A
-  /// page is "dirty" when mPSN > mFlushedPSN in the mHeader.
-  LID mPSN = 0;
-
   /// Short for "global sequence number", increased when a page is modified.
   /// It's used to check whether the page has been read or written by
   /// transactions in other workers.
+  /// A page is "dirty" when mPage.mGSN > mHeader.mFlushedGsn.
   uint64_t mGSN = 0;
 
   /// The btree ID it belongs to.
@@ -183,7 +181,7 @@ public:
   }
 
   inline bool IsDirty() const {
-    return mPage.mPSN != mHeader.mFlushedPSN;
+    return mPage.mGSN != mHeader.mFlushedGsn;
   }
 
   inline bool IsFree() const {
@@ -199,9 +197,8 @@ public:
     DCHECK(mHeader.mState == State::kFree);
     mHeader.mPageId = pageId;
     mHeader.mState = State::kHot;
-    mHeader.mFlushedPSN = 0;
+    mHeader.mFlushedGsn = 0;
 
-    mPage.mPSN = 0;
     mPage.mGSN = 0;
   }
 
@@ -265,8 +262,8 @@ inline void BufferFrame::ToJson(rapidjson::Value* resultObj,
 
   {
     rapidjson::Value member;
-    member.SetUint64(mHeader.mFlushedPSN);
-    headerObj.AddMember("mFlushedPSN", member, allocator);
+    member.SetUint64(mHeader.mFlushedGsn);
+    headerObj.AddMember("mFlushedGsn", member, allocator);
   }
 
   {
@@ -279,11 +276,6 @@ inline void BufferFrame::ToJson(rapidjson::Value* resultObj,
 
   // page without payload
   rapidjson::Value pageMetaObj(rapidjson::kObjectType);
-  {
-    rapidjson::Value member;
-    member.SetUint64(mPage.mPSN);
-    pageMetaObj.AddMember("mPSN", member, allocator);
-  }
   {
     rapidjson::Value member;
     member.SetUint64(mPage.mGSN);

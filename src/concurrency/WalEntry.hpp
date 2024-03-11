@@ -114,9 +114,9 @@ public:
 
 class WalEntryComplex : public WalEntry {
 public:
-  /// Page sequence number of the WalEntry, indicate the page version this WAL
-  /// entry is based on.
-  LID mPSN;
+  /// Global sequence number of the WalEntry, indicate the global order of the
+  /// WAL entry.
+  uint64_t mGsn;
 
   /// The page ID of the WalEntry, used to identify the btree node together with
   /// btree ID
@@ -133,9 +133,9 @@ public:
 public:
   WalEntryComplex() = default;
 
-  WalEntryComplex(LID lsn, uint64_t size, LID psn, TREEID treeId, PID pageId)
+  WalEntryComplex(LID lsn, uint64_t size, LID gsn, TREEID treeId, PID pageId)
       : WalEntry(lsn, size, Type::kComplex),
-        mPSN(psn),
+        mGsn(gsn),
         mPageId(pageId),
         mTreeId(treeId) {
   }
@@ -225,8 +225,8 @@ inline std::unique_ptr<rapidjson::Document> WalEntryComplex::ToJson() {
   // psn
   {
     rapidjson::Value member;
-    member.SetUint64(mPSN);
-    doc->AddMember("mPSN", member, doc->GetAllocator());
+    member.SetUint64(mGsn);
+    doc->AddMember("mGsn", member, doc->GetAllocator());
   }
 
   // treeId
