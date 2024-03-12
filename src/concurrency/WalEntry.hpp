@@ -9,7 +9,6 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
-#include <cstddef>
 #include <iostream>
 #include <string>
 
@@ -32,7 +31,7 @@ namespace cr {
 /// The basic WAL record representation, there are two kinds of WAL entries:
 /// 1. WalEntrySimple, whose type might be: kTxStart, kTxCommit, kTxAbort
 /// 2. WalEntryComplex, whose type is kComplex
-class WalEntry {
+class __attribute__((packed)) WalEntry {
 public:
   enum class Type : uint8_t { DO_WITH_WAL_ENTRY_TYPES(DECR_WAL_ENTRY_TYPE) };
 
@@ -82,8 +81,7 @@ public:
   virtual std::unique_ptr<rapidjson::Document> ToJson();
 
   uint32_t ComputeCRC32() const {
-    // auto startOffset = offsetof(WalEntry, lsn);
-    auto startOffset = ptrdiff_t(&mLsn) - ptrdiff_t(this);
+    auto startOffset = sizeof(uint32_t);
     const auto* src = reinterpret_cast<const uint8_t*>(this) + startOffset;
     auto srcSize = mSize - startOffset;
     auto crc32 = utils::CRC(src, srcSize);
@@ -105,6 +103,38 @@ public:
   }
 };
 
+/*
+class __attribute__((packed)) WalTxStart : public WalEntry {
+public:
+  /// Crc of the whole WalEntry, including all the payloads.
+  uint32_t mCrc32;
+
+  /// Type of the WAL entry.
+  Type mType;
+
+  /// The log sequence number of this WalEntry. The number is globally and
+  /// monotonically increased.
+  LID mLsn;
+
+  /// ID of the transaction who creates this WalEntry.
+  TXID mTxId;
+
+  /// ID of the worker who executes the transaction and records the WalEntry.
+  WORKERID mWorkerId;
+
+  WalTxStart(LID lsn, TXID txid, WORKERID workerId)
+      : WalEntry(),
+        mCrc32(0),
+        mType(Type::kTxStart),
+        mLsn(lsn),
+        mTxId(txid),
+        mWorkerId(workerId) {
+  }
+};
+
+class WalTxCommit : public WalEntry {};
+*/
+
 class WalEntrySimple : public WalEntry {
 public:
   WalEntrySimple(LID lsn, uint64_t size, Type type)
@@ -112,7 +142,7 @@ public:
   }
 };
 
-class WalEntryComplex : public WalEntry {
+class __attribute__((packed)) WalEntryComplex : public WalEntry {
 public:
   /// Global sequence number of the WalEntry, indicate the global order of the
   /// WAL entry.
