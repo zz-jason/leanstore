@@ -10,8 +10,8 @@ namespace leanstore::cr::test {
 class WalEntryTest : public ::testing::Test {};
 
 TEST_F(WalEntryTest, Size) {
-  EXPECT_EQ(sizeof(WalEntry), 41);
-  EXPECT_EQ(sizeof(WalEntryComplex), 65);
+  EXPECT_EQ(sizeof(WalEntry), 33);
+  EXPECT_EQ(sizeof(WalEntryComplex), 57);
 }
 
 } // namespace leanstore::cr::test

@@ -6,7 +6,7 @@
 #include "btree/Tuple.hpp"
 #include "btree/core/BTreeGeneric.hpp"
 #include "btree/core/BTreePessimisticExclusiveIterator.hpp"
-#include "btree/core/BTreeWALPayload.hpp"
+#include "btree/core/BTreeWalPayload.hpp"
 #include "buffer-manager/GuardedBufferFrame.hpp"
 #include "concurrency/Worker.hpp"
 #include "leanstore/KVInterface.hpp"

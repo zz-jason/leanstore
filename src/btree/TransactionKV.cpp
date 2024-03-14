@@ -5,7 +5,7 @@
 #include "btree/Tuple.hpp"
 #include "btree/core/BTreeGeneric.hpp"
 #include "btree/core/BTreePessimisticSharedIterator.hpp"
-#include "btree/core/BTreeWALPayload.hpp"
+#include "btree/core/BTreeWalPayload.hpp"
 #include "concurrency/Worker.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"

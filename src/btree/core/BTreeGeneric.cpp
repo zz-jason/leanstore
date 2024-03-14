@@ -3,7 +3,7 @@
 #include "btree/core/BTreeNode.hpp"
 #include "btree/core/BTreePessimisticExclusiveIterator.hpp"
 #include "btree/core/BTreePessimisticSharedIterator.hpp"
-#include "btree/core/BTreeWALPayload.hpp"
+#include "btree/core/BTreeWalPayload.hpp"
 #include "buffer-manager/BufferFrame.hpp"
 #include "buffer-manager/BufferManager.hpp"
 #include "buffer-manager/GuardedBufferFrame.hpp"

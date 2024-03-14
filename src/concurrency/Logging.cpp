@@ -1,5 +1,6 @@
 #include "concurrency/Logging.hpp"
 
+#include "concurrency/WalEntry.hpp"
 #include "concurrency/Worker.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
@@ -89,15 +90,11 @@ WalEntrySimple& Logging::ReserveWALEntrySimple(WalEntry::Type type) {
 /// WalEntrySimple to be flushed in the wal ring buffer.
 void Logging::SubmitWALEntrySimple() {
   SCOPED_DEFER(DEBUG_BLOCK() {
-    auto doc = mActiveWALEntrySimple->ToJson();
-    rapidjson::StringBuffer buffer;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-    doc->Accept(writer);
     LOG(INFO) << "Submit WalEntrySimple"
               << ", workerId=" << Worker::My().mWorkerId
               << ", startTs=" << Worker::My().mActiveTx.mStartTs
               << ", curGSN=" << GetCurrentGsn()
-              << ", walJson=" << buffer.GetString();
+              << ", walJson=" << WalEntry::ToJsonString(mActiveWALEntrySimple);
   });
 
   if (!((mWalBuffered >= mTxWalBegin) ||
@@ -118,15 +115,11 @@ void Logging::WriteSimpleWal(WalEntry::Type type) {
 /// @param totalSize is the size of the wal record to be flush.
 void Logging::SubmitWALEntryComplex(uint64_t totalSize) {
   SCOPED_DEFER(DEBUG_BLOCK() {
-    auto walDoc = cr::Worker::My().mLogging.mActiveWALEntryComplex->ToJson();
-    rapidjson::StringBuffer buffer;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-    walDoc->Accept(writer);
     LOG(INFO) << "SubmitWal"
               << ", workerId=" << Worker::My().mWorkerId
               << ", startTs=" << Worker::My().mActiveTx.mStartTs
               << ", curGSN=" << Worker::My().mLogging.GetCurrentGsn()
-              << ", walJson=" << buffer.GetString();
+              << ", walJson=" << WalEntry::ToJsonString(mActiveWALEntryComplex);
   });
 
   if (!((mWalBuffered >= mTxWalBegin) ||
@@ -160,8 +153,9 @@ void Logging::IterateCurrentTxWALs(
     const WalEntry& entry = *reinterpret_cast<WalEntry*>(mWalBuffer + cursor);
     ENSURE(entry.mSize > 0);
     DEBUG_BLOCK() {
-      if (entry.mType != WalEntry::Type::kCarriageReturn)
+      if (entry.mType != WalEntry::Type::kCarriageReturn) {
         entry.CheckCRC();
+      }
     }
     if (entry.mType == WalEntry::Type::kCarriageReturn) {
       cursor = 0;
