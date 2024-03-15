@@ -3,6 +3,9 @@
 
 #include <glog/logging.h>
 #include <rapidjson/document.h>
+#include <rapidjson/rapidjson.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 
 #include <string>
 
@@ -46,6 +49,16 @@ void WalPayload::ToJson(const WalPayload* wal, rapidjson::Document* doc) {
   }
 }
 
+std::string WalPayload::ToJsonString(const WalPayload* wal [[maybe_unused]]) {
+  rapidjson::Document doc(rapidjson::kObjectType);
+  ToJson(wal, &doc);
+
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer writer(buffer);
+  doc.Accept(writer);
+  return buffer.GetString();
+}
+
 void WalPayload::toJson(const WalPayload* wal, rapidjson::Document* doc) {
   // type
   auto typeName = wal->WalLogTypeName(wal->mType);
@@ -86,7 +99,8 @@ void WalPayload::toJson(const WalInsert* wal, rapidjson::Document* doc) {
   }
 }
 
-void WalPayload::toJson(const WalTxInsert* wal, rapidjson::Document* doc) {
+void WalPayload::toJson(const WalTxInsert* wal [[maybe_unused]],
+                        rapidjson::Document* doc [[maybe_unused]]) {
   // mKeySize
   {
     rapidjson::Value member;

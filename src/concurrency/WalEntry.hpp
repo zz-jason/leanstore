@@ -232,27 +232,38 @@ inline std::string WalEntry::ToJsonString(const WalEntry* entry) {
   return buffer.GetString();
 }
 
+const char kCrc32[] = "mCrc32";
+const char kLsn[] = "mLsn";
+const char kSize[] = "mSize";
+const char kType[] = "mType";
+const char kTxId[] = "mTxId";
+const char kWorkerId[] = "mWorkerId";
+const char kPrevLsn[] = "mPrevLsn";
+const char kGsn[] = "mGsn";
+const char kTreeId[] = "mTreeId";
+const char kPageId[] = "mPageId";
+
 inline void WalEntry::toJson(const WalEntrySimple* entry,
                              rapidjson::Document* doc) {
   // crc
   {
     rapidjson::Value member;
     member.SetUint(entry->mCrc32);
-    doc->AddMember("CRC", member, doc->GetAllocator());
+    doc->AddMember(kCrc32, member, doc->GetAllocator());
   }
 
   // lsn
   {
     rapidjson::Value member;
     member.SetUint64(entry->mLsn);
-    doc->AddMember("LSN", member, doc->GetAllocator());
+    doc->AddMember(kLsn, member, doc->GetAllocator());
   }
 
   // size
   {
     rapidjson::Value member;
     member.SetUint64(entry->mSize);
-    doc->AddMember("size", member, doc->GetAllocator());
+    doc->AddMember(kSize, member, doc->GetAllocator());
   }
 
   // type
@@ -260,28 +271,28 @@ inline void WalEntry::toJson(const WalEntrySimple* entry,
     auto typeName = entry->TypeName();
     rapidjson::Value member;
     member.SetString(typeName.data(), typeName.size(), doc->GetAllocator());
-    doc->AddMember("type", member, doc->GetAllocator());
+    doc->AddMember(kType, member, doc->GetAllocator());
   }
 
   // txId
   {
     rapidjson::Value member;
     member.SetUint64(entry->mTxId);
-    doc->AddMember("mTxId", member, doc->GetAllocator());
+    doc->AddMember(kTxId, member, doc->GetAllocator());
   }
 
   // workerId
   {
     rapidjson::Value member;
     member.SetUint64(entry->mWorkerId);
-    doc->AddMember("mWorkerId", member, doc->GetAllocator());
+    doc->AddMember(kWorkerId, member, doc->GetAllocator());
   }
 
   // prev_lsn_in_tx
   {
     rapidjson::Value member;
     member.SetUint64(entry->mPrevLSN);
-    doc->AddMember("mPrevLSN", member, doc->GetAllocator());
+    doc->AddMember(kPrevLsn, member, doc->GetAllocator());
   }
 }
 
@@ -295,21 +306,21 @@ inline void WalEntry::toJson(const WalEntryComplex* entry,
   {
     rapidjson::Value member;
     member.SetUint64(entry->mGsn);
-    doc->AddMember("mGsn", member, doc->GetAllocator());
+    doc->AddMember(kGsn, member, doc->GetAllocator());
   }
 
   // treeId
   {
     rapidjson::Value member;
     member.SetInt64(entry->mTreeId);
-    doc->AddMember("mTreeId", member, doc->GetAllocator());
+    doc->AddMember(kTreeId, member, doc->GetAllocator());
   }
 
   // pageId
   {
     rapidjson::Value member;
     member.SetUint64(entry->mPageId);
-    doc->AddMember("mPageId", member, doc->GetAllocator());
+    doc->AddMember(kPageId, member, doc->GetAllocator());
   }
 }
 

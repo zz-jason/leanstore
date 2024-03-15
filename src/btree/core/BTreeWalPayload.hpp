@@ -65,6 +65,8 @@ public:
 
   static void ToJson(const WalPayload* wal, rapidjson::Document* doc);
 
+  static std::string ToJsonString(const WalPayload* wal);
+
 private:
   static void toJson(const WalPayload* wal, rapidjson::Document* doc);
   static void toJson(const WalInsert* wal, rapidjson::Document* doc);
@@ -149,6 +151,8 @@ public:
   uint16_t mDeltaLength;
 
   uint8_t mPayload[];
+
+  WalUpdate() : WalPayload(WalPayload::Type::kWalUpdate) {}
 };
 
 class WalTxUpdate : public WalPayload {
