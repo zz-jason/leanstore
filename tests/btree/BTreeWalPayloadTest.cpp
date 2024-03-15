@@ -23,15 +23,16 @@ protected:
 };
 
 TEST_F(BTreeWalPayloadTest, Size) {
-  // class WalInsert;
-  // class WalTxInsert;
-  // class WalUpdate;
-  // class WalTxUpdate;
-  // class WalRemove;
-  // class WalTxRemove;
-  // class WalInitPage;
-  // class WalSplitRoot;
-  // class WalSplitNonRoot;
+  EXPECT_EQ(sizeof(WalPayload), 1);
+  EXPECT_EQ(sizeof(WalInsert), 6);
+  EXPECT_EQ(sizeof(WalTxInsert), 24);
+  EXPECT_EQ(sizeof(WalUpdate), 6);
+  EXPECT_EQ(sizeof(WalTxUpdate), 48);
+  EXPECT_EQ(sizeof(WalRemove), 6);
+  EXPECT_EQ(sizeof(WalTxRemove), 24);
+  EXPECT_EQ(sizeof(WalInitPage), 24);
+  EXPECT_EQ(sizeof(WalSplitRoot), 40);
+  EXPECT_EQ(sizeof(WalSplitNonRoot), 32);
 }
 
 TEST_F(BTreeWalPayloadTest, ToJson) {
