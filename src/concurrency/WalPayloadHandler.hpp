@@ -49,14 +49,13 @@ public:
 
 template <typename T> inline void WalPayloadHandler<T>::SubmitWal() {
   SCOPED_DEFER(DEBUG_BLOCK() {
-    auto walDoc = cr::Worker::My().mLogging.mActiveWALEntryComplex->ToJson();
-    auto entry = reinterpret_cast<T*>(
-        cr::Worker::My().mLogging.mActiveWALEntryComplex->mPayload);
-    auto payloadDoc = entry->ToJson();
-    walDoc->AddMember("payload", *payloadDoc, walDoc->GetAllocator());
+    rapidjson::Document walDoc(rapidjson::kObjectType);
+    auto* walEntry = cr::Worker::My().mLogging.mActiveWALEntryComplex;
+    WalEntry::ToJson(walEntry, &walDoc);
+
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-    walDoc->Accept(writer);
+    walDoc.Accept(writer);
     LOG(INFO) << "SubmitWal"
               << ", workerId=" << Worker::My().mWorkerId
               << ", startTs=" << Worker::My().mActiveTx.mStartTs

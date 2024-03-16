@@ -6,10 +6,11 @@
 
 #include <glog/logging.h>
 #include <rapidjson/document.h>
+#include <rapidjson/rapidjson.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
-#include <cstddef>
+#include <cstdint>
 #include <iostream>
 #include <string>
 
@@ -29,14 +30,21 @@ namespace cr {
   case Type::type:                                                             \
     return type_name;
 
+// forward declaration
+class WalEntrySimple;
+class WalEntryComplex;
+
 /// The basic WAL record representation, there are two kinds of WAL entries:
 /// 1. WalEntrySimple, whose type might be: kTxStart, kTxCommit, kTxAbort
 /// 2. WalEntryComplex, whose type is kComplex
-class WalEntry {
+///
+/// EalEntry size is critical to the write performance, packed attribute is
+/// used and virtual functions are avoided to make the size as small as
+/// possible.
+class __attribute__((packed)) WalEntry {
 public:
   enum class Type : uint8_t { DO_WITH_WAL_ENTRY_TYPES(DECR_WAL_ENTRY_TYPE) };
 
-public:
   /// Crc of the whole WalEntry, including all the payloads.
   uint32_t mCrc32 = 0;
 
@@ -71,39 +79,78 @@ public:
         mType(type) {
   }
 
-public:
-  std::string TypeName();
+  std::string TypeName() const;
 
   void InitTxInfo(Transaction* tx, WORKERID workerId) {
     mTxId = tx->mStartTs;
     mWorkerId = workerId;
   }
 
-  virtual std::unique_ptr<rapidjson::Document> ToJson();
-
   uint32_t ComputeCRC32() const {
-    // auto startOffset = offsetof(WalEntry, lsn);
-    auto startOffset = ptrdiff_t(&mLsn) - ptrdiff_t(this);
-    const auto* src = reinterpret_cast<const uint8_t*>(this) + startOffset;
-    auto srcSize = mSize - startOffset;
-    auto crc32 = utils::CRC(src, srcSize);
-    return crc32;
+    auto crc32FieldSize = sizeof(uint32_t);
+    const auto* src = reinterpret_cast<const uint8_t*>(this) + crc32FieldSize;
+    auto srcSize = mSize - crc32FieldSize;
+    return utils::CRC(src, srcSize);
   }
 
   void CheckCRC() const {
     auto actualCRC = ComputeCRC32();
     if (mCrc32 != actualCRC) {
-      auto doc = const_cast<WalEntry*>(this)->ToJson();
+      rapidjson::Document doc(rapidjson::kObjectType);
+      WalEntry::ToJson(this, &doc);
       rapidjson::StringBuffer buffer;
       rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-      doc->Accept(writer);
+      doc.Accept(writer);
       LOG(FATAL) << "CRC32 mismatch"
                  << ", this=" << (void*)this << ", actual=" << actualCRC
                  << ", expected=" << mCrc32
                  << ", walJson=" << buffer.GetString();
     }
   }
+
+  /// Convert the WalEntry to a JSON document.
+  static void ToJson(const WalEntry* entry, rapidjson::Document* resultDoc);
+
+  /// Convert the WalEntry to a JSON string.
+  static std::string ToJsonString(const WalEntry* entry);
+
+private:
+  static void toJson(const WalEntrySimple* entry, rapidjson::Document* doc);
+
+  static void toJson(const WalEntryComplex* entry, rapidjson::Document* doc);
 };
+
+/*
+class __attribute__((packed)) WalTxStart : public WalEntry {
+public:
+  /// Crc of the whole WalEntry, including all the payloads.
+  uint32_t mCrc32;
+
+  /// Type of the WAL entry.
+  Type mType;
+
+  /// The log sequence number of this WalEntry. The number is globally and
+  /// monotonically increased.
+  LID mLsn;
+
+  /// ID of the transaction who creates this WalEntry.
+  TXID mTxId;
+
+  /// ID of the worker who executes the transaction and records the WalEntry.
+  WORKERID mWorkerId;
+
+  WalTxStart(LID lsn, TXID txid, WORKERID workerId)
+      : WalEntry(),
+        mCrc32(0),
+        mType(Type::kTxStart),
+        mLsn(lsn),
+        mTxId(txid),
+        mWorkerId(workerId) {
+  }
+};
+
+class WalTxCommit : public WalEntry {};
+*/
 
 class WalEntrySimple : public WalEntry {
 public:
@@ -112,7 +159,7 @@ public:
   }
 };
 
-class WalEntryComplex : public WalEntry {
+class __attribute__((packed)) WalEntryComplex : public WalEntry {
 public:
   /// Global sequence number of the WalEntry, indicate the global order of the
   /// WAL entry.
@@ -139,15 +186,13 @@ public:
         mPageId(pageId),
         mTreeId(treeId) {
   }
-
-  virtual std::unique_ptr<rapidjson::Document> ToJson() override;
 };
 
 // -----------------------------------------------------------------------------
 // WalEntry
 // -----------------------------------------------------------------------------
 
-inline std::string WalEntry::TypeName() {
+inline std::string WalEntry::TypeName() const {
   switch (mType) {
     DO_WITH_WAL_ENTRY_TYPES(WAL_ENTRY_TYPE_NAME);
   default:
@@ -155,95 +200,128 @@ inline std::string WalEntry::TypeName() {
   }
 }
 
-inline std::unique_ptr<rapidjson::Document> WalEntry::ToJson() {
-  auto doc = std::make_unique<rapidjson::Document>();
-  doc->SetObject();
+#undef DECR_WAL_ENTRY_TYPE
+#undef WAL_ENTRY_TYPE_NAME
 
+inline void WalEntry::ToJson(const WalEntry* entry, rapidjson::Document* doc) {
+  switch (entry->mType) {
+  case Type::kTxStart:
+    [[fallthrough]];
+  case Type::kTxCommit:
+    [[fallthrough]];
+  case Type::kTxAbort:
+    [[fallthrough]];
+  case Type::kTxFinish:
+    [[fallthrough]];
+  case Type::kCarriageReturn: {
+    return toJson(reinterpret_cast<const WalEntrySimple*>(entry), doc);
+  }
+  case Type::kComplex: {
+    return toJson(reinterpret_cast<const WalEntryComplex*>(entry), doc);
+  }
+  }
+}
+
+inline std::string WalEntry::ToJsonString(const WalEntry* entry) {
+  rapidjson::Document doc(rapidjson::kObjectType);
+  ToJson(entry, &doc);
+
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer writer(buffer);
+  doc.Accept(writer);
+  return buffer.GetString();
+}
+
+const char kCrc32[] = "mCrc32";
+const char kLsn[] = "mLsn";
+const char kSize[] = "mSize";
+const char kType[] = "mType";
+const char kTxId[] = "mTxId";
+const char kWorkerId[] = "mWorkerId";
+const char kPrevLsn[] = "mPrevLsn";
+const char kGsn[] = "mGsn";
+const char kTreeId[] = "mTreeId";
+const char kPageId[] = "mPageId";
+
+inline void WalEntry::toJson(const WalEntrySimple* entry,
+                             rapidjson::Document* doc) {
   // crc
   {
     rapidjson::Value member;
-    member.SetUint(mCrc32);
-    doc->AddMember("CRC", member, doc->GetAllocator());
+    member.SetUint(entry->mCrc32);
+    doc->AddMember(kCrc32, member, doc->GetAllocator());
   }
 
   // lsn
   {
     rapidjson::Value member;
-    member.SetUint64(mLsn);
-    doc->AddMember("LSN", member, doc->GetAllocator());
+    member.SetUint64(entry->mLsn);
+    doc->AddMember(kLsn, member, doc->GetAllocator());
   }
 
   // size
   {
     rapidjson::Value member;
-    member.SetUint64(mSize);
-    doc->AddMember("size", member, doc->GetAllocator());
+    member.SetUint64(entry->mSize);
+    doc->AddMember(kSize, member, doc->GetAllocator());
   }
 
   // type
   {
-    auto typeName = TypeName();
+    auto typeName = entry->TypeName();
     rapidjson::Value member;
     member.SetString(typeName.data(), typeName.size(), doc->GetAllocator());
-    doc->AddMember("type", member, doc->GetAllocator());
+    doc->AddMember(kType, member, doc->GetAllocator());
   }
 
   // txId
   {
     rapidjson::Value member;
-    member.SetUint64(mTxId);
-    doc->AddMember("mTxId", member, doc->GetAllocator());
+    member.SetUint64(entry->mTxId);
+    doc->AddMember(kTxId, member, doc->GetAllocator());
   }
 
   // workerId
   {
     rapidjson::Value member;
-    member.SetUint64(mWorkerId);
-    doc->AddMember("mWorkerId", member, doc->GetAllocator());
+    member.SetUint64(entry->mWorkerId);
+    doc->AddMember(kWorkerId, member, doc->GetAllocator());
   }
 
   // prev_lsn_in_tx
   {
     rapidjson::Value member;
-    member.SetUint64(mPrevLSN);
-    doc->AddMember("mPrevLSN", member, doc->GetAllocator());
+    member.SetUint64(entry->mPrevLSN);
+    doc->AddMember(kPrevLsn, member, doc->GetAllocator());
   }
-
-  return doc;
 }
 
-#undef DECR_WAL_ENTRY_TYPE
-#undef WAL_ENTRY_TYPE_NAME
-
-// -----------------------------------------------------------------------------
-// WalEntryComplex
-// -----------------------------------------------------------------------------
-
-inline std::unique_ptr<rapidjson::Document> WalEntryComplex::ToJson() {
-  auto doc = WalEntry::ToJson();
+inline void WalEntry::toJson(const WalEntryComplex* entry,
+                             rapidjson::Document* doc) {
+  // collect the common fields
+  auto* simpleEntry = reinterpret_cast<const WalEntrySimple*>(entry);
+  toJson(simpleEntry, doc);
 
   // psn
   {
     rapidjson::Value member;
-    member.SetUint64(mGsn);
-    doc->AddMember("mGsn", member, doc->GetAllocator());
+    member.SetUint64(entry->mGsn);
+    doc->AddMember(kGsn, member, doc->GetAllocator());
   }
 
   // treeId
   {
     rapidjson::Value member;
-    member.SetInt64(mTreeId);
-    doc->AddMember("mTreeId", member, doc->GetAllocator());
+    member.SetInt64(entry->mTreeId);
+    doc->AddMember(kTreeId, member, doc->GetAllocator());
   }
 
   // pageId
   {
     rapidjson::Value member;
-    member.SetUint64(mPageId);
-    doc->AddMember("mPageId", member, doc->GetAllocator());
+    member.SetUint64(entry->mPageId);
+    doc->AddMember(kPageId, member, doc->GetAllocator());
   }
-
-  return doc;
 }
 
 } // namespace cr

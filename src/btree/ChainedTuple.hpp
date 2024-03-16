@@ -3,7 +3,7 @@
 #include "Tuple.hpp"
 #include "btree/BasicKV.hpp"
 #include "btree/core/BTreePessimisticExclusiveIterator.hpp"
-#include "btree/core/BTreeWALPayload.hpp"
+#include "btree/core/BTreeWalPayload.hpp"
 #include "concurrency/CRManager.hpp"
 #include "concurrency/Worker.hpp"
 #include "leanstore/Units.hpp"
