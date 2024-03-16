@@ -46,5 +46,6 @@ leanstore_add_test(AnomaliesTest)
 leanstore_add_test(AbortTest)
 leanstore_add_test(LongRunningTxTest)
 
-add_subdirectory(sync)
+add_subdirectory(btree)
 add_subdirectory(concurrency)
+add_subdirectory(sync)

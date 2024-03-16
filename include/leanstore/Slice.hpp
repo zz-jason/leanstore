@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <string_view>
 
@@ -27,6 +28,11 @@ public:
 
   Slice(const uint8_t* data, size_t size)
       : std::basic_string_view<uint8_t>(data, size) {
+  }
+
+  Slice(const char* data)
+      : std::basic_string_view<uint8_t>(reinterpret_cast<const uint8_t*>(data),
+                                        std::strlen(data)) {
   }
 
   std::string ToString() const {

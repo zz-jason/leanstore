@@ -3,7 +3,7 @@
 #include "btree/core/BTreeGeneric.hpp"
 #include "btree/core/BTreePessimisticExclusiveIterator.hpp"
 #include "btree/core/BTreePessimisticSharedIterator.hpp"
-#include "btree/core/BTreeWALPayload.hpp"
+#include "btree/core/BTreeWalPayload.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "utils/Misc.hpp"

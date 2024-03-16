@@ -2,7 +2,7 @@
 
 #include "btree/TransactionKV.hpp"
 #include "btree/core/BTreeNode.hpp"
-#include "btree/core/BTreeWALPayload.hpp"
+#include "btree/core/BTreeWalPayload.hpp"
 #include "buffer-manager/GuardedBufferFrame.hpp"
 #include "concurrency/WalEntry.hpp"
 #include "leanstore/LeanStore.hpp"
