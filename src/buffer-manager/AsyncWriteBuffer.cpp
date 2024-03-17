@@ -1,84 +1,96 @@
 #include "buffer-manager/AsyncWriteBuffer.hpp"
 
+#include "buffer-manager/BufferFrame.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "utils/Error.hpp"
 
 #include <glog/logging.h>
 
 #include <cstring>
+#include <expected>
 
-namespace leanstore {
-namespace storage {
+namespace leanstore::storage {
 
 AsyncWriteBuffer::AsyncWriteBuffer(int fd, uint64_t pageSize,
                                    uint64_t maxBatchSize)
-    : fd(fd),
-      page_size(pageSize),
-      batch_max_size(maxBatchSize),
-      mWriteBuffer(pageSize * maxBatchSize) {
-  write_buffer_commands = std::make_unique<WriteCommand[]>(maxBatchSize);
-  iocbs = std::make_unique<struct iocb[]>(maxBatchSize);
-  iocbs_ptr = std::make_unique<struct iocb*[]>(maxBatchSize);
-  events = std::make_unique<struct io_event[]>(maxBatchSize);
-
-  memset(&aio_context, 0, sizeof(aio_context));
-  const int ret = io_setup(maxBatchSize, &aio_context);
-  if (ret != 0) {
-    throw ex::GenericException("io_setup failed, ret code = " +
-                               std::to_string(ret));
+    : mFd(fd),
+      mPageSize(pageSize),
+      mMaxBatchSize(maxBatchSize),
+      mPendingRequests(0),
+      mWriteBuffer(pageSize * maxBatchSize),
+      mWriteCommands(maxBatchSize),
+      mIocbs(maxBatchSize),
+      mIocbPtrs(maxBatchSize),
+      mIoEvents(maxBatchSize) {
+  memset(&mAioCtx, 0, sizeof(mAioCtx));
+  auto ret = io_setup(maxBatchSize, &mAioCtx);
+  LOG_IF(FATAL, ret < 0) << "Failed to create AIO context, error=" << ret;
+  for (uint64_t i = 0; i < maxBatchSize; i++) {
+    mIocbPtrs[i] = &mIocbs[i];
   }
 }
 
-bool AsyncWriteBuffer::full() {
-  if (pending_requests >= batch_max_size - 2) {
-    return true;
-  }
-  return false;
+AsyncWriteBuffer::~AsyncWriteBuffer() {
+  auto ret = io_destroy(mAioCtx);
+  LOG_IF(FATAL, ret < 0) << "Failed to destroy AIO context, error=" << ret;
 }
 
-void AsyncWriteBuffer::AddToIOBatch(BufferFrame& bf, PID pageId) {
-  DCHECK(!full());
-  DCHECK(uint64_t(&bf.mPage) % 512 == 0);
-  DCHECK(pending_requests <= batch_max_size);
+bool AsyncWriteBuffer::IsFull() {
+  return !(mPendingRequests < mMaxBatchSize);
+}
+
+void AsyncWriteBuffer::Add(const BufferFrame& bf) {
+  DCHECK(!IsFull());
+  DCHECK(uint64_t(&bf.mPage) % 512 == 0) << "Page is not aligned to 512 bytes";
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().dt_page_writes[bf.mPage.mBTreeId]++;
   }
 
-  auto slot = pending_requests++;
-  write_buffer_commands[slot].bf = &bf;
-  write_buffer_commands[slot].mPageId = pageId;
-  bf.mPage.mMagicDebuging = pageId;
-  void* writeBufferSlotPtr = GetWriteBuffer(slot);
-  std::memcpy(writeBufferSlotPtr, &bf.mPage, page_size);
-  io_prep_pwrite(/* iocb */ &iocbs[slot], /* fd */ fd,
-                 /* buf */ writeBufferSlotPtr, /* count */ page_size,
-                 /* offset */ page_size * pageId);
-  iocbs[slot].data = writeBufferSlotPtr;
-  iocbs_ptr[slot] = &iocbs[slot];
+  auto pageId = bf.mHeader.mPageId;
+  auto slot = mPendingRequests++;
+
+  // record the written buffer frame and page id for later use
+  mWriteCommands[slot].Reset(&bf, pageId);
+
+  // copy the page content to write buffer
+  auto* buffer = copyToBuffer(&bf.mPage, slot);
+  io_prep_pwrite(&mIocbs[slot], mFd, buffer, mPageSize, mPageSize * pageId);
+  mIocbs[slot].data = buffer;
 }
 
-uint64_t AsyncWriteBuffer::SubmitIORequest() {
-  if (pending_requests > 0) {
-    int retCode = io_submit(aio_context, pending_requests, iocbs_ptr.get());
-    DCHECK(retCode == int32_t(pending_requests));
-    return pending_requests;
+std::expected<uint64_t, utils::Error> AsyncWriteBuffer::SubmitAll() {
+  if (mPendingRequests <= 0) {
+    return 0;
   }
-  return 0;
+  int ret = io_submit(mAioCtx, mPendingRequests, &mIocbPtrs[0]);
+  if (ret < 0) {
+    return std::unexpected(utils::Error::ErrorAio(ret, "io_submit"));
+  }
+  DCHECK(uint64_t(ret) == mPendingRequests)
+      << "Failed to submit all IO requests, expected=" << mPendingRequests;
+
+  // return requests submitted
+  return ret;
 }
 
-uint64_t AsyncWriteBuffer::WaitIORequestToComplete() {
-  if (pending_requests > 0) {
-    const int doneRequests = io_getevents(
-        /* ctx */ aio_context, /* min_nr */ pending_requests,
-        /* nr */ pending_requests, /* io_event */ events.get(),
-        /* timeout */ NULL);
-    LOG_IF(FATAL, uint32_t(doneRequests) != pending_requests)
-        << "Failed to complete all the IO requests"
-        << ", expected=" << pending_requests << ", completed=" << doneRequests;
-    pending_requests = 0;
-    return doneRequests;
+std::expected<uint64_t, utils::Error> AsyncWriteBuffer::WaitAll() {
+  if (mPendingRequests <= 0) {
+    return 0;
   }
-  return 0;
+  int ret = io_getevents(mAioCtx, mPendingRequests, mPendingRequests,
+                         &mIoEvents[0], NULL);
+  if (ret < 0) {
+    return std::unexpected(utils::Error::ErrorAio(ret, "io_getevents"));
+  }
+  DCHECK(uint64_t(ret) == mPendingRequests)
+      << "Failed to get all IO events, expected=" << mPendingRequests;
+
+  // reset pending requests, allowing new writes
+  mPendingRequests = 0;
+
+  // return requests completed
+  return ret;
 }
 
 void AsyncWriteBuffer::IterateFlushedBfs(
@@ -86,16 +98,16 @@ void AsyncWriteBuffer::IterateFlushedBfs(
     uint64_t numFlushedBfs) {
   for (uint64_t i = 0; i < numFlushedBfs; i++) {
     const auto slot =
-        (uint64_t(events[i].data) - uint64_t(mWriteBuffer.Get())) / page_size;
+        (uint64_t(mIoEvents[i].data) - uint64_t(mWriteBuffer.Get())) /
+        mPageSize;
 
-    DCHECK(events[i].res == page_size);
-    explainIfNot(events[i].res2 == 0);
-    auto* flushedPage = reinterpret_cast<Page*>(GetWriteBuffer(slot));
+    DCHECK(mIoEvents[i].res == mPageSize);
+    explainIfNot(mIoEvents[i].res2 == 0);
+    auto* flushedPage = reinterpret_cast<Page*>(getWriteBuffer(slot));
     auto flushedGsn = flushedPage->mGSN;
-    auto* flushedBf = write_buffer_commands[slot].bf;
-    callback(*flushedBf, flushedGsn);
+    auto* flushedBf = mWriteCommands[slot].mBf;
+    callback(*const_cast<BufferFrame*>(flushedBf), flushedGsn);
   }
 }
 
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage

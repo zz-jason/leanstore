@@ -430,8 +430,8 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
     Partition& targetPartition) {
   DLOG(INFO) << "Phase2: PrepareAsyncWriteBuffer begins";
   SCOPED_DEFER(DLOG(INFO) << "Phase2: PrepareAsyncWriteBuffer ended"
-                          << ", mAsyncWriteBuffer.pending_requests="
-                          << mAsyncWriteBuffer.pending_requests);
+                          << ", mAsyncWriteBuffer.PendingRequests="
+                          << mAsyncWriteBuffer.GetPendingRequests());
 
   mFreeBfList.Reset();
   for (auto* cooledBf : mEvictCandidateBfs) {
@@ -475,9 +475,9 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
       // Async write dirty pages back. They should keep in memory and stay in
       // cooling stage until all the contents are writtern back to the
       // underluing disk.
-      if (mAsyncWriteBuffer.full()) {
+      if (mAsyncWriteBuffer.IsFull()) {
         DLOG(INFO) << "Async write buffer is full"
-                   << ", bufferSize=" << mAsyncWriteBuffer.pending_requests;
+                   << ", bufferSize=" << mAsyncWriteBuffer.GetPendingRequests();
         JUMPMU_BREAK;
       }
 
@@ -492,10 +492,11 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
       }
 
       // TODO: preEviction callback according to TREEID
-      mAsyncWriteBuffer.AddToIOBatch(*cooledBf, cooledPageId);
-      DLOG(INFO) << "COOLed buffer frame is added to async write buffer"
-                 << ", pageId=" << cooledBf->mHeader.mPageId
-                 << ", bufferSize=" << mAsyncWriteBuffer.pending_requests;
+      mAsyncWriteBuffer.Add(*cooledBf);
+      DLOG(INFO) << std::format(
+          "COOLed buffer frame is added to async write buffer, pageId={}, "
+          "bufferSize={}",
+          cooledBf->mHeader.mPageId, mAsyncWriteBuffer.GetPendingRequests());
     }
     JUMPMU_CATCH() {
       DLOG(WARNING) << "COOLed buffer frame discarded, optimistic latch "
@@ -513,45 +514,56 @@ inline void BufferFrameProvider::FlushAndRecycleBufferFrames(
   DLOG(INFO) << "Phase3: FlushAndRecycleBufferFrames begins";
   SCOPED_DEFER(DLOG(INFO) << "Phase3: FlushAndRecycleBufferFrames ended");
 
-  if (mAsyncWriteBuffer.SubmitIORequest()) {
-    const uint32_t numFlushedBfs = mAsyncWriteBuffer.WaitIORequestToComplete();
-    mAsyncWriteBuffer.IterateFlushedBfs(
-        [&](BufferFrame& writtenBf, uint64_t flushedGsn) {
-          JUMPMU_TRY() {
-            // When the written back page is being exclusively locked, we should
-            // rather waste the write and move on to another page Instead of
-            // waiting on its latch because of the likelihood that a data
-            // structure implementation keeps holding a parent latch while
-            // trying to acquire a new page
-            BMOptimisticGuard optimisticGuard(writtenBf.mHeader.mLatch);
-            BMExclusiveGuard exclusiveGuard(optimisticGuard);
-            DCHECK(writtenBf.mHeader.mIsBeingWrittenBack);
-            DCHECK(writtenBf.mHeader.mFlushedGsn < flushedGsn);
-
-            // For recovery, so much has to be done here...
-            writtenBf.mHeader.mFlushedGsn = flushedGsn;
-            writtenBf.mHeader.mIsBeingWrittenBack = false;
-            PPCounters::MyCounters().flushed_pages_counter++;
-          }
-          JUMPMU_CATCH() {
-            writtenBf.mHeader.mCrc = 0;
-            writtenBf.mHeader.mIsBeingWrittenBack.store(
-                false, std::memory_order_release);
-          }
-
-          JUMPMU_TRY() {
-            BMOptimisticGuard optimisticGuard(writtenBf.mHeader.mLatch);
-            if (writtenBf.mHeader.mState == State::kCool &&
-                !writtenBf.mHeader.mIsBeingWrittenBack &&
-                !writtenBf.IsDirty()) {
-              evictFlushedBf(writtenBf, optimisticGuard, targetPartition);
-            }
-          }
-          JUMPMU_CATCH() {
-          }
-        },
-        numFlushedBfs);
+  auto result = mAsyncWriteBuffer.SubmitAll();
+  if (!result) {
+    LOG(ERROR) << "Failed to submit IO, error=" << result.error().ToString();
+    return;
   }
+
+  result = mAsyncWriteBuffer.WaitAll();
+  if (!result) {
+    LOG(ERROR) << "Failed to wait IO request to complete, error="
+               << result.error().ToString();
+    return;
+  }
+
+  auto numFlushedBfs = result.value();
+  mAsyncWriteBuffer.IterateFlushedBfs(
+      [&](BufferFrame& writtenBf, uint64_t flushedGsn) {
+        JUMPMU_TRY() {
+          // When the written back page is being exclusively locked, we should
+          // rather waste the write and move on to another page Instead of
+          // waiting on its latch because of the likelihood that a data
+          // structure implementation keeps holding a parent latch while
+          // trying to acquire a new page
+          BMOptimisticGuard optimisticGuard(writtenBf.mHeader.mLatch);
+          BMExclusiveGuard exclusiveGuard(optimisticGuard);
+          DCHECK(writtenBf.mHeader.mIsBeingWrittenBack);
+          DCHECK(writtenBf.mHeader.mFlushedGsn < flushedGsn);
+
+          // For recovery, so much has to be done here...
+          writtenBf.mHeader.mFlushedGsn = flushedGsn;
+          writtenBf.mHeader.mIsBeingWrittenBack = false;
+          PPCounters::MyCounters().flushed_pages_counter++;
+        }
+        JUMPMU_CATCH() {
+          writtenBf.mHeader.mCrc = 0;
+          writtenBf.mHeader.mIsBeingWrittenBack.store(
+              false, std::memory_order_release);
+        }
+
+        JUMPMU_TRY() {
+          BMOptimisticGuard optimisticGuard(writtenBf.mHeader.mLatch);
+          if (writtenBf.mHeader.mState == State::kCool &&
+              !writtenBf.mHeader.mIsBeingWrittenBack && !writtenBf.IsDirty()) {
+            evictFlushedBf(writtenBf, optimisticGuard, targetPartition);
+          }
+        }
+        JUMPMU_CATCH() {
+        }
+      },
+      numFlushedBfs);
+
   if (mFreeBfList.Size()) {
     mFreeBfList.PopTo(targetPartition);
   }
