@@ -492,7 +492,7 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
       }
 
       // TODO: preEviction callback according to TREEID
-      mAsyncWriteBuffer.Add(*cooledBf, cooledPageId);
+      mAsyncWriteBuffer.Add(*cooledBf);
       DLOG(INFO) << std::format(
           "COOLed buffer frame is added to async write buffer, pageId={}, "
           "bufferSize={}",

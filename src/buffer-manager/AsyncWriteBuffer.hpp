@@ -34,10 +34,10 @@ namespace leanstore::storage {
 class AsyncWriteBuffer {
 private:
   struct WriteCommand {
-    BufferFrame* mBf;
+    const BufferFrame* mBf;
     PID mPageId;
 
-    void Reset(BufferFrame* bf, PID pageId) {
+    void Reset(const BufferFrame* bf, PID pageId) {
       mBf = bf;
       mPageId = pageId;
     }
@@ -64,10 +64,10 @@ public:
   bool IsFull();
 
   /// Add a buffer frame to the write buffer:
-  /// - record the buffer frame and page id to write commands for later use
+  /// - record the buffer frame to write commands for later use
   /// - copy the page content in buffer frame to the write buffer
   /// - prepare the io request
-  void Add(BufferFrame& bf, PID pageId);
+  void Add(const BufferFrame& bf);
 
   /// Submit the write buffer to the AIO context to be written to the disk
   std::expected<uint64_t, utils::Error> SubmitAll();
@@ -84,7 +84,13 @@ public:
       uint64_t numFlushedBfs);
 
 private:
-  uint8_t* getWriteBuffer(uint64_t slot) {
+  void* copyToBuffer(const Page* page, size_t slot) {
+    void* dest = getWriteBuffer(slot);
+    std::memcpy(dest, page, mPageSize);
+    return dest;
+  }
+
+  uint8_t* getWriteBuffer(size_t slot) {
     return &mWriteBuffer.Get()[slot * mPageSize];
   }
 };

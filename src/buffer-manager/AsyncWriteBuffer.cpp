@@ -1,5 +1,6 @@
 #include "buffer-manager/AsyncWriteBuffer.hpp"
 
+#include "buffer-manager/BufferFrame.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "utils/Error.hpp"
@@ -39,21 +40,23 @@ bool AsyncWriteBuffer::IsFull() {
   return !(mPendingRequests < mMaxBatchSize);
 }
 
-void AsyncWriteBuffer::Add(BufferFrame& bf, PID pageId) {
+void AsyncWriteBuffer::Add(const BufferFrame& bf) {
   DCHECK(!IsFull());
   DCHECK(uint64_t(&bf.mPage) % 512 == 0) << "Page is not aligned to 512 bytes";
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().dt_page_writes[bf.mPage.mBTreeId]++;
   }
 
+  auto pageId = bf.mHeader.mPageId;
   auto slot = mPendingRequests++;
+
+  // record the written buffer frame and page id for later use
   mWriteCommands[slot].Reset(&bf, pageId);
-  bf.mPage.mMagicDebuging = pageId;
-  void* writeBufferSlotPtr = getWriteBuffer(slot);
-  std::memcpy(writeBufferSlotPtr, &bf.mPage, mPageSize);
-  io_prep_pwrite(&mIocbs[slot], mFd, writeBufferSlotPtr, mPageSize,
-                 mPageSize * pageId);
-  mIocbs[slot].data = writeBufferSlotPtr;
+
+  // copy the page content to write buffer
+  auto* buffer = copyToBuffer(&bf.mPage, slot);
+  io_prep_pwrite(&mIocbs[slot], mFd, buffer, mPageSize, mPageSize * pageId);
+  mIocbs[slot].data = buffer;
 }
 
 std::expected<uint64_t, utils::Error> AsyncWriteBuffer::SubmitAll() {
@@ -103,7 +106,7 @@ void AsyncWriteBuffer::IterateFlushedBfs(
     auto* flushedPage = reinterpret_cast<Page*>(getWriteBuffer(slot));
     auto flushedGsn = flushedPage->mGSN;
     auto* flushedBf = mWriteCommands[slot].mBf;
-    callback(*flushedBf, flushedGsn);
+    callback(*const_cast<BufferFrame*>(flushedBf), flushedGsn);
   }
 }
 

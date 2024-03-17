@@ -103,7 +103,7 @@ TEST_F(AsyncWriteBufferTest, AddToIoBatch) {
 
     // set the payload to the pageId
     *reinterpret_cast<int64_t*>(bfHolder.mBf->mPage.mPayload) = i;
-    testWriteBuffer.Add(*bfHolder.mBf, bfHolder.mBf->mHeader.mPageId);
+    testWriteBuffer.Add(*bfHolder.mBf);
   }
 
   // now the write buffer should be full
