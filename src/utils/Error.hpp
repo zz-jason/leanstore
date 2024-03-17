@@ -19,6 +19,15 @@ enum class ErrorCode : uint64_t {
   kFileRead,
   kFileWrite,
 
+  // AIO related error code
+  kAioAgain = 150,
+  kAioBadf,
+  kAioFault,
+  kAioInvalid,
+  kAioNoSys,
+  kAioPerm,
+  kAioUnknown,
+
   // BasicKV related error code
   kBasicKV = 200,
   kBasicKVCreate,
@@ -115,6 +124,38 @@ public:
     const std::string msg =
         "Fail to write file, file={}, errno={}, strerror={}";
     return Error(ErrorCode::kFileWrite, msg, std::forward<Args>(args)...);
+  }
+
+  static Error ErrorAio(int retCode, const std::string& apiName) {
+    switch (-retCode) {
+    case EAGAIN:
+      return Error(
+          ErrorCode::kAioAgain,
+          std::format("AIO({}) failed with EAGAIN, insufficient resources",
+                      apiName));
+    case EBADF:
+      return Error(ErrorCode::kAioBadf,
+                   "AIO({}) failed with EBADF, bad file descriptor", apiName);
+    case EFAULT:
+      return Error(ErrorCode::kAioFault,
+                   "AIO({}) failed with EFAULT, one of the data structures "
+                   "points to invalid data",
+                   apiName);
+    case EINVAL:
+      return Error(ErrorCode::kAioInvalid,
+                   "AIO({}) failed with EINVAL, invalid argument", apiName);
+    case ENOSYS:
+      return Error(ErrorCode::kAioNoSys,
+                   "AIO({}) failed with ENOSYS, not implemented", apiName);
+    case EPERM:
+      return Error(ErrorCode::kAioPerm,
+                   "AIO({}) failed with EPERM, operation not permitted",
+                   apiName);
+    default:
+      return Error(ErrorCode::kAioUnknown,
+                   "AIO({}) failed with unknown error code {}", apiName,
+                   retCode);
+    }
   }
 };
 

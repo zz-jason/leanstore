@@ -2,11 +2,12 @@
 
 #include "leanstore/Exceptions.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "utils/Error.hpp"
 
 #include <glog/logging.h>
 
-#include <cerrno>
 #include <cstring>
+#include <expected>
 
 namespace leanstore::storage {
 
@@ -18,60 +19,76 @@ AsyncWriteBuffer::AsyncWriteBuffer(int fd, uint64_t pageSize,
       mPendingRequests(0),
       mWriteBuffer(pageSize * maxBatchSize),
       mWriteCommands(maxBatchSize),
-      mIocbsNew(maxBatchSize),
+      mIocbs(maxBatchSize),
+      mIocbPtrs(maxBatchSize),
       mIoEvents(maxBatchSize) {
   memset(&mAioCtx, 0, sizeof(mAioCtx));
   auto ret = io_setup(maxBatchSize, &mAioCtx);
-  if (ret != 0) {
-    throw ex::GenericException("io_setup failed, ret code = " +
-                               std::to_string(ret));
+  LOG_IF(FATAL, ret < 0) << "Failed to create AIO context, error=" << ret;
+  for (uint64_t i = 0; i < maxBatchSize; i++) {
+    mIocbPtrs[i] = &mIocbs[i];
   }
+}
+
+AsyncWriteBuffer::~AsyncWriteBuffer() {
+  auto ret = io_destroy(mAioCtx);
+  LOG_IF(FATAL, ret < 0) << "Failed to destroy AIO context, error=" << ret;
 }
 
 bool AsyncWriteBuffer::IsFull() {
   return !(mPendingRequests < mMaxBatchSize);
 }
 
-void AsyncWriteBuffer::AddToIOBatch(BufferFrame& bf, PID pageId) {
+void AsyncWriteBuffer::Add(BufferFrame& bf, PID pageId) {
   DCHECK(!IsFull());
   DCHECK(uint64_t(&bf.mPage) % 512 == 0) << "Page is not aligned to 512 bytes";
-  // COUNTERS_BLOCK() {
-  //   WorkerCounters::MyCounters().dt_page_writes[bf.mPage.mBTreeId]++;
-  // }
+  COUNTERS_BLOCK() {
+    WorkerCounters::MyCounters().dt_page_writes[bf.mPage.mBTreeId]++;
+  }
 
   auto slot = mPendingRequests++;
   mWriteCommands[slot].Reset(&bf, pageId);
   bf.mPage.mMagicDebuging = pageId;
   void* writeBufferSlotPtr = getWriteBuffer(slot);
   std::memcpy(writeBufferSlotPtr, &bf.mPage, mPageSize);
-  io_prep_pwrite(&mIocbsNew[slot][0], mFd, writeBufferSlotPtr, mPageSize,
+  io_prep_pwrite(&mIocbs[slot], mFd, writeBufferSlotPtr, mPageSize,
                  mPageSize * pageId);
-  mIocbsNew[slot][0].data = writeBufferSlotPtr;
+  mIocbs[slot].data = writeBufferSlotPtr;
 }
 
-uint64_t AsyncWriteBuffer::SubmitIORequest() {
-  if (mPendingRequests > 0) {
-    int retCode = io_submit(mAioCtx, mPendingRequests,
-                            reinterpret_cast<iocb**>(&mIocbsNew[0]));
-    DCHECK(retCode == int32_t(mPendingRequests))
-        << std::format("io_submit failed, retCode={}, errno={}, error={}",
-                       retCode, errno, strerror(errno));
-    return mPendingRequests;
+std::expected<uint64_t, utils::Error> AsyncWriteBuffer::SubmitAll() {
+  if (mPendingRequests <= 0) {
+    return 0;
   }
-  return 0;
+  int ret = io_submit(mAioCtx, mPendingRequests, &mIocbPtrs[0]);
+  if (ret < 0) {
+    return std::unexpected(utils::Error::ErrorAio(ret, "io_submit"));
+  }
+  DCHECK(uint64_t(ret) == mPendingRequests)
+      << "Failed to submit all IO requests, expected=" << mPendingRequests;
+
+  // return requests submitted
+  return ret;
 }
 
-uint64_t AsyncWriteBuffer::WaitIORequestToComplete() {
-  if (mPendingRequests > 0) {
-    auto doneRequests = io_getevents(mAioCtx, mPendingRequests,
-                                     mPendingRequests, &mIoEvents[0], NULL);
-    LOG_IF(FATAL, uint32_t(doneRequests) != mPendingRequests)
-        << "Failed to complete all the IO requests"
-        << ", expected=" << mPendingRequests << ", completed=" << doneRequests;
-    mPendingRequests = 0;
-    return doneRequests;
+std::expected<uint64_t, utils::Error> AsyncWriteBuffer::
+    WaitAll() {
+  if (mPendingRequests <= 0) {
+    return 0;
   }
-  return 0;
+  int ret = io_getevents(mAioCtx, mPendingRequests, mPendingRequests,
+                         &mIoEvents[0], NULL);
+  if (ret < 0) {
+    return std::unexpected(utils::Error::ErrorAio(ret, "io_getevents"));
+  }
+  DCHECK(uint64_t(ret) == mPendingRequests)
+      << "Failed to get all IO events, expected=" << mPendingRequests;
+
+  // reset pending requests, allowing new writes
+  mPendingRequests = 0;
+
+  // return requests completed
+  return ret;
 }
 
 void AsyncWriteBuffer::IterateFlushedBfs(
