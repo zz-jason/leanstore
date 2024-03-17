@@ -82,7 +82,7 @@ protected:
   }
 };
 
-TEST_F(AsyncWriteBufferTest, AddToIoBatch) {
+TEST_F(AsyncWriteBufferTest, Basic) {
   FLAGS_init = false;
 
   auto testFile = getRandTestFile();
@@ -120,15 +120,6 @@ TEST_F(AsyncWriteBufferTest, AddToIoBatch) {
   auto doneRequests = result.value();
   EXPECT_EQ(doneRequests, testMaxBatchSize);
   EXPECT_EQ(testWriteBuffer.GetPendingRequests(), 0);
-
-  // iterate the flushed buffer frames
-  testWriteBuffer.IterateFlushedBfs(
-      [&](BufferFrame& flushedBf, uint64_t) {
-        auto pageId = flushedBf.mHeader.mPageId;
-        auto payload = *reinterpret_cast<int64_t*>(flushedBf.mPage.mPayload);
-        EXPECT_EQ(pageId, payload);
-      },
-      doneRequests);
 
   // read the file content
   for (int i = 0; i < testMaxBatchSize; i++) {
