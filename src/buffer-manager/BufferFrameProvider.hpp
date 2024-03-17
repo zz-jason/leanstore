@@ -430,8 +430,8 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
     Partition& targetPartition) {
   DLOG(INFO) << "Phase2: PrepareAsyncWriteBuffer begins";
   SCOPED_DEFER(DLOG(INFO) << "Phase2: PrepareAsyncWriteBuffer ended"
-                          << ", mAsyncWriteBuffer.pending_requests="
-                          << mAsyncWriteBuffer.pending_requests);
+                          << ", mAsyncWriteBuffer.PendingRequests="
+                          << mAsyncWriteBuffer.GetPendingRequests());
 
   mFreeBfList.Reset();
   for (auto* cooledBf : mEvictCandidateBfs) {
@@ -475,9 +475,9 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
       // Async write dirty pages back. They should keep in memory and stay in
       // cooling stage until all the contents are writtern back to the
       // underluing disk.
-      if (mAsyncWriteBuffer.full()) {
+      if (mAsyncWriteBuffer.IsFull()) {
         DLOG(INFO) << "Async write buffer is full"
-                   << ", bufferSize=" << mAsyncWriteBuffer.pending_requests;
+                   << ", bufferSize=" << mAsyncWriteBuffer.GetPendingRequests();
         JUMPMU_BREAK;
       }
 
@@ -493,9 +493,10 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
 
       // TODO: preEviction callback according to TREEID
       mAsyncWriteBuffer.AddToIOBatch(*cooledBf, cooledPageId);
-      DLOG(INFO) << "COOLed buffer frame is added to async write buffer"
-                 << ", pageId=" << cooledBf->mHeader.mPageId
-                 << ", bufferSize=" << mAsyncWriteBuffer.pending_requests;
+      DLOG(INFO) << std::format(
+          "COOLed buffer frame is added to async write buffer, pageId={}, "
+          "bufferSize={}",
+          cooledBf->mHeader.mPageId, mAsyncWriteBuffer.GetPendingRequests());
     }
     JUMPMU_CATCH() {
       DLOG(WARNING) << "COOLed buffer frame discarded, optimistic latch "

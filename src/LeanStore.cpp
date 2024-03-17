@@ -153,16 +153,18 @@ void LeanStore::initPageAndWalFd() {
   int flags = O_RDWR | O_DIRECT;
   mPageFd = open(GetDBFilePath().c_str(), flags, 0666);
   if (mPageFd == -1) {
-    LOG(FATAL) << "Recover failed, could not open file at: " << GetDBFilePath()
-               << ". The data is lost, please create a new DB file and start "
-                  "a new instance from it";
+    LOG(FATAL) << std::format(
+        "Recover failed, could not open file at: {}. The data is lost, please "
+        "create a new DB file and start a new instance from it",
+        GetDBFilePath());
   }
 
   mWalFd = open(GetWALFilePath().c_str(), flags, 0666);
   if (mPageFd == -1) {
-    LOG(FATAL) << "Recover failed, could not open file at: " << GetWALFilePath()
-               << ". The data is lost, please create a new WAL File and start "
-                  "a new instance from it";
+    LOG(FATAL) << std::format(
+        "Recover failed, could not open file at: {}. The data is lost, please "
+        "create a new WAL file and start a new instance from it",
+        GetWALFilePath());
   }
 }
 

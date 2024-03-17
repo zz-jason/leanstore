@@ -5,8 +5,6 @@
 
 #include <assert.h>
 #include <signal.h>
-// -------------------------------------------------------------------------------------
-#define imply(lhs, rhs) (!(lhs) || (rhs))
 //--------------------------------------------------------------------------------------
 #define Generic_Exception(name)                                                \
   struct name : public std::exception {                                        \
@@ -97,7 +95,7 @@ Generic_Exception(TODO);
 #define COUNTERS_BLOCK() if constexpr (false)
 #endif
 // -------------------------------------------------------------------------------------
-template <typename T> inline void DO_NOT_OPTIMIZE(T const& value) {
+template <typename T> inline void DO_NOT_OPTIMIZE(const T& value) {
 #if defined(__clang__)
   asm volatile("" : : "g"(value) : "memory");
 #else

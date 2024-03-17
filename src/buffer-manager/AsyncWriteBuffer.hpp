@@ -4,42 +4,50 @@
 #include "leanstore/Units.hpp"
 #include "utils/Misc.hpp"
 
+#include <gflags/gflags.h>
+
+#include <cstdint>
 #include <functional>
+#include <vector>
 
 #include <libaio.h>
 
-namespace leanstore {
-namespace storage {
+namespace leanstore::storage {
 
 class AsyncWriteBuffer {
 private:
   struct WriteCommand {
-    BufferFrame* bf;
+    BufferFrame* mBf;
     PID mPageId;
+
+    void Reset(BufferFrame* bf, PID pageId) {
+      mBf = bf;
+      mPageId = pageId;
+    }
   };
 
-public:
-  io_context_t aio_context;
-  int fd;
-  uint64_t page_size;
-  uint64_t batch_max_size;
-  uint64_t pending_requests = 0;
+  io_context_t mAioCtx;
+  int mFd;
+  uint64_t mPageSize;
+  uint64_t mMaxBatchSize;
+  uint64_t mPendingRequests;
 
   utils::AlignedBuffer<512> mWriteBuffer;
-  std::unique_ptr<WriteCommand[]> write_buffer_commands;
-  std::unique_ptr<struct iocb[]> iocbs;
-  std::unique_ptr<struct iocb*[]> iocbs_ptr;
-  std::unique_ptr<struct io_event[]> events;
+  std::vector<WriteCommand> mWriteCommands;
+  std::vector<iocb[1]> mIocbsNew;
+  std::vector<iocb*> mIocbPtrs;
+  std::vector<io_event> mIoEvents;
 
-  AsyncWriteBuffer(int fd, uint64_t page_size, uint64_t batch_max_size);
+public:
+  AsyncWriteBuffer(int fd, uint64_t pageSize, uint64_t maxBatchSize);
 
-  bool full();
-
-  uint8_t* GetWriteBuffer(uint64_t slot) {
-    return &mWriteBuffer.Get()[slot * page_size];
-  }
+  bool IsFull();
 
   void AddToIOBatch(BufferFrame& bf, PID pageId);
+
+  uint64_t GetPendingRequests() {
+    return mPendingRequests;
+  }
 
   uint64_t SubmitIORequest();
 
@@ -48,7 +56,11 @@ public:
   void IterateFlushedBfs(
       std::function<void(BufferFrame& flushedBf, uint64_t flushedGsn)> callback,
       uint64_t numFlushedBfs);
+
+private:
+  uint8_t* getWriteBuffer(uint64_t slot) {
+    return &mWriteBuffer.Get()[slot * mPageSize];
+  }
 };
 
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage
