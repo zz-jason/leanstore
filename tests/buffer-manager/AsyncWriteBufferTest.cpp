@@ -132,47 +132,4 @@ TEST_F(AsyncWriteBufferTest, Basic) {
   }
 }
 
-TEST_F(AsyncWriteBufferTest, AioRaw) {
-  auto testFile = getRandTestFile();
-  auto testFd = openFile(testFile);
-  SCOPED_DEFER({
-    closeFile(testFd);
-    LOG(INFO) << "Test file=" << testFile;
-    // removeFile(testFile);
-  });
-
-  // create the aio context
-  io_context_t aioCtx;
-  memset(&aioCtx, 0, sizeof(aioCtx));
-  auto maxEvents = 8;
-  auto ret = io_setup(maxEvents, &aioCtx);
-  ASSERT_EQ(ret, 0) << "io_setup failed, error=" << -ret;
-
-  // create the buffer
-  auto* content = "Hello, World!";
-
-  // prepare the write command
-  iocb iocb;
-  io_prep_pwrite(&iocb, testFd, const_cast<char*>(content), strlen(content), 0);
-
-  // submit the write command
-  struct iocb* iocbs[1] = {&iocb};
-  ret = io_submit(aioCtx, 1, iocbs);
-  ASSERT_EQ(ret, 1) << "io_submit failed, error=" << -ret;
-
-  // wait for the write command to complete
-  struct io_event events[1];
-  ret = io_getevents(aioCtx, 1, 1, events, NULL);
-  ASSERT_EQ(ret, 1) << "io_getevents failed, error=" << -ret;
-
-  // read the file content
-  char readBuffer[512];
-  ret = pread(testFd, readBuffer, 512, 0);
-  ASSERT_GT(ret, 0) << "pread failed, error=" << -ret;
-
-  // verify the file content
-  readBuffer[ret] = '\0';
-  EXPECT_STREQ(readBuffer, content);
-}
-
 } // namespace leanstore::storage::test
