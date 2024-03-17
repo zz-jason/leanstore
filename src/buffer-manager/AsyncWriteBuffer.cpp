@@ -71,8 +71,7 @@ std::expected<uint64_t, utils::Error> AsyncWriteBuffer::SubmitAll() {
   return ret;
 }
 
-std::expected<uint64_t, utils::Error> AsyncWriteBuffer::
-    WaitAll() {
+std::expected<uint64_t, utils::Error> AsyncWriteBuffer::WaitAll() {
   if (mPendingRequests <= 0) {
     return 0;
   }
