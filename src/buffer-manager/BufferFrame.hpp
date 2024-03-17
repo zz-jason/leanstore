@@ -1,10 +1,12 @@
 #pragma once
 
 #include "buffer-manager/Swip.hpp"
+#include "leanstore/Config.hpp"
 #include "leanstore/Units.hpp"
 #include "sync/HybridLatch.hpp"
 #include "utils/Misc.hpp"
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <rapidjson/document.h>
 
@@ -173,8 +175,7 @@ public:
   alignas(512) Page mPage;
 
 public:
-  BufferFrame() {
-  }
+  BufferFrame() = default;
 
   bool operator==(const BufferFrame& other) {
     return this == &other;
