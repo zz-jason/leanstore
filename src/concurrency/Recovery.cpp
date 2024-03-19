@@ -64,10 +64,6 @@ std::expected<void, utils::Error> Recovery::analysis() {
       auto* complexEntry = reinterpret_cast<WalEntryComplex*>(walEntryPtr);
       DCHECK_EQ(bytesRead, complexEntry->mSize);
 
-      // if (complexEntry->mPrevLSN == 0) {
-      //   // the first complex entry of a page
-      //   mActiveTxTable.emplace(complexEntry->mTxId, offset);
-      // }
       mActiveTxTable[walEntry->mTxId] = offset;
       auto& bf = resolvePage(complexEntry->mPageId);
       if (complexEntry->mGsn >= bf.mPage.mGSN &&
