@@ -18,7 +18,6 @@ namespace leanstore {
 namespace cr {
 
 #define DO_WITH_WAL_ENTRY_TYPES(ACTION, ...)                                   \
-  ACTION(kTxStart, "kTxStart", __VA_ARGS__)                                    \
   ACTION(kTxCommit, "kTxCommit", __VA_ARGS__)                                  \
   ACTION(kTxAbort, "kTxAbort", __VA_ARGS__)                                    \
   ACTION(kTxFinish, "kTxFinish", __VA_ARGS__)                                  \
@@ -35,7 +34,7 @@ class WalEntrySimple;
 class WalEntryComplex;
 
 /// The basic WAL record representation, there are two kinds of WAL entries:
-/// 1. WalEntrySimple, whose type might be: kTxStart, kTxCommit, kTxAbort
+/// 1. WalEntrySimple, whose type might be: kTxCommit, kTxAbort
 /// 2. WalEntryComplex, whose type is kComplex
 ///
 /// EalEntry size is critical to the write performance, packed attribute is
@@ -120,38 +119,6 @@ private:
   static void toJson(const WalEntryComplex* entry, rapidjson::Document* doc);
 };
 
-/*
-class __attribute__((packed)) WalTxStart : public WalEntry {
-public:
-  /// Crc of the whole WalEntry, including all the payloads.
-  uint32_t mCrc32;
-
-  /// Type of the WAL entry.
-  Type mType;
-
-  /// The log sequence number of this WalEntry. The number is globally and
-  /// monotonically increased.
-  LID mLsn;
-
-  /// ID of the transaction who creates this WalEntry.
-  TXID mTxId;
-
-  /// ID of the worker who executes the transaction and records the WalEntry.
-  WORKERID mWorkerId;
-
-  WalTxStart(LID lsn, TXID txid, WORKERID workerId)
-      : WalEntry(),
-        mCrc32(0),
-        mType(Type::kTxStart),
-        mLsn(lsn),
-        mTxId(txid),
-        mWorkerId(workerId) {
-  }
-};
-
-class WalTxCommit : public WalEntry {};
-*/
-
 class WalEntrySimple : public WalEntry {
 public:
   WalEntrySimple(LID lsn, uint64_t size, Type type)
@@ -205,8 +172,6 @@ inline std::string WalEntry::TypeName() const {
 
 inline void WalEntry::ToJson(const WalEntry* entry, rapidjson::Document* doc) {
   switch (entry->mType) {
-  case Type::kTxStart:
-    [[fallthrough]];
   case Type::kTxCommit:
     [[fallthrough]];
   case Type::kTxAbort:
