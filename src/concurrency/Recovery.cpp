@@ -31,13 +31,6 @@ std::expected<void, utils::Error> Recovery::analysis() {
 
     auto* walEntry = reinterpret_cast<WalEntry*>(walEntryPtr);
     switch (walEntry->mType) {
-    case WalEntry::Type::kTxCommit: {
-      DCHECK_EQ(bytesRead, walEntry->mSize);
-      DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
-      mActiveTxTable[walEntry->mTxId] = offset;
-      offset += bytesRead;
-      continue;
-    }
     case WalEntry::Type::kTxAbort: {
       DCHECK_EQ(bytesRead, walEntry->mSize);
       DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
