@@ -153,7 +153,6 @@ void Worker::CommitTx() {
   }
 
   if (mActiveTx.mIsDurable) {
-    mLogging.WriteSimpleWal(WalEntry::Type::kTxCommit);
     mLogging.WriteSimpleWal(WalEntry::Type::kTxFinish);
   }
 

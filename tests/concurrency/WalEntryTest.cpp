@@ -18,7 +18,6 @@ TEST_F(WalEntryTest, Size) {
 
 TEST_F(WalEntryTest, ToJsonString) {
   auto typeNames = std::unordered_map<WalEntry::Type, std::string>{
-      {WalEntry::Type::kTxCommit, "kTxCommit"},
       {WalEntry::Type::kTxAbort, "kTxAbort"},
       {WalEntry::Type::kTxFinish, "kTxFinish"},
       {WalEntry::Type::kCarriageReturn, "kCarriageReturn"},
