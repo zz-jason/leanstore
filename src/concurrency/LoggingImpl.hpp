@@ -13,8 +13,10 @@ WalPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payloadSize,
                                                      TREEID treeId,
                                                      Args&&... args) {
   // write transaction start on demand
+  auto prevLsn = mPrevLSN;
   if (!ActiveTx().mHasWrote) {
-    WriteSimpleWal(WalEntry::Type::kTxStart);
+    // no prevLsn for the first wal entry in a transaction
+    prevLsn = 0;
     ActiveTx().mHasWrote = true;
   }
 
@@ -28,7 +30,7 @@ WalPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payloadSize,
 
   mActiveWALEntryComplex =
       new (entryPtr) WalEntryComplex(entryLSN, entrySize, psn, treeId, pageId);
-  mActiveWALEntryComplex->mPrevLSN = mPrevLSN;
+  mActiveWALEntryComplex->mPrevLSN = prevLsn;
   auto& curWorker = leanstore::cr::Worker::My();
   mActiveWALEntryComplex->InitTxInfo(&curWorker.mActiveTx, curWorker.mWorkerId);
 
