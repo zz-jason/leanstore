@@ -18,7 +18,6 @@ namespace leanstore {
 namespace cr {
 
 #define DO_WITH_WAL_ENTRY_TYPES(ACTION, ...)                                   \
-  ACTION(kTxCommit, "kTxCommit", __VA_ARGS__)                                  \
   ACTION(kTxAbort, "kTxAbort", __VA_ARGS__)                                    \
   ACTION(kTxFinish, "kTxFinish", __VA_ARGS__)                                  \
   ACTION(kComplex, "kComplex", __VA_ARGS__)                                    \
@@ -34,7 +33,7 @@ class WalEntrySimple;
 class WalEntryComplex;
 
 /// The basic WAL record representation, there are two kinds of WAL entries:
-/// 1. WalEntrySimple, whose type might be: kTxCommit, kTxAbort
+/// 1. WalEntrySimple, whose type might be: kTxAbort, kTxFinish, kCarriageReturn
 /// 2. WalEntryComplex, whose type is kComplex
 ///
 /// EalEntry size is critical to the write performance, packed attribute is
@@ -172,8 +171,6 @@ inline std::string WalEntry::TypeName() const {
 
 inline void WalEntry::ToJson(const WalEntry* entry, rapidjson::Document* doc) {
   switch (entry->mType) {
-  case Type::kTxCommit:
-    [[fallthrough]];
   case Type::kTxAbort:
     [[fallthrough]];
   case Type::kTxFinish:
