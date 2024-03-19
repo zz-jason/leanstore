@@ -31,14 +31,6 @@ std::expected<void, utils::Error> Recovery::analysis() {
 
     auto* walEntry = reinterpret_cast<WalEntry*>(walEntryPtr);
     switch (walEntry->mType) {
-    case WalEntry::Type::kTxStart: {
-      DCHECK_EQ(bytesRead, walEntry->mSize);
-      DCHECK(mActiveTxTable.find(walEntry->mTxId) == mActiveTxTable.end());
-      auto txId = walEntry->mTxId;
-      mActiveTxTable.emplace(txId, offset);
-      offset += bytesRead;
-      continue;
-    }
     case WalEntry::Type::kTxCommit: {
       DCHECK_EQ(bytesRead, walEntry->mSize);
       DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
@@ -71,11 +63,13 @@ std::expected<void, utils::Error> Recovery::analysis() {
 
       auto* complexEntry = reinterpret_cast<WalEntryComplex*>(walEntryPtr);
       DCHECK_EQ(bytesRead, complexEntry->mSize);
-      DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
+
+      // if (complexEntry->mPrevLSN == 0) {
+      //   // the first complex entry of a page
+      //   mActiveTxTable.emplace(complexEntry->mTxId, offset);
+      // }
       mActiveTxTable[walEntry->mTxId] = offset;
-
       auto& bf = resolvePage(complexEntry->mPageId);
-
       if (complexEntry->mGsn >= bf.mPage.mGSN &&
           mDirtyPageTable.find(complexEntry->mPageId) ==
               mDirtyPageTable.end()) {

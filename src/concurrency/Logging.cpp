@@ -72,10 +72,7 @@ WalEntrySimple& Logging::ReserveWALEntrySimple(WalEntry::Type type) {
   mActiveWALEntrySimple =
       new (entryPtr) WalEntrySimple(mLsnClock++, entrySize, type);
 
-  // set previous LSN on demand.
-  if (type != WalEntry::Type::kTxStart) {
-    mActiveWALEntrySimple->mPrevLSN = mPrevLSN;
-  }
+  mActiveWALEntrySimple->mPrevLSN = mPrevLSN;
   auto& curWorker = leanstore::cr::Worker::My();
   mActiveWALEntrySimple->InitTxInfo(&curWorker.mActiveTx, curWorker.mWorkerId);
   return *mActiveWALEntrySimple;
