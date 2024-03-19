@@ -43,38 +43,13 @@ class __attribute__((packed)) WalEntry {
 public:
   enum class Type : uint8_t { DO_WITH_WAL_ENTRY_TYPES(DECR_WAL_ENTRY_TYPE) };
 
-  /// Crc of the whole WalEntry, including all the payloads.
-  uint32_t mCrc32 = 0;
-
-  /// The log sequence number of this WalEntry. The number is globally and
-  /// monotonically increased.
-  LID mLsn;
-
-  /// Log sequence number for the previous WalEntry of the same transaction. 0
-  /// if it's the first WAL entry in the transaction.
-  LID mPrevLSN = 0;
-
-  // Size of the whole WalEntry, including all the payloads. The entire WAL
-  // entry stays in the WAL ring buffer of the current worker thread.
-  uint16_t mSize;
-
   /// Type of the WAL entry.
   Type mType;
-
-  /// ID of the worker who executes the transaction and records the WalEntry.
-  WORKERID mWorkerId;
-
-  /// ID of the transaction who creates this WalEntry.
-  TXID mTxId;
 
 public:
   WalEntry() = default;
 
-  WalEntry(LID lsn, uint64_t size, Type type)
-      : mCrc32(0),
-        mLsn(lsn),
-        mSize(size),
-        mType(type) {
+  WalEntry(Type type) : mType(type) {
   }
 
   std::string TypeName() const;
@@ -118,6 +93,24 @@ private:
   static void toJson(const WalEntryComplex* entry, rapidjson::Document* doc);
 };
 
+// maybe it can also be removed, we can use the first compensation log to
+// indicate transaction abort
+class __attribute__((packed)) WalTxAbort : public WalEntry {
+public:
+  TXID mTxId;
+};
+
+class __attribute__((packed)) WalCarriageReturn : public WalEntry {
+public:
+  uint16_t mSize;
+};
+
+class __attribute__((packed)) WalTxFinish : public WalEntry {
+public:
+  TXID mTxId;
+};
+
+// TODO(jian.z): replace it with WalTxAbort, WalTxFinish, WalCarriageReturn
 class WalEntrySimple : public WalEntry {
 public:
   WalEntrySimple(LID lsn, uint64_t size, Type type)
@@ -127,6 +120,27 @@ public:
 
 class __attribute__((packed)) WalEntryComplex : public WalEntry {
 public:
+  /// Crc of the whole WalEntry, including all the payloads.
+  uint32_t mCrc32 = 0;
+
+  /// The log sequence number of this WalEntry. The number is globally and
+  /// monotonically increased.
+  LID mLsn;
+
+  /// Log sequence number for the previous WalEntry of the same transaction. 0
+  /// if it's the first WAL entry in the transaction.
+  LID mPrevLSN = 0;
+
+  // Size of the whole WalEntry, including all the payloads. The entire WAL
+  // entry stays in the WAL ring buffer of the current worker thread.
+  uint16_t mSize;
+
+  /// ID of the worker who executes the transaction and records the WalEntry.
+  WORKERID mWorkerId;
+
+  /// ID of the transaction who creates this WalEntry.
+  TXID mTxId;
+
   /// Global sequence number of the WalEntry, indicate the global order of the
   /// WAL entry.
   uint64_t mGsn;
