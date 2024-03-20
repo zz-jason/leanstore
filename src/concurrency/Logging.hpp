@@ -46,13 +46,6 @@ class Logging {
 public:
   LID mPrevLSN;
 
-  /// The active simple WalEntry for the current transaction, usually used for
-  /// transaction start, commit, or abort.
-  ///
-  /// NOTE: Either mActiveWALEntrySimple or mActiveWALEntryComplex is effective
-  /// during transaction processing.
-  WalEntrySimple* mActiveWALEntrySimple;
-
   /// The active complex WalEntry for the current transaction, usually used for
   /// insert, update, delete, or btree related operations.
   ///
@@ -131,11 +124,9 @@ public:
   void IterateCurrentTxWALs(
       std::function<void(const WalEntry& entry)> callback);
 
-  WalEntrySimple& ReserveWALEntrySimple(WalEntry::Type type);
-
-  void SubmitWALEntrySimple();
-
-  void WriteSimpleWal(WalEntry::Type type);
+  void WriteWalTxAbort();
+  void WriteWalTxFinish();
+  void WriteWalCarriageReturn();
 
   template <typename T, typename... Args>
   WalPayloadHandler<T> ReserveWALEntryComplex(uint64_t payloadSize, PID pageId,

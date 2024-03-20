@@ -11,9 +11,9 @@
 #include <rapidjson/writer.h>
 
 #include <cstring>
+#include <format>
 
-namespace leanstore {
-namespace cr {
+namespace leanstore::cr {
 
 /// @brief Calculate the continuous free space left in the wal ring buffer.
 /// @return Size of the contiguous free space
@@ -26,12 +26,6 @@ uint32_t Logging::walContiguousFreeSpace() {
 }
 
 void Logging::ReserveContiguousBuffer(uint32_t bytesRequired) {
-  SCOPED_DEFER({
-    DCHECK(bytesRequired <= walContiguousFreeSpace())
-        << "bytesRequired=" << bytesRequired
-        << ", walContiguousFreeSpace()=" << walContiguousFreeSpace();
-  });
-
   // Spin until there is enough space. The wal ring buffer space is reclaimed
   // when the group commit thread commits the written wal entries.
   while (true) {
@@ -39,13 +33,7 @@ void Logging::ReserveContiguousBuffer(uint32_t bytesRequired) {
     if (flushed <= mWalBuffered) {
       // carraige return, consume the last bytes from mWalBuffered to the end
       if (mWalBufferSize - mWalBuffered < bytesRequired) {
-        auto entrySize = mWalBufferSize - mWalBuffered;
-        auto entryType = WalEntry::Type::kCarriageReturn;
-        auto* entryPtr = mWalBuffer + mWalBuffered;
-        auto* entry = new (entryPtr) WalEntrySimple(0, entrySize, entryType);
-        entry->mCrc32 = entry->ComputeCRC32();
-        mWalBuffered = 0;
-        publishWalBufferedOffset();
+        WriteWalCarriageReturn();
         continue;
       }
       // Have enough space from mWalBuffered to the end
@@ -60,69 +48,72 @@ void Logging::ReserveContiguousBuffer(uint32_t bytesRequired) {
   }
 }
 
-/// Reserve space and initialize a WalEntrySimple when a transaction is started,
-/// committed, or aborted.
-WalEntrySimple& Logging::ReserveWALEntrySimple(WalEntry::Type type) {
-  SCOPED_DEFER(mPrevLSN = mActiveWALEntrySimple->mLsn;);
-
-  ReserveContiguousBuffer(sizeof(WalEntrySimple));
-  auto* entryPtr = mWalBuffer + mWalBuffered;
-  auto entrySize = sizeof(WalEntrySimple);
-  std::memset(entryPtr, 0, entrySize);
-  mActiveWALEntrySimple =
-      new (entryPtr) WalEntrySimple(mLsnClock++, entrySize, type);
-
-  mActiveWALEntrySimple->mPrevLSN = mPrevLSN;
-  auto& curWorker = leanstore::cr::Worker::My();
-  mActiveWALEntrySimple->InitTxInfo(&curWorker.mActiveTx, curWorker.mWorkerId);
-  return *mActiveWALEntrySimple;
-}
-
-/// Submits the WalEntrySimple to group committer when transaction is started,
-/// committed, or aborted. It updates mCurrTxId to notify the group commit
-/// thread to flush WAL records for finished (committed or aborted)
-/// transactions.
-///
-/// NOTE: users should call ReserveWALEntrySimple() firstly to initialize the
-/// WalEntrySimple to be flushed in the wal ring buffer.
-void Logging::SubmitWALEntrySimple() {
-  SCOPED_DEFER(DEBUG_BLOCK() {
-    LOG(INFO) << "Submit WalEntrySimple"
-              << ", workerId=" << Worker::My().mWorkerId
-              << ", startTs=" << Worker::My().mActiveTx.mStartTs
-              << ", curGSN=" << GetCurrentGsn()
-              << ", walJson=" << WalEntry::ToJsonString(mActiveWALEntrySimple);
+void Logging::WriteWalTxAbort() {
+  WalEntry* entry;
+  SCOPED_DEFER({
+    DLOG(INFO) << std::format(
+        "WriteWalTxAbort, workerId={}, startTs={}, curGSN={}, walJson={}",
+        Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
+        GetCurrentGsn(), WalEntry::ToJsonString(entry));
   });
 
-  if (!((mWalBuffered >= mTxWalBegin) ||
-        (mWalBuffered + sizeof(WalEntrySimple) < mTxWalBegin))) {
-    Worker::My().mActiveTx.mWalExceedBuffer = true;
-  }
-  mActiveWALEntrySimple->mCrc32 = mActiveWALEntrySimple->ComputeCRC32();
-  mWalBuffered += sizeof(WalEntrySimple);
+  // Reserve space
+  auto size = sizeof(WalTxAbort);
+  ReserveContiguousBuffer(size);
+
+  // Initialize a WalTxAbort
+  auto* data = mWalBuffer + mWalBuffered;
+  std::memset(data, 0, size);
+  entry = new (data) WalTxAbort(size);
+
+  // Submit the WalTxAbort to group committer
+  mWalBuffered += size;
   publishWalFlushReq();
 }
 
-void Logging::WriteSimpleWal(WalEntry::Type type) {
-  ReserveWALEntrySimple(type);
-  SubmitWALEntrySimple();
+void Logging::WriteWalTxFinish() {
+  WalEntry* entry;
+  SCOPED_DEFER({
+    DLOG(INFO) << std::format(
+        "WriteWalTxFinish, workerId={}, startTs={}, curGSN={}, walJson={}",
+        Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
+        GetCurrentGsn(), WalEntry::ToJsonString(entry));
+  });
+
+  // Reserve space
+  auto size = sizeof(WalTxFinish);
+  ReserveContiguousBuffer(size);
+
+  // Initialize a WalTxFinish
+  auto* data = mWalBuffer + mWalBuffered;
+  std::memset(data, 0, size);
+  entry = new (data) WalTxFinish(Worker::My().mActiveTx.mStartTs);
+
+  // Submit the WalTxAbort to group committer
+  mWalBuffered += size;
+  publishWalFlushReq();
+}
+
+void Logging::WriteWalCarriageReturn() {
+  DCHECK(mWalFlushed <= mWalBuffered)
+      << "CarriageReturn should only used for the last bytes in the wal buffer";
+  auto entrySize = mWalBufferSize - mWalBuffered;
+  auto* entryPtr = mWalBuffer + mWalBuffered;
+  new (entryPtr) WalCarriageReturn(entrySize);
+  mWalBuffered = 0;
+  publishWalBufferedOffset();
 }
 
 /// Submits the wal record to group committer when it is ready to flush to disk.
 /// @param totalSize is the size of the wal record to be flush.
 void Logging::SubmitWALEntryComplex(uint64_t totalSize) {
-  SCOPED_DEFER(DEBUG_BLOCK() {
-    LOG(INFO) << "SubmitWal"
-              << ", workerId=" << Worker::My().mWorkerId
-              << ", startTs=" << Worker::My().mActiveTx.mStartTs
-              << ", curGSN=" << Worker::My().mLogging.GetCurrentGsn()
-              << ", walJson=" << WalEntry::ToJsonString(mActiveWALEntryComplex);
+  SCOPED_DEFER({
+    DLOG(INFO) << std::format(
+        "SubmitWal, workerId={}, startTs={}, curGSN={}, walJson={}",
+        Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
+        GetCurrentGsn(), WalEntry::ToJsonString(mActiveWALEntryComplex));
   });
 
-  if (!((mWalBuffered >= mTxWalBegin) ||
-        (mWalBuffered + totalSize < mTxWalBegin))) {
-    Worker::My().mActiveTx.mWalExceedBuffer = true;
-  }
   mActiveWALEntryComplex->mCrc32 = mActiveWALEntryComplex->ComputeCRC32();
   mWalBuffered += totalSize;
   publishWalFlushReq();
@@ -148,20 +139,19 @@ void Logging::IterateCurrentTxWALs(
   uint64_t cursor = mTxWalBegin;
   while (cursor != mWalBuffered) {
     const WalEntry& entry = *reinterpret_cast<WalEntry*>(mWalBuffer + cursor);
-    ENSURE(entry.mSize > 0);
     DEBUG_BLOCK() {
-      if (entry.mType != WalEntry::Type::kCarriageReturn) {
-        entry.CheckCRC();
+      if (entry.mType == WalEntry::Type::kComplex) {
+        reinterpret_cast<const WalEntryComplex*>(&entry)->CheckCRC();
       }
     }
+
     if (entry.mType == WalEntry::Type::kCarriageReturn) {
       cursor = 0;
     } else {
       callback(entry);
-      cursor += entry.mSize;
+      cursor += WalEntry::Size(&entry);
     }
   }
 }
 
-} // namespace cr
-} // namespace leanstore
+} // namespace leanstore::cr
