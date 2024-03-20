@@ -1,6 +1,5 @@
 #pragma once
 
-#include "concurrency/Transaction.hpp"
 #include "leanstore/Units.hpp"
 #include "utils/Misc.hpp"
 
@@ -11,11 +10,10 @@
 #include <rapidjson/writer.h>
 
 #include <cstdint>
-#include <iostream>
+#include <format>
 #include <string>
 
-namespace leanstore {
-namespace cr {
+namespace leanstore::cr {
 
 #define DO_WITH_WAL_ENTRY_TYPES(ACTION, ...)                                   \
   ACTION(kTxAbort, "kTxAbort", __VA_ARGS__)                                    \
@@ -29,12 +27,13 @@ namespace cr {
     return type_name;
 
 // forward declaration
-class WalEntrySimple;
+class WalTxAbort;
+class WalTxFinish;
+class WalCarriageReturn;
 class WalEntryComplex;
 
 /// The basic WAL record representation, there are two kinds of WAL entries:
-/// 1. WalEntrySimple, whose type might be: kTxAbort, kTxFinish, kCarriageReturn
-/// 2. WalEntryComplex, whose type is kComplex
+/// 1. WalEntryComplex, whose type is kComplex
 ///
 /// EalEntry size is critical to the write performance, packed attribute is
 /// used and virtual functions are avoided to make the size as small as
@@ -43,68 +42,19 @@ class __attribute__((packed)) WalEntry {
 public:
   enum class Type : uint8_t { DO_WITH_WAL_ENTRY_TYPES(DECR_WAL_ENTRY_TYPE) };
 
-  /// Crc of the whole WalEntry, including all the payloads.
-  uint32_t mCrc32 = 0;
-
-  /// The log sequence number of this WalEntry. The number is globally and
-  /// monotonically increased.
-  LID mLsn;
-
-  /// Log sequence number for the previous WalEntry of the same transaction. 0
-  /// if it's the first WAL entry in the transaction.
-  LID mPrevLSN = 0;
-
-  // Size of the whole WalEntry, including all the payloads. The entire WAL
-  // entry stays in the WAL ring buffer of the current worker thread.
-  uint16_t mSize;
-
   /// Type of the WAL entry.
   Type mType;
-
-  /// ID of the worker who executes the transaction and records the WalEntry.
-  WORKERID mWorkerId;
-
-  /// ID of the transaction who creates this WalEntry.
-  TXID mTxId;
 
 public:
   WalEntry() = default;
 
-  WalEntry(LID lsn, uint64_t size, Type type)
-      : mCrc32(0),
-        mLsn(lsn),
-        mSize(size),
-        mType(type) {
+  WalEntry(Type type) : mType(type) {
   }
 
   std::string TypeName() const;
 
-  void InitTxInfo(Transaction* tx, WORKERID workerId) {
-    mTxId = tx->mStartTs;
-    mWorkerId = workerId;
-  }
-
-  uint32_t ComputeCRC32() const {
-    auto crc32FieldSize = sizeof(uint32_t);
-    const auto* src = reinterpret_cast<const uint8_t*>(this) + crc32FieldSize;
-    auto srcSize = mSize - crc32FieldSize;
-    return utils::CRC(src, srcSize);
-  }
-
-  void CheckCRC() const {
-    auto actualCRC = ComputeCRC32();
-    if (mCrc32 != actualCRC) {
-      rapidjson::Document doc(rapidjson::kObjectType);
-      WalEntry::ToJson(this, &doc);
-      rapidjson::StringBuffer buffer;
-      rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-      doc.Accept(writer);
-      LOG(FATAL) << "CRC32 mismatch"
-                 << ", this=" << (void*)this << ", actual=" << actualCRC
-                 << ", expected=" << mCrc32
-                 << ", walJson=" << buffer.GetString();
-    }
-  }
+  /// Returns the size of the WalEntry, including all the payloads.
+  static size_t Size(const WalEntry* entry);
 
   /// Convert the WalEntry to a JSON document.
   static void ToJson(const WalEntry* entry, rapidjson::Document* resultDoc);
@@ -113,20 +63,63 @@ public:
   static std::string ToJsonString(const WalEntry* entry);
 
 private:
-  static void toJson(const WalEntrySimple* entry, rapidjson::Document* doc);
-
+  static void toJson(const WalTxAbort* entry, rapidjson::Document* doc);
+  static void toJson(const WalTxFinish* entry, rapidjson::Document* doc);
+  static void toJson(const WalCarriageReturn* entry, rapidjson::Document* doc);
   static void toJson(const WalEntryComplex* entry, rapidjson::Document* doc);
 };
 
-class WalEntrySimple : public WalEntry {
+// maybe it can also be removed, we can use the first compensation log to
+// indicate transaction abort
+class __attribute__((packed)) WalTxAbort : public WalEntry {
 public:
-  WalEntrySimple(LID lsn, uint64_t size, Type type)
-      : WalEntry(lsn, size, type) {
+  TXID mTxId;
+
+  explicit WalTxAbort(TXID txId) : WalEntry(Type::kTxAbort), mTxId(txId) {
+  }
+};
+
+class __attribute__((packed)) WalTxFinish : public WalEntry {
+public:
+  TXID mTxId;
+
+  explicit WalTxFinish(TXID txId) : WalEntry(Type::kTxFinish), mTxId(txId) {
+  }
+};
+
+class __attribute__((packed)) WalCarriageReturn : public WalEntry {
+public:
+  uint16_t mSize;
+
+  explicit WalCarriageReturn(uint16_t size)
+      : WalEntry(Type::kCarriageReturn),
+        mSize(size) {
   }
 };
 
 class __attribute__((packed)) WalEntryComplex : public WalEntry {
 public:
+  /// Crc of the whole WalEntry, including all the payloads.
+  uint32_t mCrc32;
+
+  /// The log sequence number of this WalEntry. The number is globally and
+  /// monotonically increased.
+  LID mLsn;
+
+  /// Log sequence number for the previous WalEntry of the same transaction. 0
+  /// if it's the first WAL entry in the transaction.
+  LID mPrevLSN;
+
+  // Size of the whole WalEntry, including all the payloads. The entire WAL
+  // entry stays in the WAL ring buffer of the current worker thread.
+  uint16_t mSize;
+
+  /// ID of the worker who executes the transaction and records the WalEntry.
+  WORKERID mWorkerId;
+
+  /// ID of the transaction who creates this WalEntry.
+  TXID mTxId;
+
   /// Global sequence number of the WalEntry, indicate the global order of the
   /// WAL entry.
   uint64_t mGsn;
@@ -143,14 +136,43 @@ public:
   /// remove, update, etc.
   uint8_t mPayload[];
 
-public:
   WalEntryComplex() = default;
 
-  WalEntryComplex(LID lsn, uint64_t size, LID gsn, TREEID treeId, PID pageId)
-      : WalEntry(lsn, size, Type::kComplex),
+  WalEntryComplex(LID lsn, LID prevLsn, uint64_t size, WORKERID workerId,
+                  TXID txid, LID gsn, PID pageId, TREEID treeId)
+      : WalEntry(Type::kComplex),
+        mCrc32(0),
+        mLsn(lsn),
+        mPrevLSN(prevLsn),
+        mSize(size),
+        mWorkerId(workerId),
+        mTxId(txid),
         mGsn(gsn),
         mPageId(pageId),
         mTreeId(treeId) {
+  }
+
+  uint32_t ComputeCRC32() const {
+    auto typeFieldSize = sizeof(Type);
+    auto crc32FieldSize = sizeof(uint32_t);
+    auto crcSkipSize = typeFieldSize + crc32FieldSize;
+    const auto* src = reinterpret_cast<const uint8_t*>(this) + crcSkipSize;
+    auto srcSize = mSize - crcSkipSize;
+    return utils::CRC(src, srcSize);
+  }
+
+  void CheckCRC() const {
+    auto actualCRC = ComputeCRC32();
+    if (mCrc32 != actualCRC) {
+      rapidjson::Document doc(rapidjson::kObjectType);
+      WalEntry::ToJson(this, &doc);
+      rapidjson::StringBuffer buffer;
+      rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+      doc.Accept(writer);
+      LOG(FATAL) << std::format(
+          "CRC32 mismatch, actual={}, expected={}, walJson={}", actualCRC,
+          mCrc32, buffer.GetString());
+    }
   }
 };
 
@@ -169,29 +191,20 @@ inline std::string WalEntry::TypeName() const {
 #undef DECR_WAL_ENTRY_TYPE
 #undef WAL_ENTRY_TYPE_NAME
 
-inline void WalEntry::ToJson(const WalEntry* entry, rapidjson::Document* doc) {
+inline size_t WalEntry::Size(const WalEntry* entry) {
   switch (entry->mType) {
-  case Type::kTxAbort:
-    [[fallthrough]];
-  case Type::kTxFinish:
-    [[fallthrough]];
-  case Type::kCarriageReturn: {
-    return toJson(reinterpret_cast<const WalEntrySimple*>(entry), doc);
+  case WalEntry::Type::kComplex:
+    return static_cast<const WalEntryComplex*>(entry)->mSize;
+  case WalEntry::Type::kTxAbort:
+    return sizeof(WalTxAbort);
+  case WalEntry::Type::kTxFinish:
+    return sizeof(WalTxFinish);
+  case WalEntry::Type::kCarriageReturn:
+    return static_cast<const WalCarriageReturn*>(entry)->mSize;
+  default:
+    LOG(FATAL) << "Unknown WalEntry type: " << static_cast<int>(entry->mType);
   }
-  case Type::kComplex: {
-    return toJson(reinterpret_cast<const WalEntryComplex*>(entry), doc);
-  }
-  }
-}
-
-inline std::string WalEntry::ToJsonString(const WalEntry* entry) {
-  rapidjson::Document doc(rapidjson::kObjectType);
-  ToJson(entry, &doc);
-
-  rapidjson::StringBuffer buffer;
-  rapidjson::Writer writer(buffer);
-  doc.Accept(writer);
-  return buffer.GetString();
+  return 0;
 }
 
 const char kCrc32[] = "mCrc32";
@@ -205,7 +218,68 @@ const char kGsn[] = "mGsn";
 const char kTreeId[] = "mTreeId";
 const char kPageId[] = "mPageId";
 
-inline void WalEntry::toJson(const WalEntrySimple* entry,
+inline void WalEntry::ToJson(const WalEntry* entry, rapidjson::Document* doc) {
+  // type
+  {
+    auto typeName = entry->TypeName();
+    rapidjson::Value member;
+    member.SetString(typeName.data(), typeName.size(), doc->GetAllocator());
+    doc->AddMember(kType, member, doc->GetAllocator());
+  }
+
+  switch (entry->mType) {
+  case Type::kTxAbort:
+    return toJson(reinterpret_cast<const WalTxAbort*>(entry), doc);
+  case Type::kTxFinish:
+    return toJson(reinterpret_cast<const WalTxFinish*>(entry), doc);
+  case Type::kCarriageReturn:
+    return toJson(reinterpret_cast<const WalCarriageReturn*>(entry), doc);
+  case Type::kComplex:
+    return toJson(reinterpret_cast<const WalEntryComplex*>(entry), doc);
+  }
+}
+
+inline std::string WalEntry::ToJsonString(const WalEntry* entry) {
+  rapidjson::Document doc(rapidjson::kObjectType);
+  ToJson(entry, &doc);
+
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer writer(buffer);
+  doc.Accept(writer);
+  return buffer.GetString();
+}
+
+inline void WalEntry::toJson(const WalTxAbort* entry,
+                             rapidjson::Document* doc) {
+  // txid
+  {
+    rapidjson::Value member;
+    member.SetUint64(entry->mTxId);
+    doc->AddMember(kTxId, member, doc->GetAllocator());
+  }
+}
+
+inline void WalEntry::toJson(const WalTxFinish* entry,
+                             rapidjson::Document* doc) {
+  // txid
+  {
+    rapidjson::Value member;
+    member.SetUint64(entry->mTxId);
+    doc->AddMember(kTxId, member, doc->GetAllocator());
+  }
+}
+
+inline void WalEntry::toJson(const WalCarriageReturn* entry,
+                             rapidjson::Document* doc) {
+  // size
+  {
+    rapidjson::Value member;
+    member.SetUint64(entry->mSize);
+    doc->AddMember(kTxId, member, doc->GetAllocator());
+  }
+}
+
+inline void WalEntry::toJson(const WalEntryComplex* entry,
                              rapidjson::Document* doc) {
   // crc
   {
@@ -228,14 +302,6 @@ inline void WalEntry::toJson(const WalEntrySimple* entry,
     doc->AddMember(kSize, member, doc->GetAllocator());
   }
 
-  // type
-  {
-    auto typeName = entry->TypeName();
-    rapidjson::Value member;
-    member.SetString(typeName.data(), typeName.size(), doc->GetAllocator());
-    doc->AddMember(kType, member, doc->GetAllocator());
-  }
-
   // txId
   {
     rapidjson::Value member;
@@ -256,13 +322,6 @@ inline void WalEntry::toJson(const WalEntrySimple* entry,
     member.SetUint64(entry->mPrevLSN);
     doc->AddMember(kPrevLsn, member, doc->GetAllocator());
   }
-}
-
-inline void WalEntry::toJson(const WalEntryComplex* entry,
-                             rapidjson::Document* doc) {
-  // collect the common fields
-  auto* simpleEntry = reinterpret_cast<const WalEntrySimple*>(entry);
-  toJson(simpleEntry, doc);
 
   // psn
   {
@@ -286,5 +345,4 @@ inline void WalEntry::toJson(const WalEntryComplex* entry,
   }
 }
 
-} // namespace cr
-} // namespace leanstore
+} // namespace leanstore::cr

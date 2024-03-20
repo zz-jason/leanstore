@@ -153,7 +153,7 @@ void Worker::CommitTx() {
   }
 
   if (mActiveTx.mIsDurable) {
-    mLogging.WriteSimpleWal(WalEntry::Type::kTxFinish);
+    mLogging.WriteWalTxFinish();
   }
 
   if (mLogging.mHasRemoteDependency) {
@@ -241,8 +241,8 @@ void Worker::AbortTx() {
 
   if (mActiveTx.mHasWrote && mActiveTx.mIsDurable) {
     // TODO: write compensation wal records between abort and finish
-    mLogging.WriteSimpleWal(WalEntry::Type::kTxAbort);
-    mLogging.WriteSimpleWal(WalEntry::Type::kTxFinish);
+    mLogging.WriteWalTxAbort();
+    mLogging.WriteWalTxFinish();
   }
 }
 

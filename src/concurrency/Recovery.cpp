@@ -8,6 +8,7 @@
 #include "leanstore/LeanStore.hpp"
 #include "sync/HybridGuard.hpp"
 
+#include <cstdint>
 #include <expected>
 #include <utility>
 
@@ -21,53 +22,38 @@ std::expected<void, utils::Error> Recovery::analysis() {
   // asume that each WalEntry is smaller than the page size
   utils::AlignedBuffer<512> alignedBuffer(mStore->mStoreOption.mPageSize);
   uint8_t* walEntryPtr = alignedBuffer.Get();
-  uint64_t walEntrySize = sizeof(WalEntry);
   for (auto offset = mWalStartOffset; offset < mWalSize;) {
-    uint64_t bytesRead = 0;
-    if (auto res = readFromWalFile(offset, walEntrySize, walEntryPtr); !res) {
+    if (auto res = readWalEntry(offset, walEntryPtr); !res) {
       return std::unexpected(res.error());
     }
-    bytesRead += walEntrySize;
-
     auto* walEntry = reinterpret_cast<WalEntry*>(walEntryPtr);
     switch (walEntry->mType) {
     case WalEntry::Type::kTxAbort: {
-      DCHECK_EQ(bytesRead, walEntry->mSize);
-      DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
-      mActiveTxTable[walEntry->mTxId] = offset;
-      offset += bytesRead;
+      auto* wal = reinterpret_cast<WalTxAbort*>(walEntryPtr);
+      DCHECK(mActiveTxTable.find(wal->mTxId) != mActiveTxTable.end());
+      mActiveTxTable[wal->mTxId] = offset;
       continue;
     }
     case WalEntry::Type::kTxFinish: {
-      DCHECK_EQ(bytesRead, walEntry->mSize);
-      DCHECK(mActiveTxTable.find(walEntry->mTxId) != mActiveTxTable.end());
-      mActiveTxTable.erase(walEntry->mTxId);
-      offset += bytesRead;
+      auto* wal = reinterpret_cast<WalTxFinish*>(walEntryPtr);
+      DCHECK(mActiveTxTable.find(wal->mTxId) != mActiveTxTable.end());
+      mActiveTxTable.erase(wal->mTxId);
+      continue;
+    }
+    case WalEntry::Type::kCarriageReturn: {
+      // do nothing
       continue;
     }
     case WalEntry::Type::kComplex: {
-      auto leftOffset = offset + bytesRead;
-      auto leftSize = walEntry->mSize - bytesRead;
-      auto* leftDest = walEntryPtr + bytesRead;
-      if (auto res = readFromWalFile(leftOffset, leftSize, leftDest); !res) {
-        return std::unexpected(res.error());
-      }
-      bytesRead += leftSize;
-
-      auto* complexEntry = reinterpret_cast<WalEntryComplex*>(walEntryPtr);
-      DCHECK_EQ(bytesRead, complexEntry->mSize);
-
-      mActiveTxTable[walEntry->mTxId] = offset;
-      auto& bf = resolvePage(complexEntry->mPageId);
-      if (complexEntry->mGsn >= bf.mPage.mGSN &&
-          mDirtyPageTable.find(complexEntry->mPageId) ==
-              mDirtyPageTable.end()) {
+      auto* wal = reinterpret_cast<WalEntryComplex*>(walEntryPtr);
+      mActiveTxTable[wal->mTxId] = offset;
+      auto& bf = resolvePage(wal->mPageId);
+      if (wal->mGsn >= bf.mPage.mGSN &&
+          mDirtyPageTable.find(wal->mPageId) == mDirtyPageTable.end()) {
         // record the first WalEntry that makes the page dirty
-        auto pageId = complexEntry->mPageId;
+        auto pageId = wal->mPageId;
         mDirtyPageTable.emplace(pageId, offset);
       }
-
-      offset += bytesRead;
       continue;
     }
     default: {
@@ -157,38 +143,18 @@ std::expected<void, utils::Error> Recovery::redo() {
 
 std::expected<bool, utils::Error> Recovery::nextWalComplexToRedo(
     uint64_t& offset, WalEntryComplex* complexEntry) {
-  const uint64_t walEntrySize = sizeof(WalEntry);
   auto* buff = reinterpret_cast<uint8_t*>(complexEntry);
-
   while (offset < mWalSize) {
-    uint64_t bytesRead = 0;
-
-    // read the header of the complex entry
-    if (auto res = readFromWalFile(offset, walEntrySize, buff); !res) {
+    // read a WalEntry
+    if (auto res = readWalEntry(offset, buff); !res) {
       return std::unexpected(res.error());
     }
-    bytesRead += walEntrySize;
 
     // skip if not a complex entry
     auto* walEntry = reinterpret_cast<WalEntry*>(buff);
     if (walEntry->mType != WalEntry::Type::kComplex) {
-      offset += bytesRead;
       continue;
     }
-
-    // read the rest of the complex entry
-    auto leftOffset = offset + bytesRead;
-    auto leftSize = walEntry->mSize - bytesRead;
-    auto* leftDest = buff + bytesRead;
-    if (auto res = readFromWalFile(leftOffset, leftSize, leftDest); !res) {
-      return std::unexpected(res.error());
-    }
-    bytesRead += leftSize;
-    offset += bytesRead;
-    DCHECK(bytesRead == complexEntry->mSize)
-        << "bytesRead should be equal to complexEntry->mSize"
-        << ", offset=" << offset << ", bytesRead=" << bytesRead
-        << ", complexEntry->mSize=" << complexEntry->mSize;
 
     // skip if the page is not dirty
     if (mDirtyPageTable.find(complexEntry->mPageId) == mDirtyPageTable.end() ||
@@ -398,6 +364,72 @@ void Recovery::redoSplitNonRoot(storage::BufferFrame& bf,
       guardedParent->spaceNeeded(sepInfo.mSize, sizeof(Swip));
   xGuardedParent->requestSpaceFor(spaceNeededForSeparator);
   xGuardedChild->Split(xGuardedParent, xGuardedNewLeft, sepInfo);
+}
+
+/// Read a WalEntry from the WAL file
+std::expected<void, utils::Error> Recovery::readWalEntry(uint64_t& offset,
+                                                         uint8_t* dest) {
+  // read the WalEntry
+  auto walEntrySize = sizeof(WalEntry);
+  if (auto res = readFromWalFile(offset, walEntrySize, dest); !res) {
+    return std::unexpected(res.error());
+  }
+
+  switch (reinterpret_cast<WalEntry*>(dest)->mType) {
+  case leanstore::cr::WalEntry::Type::kTxAbort: {
+    auto left = sizeof(WalTxAbort) - walEntrySize;
+    auto res =
+        readFromWalFile(offset + walEntrySize, left, dest + walEntrySize);
+    if (!res) {
+      return std::unexpected(res.error());
+    }
+    offset += sizeof(WalTxAbort);
+    return {};
+  }
+  case leanstore::cr::WalEntry::Type::kTxFinish: {
+    auto left = sizeof(WalTxFinish) - walEntrySize;
+    auto res =
+        readFromWalFile(offset + walEntrySize, left, dest + walEntrySize);
+    if (!res) {
+      return std::unexpected(res.error());
+    }
+    offset += sizeof(WalTxFinish);
+    return {};
+  }
+  case leanstore::cr::WalEntry::Type::kCarriageReturn: {
+    auto left = sizeof(WalCarriageReturn) - walEntrySize;
+    auto res =
+        readFromWalFile(offset + walEntrySize, left, dest + walEntrySize);
+    if (!res) {
+      return std::unexpected(res.error());
+    }
+    offset += reinterpret_cast<WalCarriageReturn*>(dest)->mSize;
+    return {};
+  }
+  case leanstore::cr::WalEntry::Type::kComplex: {
+    // read the body of WalEntryComplex
+    auto left = sizeof(WalEntryComplex) - walEntrySize;
+    auto res =
+        readFromWalFile(offset + walEntrySize, left, dest + walEntrySize);
+    if (!res) {
+      return std::unexpected(res.error());
+    }
+
+    // read the payload of WalEntryComplex
+    left = reinterpret_cast<WalEntryComplex*>(dest)->mSize -
+           sizeof(WalEntryComplex);
+    res = readFromWalFile(offset + sizeof(WalEntryComplex), left,
+                          dest + sizeof(WalEntryComplex));
+    if (!res) {
+      return std::unexpected(res.error());
+    }
+
+    // advance the offset
+    offset += reinterpret_cast<WalEntryComplex*>(dest)->mSize;
+    return {};
+  }
+  }
+  return {};
 }
 
 } // namespace leanstore::cr
