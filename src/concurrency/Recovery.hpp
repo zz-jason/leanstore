@@ -113,6 +113,10 @@ private:
   /// Return the buffer frame containing the required dirty page
   storage::BufferFrame& resolvePage(PID pageId);
 
+  /// Read a WalEntry from the WAL file to the destination buffer.
+  std::expected<void, utils::Error> readWalEntry(uint64_t& offset,
+                                                 uint8_t* dest);
+
   std::expected<void, utils::Error> readFromWalFile(int64_t entryOffset,
                                                     size_t entrySize,
                                                     void* destination);

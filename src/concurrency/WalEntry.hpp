@@ -200,8 +200,11 @@ inline size_t WalEntry::Size(const WalEntry* entry) {
   case WalEntry::Type::kTxFinish:
     return sizeof(WalTxFinish);
   case WalEntry::Type::kCarriageReturn:
-    return sizeof(WalCarriageReturn);
+    return reinterpret_cast<const WalCarriageReturn*>(&entry)->mSize;
+  default:
+    LOG(FATAL) << "Unknown WalEntry type: " << static_cast<int>(entry->mType);
   }
+  return 0;
 }
 
 const char kCrc32[] = "mCrc32";
@@ -226,9 +229,9 @@ inline void WalEntry::ToJson(const WalEntry* entry, rapidjson::Document* doc) {
 
   switch (entry->mType) {
   case Type::kTxAbort:
-    return ToJson(reinterpret_cast<const WalTxAbort*>(entry), doc);
+    return toJson(reinterpret_cast<const WalTxAbort*>(entry), doc);
   case Type::kTxFinish:
-    return ToJson(reinterpret_cast<const WalTxFinish*>(entry), doc);
+    return toJson(reinterpret_cast<const WalTxFinish*>(entry), doc);
   case Type::kCarriageReturn:
     return toJson(reinterpret_cast<const WalCarriageReturn*>(entry), doc);
   case Type::kComplex:
