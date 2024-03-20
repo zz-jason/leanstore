@@ -5,11 +5,6 @@
 #include <gtest/gtest.h>
 #include <rapidjson/document.h>
 
-#include <memory>
-#include <tuple>
-#include <unordered_map>
-#include <vector>
-
 namespace leanstore::cr::test {
 
 class WalEntryTest : public ::testing::Test {};
@@ -18,7 +13,7 @@ TEST_F(WalEntryTest, Size) {
   EXPECT_EQ(sizeof(WalEntry), 1);
   EXPECT_EQ(sizeof(WalTxAbort), 9);
   EXPECT_EQ(sizeof(WalTxFinish), 9);
-  EXPECT_EQ(sizeof(WalCarriageReturn), 9);
+  EXPECT_EQ(sizeof(WalCarriageReturn), 3);
   EXPECT_EQ(sizeof(WalEntryComplex), 57);
 }
 

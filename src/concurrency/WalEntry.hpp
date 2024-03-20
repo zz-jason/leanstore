@@ -194,13 +194,13 @@ inline std::string WalEntry::TypeName() const {
 inline size_t WalEntry::Size(const WalEntry* entry) {
   switch (entry->mType) {
   case WalEntry::Type::kComplex:
-    return reinterpret_cast<const WalEntryComplex*>(&entry)->mSize;
+    return static_cast<const WalEntryComplex*>(entry)->mSize;
   case WalEntry::Type::kTxAbort:
     return sizeof(WalTxAbort);
   case WalEntry::Type::kTxFinish:
     return sizeof(WalTxFinish);
   case WalEntry::Type::kCarriageReturn:
-    return reinterpret_cast<const WalCarriageReturn*>(&entry)->mSize;
+    return static_cast<const WalCarriageReturn*>(entry)->mSize;
   default:
     LOG(FATAL) << "Unknown WalEntry type: " << static_cast<int>(entry->mType);
   }
