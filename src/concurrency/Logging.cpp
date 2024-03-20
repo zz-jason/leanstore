@@ -87,7 +87,7 @@ void Logging::WriteWalTxFinish() {
   // Initialize a WalTxFinish
   auto* data = mWalBuffer + mWalBuffered;
   std::memset(data, 0, size);
-  entry = new (data) WalTxFinish(size);
+  entry = new (data) WalTxFinish(Worker::My().mActiveTx.mStartTs);
 
   // Submit the WalTxAbort to group committer
   mWalBuffered += size;

@@ -378,7 +378,9 @@ std::expected<void, utils::Error> Recovery::readWalEntry(uint64_t& offset,
   switch (reinterpret_cast<WalEntry*>(dest)->mType) {
   case leanstore::cr::WalEntry::Type::kTxAbort: {
     auto left = sizeof(WalTxAbort) - walEntrySize;
-    if (auto res = readFromWalFile(offset, left, dest + walEntrySize); !res) {
+    auto res =
+        readFromWalFile(offset + walEntrySize, left, dest + walEntrySize);
+    if (!res) {
       return std::unexpected(res.error());
     }
     offset += sizeof(WalTxAbort);
@@ -386,7 +388,9 @@ std::expected<void, utils::Error> Recovery::readWalEntry(uint64_t& offset,
   }
   case leanstore::cr::WalEntry::Type::kTxFinish: {
     auto left = sizeof(WalTxFinish) - walEntrySize;
-    if (auto res = readFromWalFile(offset, left, dest + walEntrySize); !res) {
+    auto res =
+        readFromWalFile(offset + walEntrySize, left, dest + walEntrySize);
+    if (!res) {
       return std::unexpected(res.error());
     }
     offset += sizeof(WalTxFinish);
@@ -394,7 +398,9 @@ std::expected<void, utils::Error> Recovery::readWalEntry(uint64_t& offset,
   }
   case leanstore::cr::WalEntry::Type::kCarriageReturn: {
     auto left = sizeof(WalCarriageReturn) - walEntrySize;
-    if (auto res = readFromWalFile(offset, left, dest + walEntrySize); !res) {
+    auto res =
+        readFromWalFile(offset + walEntrySize, left, dest + walEntrySize);
+    if (!res) {
       return std::unexpected(res.error());
     }
     offset += reinterpret_cast<WalCarriageReturn*>(dest)->mSize;
@@ -403,14 +409,17 @@ std::expected<void, utils::Error> Recovery::readWalEntry(uint64_t& offset,
   case leanstore::cr::WalEntry::Type::kComplex: {
     // read the body of WalEntryComplex
     auto left = sizeof(WalEntryComplex) - walEntrySize;
-    if (auto res = readFromWalFile(offset, left, dest + walEntrySize); !res) {
+    auto res =
+        readFromWalFile(offset + walEntrySize, left, dest + walEntrySize);
+    if (!res) {
       return std::unexpected(res.error());
     }
 
     // read the payload of WalEntryComplex
     left = reinterpret_cast<WalEntryComplex*>(dest)->mSize -
            sizeof(WalEntryComplex);
-    auto res = readFromWalFile(offset, left, dest + sizeof(WalEntryComplex));
+    res = readFromWalFile(offset + sizeof(WalEntryComplex), left,
+                          dest + sizeof(WalEntryComplex));
     if (!res) {
       return std::unexpected(res.error());
     }
