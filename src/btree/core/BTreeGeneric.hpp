@@ -158,6 +158,14 @@ private:
                            const BTreeNode::SeparatorInfo& sepInfo,
                            uint16_t spaceNeededForSeparator);
 
+  bool mergeAndReclaimLeft(GuardedBufferFrame<BTreeNode>& guardedParent,
+                           GuardedBufferFrame<BTreeNode>& guardedChild,
+                           uint32_t posInParent, bool swizzleSibling);
+
+  bool mergeAndReclaimRight(GuardedBufferFrame<BTreeNode>& guardedParent,
+                            GuardedBufferFrame<BTreeNode>& guardedChild,
+                            uint32_t posInParent, bool swizzleSibling);
+
   int64_t iterateAllPages(BTreeNodeCallback inner, BTreeNodeCallback leaf);
 
   int64_t iterateAllPagesRecursive(GuardedBufferFrame<BTreeNode>& guardedNode,

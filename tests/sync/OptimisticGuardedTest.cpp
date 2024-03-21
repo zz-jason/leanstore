@@ -1,9 +1,9 @@
 #include "sync/OptimisticGuarded.hpp"
 
+#include "buffer-manager/BufferManager.hpp"
 #include "concurrency/CRManager.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "buffer-manager/BufferManager.hpp"
 
 #include <gtest/gtest.h>
 

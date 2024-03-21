@@ -43,14 +43,8 @@ endfunction(leanstore_add_test_in_dir)
 
 
 # Add tests
-leanstore_add_test(BasicKVTest)
-leanstore_add_test(RecoveryTest)
-leanstore_add_test(OptimisticGuardedTest)
-leanstore_add_test(TransactionKVTest)
-leanstore_add_test(MvccTest)
 leanstore_add_test(AnomaliesTest)
 leanstore_add_test(AbortTest)
-leanstore_add_test(LongRunningTxTest)
 
 # tests in btree
 leanstore_add_test_in_dir(btree)
