@@ -11,7 +11,24 @@ file(GLOB_RECURSE LEANSTORE_SRC **.cpp **/**.cpp **.cc **/**.cc **.hpp **/**.hpp
 add_library(leanstore STATIC ${LEANSTORE_SRC})
 
 # dependencies
-set(leanstore_deps aio tabulate::tabulate rapidjson gflags::gflags glog::glog Crc32c::crc32c)
+set(leanstore_deps
+  aio
+  tabulate::tabulate
+  rapidjson
+  gflags::gflags
+  glog::glog
+  Crc32c::crc32c
+  prometheus-cpp::core
+  prometheus-cpp::pull
+  # opentelemetry-cpp::api
+  # opentelemetry-cpp::common
+  # opentelemetry-cpp::ext
+  # opentelemetry-cpp::logs
+  # opentelemetry-cpp::metrics
+  # opentelemetry-cpp::sdk
+  # opentelemetry_exporter_prometheus
+  # opentelemetry-cpp::trace
+)
 target_link_libraries(leanstore PUBLIC ${leanstore_deps})
 
 # include dirs
