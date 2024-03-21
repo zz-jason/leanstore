@@ -117,13 +117,16 @@ void Worker::StartTx(TxMode mode, IsolationLevel level) {
 }
 
 void Worker::CommitTx() {
-  SCOPED_DEFER(COUNTERS_BLOCK() {
+  SCOPED_DEFER({
     mActiveTx.mState = TxState::kCommitted;
-    DLOG(INFO) << "Transaction committed"
-               << ", workerId=" << mWorkerId
-               << ", startTs=" << mActiveTx.mStartTs
-               << ", commitTs=" << mActiveTx.mCommitTs
-               << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
+    mStore->mMetricsManager.IncTxCommit();
+    COUNTERS_BLOCK() {
+      DLOG(INFO) << "Transaction committed"
+                 << ", workerId=" << mWorkerId
+                 << ", startTs=" << mActiveTx.mStartTs
+                 << ", commitTs=" << mActiveTx.mCommitTs
+                 << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
+    }
   });
 
   utils::Timer timer(CRCounters::MyCounters().cc_ms_commit_tx);
@@ -203,6 +206,7 @@ void Worker::CommitTx() {
 void Worker::AbortTx() {
   SCOPED_DEFER({
     mActiveTx.mState = TxState::kAborted;
+    mStore->mMetricsManager.IncTxCommit();
     mActiveTxId.store(0, std::memory_order_release);
     LOG(INFO) << "Transaction aborted"
               << ", workerId=" << mWorkerId

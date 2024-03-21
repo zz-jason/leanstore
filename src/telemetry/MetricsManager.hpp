@@ -45,7 +45,7 @@ class MetricsManager {
 public:
   MetricsManager() {
     // create an http server running on port 8080
-    prometheus::Exposer exposer{"127.0.0.1:8080"};
+    prometheus::Exposer exposer{"0.0.0.0:2345"};
 
     // create a metrics registry
     mRegistry = std::make_shared<prometheus::Registry>();

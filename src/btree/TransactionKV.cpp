@@ -47,6 +47,7 @@ void TransactionKV::Init(leanstore::LeanStore* store, TREEID treeId,
 }
 
 OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
+  mStore->mMetricsManager.IncTxKvLookup();
   DCHECK(cr::Worker::My().IsTxStarted())
       << "Worker is not in a transaction"
       << ", workerId=" << cr::Worker::My().mWorkerId
@@ -89,6 +90,7 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
 
 OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
                                     UpdateDesc& updateDesc) {
+  mStore->mMetricsManager.IncTxKvLookup();
   DCHECK(cr::Worker::My().IsTxStarted());
   JUMPMU_TRY() {
     auto xIter = GetExclusiveIterator();

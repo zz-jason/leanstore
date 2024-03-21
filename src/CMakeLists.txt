@@ -20,14 +20,6 @@ set(leanstore_deps
   Crc32c::crc32c
   prometheus-cpp::core
   prometheus-cpp::pull
-  # opentelemetry-cpp::api
-  # opentelemetry-cpp::common
-  # opentelemetry-cpp::ext
-  # opentelemetry-cpp::logs
-  # opentelemetry-cpp::metrics
-  # opentelemetry-cpp::sdk
-  # opentelemetry_exporter_prometheus
-  # opentelemetry-cpp::trace
 )
 target_link_libraries(leanstore PUBLIC ${leanstore_deps})
 

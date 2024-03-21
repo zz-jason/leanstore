@@ -2,6 +2,7 @@
 
 #include "leanstore/Store.hpp"
 #include "leanstore/Units.hpp"
+#include "telemetry/MetricsManager.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Error.hpp"
 
@@ -64,6 +65,9 @@ public:
   /// for all transactions in the store. Start from a positive number, 0
   /// indicates invalid timestamp
   std::atomic<uint64_t> mTimestampOracle = 1;
+
+  /// The metrics manager
+  telemetry::MetricsManager mMetricsManager;
 
 #ifdef DEBUG
   utils::DebugFlagsRegistry mDebugFlagsRegistry;
