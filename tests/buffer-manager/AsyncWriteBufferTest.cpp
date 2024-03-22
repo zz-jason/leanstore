@@ -125,7 +125,8 @@ TEST_F(AsyncWriteBufferTest, Basic) {
   for (int i = 0; i < testMaxBatchSize; i++) {
     BufferFrameHolder bfHolder(testPageSize, i);
     auto ret =
-        pread(testFd, &bfHolder.mBf->mPage, testPageSize, testPageSize * i);
+        pread(testFd, reinterpret_cast<void*>(bfHolder.mBuffer.Get() + 512),
+              testPageSize, testPageSize * i);
     EXPECT_EQ(ret, testPageSize);
     auto payload = *reinterpret_cast<int64_t*>(bfHolder.mBf->mPage.mPayload);
     EXPECT_EQ(payload, i);

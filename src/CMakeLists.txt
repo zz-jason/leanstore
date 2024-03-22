@@ -18,6 +18,7 @@ set(leanstore_deps
   gflags::gflags
   glog::glog
   Crc32c::crc32c
+  httplib::httplib
   prometheus-cpp::core
   prometheus-cpp::pull
 )
@@ -53,7 +54,7 @@ if(PARANOID)
   target_compile_definitions(leanstore PUBLIC PARANOID)
 endif(PARANOID)
 
-set(COUNTERS_LEVEL "all" CACHE STRING "Which counters to leave in leanstore build")
+option(COUNTERS_LEVEL "Which counters to leave in leanstore build" "all")
 if(COUNTERS_LEVEL STREQUAL "all")
   target_compile_definitions(leanstore PUBLIC MACRO_COUNTERS_ALL)
 endif()

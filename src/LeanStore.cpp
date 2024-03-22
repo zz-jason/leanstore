@@ -57,6 +57,9 @@ LeanStore::LeanStore() {
   LOG(INFO) << "LeanStore starting ...";
   SCOPED_DEFER(LOG(INFO) << "LeanStore started");
 
+  // Start http metrics exposer
+  mMetricsManager.StartHttpExposer();
+
   initPageAndWalFd();
 
   // create global btree catalog

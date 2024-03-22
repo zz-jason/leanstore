@@ -1,5 +1,6 @@
 #pragma once
 
+#include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "utils/UserThread.hpp"
 
@@ -21,6 +22,8 @@ class WalFlushReq;
 
 class GroupCommitter : public leanstore::utils::UserThread {
 public:
+  leanstore::LeanStore* mStore;
+
   /// File descriptor of the underlying WAL file.
   const int32_t mWalFd;
 
@@ -53,8 +56,10 @@ public:
   std::unique_ptr<io_event[]> mIOEvents;
 
 public:
-  GroupCommitter(int32_t walFd, std::vector<Worker*>& workers, int cpu)
+  GroupCommitter(leanstore::LeanStore* store, int32_t walFd,
+                 std::vector<Worker*>& workers, int cpu)
       : UserThread("GroupCommitter", cpu),
+        mStore(store),
         mWalFd(walFd),
         mWalSize(0),
         mGlobalMinFlushedGSN(0),

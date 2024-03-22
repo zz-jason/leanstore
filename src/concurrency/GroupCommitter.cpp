@@ -2,9 +2,9 @@
 
 #include "concurrency/CRManager.hpp"
 #include "concurrency/Worker.hpp"
-#include "leanstore/Exceptions.hpp"
 #include "profiling/counters/CPUCounters.hpp"
-#include "utils/Timer.hpp"
+#include "telemetry/MetricOnlyTimer.hpp"
+#include "telemetry/MetricsManager.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -45,15 +45,10 @@ void GroupCommitter::prepareIOCBs(int32_t& numIOCBs, uint64_t& minFlushedGSN,
                                   uint64_t& maxFlushedGSN, TXID& minFlushedTxId,
                                   std::vector<uint64_t>& numRfaTxs,
                                   std::vector<WalFlushReq>& walFlushReqCopies) {
-  /// counters
-  leanstore::utils::SteadyTimer phase1Timer [[maybe_unused]];
-  COUNTERS_BLOCK() {
-    CRCounters::MyCounters().gct_rounds++;
-    phase1Timer.Start();
-  }
-  SCOPED_DEFER(COUNTERS_BLOCK() {
-    phase1Timer.Stop();
-    CRCounters::MyCounters().gct_phase_1_ms += phase1Timer.ElaspedUS();
+  leanstore::telemetry::MetricOnlyTimer timer;
+  SCOPED_DEFER({
+    METRIC_HIST_OBSERVE(mStore->mMetricsManager, group_committer_prep_iocbs_us,
+                        timer.ElaspedUs());
   });
 
   numIOCBs = 0;
@@ -104,14 +99,10 @@ void GroupCommitter::prepareIOCBs(int32_t& numIOCBs, uint64_t& minFlushedGSN,
 void GroupCommitter::writeIOCBs(int32_t numIOCBs) {
   DCHECK(numIOCBs > 0) << "should have at least 1 IOCB to write";
 
-  // counter
-  leanstore::utils::SteadyTimer writeTimer [[maybe_unused]];
-  COUNTERS_BLOCK() {
-    writeTimer.Start();
-  }
-  SCOPED_DEFER(COUNTERS_BLOCK() {
-    writeTimer.Stop();
-    CRCounters::MyCounters().gct_write_ms += writeTimer.ElaspedUS();
+  leanstore::telemetry::MetricOnlyTimer timer;
+  SCOPED_DEFER({
+    METRIC_HIST_OBSERVE(mStore->mMetricsManager, group_committer_write_iocbs_us,
+                        timer.ElaspedUs());
   });
 
   // submit all log writes using a single system call.
@@ -150,18 +141,10 @@ void GroupCommitter::commitTXs(
     uint64_t minFlushedGSN, uint64_t maxFlushedGSN, TXID minFlushedTxId,
     const std::vector<uint64_t>& numRfaTxs,
     const std::vector<WalFlushReq>& walFlushReqCopies) {
-  // commited transactions
-  uint64_t numCommitted = 0;
-
-  // counter
-  leanstore::utils::SteadyTimer phase2Timer [[maybe_unused]];
-  COUNTERS_BLOCK() {
-    phase2Timer.Start();
-  }
-  SCOPED_DEFER(COUNTERS_BLOCK() {
-    CRCounters::MyCounters().gct_committed_tx += numCommitted;
-    phase2Timer.Stop();
-    CRCounters::MyCounters().gct_phase_2_ms += phase2Timer.ElaspedUS();
+  leanstore::telemetry::MetricOnlyTimer timer;
+  SCOPED_DEFER({
+    METRIC_HIST_OBSERVE(mStore->mMetricsManager, group_committer_commit_txs_us,
+                        timer.ElaspedUs());
   });
 
   for (WORKERID workerId = 0; workerId < mWorkers.size(); workerId++) {
@@ -193,7 +176,6 @@ void GroupCommitter::commitTXs(
       if (i > 0) {
         logging.mTxToCommit.erase(logging.mTxToCommit.begin(),
                                   logging.mTxToCommit.begin() + i);
-        numCommitted += i;
       }
     }
 
@@ -218,7 +200,6 @@ void GroupCommitter::commitTXs(
       if (i > 0) {
         logging.mRfaTxToCommit.erase(logging.mRfaTxToCommit.begin(),
                                      logging.mRfaTxToCommit.begin() + i);
-        numCommitted += i;
       }
     }
 
@@ -262,9 +243,9 @@ void GroupCommitter::setUpIOCB(int32_t ioSlot, uint8_t* buf, uint64_t lower,
   mWalSize += upper - lower;
   mIOCBs[ioSlot].data = bufAligned;
   mIOCBPtrs[ioSlot] = &mIOCBs[ioSlot];
-  COUNTERS_BLOCK() {
-    CRCounters::MyCounters().gct_write_bytes += countAligned;
-  }
+
+  METRIC_COUNTER_INC(mStore->mMetricsManager, group_committer_disk_write_total,
+                     countAligned);
 };
 
 } // namespace cr
