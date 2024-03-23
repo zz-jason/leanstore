@@ -11,7 +11,17 @@ file(GLOB_RECURSE LEANSTORE_SRC **.cpp **/**.cpp **.cc **/**.cc **.hpp **/**.hpp
 add_library(leanstore STATIC ${LEANSTORE_SRC})
 
 # dependencies
-set(leanstore_deps aio tabulate::tabulate rapidjson gflags::gflags glog::glog Crc32c::crc32c)
+set(leanstore_deps
+  aio
+  tabulate::tabulate
+  rapidjson
+  gflags::gflags
+  glog::glog
+  Crc32c::crc32c
+  httplib::httplib
+  prometheus-cpp::core
+  prometheus-cpp::pull
+)
 target_link_libraries(leanstore PUBLIC ${leanstore_deps})
 
 # include dirs
@@ -44,7 +54,7 @@ if(PARANOID)
   target_compile_definitions(leanstore PUBLIC PARANOID)
 endif(PARANOID)
 
-set(COUNTERS_LEVEL "all" CACHE STRING "Which counters to leave in leanstore build")
+option(COUNTERS_LEVEL "Which counters to leave in leanstore build" "all")
 if(COUNTERS_LEVEL STREQUAL "all")
   target_compile_definitions(leanstore PUBLIC MACRO_COUNTERS_ALL)
 endif()

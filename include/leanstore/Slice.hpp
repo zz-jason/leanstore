@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -37,6 +38,11 @@ public:
 
   std::string ToString() const {
     return std::string(reinterpret_cast<const char*>(data()), size());
+  }
+
+  void CopyTo(std::string& dest) const {
+    dest.resize(size());
+    std::memcpy(dest.data(), data(), size());
   }
 };
 

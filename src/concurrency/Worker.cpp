@@ -7,9 +7,10 @@
 #include "concurrency/Transaction.hpp"
 #include "concurrency/WalEntry.hpp"
 #include "leanstore/Config.hpp"
-#include "leanstore/Exceptions.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "profiling/counters/CRCounters.hpp"
+#include "telemetry/MetricOnlyTimer.hpp"
+#include "telemetry/MetricsManager.hpp"
 #include "utils/Defer.hpp"
 
 #include <glog/logging.h>
@@ -48,7 +49,6 @@ Worker::~Worker() {
 }
 
 void Worker::StartTx(TxMode mode, IsolationLevel level) {
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_start_tx);
   Transaction prevTx = mActiveTx;
   DCHECK(prevTx.mState != TxState::kStarted)
       << "Previous transaction not ended"
@@ -117,16 +117,8 @@ void Worker::StartTx(TxMode mode, IsolationLevel level) {
 }
 
 void Worker::CommitTx() {
-  SCOPED_DEFER(COUNTERS_BLOCK() {
-    mActiveTx.mState = TxState::kCommitted;
-    DLOG(INFO) << "Transaction committed"
-               << ", workerId=" << mWorkerId
-               << ", startTs=" << mActiveTx.mStartTs
-               << ", commitTs=" << mActiveTx.mCommitTs
-               << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
-  });
+  SCOPED_DEFER(mActiveTx.mState = TxState::kCommitted);
 
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_commit_tx);
   if (!mActiveTx.mIsDurable) {
     return;
   }
@@ -156,9 +148,11 @@ void Worker::CommitTx() {
     mLogging.WriteWalTxFinish();
   }
 
+  // update max observed GSN
+  mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
+
   if (mLogging.mHasRemoteDependency) {
     // for group commit
-    mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
     std::unique_lock<std::mutex> g(mLogging.mTxToCommitMutex);
     mLogging.mTxToCommit.push_back(mActiveTx);
     DLOG(INFO) << "Puting transaction with remote dependency to mTxToCommit"
@@ -168,7 +162,6 @@ void Worker::CommitTx() {
                << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
   } else {
     // for group commit
-    mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
     std::unique_lock<std::mutex> g(mLogging.mRfaTxToCommitMutex);
     CRCounters::MyCounters().rfa_committed_tx++;
     mLogging.mRfaTxToCommit.push_back(mActiveTx);
@@ -183,8 +176,11 @@ void Worker::CommitTx() {
   mCc.GarbageCollection();
 
   // Wait transaction to be committed
+  telemetry::MetricOnlyTimer timer;
   while (mLogging.TxUnCommitted(mActiveTx.mCommitTs)) {
   }
+  METRIC_HIST_OBSERVE(mStore->mMetricsManager, tx_commit_wal_wait_us,
+                      timer.ElaspedUs());
 }
 
 /// TODO(jian.z): revert changes made in-place on the btree
@@ -203,6 +199,7 @@ void Worker::CommitTx() {
 void Worker::AbortTx() {
   SCOPED_DEFER({
     mActiveTx.mState = TxState::kAborted;
+    METRIC_COUNTER_INC(mStore->mMetricsManager, tx_abort_total, 1);
     mActiveTxId.store(0, std::memory_order_release);
     LOG(INFO) << "Transaction aborted"
               << ", workerId=" << mWorkerId
@@ -211,7 +208,6 @@ void Worker::AbortTx() {
               << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
   });
 
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_abort_tx);
   if (!(mActiveTx.mState == TxState::kStarted && mActiveTx.mIsDurable)) {
     return;
   }

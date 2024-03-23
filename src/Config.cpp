@@ -93,6 +93,10 @@ DEFINE_bool(enable_eager_garbage_collection, false,
             "When enabled, the global watermarks are updated after each "
             "transaction commit. Used for tests");
 
+// metrics
+DEFINE_bool(enable_metrics, false, "");
+DEFINE_int32(metrics_port, 8080, "");
+
 namespace leanstore {
 
 std::string GetMetaFilePath() {

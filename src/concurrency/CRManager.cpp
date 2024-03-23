@@ -40,7 +40,7 @@ CRManager::CRManager(leanstore::LeanStore* store)
   if (FLAGS_wal) {
     const int cpu = storeOption.mNumTxWorkers;
     mGroupCommitter =
-        std::make_unique<GroupCommitter>(mStore->mWalFd, mWorkers, cpu);
+        std::make_unique<GroupCommitter>(mStore, mStore->mWalFd, mWorkers, cpu);
     mGroupCommitter->Start();
   }
 

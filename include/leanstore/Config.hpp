@@ -1,6 +1,7 @@
 #pragma once
 
 #include <gflags/gflags.h>
+#include <gflags/gflags_declare.h>
 
 #include <string>
 
@@ -57,6 +58,10 @@ DECLARE_bool(init);
 DECLARE_string(isolation_level);
 DECLARE_bool(enable_garbage_collection);
 DECLARE_bool(enable_eager_garbage_collection);
+
+// metrics
+DECLARE_bool(enable_metrics);
+DECLARE_int32(metrics_port);
 
 namespace leanstore {
 
