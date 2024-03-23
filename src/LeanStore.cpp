@@ -50,15 +50,17 @@ std::expected<std::unique_ptr<LeanStore>, utils::Error> LeanStore::Open() {
   return std::make_unique<LeanStore>();
 }
 
-LeanStore::LeanStore() {
+LeanStore::LeanStore() : mMetricsManager() {
   initStoreOption();
   initGoogleLog();
 
   LOG(INFO) << "LeanStore starting ...";
   SCOPED_DEFER(LOG(INFO) << "LeanStore started");
 
-  // Start http metrics exposer
-  mMetricsManager.StartHttpExposer();
+  // Expose the metrics
+  if (FLAGS_enable_metrics) {
+    mMetricsManager.Expose();
+  }
 
   initPageAndWalFd();
 

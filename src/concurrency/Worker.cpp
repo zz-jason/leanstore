@@ -148,9 +148,11 @@ void Worker::CommitTx() {
     mLogging.WriteWalTxFinish();
   }
 
+  // update max observed GSN
+  mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
+
   if (mLogging.mHasRemoteDependency) {
     // for group commit
-    mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
     std::unique_lock<std::mutex> g(mLogging.mTxToCommitMutex);
     mLogging.mTxToCommit.push_back(mActiveTx);
     DLOG(INFO) << "Puting transaction with remote dependency to mTxToCommit"
@@ -160,7 +162,6 @@ void Worker::CommitTx() {
                << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
   } else {
     // for group commit
-    mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
     std::unique_lock<std::mutex> g(mLogging.mRfaTxToCommitMutex);
     CRCounters::MyCounters().rfa_committed_tx++;
     mLogging.mRfaTxToCommit.push_back(mActiveTx);

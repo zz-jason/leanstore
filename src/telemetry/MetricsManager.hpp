@@ -115,7 +115,7 @@ const std::vector<double> kBoundariesUs{
 /// LeanStore. It's expected to be a singleton inside a LeanStore instance.
 class MetricsManager {
 public:
-  MetricsManager() : mExposer("0.0.0.0", 8080) {
+  MetricsManager() : mExposer() {
     // create a metrics registry
     mRegistry = std::make_shared<prometheus::Registry>();
 
@@ -125,7 +125,7 @@ public:
     mExposer.SetCollectable(mRegistry);
   }
 
-  void StartHttpExposer() {
+  void Expose() {
     mExposer.Start();
   }
 
