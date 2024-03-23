@@ -34,6 +34,8 @@ private:
 public:
   YcsbLeanStore() {
     FLAGS_init = true;
+    FLAGS_enable_metrics = true;
+    FLAGS_metrics_port = 8080;
     FLAGS_data_dir = "/tmp/ycsb/" + FLAGS_ycsb_workload;
 
     auto res = LeanStore::Open();
@@ -134,7 +136,7 @@ public:
       mStore->ExecAsync(workerId, [&]() {
         uint8_t key[FLAGS_ycsb_key_size];
         std::string valRead;
-        auto copyValue = [&](Slice val) { valRead = val.ToString(); };
+        auto copyValue = [&](Slice val) { val.CopyTo(valRead); };
 
         auto updateDescBufSize = UpdateDesc::Size(1);
         uint8_t updateDescBuf[updateDescBufSize];

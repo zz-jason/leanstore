@@ -10,6 +10,8 @@
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
+#include "telemetry/MetricOnlyTimer.hpp"
+#include "telemetry/MetricsManager.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Misc.hpp"
 
@@ -47,6 +49,13 @@ void TransactionKV::Init(leanstore::LeanStore* store, TREEID treeId,
 }
 
 OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
+  telemetry::MetricOnlyTimer timer;
+  SCOPED_DEFER({
+    METRIC_COUNTER_INC(mStore->mMetricsManager, tx_kv_lookup_total, 1);
+    METRIC_HIST_OBSERVE(mStore->mMetricsManager, tx_kv_lookup_us,
+                        timer.ElaspedUs());
+  });
+
   DCHECK(cr::Worker::My().IsTxStarted())
       << "Worker is not in a transaction"
       << ", workerId=" << cr::Worker::My().mWorkerId
@@ -58,11 +67,8 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
       return OpCode::kNotFound;
     }
     auto [ret, versionsRead] = getVisibleTuple(gIter.value(), valCallback);
-    COUNTERS_BLOCK() {
-      WorkerCounters::MyCounters().cc_read_chains[mTreeId]++;
-      WorkerCounters::MyCounters().cc_read_versions_visited[mTreeId] +=
-          versionsRead;
-    }
+    METRIC_COUNTER_INC(mStore->mMetricsManager, tx_version_read_total,
+                       versionsRead);
     return ret;
   };
 
@@ -75,11 +81,8 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
   }
 
   auto [ret, versionsRead] = getVisibleTuple(iter.value(), valCallback);
-  COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().cc_read_chains[mTreeId]++;
-    WorkerCounters::MyCounters().cc_read_versions_visited[mTreeId] +=
-        versionsRead;
-  }
+  METRIC_COUNTER_INC(mStore->mMetricsManager, tx_version_read_total,
+                     versionsRead);
 
   if (cr::ActiveTx().IsLongRunning() && ret == OpCode::kNotFound) {
     ret = lookupInGraveyard();
@@ -89,6 +92,12 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
 
 OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
                                     UpdateDesc& updateDesc) {
+  telemetry::MetricOnlyTimer timer;
+  SCOPED_DEFER({
+    METRIC_COUNTER_INC(mStore->mMetricsManager, tx_kv_update_total, 1);
+    METRIC_HIST_OBSERVE(mStore->mMetricsManager, tx_kv_update_us,
+                        timer.ElaspedUs());
+  });
   DCHECK(cr::Worker::My().IsTxStarted());
   JUMPMU_TRY() {
     auto xIter = GetExclusiveIterator();
@@ -116,10 +125,6 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
         // conflict detected, the tuple is write locked by other worker or not
         // visible for me
         JUMPMU_RETURN OpCode::kAbortTx;
-      }
-
-      COUNTERS_BLOCK() {
-        WorkerCounters::MyCounters().cc_update_chains[mTreeId]++;
       }
 
       // write lock the tuple
@@ -151,16 +156,10 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
         // convert to fat tuple if it's frequently updated by me and other
         // workers
         if (FLAGS_enable_fat_tuple && chainedTuple.ShouldConvertToFatTuple()) {
-          COUNTERS_BLOCK() {
-            WorkerCounters::MyCounters().cc_fat_tuple_triggered[mTreeId]++;
-          }
           chainedTuple.mTotalUpdates = 0;
           auto succeed = Tuple::ToFat(xIter);
           if (succeed) {
             xIter.mGuardedLeaf->mHasGarbage = true;
-            COUNTERS_BLOCK() {
-              WorkerCounters::MyCounters().cc_fat_tuple_convert[mTreeId]++;
-            }
           }
           Tuple::From(mutRawVal.Data())->WriteUnlock();
           JUMPMU_CONTINUE;

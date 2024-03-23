@@ -29,7 +29,9 @@ IncludeCategories:
     Priority:        2
   - Regex:           '^("|<)(benchmark)/'
     Priority:        3
-  - Regex:           '^("|<)(gtest|gmock|gflags|glog|rapidjson|tabulate|rocksdb|gperftools|crc32c)/'
+  - Regex:           '^("|<)(gtest|gmock|gflags|glog|rapidjson|tabulate|rocksdb|gperftools|crc32c|prometheus)/'
+    Priority:        4
+  - Regex:           '^("|<)(httplib)'
     Priority:        4
   - Regex:           '<[[:alnum:]_/]+>'
     Priority:        5

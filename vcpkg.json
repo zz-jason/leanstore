@@ -14,9 +14,26 @@
     "gperftools",
     "tabulate",
     {
+      "name": "prometheus-cpp",
+      "features": [
+        "pull"
+      ],
+      "version>=": "1.1.0"
+    },
+    {
+      "name": "cpp-httplib",
+      "version>=": "0.14.3"
+    },
+    {
       "name": "crc32c",
       "version>=": "1.1.2#2"
     }
   ],
-  "builtin-baseline": "4a2c30139309a6e4690ce929df33e85a1706a0e2"
+  "builtin-baseline": "4a2c30139309a6e4690ce929df33e85a1706a0e2",
+  "overrides": [
+    {
+      "name": "prometheus-cpp",
+      "version": "1.0.0"
+    }
+  ]
 }
