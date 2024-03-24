@@ -1,0 +1,26 @@
+# docker-compose.yml
+version: '3'
+services:
+  prometheus:
+    network_mode: "host"
+    image: prom/prometheus:latest
+    command:
+      - --storage.tsdb.retention.time=7d
+      - --config.file=/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+  grafana:
+    network_mode: "host"
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+  node_exporter:
+    network_mode: "host"
+    image: prom/node-exporter:latest
+    ports:
+      - "9100:9100"
