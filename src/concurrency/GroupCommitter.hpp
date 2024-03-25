@@ -2,11 +2,11 @@
 
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
+#include "utils/AsyncIo.hpp"
 #include "utils/UserThread.hpp"
 
 #include <glog/logging.h>
 
-#include <memory>
 #include <string>
 
 #include <libaio.h>
@@ -43,17 +43,7 @@ public:
   /// All the workers.
   std::vector<Worker*>& mWorkers;
 
-  /// IO context, used by libaio.
-  io_context_t mIOContext;
-
-  /// IO control blocks, used by libaio.
-  std::unique_ptr<iocb[]> mIOCBs;
-
-  /// IO control block address in mIOCBs, used by libaio.
-  std::unique_ptr<iocb*[]> mIOCBPtrs;
-
-  /// IO events, used by libaio.
-  std::unique_ptr<io_event[]> mIOEvents;
+  utils::AsyncIo mAIo;
 
 public:
   GroupCommitter(leanstore::LeanStore* store, int32_t walFd,
@@ -65,13 +55,7 @@ public:
         mGlobalMinFlushedGSN(0),
         mGlobalMaxFlushedGSN(0),
         mWorkers(workers),
-        mIOContext(nullptr),
-        mIOCBs(new iocb[workers.size() * 2 + 2]),
-        mIOCBPtrs(new iocb*[workers.size() * 2 + 2]),
-        mIOEvents(new io_event[workers.size() * 2 + 2]) {
-    // setup AIO context
-    const auto error = io_setup(workers.size() * 2 + 2, &mIOContext);
-    LOG_IF(FATAL, error != 0) << "io_setup failed, error=" << error;
+        mAIo(workers.size() * 2 + 2) {
   }
 
   virtual ~GroupCommitter() override = default;
@@ -85,21 +69,17 @@ private:
   /// libaio is used to batch all log writes, these log writes are then
   /// submitted using a single system call.
   ///
-  /// @param[out] numIOCBS number of prepared IOCBs
   /// @param[out] minFlushedGSN the min flushed GSN among all the wal records
   /// @param[out] maxFlushedGSN the max flushed GSN among all the wal records
   /// @param[out] minFlushedTxId the min flushed transaction ID
   /// @param[out] numRfaTxs number of transactions without dependency
   /// @param[out] walFlushReqCopies snapshot of the flush requests
-  void prepareIOCBs(int32_t& numIOCBs, uint64_t& minFlushedGSN,
-                    uint64_t& maxFlushedGSN, TXID& minFlushedTxId,
-                    std::vector<uint64_t>& numRfaTxs,
+  void prepareIOCBs(uint64_t& minFlushedGSN, uint64_t& maxFlushedGSN,
+                    TXID& minFlushedTxId, std::vector<uint64_t>& numRfaTxs,
                     std::vector<WalFlushReq>& walFlushReqCopies);
 
   /// Phase 2: write all the prepared IOCBs
-  ///
-  /// @param[in] numIOCBs number of IOCBs to write
-  void writeIOCBs(int32_t numIOCBs);
+  void writeIOCBs();
 
   /// Phase 3: commit transactions
   ///
@@ -112,7 +92,7 @@ private:
                  TXID minFlushedTxId, const std::vector<uint64_t>& numRfaTxs,
                  const std::vector<WalFlushReq>& walFlushReqCopies);
 
-  void setUpIOCB(int32_t ioSlot, uint8_t* buf, uint64_t lower, uint64_t upper);
+  void setUpIOCB(uint8_t* buf, uint64_t lower, uint64_t upper);
 };
 
 } // namespace cr

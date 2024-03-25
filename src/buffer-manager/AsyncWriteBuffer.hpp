@@ -2,6 +2,7 @@
 
 #include "buffer-manager/BufferFrame.hpp"
 #include "leanstore/Units.hpp"
+#include "utils/AsyncIo.hpp"
 #include "utils/Error.hpp"
 #include "utils/Misc.hpp"
 
@@ -43,17 +44,12 @@ private:
     }
   };
 
-  io_context_t mAioCtx;
   int mFd;
   uint64_t mPageSize;
-  uint64_t mMaxBatchSize;
-  uint64_t mPendingRequests;
+  utils::AsyncIo mAIo;
 
   utils::AlignedBuffer<512> mWriteBuffer;
   std::vector<WriteCommand> mWriteCommands;
-  std::vector<iocb> mIocbs;
-  std::vector<iocb*> mIocbPtrs;
-  std::vector<io_event> mIoEvents;
 
 public:
   AsyncWriteBuffer(int fd, uint64_t pageSize, uint64_t maxBatchSize);
@@ -76,7 +72,7 @@ public:
   std::expected<uint64_t, utils::Error> WaitAll();
 
   uint64_t GetPendingRequests() {
-    return mPendingRequests;
+    return mAIo.GetNumRequests();
   }
 
   void IterateFlushedBfs(
