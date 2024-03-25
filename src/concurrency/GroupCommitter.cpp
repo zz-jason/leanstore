@@ -91,6 +91,10 @@ void GroupCommitter::prepareIOCBs(uint64_t& minFlushedGSN,
       setUpIOCB(logging.mWalBuffer, 0, buffered);
     }
   }
+
+  if (!mAIo.IsEmpty() && FLAGS_wal_fsync) {
+    mAIo.PrepareFsync(mWalFd);
+  }
 }
 
 void GroupCommitter::writeIOCBs() {
@@ -210,18 +214,15 @@ void GroupCommitter::commitTXs(
 }
 
 void GroupCommitter::setUpIOCB(uint8_t* buf, uint64_t lower, uint64_t upper) {
-  auto lowerAligned = utils::AlignDown(lower);
-  auto upperAligned = utils::AlignUp(upper);
+  constexpr size_t kAligment = 4096;
+
+  auto lowerAligned = utils::AlignDown(lower, kAligment);
+  auto upperAligned = utils::AlignUp(upper, kAligment);
   auto* bufAligned = buf + lowerAligned;
   auto countAligned = upperAligned - lowerAligned;
-  auto offsetAligned = utils::AlignDown(mWalSize);
-
-  DCHECK(uint64_t(bufAligned) % 512 == 0);
-  DCHECK(countAligned % 512 == 0);
-  DCHECK(offsetAligned % 512 == 0);
+  auto offsetAligned = utils::AlignDown(mWalSize, kAligment);
 
   mAIo.PrepareWrite(mWalFd, bufAligned, countAligned, offsetAligned);
-
   mWalSize += upper - lower;
 
   METRIC_COUNTER_INC(mStore->mMetricsManager, group_committer_disk_write_total,

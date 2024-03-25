@@ -33,11 +33,6 @@ private:
 
 public:
   YcsbLeanStore() {
-    FLAGS_init = true;
-    FLAGS_enable_metrics = true;
-    FLAGS_metrics_port = 8080;
-    FLAGS_data_dir = "/tmp/ycsb/" + FLAGS_ycsb_workload;
-
     auto res = LeanStore::Open();
     if (!res) {
       std::cerr << "Failed to open leanstore: " << res.error().ToString()

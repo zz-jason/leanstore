@@ -44,12 +44,12 @@ inline void PinThisThread(const uint64_t workerId) {
   }
 }
 
-inline uint64_t AlignUp(uint64_t x) {
-  return (x + 511) & ~511ul;
+inline uint64_t AlignDown(uint64_t x, uint64_t alignment) {
+  return x & ~(alignment - 1);
 }
 
-inline uint64_t AlignDown(uint64_t x) {
-  return x - (x & 511);
+inline uint64_t AlignUp(uint64_t x, uint64_t alignment) {
+  return AlignDown(x + alignment - 1, alignment);
 }
 
 uint32_t CRC(const uint8_t* src, uint64_t size);

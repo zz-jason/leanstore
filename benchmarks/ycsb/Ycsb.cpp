@@ -20,11 +20,16 @@ static std::string kTargetLeanStore = "leanstore";
 static std::string kTargetRocksDb = "rocksdb";
 
 int main(int argc, char** argv) {
-  std::string cpuProfile = FLAGS_data_dir + "/profile/cpu.prof";
+  FLAGS_init = true;
+  FLAGS_enable_metrics = true;
+  FLAGS_metrics_port = 8080;
+  FLAGS_data_dir = "/tmp/ycsb/" + FLAGS_ycsb_workload;
+
+  std::string cpuProfile = FLAGS_data_dir + "/cpu.prof";
   ProfilerStart(cpuProfile.c_str());
   SCOPED_DEFER(ProfilerStop());
 
-  std::string heapProfile = FLAGS_data_dir + "/profile/heap.prof";
+  std::string heapProfile = FLAGS_data_dir + "/heap.prof";
   HeapProfilerStart(heapProfile.c_str());
   SCOPED_DEFER(HeapProfilerStop());
 
