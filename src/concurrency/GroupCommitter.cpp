@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
+#include <cstring>
+#include <format>
 
 namespace leanstore {
 namespace cr {
@@ -16,7 +18,6 @@ namespace cr {
 void GroupCommitter::runImpl() {
   CPUCounters::registerThread(mThreadName, false);
 
-  int32_t numIOCBs = 0;
   uint64_t minFlushedGSN = std::numeric_limits<uint64_t>::max();
   uint64_t maxFlushedGSN = 0;
   TXID minFlushedTxId = std::numeric_limits<TXID>::max();
@@ -27,12 +28,12 @@ void GroupCommitter::runImpl() {
   while (mKeepRunning) {
 
     // phase 1
-    prepareIOCBs(numIOCBs, minFlushedGSN, maxFlushedGSN, minFlushedTxId,
-                 numRfaTxs, walFlushReqCopies);
+    prepareIOCBs(minFlushedGSN, maxFlushedGSN, minFlushedTxId, numRfaTxs,
+                 walFlushReqCopies);
 
-    if (numIOCBs > 0) {
+    if (!mAIo.IsEmpty()) {
       // phase 2
-      writeIOCBs(numIOCBs);
+      writeIOCBs();
     }
 
     // phase 3
@@ -41,7 +42,7 @@ void GroupCommitter::runImpl() {
   }
 }
 
-void GroupCommitter::prepareIOCBs(int32_t& numIOCBs, uint64_t& minFlushedGSN,
+void GroupCommitter::prepareIOCBs(uint64_t& minFlushedGSN,
                                   uint64_t& maxFlushedGSN, TXID& minFlushedTxId,
                                   std::vector<uint64_t>& numRfaTxs,
                                   std::vector<WalFlushReq>& walFlushReqCopies) {
@@ -51,7 +52,6 @@ void GroupCommitter::prepareIOCBs(int32_t& numIOCBs, uint64_t& minFlushedGSN,
                         timer.ElaspedUs());
   });
 
-  numIOCBs = 0;
   minFlushedGSN = std::numeric_limits<uint64_t>::max();
   maxFlushedGSN = 0;
   minFlushedTxId = std::numeric_limits<TXID>::max();
@@ -85,20 +85,15 @@ void GroupCommitter::prepareIOCBs(int32_t& numIOCBs, uint64_t& minFlushedGSN,
     const uint64_t flushed = logging.mWalFlushed;
     const uint64_t bufferEnd = FLAGS_wal_buffer_size;
     if (buffered > flushed) {
-      setUpIOCB(numIOCBs, logging.mWalBuffer, flushed, buffered);
-      numIOCBs++;
+      setUpIOCB(logging.mWalBuffer, flushed, buffered);
     } else if (buffered < flushed) {
-      setUpIOCB(numIOCBs, logging.mWalBuffer, flushed, bufferEnd);
-      numIOCBs++;
-      setUpIOCB(numIOCBs, logging.mWalBuffer, 0, buffered);
-      numIOCBs++;
+      setUpIOCB(logging.mWalBuffer, flushed, bufferEnd);
+      setUpIOCB(logging.mWalBuffer, 0, buffered);
     }
   }
 }
 
-void GroupCommitter::writeIOCBs(int32_t numIOCBs) {
-  DCHECK(numIOCBs > 0) << "should have at least 1 IOCB to write";
-
+void GroupCommitter::writeIOCBs() {
   leanstore::telemetry::MetricOnlyTimer timer;
   SCOPED_DEFER({
     METRIC_HIST_OBSERVE(mStore->mMetricsManager, group_committer_write_iocbs_us,
@@ -106,34 +101,23 @@ void GroupCommitter::writeIOCBs(int32_t numIOCBs) {
   });
 
   // submit all log writes using a single system call.
-  for (auto left = numIOCBs; left > 0;) {
-    auto* iocbToSubmit = mIOCBPtrs.get() + numIOCBs - left;
-    int32_t submitted = io_submit(mIOContext, left, iocbToSubmit);
-    if (submitted < 0) {
-      LOG(ERROR) << "io_submit failed"
-                 << ", mWalFd=" << mWalFd << ", numIOCBs=" << numIOCBs
-                 << ", left=" << left << ", errorCode=" << -submitted
-                 << ", errorMsg=" << strerror(-submitted);
-      return;
-    }
-    left -= submitted;
+  if (auto res = mAIo.SubmitAll(); !res) {
+    LOG(ERROR) << std::format("Failed to submit all IO, error={}",
+                              res.error().ToString());
   }
 
-  auto numCompleted =
-      io_getevents(mIOContext, numIOCBs, numIOCBs, mIOEvents.get(), nullptr);
-  if (numCompleted < 0) {
-    LOG(ERROR) << "io_getevents failed"
-               << ", mWalFd=" << mWalFd << ", numIOCBs=" << numIOCBs
-               << ", errorCode=" << -numCompleted
-               << ", errorMsg=" << strerror(-numCompleted);
-    return;
+  /// wait all to finish.
+  if (auto res = mAIo.WaitAll(); !res) {
+    LOG(ERROR) << std::format("Failed to wait all IO, error={}",
+                              res.error().ToString());
   }
 
+  /// sync the metadata in the end.
   if (FLAGS_wal_fsync) {
     auto failed = fdatasync(mWalFd);
-    LOG_IF(ERROR, failed) << "fdatasync failed"
-                          << ", mWalFd=" << mWalFd << ", errorCode=" << errno
-                          << ", errorMsg=" << strerror(errno);
+    LOG_IF(ERROR, failed) << std::format(
+        "fdatasync failed, mWalFd={}, errno={}, error={}", mWalFd, errno,
+        strerror(errno));
   }
 }
 
@@ -225,8 +209,7 @@ void GroupCommitter::commitTXs(
   }
 }
 
-void GroupCommitter::setUpIOCB(int32_t ioSlot, uint8_t* buf, uint64_t lower,
-                               uint64_t upper) {
+void GroupCommitter::setUpIOCB(uint8_t* buf, uint64_t lower, uint64_t upper) {
   auto lowerAligned = utils::AlignDown(lower);
   auto upperAligned = utils::AlignUp(upper);
   auto* bufAligned = buf + lowerAligned;
@@ -237,12 +220,9 @@ void GroupCommitter::setUpIOCB(int32_t ioSlot, uint8_t* buf, uint64_t lower,
   DCHECK(countAligned % 512 == 0);
   DCHECK(offsetAligned % 512 == 0);
 
-  io_prep_pwrite(/* iocb */ &mIOCBs[ioSlot], /* fd */ mWalFd,
-                 /* buf */ bufAligned, /* count */ countAligned,
-                 /* offset */ offsetAligned);
+  mAIo.PrepareWrite(mWalFd, bufAligned, countAligned, offsetAligned);
+
   mWalSize += upper - lower;
-  mIOCBs[ioSlot].data = bufAligned;
-  mIOCBPtrs[ioSlot] = &mIOCBs[ioSlot];
 
   METRIC_COUNTER_INC(mStore->mMetricsManager, group_committer_disk_write_total,
                      countAligned);

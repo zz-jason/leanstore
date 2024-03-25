@@ -11,6 +11,7 @@
 #include "profiling/counters/WorkerCounters.hpp"
 #include "sync/HybridLatch.hpp"
 #include "sync/ScopedHybridGuard.hpp"
+#include "utils/AsyncIo.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Error.hpp"
 #include "utils/Misc.hpp"
@@ -128,37 +129,52 @@ void BufferManager::CheckpointAllBufferFrames() {
   utils::Parallelize::ParallelRange(mNumBfs, [&](uint64_t begin, uint64_t end) {
     utils::AlignedBuffer<512> alignedBuffer(mStore->mStoreOption.mPageSize);
     auto* buffer = alignedBuffer.Get();
+    utils::AsyncIo aio(1);
+
     for (uint64_t i = begin; i < end; i++) {
       auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
       auto& bf = *reinterpret_cast<BufferFrame*>(bfAddr);
       bf.mHeader.mLatch.LockExclusively();
       if (!bf.IsFree()) {
         mStore->mTreeRegistry->Checkpoint(bf.mPage.mBTreeId, bf, buffer);
-        auto ret =
-            pwrite(mStore->mPageFd, buffer, mStore->mStoreOption.mPageSize,
-                   bf.mHeader.mPageId * mStore->mStoreOption.mPageSize);
-        DCHECK_EQ(ret, (int64_t)mStore->mStoreOption.mPageSize);
+        // wait the last write to finish
+        if (auto res = aio.WaitAll(); !res) {
+          LOG(FATAL) << std::format("failed to wait all IO to finish, error={}",
+                                    res.error().ToString());
+        }
+        aio.PrepareWrite(mStore->mPageFd, buffer,
+                         mStore->mStoreOption.mPageSize,
+                         bf.mHeader.mPageId * mStore->mStoreOption.mPageSize);
+        if (auto res = aio.SubmitAll(); !res) {
+          LOG(FATAL) << std::format("failed to submit all IO, error={}",
+                                    res.error().ToString());
+        }
       }
       bf.mHeader.mLatch.UnlockExclusively();
+    }
+    // wait the last write to finish
+    if (auto res = aio.WaitAll(); !res) {
+      LOG(FATAL) << std::format("failed to wait all IO to finish, error={}",
+                                res.error().ToString());
     }
   });
 }
 
 auto BufferManager::CheckpointBufferFrame(BufferFrame& bf)
     -> std::expected<void, utils::Error> {
+  utils::AsyncIo aio(1);
   alignas(512) uint8_t buffer[mStore->mStoreOption.mPageSize];
   bf.mHeader.mLatch.LockExclusively();
   if (!bf.IsFree()) {
     mStore->mTreeRegistry->Checkpoint(bf.mPage.mBTreeId, bf, buffer);
-    auto ret = pwrite(mStore->mPageFd, buffer, mStore->mStoreOption.mPageSize,
-                      bf.mHeader.mPageId * mStore->mStoreOption.mPageSize);
-    if (ret < 0) {
-      return std::unexpected<utils::Error>(
-          utils::Error::FileWrite(GetDBFilePath(), errno, strerror(errno)));
+
+    aio.PrepareWrite(mStore->mPageFd, buffer, mStore->mStoreOption.mPageSize,
+                     bf.mHeader.mPageId * mStore->mStoreOption.mPageSize);
+    if (auto res = aio.SubmitAll(); !res) {
+      return std::unexpected(res.error());
     }
-    if ((uint64_t)ret < mStore->mStoreOption.mPageSize) {
-      return std::unexpected<utils::Error>(utils::Error::General(
-          "Write incomplete, only " + std::to_string(ret) + " bytes written"));
+    if (auto res = aio.WaitAll(); !res) {
+      return std::unexpected(res.error());
     }
   }
   bf.mHeader.mLatch.UnlockExclusively();
@@ -444,11 +460,14 @@ auto BufferManager::WritePageSync(BufferFrame& bf)
   ScopedHybridGuard guard(bf.mHeader.mLatch, LatchMode::kPessimisticExclusive);
   auto pageId = bf.mHeader.mPageId;
   auto& partition = GetPartition(pageId);
-  auto ret = pwrite(mStore->mPageFd, &bf.mPage, mStore->mStoreOption.mPageSize,
-                    pageId * mStore->mStoreOption.mPageSize);
-  if (ret < 0) {
-    return std::unexpected<utils::Error>(
-        utils::Error::FileWrite(GetDBFilePath(), errno, strerror(errno)));
+  utils::AsyncIo aio(1);
+  aio.PrepareWrite(mStore->mPageFd, &bf.mPage, mStore->mStoreOption.mPageSize,
+                   pageId * mStore->mStoreOption.mPageSize);
+  if (auto res = aio.SubmitAll(); !res) {
+    return std::unexpected(res.error());
+  }
+  if (auto res = aio.WaitAll(); !res) {
+    return std::unexpected(res.error());
   }
   bf.Reset();
   guard.Unlock();
