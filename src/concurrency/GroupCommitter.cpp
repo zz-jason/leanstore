@@ -101,10 +101,16 @@ void GroupCommitter::writeIOCBs() {
   });
 
   // submit all log writes using a single system call.
-  mAIo.SubmitAll();
+  if (auto res = mAIo.SubmitAll(); !res) {
+    LOG(ERROR) << std::format("Failed to submit all IO, error={}",
+                              res.error().ToString());
+  }
 
   /// wait all to finish.
-  mAIo.WaitAll();
+  if (auto res = mAIo.WaitAll(); !res) {
+    LOG(ERROR) << std::format("Failed to wait all IO, error={}",
+                              res.error().ToString());
+  }
 
   /// sync the metadata in the end.
   if (FLAGS_wal_fsync) {
