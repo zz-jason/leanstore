@@ -7,7 +7,6 @@
 
 #include <glog/logging.h>
 
-#include <cstring>
 #include <expected>
 
 namespace leanstore::storage {
@@ -16,93 +15,50 @@ AsyncWriteBuffer::AsyncWriteBuffer(int fd, uint64_t pageSize,
                                    uint64_t maxBatchSize)
     : mFd(fd),
       mPageSize(pageSize),
-      mMaxBatchSize(maxBatchSize),
-      mPendingRequests(0),
+      mAIo(maxBatchSize),
       mWriteBuffer(pageSize * maxBatchSize),
-      mWriteCommands(maxBatchSize),
-      mIocbs(maxBatchSize),
-      mIocbPtrs(maxBatchSize),
-      mIoEvents(maxBatchSize) {
-  memset(&mAioCtx, 0, sizeof(mAioCtx));
-  auto ret = io_setup(maxBatchSize, &mAioCtx);
-  LOG_IF(FATAL, ret < 0) << "Failed to create AIO context, error=" << ret;
-  for (uint64_t i = 0; i < maxBatchSize; i++) {
-    mIocbPtrs[i] = &mIocbs[i];
-  }
+      mWriteCommands(maxBatchSize) {
 }
 
 AsyncWriteBuffer::~AsyncWriteBuffer() {
-  auto ret = io_destroy(mAioCtx);
-  LOG_IF(FATAL, ret < 0) << "Failed to destroy AIO context, error=" << ret;
 }
 
 bool AsyncWriteBuffer::IsFull() {
-  return !(mPendingRequests < mMaxBatchSize);
+  return mAIo.IsFull();
 }
 
 void AsyncWriteBuffer::Add(const BufferFrame& bf) {
-  DCHECK(!IsFull());
   DCHECK(uint64_t(&bf.mPage) % 512 == 0) << "Page is not aligned to 512 bytes";
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().dt_page_writes[bf.mPage.mBTreeId]++;
   }
 
-  auto pageId = bf.mHeader.mPageId;
-  auto slot = mPendingRequests++;
-
   // record the written buffer frame and page id for later use
+  auto pageId = bf.mHeader.mPageId;
+  auto slot = mAIo.GetNumRequests();
   mWriteCommands[slot].Reset(&bf, pageId);
 
   // copy the page content to write buffer
   auto* buffer = copyToBuffer(&bf.mPage, slot);
-  io_prep_pwrite(&mIocbs[slot], mFd, buffer, mPageSize, mPageSize * pageId);
-  mIocbs[slot].data = buffer;
+
+  mAIo.PrepareWrite(mFd, buffer, mPageSize, mPageSize * pageId);
 }
 
 std::expected<uint64_t, utils::Error> AsyncWriteBuffer::SubmitAll() {
-  if (mPendingRequests <= 0) {
-    return 0;
-  }
-  int ret = io_submit(mAioCtx, mPendingRequests, &mIocbPtrs[0]);
-  if (ret < 0) {
-    return std::unexpected(utils::Error::ErrorAio(ret, "io_submit"));
-  }
-  DCHECK(uint64_t(ret) == mPendingRequests)
-      << "Failed to submit all IO requests, expected=" << mPendingRequests;
-
-  // return requests submitted
-  return ret;
+  return mAIo.SubmitAll();
 }
 
 std::expected<uint64_t, utils::Error> AsyncWriteBuffer::WaitAll() {
-  if (mPendingRequests <= 0) {
-    return 0;
-  }
-  int ret = io_getevents(mAioCtx, mPendingRequests, mPendingRequests,
-                         &mIoEvents[0], NULL);
-  if (ret < 0) {
-    return std::unexpected(utils::Error::ErrorAio(ret, "io_getevents"));
-  }
-  DCHECK(uint64_t(ret) == mPendingRequests)
-      << "Failed to get all IO events, expected=" << mPendingRequests;
-
-  // reset pending requests, allowing new writes
-  mPendingRequests = 0;
-
-  // return requests completed
-  return ret;
+  return mAIo.WaitAll();
 }
 
 void AsyncWriteBuffer::IterateFlushedBfs(
     std::function<void(BufferFrame&, uint64_t)> callback,
     uint64_t numFlushedBfs) {
   for (uint64_t i = 0; i < numFlushedBfs; i++) {
-    const auto slot =
-        (uint64_t(mIoEvents[i].data) - uint64_t(mWriteBuffer.Get())) /
-        mPageSize;
-
-    DCHECK(mIoEvents[i].res == mPageSize);
-    explainIfNot(mIoEvents[i].res2 == 0);
+    const auto slot = (reinterpret_cast<uint64_t>(mAIo.GetIoEvent(i)->data) -
+                       reinterpret_cast<uint64_t>(mWriteBuffer.Get())) /
+                      mPageSize;
     auto* flushedPage = reinterpret_cast<Page*>(getWriteBuffer(slot));
     auto flushedGsn = flushedPage->mGSN;
     auto* flushedBf = mWriteCommands[slot].mBf;
