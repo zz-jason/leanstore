@@ -89,20 +89,25 @@ void CRManager::setupHistoryStorage4EachWorker() {
 }
 
 constexpr char kKeyWalSize[] = "wal_size";
-constexpr char kKeyGlobalLogicalClock[] = "global_logical_clock";
+constexpr char kKeyUsrTxTso[] = "usr_tx_tso";
+constexpr char kKeySysTxTso[] = "sys_tx_tso";
 
 StringMap CRManager::Serialize() {
   StringMap map;
-  uint64_t val = mStore->mTimestampOracle.load();
   map[kKeyWalSize] = std::to_string(mGroupCommitter->mWalSize);
-  map[kKeyGlobalLogicalClock] = std::to_string(val);
+  map[kKeyUsrTxTso] = std::to_string(mStore->mUsrTxTso.load());
+  map[kKeySysTxTso] = std::to_string(mStore->mSysTxTso.load());
   return map;
 }
 
 void CRManager::Deserialize(StringMap map) {
-  uint64_t val = std::stoull(map[kKeyGlobalLogicalClock]);
-  mStore->mTimestampOracle = val;
-  mStore->mCRManager->mGlobalWmkInfo.mWmkOfAllTx = val;
+  uint64_t usrTxTso = std::stoull(map[kKeyUsrTxTso]);
+  mStore->mUsrTxTso = usrTxTso;
+  mStore->mCRManager->mGlobalWmkInfo.mWmkOfAllTx = usrTxTso;
+
+  uint64_t sysTxTso = std::stoull(map[kKeySysTxTso]);
+  mStore->mSysTxTso = sysTxTso;
+
   mGroupCommitter->mWalSize = std::stoull(map[kKeyWalSize]);
 }
 

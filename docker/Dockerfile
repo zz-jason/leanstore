@@ -52,7 +52,6 @@ COPY vcpkg-triplets/arm64-linux.cmake /opt/vcpkg/triplets/arm64-linux.cmake
 RUN apt-get update && apt-get install -y \
         autoconf libtool golang graphviz sysstat \
  && rm -rf /var/lib/apt/lists/* \
- && go install github.com/google/pprof@latest \
  && echo 'export PATH=$HOME/go/bin:$PATH' >> ~/.bashrc
 
 

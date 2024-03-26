@@ -65,6 +65,8 @@ public:
   void StartTx(TxMode mode = TxMode::kShortRunning,
                IsolationLevel level = IsolationLevel::kSnapshotIsolation);
 
+  uint64_t StartSysTx();
+
   void CommitTx();
 
   void AbortTx();

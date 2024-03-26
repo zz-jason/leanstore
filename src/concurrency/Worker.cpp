@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <format>
 #include <mutex>
 
 namespace leanstore::cr {
@@ -48,6 +49,18 @@ Worker::~Worker() {
   mLogging.mWalBuffer = nullptr;
 }
 
+uint64_t Worker::StartSysTx() {
+  DCHECK(mActiveTx.mState == TxState::kStarted) << std::format(
+      "System transaction can only start within a user transaction, "
+      "workerId={}, startTs={}, txState={}",
+      mWorkerId, mActiveTx.mStartTs, TxStatUtil::ToString(mActiveTx.mState));
+  auto sysTxId = mLogging.GetCurrentGsn() + 1;
+  mLogging.SetCurrentGsn(sysTxId);
+  mActiveTx.mSysTxId = sysTxId;
+  mActiveTx.mDependentSysTxId = std::max(mActiveTx.mDependentSysTxId, sysTxId);
+  return sysTxId;
+}
+
 void Worker::StartTx(TxMode mode, IsolationLevel level) {
   Transaction prevTx = mActiveTx;
   DCHECK(prevTx.mState != TxState::kStarted)
@@ -66,7 +79,7 @@ void Worker::StartTx(TxMode mode, IsolationLevel level) {
                << mStore->mCRManager->mGroupCommitter->mGlobalMaxFlushedGSN;
   });
 
-  mActiveTx.Start(mode, level);
+  mActiveTx.StartUsrTx(mode, level);
 
   if (!mActiveTx.mIsDurable) {
     return;
@@ -101,7 +114,7 @@ void Worker::StartTx(TxMode mode, IsolationLevel level) {
   //
   // TODO(jian.z): Allocating transaction start ts globally heavily hurts the
   // scalability, especially for read-only transactions
-  mActiveTx.mStartTs = mStore->AllocTs();
+  mActiveTx.mStartTs = mStore->AllocTs4UsrTx();
   auto curTxId = mActiveTx.mStartTs;
   if (FLAGS_enable_long_running_transaction && mActiveTx.IsLongRunning()) {
     // Mark as long-running transaction
@@ -126,7 +139,7 @@ void Worker::CommitTx() {
   // Reset mCommandId on commit
   mCommandId = 0;
   if (mActiveTx.mHasWrote) {
-    mActiveTx.mCommitTs = mStore->AllocTs();
+    mActiveTx.mCommitTs = mStore->AllocTs4UsrTx();
     mCc.mCommitTree.AppendCommitLog(mActiveTx.mStartTs, mActiveTx.mCommitTs);
     mCc.mLatestCommitTs.store(mActiveTx.mCommitTs, std::memory_order_release);
   } else {

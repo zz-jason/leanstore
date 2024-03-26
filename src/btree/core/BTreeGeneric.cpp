@@ -7,6 +7,7 @@
 #include "buffer-manager/BufferFrame.hpp"
 #include "buffer-manager/BufferManager.hpp"
 #include "buffer-manager/GuardedBufferFrame.hpp"
+#include "concurrency/Worker.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
@@ -53,6 +54,8 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId,
     auto metaWalHandler = xGuardedMeta.ReserveWALPayload<WalInitPage>(
         0, mTreeId, xGuardedMeta->mIsLeaf);
     metaWalHandler.SubmitWal();
+
+    xGuardedRoot.SyncGSNBeforeWrite();
   }
 }
 

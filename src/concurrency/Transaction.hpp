@@ -50,6 +50,18 @@ public:
   /// be committed.
   LID mMaxObservedGSN = 0;
 
+  /// The dependent system and user transaction id for the current user
+  /// transaction.
+  TXID mDependentSysTxId = 0;
+  TXID mDependentUsrTxId = 0;
+
+  /// The system transaction id for the current user transaction. System
+  /// transactions are triggered by the system itself, e.g. btree node split and
+  /// merge. Their execution result is immediately visible to all running
+  /// user/system transactions. It's updated if any system transaction is
+  /// executed during the current user transaction.
+  TXID mSysTxId = 0;
+
   /// mTxMode is the mode of the current transaction.
   TxMode mTxMode = TxMode::kShortRunning;
 
@@ -67,20 +79,27 @@ public:
   bool mWalExceedBuffer = false;
 
 public:
-  inline bool IsLongRunning() {
+  bool IsLongRunning() {
     return mTxMode == TxMode::kLongRunning;
   }
 
-  inline bool AtLeastSI() {
+  bool AtLeastSI() {
     return mTxIsolationLevel >= IsolationLevel::kSnapshotIsolation;
   }
 
+  bool HasSysTx() {
+    return mSysTxId != 0;
+  }
+
   // Start a new transaction, initialize all fields
-  inline void Start(TxMode mode, IsolationLevel level) {
+  void StartUsrTx(TxMode mode, IsolationLevel level) {
     mState = TxState::kStarted;
     mStartTs = 0;
     mCommitTs = 0;
     mMaxObservedGSN = 0;
+    mDependentSysTxId = 0;
+    mDependentUsrTxId = 0;
+    mSysTxId = 0;
     mTxMode = mode;
     mTxIsolationLevel = level;
     mHasWrote = false;

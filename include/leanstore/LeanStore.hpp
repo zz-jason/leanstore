@@ -64,7 +64,9 @@ public:
   /// The global timestamp oracle, used to generate start and commit timestamps
   /// for all transactions in the store. Start from a positive number, 0
   /// indicates invalid timestamp
-  std::atomic<uint64_t> mTimestampOracle = 1;
+  std::atomic<uint64_t> mUsrTxTso = 1;
+
+  std::atomic<uint64_t> mSysTxTso = 1;
 
   /// The metrics manager
   telemetry::MetricsManager mMetricsManager;
@@ -119,8 +121,12 @@ public:
   void DropTransactionKV(const std::string& name);
 
   /// Alloc a new timestamp from the timestamp oracle
-  uint64_t AllocTs() {
-    return mTimestampOracle.fetch_add(1);
+  uint64_t AllocTs4UsrTx() {
+    return mUsrTxTso.fetch_add(1);
+  }
+
+  uint64_t AllocTs4SysTx() {
+    return mSysTxTso.fetch_add(1);
   }
 
   std::expected<std::unique_ptr<TxWorker>, utils::Error> GetTxWorker(

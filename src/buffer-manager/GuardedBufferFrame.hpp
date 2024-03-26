@@ -142,8 +142,8 @@ public:
 
 public:
   inline void SyncGSNBeforeWrite() {
-    DCHECK(mBf != nullptr);
-    DCHECK(mBf->mPage.mGSN <= cr::Worker::My().mLogging.GetCurrentGsn())
+    DCHECK(mBf != nullptr &&
+           mBf->mPage.mGSN <= cr::Worker::My().mLogging.GetCurrentGsn())
         << "Page GSN should <= worker GSN"
         << ", pageGSN=" << mBf->mPage.mGSN
         << ", workerGSN=" << cr::Worker::My().mLogging.GetCurrentGsn();
@@ -152,9 +152,8 @@ public:
     mBf->mHeader.mLastWriterWorker = cr::Worker::My().mWorkerId;
 
     // increase GSN
-    const auto workerGSN = cr::Worker::My().mLogging.GetCurrentGsn();
-    mBf->mPage.mGSN = workerGSN + 1;
-    cr::Worker::My().mLogging.SetCurrentGsn(workerGSN + 1);
+    auto sysTxId = cr::Worker::My().StartSysTx();
+    mBf->mPage.mGSN = sysTxId;
   }
 
   // TODO: don't sync on temporary table pages like history trees
@@ -191,8 +190,6 @@ public:
         cr::Worker::My().mLogging.ReserveWALEntryComplex<WT, Args...>(
             sizeof(WT) + walSize, pageId, mBf->mPage.mGSN, treeId,
             std::forward<Args>(args)...);
-
-    SyncGSNBeforeWrite();
     return handler;
   }
 
