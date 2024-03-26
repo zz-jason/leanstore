@@ -2,12 +2,9 @@
 
 #include "YcsbLeanStore.hpp"
 #include "leanstore/Config.hpp"
-#include "utils/Defer.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
-#include <gperftools/heap-profiler.h>
-#include <gperftools/profiler.h>
 
 #include <algorithm>
 #include <cctype>
@@ -24,14 +21,6 @@ int main(int argc, char** argv) {
   FLAGS_enable_metrics = true;
   FLAGS_metrics_port = 8080;
   FLAGS_data_dir = "/tmp/ycsb/" + FLAGS_ycsb_workload;
-
-  std::string cpuProfile = FLAGS_data_dir + "/cpu.prof";
-  ProfilerStart(cpuProfile.c_str());
-  SCOPED_DEFER(ProfilerStop());
-
-  std::string heapProfile = FLAGS_data_dir + "/heap.prof";
-  HeapProfilerStart(heapProfile.c_str());
-  SCOPED_DEFER(HeapProfilerStop());
 
   gflags::SetUsageMessage("Ycsb Benchmark");
   gflags::ParseCommandLineFlags(&argc, &argv, true);

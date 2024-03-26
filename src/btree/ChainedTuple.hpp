@@ -10,6 +10,9 @@
 
 #include <glog/logging.h>
 
+#include <cstdint>
+#include <string>
+
 namespace leanstore::storage::btree {
 
 /// History versions of chained tuple are stored in the history tree of the
@@ -122,8 +125,8 @@ inline std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(
 
   // Head is not visible
   uint16_t valueSize = payload.length() - sizeof(ChainedTuple);
-  auto valueBuf = std::make_unique<uint8_t[]>(valueSize);
-  std::memcpy(valueBuf.get(), this->mPayload, valueSize);
+  std::basic_string<uint8_t> valueBuf(valueSize, 0);
+  std::memcpy(valueBuf.data(), this->mPayload, valueSize);
 
   WORKERID newerWorkerId = mWorkerId;
   TXID newerTxId = mTxId;
@@ -142,27 +145,26 @@ inline std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(
               // Apply delta
               auto& updateDesc = *UpdateDesc::From(updateVersion.mPayload);
               auto* oldValOfSlots = updateVersion.mPayload + updateDesc.Size();
-              BasicKV::CopyToValue(updateDesc, oldValOfSlots, valueBuf.get());
+              BasicKV::CopyToValue(updateDesc, oldValOfSlots, valueBuf.data());
             } else {
               valueSize = versionSize - sizeof(UpdateVersion);
-              valueBuf = std::make_unique<uint8_t[]>(valueSize);
-              std::memcpy(valueBuf.get(), updateVersion.mPayload, valueSize);
+              valueBuf.resize(valueSize);
+              std::memcpy(valueBuf.data(), updateVersion.mPayload, valueSize);
             }
             break;
           }
           case VersionType::kRemove: {
             auto& removeVersion = *RemoveVersion::From(versionBuf);
             auto removedVal = removeVersion.RemovedVal();
-            valueSize = removeVersion.mValSize;
-            valueBuf = std::make_unique<uint8_t[]>(removedVal.size());
-            std::memcpy(valueBuf.get(), removedVal.data(), removedVal.size());
+            valueBuf.resize(removedVal.size());
+            std::memcpy(valueBuf.data(), removedVal.data(), removedVal.size());
             break;
           }
           case VersionType::kInsert: {
             auto& insertVersion = *InsertVersion::From(versionBuf);
-            valueSize = insertVersion.mValSize;
-            valueBuf = std::make_unique<uint8_t[]>(valueSize);
-            std::memcpy(valueBuf.get(), insertVersion.mPayload, valueSize);
+            valueBuf.resize(insertVersion.mValSize);
+            std::memcpy(valueBuf.data(), insertVersion.mPayload,
+                        insertVersion.mValSize);
             break;
           }
           }
@@ -183,7 +185,7 @@ inline std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(
     }
 
     if (cr::Worker::My().mCc.VisibleForMe(newerWorkerId, newerTxId)) {
-      callback(Slice(valueBuf.get(), valueSize));
+      callback(Slice(valueBuf));
       return {OpCode::kOK, versionsRead};
     }
     versionsRead++;

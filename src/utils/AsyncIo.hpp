@@ -71,7 +71,9 @@ public:
 
     int ret = io_submit(mAioCtx, mNumReqs, &mIocbPtrs[0]);
     if (ret < 0) {
-      return std::unexpected(utils::Error::ErrorAio(ret, "io_submit"));
+      return std::unexpected(utils::Error::ErrorAio(
+          ret, std::format("io_submit({}, {}, {})", (void*)&mAioCtx, mNumReqs,
+                           (void*)&mIocbPtrs[0])));
     }
 
     // return requests submitted

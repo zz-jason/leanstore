@@ -10,6 +10,7 @@
 #include <atomic>
 #include <cerrno>
 #include <cstring>
+#include <ctime>
 #include <format>
 
 namespace leanstore {
@@ -111,7 +112,8 @@ void GroupCommitter::writeIOCBs() {
   }
 
   /// wait all to finish.
-  if (auto res = mAIo.WaitAll(); !res) {
+  timespec timeout = {1, 0}; // 1s
+  if (auto res = mAIo.WaitAll(&timeout); !res) {
     LOG(ERROR) << std::format("Failed to wait all IO, error={}",
                               res.error().ToString());
   }

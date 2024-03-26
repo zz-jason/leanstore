@@ -140,10 +140,11 @@ public:
         updateDesc->mUpdateSlots[0].mOffset = 0;
         updateDesc->mUpdateSlots[0].mSize = FLAGS_ycsb_val_size;
 
+        std::string valGen;
         auto updateCallBack = [&](MutableSlice toUpdate) {
           auto newValSize = updateDesc->mUpdateSlots[0].mSize;
-          auto newVal = utils::RandomGenerator::RandAlphString(newValSize);
-          std::memcpy(toUpdate.Data(), newVal.data(), newVal.size());
+          utils::RandomGenerator::RandAlphString(newValSize, valGen);
+          std::memcpy(toUpdate.Data(), valGen.data(), valGen.size());
         };
 
         while (keepRunning) {

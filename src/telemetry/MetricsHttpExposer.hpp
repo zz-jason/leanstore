@@ -1,13 +1,20 @@
 #pragma once
 
 #include "leanstore/Config.hpp"
+#include "utils/RandomGenerator.hpp"
 #include "utils/UserThread.hpp"
 
+#include <gperftools/heap-profiler.h>
+#include <gperftools/profiler.h>
 #include <httplib.h>
 #include <prometheus/collectable.h>
 #include <prometheus/text_serializer.h>
 
+#include <cstdio>
 #include <mutex>
+
+#include <fcntl.h>
+#include <unistd.h>
 
 namespace leanstore::telemetry {
 
@@ -20,6 +27,14 @@ public:
     mServer.Get("/metrics",
                 [&](const httplib::Request& req, httplib::Response& res) {
                   handleMetrics(req, res);
+                });
+
+    mServer.Get("/heap", [&](const httplib::Request& req,
+                             httplib::Response& res) { handleHeap(req, res); });
+
+    mServer.Get("/profile",
+                [&](const httplib::Request& req, httplib::Response& res) {
+                  handleProfile(req, res);
                 });
   }
 
@@ -55,6 +70,60 @@ private:
     const prometheus::TextSerializer serializer;
     std::vector<prometheus::MetricFamily> empty;
     res.set_content(serializer.Serialize(empty), kContentType);
+  }
+
+  void handleHeap(const httplib::Request& req, httplib::Response& res) {
+    // get the profiling time in seconds from the query
+    auto secondsStr = req.get_param_value("seconds");
+    auto seconds = secondsStr.empty() ? 10 : std::stoi(secondsStr);
+
+    // generate a random file name
+    auto perfFile = createRandomFile();
+
+    // profile for the given seconds
+    HeapProfilerStart(perfFile.c_str());
+    SCOPED_DEFER({
+      HeapProfilerStop();
+      std::remove(perfFile.c_str());
+    });
+    sleep(seconds);
+
+    // dump the profile and return it
+    res.set_content(GetHeapProfile(), kContentType);
+  }
+
+  void handleProfile(const httplib::Request& req, httplib::Response& res) {
+    // get the profiling time in seconds from the query
+    auto secondsStr = req.get_param_value("seconds");
+    auto seconds = secondsStr.empty() ? 10 : std::stoi(secondsStr);
+
+    // generate a random file name
+    auto perfFile = createRandomFile();
+    SCOPED_DEFER(std::remove(perfFile.c_str()));
+
+    // profile for the given seconds
+    ProfilerStart(perfFile.c_str());
+    sleep(seconds);
+    ProfilerStop();
+    ProfilerFlush();
+
+    // read the file and return it
+    readProfile(perfFile, res);
+  }
+
+  std::string createRandomFile() {
+    auto perfFile = std::format("/tmp/leanstore-{}.prof",
+                                utils::RandomGenerator::RandAlphString(8));
+    std::ofstream file(perfFile);
+    file.close();
+    return perfFile;
+  }
+
+  void readProfile(const std::string& file, httplib::Response& res) {
+    std::ifstream stream(file);
+    std::stringstream buffer;
+    buffer << stream.rdbuf();
+    res.set_content(buffer.str(), kContentType);
   }
 
   /// The http server
