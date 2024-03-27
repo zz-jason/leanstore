@@ -48,19 +48,19 @@ public:
 };
 
 template <typename T> inline void WalPayloadHandler<T>::SubmitWal() {
-  SCOPED_DEFER(DEBUG_BLOCK() {
-    rapidjson::Document walDoc(rapidjson::kObjectType);
-    auto* walEntry = cr::Worker::My().mLogging.mActiveWALEntryComplex;
-    WalEntry::ToJson(walEntry, &walDoc);
+  SCOPED_DEFER(DEBUG_BLOCK(){
+      // rapidjson::Document walDoc(rapidjson::kObjectType);
+      // auto* walEntry = cr::Worker::My().mLogging.mActiveWALEntryComplex;
+      // WalEntry::ToJson(walEntry, &walDoc);
 
-    rapidjson::StringBuffer buffer;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-    walDoc.Accept(writer);
-    LOG(INFO) << "SubmitWal"
-              << ", workerId=" << Worker::My().mWorkerId
-              << ", startTs=" << Worker::My().mActiveTx.mStartTs
-              << ", curGSN=" << Worker::My().mLogging.GetCurrentGsn()
-              << ", walJson=" << buffer.GetString();
+      // rapidjson::StringBuffer buffer;
+      // rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+      // walDoc.Accept(writer);
+      // LOG(INFO) << "SubmitWal"
+      //           << ", workerId=" << Worker::My().mWorkerId
+      //           << ", startTs=" << Worker::My().mActiveTx.mStartTs
+      //           << ", curGSN=" << Worker::My().mLogging.GetCurrentGsn()
+      //           << ", walJson=" << buffer.GetString();
   });
 
   cr::Worker::My().mLogging.SubmitWALEntryComplex(mTotalSize);

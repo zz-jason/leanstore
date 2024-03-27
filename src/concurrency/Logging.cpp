@@ -72,12 +72,12 @@ void Logging::WriteWalTxAbort() {
 }
 
 void Logging::WriteWalTxFinish() {
-  WalEntry* entry;
+  WalEntry* entry [[maybe_unused]];
   SCOPED_DEFER({
-    DLOG(INFO) << std::format(
-        "WriteWalTxFinish, workerId={}, startTs={}, curGSN={}, walJson={}",
-        Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
-        GetCurrentGsn(), WalEntry::ToJsonString(entry));
+      // DLOG(INFO) << std::format(
+      //     "WriteWalTxFinish, workerId={}, startTs={}, curGSN={}, walJson={}",
+      //     Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
+      //     GetCurrentGsn(), WalEntry::ToJsonString(entry));
   });
 
   // Reserve space
@@ -108,10 +108,10 @@ void Logging::WriteWalCarriageReturn() {
 /// @param totalSize is the size of the wal record to be flush.
 void Logging::SubmitWALEntryComplex(uint64_t totalSize) {
   SCOPED_DEFER({
-    DLOG(INFO) << std::format(
-        "SubmitWal, workerId={}, startTs={}, curGSN={}, walJson={}",
-        Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
-        GetCurrentGsn(), WalEntry::ToJsonString(mActiveWALEntryComplex));
+      // DLOG(INFO) << std::format(
+      //     "SubmitWal, workerId={}, startTs={}, curGSN={}, walJson={}",
+      //     Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
+      //     GetCurrentGsn(), WalEntry::ToJsonString(mActiveWALEntryComplex));
   });
 
   mActiveWALEntryComplex->mCrc32 = mActiveWALEntryComplex->ComputeCRC32();

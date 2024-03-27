@@ -224,7 +224,7 @@ inline void WalEntry::ToJson(const WalEntry* entry, rapidjson::Document* doc) {
     auto typeName = entry->TypeName();
     rapidjson::Value member;
     member.SetString(typeName.data(), typeName.size(), doc->GetAllocator());
-    doc->AddMember(kType, member, doc->GetAllocator());
+    doc->AddMember(kType, std::move(member), doc->GetAllocator());
   }
 
   switch (entry->mType) {
