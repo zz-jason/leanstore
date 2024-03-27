@@ -45,9 +45,6 @@ protected:
 };
 
 TEST_F(TransactionKVTest, Create) {
-  storage::btree::TransactionKV* btree;
-  storage::btree::TransactionKV* another;
-
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
   auto btreeConfig = leanstore::storage::btree::BTreeConfig{
@@ -56,35 +53,29 @@ TEST_F(TransactionKVTest, Create) {
   };
 
   mStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
-    SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
-    EXPECT_NE(btree, nullptr);
+    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    EXPECT_TRUE(res);
+    EXPECT_NE(res.value(), nullptr);
   });
 
   // create btree with same should fail in the same worker
   mStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
-    SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mStore->CreateTransactionKV(btreeName, btreeConfig, &another);
-    EXPECT_EQ(another, nullptr);
+    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    EXPECT_FALSE(res);
   });
 
   // create btree with same should also fail in other workers
   mStore->ExecSync(1, [&]() {
-    cr::Worker::My().StartTx();
-    SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mStore->CreateTransactionKV(btreeName, btreeConfig, &another);
-    EXPECT_EQ(another, nullptr);
+    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    EXPECT_FALSE(res);
   });
 
   // create btree with another different name should success
   const auto* btreeName2 = "testTree2";
   mStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
-    SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mStore->CreateTransactionKV(btreeName2, btreeConfig, &another);
-    EXPECT_NE(btree, nullptr);
+    auto res = mStore->CreateTransactionKV(btreeName2, btreeConfig);
+    EXPECT_TRUE(res);
+    EXPECT_NE(res.value(), nullptr);
   });
 
   mStore->ExecSync(1, [&]() {
@@ -114,10 +105,9 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
   mStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
-    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    btree = res.value();
     EXPECT_NE(btree, nullptr);
-    cr::Worker::My().CommitTx();
 
     // insert some values
     cr::Worker::My().StartTx();
@@ -182,10 +172,9 @@ TEST_F(TransactionKVTest, Insert1000KVs) {
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
 
-    cr::Worker::My().StartTx();
-    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    btree = res.value();
     EXPECT_NE(btree, nullptr);
-    cr::Worker::My().CommitTx();
 
     // insert numKVs tuples
     std::set<std::string> uniqueKeys;
@@ -222,10 +211,9 @@ TEST_F(TransactionKVTest, InsertDuplicates) {
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
 
-    cr::Worker::My().StartTx();
-    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    btree = res.value();
     EXPECT_NE(btree, nullptr);
-    cr::Worker::My().CommitTx();
 
     // insert numKVs tuples
     std::set<std::string> uniqueKeys;
@@ -270,10 +258,9 @@ TEST_F(TransactionKVTest, Remove) {
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
 
-    cr::Worker::My().StartTx();
-    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    btree = res.value();
     EXPECT_NE(btree, nullptr);
-    cr::Worker::My().CommitTx();
 
     // insert numKVs tuples
     std::set<std::string> uniqueKeys;
@@ -326,10 +313,9 @@ TEST_F(TransactionKVTest, RemoveNotExisted) {
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
 
-    cr::Worker::My().StartTx();
-    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    btree = res.value();
     EXPECT_NE(btree, nullptr);
-    cr::Worker::My().CommitTx();
 
     // insert numKVs tuples
     std::set<std::string> uniqueKeys;
@@ -383,10 +369,9 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
 
-    cr::Worker::My().StartTx();
-    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    btree = res.value();
     EXPECT_NE(btree, nullptr);
-    cr::Worker::My().CommitTx();
 
     // insert numKVs tuples
     ssize_t numKVs(100);
@@ -464,10 +449,9 @@ TEST_F(TransactionKVTest, ToJson) {
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
 
-    cr::Worker::My().StartTx();
-    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    btree = res.value();
     EXPECT_NE(btree, nullptr);
-    cr::Worker::My().CommitTx();
 
     // insert some values
     cr::Worker::My().StartTx();
@@ -511,9 +495,8 @@ TEST_F(TransactionKVTest, Update) {
     };
 
     // create btree
-    cr::Worker::My().StartTx();
-    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
-    cr::Worker::My().CommitTx();
+    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    btree = res.value();
     EXPECT_NE(btree, nullptr);
 
     // insert values
@@ -604,9 +587,8 @@ TEST_F(TransactionKVTest, ScanAsc) {
     };
 
     // create btree
-    cr::Worker::My().StartTx();
-    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
-    cr::Worker::My().CommitTx();
+    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    btree = res.value();
     EXPECT_NE(btree, nullptr);
 
     // insert values
@@ -691,9 +673,8 @@ TEST_F(TransactionKVTest, ScanDesc) {
     };
 
     // create btree
-    cr::Worker::My().StartTx();
-    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
-    cr::Worker::My().CommitTx();
+    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    btree = res.value();
     EXPECT_NE(btree, nullptr);
 
     // insert values
@@ -783,9 +764,8 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
     };
 
     // create btree
-    cr::Worker::My().StartTx();
-    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
-    cr::Worker::My().CommitTx();
+    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    btree = res.value();
     EXPECT_NE(btree, nullptr);
 
     // insert values
@@ -898,9 +878,8 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
     };
 
     // create btree
-    cr::Worker::My().StartTx();
-    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
-    cr::Worker::My().CommitTx();
+    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    btree = res.value();
     EXPECT_NE(btree, nullptr);
 
     // insert values

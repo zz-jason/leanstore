@@ -23,6 +23,7 @@
 
 #include <expected>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -466,19 +467,9 @@ void LeanStore::deserializeFlags() {
   }
 }
 
-void LeanStore::CreateBasicKV(const std::string& name,
-                              storage::btree::BTreeConfig& config,
-                              storage::btree::BasicKV** btree) {
-  DCHECK(cr::Worker::My().IsTxStarted());
-  auto res = storage::btree::BasicKV::Create(this, name, config);
-  if (!res) {
-    LOG(ERROR) << "Failed to register BasicKV"
-               << ", name=" << name << ", error=" << res.error().ToString();
-    *btree = nullptr;
-    return;
-  }
-
-  *btree = res.value();
+std::expected<storage::btree::BasicKV*, utils::Error> LeanStore::CreateBasicKV(
+    const std::string& name, storage::btree::BTreeConfig& config) {
+  return storage::btree::BasicKV::Create(this, name, config);
 }
 
 void LeanStore::GetBasicKV(const std::string& name,
@@ -498,39 +489,43 @@ void LeanStore::DropBasicKV(const std::string& name) {
   }
 }
 
-void LeanStore::CreateTransactionKV(const std::string& name,
-                                    storage::btree::BTreeConfig& config,
-                                    storage::btree::TransactionKV** btree) {
-  DCHECK(cr::Worker::My().IsTxStarted());
-  *btree = nullptr;
-
+std::expected<storage::btree::TransactionKV*, utils::Error> LeanStore::
+    CreateTransactionKV(const std::string& name,
+                        storage::btree::BTreeConfig& config) {
   // create btree for graveyard
   auto graveyardName = "_" + name + "_graveyard";
   auto graveyardConfig =
       storage::btree::BTreeConfig{.mEnableWal = false, .mUseBulkInsert = false};
-  auto res =
-      storage::btree::BasicKV::Create(this, graveyardName, graveyardConfig);
-  if (!res) {
-    LOG(ERROR) << "Failed to create TransactionKV graveyard"
-               << ", btreeVI=" << name << ", graveyardName=" << graveyardName
-               << ", error=" << res.error().ToString();
-    return;
-  }
-  auto* graveyard = res.value();
 
-  // clean resource on failure
-  SCOPED_DEFER(if (*btree == nullptr && graveyard != nullptr) {
+  // create graveyard
+  btree::BasicKV* graveyard;
+  if (auto res =
+          storage::btree::BasicKV::Create(this, graveyardName, graveyardConfig);
+      !res) {
+    LOG(ERROR) << std::format("Failed to create TransactionKV graveyard, "
+                              "btreeVI={}, graveyardName={}, error={}",
+                              name, graveyardName, res.error().ToString());
+    return std::unexpected(std::move(res.error()));
+  } else {
+    graveyard = res.value();
+  }
+
+  // create transaction btree
+  if (auto res =
+          storage::btree::TransactionKV::Create(this, name, config, graveyard);
+      !res) {
     leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(
         *static_cast<leanstore::storage::btree::BTreeGeneric*>(graveyard));
-    auto res = mTreeRegistry->UnRegisterTree(graveyard->mTreeId);
-    if (!res) {
-      LOG(ERROR) << "UnRegister graveyard failed"
-                 << ", error=" << res.error().ToString();
+    auto res2 = mTreeRegistry->UnRegisterTree(graveyard->mTreeId);
+    if (!res2) {
+      LOG(ERROR) << std::format("UnRegister TransactionKV graveyard failed, "
+                                "graveyardName={}, error={}",
+                                graveyardName, res2.error().ToString());
     }
-  });
-
-  // create btree for main data
-  *btree = storage::btree::TransactionKV::Create(this, name, config, graveyard);
+    return std::unexpected(std::move(res.error()));
+  } else {
+    return res.value();
+  }
 }
 
 void LeanStore::GetTransactionKV(const std::string& name,

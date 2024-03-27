@@ -79,14 +79,12 @@ public:
   ~LeanStore();
 
 public:
-  /// Register a BasicKV
+  /// Create a BasicKV
   ///
   /// @param name The unique name of the btree
   /// @param config The config of the btree
-  /// @param btree The pointer to store the registered btree
-  void CreateBasicKV(const std::string& name,
-                     storage::btree::BTreeConfig& config,
-                     storage::btree::BasicKV** btree);
+  std::expected<storage::btree::BasicKV*, utils::Error> CreateBasicKV(
+      const std::string& name, storage::btree::BTreeConfig& config);
 
   /// Get a registered BasicKV
   ///
@@ -103,9 +101,9 @@ public:
   /// @param name The unique name of the btree
   /// @param config The config of the btree
   /// @param btree The pointer to store the registered btree
-  void CreateTransactionKV(const std::string& name,
-                           storage::btree::BTreeConfig& config,
-                           storage::btree::TransactionKV** btree);
+  std::expected<storage::btree::TransactionKV*, utils::Error>
+  CreateTransactionKV(const std::string& name,
+                      storage::btree::BTreeConfig& config);
 
   /// Get a registered TransactionKV
   ///
