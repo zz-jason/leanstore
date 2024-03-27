@@ -80,6 +80,17 @@ public:
     });
     return result;
   }
+
+  static void RandAlphString(size_t len, std::string& result) {
+    static constexpr auto kChars = "0123456789"
+                                   "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                                   "abcdefghijklmnopqrstuvwxyz";
+    result.resize(len, '\0');
+    std::generate_n(begin(result), len, [&]() {
+      auto i = RandU64Std(0, std::strlen(kChars));
+      return kChars[i];
+    });
+  }
 };
 
 } // namespace utils
