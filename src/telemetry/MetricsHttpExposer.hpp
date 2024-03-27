@@ -4,8 +4,10 @@
 #include "utils/RandomGenerator.hpp"
 #include "utils/UserThread.hpp"
 
+#ifdef ENABLE_PROFILING
 #include <gperftools/heap-profiler.h>
 #include <gperftools/profiler.h>
+#endif
 #include <httplib.h>
 #include <prometheus/collectable.h>
 #include <prometheus/text_serializer.h>
@@ -72,7 +74,9 @@ private:
     res.set_content(serializer.Serialize(empty), kContentType);
   }
 
-  void handleHeap(const httplib::Request& req, httplib::Response& res) {
+  void handleHeap(const httplib::Request& req [[maybe_unused]],
+                  httplib::Response& res) {
+#ifdef ENABLE_PROFILING
     // get the profiling time in seconds from the query
     auto secondsStr = req.get_param_value("seconds");
     auto seconds = secondsStr.empty() ? 10 : std::stoi(secondsStr);
@@ -90,9 +94,17 @@ private:
 
     // dump the profile and return it
     res.set_content(GetHeapProfile(), kContentType);
+    return;
+#else
+    res.set_content("not implemented", kContentType);
+    return;
+#endif
   }
 
-  void handleProfile(const httplib::Request& req, httplib::Response& res) {
+  void handleProfile(const httplib::Request& req [[maybe_unused]],
+                     httplib::Response& res) {
+
+#ifdef ENABLE_PROFILING
     // get the profiling time in seconds from the query
     auto secondsStr = req.get_param_value("seconds");
     auto seconds = secondsStr.empty() ? 10 : std::stoi(secondsStr);
@@ -109,6 +121,10 @@ private:
 
     // read the file and return it
     readProfile(perfFile, res);
+    return;
+#else
+    res.set_content("not implemented", kContentType);
+#endif
   }
 
   std::string createRandomFile() {

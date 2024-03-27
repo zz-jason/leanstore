@@ -35,11 +35,12 @@
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "CMAKE_BUILD_TYPE": "Release",
-                "COUNTERS_LEVEL": "all"
+                "COUNTERS_LEVEL": "all",
+                "ENABLE_PROFILING": "ON"
             }
         },
         {
-            "name": "release_no_counters",
+            "name": "performance",
             "binaryDir": "${sourceDir}/build/release",
             "cacheVariables": {
                 "CMAKE_C_COMPILER": "gcc-13",
