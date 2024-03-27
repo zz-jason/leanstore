@@ -1,13 +1,15 @@
 #include "btree/BasicKV.hpp"
 
-#include "concurrency/CRManager.hpp"
-#include "leanstore/LeanStore.hpp"
 #include "btree/TransactionKV.hpp"
 #include "btree/core/BTreeGeneric.hpp"
 #include "buffer-manager/BufferManager.hpp"
+#include "concurrency/CRManager.hpp"
+#include "leanstore/LeanStore.hpp"
 #include "utils/Defer.hpp"
 
 #include <gtest/gtest.h>
+
+#include <cstddef>
 
 namespace leanstore::test {
 
@@ -39,9 +41,6 @@ protected:
 };
 
 TEST_F(BasicKVTest, BasicKVCreate) {
-  storage::btree::BasicKV* btree;
-  storage::btree::BasicKV* another;
-
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
   auto btreeConfig = leanstore::storage::btree::BTreeConfig{
@@ -50,35 +49,29 @@ TEST_F(BasicKVTest, BasicKVCreate) {
   };
 
   mStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
-    SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mStore->CreateBasicKV(btreeName, btreeConfig, &btree);
-    EXPECT_NE(btree, nullptr);
+    auto res = mStore->CreateBasicKV(btreeName, btreeConfig);
+    EXPECT_TRUE(res);
+    EXPECT_NE(res.value(), nullptr);
   });
 
   // create btree with same should fail in the same worker
   mStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
-    SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mStore->CreateBasicKV(btreeName, btreeConfig, &another);
-    EXPECT_EQ(another, nullptr);
+    auto res = mStore->CreateBasicKV(btreeName, btreeConfig);
+    EXPECT_FALSE(res);
   });
 
   // create btree with same should also fail in other workers
   mStore->ExecSync(1, [&]() {
-    cr::Worker::My().StartTx();
-    SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mStore->CreateBasicKV(btreeName, btreeConfig, &another);
-    EXPECT_EQ(another, nullptr);
+    auto res = mStore->CreateBasicKV(btreeName, btreeConfig);
+    EXPECT_FALSE(res);
   });
 
   // create btree with another different name should success
   btreeName = "testTree2";
   mStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
-    SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mStore->CreateBasicKV(btreeName, btreeConfig, &another);
-    EXPECT_NE(btree, nullptr);
+    auto res = mStore->CreateBasicKV(btreeName, btreeConfig);
+    EXPECT_TRUE(res);
+    EXPECT_NE(res.value(), nullptr);
   });
 }
 
@@ -101,12 +94,12 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
   mStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
-    mStore->CreateBasicKV(btreeName, btreeConfig, &btree);
-    EXPECT_NE(btree, nullptr);
-    cr::Worker::My().CommitTx();
+    auto res = mStore->CreateBasicKV(btreeName, btreeConfig);
+    EXPECT_TRUE(res);
+    EXPECT_NE(res.value(), nullptr);
 
     // insert some values
+    btree = res.value();
     cr::Worker::My().StartTx();
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];

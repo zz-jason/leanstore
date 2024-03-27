@@ -11,6 +11,8 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <format>
+
 using namespace std;
 using namespace leanstore::storage;
 
@@ -140,18 +142,29 @@ OpCode BasicKV::ScanDesc(Slice scanKey, ScanCallback callback) {
 OpCode BasicKV::Insert(Slice key, Slice val) {
   JUMPMU_TRY() {
     auto xIter = GetExclusiveIterator();
-    OpCode ret = xIter.InsertKV(key, val);
-    ENSURE(ret == OpCode::kOK);
+    auto ret = xIter.InsertKV(key, val);
+
+    if (ret == OpCode::kDuplicated) {
+      LOG(INFO) << std::format("Insert duplicated, workerId={}, key={}",
+                               cr::Worker::My().mWorkerId, key.ToString());
+      JUMPMU_RETURN OpCode::kDuplicated;
+    }
+
+    if (ret != OpCode::kOK) {
+      LOG(INFO) << std::format("Insert failed, workerId={}, key={}, ret={}",
+                               cr::Worker::My().mWorkerId, key.ToString(),
+                               ToString(ret));
+      JUMPMU_RETURN ret;
+    }
+
     if (mConfig.mEnableWal) {
       auto walSize = key.length() + val.length();
       xIter.mGuardedLeaf.WriteWal<WalInsert>(walSize, key, val);
     }
-    JUMPMU_RETURN OpCode::kOK;
   }
   JUMPMU_CATCH() {
   }
-  UNREACHABLE();
-  return OpCode::kOther;
+  return OpCode::kOK;
 }
 
 OpCode BasicKV::PrefixLookup(Slice key, PrefixLookupCallback callback) {

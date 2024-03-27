@@ -68,9 +68,9 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
   };
 
   mStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
-    SCOPED_DEFER(cr::Worker::My().CommitTx());
-    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    ASSERT_TRUE(res);
+    btree = res.value();
     EXPECT_NE(btree, nullptr);
   });
 
@@ -145,10 +145,9 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
   };
 
   mStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
-    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    btree = res.value();
     EXPECT_NE(btree, nullptr);
-    cr::Worker::My().CommitTx();
 
     // insert some values
     cr::Worker::My().StartTx();
@@ -246,10 +245,9 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
 
   mStore->ExecSync(0, [&]() {
     // create btree
-    cr::Worker::My().StartTx();
-    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    btree = res.value();
     EXPECT_NE(btree, nullptr);
-    cr::Worker::My().CommitTx();
 
     // insert some values
     for (size_t i = 0; i < numKVs; ++i) {
@@ -341,10 +339,9 @@ TEST_F(RecoveringTest, RecoverAfterRemove) {
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
-    cr::Worker::My().StartTx();
-    mStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
+    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    btree = res.value();
     EXPECT_NE(btree, nullptr);
-    cr::Worker::My().CommitTx();
 
     // insert some values
     for (size_t i = 0; i < numKVs; ++i) {
