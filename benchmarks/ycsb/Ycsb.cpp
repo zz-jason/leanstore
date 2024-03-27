@@ -13,7 +13,8 @@
 // For data preparation
 static std::string kCmdLoad = "load";
 static std::string kCmdRun = "run";
-static std::string kTargetLeanStore = "leanstore";
+static std::string kTargetTransactionKv = "transactionkv";
+static std::string kTargetBasicKv = "basickv";
 static std::string kTargetRocksDb = "rocksdb";
 
 int main(int argc, char** argv) {
@@ -45,8 +46,10 @@ int main(int argc, char** argv) {
   }
 
   leanstore::ycsb::YcsbExecutor* executor = nullptr;
-  if (FLAGS_ycsb_target == kTargetLeanStore) {
-    executor = new leanstore::ycsb::YcsbLeanStore();
+  if (FLAGS_ycsb_target == kTargetTransactionKv ||
+      FLAGS_ycsb_target == kTargetBasicKv) {
+    bool benchTransactionKv = FLAGS_ycsb_target == kTargetTransactionKv;
+    executor = new leanstore::ycsb::YcsbLeanStore(benchTransactionKv);
   } else if (FLAGS_ycsb_target == kTargetRocksDb) {
     // executor = new leanstore::ycsb::YcsbRocksDb();
     LOG(FATAL) << "Unknown target: " << FLAGS_ycsb_target;

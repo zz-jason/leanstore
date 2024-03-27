@@ -20,6 +20,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <format>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -29,10 +30,13 @@ namespace leanstore::ycsb {
 
 class YcsbLeanStore : public YcsbExecutor {
 private:
-  std::unique_ptr<LeanStore> mStore = nullptr;
+  std::unique_ptr<LeanStore> mStore;
+
+  bool mBenchTransactionKv;
 
 public:
-  YcsbLeanStore() {
+  YcsbLeanStore(bool benchTransactionKv)
+      : mBenchTransactionKv(benchTransactionKv) {
     auto res = LeanStore::Open();
     if (!res) {
       std::cerr << "Failed to open leanstore: " << res.error().ToString()
@@ -43,29 +47,52 @@ public:
     mStore = std::move(res.value());
   }
 
-  inline KVInterface* CreateTable() {
+  KVInterface* CreateTable() {
     auto tableName = "ycsb_" + FLAGS_ycsb_workload;
     auto config = btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
-    btree::TransactionKV* table;
+
+    // create table with transaction kv
+    if (mBenchTransactionKv) {
+      btree::TransactionKV* table;
+      mStore->ExecSync(0, [&]() {
+        auto res = mStore->CreateTransactionKV(tableName, config);
+        if (!res) {
+          LOG(FATAL) << std::format("Failed to create table: name={}, error={}",
+                                    tableName, res.error().ToString());
+        }
+        table = res.value();
+      });
+      return table;
+    }
+
+    // create table with basic kv
+    btree::BasicKV* table;
     mStore->ExecSync(0, [&]() {
-      cr::Worker::My().StartTx();
-      SCOPED_DEFER(cr::Worker::My().CommitTx());
-      mStore->CreateTransactionKV(tableName, config, &table);
+      auto res = mStore->CreateBasicKV(tableName, config);
+      if (!res) {
+        LOG(FATAL) << std::format("Failed to create table: name={}, error={}",
+                                  tableName, res.error().ToString());
+      }
+      table = res.value();
     });
     return table;
   }
 
-  inline KVInterface* GetTable() {
+  KVInterface* GetTable() {
     auto tableName = "ycsb_" + FLAGS_ycsb_workload;
-    btree::TransactionKV* table;
-    mStore->GetTransactionKV(tableName, &table);
+    if (mBenchTransactionKv) {
+      btree::TransactionKV* table;
+      mStore->GetTransactionKV(tableName, &table);
+      return table;
+    }
+    btree::BasicKV* table;
+    mStore->GetBasicKV(tableName, &table);
     return table;
   }
 
-public:
   void HandleCmdLoad() override {
     auto* table = CreateTable();
     auto zipfRandom = utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count,
@@ -100,10 +127,14 @@ public:
               uint8_t val[FLAGS_ycsb_val_size];
               utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
 
-              cr::Worker::My().StartTx();
+              if (mBenchTransactionKv) {
+                cr::Worker::My().StartTx();
+              }
               table->Insert(Slice(key, FLAGS_ycsb_key_size),
                             Slice(val, FLAGS_ycsb_val_size));
-              cr::Worker::My().CommitTx();
+              if (mBenchTransactionKv) {
+                cr::Worker::My().CommitTx();
+              }
             }
           });
         });
@@ -157,17 +188,26 @@ public:
               if (readProbability <= workload.mReadProportion * 100) {
                 // generate key for read
                 GenYcsbKey(zipfRandom, key);
-                cr::Worker::My().StartTx();
-                table->Lookup(Slice(key, FLAGS_ycsb_key_size), copyValue);
-                cr::Worker::My().CommitTx();
+                if (mBenchTransactionKv) {
+                  cr::Worker::My().StartTx();
+                  table->Lookup(Slice(key, FLAGS_ycsb_key_size), copyValue);
+                  cr::Worker::My().CommitTx();
+                } else {
+                  table->Lookup(Slice(key, FLAGS_ycsb_key_size), copyValue);
+                }
               } else {
                 // generate key for update
                 GenYcsbKey(zipfRandom, key);
                 // generate val for update
-                cr::Worker::My().StartTx();
-                table->UpdatePartial(Slice(key, FLAGS_ycsb_key_size),
-                                     updateCallBack, *updateDesc);
-                cr::Worker::My().CommitTx();
+                if (mBenchTransactionKv) {
+                  cr::Worker::My().StartTx();
+                  table->UpdatePartial(Slice(key, FLAGS_ycsb_key_size),
+                                       updateCallBack, *updateDesc);
+                  cr::Worker::My().CommitTx();
+                } else {
+                  table->UpdatePartial(Slice(key, FLAGS_ycsb_key_size),
+                                       updateCallBack, *updateDesc);
+                }
               }
               break;
             }

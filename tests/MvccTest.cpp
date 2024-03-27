@@ -46,10 +46,9 @@ protected:
         .mUseBulkInsert = FLAGS_bulk_insert,
     };
     mStore->ExecSync(0, [&]() {
-      cr::Worker::My().StartTx();
-      SCOPED_DEFER(cr::Worker::My().CommitTx());
-
-      mStore->CreateTransactionKV(mTreeName, config, &mBTree);
+      auto res = mStore->CreateTransactionKV(mTreeName, config);
+      ASSERT_TRUE(res);
+      mBTree = res.value();
       ASSERT_NE(mBTree, nullptr);
     });
   }

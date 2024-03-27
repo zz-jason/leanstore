@@ -117,9 +117,9 @@ private:
   void undoLastRemove(const WalTxRemove* walRemove);
 
 public:
-  static TransactionKV* Create(leanstore::LeanStore* store,
-                               const std::string& treeName, BTreeConfig& config,
-                               BasicKV* graveyard);
+  static std::expected<TransactionKV*, utils::Error> Create(
+      leanstore::LeanStore* store, const std::string& treeName,
+      BTreeConfig& config, BasicKV* graveyard);
 
   inline static void InsertToNode(GuardedBufferFrame<BTreeNode>& guardedNode,
                                   Slice key, Slice val, WORKERID workerId,

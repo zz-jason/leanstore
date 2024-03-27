@@ -69,22 +69,9 @@ public:
     };
     bool inAlreadyStartedTx = false;
     mStore->ExecSync(mWorkerId, [&]() {
-      bool autoCommit = mAutoCommit;
-      if (cr::Worker::My().mActiveTx.mState == cr::TxState::kStarted) {
-        inAlreadyStartedTx = true;
-        autoCommit = false;
-      }
-      if (!inAlreadyStartedTx && !mAutoCommit) {
-        return;
-      }
-
-      if (autoCommit) {
-        cr::Worker::My().StartTx(TxMode::kShortRunning,
-                                 IsolationLevel::kSerializable);
-      }
-      mStore->CreateTransactionKV(name, config, &table);
-      if (autoCommit) {
-        cr::Worker::My().CommitTx();
+      auto res = mStore->CreateTransactionKV(name, config);
+      if (res) {
+        table = res.value();
       }
     });
     if (!inAlreadyStartedTx && !mAutoCommit) {

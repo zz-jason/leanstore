@@ -212,21 +212,18 @@ inline void LeanStoreMVCCSession::AbortTx() {
 
 // DDL operations
 inline auto LeanStoreMVCCSession::CreateTable(const std::string& tblName,
-                                              bool implicitTx)
+                                              bool implicitTx [[maybe_unused]])
     -> std::expected<TableRef*, utils::Error> {
   auto config = storage::btree::BTreeConfig{
       .mEnableWal = FLAGS_wal,
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
 
-  storage::btree::TransactionKV* btree;
+  storage::btree::TransactionKV* btree{nullptr};
   mStore->mLeanStore->ExecSync(mWorkerId, [&]() {
-    if (implicitTx) {
-      cr::Worker::My().StartTx(mTxMode, mIsolationLevel);
-    }
-    mStore->mLeanStore->CreateTransactionKV(tblName, config, &btree);
-    if (implicitTx) {
-      cr::Worker::My().CommitTx();
+    auto res = mStore->mLeanStore->CreateTransactionKV(tblName, config);
+    if (res) {
+      btree = res.value();
     }
   });
   if (btree == nullptr) {

@@ -1,10 +1,10 @@
-#include "concurrency/CRManager.hpp"
-#include "leanstore/Config.hpp"
-#include "leanstore/LeanStore.hpp"
 #include "btree/BasicKV.hpp"
 #include "btree/TransactionKV.hpp"
 #include "btree/core/BTreeGeneric.hpp"
 #include "buffer-manager/BufferManager.hpp"
+#include "concurrency/CRManager.hpp"
+#include "leanstore/Config.hpp"
+#include "leanstore/LeanStore.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <benchmark/benchmark.h>
@@ -37,10 +37,10 @@ static void BenchUpdateInsert(benchmark::State& state) {
       .mUseBulkInsert = FLAGS_bulk_insert,
   };
   sLeanStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
-    sLeanStore->CreateTransactionKV(btreeName, btreeConfig, &btree);
-    EXPECT_NE(btree, nullptr);
-    cr::Worker::My().CommitTx();
+    auto res = sLeanStore->CreateTransactionKV(btreeName, btreeConfig);
+    EXPECT_TRUE(res);
+    EXPECT_NE(res.value(), nullptr);
+    btree = res.value();
   });
 
   std::unordered_set<std::string> dedup;

@@ -13,32 +13,35 @@
 #include "telemetry/MetricOnlyTimer.hpp"
 #include "telemetry/MetricsManager.hpp"
 #include "utils/Defer.hpp"
+#include "utils/Error.hpp"
 #include "utils/Misc.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include <cstring>
+#include <expected>
+#include <format>
 #include <string_view>
 
 namespace leanstore::storage::btree {
 
-TransactionKV* TransactionKV::Create(leanstore::LeanStore* store,
-                                     const std::string& treeName,
-                                     BTreeConfig& config, BasicKV* graveyard) {
+std::expected<TransactionKV*, utils::Error> TransactionKV::Create(
+    leanstore::LeanStore* store, const std::string& treeName,
+    BTreeConfig& config, BasicKV* graveyard) {
   auto [treePtr, treeId] = store->mTreeRegistry->CreateTree(treeName, [&]() {
     return std::unique_ptr<BufferManagedTree>(
         static_cast<BufferManagedTree*>(new TransactionKV()));
   });
   if (treePtr == nullptr) {
-    LOG(ERROR) << "Failed to create TransactionKV, treeName has been taken"
-               << ", treeName=" << treeName;
-    return nullptr;
+    return std::unexpected(utils::Error::General(std::format(
+        "Failed to create TransactionKV, treeName has been taken, treeName={}",
+        treeName)));
   }
-  auto* tree = dynamic_cast<TransactionKV*>(treePtr);
+
+  auto* tree = DownCast<TransactionKV*>(treePtr);
   tree->Init(store, treeId, config, graveyard);
 
-  // TODO(jian.z): record WAL
   return tree;
 }
 
