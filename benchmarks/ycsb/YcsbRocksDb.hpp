@@ -1,6 +1,5 @@
 #include "Ycsb.hpp"
 #include "leanstore/Config.hpp"
-#include "leanstore/Units.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -151,12 +150,12 @@ public:
         aborted += a.exchange(0);
       }
       auto abortRate = (aborted)*1.0 / (committed + aborted);
-      std::cout << "[" << i << "s] "
-                << " [tps=" << committed * 1.0 / reportPeriod << "]" // tps
-                << " [committed=" << committed << "]"     // committed count
-                << " [conflicted=" << aborted << "]"      // aborted count
-                << " [conflict rate=" << abortRate << "]" // abort rate
-                << std::endl;
+      auto summary = std::format("[{} thds] [{}s] [tps={:.2f}] [committed={}] "
+                                 "[conflicted={}] [conflict rate={:.2f}]",
+                                 FLAGS_worker_threads, i,
+                                 (committed + aborted) * 1.0 / reportPeriod,
+                                 committed, aborted, abortRate);
+      std::cout << summary << std::endl;
     }
   }
 };

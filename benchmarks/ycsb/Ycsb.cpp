@@ -1,6 +1,9 @@
 #include "Ycsb.hpp"
 
 #include "YcsbLeanStore.hpp"
+#ifdef ENABLE_ROCKSDB
+#include "YcsbRocksDb.hpp"
+#endif
 #include "leanstore/Config.hpp"
 
 #include <gflags/gflags.h>
@@ -51,9 +54,12 @@ int main(int argc, char** argv) {
     bool benchTransactionKv = FLAGS_ycsb_target == kTargetTransactionKv;
     executor = new leanstore::ycsb::YcsbLeanStore(benchTransactionKv);
   } else if (FLAGS_ycsb_target == kTargetRocksDb) {
-    // executor = new leanstore::ycsb::YcsbRocksDb();
-    LOG(FATAL) << "Unknown target: " << FLAGS_ycsb_target;
-  } else {
+#ifdef ENABLE_ROCKSDB
+    executor = new leanstore::ycsb::YcsbRocksDb();
+#endif
+  }
+
+  if (executor == nullptr) {
     LOG(FATAL) << "Unknown target: " << FLAGS_ycsb_target;
   }
 

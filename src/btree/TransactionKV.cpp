@@ -10,6 +10,7 @@
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
+#include "sync/HybridGuard.hpp"
 #include "telemetry/MetricOnlyTimer.hpp"
 #include "telemetry/MetricsManager.hpp"
 #include "utils/Defer.hpp"
@@ -51,6 +52,31 @@ void TransactionKV::Init(leanstore::LeanStore* store, TREEID treeId,
   BasicKV::Init(store, treeId, config);
 }
 
+OpCode TransactionKV::lookupOptimistic(Slice key, ValCallback valCallback) {
+  JUMPMU_TRY() {
+    GuardedBufferFrame<BTreeNode> guardedLeaf;
+    FindLeafCanJump(key, guardedLeaf, LatchMode::kOptimisticOrJump);
+    auto slotId = guardedLeaf->lowerBound<true>(key);
+    if (slotId != -1) {
+      auto [ret, versionsRead] =
+          getVisibleTuple(guardedLeaf->Value(slotId), valCallback);
+      METRIC_COUNTER_INC(mStore->mMetricsManager, tx_version_read_total,
+                         versionsRead);
+      guardedLeaf.JumpIfModifiedByOthers();
+      JUMPMU_RETURN ret;
+    }
+
+    guardedLeaf.JumpIfModifiedByOthers();
+    JUMPMU_RETURN OpCode::kNotFound;
+  }
+  JUMPMU_CATCH() {
+    WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
+  }
+
+  // lock optimistically failed, return kOther to retry
+  return OpCode::kOther;
+}
+
 OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
   telemetry::MetricOnlyTimer timer;
   SCOPED_DEFER({
@@ -75,6 +101,18 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
     return ret;
   };
 
+  auto optimisticRet = lookupOptimistic(key, valCallback);
+  if (optimisticRet == OpCode::kOK) {
+    return OpCode::kOK;
+  }
+  if (optimisticRet == OpCode::kNotFound) {
+    // In a lookup-after-remove(other worker) scenario, the tuple may be garbage
+    // collected and moved to the graveyard, check the graveyard for the key.
+    return cr::ActiveTx().IsLongRunning() ? lookupInGraveyard()
+                                          : OpCode::kNotFound;
+  }
+
+  // lookup pessimistically
   auto iter = GetIterator();
   if (!iter.SeekExact(key)) {
     // In a lookup-after-remove(other worker) scenario, the tuple may be garbage
@@ -86,7 +124,6 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
   auto [ret, versionsRead] = getVisibleTuple(iter.value(), valCallback);
   METRIC_COUNTER_INC(mStore->mMetricsManager, tx_version_read_total,
                      versionsRead);
-
   if (cr::ActiveTx().IsLongRunning() && ret == OpCode::kNotFound) {
     ret = lookupInGraveyard();
   }
@@ -454,7 +491,8 @@ void TransactionKV::undoLastInsert(const WalTxInsert* walInsert) {
                       << ", key=" << ToString(key);
       // TODO(jian.z): write compensation wal entry
       if (walInsert->mPrevCommandId != kInvalidCommandid) {
-        // only remove the inserted value and mark the chained tuple as removed
+        // only remove the inserted value and mark the chained tuple as
+        // removed
         auto mutRawVal = xIter.MutableVal();
         auto* chainedTuple = ChainedTuple::From(mutRawVal.Data());
 
@@ -754,8 +792,8 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData,
     return;
   }
 
-  // Move the removedKey to graveyard, it's removed by short-running transaction
-  // but still visible for long-running transactions
+  // Move the removedKey to graveyard, it's removed by short-running
+  // transaction but still visible for long-running transactions
   //
   // TODO(jian.z): handle corner cases in insert-after-remove scenario
   JUMPMU_TRY() {

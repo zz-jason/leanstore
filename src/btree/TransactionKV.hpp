@@ -14,7 +14,9 @@
 
 #include <glog/logging.h>
 
+#include <expected>
 #include <string>
+#include <tuple>
 
 namespace leanstore {
 
@@ -39,7 +41,6 @@ public:
     mTreeType = BTreeType::kTransactionKV;
   }
 
-public:
   OpCode Lookup(Slice key, ValCallback valCallback) override;
 
   OpCode ScanAsc(Slice startKey, ScanCallback) override;
@@ -68,6 +69,8 @@ public:
   void unlock(const uint8_t* walEntryPtr) override;
 
 private:
+  OpCode lookupOptimistic(Slice key, ValCallback valCallback);
+
   template <bool asc = true>
   OpCode scan4ShortRunningTx(Slice key, ScanCallback callback);
 
