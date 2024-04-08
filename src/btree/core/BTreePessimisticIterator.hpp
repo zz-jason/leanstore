@@ -5,6 +5,7 @@
 #include "btree/core/BTreeNode.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/Units.hpp"
+#include "sync/HybridLatch.hpp"
 
 #include <glog/logging.h>
 
@@ -91,9 +92,10 @@ protected:
                 mBTree.mStore->mBufferManager.get(), mGuardedParent, *childSwip,
                 mode);
           } else {
+            // latch the middle node optimistically
             guardedChild = GuardedBufferFrame<BTreeNode>(
-                mBTree.mStore->mBufferManager.get(), mGuardedParent,
-                *childSwip);
+                mBTree.mStore->mBufferManager.get(), mGuardedParent, *childSwip,
+                LatchMode::kOptimisticSpin);
           }
         }
 

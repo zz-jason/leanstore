@@ -6,6 +6,7 @@
 #include "btree/core/BTreeWalPayload.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
+#include "sync/HybridLatch.hpp"
 #include "utils/Misc.hpp"
 
 #include <gflags/gflags.h>
@@ -38,7 +39,7 @@ OpCode BasicKV::Lookup(Slice key, ValCallback valCallback) {
   while (true) {
     JUMPMU_TRY() {
       GuardedBufferFrame<BTreeNode> guardedLeaf;
-      FindLeafCanJump(key, guardedLeaf);
+      FindLeafCanJump(key, guardedLeaf, LatchMode::kPessimisticShared);
       auto slotId = guardedLeaf->lowerBound<true>(key);
       if (slotId != -1) {
         valCallback(guardedLeaf->Value(slotId));

@@ -48,7 +48,7 @@ Worker::~Worker() {
   mLogging.mWalBuffer = nullptr;
 }
 
-void Worker::StartTx(TxMode mode, IsolationLevel level) {
+void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   Transaction prevTx = mActiveTx;
   DCHECK(prevTx.mState != TxState::kStarted)
       << "Previous transaction not ended"
@@ -101,7 +101,11 @@ void Worker::StartTx(TxMode mode, IsolationLevel level) {
   //
   // TODO(jian.z): Allocating transaction start ts globally heavily hurts the
   // scalability, especially for read-only transactions
-  mActiveTx.mStartTs = mStore->AllocTs();
+  if (isReadOnly) {
+    mActiveTx.mStartTs = mStore->GetTs();
+  } else {
+    mActiveTx.mStartTs = mStore->AllocTs();
+  }
   auto curTxId = mActiveTx.mStartTs;
   if (FLAGS_enable_long_running_transaction && mActiveTx.IsLongRunning()) {
     // Mark as long-running transaction

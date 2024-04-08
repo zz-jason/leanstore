@@ -1,6 +1,5 @@
 #include "Ycsb.hpp"
 #include "leanstore/Config.hpp"
-#include "leanstore/Units.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -10,7 +9,10 @@
 #include <glog/logging.h>
 #include <gperftools/heap-profiler.h>
 #include <gperftools/profiler.h>
+
+#ifdef ENABLE_ROCKSDB
 #include <rocksdb/db.h>
+#endif
 
 #include <atomic>
 #include <chrono>
@@ -21,11 +23,15 @@
 namespace leanstore::ycsb {
 
 class YcsbRocksDb : public YcsbExecutor {
+
 private:
+#ifdef ENABLE_ROCKSDB
   rocksdb::DB* mDb = nullptr;
+#endif
 
 public:
   YcsbRocksDb() {
+#ifdef ENABLE_ROCKSDB
     rocksdb::Options options;
     options.create_if_missing = true;
     options.error_if_exists = false;
@@ -35,9 +41,11 @@ public:
     if (!status.ok()) {
       LOG(FATAL) << "Failed to open rocksdb: " << status.ToString();
     }
+#endif
   }
 
   void HandleCmdLoad() override {
+#ifdef ENABLE_ROCKSDB
     // load data with FLAGS_worker_threads
     auto zipfRandom = utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count,
                                                     FLAGS_zipf_factor);
@@ -77,9 +85,11 @@ public:
             }
           }
         });
+#endif
   }
 
   void HandleCmdRun() override {
+#ifdef ENABLE_ROCKSDB
     // Run the benchmark in FLAGS_worker_threads
     auto workloadType = static_cast<Workload>(FLAGS_ycsb_workload[0] - 'a');
     auto workload = GetWorkloadSpec(workloadType);
@@ -151,13 +161,14 @@ public:
         aborted += a.exchange(0);
       }
       auto abortRate = (aborted)*1.0 / (committed + aborted);
-      std::cout << "[" << i << "s] "
-                << " [tps=" << committed * 1.0 / reportPeriod << "]" // tps
-                << " [committed=" << committed << "]"     // committed count
-                << " [conflicted=" << aborted << "]"      // aborted count
-                << " [conflict rate=" << abortRate << "]" // abort rate
-                << std::endl;
+      auto summary = std::format("[{} thds] [{}s] [tps={:.2f}] [committed={}] "
+                                 "[conflicted={}] [conflict rate={:.2f}]",
+                                 FLAGS_worker_threads, i,
+                                 (committed + aborted) * 1.0 / reportPeriod,
+                                 committed, aborted, abortRate);
+      std::cout << summary << std::endl;
     }
+#endif
   }
 };
 

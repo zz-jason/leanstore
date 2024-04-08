@@ -2,27 +2,39 @@
 # Set build target and dependencies for the lib
 # ---------------------------------------------------------------------------
 
-add_executable(ycsb Ycsb.cpp YcsbFlags.cpp)
-
-# dependencies
-# find_package(RocksDB CONFIG REQUIRED)
-target_link_libraries(ycsb PRIVATE
-  leanstore
-  # RocksDB::rocksdb
-  # RocksDB::rocksdb-shared
+set(YCSB_SRC
+  Ycsb.cpp
+  YcsbFlags.cpp
 )
+
+set(YCSB_DEPS
+  leanstore
+)
+
+option(ENABLE_ROCKSDB "Enable benchmarking rocksdb" OFF)
+if(ENABLE_ROCKSDB)
+  find_package(RocksDB CONFIG REQUIRED)
+  list(APPEND YCSB_DEPS RocksDB::rocksdb)
+  list(APPEND YCSB_DEPS RocksDB::rocksdb-shared)
+endif(ENABLE_ROCKSDB)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PKG_PROFILER IMPORTED_TARGET libprofiler)
 pkg_check_modules(PKG_TCMALLOC IMPORTED_TARGET libtcmalloc)
 if (PKG_PROFILER_FOUND)
-  message(STATUS "libprofiler found: ${PKG_PROFILER}")
-  target_link_libraries(ycsb PUBLIC PkgConfig::PKG_PROFILER)
+  list(APPEND YCSB_DEPS PkgConfig::PKG_PROFILER)
 endif (PKG_PROFILER_FOUND)
 if (PKG_TCMALLOC_FOUND)
   message(STATUS "libtcmalloc found: ${PKG_TCMALLOC}")
-  target_link_libraries(ycsb PUBLIC PkgConfig::PKG_TCMALLOC)
+  list(APPEND YCSB_DEPS PkgConfig::PKG_TCMALLOC)
 endif (PKG_TCMALLOC_FOUND)
+
+add_executable(ycsb ${YCSB_SRC})
+target_link_libraries(ycsb PRIVATE ${YCSB_DEPS})
+
+if(ENABLE_ROCKSDB)
+  target_compile_definitions(ycsb PUBLIC ENABLE_ROCKSDB)
+endif(ENABLE_ROCKSDB)
 
 # include dirs
 target_include_directories(ycsb PUBLIC ${CMAKE_SOURCE_DIR}/include)
