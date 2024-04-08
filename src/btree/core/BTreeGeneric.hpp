@@ -7,6 +7,7 @@
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "sync/HybridLatch.hpp"
 
 #include "glog/logging.h"
 
@@ -374,9 +375,15 @@ inline void BTreeGeneric::FindLeafCanJump(
     Slice key, GuardedBufferFrame<BTreeNode>& guardedTarget, LatchMode mode) {
   guardedTarget.unlock();
   auto* bufferManager = mStore->mBufferManager.get();
-  GuardedBufferFrame<BTreeNode> guardedParent(bufferManager, mMetaNodeSwip);
+
+  // meta node
+  GuardedBufferFrame<BTreeNode> guardedParent(bufferManager, mMetaNodeSwip,
+                                              LatchMode::kOptimisticSpin);
+
+  // root node
   guardedTarget = GuardedBufferFrame<BTreeNode>(
-      bufferManager, guardedParent, guardedParent->mRightMostChildSwip);
+      bufferManager, guardedParent, guardedParent->mRightMostChildSwip,
+      LatchMode::kOptimisticSpin);
 
   volatile uint16_t level = 0;
   while (!guardedTarget->mIsLeaf) {
@@ -391,8 +398,9 @@ inline void BTreeGeneric::FindLeafCanJump(
       guardedTarget = GuardedBufferFrame<BTreeNode>(
           bufferManager, guardedParent, childSwip, mode);
     } else {
-      guardedTarget = GuardedBufferFrame<BTreeNode>(bufferManager,
-                                                    guardedParent, childSwip);
+      // middle node
+      guardedTarget = GuardedBufferFrame<BTreeNode>(
+          bufferManager, guardedParent, childSwip, LatchMode::kOptimisticSpin);
     }
     level = level + 1;
   }

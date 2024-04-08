@@ -9,8 +9,11 @@
 #include <gflags/gflags.h>
 #include <rapidjson/document.h>
 
+#include <algorithm>
 #include <atomic>
+#include <cstdint>
 #include <expected>
+#include <limits>
 #include <memory>
 
 namespace leanstore::storage::btree {
@@ -114,6 +117,10 @@ public:
   /// Unregister a TransactionKV
   /// @param name The unique name of the btree
   void DropTransactionKV(const std::string& name);
+
+  uint64_t GetTs() {
+    return mTimestampOracle.load();
+  }
 
   /// Alloc a new timestamp from the timestamp oracle
   uint64_t AllocTs() {

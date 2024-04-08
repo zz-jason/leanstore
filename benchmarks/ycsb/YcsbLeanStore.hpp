@@ -189,7 +189,9 @@ public:
                 // generate key for read
                 GenYcsbKey(zipfRandom, key);
                 if (mBenchTransactionKv) {
-                  cr::Worker::My().StartTx();
+                  cr::Worker::My().StartTx(TxMode::kShortRunning,
+                                           IsolationLevel::kSnapshotIsolation,
+                                           true);
                   table->Lookup(Slice(key, FLAGS_ycsb_key_size), copyValue);
                   cr::Worker::My().CommitTx();
                 } else {

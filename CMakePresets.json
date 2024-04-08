@@ -35,8 +35,9 @@
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "CMAKE_BUILD_TYPE": "Release",
-                "COUNTERS_LEVEL": "all",
-                "ENABLE_PROFILING": "ON"
+                "COUNTERS_LEVEL": "none",
+                "ENABLE_PROFILING": "ON",
+                "ENABLE_ROCKSDB": "ON"
             }
         },
         {
@@ -47,6 +48,7 @@
                 "CMAKE_CXX_COMPILER": "g++-13",
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "ENABLE_ROCKSDB": "ON",
                 "CMAKE_BUILD_TYPE": "Release",
                 "COUNTERS_LEVEL": "none"
             }
