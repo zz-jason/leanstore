@@ -4,7 +4,6 @@
 #include "leanstore/Units.hpp"
 #include "telemetry/MetricsManager.hpp"
 #include "utils/DebugFlags.hpp"
-#include "utils/Error.hpp"
 #include "utils/Result.hpp"
 
 #include <gflags/gflags.h>
@@ -121,8 +120,7 @@ public:
     return mTimestampOracle.fetch_add(1);
   }
 
-  std::expected<std::unique_ptr<TxWorker>, utils::Error> GetTxWorker(
-      WORKERID workerId);
+  Result<std::unique_ptr<TxWorker>> GetTxWorker(WORKERID workerId);
 
   /// Execute a custom user function on a worker thread.
   /// @param workerId worker to compute job

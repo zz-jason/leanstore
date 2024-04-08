@@ -5,6 +5,7 @@
 #include "sync/HybridGuard.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
+#include "utils/Result.hpp"
 
 #include <glog/logging.h>
 
@@ -16,8 +17,7 @@
 #include <tuple>
 #include <unordered_map>
 
-namespace leanstore {
-namespace storage {
+namespace leanstore::storage {
 
 class ParentSwipHandler {
 public:
@@ -162,8 +162,8 @@ public:
     return true;
   }
 
-  [[nodiscard]] inline auto UnregisterTree(const std::string& treeName)
-      -> std::expected<bool, utils::Error> {
+  [[nodiscard]] inline Result<bool> UnregisterTree(
+      const std::string& treeName) {
     std::unique_lock uniqueGuard(mMutex);
     auto it = mTreeIndexByName.find(treeName);
     if (it != mTreeIndexByName.end()) {
@@ -176,8 +176,7 @@ public:
         utils::Error::General("TreeId not found"));
   }
 
-  [[nodiscard]] inline auto UnRegisterTree(TREEID treeId)
-      -> std::expected<bool, utils::Error> {
+  [[nodiscard]] inline Result<bool> UnRegisterTree(TREEID treeId) {
     std::unique_lock uniqueGuard(mMutex);
     auto it = mTrees.find(treeId);
     if (it != mTrees.end()) {
@@ -296,5 +295,4 @@ public:
   }
 };
 
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage

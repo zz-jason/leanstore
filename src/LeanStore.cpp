@@ -241,8 +241,7 @@ LeanStore::~LeanStore() {
   }
 }
 
-std::expected<std::unique_ptr<TxWorker>, utils::Error> LeanStore::GetTxWorker(
-    WORKERID workerId) {
+Result<std::unique_ptr<TxWorker>> LeanStore::GetTxWorker(WORKERID workerId) {
   return std::make_unique<TxWorkerImpl>(this, workerId);
 }
 

@@ -3,7 +3,7 @@
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/Slice.hpp"
 #include "leanstore/Units.hpp"
-#include "utils/Error.hpp"
+#include "utils/Result.hpp"
 
 #include <expected>
 #include <functional>
@@ -30,16 +30,14 @@ public:
   /// Typically, users only need to open one leanstore instance per process.
   /// The store is automatically closed when the returned unique_ptr is
   /// destroyed.
-  static std::expected<std::unique_ptr<Store>, utils::Error> New(
-      StoreOption option);
+  static Result<std::unique_ptr<Store>> New(StoreOption option);
 
 public:
   virtual ~Store() = default;
 
   /// Get a transaction worker, all the transaction operations are dispatched
   /// to the worker thread.
-  virtual std::expected<std::unique_ptr<TxWorker>, utils::Error> GetTxWorker(
-      WORKERID workerId) = 0;
+  virtual Result<std::unique_ptr<TxWorker>> GetTxWorker(WORKERID workerId) = 0;
 
   /// Execute a custom user function on a worker thread.
   virtual void ExecSync(WORKERID workerId, std::function<void()> fn) = 0;
@@ -97,56 +95,47 @@ public:
   virtual ~TxWorker() = default;
 
   /// Start a transaction.
-  virtual std::expected<void, utils::Error> StartTx(TxMode mode,
-                                                    IsolationLevel level) = 0;
+  virtual Result<void> StartTx(TxMode mode, IsolationLevel level) = 0;
 
   /// Commit a transaction.
-  virtual std::expected<void, utils::Error> CommitTx() = 0;
+  virtual Result<void> CommitTx() = 0;
 
   /// Abort a transaction.
-  virtual std::expected<void, utils::Error> AbortTx() = 0;
+  virtual Result<void> AbortTx() = 0;
 
   /// Create a table, should be executed inside a transaction.
-  virtual std::expected<TableRef, utils::Error> CreateTable(
-      const std::string& name) = 0;
+  virtual Result<TableRef> CreateTable(const std::string& name) = 0;
 
   /// Get a table, should be executed inside a transaction.
-  virtual std::expected<TableRef, utils::Error> GetTable(
-      const std::string& name) = 0;
+  virtual Result<TableRef> GetTable(const std::string& name) = 0;
 
   /// Drop a table, should be executed inside a transaction.
-  virtual std::expected<void, utils::Error> DropTable(
-      const std::string& name) = 0;
+  virtual Result<void> DropTable(const std::string& name) = 0;
 
   /// Put a key-value pair into a table, should be executed inside a
   /// transaction.
-  virtual std::expected<void, utils::Error> Put(TableRef table, Slice key,
-                                                Slice value) = 0;
+  virtual Result<void> Put(TableRef table, Slice key, Slice value) = 0;
 
   /// Update a key-value pair from a table, should be executed inside a
   /// transaction.
-  virtual std::expected<void, utils::Error> Update(TableRef table, Slice key,
-                                                   Slice value) = 0;
+  virtual Result<void> Update(TableRef table, Slice key, Slice value) = 0;
 
   /// Delete a key-value pair from a table, should be executed inside a
   /// transaction.
-  virtual std::expected<void, utils::Error> Delete(TableRef table,
-                                                   Slice key) = 0;
+  virtual Result<void> Delete(TableRef table, Slice key) = 0;
 
   /// Get a key-value pair from a table, should be executed inside a
   /// transaction.
-  virtual std::expected<void, utils::Error> Get(TableRef table, Slice key,
-                                                std::string* value) = 0;
+  virtual Result<void> Get(TableRef table, Slice key, std::string* value) = 0;
 
   /// Create an iterator to scan a table, should be executed inside a
   /// transaction.
-  virtual std::expected<std::unique_ptr<TableIterator>, utils::Error>
-  NewTableIterator(TableRef table) = 0;
+  virtual Result<std::unique_ptr<TableIterator>> NewTableIterator(
+      TableRef table) = 0;
 
   /// Get the total key-value pairs in a table, should be executed inside a
   /// transaction.
-  virtual std::expected<uint64_t, utils::Error> GetTableSize(
-      TableRef table) = 0;
+  virtual Result<uint64_t> GetTableSize(TableRef table) = 0;
 };
 
 /// TableIterator is used to scan a table.
@@ -187,7 +176,7 @@ public:
   virtual bool Valid() = 0;
 
   /// Return the error message if the iterator is invalid.
-  virtual std::expected<void, utils::Error> Error() = 0;
+  virtual Result<void> Error() = 0;
 
   /// Move the iterator to the next key-value pair.
   virtual void Next() = 0;

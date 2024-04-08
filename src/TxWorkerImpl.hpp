@@ -6,6 +6,7 @@
 #include "leanstore/Store.hpp"
 #include "leanstore/Units.hpp"
 #include "utils/Error.hpp"
+#include "utils/Result.hpp"
 
 #include <expected>
 #include <memory>
@@ -29,8 +30,7 @@ public:
   virtual ~TxWorkerImpl() = default;
 
   /// Start a transaction.
-  virtual std::expected<void, utils::Error> StartTx(
-      TxMode mode, IsolationLevel level) override {
+  virtual Result<void> StartTx(TxMode mode, IsolationLevel level) override {
     bool txAlreadyStarted = false;
     mStore->ExecSync(mWorkerId, [&]() {
       if (cr::Worker::My().mActiveTx.mState == cr::TxState::kStarted) {
@@ -48,20 +48,19 @@ public:
   }
 
   /// Commit a transaction.
-  virtual std::expected<void, utils::Error> CommitTx() override {
+  virtual Result<void> CommitTx() override {
     mStore->ExecSync(mWorkerId, [&]() { cr::Worker::My().CommitTx(); });
     return {};
   }
 
   /// Abort a transaction.
-  virtual std::expected<void, utils::Error> AbortTx() override {
+  virtual Result<void> AbortTx() override {
     mStore->ExecSync(mWorkerId, [&]() { cr::Worker::My().AbortTx(); });
     return {};
   }
 
   /// Create a table, should be executed inside a transaction.
-  virtual std::expected<TableRef, utils::Error> CreateTable(
-      const std::string& name) override {
+  virtual Result<TableRef> CreateTable(const std::string& name) override {
     storage::btree::TransactionKV* table;
     auto config = leanstore::storage::btree::BTreeConfig{
         .mEnableWal = FLAGS_wal,
@@ -86,72 +85,66 @@ public:
   }
 
   /// Get a table, should be executed inside a transaction.
-  virtual std::expected<TableRef, utils::Error> GetTable(
-      const std::string& name [[maybe_unused]]) override {
+  virtual Result<TableRef> GetTable(const std::string& name
+                                    [[maybe_unused]]) override {
     return std::unexpected<utils::Error>(
         utils::Error::General("Not implemented yet"));
   }
 
   /// Drop a table, should be executed inside a transaction.
-  virtual std::expected<void, utils::Error> DropTable(
-      const std::string& name [[maybe_unused]]) override {
+  virtual Result<void> DropTable(const std::string& name
+                                 [[maybe_unused]]) override {
     return std::unexpected<utils::Error>(
         utils::Error::General("Not implemented yet"));
   }
 
   /// Put a key-value pair into a table, should be executed inside a
   /// transaction.
-  virtual std::expected<void, utils::Error> Put(TableRef table [[maybe_unused]],
-                                                Slice key [[maybe_unused]],
-                                                Slice value
-                                                [[maybe_unused]]) override {
+  virtual Result<void> Put(TableRef table [[maybe_unused]],
+                           Slice key [[maybe_unused]],
+                           Slice value [[maybe_unused]]) override {
     return std::unexpected<utils::Error>(
         utils::Error::General("Not implemented yet"));
   }
 
   /// Update a key-value pair from a table, should be executed inside a
   /// transaction.
-  virtual std::expected<void, utils::Error> Update(TableRef table
-                                                   [[maybe_unused]],
-                                                   Slice key [[maybe_unused]],
-                                                   Slice value
-                                                   [[maybe_unused]]) override {
+  virtual Result<void> Update(TableRef table [[maybe_unused]],
+                              Slice key [[maybe_unused]],
+                              Slice value [[maybe_unused]]) override {
     return std::unexpected<utils::Error>(
         utils::Error::General("Not implemented yet"));
   }
 
   /// Delete a key-value pair from a table, should be executed inside a
   /// transaction.
-  virtual std::expected<void, utils::Error> Delete(TableRef table
-                                                   [[maybe_unused]],
-                                                   Slice key
-                                                   [[maybe_unused]]) override {
+  virtual Result<void> Delete(TableRef table [[maybe_unused]],
+                              Slice key [[maybe_unused]]) override {
     return std::unexpected<utils::Error>(
         utils::Error::General("Not implemented yet"));
   }
 
   /// Get a key-value pair from a table, should be executed inside a
   /// transaction.
-  virtual std::expected<void, utils::Error> Get(TableRef table [[maybe_unused]],
-                                                Slice key [[maybe_unused]],
-                                                std::string* value
-                                                [[maybe_unused]]) override {
+  virtual Result<void> Get(TableRef table [[maybe_unused]],
+                           Slice key [[maybe_unused]],
+                           std::string* value [[maybe_unused]]) override {
     return std::unexpected<utils::Error>(
         utils::Error::General("Not implemented yet"));
   }
 
   /// Create an iterator to scan a table, should be executed inside a
   /// transaction.
-  virtual std::expected<std::unique_ptr<TableIterator>, utils::Error>
-  NewTableIterator(TableRef table [[maybe_unused]]) override {
+  virtual Result<std::unique_ptr<TableIterator>> NewTableIterator(
+      TableRef table [[maybe_unused]]) override {
     return std::unexpected<utils::Error>(
         utils::Error::General("Not implemented yet"));
   }
 
   /// Get the total key-value pairs in a table, should be executed inside a
   /// transaction.
-  virtual std::expected<uint64_t, utils::Error> GetTableSize(
-      TableRef table [[maybe_unused]]) override {
+  virtual Result<uint64_t> GetTableSize(TableRef table
+                                        [[maybe_unused]]) override {
     return std::unexpected<utils::Error>(
         utils::Error::General("Not implemented yet"));
   }
