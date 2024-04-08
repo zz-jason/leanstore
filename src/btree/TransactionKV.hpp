@@ -11,6 +11,7 @@
 #include "concurrency/Worker.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/Units.hpp"
+#include "utils/Result.hpp"
 
 #include <glog/logging.h>
 
@@ -117,9 +118,9 @@ private:
   void undoLastRemove(const WalTxRemove* walRemove);
 
 public:
-  static std::expected<TransactionKV*, utils::Error> Create(
-      leanstore::LeanStore* store, const std::string& treeName,
-      BTreeConfig& config, BasicKV* graveyard);
+  static Result<TransactionKV*> Create(leanstore::LeanStore* store,
+                                       const std::string& treeName,
+                                       BTreeConfig& config, BasicKV* graveyard);
 
   inline static void InsertToNode(GuardedBufferFrame<BTreeNode>& guardedNode,
                                   Slice key, Slice val, WORKERID workerId,

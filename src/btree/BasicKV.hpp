@@ -2,9 +2,6 @@
 
 #include "btree/core/BTreeGeneric.hpp"
 #include "leanstore/KVInterface.hpp"
-#include "utils/Error.hpp"
-
-#include <expected>
 
 using namespace leanstore::storage;
 
@@ -50,10 +47,9 @@ public:
   bool IsRangeEmpty(Slice startKey, Slice endKey);
 
 public:
-  [[nodiscard]] static auto Create(leanstore::LeanStore* store,
-                                   const std::string& treeName,
-                                   BTreeConfig& config)
-      -> std::expected<BasicKV*, utils::Error>;
+  static Result<BasicKV*> Create(leanstore::LeanStore* store,
+                                 const std::string& treeName,
+                                 BTreeConfig& config);
 
   /// Copy the slots from the value to the buffer.
   ///

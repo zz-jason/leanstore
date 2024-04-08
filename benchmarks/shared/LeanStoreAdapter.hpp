@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Adapter.hpp"
+#include "btree/core/BTreeGeneric.hpp"
 #include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "btree/core/BTreeGeneric.hpp"
 
 #include <glog/logging.h>
 
@@ -28,7 +28,13 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
       leanstore::storage::btree::TransactionKV* tree;
       storage::btree::BTreeConfig config{.mEnableWal = FLAGS_wal,
                                          .mUseBulkInsert = false};
-      db.CreateTransactionKV(name, config, &tree);
+      auto res = db.CreateTransactionKV(name, config);
+      if (res) {
+        tree = res.value();
+      } else {
+        LOG(FATAL) << std::format("failed to create transaction kv, error={}",
+                                  res.error().ToString());
+      }
       btree = reinterpret_cast<leanstore::KVInterface*>(tree);
     }
   }

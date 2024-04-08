@@ -3,13 +3,12 @@
 #include "buffer-manager/BufferFrame.hpp"
 #include "leanstore/Units.hpp"
 #include "utils/AsyncIo.hpp"
-#include "utils/Error.hpp"
 #include "utils/Misc.hpp"
+#include "utils/Result.hpp"
 
 #include <gflags/gflags.h>
 
 #include <cstdint>
-#include <expected>
 #include <functional>
 #include <vector>
 
@@ -66,10 +65,10 @@ public:
   void Add(const BufferFrame& bf);
 
   /// Submit the write buffer to the AIO context to be written to the disk
-  std::expected<uint64_t, utils::Error> SubmitAll();
+  Result<uint64_t> SubmitAll();
 
   /// Wait for the IO request to complete
-  std::expected<uint64_t, utils::Error> WaitAll();
+  Result<uint64_t> WaitAll();
 
   uint64_t GetPendingRequests() {
     return mAIo.GetNumRequests();
