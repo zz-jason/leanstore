@@ -9,7 +9,10 @@
 #include <glog/logging.h>
 #include <gperftools/heap-profiler.h>
 #include <gperftools/profiler.h>
+
+#ifdef ENABLE_ROCKSDB
 #include <rocksdb/db.h>
+#endif
 
 #include <atomic>
 #include <chrono>
@@ -20,11 +23,15 @@
 namespace leanstore::ycsb {
 
 class YcsbRocksDb : public YcsbExecutor {
+
 private:
+#ifdef ENABLE_ROCKSDB
   rocksdb::DB* mDb = nullptr;
+#endif
 
 public:
   YcsbRocksDb() {
+#ifdef ENABLE_ROCKSDB
     rocksdb::Options options;
     options.create_if_missing = true;
     options.error_if_exists = false;
@@ -34,9 +41,11 @@ public:
     if (!status.ok()) {
       LOG(FATAL) << "Failed to open rocksdb: " << status.ToString();
     }
+#endif
   }
 
   void HandleCmdLoad() override {
+#ifdef ENABLE_ROCKSDB
     // load data with FLAGS_worker_threads
     auto zipfRandom = utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count,
                                                     FLAGS_zipf_factor);
@@ -76,9 +85,11 @@ public:
             }
           }
         });
+#endif
   }
 
   void HandleCmdRun() override {
+#ifdef ENABLE_ROCKSDB
     // Run the benchmark in FLAGS_worker_threads
     auto workloadType = static_cast<Workload>(FLAGS_ycsb_workload[0] - 'a');
     auto workload = GetWorkloadSpec(workloadType);
@@ -157,6 +168,7 @@ public:
                                  committed, aborted, abortRate);
       std::cout << summary << std::endl;
     }
+#endif
   }
 };
 

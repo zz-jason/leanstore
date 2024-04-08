@@ -120,7 +120,6 @@ public:
   void DropTransactionKV(const std::string& name);
 
   uint64_t GetTs() {
-    // return std::numeric_limits<uint64_t>::max();
     return mTimestampOracle.load();
   }
 
