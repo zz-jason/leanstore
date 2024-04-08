@@ -18,13 +18,13 @@ using namespace leanstore::storage;
 using namespace leanstore::utils;
 using namespace leanstore::storage::btree;
 
-std::expected<void, utils::Error> Recovery::analysis() {
+Result<void> Recovery::analysis() {
   // asume that each WalEntry is smaller than the page size
   utils::AlignedBuffer<512> alignedBuffer(mStore->mStoreOption.mPageSize);
   uint8_t* walEntryPtr = alignedBuffer.Get();
   for (auto offset = mWalStartOffset; offset < mWalSize;) {
     if (auto res = readWalEntry(offset, walEntryPtr); !res) {
-      return std::unexpected(res.error());
+      return std::unexpected(std::move(res.error()));
     }
     auto* walEntry = reinterpret_cast<WalEntry*>(walEntryPtr);
     switch (walEntry->mType) {
@@ -64,7 +64,7 @@ std::expected<void, utils::Error> Recovery::analysis() {
   return {};
 }
 
-std::expected<void, utils::Error> Recovery::redo() {
+Result<void> Recovery::redo() {
   // asume that each WalEntry is smaller than the page size
   utils::AlignedBuffer<512> alignedBuffer(mStore->mStoreOption.mPageSize);
   auto* complexEntry = reinterpret_cast<WalEntryComplex*>(alignedBuffer.Get());
@@ -141,8 +141,8 @@ std::expected<void, utils::Error> Recovery::redo() {
   return {};
 }
 
-std::expected<bool, utils::Error> Recovery::nextWalComplexToRedo(
-    uint64_t& offset, WalEntryComplex* complexEntry) {
+Result<bool> Recovery::nextWalComplexToRedo(uint64_t& offset,
+                                            WalEntryComplex* complexEntry) {
   auto* buff = reinterpret_cast<uint8_t*>(complexEntry);
   while (offset < mWalSize) {
     // read a WalEntry
@@ -367,8 +367,7 @@ void Recovery::redoSplitNonRoot(storage::BufferFrame& bf,
 }
 
 /// Read a WalEntry from the WAL file
-std::expected<void, utils::Error> Recovery::readWalEntry(uint64_t& offset,
-                                                         uint8_t* dest) {
+Result<void> Recovery::readWalEntry(uint64_t& offset, uint8_t* dest) {
   // read the WalEntry
   auto walEntrySize = sizeof(WalEntry);
   if (auto res = readFromWalFile(offset, walEntrySize, dest); !res) {

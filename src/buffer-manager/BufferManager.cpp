@@ -160,8 +160,7 @@ void BufferManager::CheckpointAllBufferFrames() {
   });
 }
 
-auto BufferManager::CheckpointBufferFrame(BufferFrame& bf)
-    -> std::expected<void, utils::Error> {
+Result<void> BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
   utils::AsyncIo aio(1);
   alignas(512) uint8_t buffer[mStore->mStoreOption.mPageSize];
   bf.mHeader.mLatch.LockExclusively();
@@ -455,8 +454,7 @@ BufferFrame& BufferManager::ReadPageSync(PID pageId) {
   }
 }
 
-auto BufferManager::WritePageSync(BufferFrame& bf)
-    -> std::expected<void, utils::Error> {
+Result<void> BufferManager::WritePageSync(BufferFrame& bf) {
   ScopedHybridGuard guard(bf.mHeader.mLatch, LatchMode::kPessimisticExclusive);
   auto pageId = bf.mHeader.mPageId;
   auto& partition = GetPartition(pageId);

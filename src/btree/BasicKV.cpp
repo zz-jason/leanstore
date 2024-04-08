@@ -18,9 +18,9 @@ using namespace leanstore::storage;
 
 namespace leanstore::storage::btree {
 
-auto BasicKV::Create(leanstore::LeanStore* store, const std::string& treeName,
-                     BTreeConfig& config)
-    -> std::expected<BasicKV*, utils::Error> {
+Result<BasicKV*> BasicKV::Create(leanstore::LeanStore* store,
+                                 const std::string& treeName,
+                                 BTreeConfig& config) {
   auto [treePtr, treeId] = store->mTreeRegistry->CreateTree(treeName, [&]() {
     return std::unique_ptr<BufferManagedTree>(
         static_cast<BufferManagedTree*>(new BasicKV()));

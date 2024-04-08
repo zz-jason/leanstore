@@ -15,24 +15,26 @@
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
 #include "utils/Misc.hpp"
+#include "utils/Result.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include <cstring>
-#include <expected>
 #include <format>
 #include <string_view>
 
 namespace leanstore::storage::btree {
 
-std::expected<TransactionKV*, utils::Error> TransactionKV::Create(
-    leanstore::LeanStore* store, const std::string& treeName,
-    BTreeConfig& config, BasicKV* graveyard) {
+Result<TransactionKV*> TransactionKV::Create(leanstore::LeanStore* store,
+                                             const std::string& treeName,
+                                             BTreeConfig& config,
+                                             BasicKV* graveyard) {
   auto [treePtr, treeId] = store->mTreeRegistry->CreateTree(treeName, [&]() {
     return std::unique_ptr<BufferManagedTree>(
         static_cast<BufferManagedTree*>(new TransactionKV()));
   });
+
   if (treePtr == nullptr) {
     return std::unexpected(utils::Error::General(std::format(
         "Failed to create TransactionKV, treeName has been taken, treeName={}",
