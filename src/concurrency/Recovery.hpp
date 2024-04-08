@@ -7,6 +7,7 @@
 #include "leanstore/Units.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
+#include "utils/Result.hpp"
 
 #include <glog/logging.h>
 
@@ -75,15 +76,15 @@ private:
   /// last checkpoint, and all transactions for which we encounter Begin
   /// Transaction entries are added to the TT. Whenever an End Log entry is
   /// found, the corresponding transaction is removed.
-  std::expected<void, utils::Error> analysis();
+  Result<void> analysis();
 
   /// During the redo phase, the DPT is used to find the set of pages in the
   /// buffer pool that were dirty at the time of the crash. All these pages are
   /// read from disk and redone from the first log record that makes them dirty.
-  std::expected<void, utils::Error> redo();
+  Result<void> redo();
 
-  std::expected<bool, utils::Error> nextWalComplexToRedo(
-      uint64_t& offset, WalEntryComplex* walEntryPtr);
+  Result<bool> nextWalComplexToRedo(uint64_t& offset,
+                                    WalEntryComplex* walEntryPtr);
 
   void redoInsert(storage::BufferFrame& bf, WalEntryComplex* complexEntry);
 
@@ -114,12 +115,10 @@ private:
   storage::BufferFrame& resolvePage(PID pageId);
 
   /// Read a WalEntry from the WAL file to the destination buffer.
-  std::expected<void, utils::Error> readWalEntry(uint64_t& offset,
-                                                 uint8_t* dest);
+  Result<void> readWalEntry(uint64_t& offset, uint8_t* dest);
 
-  std::expected<void, utils::Error> readFromWalFile(int64_t entryOffset,
-                                                    size_t entrySize,
-                                                    void* destination);
+  Result<void> readFromWalFile(int64_t entryOffset, size_t entrySize,
+                               void* destination);
 };
 
 inline bool Recovery::Run() {
@@ -173,9 +172,8 @@ inline storage::BufferFrame& Recovery::resolvePage(PID pageId) {
   return bf;
 }
 
-inline auto Recovery::readFromWalFile(int64_t offset, size_t nbytes,
-                                      void* destination)
-    -> std::expected<void, utils::Error> {
+inline Result<void> Recovery::readFromWalFile(int64_t offset, size_t nbytes,
+                                              void* destination) {
   auto fileName = GetWALFilePath();
   FILE* fp = fopen(fileName.c_str(), "rb");
   if (fp == nullptr) {

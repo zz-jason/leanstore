@@ -3,11 +3,9 @@
 #include "buffer-manager/BufferFrame.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
-#include "utils/Error.hpp"
+#include "utils/Result.hpp"
 
 #include <glog/logging.h>
-
-#include <expected>
 
 namespace leanstore::storage {
 
@@ -44,11 +42,11 @@ void AsyncWriteBuffer::Add(const BufferFrame& bf) {
   mAIo.PrepareWrite(mFd, buffer, mPageSize, mPageSize * pageId);
 }
 
-std::expected<uint64_t, utils::Error> AsyncWriteBuffer::SubmitAll() {
+Result<uint64_t> AsyncWriteBuffer::SubmitAll() {
   return mAIo.SubmitAll();
 }
 
-std::expected<uint64_t, utils::Error> AsyncWriteBuffer::WaitAll() {
+Result<uint64_t> AsyncWriteBuffer::WaitAll() {
   return mAIo.WaitAll();
 }
 

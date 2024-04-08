@@ -11,6 +11,7 @@
 #include "profiling/tables/BMTable.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Misc.hpp"
+#include "utils/Result.hpp"
 #include "utils/UserThread.hpp"
 
 #include <gflags/gflags.h>
@@ -38,7 +39,7 @@
 
 namespace leanstore {
 
-std::expected<std::unique_ptr<LeanStore>, utils::Error> LeanStore::Open() {
+Result<std::unique_ptr<LeanStore>> LeanStore::Open() {
   if (FLAGS_init) {
     std::cout << "Clean data dir: " << FLAGS_data_dir << std::endl;
     std::filesystem::path dirPath = FLAGS_data_dir;
@@ -46,6 +47,7 @@ std::expected<std::unique_ptr<LeanStore>, utils::Error> LeanStore::Open() {
     std::filesystem::create_directories(dirPath);
     std::filesystem::create_directories(GetLogDir());
   }
+
   // for glog
   FLAGS_log_dir = GetLogDir();
   return std::make_unique<LeanStore>();
@@ -239,8 +241,7 @@ LeanStore::~LeanStore() {
   }
 }
 
-std::expected<std::unique_ptr<TxWorker>, utils::Error> LeanStore::GetTxWorker(
-    WORKERID workerId) {
+Result<std::unique_ptr<TxWorker>> LeanStore::GetTxWorker(WORKERID workerId) {
   return std::make_unique<TxWorkerImpl>(this, workerId);
 }
 
@@ -467,7 +468,7 @@ void LeanStore::deserializeFlags() {
   }
 }
 
-std::expected<storage::btree::BasicKV*, utils::Error> LeanStore::CreateBasicKV(
+Result<storage::btree::BasicKV*> LeanStore::CreateBasicKV(
     const std::string& name, storage::btree::BTreeConfig& config) {
   return storage::btree::BasicKV::Create(this, name, config);
 }
@@ -489,9 +490,8 @@ void LeanStore::DropBasicKV(const std::string& name) {
   }
 }
 
-std::expected<storage::btree::TransactionKV*, utils::Error> LeanStore::
-    CreateTransactionKV(const std::string& name,
-                        storage::btree::BTreeConfig& config) {
+Result<storage::btree::TransactionKV*> LeanStore::CreateTransactionKV(
+    const std::string& name, storage::btree::BTreeConfig& config) {
   // create btree for graveyard
   auto graveyardName = "_" + name + "_graveyard";
   auto graveyardConfig =
@@ -511,9 +511,9 @@ std::expected<storage::btree::TransactionKV*, utils::Error> LeanStore::
   }
 
   // create transaction btree
-  if (auto res =
-          storage::btree::TransactionKV::Create(this, name, config, graveyard);
-      !res) {
+  auto res =
+      storage::btree::TransactionKV::Create(this, name, config, graveyard);
+  if (!res) {
     leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(
         *static_cast<leanstore::storage::btree::BTreeGeneric*>(graveyard));
     auto res2 = mTreeRegistry->UnRegisterTree(graveyard->mTreeId);
@@ -522,10 +522,8 @@ std::expected<storage::btree::TransactionKV*, utils::Error> LeanStore::
                                 "graveyardName={}, error={}",
                                 graveyardName, res2.error().ToString());
     }
-    return std::unexpected(std::move(res.error()));
-  } else {
-    return res.value();
   }
+  return res;
 }
 
 void LeanStore::GetTransactionKV(const std::string& name,

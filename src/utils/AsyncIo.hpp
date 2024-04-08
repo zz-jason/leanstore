@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils/Error.hpp"
+#include "utils/Result.hpp"
 
 #include <glog/logging.h>
 
@@ -64,7 +65,7 @@ public:
     io_prep_fsync(&mIocbs[slot], fd);
   }
 
-  [[nodiscard]] std::expected<uint64_t, utils::Error> SubmitAll() {
+  Result<uint64_t> SubmitAll() {
     if (IsEmpty()) {
       return 0;
     }
@@ -80,8 +81,7 @@ public:
     return ret;
   }
 
-  [[nodiscard]] std::expected<uint64_t, utils::Error> WaitAll(
-      timespec* timeout = nullptr) {
+  Result<uint64_t> WaitAll(timespec* timeout = nullptr) {
     if (IsEmpty()) {
       return 0;
     }
@@ -102,8 +102,7 @@ public:
     return &mIoEvents[i];
   }
 
-  [[nodiscard]] static std::expected<int32_t, Error> Create4DirectIo(
-      const char* file) {
+  Result<int32_t> Create4DirectIo(const char* file) {
     int flags = O_TRUNC | O_CREAT | O_RDWR | O_DIRECT;
     auto fd = open(file, flags, 0666);
     if (fd == -1) {

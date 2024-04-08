@@ -5,7 +5,6 @@
 #include "buffer-manager/Swip.hpp"
 #include "leanstore/Units.hpp"
 #include "profiling/tables/BMTable.hpp"
-#include "utils/Error.hpp"
 
 #include <expected>
 
@@ -114,8 +113,7 @@ public:
 
   /// Write page to disk.
   /// usually called by recovery.
-  [[nodiscard]] auto WritePageSync(BufferFrame&)
-      -> std::expected<void, utils::Error>;
+  [[nodiscard]] Result<void> WritePageSync(BufferFrame&);
 
   /// Sync all the data written to disk, harden all the writes on mPageFd
   void SyncAllPageWrites();
@@ -127,8 +125,7 @@ public:
   /// Checkpoints a buffer frame to disk. The buffer frame content is copied to
   /// a tmp memory buffer, swips in the tmp memory buffer are changed to page
   /// IDs, then the tmp memory buffer is written to the disk.
-  [[nodiscard]] auto CheckpointBufferFrame(BufferFrame& bf)
-      -> std::expected<void, utils::Error>;
+  [[nodiscard]] Result<void> CheckpointBufferFrame(BufferFrame& bf);
 
   /// Checkpoints all the buffer frames.
   void CheckpointAllBufferFrames();

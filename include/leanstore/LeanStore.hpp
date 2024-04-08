@@ -4,7 +4,7 @@
 #include "leanstore/Units.hpp"
 #include "telemetry/MetricsManager.hpp"
 #include "utils/DebugFlags.hpp"
-#include "utils/Error.hpp"
+#include "utils/Result.hpp"
 
 #include <gflags/gflags.h>
 #include <rapidjson/document.h>
@@ -40,7 +40,7 @@ namespace leanstore {
 
 class LeanStore {
 public:
-  static std::expected<std::unique_ptr<LeanStore>, utils::Error> Open();
+  static Result<std::unique_ptr<LeanStore>> Open();
 
 public:
   /// The storage option for leanstore
@@ -83,7 +83,7 @@ public:
   ///
   /// @param name The unique name of the btree
   /// @param config The config of the btree
-  std::expected<storage::btree::BasicKV*, utils::Error> CreateBasicKV(
+  Result<storage::btree::BasicKV*> CreateBasicKV(
       const std::string& name, storage::btree::BTreeConfig& config);
 
   /// Get a registered BasicKV
@@ -101,9 +101,8 @@ public:
   /// @param name The unique name of the btree
   /// @param config The config of the btree
   /// @param btree The pointer to store the registered btree
-  std::expected<storage::btree::TransactionKV*, utils::Error>
-  CreateTransactionKV(const std::string& name,
-                      storage::btree::BTreeConfig& config);
+  Result<storage::btree::TransactionKV*> CreateTransactionKV(
+      const std::string& name, storage::btree::BTreeConfig& config);
 
   /// Get a registered TransactionKV
   ///
@@ -121,8 +120,7 @@ public:
     return mTimestampOracle.fetch_add(1);
   }
 
-  std::expected<std::unique_ptr<TxWorker>, utils::Error> GetTxWorker(
-      WORKERID workerId);
+  Result<std::unique_ptr<TxWorker>> GetTxWorker(WORKERID workerId);
 
   /// Execute a custom user function on a worker thread.
   /// @param workerId worker to compute job
