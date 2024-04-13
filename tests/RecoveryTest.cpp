@@ -5,6 +5,7 @@
 #include "concurrency/CRManager.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
+#include "leanstore/Store.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Defer.hpp"
 #include "utils/JsonUtil.hpp"
@@ -31,21 +32,16 @@ protected:
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" +
                        std::string(curTest->name());
-    FLAGS_create_from_scratch = true;
-    FLAGS_logtostdout = true;
-    FLAGS_data_dir = "/tmp/" + curTestName;
-    FLAGS_worker_threads = 2;
-    FLAGS_enable_eager_garbage_collection = true;
-    auto res = LeanStore::Open();
+    auto res = LeanStore::Open(StoreOption{
+        .mCreateFromScratch = true,
+        .mStoreDir = "/tmp/" + curTestName,
+        .mWorkerThreads = 2,
+        .mEnableEagerGc = true,
+    });
     mStore = std::move(res.value());
   }
 
   ~RecoveringTest() = default;
-
-  static uint64_t randomWorkerId() {
-    auto numWorkers = FLAGS_worker_threads;
-    return utils::RandomGenerator::Rand<uint64_t>(0, numWorkers);
-  }
 };
 
 TEST_F(RecoveringTest, SerializeAndDeserialize) {
@@ -63,8 +59,8 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
   // create btree for table records
   const auto* btreeName = "testTree1";
   auto btreeConfig = BTreeConfig{
-      .mEnableWal = FLAGS_wal,
-      .mUseBulkInsert = FLAGS_bulk_insert,
+      .mEnableWal = mStore->mStoreOption.mEnableWal,
+      .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
   };
 
   mStore->ExecSync(0, [&]() {
@@ -88,8 +84,9 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
   mStore.reset(nullptr);
 
   // recreate the store, it's expected that all the meta and pages are rebult.
-  FLAGS_create_from_scratch = false;
-  auto res = LeanStore::Open();
+  auto res = LeanStore::Open(StoreOption{
+      .mCreateFromScratch = false,
+  });
   EXPECT_TRUE(res);
 
   mStore = std::move(res.value());
@@ -140,8 +137,8 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
   auto btreeConfig = BTreeConfig{
-      .mEnableWal = FLAGS_wal,
-      .mUseBulkInsert = FLAGS_bulk_insert,
+      .mEnableWal = mStore->mStoreOption.mEnableWal,
+      .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
   };
 
   mStore->ExecSync(0, [&]() {
@@ -169,8 +166,9 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
-  FLAGS_create_from_scratch = false;
-  auto res = LeanStore::Open();
+  auto res = LeanStore::Open(StoreOption{
+      .mCreateFromScratch = false,
+  });
   EXPECT_TRUE(res);
 
   mStore = std::move(res.value());
@@ -230,10 +228,9 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = BTreeConfig{
-      .mEnableWal = FLAGS_wal,
-      .mUseBulkInsert = FLAGS_bulk_insert,
-  };
+  auto btreeConfig =
+      BTreeConfig{.mEnableWal = mStore->mStoreOption.mEnableWal,
+                  .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert};
 
   // update all the values to this newVal
   const uint64_t updateDescBufSize = UpdateDesc::Size(1);
@@ -285,8 +282,9 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
-  FLAGS_create_from_scratch = false;
-  auto res = LeanStore::Open();
+  auto res = LeanStore::Open(StoreOption{
+      .mCreateFromScratch = false,
+  });
   EXPECT_TRUE(res);
 
   mStore = std::move(res.value());
@@ -336,8 +334,8 @@ TEST_F(RecoveringTest, RecoverAfterRemove) {
   mStore->ExecSync(0, [&]() {
     // create btree
     auto btreeConfig = BTreeConfig{
-        .mEnableWal = FLAGS_wal,
-        .mUseBulkInsert = FLAGS_bulk_insert,
+        .mEnableWal = mStore->mStoreOption.mEnableWal,
+        .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
     };
     auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
     btree = res.value();
@@ -371,8 +369,9 @@ TEST_F(RecoveringTest, RecoverAfterRemove) {
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
-  FLAGS_create_from_scratch = false;
-  auto res = LeanStore::Open();
+  auto res = LeanStore::Open(StoreOption{
+      .mCreateFromScratch = false,
+  });
   EXPECT_TRUE(res);
 
   mStore = std::move(res.value());

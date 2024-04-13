@@ -6,7 +6,6 @@
 #include "btree/core/BTreeWalPayload.hpp"
 #include "concurrency/CRManager.hpp"
 #include "concurrency/Worker.hpp"
-#include "leanstore/Config.hpp"
 #include "leanstore/Units.hpp"
 
 #include <glog/logging.h>

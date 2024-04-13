@@ -8,7 +8,6 @@
 #include "concurrency/Worker.hpp"
 #include "utils/Misc.hpp"
 
-#include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include <unordered_map>

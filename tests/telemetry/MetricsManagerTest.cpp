@@ -1,16 +1,10 @@
 #include "telemetry/MetricsManager.hpp"
 
-#include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
+#include "leanstore/Store.hpp"
 
-#include <gflags/gflags.h>
 #include <gtest/gtest.h>
 #include <httplib.h>
-
-#include <cstddef>
-#include <cstring>
-#include <format>
-#include <iostream>
 
 #include <fcntl.h>
 
@@ -26,14 +20,15 @@ protected:
 };
 
 TEST_F(MetricsManagerTest, Basic) {
-  FLAGS_enable_metrics = true;
-  auto res = leanstore::LeanStore::Open();
+  auto res = leanstore::LeanStore::Open(StoreOption{
+      .mEnableMetrics = true,
+  });
   ASSERT_TRUE(res);
 
   auto store = std::move(res.value());
   METRIC_COUNTER_INC(store->mMetricsManager, tx_abort_total, 100);
 
-  httplib::Client cli("0.0.0.0", FLAGS_metrics_port);
+  httplib::Client cli("0.0.0.0", store->mStoreOption.mMetricsPort);
 
   auto result = cli.Get("/metrics");
   ASSERT_TRUE(result) << "Error: " << result.error();

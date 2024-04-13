@@ -6,6 +6,7 @@
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/Units.hpp"
 #include "sync/HybridLatch.hpp"
+#include "utils/UserThread.hpp"
 
 #include <glog/logging.h>
 
@@ -241,7 +242,8 @@ public:
         mFuncCleanUp = nullptr;
       }
 
-      if (FLAGS_optimistic_scan && mLeafPosInParent != -1) {
+      if (utils::tlsStore->mStoreOption.mEnableOptimisticScan &&
+          mLeafPosInParent != -1) {
         JUMPMU_TRY() {
           if ((mLeafPosInParent + 1) <= mGuardedParent->mNumSeps) {
             int32_t nextLeafPos = mLeafPosInParent + 1;
@@ -345,7 +347,8 @@ public:
         mFuncCleanUp = nullptr;
       }
 
-      if (FLAGS_optimistic_scan && mLeafPosInParent != -1) {
+      if (utils::tlsStore->mStoreOption.mEnableOptimisticScan &&
+          mLeafPosInParent != -1) {
         JUMPMU_TRY() {
           if ((mLeafPosInParent - 1) >= 0) {
             int32_t nextLeafPos = mLeafPosInParent - 1;

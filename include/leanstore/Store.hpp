@@ -58,6 +58,14 @@ public:
   /// Whether to perform crc check for buffer frames.
   bool mEnableBufferCrcCheck = false;
 
+  /// BufferFrame recycle batch size. Everytime a batch of buffer frames is
+  /// randomly picked and verified by the buffer frame provider, some of them
+  /// are COOLed, some of them are EVICted.
+  uint64_t mBufferFrameRecycleBatchSize = 64;
+
+  /// Whether to reclaim unused free page ids
+  bool mEnableReclaimPageIds = true;
+
   // ---------------------------------------------------------------------------
   // Logging and recovery related options
   // ---------------------------------------------------------------------------
@@ -71,6 +79,8 @@ public:
   // ---------------------------------------------------------------------------
   // Generic BTree related options
   // ---------------------------------------------------------------------------
+
+  bool mEnableBulkInsert = false;
 
   /// Whether to enable X-Merge
   bool mEnableXMerge = false;
@@ -97,12 +107,15 @@ public:
   /// 2: AVX512
   int64_t mBTreeHints = 1;
 
-  // ---------------------------------------------------------------------------
-  // Basic KV related options
-  // ---------------------------------------------------------------------------
+  /// Whether to enable heads optimization in lowerBound search.
+  bool mEnableHeadOptimization = true;
+
+  /// Whether to enable optimistic scan. Jump to next leaf directly if the
+  /// pointer in the parent has not changed
+  bool mEnableOptimisticScan = true;
 
   // ---------------------------------------------------------------------------
-  // Transaction KV related options
+  // Transaction related options
   // ---------------------------------------------------------------------------
 
   /// Whether to enable long running transaction.
@@ -111,18 +124,14 @@ public:
   /// Whether to enable fat tuple.
   bool mEnableFatTuple = false;
 
-  // ---------------------------------------------------------------------------
-  // Concurrency Control related options
-  // ---------------------------------------------------------------------------
-
   /// Whether to enable garbage collection.
   bool mEnableGc = true;
 
   /// Whether to enable eager garbage collection. To enable eager garbage
-  /// collection, the garbage collection must be enabled first. Once  enabled,
+  /// collection, the garbage collection must be enabled first. Once enabled,
   /// the garbage collection will be triggered after each transaction commit and
   /// abort.
-  bool mEnableEagerGc = true;
+  bool mEnableEagerGc = false;
 
   // ---------------------------------------------------------------------------
   // Metrics related options
@@ -135,6 +144,24 @@ public:
   int32_t mMetricsPort = 8080;
 
   bool mEnableCpuCounters = true;
+
+  bool mEnableTimeMeasure = false;
+
+  std::string GetMetaFilePath() const {
+    return mStoreDir + "/meta.json";
+  }
+
+  std::string GetDbFilePath() const {
+    return mStoreDir + "/db.pages";
+  }
+
+  std::string GetWalFilePath() const {
+    return mStoreDir + "/wal.log";
+  }
+
+  std::string GetLogDir() const {
+    return mStoreDir + "/logs";
+  }
 };
 
 } // namespace leanstore

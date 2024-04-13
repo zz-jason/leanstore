@@ -5,7 +5,6 @@
 #include "btree/core/BTreeGeneric.hpp"
 #include "buffer-manager/BufferManager.hpp"
 #include "concurrency/CRManager.hpp"
-#include "leanstore/Config.hpp"
 #include "leanstore/Store.hpp"
 #include "profiling/tables/BMTable.hpp"
 #include "utils/Defer.hpp"
@@ -13,7 +12,6 @@
 #include "utils/Result.hpp"
 #include "utils/UserThread.hpp"
 
-#include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
@@ -38,12 +36,13 @@
 
 namespace leanstore {
 
-Result<std::unique_ptr<LeanStore>> LeanStore::Open() {
-  return std::make_unique<LeanStore>();
+Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption option) {
+  FLAGS_logtostdout = true;
+  return std::make_unique<LeanStore>(std::move(option));
 }
 
-LeanStore::LeanStore()
-    : mStoreOption(defaultStoreOption()),
+LeanStore::LeanStore(StoreOption option)
+    : mStoreOption(std::move(option)),
       mMetricsManager(this) {
   utils::tlsStore = this;
 
@@ -52,12 +51,12 @@ LeanStore::LeanStore()
     std::filesystem::path dirPath = mStoreOption.mStoreDir;
     std::filesystem::remove_all(dirPath);
     std::filesystem::create_directories(dirPath);
-    std::filesystem::create_directories(GetLogDir());
+    std::filesystem::create_directories(mStoreOption.GetLogDir());
   }
 
   // for glog
   {
-    FLAGS_log_dir = GetLogDir();
+    FLAGS_log_dir = mStoreOption.GetLogDir();
     initGoogleLog();
   }
 
@@ -90,61 +89,6 @@ LeanStore::LeanStore()
     deserializeMeta();
     mBufferManager->RecoverFromDisk();
   }
-}
-
-// TODO: abandon the usage of gflags, init a StoreOption before creating the
-// store. StoreOption is designed to be used to create a store.
-StoreOption LeanStore::defaultStoreOption() {
-  return StoreOption{
-      // store options
-      .mCreateFromScratch = FLAGS_create_from_scratch,
-      .mStoreDir = FLAGS_data_dir,
-
-      // worker thread options
-      .mWorkerThreads = FLAGS_worker_threads,
-      .mWalBufferSize = FLAGS_wal_buffer_size,
-
-      // buffer pool options
-      .mPageSize = FLAGS_page_size,
-      .mNumPartitions = 1u << FLAGS_partition_bits,
-      .mBufferPoolSize = FLAGS_buffer_pool_size,
-      .mFreePct = FLAGS_free_pct,
-      .mNumBufferProviders = FLAGS_pp_threads,
-      .mBufferWriteBatchSize = FLAGS_write_buffer_size,
-      .mEnableBufferCrcCheck = FLAGS_crc_check,
-
-      // logging and recovery options
-      .mEnableWal = FLAGS_wal,
-      .mEnableWalFsync = FLAGS_wal_fsync,
-
-      // btree options
-      .mEnableXMerge = FLAGS_xmerge,
-      .mXMergeK = FLAGS_xmerge_k,
-      .mXMergeTargetPct = FLAGS_xmerge_target_pct,
-
-      .mEnableContentionSplit = FLAGS_contention_split,
-      .mContentionSplitProbility = FLAGS_cm_period,
-      .mContentionSplitSampleProbability =
-          FLAGS_contention_split_sample_probability,
-      .mContentionSplitThresholdPct = FLAGS_contention_split_threshold_pct,
-
-      .mBTreeHints = FLAGS_btree_hints,
-
-      // basic kv options
-
-      // transaction kv options
-      .mEnableLongRunningTx = FLAGS_enable_long_running_transaction,
-      .mEnableFatTuple = FLAGS_enable_fat_tuple,
-
-      // concurrency control options
-      .mEnableGc = FLAGS_enable_garbage_collection,
-      .mEnableEagerGc = FLAGS_enable_eager_garbage_collection,
-
-      // metrics options
-      .mEnableMetrics = FLAGS_enable_metrics,
-      .mMetricsPort = FLAGS_metrics_port,
-      .mEnableCpuCounters = FLAGS_cpu_counters,
-  };
 }
 
 void LeanStore::initGoogleLog() {
@@ -188,14 +132,16 @@ void LeanStore::initPageAndWalFd() {
   // Create a new instance on the specified DB file
   if (mStoreOption.mCreateFromScratch) {
     int flags = O_TRUNC | O_CREAT | O_RDWR | O_DIRECT;
-    mPageFd = open(GetDBFilePath().c_str(), flags, 0666);
+    auto dbFilePath = mStoreOption.GetDbFilePath();
+    mPageFd = open(dbFilePath.c_str(), flags, 0666);
     if (mPageFd == -1) {
-      LOG(FATAL) << "Could not open file at: " << GetDBFilePath();
+      LOG(FATAL) << "Could not open file at: " << dbFilePath;
     }
 
-    mWalFd = open(GetWALFilePath().c_str(), flags, 0666);
+    auto walFilePath = mStoreOption.GetWalFilePath();
+    mWalFd = open(walFilePath.c_str(), flags, 0666);
     if (mPageFd == -1) {
-      LOG(FATAL) << "Could not open file at: " << GetWALFilePath();
+      LOG(FATAL) << "Could not open file at: " << walFilePath;
     }
     return;
   }
@@ -203,20 +149,22 @@ void LeanStore::initPageAndWalFd() {
   // Recover pages and WAL from existing files
   deserializeFlags();
   int flags = O_RDWR | O_DIRECT;
-  mPageFd = open(GetDBFilePath().c_str(), flags, 0666);
+  auto dbFilePath = mStoreOption.GetDbFilePath();
+  mPageFd = open(dbFilePath.c_str(), flags, 0666);
   if (mPageFd == -1) {
     LOG(FATAL) << std::format(
         "Recover failed, could not open file at: {}. The data is lost, please "
         "create a new DB file and start a new instance from it",
-        GetDBFilePath());
+        dbFilePath);
   }
 
-  mWalFd = open(GetWALFilePath().c_str(), flags, 0666);
+  auto walFilePath = mStoreOption.GetWalFilePath();
+  mWalFd = open(walFilePath.c_str(), flags, 0666);
   if (mPageFd == -1) {
     LOG(FATAL) << std::format(
         "Recover failed, could not open file at: {}. The data is lost, please "
         "create a new WAL file and start a new instance from it",
-        GetWALFilePath());
+        walFilePath);
   }
 }
 
@@ -272,10 +220,11 @@ LeanStore::~LeanStore() {
   }
 
   {
+    auto walFilePath = mStoreOption.GetWalFilePath();
     struct stat st;
-    if (stat(GetWALFilePath().c_str(), &st) == 0) {
-      DLOG(INFO) << "The size of " << GetWALFilePath() << " is " << st.st_size
-                 << " bytes";
+    if (stat(walFilePath.c_str(), &st) == 0) {
+      DLOG(INFO) << std::format("The size of {} is {} bytes", walFilePath,
+                                st.st_size);
     }
   }
   if (close(mWalFd) == -1) {
@@ -316,7 +265,7 @@ void LeanStore::serializeMeta() {
 
   // serialize data structure instances
   std::ofstream metaFile;
-  metaFile.open(leanstore::GetMetaFilePath(), ios::trunc);
+  metaFile.open(mStoreOption.GetMetaFilePath(), ios::trunc);
 
   rapidjson::Document doc;
   auto& allocator = doc.GetAllocator();
@@ -410,7 +359,7 @@ void LeanStore::deserializeMeta() {
   SCOPED_DEFER(LOG(INFO) << "deserializeMeta ended");
 
   std::ifstream metaFile;
-  metaFile.open(leanstore::GetMetaFilePath());
+  metaFile.open(mStoreOption.GetMetaFilePath());
   rapidjson::IStreamWrapper isw(metaFile);
   rapidjson::Document doc;
   doc.ParseStream(isw);
@@ -495,7 +444,7 @@ void LeanStore::deserializeFlags() {
   SCOPED_DEFER(LOG(INFO) << "deserializeFlags ended");
 
   std::ifstream jsonFile;
-  jsonFile.open(leanstore::GetMetaFilePath());
+  jsonFile.open(mStoreOption.GetMetaFilePath());
   rapidjson::IStreamWrapper isw(jsonFile);
   rapidjson::Document doc;
   doc.ParseStream(isw);

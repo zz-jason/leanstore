@@ -4,7 +4,6 @@
 #include "concurrency/CRManager.hpp"
 #include "concurrency/GroupCommitter.hpp"
 #include "concurrency/Recovery.hpp"
-#include "leanstore/Config.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
@@ -19,12 +18,12 @@
 #include "utils/RandomGenerator.hpp"
 #include "utils/UserThread.hpp"
 
-#include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include <cerrno>
 #include <cstring>
 #include <expected>
+#include <format>
 
 #include <fcntl.h>
 #include <sys/resource.h>
@@ -233,7 +232,7 @@ BufferFrame& BufferManager::AllocNewPage(TREEID treeId) {
 // ATTENTION: this function unlocks it !!
 void BufferManager::ReclaimPage(BufferFrame& bf) {
   Partition& partition = GetPartition(bf.mHeader.mPageId);
-  if (FLAGS_reclaim_page_ids) {
+  if (mStore->mStoreOption.mEnableReclaimPageIds) {
     partition.ReclaimPageId(bf.mHeader.mPageId);
   }
 
@@ -420,15 +419,12 @@ void BufferManager::ReadPageSync(PID pageId, void* pageBuffer) {
       memset(pageBuffer, 0, mStore->mStoreOption.mPageSize);
       auto* page = new (pageBuffer) BufferFrame();
       page->Init(pageId);
-      LOG(ERROR) << "Failed to read page"
-                 << ", error="
-                 << utils::Error::FileRead(GetDBFilePath(), errno,
-                                           strerror(errno))
-                        .ToString()              // error
-                 << ", fd=" << mStore->mPageFd   // file descriptor
-                 << ", pageId=" << pageId        // page id
-                 << ", bytesRead=" << bytesRead  // bytes read
-                 << ", bytesLeft=" << bytesLeft; // bytes left
+      LOG(ERROR) << std::format("Failed to read page, error={}, fileName={}, "
+                                "fd={}, pageId={}, bytesRead={}, "
+                                "bytesLeft={}",
+                                strerror(errno),
+                                mStore->mStoreOption.GetDbFilePath(),
+                                mStore->mPageFd, pageId, bytesRead, bytesLeft);
       return;
     }
 

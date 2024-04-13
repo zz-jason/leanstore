@@ -3,7 +3,6 @@
 #include "buffer-manager/TreeRegistry.hpp"
 #include "concurrency/CRManager.hpp"
 #include "concurrency/Worker.hpp"
-#include "leanstore/Config.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "leanstore/Units.hpp"
 #include "profiling/counters/WorkerCounters.hpp"

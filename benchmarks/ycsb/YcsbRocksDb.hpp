@@ -1,11 +1,9 @@
 #include "Ycsb.hpp"
-#include "leanstore/Config.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
 #include "utils/ScrambledZipfGenerator.hpp"
 
-#include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gperftools/heap-profiler.h>
 #include <gperftools/profiler.h>
@@ -46,9 +44,9 @@ public:
 
   void HandleCmdLoad() override {
 #ifdef ENABLE_ROCKSDB
-    // load data with FLAGS_worker_threads
+    // load data with FLAGS_ycsb_threads
     auto zipfRandom = utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count,
-                                                    FLAGS_zipf_factor);
+                                                    FLAGS_ycsb_zipf_factor);
     auto start = std::chrono::high_resolution_clock::now();
     std::cout << "Inserting " << FLAGS_ycsb_record_count << " values"
               << std::endl;
@@ -65,7 +63,7 @@ public:
     });
 
     utils::Parallelize::Range(
-        FLAGS_worker_threads, FLAGS_ycsb_record_count,
+        FLAGS_ycsb_threads, FLAGS_ycsb_record_count,
         [&](uint64_t, uint64_t begin, uint64_t end) {
           for (uint64_t i = begin; i < end; i++) {
             // generate key
@@ -90,14 +88,14 @@ public:
 
   void HandleCmdRun() override {
 #ifdef ENABLE_ROCKSDB
-    // Run the benchmark in FLAGS_worker_threads
+    // Run the benchmark in FLAGS_ycsb_threads
     auto workloadType = static_cast<Workload>(FLAGS_ycsb_workload[0] - 'a');
     auto workload = GetWorkloadSpec(workloadType);
     auto zipfRandom = utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count,
-                                                    FLAGS_zipf_factor);
+                                                    FLAGS_ycsb_zipf_factor);
     std::atomic<bool> keepRunning = true;
-    std::vector<std::atomic<uint64_t>> threadCommitted(FLAGS_worker_threads);
-    std::vector<std::atomic<uint64_t>> threadAborted(FLAGS_worker_threads);
+    std::vector<std::atomic<uint64_t>> threadCommitted(FLAGS_ycsb_threads);
+    std::vector<std::atomic<uint64_t>> threadAborted(FLAGS_ycsb_threads);
     // init counters
     for (auto& c : threadCommitted) {
       c = 0;
@@ -106,7 +104,7 @@ public:
       a = 0;
     }
 
-    for (uint64_t workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
+    for (uint64_t workerId = 0; workerId < FLAGS_ycsb_threads; workerId++) {
       std::thread([&, workerId]() {
         uint8_t key[FLAGS_ycsb_key_size];
         std::string valRead;
@@ -163,7 +161,7 @@ public:
       auto abortRate = (aborted)*1.0 / (committed + aborted);
       auto summary = std::format("[{} thds] [{}s] [tps={:.2f}] [committed={}] "
                                  "[conflicted={}] [conflict rate={:.2f}]",
-                                 FLAGS_worker_threads, i,
+                                 FLAGS_ycsb_threads, i,
                                  (committed + aborted) * 1.0 / reportPeriod,
                                  committed, aborted, abortRate);
       std::cout << summary << std::endl;

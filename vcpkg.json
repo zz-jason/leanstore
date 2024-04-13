@@ -9,6 +9,10 @@
       ],
       "version>=": "0.6.0"
     },
+    {
+      "name": "spdlog",
+      "version>=": "1.13.0"
+    },
     "gtest",
     "rapidjson",
     "gperftools",
@@ -27,13 +31,8 @@
     {
       "name": "crc32c",
       "version>=": "1.1.2#2"
-    }
+    },
+    "rocksdb"
   ],
-  "builtin-baseline": "4a2c30139309a6e4690ce929df33e85a1706a0e2",
-  "overrides": [
-    {
-      "name": "prometheus-cpp",
-      "version": "1.0.0"
-    }
-  ]
+  "builtin-baseline": "4a2c30139309a6e4690ce929df33e85a1706a0e2"
 }

@@ -1,19 +1,16 @@
 #pragma once
 
 #include "buffer-manager/Swip.hpp"
-#include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "sync/HybridLatch.hpp"
 #include "utils/Misc.hpp"
 #include "utils/UserThread.hpp"
 
-#include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <rapidjson/document.h>
 
 #include <atomic>
-#include <cstring>
 #include <limits>
 #include <sstream>
 

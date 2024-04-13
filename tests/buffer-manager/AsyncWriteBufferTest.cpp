@@ -2,12 +2,11 @@
 
 #include "buffer-manager/BufferFrame.hpp"
 #include "buffer-manager/Swip.hpp"
-#include "leanstore/Config.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Misc.hpp"
 #include "utils/RandomGenerator.hpp"
 
-#include <gflags/gflags.h>
+#include <glog/logging.h>
 #include <gtest/gtest.h>
 
 #include <cstddef>
@@ -35,6 +34,7 @@ protected:
   };
 
   void SetUp() override {
+    FLAGS_logtostdout = true;
     // remove the test directory if it exists
     TearDown();
 
@@ -46,11 +46,6 @@ protected:
   }
 
   void TearDown() override {
-    // remove the test directory
-    // auto ret = system(std::format("rm -rf {}", mTestDir).c_str());
-    // EXPECT_EQ(ret, 0) << std::format(
-    //     "Failed to remove test directory, testDir={}, errno={}, error={}",
-    //     mTestDir, errno, strerror(errno));
   }
 
   std::string getRandTestFile() {
@@ -83,8 +78,6 @@ protected:
 };
 
 TEST_F(AsyncWriteBufferTest, Basic) {
-  FLAGS_create_from_scratch = false;
-
   auto testFile = getRandTestFile();
   auto testFd = openFile(testFile);
   SCOPED_DEFER({

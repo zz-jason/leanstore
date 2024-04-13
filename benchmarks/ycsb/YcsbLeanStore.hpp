@@ -3,15 +3,13 @@
 #include "btree/core/BTreeGeneric.hpp"
 #include "concurrency/CRManager.hpp"
 #include "concurrency/Worker.hpp"
-#include "leanstore/Config.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
+#include "leanstore/Store.hpp"
 #include "utils/Defer.hpp"
-#include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
 #include "utils/ScrambledZipfGenerator.hpp"
 
-#include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gperftools/heap-profiler.h>
 #include <gperftools/profiler.h>
@@ -37,7 +35,13 @@ private:
 public:
   YcsbLeanStore(bool benchTransactionKv)
       : mBenchTransactionKv(benchTransactionKv) {
-    auto res = LeanStore::Open();
+    auto res = LeanStore::Open(StoreOption{
+        .mCreateFromScratch = true,
+        .mStoreDir = "/tmp/ycsb/" + FLAGS_ycsb_workload,
+        .mWorkerThreads = FLAGS_ycsb_threads,
+        .mEnableMetrics = true,
+        .mMetricsPort = 8080,
+    });
     if (!res) {
       std::cerr << "Failed to open leanstore: " << res.error().ToString()
                 << std::endl;
@@ -50,8 +54,8 @@ public:
   KVInterface* CreateTable() {
     auto tableName = "ycsb_" + FLAGS_ycsb_workload;
     auto config = btree::BTreeConfig{
-        .mEnableWal = FLAGS_wal,
-        .mUseBulkInsert = FLAGS_bulk_insert,
+        .mEnableWal = mStore->mStoreOption.mEnableWal,
+        .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
     };
 
     // create table with transaction kv
@@ -96,7 +100,7 @@ public:
   void HandleCmdLoad() override {
     auto* table = CreateTable();
     auto zipfRandom = utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count,
-                                                    FLAGS_zipf_factor);
+                                                    FLAGS_ycsb_zipf_factor);
 
     // record the start and end time, calculating throughput in the end
     auto start = std::chrono::high_resolution_clock::now();
@@ -149,10 +153,12 @@ public:
     auto workloadType = static_cast<Workload>(FLAGS_ycsb_workload[0] - 'a');
     auto workload = GetWorkloadSpec(workloadType);
     auto zipfRandom = utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count,
-                                                    FLAGS_zipf_factor);
+                                                    FLAGS_ycsb_zipf_factor);
     atomic<bool> keepRunning = true;
-    std::vector<std::atomic<uint64_t>> threadCommitted(FLAGS_worker_threads);
-    std::vector<std::atomic<uint64_t>> threadAborted(FLAGS_worker_threads);
+    std::vector<std::atomic<uint64_t>> threadCommitted(
+        mStore->mStoreOption.mWorkerThreads);
+    std::vector<std::atomic<uint64_t>> threadAborted(
+        mStore->mStoreOption.mWorkerThreads);
     // init counters
     for (auto& c : threadCommitted) {
       c = 0;
@@ -161,7 +167,8 @@ public:
       a = 0;
     }
 
-    for (uint64_t workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
+    for (uint64_t workerId = 0; workerId < mStore->mStoreOption.mWorkerThreads;
+         workerId++) {
       mStore->ExecAsync(workerId, [&]() {
         uint8_t key[FLAGS_ycsb_key_size];
         std::string valRead;
@@ -252,7 +259,7 @@ public:
       auto abortRate = (aborted)*1.0 / (committed + aborted);
       auto summary = std::format("[{} thds] [{}s] [tps={:.2f}] [committed={}] "
                                  "[conflicted={}] [conflict rate={:.2f}]",
-                                 FLAGS_worker_threads, i,
+                                 mStore->mStoreOption.mWorkerThreads, i,
                                  (committed + aborted) * 1.0 / reportPeriod,
                                  committed, aborted, abortRate);
       std::cout << summary << std::endl;

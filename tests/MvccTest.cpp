@@ -4,6 +4,7 @@
 #include "buffer-manager/BufferManager.hpp"
 #include "concurrency/CRManager.hpp"
 #include "leanstore/LeanStore.hpp"
+#include "leanstore/Store.hpp"
 #include "utils/Defer.hpp"
 #include "utils/RandomGenerator.hpp"
 
@@ -28,11 +29,11 @@ protected:
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" +
                        std::string(curTest->name());
-    FLAGS_create_from_scratch = true;
-    FLAGS_logtostdout = true;
-    FLAGS_data_dir = "/tmp/" + curTestName;
-    FLAGS_worker_threads = 3;
-    auto res = LeanStore::Open();
+    auto res = LeanStore::Open(StoreOption{
+        .mCreateFromScratch = true,
+        .mStoreDir = "/tmp/" + curTestName,
+        .mWorkerThreads = 3,
+    });
     mStore = std::move(res.value());
   }
 
@@ -42,8 +43,8 @@ protected:
     // create a btree name for test
     mTreeName = RandomGenerator::RandAlphString(10);
     auto config = BTreeConfig{
-        .mEnableWal = FLAGS_wal,
-        .mUseBulkInsert = FLAGS_bulk_insert,
+        .mEnableWal = mStore->mStoreOption.mEnableWal,
+        .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
     };
     mStore->ExecSync(0, [&]() {
       auto res = mStore->CreateTransactionKV(mTreeName, config);

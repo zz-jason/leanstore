@@ -3,7 +3,6 @@
 #include "BTreeNode.hpp"
 #include "buffer-manager/BufferManager.hpp"
 #include "buffer-manager/GuardedBufferFrame.hpp"
-#include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "profiling/counters/WorkerCounters.hpp"

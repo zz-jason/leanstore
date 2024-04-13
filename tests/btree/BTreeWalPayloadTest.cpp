@@ -4,6 +4,7 @@
 #include "leanstore/KVInterface.hpp"
 
 #include <gflags/gflags.h>
+#include <gflags/gflags_declare.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <rapidjson/document.h>
@@ -14,6 +15,10 @@ namespace leanstore::storage::btree::test {
 
 class BTreeWalPayloadTest : public ::testing::Test {
 protected:
+  void SetUp() override {
+    FLAGS_logtostdout = true;
+  }
+
   std::string toString(const rapidjson::Document* doc) {
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
@@ -102,3 +107,9 @@ TEST_F(BTreeWalPayloadTest, ToJson) {
 }
 
 } // namespace leanstore::storage::btree::test
+
+int main(int argc, char** argv) {
+  google::InitGoogleLogging(argv[0]);
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}

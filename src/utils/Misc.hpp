@@ -1,7 +1,6 @@
 #pragma once
 
 #include "JumpMU.hpp"
-#include "leanstore/Config.hpp"
 
 #include <glog/logging.h>
 
@@ -16,7 +15,9 @@ template <typename T1, typename T2> T1 DownCast(T2 ptr) {
   return static_cast<T1>(ptr);
 }
 
-namespace utils {
+} // namespace leanstore
+
+namespace leanstore::utils {
 
 inline uint32_t GetBitsNeeded(uint64_t input) {
   return std::max(std::floor(std::log2(input)) + 1, 1.0);
@@ -173,23 +174,9 @@ struct Timer {
 
   std::chrono::high_resolution_clock::time_point mStartTimePoint;
 
-  Timer(std::atomic<uint64_t>& timeCounterUS) : mTimeCounterUS(timeCounterUS) {
-    if (FLAGS_measure_time) {
-      mStartTimePoint = std::chrono::high_resolution_clock::now();
-    }
-  }
+  Timer(std::atomic<uint64_t>& timeCounterUS);
 
-  ~Timer() {
-    if (FLAGS_measure_time) {
-      auto endTimePoint = std::chrono::high_resolution_clock::now();
-      const uint64_t duration =
-          std::chrono::duration_cast<std::chrono::microseconds>(endTimePoint -
-                                                                mStartTimePoint)
-              .count();
-      mTimeCounterUS += duration;
-    }
-  }
+  ~Timer();
 };
 
-} // namespace utils
-} // namespace leanstore
+} // namespace leanstore::utils

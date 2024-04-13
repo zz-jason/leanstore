@@ -2,7 +2,6 @@
 
 #include "YcsbLeanStore.hpp"
 #include "YcsbRocksDb.hpp"
-#include "leanstore/Config.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -19,10 +18,6 @@ static std::string kTargetBasicKv = "basickv";
 static std::string kTargetRocksDb = "rocksdb";
 
 int main(int argc, char** argv) {
-  FLAGS_create_from_scratch = true;
-  FLAGS_enable_metrics = true;
-  FLAGS_metrics_port = 8080;
-  FLAGS_data_dir = "/tmp/ycsb/" + FLAGS_ycsb_workload;
 
   gflags::SetUsageMessage("Ycsb Benchmark");
   gflags::ParseCommandLineFlags(&argc, &argv, true);

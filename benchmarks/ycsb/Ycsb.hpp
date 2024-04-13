@@ -3,6 +3,7 @@
 #include "utils/ScrambledZipfGenerator.hpp"
 
 #include <gflags/gflags.h>
+#include <gflags/gflags_declare.h>
 #include <glog/logging.h>
 
 #include <chrono>
@@ -14,13 +15,14 @@
 DECLARE_string(ycsb_target);
 DECLARE_string(ycsb_cmd);
 DECLARE_string(ycsb_workload);
+DECLARE_uint32(ycsb_threads);
 DECLARE_uint64(ycsb_run_for_seconds);
 
 // For the data preparation
 DECLARE_uint64(ycsb_key_size);
 DECLARE_uint64(ycsb_val_size);
 DECLARE_uint64(ycsb_record_count);
-DECLARE_double(zipf_factor);
+DECLARE_double(ycsb_zipf_factor);
 
 namespace leanstore::ycsb {
 

@@ -1,13 +1,13 @@
 #include "sync/ScopedHybridGuard.hpp"
 
+#include "buffer-manager/BufferManager.hpp"
 #include "concurrency/CRManager.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "buffer-manager/BufferManager.hpp"
+#include "leanstore/Store.hpp"
 #include "sync/HybridLatch.hpp"
 #include "utils/JumpMU.hpp"
 #include "utils/RandomGenerator.hpp"
 
-#include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <rapidjson/document.h>
@@ -30,12 +30,12 @@ protected:
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" +
                        std::string(curTest->name());
-    FLAGS_create_from_scratch = true;
-    FLAGS_logtostdout = true;
-    FLAGS_data_dir = "/tmp/" + curTestName;
-    FLAGS_worker_threads = 2;
-    FLAGS_enable_eager_garbage_collection = true;
-    auto res = LeanStore::Open();
+    auto res = LeanStore::Open(StoreOption{
+        .mCreateFromScratch = true,
+        .mStoreDir = "/tmp/" + curTestName,
+        .mWorkerThreads = 2,
+        .mEnableEagerGc = true,
+    });
     mStore = std::move(res.value());
   }
 

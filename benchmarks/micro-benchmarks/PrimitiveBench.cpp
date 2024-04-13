@@ -1,5 +1,4 @@
 #include "buffer-manager/BufferFrame.hpp"
-#include "leanstore/Units.hpp"
 #include "sync/OptimisticGuarded.hpp"
 #include "utils/Misc.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -18,11 +17,12 @@ using namespace leanstore::utils;
 using namespace leanstore::storage;
 
 static void BenchU8ToPage(benchmark::State& state) {
-  AlignedBuffer<512> alignedBuffer(FLAGS_page_size * 4);
+  auto pageSize = 4 * 1024;
+  AlignedBuffer<512> alignedBuffer(pageSize * 4);
   auto* buf = alignedBuffer.Get();
   auto i = 1;
   for (auto _ : state) {
-    reinterpret_cast<Page*>(&buf[i * FLAGS_page_size])->mGSN = 1;
+    reinterpret_cast<Page*>(&buf[i * pageSize])->mGSN = 1;
   }
 }
 
@@ -42,7 +42,6 @@ static void BenchStdArray(benchmark::State& state) {
       auto val = RandomGenerator::Rand((uint64_t)0,
                                        std::numeric_limits<uint64_t>::max());
       sTmpArray[i].store(val, std::memory_order_release);
-      // rawArray[i].store(val, std::memory_order_release);
     }
   }
 }

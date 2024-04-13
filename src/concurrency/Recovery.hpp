@@ -174,7 +174,7 @@ inline storage::BufferFrame& Recovery::resolvePage(PID pageId) {
 
 inline Result<void> Recovery::readFromWalFile(int64_t offset, size_t nbytes,
                                               void* destination) {
-  auto fileName = GetWALFilePath();
+  auto fileName = mStore->mStoreOption.GetWalFilePath();
   FILE* fp = fopen(fileName.c_str(), "rb");
   if (fp == nullptr) {
     return std::unexpected(

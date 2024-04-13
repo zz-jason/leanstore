@@ -2,7 +2,6 @@
 
 #include "Adapter.hpp"
 #include "btree/core/BTreeGeneric.hpp"
-#include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
 
 #include <glog/logging.h>
@@ -20,14 +19,14 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
   }
 
   LeanStoreAdapter(LeanStore& db, std::string name) : name(name) {
-    if (!FLAGS_create_from_scratch) {
+    if (!db.mStoreOption.mCreateFromScratch) {
       leanstore::storage::btree::TransactionKV* tree;
       db.GetTransactionKV(name, &tree);
       btree = reinterpret_cast<leanstore::KVInterface*>(tree);
     } else {
       leanstore::storage::btree::TransactionKV* tree;
-      storage::btree::BTreeConfig config{.mEnableWal = FLAGS_wal,
-                                         .mUseBulkInsert = false};
+      storage::btree::BTreeConfig config{
+          .mEnableWal = db.mStoreOption.mEnableWal, .mUseBulkInsert = false};
       auto res = db.CreateTransactionKV(name, config);
       if (res) {
         tree = res.value();

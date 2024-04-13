@@ -6,7 +6,6 @@
 #include "utils/DebugFlags.hpp"
 #include "utils/Result.hpp"
 
-#include <gflags/gflags.h>
 #include <rapidjson/document.h>
 
 #include <atomic>
@@ -41,7 +40,8 @@ namespace leanstore {
 
 class LeanStore {
 public:
-  static Result<std::unique_ptr<LeanStore>> Open();
+  static Result<std::unique_ptr<LeanStore>> Open(
+      StoreOption option = StoreOption{});
 
   /// The storage option for leanstore
   StoreOption mStoreOption;
@@ -73,7 +73,7 @@ public:
   utils::DebugFlagsRegistry mDebugFlagsRegistry;
 #endif
 
-  LeanStore();
+  LeanStore(StoreOption option = StoreOption{});
 
   ~LeanStore();
 
@@ -155,8 +155,6 @@ private:
   void initGoogleLog();
 
   void initPageAndWalFd();
-
-  static StoreOption defaultStoreOption();
 };
 
 } // namespace leanstore

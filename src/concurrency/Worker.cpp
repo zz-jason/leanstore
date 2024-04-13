@@ -6,7 +6,6 @@
 #include "concurrency/Logging.hpp"
 #include "concurrency/Transaction.hpp"
 #include "concurrency/WalEntry.hpp"
-#include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "profiling/counters/CRCounters.hpp"
 #include "telemetry/MetricOnlyTimer.hpp"

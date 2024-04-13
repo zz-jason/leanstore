@@ -1,6 +1,5 @@
 #include "ConfigsTable.hpp"
 
-#include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "utils/UserThread.hpp"
 
@@ -16,8 +15,9 @@ void ConfigsTable::add(std::string name, std::string value) {
 }
 
 void ConfigsTable::open() {
-  columns.emplace("c_worker_threads",
-                  [&](Column& col) { col << FLAGS_worker_threads; });
+  columns.emplace("c_worker_threads", [&](Column& col) {
+    col << utils::tlsStore->mStoreOption.mWorkerThreads;
+  });
 
   columns.emplace("c_free_pct", [&](Column& col) {
     col << utils::tlsStore->mStoreOption.mFreePct;
@@ -35,8 +35,9 @@ void ConfigsTable::open() {
     col << utils::tlsStore->mStoreOption.mBufferPoolSize;
   });
 
-  columns.emplace("c_bulk_insert",
-                  [&](Column& col) { col << FLAGS_bulk_insert; });
+  columns.emplace("c_bulk_insert", [&](Column& col) {
+    col << utils::tlsStore->mStoreOption.mEnableBulkInsert;
+  });
 
   columns.emplace("c_contention_split", [&](Column& col) {
     col << utils::tlsStore->mStoreOption.mEnableContentionSplit;
@@ -66,20 +67,32 @@ void ConfigsTable::open() {
     col << utils::tlsStore->mStoreOption.mXMergeTargetPct;
   });
 
-  columns.emplace("c_btree_heads",
-                  [&](Column& col) { col << FLAGS_btree_heads; });
-  columns.emplace("c_btree_hints",
-                  [&](Column& col) { col << FLAGS_btree_hints; });
+  columns.emplace("c_btree_heads", [&](Column& col) {
+    col << utils::tlsStore->mStoreOption.mEnableHeadOptimization;
+  });
 
-  columns.emplace("c_wal", [&](Column& col) { col << FLAGS_wal; });
+  columns.emplace("c_btree_hints", [&](Column& col) {
+    col << utils::tlsStore->mStoreOption.mBTreeHints;
+  });
+
+  columns.emplace("c_wal", [&](Column& col) {
+    col << utils::tlsStore->mStoreOption.mEnableWal;
+  });
+
   columns.emplace("c_wal_io_hack", [&](Column& col) { col << 1; });
-  columns.emplace("c_wal_fsync", [&](Column& col) { col << FLAGS_wal_fsync; });
-  columns.emplace("c_enable_garbage_collection",
-                  [&](Column& col) { col << FLAGS_enable_garbage_collection; });
-  columns.emplace("c_vi_fat_tuple",
-                  [&](Column& col) { col << FLAGS_enable_fat_tuple; });
-  columns.emplace("c_isolation_level",
-                  [&](Column& col) { col << FLAGS_isolation_level; });
+
+  columns.emplace("c_wal_fsync", [&](Column& col) {
+    col << utils::tlsStore->mStoreOption.mEnableWalFsync;
+  });
+
+  columns.emplace("c_enable_garbage_collection", [&](Column& col) {
+    col << utils::tlsStore->mStoreOption.mEnableGc;
+  });
+
+  columns.emplace("c_vi_fat_tuple", [&](Column& col) {
+    col << utils::tlsStore->mStoreOption.mEnableFatTuple;
+  });
+
   columns.emplace("c_enable_long_running_transaction", [&](Column& col) {
     col << utils::tlsStore->mStoreOption.mEnableLongRunningTx;
   });

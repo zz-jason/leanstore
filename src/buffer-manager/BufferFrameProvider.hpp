@@ -7,7 +7,6 @@
 #include "buffer-manager/Partition.hpp"
 #include "buffer-manager/Swip.hpp"
 #include "buffer-manager/TreeRegistry.hpp"
-#include "leanstore/Config.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
@@ -17,7 +16,6 @@
 #include "utils/RandomGenerator.hpp"
 #include "utils/UserThread.hpp"
 
-#include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include <mutex>
@@ -102,8 +100,10 @@ public:
         mAsyncWriteBuffer(store->mPageFd, store->mStoreOption.mPageSize,
                           mStore->mStoreOption.mBufferWriteBatchSize),
         mFreeBfList() {
-    mCoolCandidateBfs.reserve(FLAGS_buffer_frame_recycle_batch_size);
-    mEvictCandidateBfs.reserve(FLAGS_buffer_frame_recycle_batch_size);
+    mCoolCandidateBfs.reserve(
+        mStore->mStoreOption.mBufferFrameRecycleBatchSize);
+    mEvictCandidateBfs.reserve(
+        mStore->mStoreOption.mBufferFrameRecycleBatchSize);
   }
 
   // no copy and assign
@@ -147,7 +147,8 @@ protected:
 private:
   inline void randomBufferFramesToCoolOrEvict() {
     mCoolCandidateBfs.clear();
-    for (uint64_t i = 0; i < FLAGS_buffer_frame_recycle_batch_size; i++) {
+    for (auto i = 0u; i < mStore->mStoreOption.mBufferFrameRecycleBatchSize;
+         i++) {
       auto* randomBf = randomBufferFrame();
       DO_NOT_OPTIMIZE(randomBf->mHeader.mState);
       mCoolCandidateBfs.push_back(randomBf);

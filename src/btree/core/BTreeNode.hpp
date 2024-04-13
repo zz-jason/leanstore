@@ -363,7 +363,7 @@ public:
 
   void searchHint(HeadType key_head, uint16_t& lower_out, uint16_t& upper_out) {
     if (mNumSeps > sHintCount * 2) {
-      if (FLAGS_btree_hints == 2) {
+      if (utils::tlsStore->mStoreOption.mBTreeHints == 2) {
 #ifdef __AVX512F__
         const uint16_t dist = mNumSeps / (sHintCount + 1);
         uint16_t pos, pos2;
@@ -386,7 +386,7 @@ public:
 #else
         LOG(ERROR) << "Search hint with AVX512 failed: __AVX512F__ not found";
 #endif
-      } else if (FLAGS_btree_hints == 1) {
+      } else if (utils::tlsStore->mStoreOption.mBTreeHints == 1) {
         const uint16_t dist = mNumSeps / (sHintCount + 1);
         uint16_t pos, pos2;
 
@@ -509,7 +509,7 @@ public:
     searchHint(keyHead, lower, upper);
     while (lower < upper) {
       bool foundEqual(false);
-      if (FLAGS_btree_heads) {
+      if (utils::tlsStore->mStoreOption.mEnableHeadOptimization) {
         foundEqual = shrinkSearchRangeWithHead(lower, upper, key, keyHead);
       } else {
         foundEqual = shrinkSearchRange(lower, upper, key);

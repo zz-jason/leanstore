@@ -5,6 +5,7 @@
 #include "concurrency/CRManager.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
+#include "leanstore/Store.hpp"
 #include "leanstore/Units.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
@@ -92,11 +93,11 @@ public:
 
 public:
   LeanStoreMVCC(const std::string& storeDir, uint32_t sessionLimit) {
-    FLAGS_create_from_scratch = true;
-    FLAGS_logtostdout = true;
-    FLAGS_data_dir = storeDir;
-    FLAGS_worker_threads = sessionLimit;
-    auto res = LeanStore::Open();
+    auto res = LeanStore::Open(StoreOption{
+        .mCreateFromScratch = true,
+        .mStoreDir = storeDir,
+        .mWorkerThreads = sessionLimit,
+    });
     mLeanStore = std::move(res.value());
   }
 
@@ -206,8 +207,8 @@ inline void LeanStoreMVCCSession::AbortTx() {
 inline Result<TableRef*> LeanStoreMVCCSession::CreateTable(
     const std::string& tblName, bool implicitTx [[maybe_unused]]) {
   auto config = storage::btree::BTreeConfig{
-      .mEnableWal = FLAGS_wal,
-      .mUseBulkInsert = FLAGS_bulk_insert,
+      .mEnableWal = mStore->mLeanStore->mStoreOption.mEnableWal,
+      .mUseBulkInsert = mStore->mLeanStore->mStoreOption.mEnableBulkInsert,
   };
 
   storage::btree::TransactionKV* btree{nullptr};
