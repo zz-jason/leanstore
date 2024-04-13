@@ -13,14 +13,14 @@
 #include "utils/AsyncIo.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Error.hpp"
+#include "utils/Log.hpp"
 #include "utils/Misc.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
 #include "utils/UserThread.hpp"
 
-#include <glog/logging.h>
-
 #include <cerrno>
+#include <cstdint>
 #include <cstring>
 #include <expected>
 #include <format>
@@ -44,10 +44,10 @@ BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
   // totalmemSize buffer pool with zero-initialized contents.
   void* underlyingBuf = mmap(NULL, totalMemSize, PROT_READ | PROT_WRITE,
                              MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  LOG_IF(FATAL, underlyingBuf == MAP_FAILED)
-      << "Failed to allocate memory for the buffer pool"
-      << ", bufferPoolSize=" << mStore->mStoreOption.mBufferPoolSize
-      << ", totalMemSize=" << totalMemSize;
+  Log::FatalIf(underlyingBuf == MAP_FAILED,
+               "Failed to allocate memory for the buffer pool, "
+               "bufferPoolSize={}, totalMemSize={}",
+               mStore->mStoreOption.mBufferPoolSize, totalMemSize);
 
   mBufferPool = reinterpret_cast<uint8_t*>(underlyingBuf);
   madvise(mBufferPool, totalMemSize, MADV_HUGEPAGE);
@@ -124,7 +124,7 @@ void BufferManager::Deserialize(StringMap map) {
 
 void BufferManager::CheckpointAllBufferFrames() {
   LS_DEBUG_EXECUTE(mStore, "skip_CheckpointAllBufferFrames", {
-    LOG(ERROR) << "CheckpointAllBufferFrames skipped due to debug flag";
+    Log::Error("CheckpointAllBufferFrames skipped due to debug flag");
     return;
   });
 
@@ -142,23 +142,23 @@ void BufferManager::CheckpointAllBufferFrames() {
         mStore->mTreeRegistry->Checkpoint(bf.mPage.mBTreeId, bf, buffer);
         // wait the last write to finish
         if (auto res = aio.WaitAll(); !res) {
-          LOG(FATAL) << std::format("failed to wait all IO to finish, error={}",
-                                    res.error().ToString());
+          Log::Fatal("failed to wait all IO to finish, error={}",
+                     res.error().ToString());
         }
         aio.PrepareWrite(mStore->mPageFd, buffer,
                          mStore->mStoreOption.mPageSize,
                          bf.mHeader.mPageId * mStore->mStoreOption.mPageSize);
         if (auto res = aio.SubmitAll(); !res) {
-          LOG(FATAL) << std::format("failed to submit all IO, error={}",
-                                    res.error().ToString());
+          Log::Fatal("failed to submit all IO, error={}",
+                     res.error().ToString());
         }
       }
       bf.mHeader.mLatch.UnlockExclusively();
     }
     // wait the last write to finish
     if (auto res = aio.WaitAll(); !res) {
-      LOG(FATAL) << std::format("failed to wait all IO to finish, error={}",
-                                res.error().ToString());
+      Log::Fatal("failed to wait all IO to finish, error={}",
+                 res.error().ToString());
     }
   });
 }
@@ -419,12 +419,11 @@ void BufferManager::ReadPageSync(PID pageId, void* pageBuffer) {
       memset(pageBuffer, 0, mStore->mStoreOption.mPageSize);
       auto* page = new (pageBuffer) BufferFrame();
       page->Init(pageId);
-      LOG(ERROR) << std::format("Failed to read page, error={}, fileName={}, "
-                                "fd={}, pageId={}, bytesRead={}, "
-                                "bytesLeft={}",
-                                strerror(errno),
-                                mStore->mStoreOption.GetDbFilePath(),
-                                mStore->mPageFd, pageId, bytesRead, bytesLeft);
+      Log::Error(
+          "Failed to read page, error={}, fileName={}, fd={}, pageId={}, "
+          "bytesRead={}, bytesLeft={}",
+          strerror(errno), mStore->mStoreOption.GetDbFilePath(),
+          mStore->mPageFd, pageId, bytesRead, bytesLeft);
       return;
     }
 

@@ -8,6 +8,7 @@
 #include "profiling/counters/CRCounters.hpp"
 #include "sync/HybridLatch.hpp"
 #include "sync/ScopedHybridGuard.hpp"
+#include "utils/Log.hpp"
 #include "utils/Misc.hpp"
 #include "utils/UserThread.hpp"
 
@@ -124,10 +125,9 @@ bool HistoryStorage::GetVersion(
     JUMPMU_RETURN true;
   }
   JUMPMU_CATCH() {
-    LOG(ERROR) << "Can not retrieve older version"
-               << ", newerTxId: " << newerTxId
-               << ", newerCommandId: " << newerCommandId
-               << ", isRemoveCommand: " << isRemoveCommand;
+    Log::Error("Can not retrieve older version"
+               ", newerTxId: {}, newerCommandId: {}, isRemoveCommand: {}",
+               newerTxId, newerCommandId, isRemoveCommand);
   }
   UNREACHABLE();
   return false;

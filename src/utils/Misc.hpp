@@ -1,8 +1,7 @@
 #pragma once
 
-#include "JumpMU.hpp"
-
-#include <glog/logging.h>
+#include "utils/JumpMU.hpp"
+#include "utils/Log.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -40,8 +39,7 @@ inline void PinThisThread(const uint64_t workerId) {
   CPU_SET(workerId, &cpuset);
   pthread_t currentThread = pthread_self();
   if (pthread_setaffinity_np(currentThread, sizeof(cpu_set_t), &cpuset) != 0) {
-    DLOG(ERROR)
-        << "Could not pin a thread, maybe because of over subscription?";
+    Log::Debug("Could not pin a thread, maybe because of over subscription?");
   }
 }
 

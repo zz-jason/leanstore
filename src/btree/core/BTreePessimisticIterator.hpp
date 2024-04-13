@@ -6,9 +6,8 @@
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/Units.hpp"
 #include "sync/HybridLatch.hpp"
+#include "utils/Log.hpp"
 #include "utils/UserThread.hpp"
-
-#include <glog/logging.h>
 
 using namespace leanstore::storage;
 
@@ -131,7 +130,7 @@ protected:
         mMode == LatchMode::kPessimisticExclusive) {
       findLeafAndLatch(mGuardedLeaf, key, mMode);
     } else {
-      DLOG(FATAL) << "Unsupported latch mode: " << uint64_t(mMode);
+      Log::Fatal("Unsupported latch mode: {}", uint64_t(mMode));
     }
   }
 

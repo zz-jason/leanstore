@@ -7,9 +7,8 @@
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "sync/HybridLatch.hpp"
+#include "utils/Log.hpp"
 #include "utils/Misc.hpp"
-
-#include <glog/logging.h>
 
 #include <format>
 
@@ -50,7 +49,7 @@ OpCode BasicKV::Lookup(Slice key, ValCallback valCallback) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
     JUMPMU_CATCH() {
-      DLOG(WARNING) << "BasicKV::Lookup retried";
+      Log::Debug("BasicKV::Lookup retried");
       WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
     }
   }
@@ -145,15 +144,14 @@ OpCode BasicKV::Insert(Slice key, Slice val) {
     auto ret = xIter.InsertKV(key, val);
 
     if (ret == OpCode::kDuplicated) {
-      LOG(INFO) << std::format("Insert duplicated, workerId={}, key={}",
-                               cr::Worker::My().mWorkerId, key.ToString());
+      Log::Info("Insert duplicated, workerId={}, key={}, treeId={}",
+                cr::Worker::My().mWorkerId, key.ToString(), mTreeId);
       JUMPMU_RETURN OpCode::kDuplicated;
     }
 
     if (ret != OpCode::kOK) {
-      LOG(INFO) << std::format("Insert failed, workerId={}, key={}, ret={}",
-                               cr::Worker::My().mWorkerId, key.ToString(),
-                               ToString(ret));
+      Log::Info("Insert failed, workerId={}, key={}, ret={}",
+                cr::Worker::My().mWorkerId, key.ToString(), ToString(ret));
       JUMPMU_RETURN ret;
     }
 

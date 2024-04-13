@@ -11,9 +11,8 @@
 #include "concurrency/Worker.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/Units.hpp"
+#include "utils/Log.hpp"
 #include "utils/Result.hpp"
-
-#include <glog/logging.h>
 
 #include <expected>
 #include <string>
@@ -101,8 +100,8 @@ private:
           JUMPMU_RETURN ret;
         }
         default: {
-          LOG(ERROR) << "Unhandled tuple format: "
-                     << TupleFormatUtil::ToString(tuple->mFormat);
+          Log::Error("Unhandled tuple format: {}",
+                     TupleFormatUtil::ToString(tuple->mFormat));
         }
         }
       }

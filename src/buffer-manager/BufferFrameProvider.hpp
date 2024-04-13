@@ -13,11 +13,11 @@
 #include "profiling/counters/CPUCounters.hpp"
 #include "profiling/counters/PPCounters.hpp"
 #include "utils/Defer.hpp"
+#include "utils/Log.hpp"
 #include "utils/RandomGenerator.hpp"
 #include "utils/UserThread.hpp"
 
-#include <glog/logging.h>
-
+#include <cstdint>
 #include <mutex>
 
 #include <fcntl.h>
@@ -242,10 +242,10 @@ inline void BufferFrameProvider::evictFlushedBf(
 // cool: evict it
 inline void BufferFrameProvider::PickBufferFramesToCool(
     Partition& targetPartition) {
-  DLOG(INFO) << "Phase1: PickBufferFramesToCool begins";
-  SCOPED_DEFER(DLOG(INFO) << "Phase1: PickBufferFramesToCool ended"
-                          << ", mEvictCandidateBfs.size="
-                          << mEvictCandidateBfs.size());
+  Log::Debug("Phase1: PickBufferFramesToCool begins");
+  SCOPED_DEFER(Log::Debug(
+      "Phase1: PickBufferFramesToCool ended, mEvictCandidateBfs.size={}",
+      mEvictCandidateBfs.size()));
 
   COUNTERS_BLOCK() {
     auto phase1Begin = std::chrono::high_resolution_clock::now();
@@ -273,27 +273,29 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         BMOptimisticGuard readGuard(coolCandidate->mHeader.mLatch);
         if (coolCandidate->ShouldRemainInMem()) {
           failedAttempts = failedAttempts + 1;
-          DLOG(WARNING) << "Cool candidate discarded, should remain in memory"
-                        << ", pageId=" << coolCandidate->mHeader.mPageId;
+          Log::Debug(
+              "Cool candidate discarded, should remain in memory, pageId={}",
+              coolCandidate->mHeader.mPageId);
           JUMPMU_CONTINUE;
         }
         readGuard.JumpIfModifiedByOthers();
 
         if (coolCandidate->mHeader.mState == State::kCool) {
           mEvictCandidateBfs.push_back(coolCandidate);
-          LOG(INFO) << "Find a cool buffer frame, added to mEvictCandidateBfs"
-                    << ", pageId=" << coolCandidate->mHeader.mPageId;
+          Log::Info("Find a cool buffer frame, added to mEvictCandidateBfs, "
+                    "pageId={}",
+                    coolCandidate->mHeader.mPageId);
           // TODO: maybe without failedAttempts?
           failedAttempts = failedAttempts + 1;
-          DLOG(WARNING) << "Cool candidate discarded, it's already cool"
-                        << ", pageId=" << coolCandidate->mHeader.mPageId;
+          Log::Debug("Cool candidate discarded, it's already cool, pageId={}",
+                     coolCandidate->mHeader.mPageId);
           JUMPMU_CONTINUE;
         }
 
         if (coolCandidate->mHeader.mState != State::kHot) {
           failedAttempts = failedAttempts + 1;
-          DLOG(WARNING) << "Cool candidate discarded, it's not hot"
-                        << ", pageId=" << coolCandidate->mHeader.mPageId;
+          Log::Debug("Cool candidate discarded, it's not hot, pageId={}",
+                     coolCandidate->mHeader.mPageId);
           JUMPMU_CONTINUE;
         }
         readGuard.JumpIfModifiedByOthers();
@@ -322,11 +324,11 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
                 readGuard.JumpIfModifiedByOthers();
                 pickedAChild = true;
                 mCoolCandidateBfs.push_back(childBf);
-                DLOG(WARNING)
-                    << "Cool candidate discarded, one of its child is hot"
-                    << ", pageId=" << coolCandidate->mHeader.mPageId
-                    << ", hotChildPageId=" << childBf->mHeader.mPageId
-                    << ", the hot child is picked as the next cool candidate";
+                Log::Debug("Cool candidate discarded, one of its child is hot, "
+                           "pageId={}, hotChildPageId={}, the hot child is "
+                           "picked as the next cool candidate",
+                           coolCandidate->mHeader.mPageId,
+                           childBf->mHeader.mPageId);
                 return false;
               }
               readGuard.JumpIfModifiedByOthers();
@@ -341,11 +343,10 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
                    .count());
         }
         if (!allChildrenEvicted || pickedAChild) {
-          DLOG(WARNING)
-              << "Cool candidate discarded, not all the children are evicted"
-              << ", pageId=" << coolCandidate->mHeader.mPageId
-              << ", allChildrenEvicted=" << allChildrenEvicted
-              << ", pickedAChild=" << pickedAChild;
+          Log::Debug(
+              "Cool candidate discarded, not all the children are "
+              "evicted, pageId={}, allChildrenEvicted={}, pickedAChild={}",
+              coolCandidate->mHeader.mPageId, allChildrenEvicted, pickedAChild);
           failedAttempts = failedAttempts + 1;
           JUMPMU_CONTINUE;
         }
@@ -376,9 +377,9 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
             coolCandidate->mPage.mBTreeId, *coolCandidate);
         if (checkResult == SpaceCheckResult::kRestartSameBf ||
             checkResult == SpaceCheckResult::kPickAnotherBf) {
-          DLOG(WARNING) << "Cool candidate discarded, space check failed"
-                        << ", pageId=" << coolCandidate->mHeader.mPageId
-                        << ", checkResult is kRestartSameBf || kPickAnotherBf";
+          Log::Debug("Cool candidate discarded, space check failed, "
+                     "pageId={}, checkResult={}",
+                     coolCandidate->mHeader.mPageId, (uint64_t)checkResult);
           JUMPMU_CONTINUE;
         }
         readGuard.JumpIfModifiedByOthers();
@@ -403,8 +404,8 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
           coolCandidate->mHeader.mState = State::kCool;
           // mark the swip to the buffer frame to cool state
           parentHandler.mChildSwip.Cool();
-          DLOG(WARNING) << "Cool candidate find, state changed to cool"
-                        << ", pageId=" << coolCandidate->mHeader.mPageId;
+          Log::Debug("Cool candidate find, state changed to cool, pageId={}",
+                     coolCandidate->mHeader.mPageId);
         }
 
         COUNTERS_BLOCK() {
@@ -413,10 +414,10 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         failedAttempts = 0;
       }
       JUMPMU_CATCH() {
-        DLOG(WARNING)
-            << "Cool candidate discarded, optimistic latch failed, someone has "
-               "modified the buffer frame during cool validateion"
-            << ", pageId=" << coolCandidate->mHeader.mPageId;
+        Log::Debug("Cool candidate discarded, optimistic latch failed, "
+                   "someone has modified the buffer frame during cool "
+                   "validateion, pageId={}",
+                   coolCandidate->mHeader.mPageId);
       }
     }
   }
@@ -424,10 +425,10 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
 
 inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
     Partition& targetPartition) {
-  DLOG(INFO) << "Phase2: PrepareAsyncWriteBuffer begins";
-  SCOPED_DEFER(DLOG(INFO) << "Phase2: PrepareAsyncWriteBuffer ended"
-                          << ", mAsyncWriteBuffer.PendingRequests="
-                          << mAsyncWriteBuffer.GetPendingRequests());
+  Log::Debug("Phase2: PrepareAsyncWriteBuffer begins");
+  SCOPED_DEFER(Log::Debug("Phase2: PrepareAsyncWriteBuffer ended, "
+                          "mAsyncWriteBuffer.PendingRequests={}",
+                          mAsyncWriteBuffer.GetPendingRequests()));
 
   mFreeBfList.Reset();
   for (auto* cooledBf : mEvictCandidateBfs) {
@@ -437,11 +438,11 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
       // partition
       if (cooledBf->mHeader.mState != State::kCool ||
           cooledBf->mHeader.mIsBeingWrittenBack) {
-        DLOG(WARNING) << "COOLed buffer frame discarded"
-                      << ", pageId=" << cooledBf->mHeader.mPageId << ", IsCool="
-                      << (cooledBf->mHeader.mState == State::kCool)
-                      << ", isBeingWritternBack="
-                      << cooledBf->mHeader.mIsBeingWrittenBack;
+        Log::Debug("COOLed buffer frame discarded, pageId={}, IsCool={}, "
+                   "isBeingWritternBack={}",
+                   cooledBf->mHeader.mPageId,
+                   cooledBf->mHeader.mState == State::kCool,
+                   cooledBf->mHeader.mIsBeingWrittenBack.load());
         JUMPMU_CONTINUE;
       }
       const PID cooledPageId = cooledBf->mHeader.mPageId;
@@ -453,9 +454,9 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
       JumpScoped<std::unique_lock<std::mutex>> ioGuard(
           partition.mInflightIOMutex);
       if (partition.mInflightIOs.Lookup(cooledPageId)) {
-        DLOG(WARNING) << "COOLed buffer frame discarded, already in IO stage"
-                      << ", pageId=" << cooledBf->mHeader.mPageId
-                      << ", partitionId=" << partitionId;
+        Log::Debug("COOLed buffer frame discarded, already in IO stage, "
+                   "pageId={}, partitionId={}",
+                   cooledPageId, partitionId);
         JUMPMU_CONTINUE;
       }
 
@@ -463,8 +464,9 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
       // writing any bytes back to the underlying disk.
       if (!cooledBf->IsDirty()) {
         evictFlushedBf(*cooledBf, optimisticGuard, targetPartition);
-        DLOG(INFO) << "COOLed buffer frame is not dirty, reclaim directly"
-                   << ", pageId=" << cooledBf->mHeader.mPageId;
+        Log::Debug(
+            "COOLed buffer frame is not dirty, reclaim directly, pageId={}",
+            cooledBf->mHeader.mPageId);
         JUMPMU_CONTINUE;
       }
 
@@ -472,8 +474,8 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
       // cooling stage until all the contents are writtern back to the
       // underluing disk.
       if (mAsyncWriteBuffer.IsFull()) {
-        DLOG(INFO) << "Async write buffer is full"
-                   << ", bufferSize=" << mAsyncWriteBuffer.GetPendingRequests();
+        Log::Debug("Async write buffer is full, bufferSize={}",
+                   mAsyncWriteBuffer.GetPendingRequests());
         JUMPMU_BREAK;
       }
 
@@ -489,16 +491,17 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
 
       // TODO: preEviction callback according to TREEID
       mAsyncWriteBuffer.Add(*cooledBf);
-      DLOG(INFO) << std::format(
-          "COOLed buffer frame is added to async write buffer, pageId={}, "
-          "bufferSize={}",
-          cooledBf->mHeader.mPageId, mAsyncWriteBuffer.GetPendingRequests());
+      Log::Debug("COOLed buffer frame is added to async write buffer, "
+                 "pageId={}, bufferSize={}",
+                 cooledBf->mHeader.mPageId,
+                 mAsyncWriteBuffer.GetPendingRequests());
     }
     JUMPMU_CATCH() {
-      DLOG(WARNING) << "COOLed buffer frame discarded, optimistic latch "
-                       "failed, someone has modified the buffer frame during "
-                       "cool validateion"
-                    << ", pageId=" << cooledBf->mHeader.mPageId;
+      Log::Debug(
+          "COOLed buffer frame discarded, optimistic latch failed, "
+          "someone has modified the buffer frame during cool validateion, "
+          "pageId={}",
+          cooledBf->mHeader.mPageId);
     }
   }
 
@@ -507,19 +510,19 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
 
 inline void BufferFrameProvider::FlushAndRecycleBufferFrames(
     Partition& targetPartition) {
-  DLOG(INFO) << "Phase3: FlushAndRecycleBufferFrames begins";
-  SCOPED_DEFER(DLOG(INFO) << "Phase3: FlushAndRecycleBufferFrames ended");
+  Log::Debug("Phase3: FlushAndRecycleBufferFrames begins");
+  SCOPED_DEFER(Log::Debug("Phase3: FlushAndRecycleBufferFrames ended"));
 
   auto result = mAsyncWriteBuffer.SubmitAll();
   if (!result) {
-    LOG(ERROR) << "Failed to submit IO, error=" << result.error().ToString();
+    Log::Error("Failed to submit IO, error={}", result.error().ToString());
     return;
   }
 
   result = mAsyncWriteBuffer.WaitAll();
   if (!result) {
-    LOG(ERROR) << "Failed to wait IO request to complete, error="
-               << result.error().ToString();
+    Log::Error("Failed to wait IO request to complete, error={}",
+               result.error().ToString());
     return;
   }
 
@@ -527,11 +530,11 @@ inline void BufferFrameProvider::FlushAndRecycleBufferFrames(
   mAsyncWriteBuffer.IterateFlushedBfs(
       [&](BufferFrame& writtenBf, uint64_t flushedGsn) {
         JUMPMU_TRY() {
-          // When the written back page is being exclusively locked, we should
-          // rather waste the write and move on to another page Instead of
-          // waiting on its latch because of the likelihood that a data
-          // structure implementation keeps holding a parent latch while
-          // trying to acquire a new page
+          // When the written back page is being exclusively locked, we
+          // should rather waste the write and move on to another page
+          // Instead of waiting on its latch because of the likelihood that
+          // a data structure implementation keeps holding a parent latch
+          // while trying to acquire a new page
           BMOptimisticGuard optimisticGuard(writtenBf.mHeader.mLatch);
           BMExclusiveGuard exclusiveGuard(optimisticGuard);
           DCHECK(writtenBf.mHeader.mIsBeingWrittenBack);

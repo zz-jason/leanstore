@@ -9,9 +9,9 @@
 #include "utils/DebugFlags.hpp"
 #include "utils/Defer.hpp"
 #include "utils/JsonUtil.hpp"
+#include "utils/Log.hpp"
 #include "utils/RandomGenerator.hpp"
 
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 
 #include <cstddef>
@@ -156,7 +156,7 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
 
     rapidjson::Document doc(rapidjson::kObjectType);
     leanstore::storage::btree::BTreeGeneric::ToJson(*btree, &doc);
-    LOG(INFO) << "BTree before destroy:\n" << leanstore::utils::JsonToStr(&doc);
+    Log::Debug("BTree before destroy:\n{}", leanstore::utils::JsonToStr(&doc));
   });
 
   // skip dumpping buffer frames on exit
@@ -179,7 +179,7 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     rapidjson::Document doc(rapidjson::kObjectType);
     BTreeGeneric::ToJson(*static_cast<BTreeGeneric*>(btree), &doc);
-    DLOG(INFO) << "TransactionKV after recovery: " << utils::JsonToStr(&doc);
+    Log::Debug("TransactionKV after recovery: {}", utils::JsonToStr(&doc));
   });
 
   // lookup the restored btree
@@ -272,7 +272,7 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
 
     rapidjson::Document doc(rapidjson::kObjectType);
     leanstore::storage::btree::BTreeGeneric::ToJson(*btree, &doc);
-    LOG(INFO) << "BTree before destroy:\n" << leanstore::utils::JsonToStr(&doc);
+    Log::Debug("BTree before destroy:\n{}", leanstore::utils::JsonToStr(&doc));
   });
 
   // skip dumpping buffer frames on exit
@@ -295,7 +295,7 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     rapidjson::Document doc(rapidjson::kObjectType);
     BTreeGeneric::ToJson(*static_cast<BTreeGeneric*>(btree), &doc);
-    DLOG(INFO) << "TransactionKV after recovery: " << utils::JsonToStr(&doc);
+    Log::Debug("TransactionKV after recovery: {}", utils::JsonToStr(&doc));
   });
 
   // lookup the restored btree
@@ -359,7 +359,7 @@ TEST_F(RecoveringTest, RecoverAfterRemove) {
 
     rapidjson::Document doc(rapidjson::kObjectType);
     leanstore::storage::btree::BTreeGeneric::ToJson(*btree, &doc);
-    LOG(INFO) << "BTree before destroy:\n" << leanstore::utils::JsonToStr(&doc);
+    Log::Debug("BTree before destroy:\n{}", leanstore::utils::JsonToStr(&doc));
   });
 
   // skip dumpping buffer frames on exit

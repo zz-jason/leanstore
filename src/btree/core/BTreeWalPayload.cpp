@@ -1,7 +1,8 @@
 
 #include "btree/core/BTreeWalPayload.hpp"
 
-#include <glog/logging.h>
+#include "utils/Log.hpp"
+
 #include <rapidjson/document.h>
 #include <rapidjson/rapidjson.h>
 #include <rapidjson/stringbuffer.h>
@@ -134,7 +135,7 @@ void WalPayload::toJson(const WalTxInsert* wal [[maybe_unused]],
 
 void WalPayload::toJson(const WalUpdate* wal [[maybe_unused]],
                         rapidjson::Document* doc [[maybe_unused]]) {
-  DLOG(ERROR) << "toJson for WalUpdate not implemented";
+  Log::Debug("toJson for WalUpdate not implemented");
   rapidjson::Value member;
   member.SetString("Not implemented", doc->GetAllocator());
   doc->AddMember("mVal", member, doc->GetAllocator());
@@ -142,7 +143,7 @@ void WalPayload::toJson(const WalUpdate* wal [[maybe_unused]],
 
 void WalPayload::toJson(const WalTxUpdate* wal [[maybe_unused]],
                         rapidjson::Document* doc [[maybe_unused]]) {
-  DLOG(ERROR) << "toJson for WalTxUpdate not implemented";
+  Log::Debug("toJson for WalTxUpdate not implemented");
   rapidjson::Value member;
   member.SetString("Not implemented", doc->GetAllocator());
   doc->AddMember("mVal", member, doc->GetAllocator());
@@ -150,7 +151,7 @@ void WalPayload::toJson(const WalTxUpdate* wal [[maybe_unused]],
 
 void WalPayload::toJson(const WalRemove* wal [[maybe_unused]],
                         rapidjson::Document* doc [[maybe_unused]]) {
-  DLOG(ERROR) << "toJson for WalRemove not implemented";
+  Log::Debug("toJson for WalRemove not implemented");
   rapidjson::Value member;
   member.SetString("Not implemented", doc->GetAllocator());
   doc->AddMember("mVal", member, doc->GetAllocator());
@@ -158,7 +159,7 @@ void WalPayload::toJson(const WalRemove* wal [[maybe_unused]],
 
 void WalPayload::toJson(const WalTxRemove* wal [[maybe_unused]],
                         rapidjson::Document* doc [[maybe_unused]]) {
-  DLOG(ERROR) << "toJson for WalTxRemove not implemented";
+  Log::Debug("toJson for WalTxRemove not implemented");
   rapidjson::Value member;
   member.SetString("Not implemented", doc->GetAllocator());
   doc->AddMember("mVal", member, doc->GetAllocator());

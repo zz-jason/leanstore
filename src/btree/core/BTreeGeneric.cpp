@@ -11,9 +11,8 @@
 #include "leanstore/Units.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "utils/Defer.hpp"
+#include "utils/Log.hpp"
 #include "utils/Misc.hpp"
-
-#include <glog/logging.h>
 
 using namespace leanstore::storage;
 
@@ -72,10 +71,10 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit,
   auto guardedChild = GuardedBufferFrame<BTreeNode>(
       mStore->mBufferManager.get(), guardedParent, parentHandler.mChildSwip);
   if (guardedChild->mNumSeps <= 1) {
-    DLOG(WARNING) << "Split failed, not enough separators in node"
-                  << ", toSplit.mHeader.mPageId=" << toSplit.mHeader.mPageId
-                  << ", favoredSplitPos=" << favoredSplitPos
-                  << ", guardedChild->mNumSeps=" << guardedChild->mNumSeps;
+    Log::Warn("Split failed, not enough separators in node, "
+              "toSplit.mHeader.mPageId={}, favoredSplitPos={}, "
+              "guardedChild->mNumSeps={}",
+              toSplit.mHeader.mPageId, favoredSplitPos, guardedChild->mNumSeps);
     return;
   }
 
@@ -550,7 +549,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
       } else if (ret == 0) {
         break;
       } else {
-        DLOG(FATAL) << "Invalid return code from mergeLeftIntoRight";
+        Log::Fatal("Invalid return code from mergeLeftIntoRight");
       }
     }
   }
@@ -648,8 +647,8 @@ StringMap BTreeGeneric::Serialize() {
   auto& metaBf = mMetaNodeSwip.AsBufferFrame();
   auto metaPageId = metaBf.mHeader.mPageId;
   auto res = mStore->mBufferManager->CheckpointBufferFrame(metaBf);
-  DLOG_IF(FATAL, !res) << "Failed to checkpoint meta node: "
-                       << res.error().ToString();
+  Log::FatalIf(!res, "Failed to checkpoint meta node: {}",
+               res.error().ToString());
   return {{kTreeId, std::to_string(mTreeId)},
           {kHeight, std::to_string(mHeight.load())},
           {kMetaPageId, std::to_string(metaPageId)}};
@@ -674,7 +673,7 @@ void BTreeGeneric::Deserialize(StringMap map) {
     }
     JUMPMU_CATCH() {
       failcounter++;
-      LOG_IF(FATAL, failcounter >= 100) << "Failed to load MetaNode";
+      Log::FatalIf(failcounter >= 100, "Failed to load MetaNode");
     }
   }
   mMetaNodeSwip.AsBufferFrame().mHeader.mKeepInMemory = true;

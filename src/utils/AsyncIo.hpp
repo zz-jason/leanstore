@@ -1,9 +1,8 @@
 #pragma once
 
 #include "utils/Error.hpp"
+#include "utils/Log.hpp"
 #include "utils/Result.hpp"
-
-#include <glog/logging.h>
 
 #include <cerrno>
 #include <cstdint>
@@ -31,12 +30,12 @@ public:
 
     std::memset(&mAioCtx, 0, sizeof(mAioCtx));
     auto ret = io_setup(mMaxReqs, &mAioCtx);
-    LOG_IF(FATAL, ret < 0) << std::format("io_setup failed, error={}", ret);
+    Log::FatalIf(ret < 0, "io_setup failed, error={}", ret);
   }
 
   ~AsyncIo() {
     auto ret = io_destroy(mAioCtx);
-    LOG_IF(FATAL, ret < 0) << std::format("io_destroy failed, error={}", ret);
+    Log::FatalIf(ret < 0, "io_destroy failed, error={}", ret);
   }
 
   size_t GetNumRequests() {

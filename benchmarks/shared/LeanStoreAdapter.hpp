@@ -3,8 +3,7 @@
 #include "Adapter.hpp"
 #include "btree/core/BTreeGeneric.hpp"
 #include "leanstore/LeanStore.hpp"
-
-#include <glog/logging.h>
+#include "utils/Log.hpp"
 
 #include <functional>
 
@@ -31,8 +30,8 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
       if (res) {
         tree = res.value();
       } else {
-        LOG(FATAL) << std::format("failed to create transaction kv, error={}",
-                                  res.error().ToString());
+        Log::Fatal(std::format("failed to create transaction kv, error={}",
+                               res.error().ToString()));
       }
       btree = reinterpret_cast<leanstore::KVInterface*>(tree);
     }

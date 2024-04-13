@@ -3,9 +3,9 @@
 #include "buffer-manager/BufferFrame.hpp"
 #include "buffer-manager/GuardedBufferFrame.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "utils/Log.hpp"
 #include "utils/UserThread.hpp"
 
-#include <glog/logging.h>
 #include <rapidjson/document.h>
 
 #include <algorithm>
@@ -384,7 +384,7 @@ public:
           upper_out = (pos2 + 1) * dist;
         }
 #else
-        LOG(ERROR) << "Search hint with AVX512 failed: __AVX512F__ not found";
+        Log::Error("Search hint with AVX512 failed: __AVX512F__ not found");
 #endif
       } else if (utils::tlsStore->mStoreOption.mBTreeHints == 1) {
         const uint16_t dist = mNumSeps / (sHintCount + 1);

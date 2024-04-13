@@ -7,8 +7,7 @@
 #include "concurrency/CRManager.hpp"
 #include "concurrency/Worker.hpp"
 #include "leanstore/Units.hpp"
-
-#include <glog/logging.h>
+#include "utils/Log.hpp"
 
 namespace leanstore::storage::btree {
 
@@ -172,13 +171,11 @@ inline std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(
           newerCommandId = version.mCommandId;
         });
     if (!found) {
-      LOG(ERROR) << "Not found in the version tree"
-                 << ", workerId=" << cr::Worker::My().mWorkerId
-                 << ", startTs=" << cr::ActiveTx().mStartTs
-                 << ", versionsRead=" << versionsRead
-                 << ", newerWorkerId=" << newerWorkerId
-                 << ", newerTxId=" << newerTxId
-                 << ", newerCommandId=" << newerCommandId;
+      Log::Error("Not found in the version tree, workerId={}, startTs={}, "
+                 "versionsRead={}, newerWorkerId={}, newerTxId={}, "
+                 "newerCommandId={}",
+                 cr::Worker::My().mWorkerId, cr::ActiveTx().mStartTs,
+                 versionsRead, newerWorkerId, newerTxId, newerCommandId);
       return {OpCode::kNotFound, versionsRead};
     }
 

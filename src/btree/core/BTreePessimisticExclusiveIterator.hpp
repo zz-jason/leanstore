@@ -2,9 +2,8 @@
 
 #include "BTreePessimisticIterator.hpp"
 #include "leanstore/KVInterface.hpp"
+#include "utils/Log.hpp"
 #include "utils/UserThread.hpp"
-
-#include <glog/logging.h>
 
 using namespace leanstore::storage;
 
@@ -83,9 +82,8 @@ public:
         JUMPMU_BREAK;
       }
       JUMPMU_CATCH() {
-        LOG(INFO) << "Split failed"
-                  << ", treeId=" << mBTree.mTreeId
-                  << ", pageId=" << mGuardedLeaf.mBf->mHeader.mPageId;
+        Log::Info("SplitForKey failed, treeId={}, pageId={}", mBTree.mTreeId,
+                  mGuardedLeaf.mBf->mHeader.mPageId);
       }
     }
   }
@@ -155,10 +153,11 @@ public:
     auto& contentionStats = mGuardedLeaf.mBf->mHeader.mContentionStats;
     auto lastUpdatedSlot = contentionStats.mLastUpdatedSlot;
     contentionStats.Update(mGuardedLeaf.EncounteredContention(), mSlotId);
-    DLOG(INFO) << "[Contention Split] ContentionStats updated"
-               << ", pageId=" << mGuardedLeaf.mBf->mHeader.mPageId
-               << ", slot=" << mSlotId << ", encountered contention="
-               << mGuardedLeaf.EncounteredContention();
+    Log::Debug(
+        "[Contention Split] ContentionStats updated, pageId={}, slot={}, "
+        "encountered contention={}",
+        mGuardedLeaf.mBf->mHeader.mPageId, mSlotId,
+        mGuardedLeaf.EncounteredContention());
 
     // haven't met the contention split validation probability
     if ((randomNumber &
@@ -179,10 +178,10 @@ public:
       JUMPMU_TRY() {
         mBTree.TrySplitMayJump(*mGuardedLeaf.mBf, splitSlot);
 
-        DLOG(INFO) << "[Contention Split] succeed"
-                   << ", pageId=" << mGuardedLeaf.mBf->mHeader.mPageId
-                   << ", contention pct=" << contentionPct
-                   << ", split slot=" << splitSlot;
+        Log::Debug(
+            "[Contention Split] succeed, pageId={}, contention pct={}, split "
+            "slot={}",
+            mGuardedLeaf.mBf->mHeader.mPageId, contentionPct, splitSlot);
 
         COUNTERS_BLOCK() {
           WorkerCounters::MyCounters()
@@ -191,10 +190,10 @@ public:
         }
       }
       JUMPMU_CATCH() {
-        LOG(INFO) << "[Contention Split] contention split failed"
-                  << ", pageId=" << mGuardedLeaf.mBf->mHeader.mPageId
-                  << ", contention pct=" << contentionPct
-                  << ", split slot=" << splitSlot;
+        Log::Info(
+            "[Contention Split] contention split failed, pageId={}, contention "
+            "pct={}, split slot={}",
+            mGuardedLeaf.mBf->mHeader.mPageId, contentionPct, splitSlot);
 
         COUNTERS_BLOCK() {
           WorkerCounters::MyCounters()
@@ -226,8 +225,8 @@ public:
         mBTree.TryMergeMayJump(*mGuardedLeaf.mBf);
       }
       JUMPMU_CATCH() {
-        DLOG(INFO) << "TryMergeIfNeeded failed"
-                   << ", pageId=" << mGuardedLeaf.mBf->mHeader.mPageId;
+        Log::Debug("TryMergeIfNeeded failed, pageId={}",
+                   mGuardedLeaf.mBf->mHeader.mPageId);
       }
       return true;
     }

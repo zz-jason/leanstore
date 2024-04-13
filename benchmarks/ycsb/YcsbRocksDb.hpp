@@ -1,5 +1,6 @@
 #include "Ycsb.hpp"
 #include "utils/Defer.hpp"
+#include "utils/Log.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
 #include "utils/ScrambledZipfGenerator.hpp"
@@ -37,7 +38,7 @@ public:
     auto status = rocksdb::DB::Open(
         options, "/tmp/ycsb/rocksdb/" + FLAGS_ycsb_workload, &mDb);
     if (!status.ok()) {
-      LOG(FATAL) << "Failed to open rocksdb: " << status.ToString();
+      Log::Fatal("Failed to open rocksdb: {}", status.ToString());
     }
 #endif
   }
@@ -79,7 +80,7 @@ public:
                          rocksdb::Slice((char*)key, FLAGS_ycsb_key_size),
                          rocksdb::Slice((char*)val, FLAGS_ycsb_val_size));
             if (!status.ok()) {
-              LOG(FATAL) << "Failed to insert: " << status.ToString();
+              Log::Fatal("Failed to insert: {}", status.ToString());
             }
           }
         });
@@ -121,7 +122,7 @@ public:
                   rocksdb::ReadOptions(),
                   rocksdb::Slice((char*)key, FLAGS_ycsb_key_size), &valRead);
               if (!status.ok()) {
-                LOG(FATAL) << "Failed to read: " << status.ToString();
+                Log::Fatal("Failed to read: {}", status.ToString());
               }
             } else {
               // generate key for update
@@ -138,8 +139,8 @@ public:
             break;
           }
           default: {
-            LOG(FATAL) << "Unsupported workload type: "
-                       << static_cast<uint8_t>(workloadType);
+            Log::Fatal("Unsupported workload type: {}",
+                       static_cast<uint8_t>(workloadType));
           }
           }
           threadCommitted[workerId]++;

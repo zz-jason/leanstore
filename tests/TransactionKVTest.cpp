@@ -8,6 +8,7 @@
 #include "leanstore/Store.hpp"
 #include "utils/Defer.hpp"
 #include "utils/JsonUtil.hpp"
+#include "utils/Log.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <gtest/gtest.h>
@@ -825,8 +826,8 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
     }
   });
 
-  LOG(INFO) << "key=" << kvToTest.begin()->first
-            << ", val=" << kvToTest.begin()->second << ", newVal=" << newVal;
+  Log::Debug("InsertAfterRemoveDifferentWorkers, key={}, val={}, newVal={}",
+             kvToTest.begin()->first, kvToTest.begin()->second, newVal);
   mStore->ExecSync(1, [&]() {
     // lookup the new value
     cr::Worker::My().StartTx();

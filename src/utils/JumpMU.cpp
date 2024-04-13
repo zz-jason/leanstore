@@ -1,6 +1,6 @@
 #include "JumpMU.hpp"
 
-#include <glog/logging.h>
+#include "utils/Log.hpp"
 
 namespace jumpmu {
 
@@ -13,9 +13,10 @@ __thread void* tlsObjs[JUMPMU_STACK_OBJECTS_LIMIT];
 __thread void (*tlsObjDtors[JUMPMU_STACK_OBJECTS_LIMIT])(void*);
 
 void Jump() {
-  DCHECK(tlsNumJumpPoints > 0) << "tlsNumJumpPoints=" << tlsNumJumpPoints;
-  DCHECK(tlsNumStackObjs >= 0) << "tlsNumStackObjs=" << tlsNumStackObjs;
-
+  leanstore::Log::DebugCheck(tlsNumJumpPoints > 0, "tlsNumJumpPoints={}",
+                             tlsNumJumpPoints);
+  leanstore::Log::DebugCheck(tlsNumStackObjs >= 0, "tlsNumStackObjs={}",
+                             tlsNumStackObjs);
   auto numJumpStackObjs = tlsJumpPointNumStackObjs[tlsNumJumpPoints - 1];
 
   // Release resource hold by stack objects in reverse (FILO) order.
@@ -29,10 +30,10 @@ void Jump() {
 
   // Jump to the preset jump point
   auto& jumpPoint = jumpmu::tlsJumpPoints[jumpmu::tlsNumJumpPoints - 1];
-  DLOG(INFO) << "Jump to jump point " << jumpmu::tlsNumJumpPoints - 1 << " ("
-             << jumpmu::tlsNumStackObjs << " stack objects, "
-             << jumpmu::tlsJumpPointNumStackObjs[jumpmu::tlsNumJumpPoints - 1]
-             << " jump stack objects)";
+  leanstore::Log::Debug(
+      "Jump to jump point {} ({} stack objects, {} jump stack objects)",
+      jumpmu::tlsNumJumpPoints - 1, jumpmu::tlsNumStackObjs,
+      jumpmu::tlsJumpPointNumStackObjs[jumpmu::tlsNumJumpPoints - 1]);
   tlsNumJumpPoints--;
   longjmp(jumpPoint, 1);
 }

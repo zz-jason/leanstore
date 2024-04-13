@@ -7,8 +7,7 @@
 #include "concurrency/Worker.hpp"
 #include "sync/HybridGuard.hpp"
 #include "sync/HybridLatch.hpp"
-
-#include <glog/logging.h>
+#include "utils/Log.hpp"
 
 #include <utility>
 
@@ -163,12 +162,11 @@ public:
         mBf->mPage.mGSN > cr::Worker::My().mLogging.mTxReadSnapshot &&
         mBf->mHeader.mLastWriterWorker != cr::Worker::My().mWorkerId) {
       cr::Worker::My().mLogging.mHasRemoteDependency = true;
-      DLOG(INFO) << "Detected remote dependency"
-                 << ", workerId=" << cr::Worker::My().mWorkerId
-                 << ", txReadSnapshot(GSN)="
-                 << cr::Worker::My().mLogging.mTxReadSnapshot
-                 << ", pageLastWriterWorker=" << mBf->mHeader.mLastWriterWorker
-                 << ", pageGSN=" << mBf->mPage.mGSN;
+      Log::Debug("Detected remote dependency, workerId={}, "
+                 "txReadSnapshot(GSN)={}, pageLastWriterWorker={}, pageGSN={}",
+                 cr::Worker::My().mWorkerId,
+                 cr::Worker::My().mLogging.mTxReadSnapshot,
+                 mBf->mHeader.mLastWriterWorker, mBf->mPage.mGSN);
     }
 
     const auto workerGSN = cr::Worker::My().mLogging.GetCurrentGsn();

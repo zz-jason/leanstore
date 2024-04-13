@@ -2,8 +2,7 @@
 
 #include "Defer.hpp"
 #include "Misc.hpp"
-
-#include <glog/logging.h>
+#include "utils/Log.hpp"
 
 #include <atomic>
 #include <memory>
@@ -41,9 +40,10 @@ public:
       : mStore(store),
         mThreadName(name),
         mRunningCPU(runningCPU) {
-    LOG_IF(ERROR, mThreadName.size() > 15)
-        << "Thread name should be restricted to 15 characters"
-        << ", name=" << name << ", size=" << name.size();
+    Log::ErrorIf(
+        mThreadName.size() > 15,
+        "Thread name should be restricted to 15 characters, name={}, size={}",
+        name, name.size());
   }
 
   virtual ~UserThread() {
@@ -81,8 +81,8 @@ protected:
     tlsThreadName = mThreadName;
 
     // log info about thread start and stop events
-    LOG(INFO) << mThreadName << " thread started";
-    SCOPED_DEFER(LOG(INFO) << mThreadName << " thread stopped");
+    Log::Info("{} thread started", mThreadName);
+    SCOPED_DEFER(Log::Info("{} thread stopped", mThreadName));
 
     // setup thread name
     pthread_setname_np(pthread_self(), mThreadName.c_str());
@@ -90,7 +90,7 @@ protected:
     // pin the thread to a specific CPU
     if (mRunningCPU != -1) {
       utils::PinThisThread(mRunningCPU);
-      LOG(INFO) << mThreadName << " pined to CPU " << mRunningCPU;
+      Log::Info("{} pined to CPU {}", mThreadName, mRunningCPU);
     }
 
     // run custom thread loop

@@ -1,10 +1,10 @@
 #pragma once
 
+#include "utils/Log.hpp"
 #include "utils/ScrambledZipfGenerator.hpp"
 
 #include <gflags/gflags.h>
 #include <gflags/gflags_declare.h>
-#include <glog/logging.h>
 
 #include <chrono>
 #include <cstdint>
@@ -73,7 +73,7 @@ inline WorkloadSpec GetWorkloadSpec(Workload workload) {
   case Workload::kF:
     return {0.5, 0.0, 0.0, 0.5};
   default:
-    LOG(FATAL) << "Unknown workload: " << static_cast<uint8_t>(workload);
+    Log::Fatal("Unknown workload: {}", static_cast<uint8_t>(workload));
   }
 }
 

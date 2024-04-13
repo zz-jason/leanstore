@@ -8,11 +8,11 @@
 #include "leanstore/Store.hpp"
 #include "profiling/tables/BMTable.hpp"
 #include "utils/Defer.hpp"
+#include "utils/Log.hpp"
 #include "utils/Misc.hpp"
 #include "utils/Result.hpp"
 #include "utils/UserThread.hpp"
 
-#include <glog/logging.h>
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
 #include <rapidjson/prettywriter.h>
@@ -60,8 +60,8 @@ LeanStore::LeanStore(StoreOption option)
     initGoogleLog();
   }
 
-  LOG(INFO) << "LeanStore starting ...";
-  SCOPED_DEFER(LOG(INFO) << "LeanStore started");
+  Log::Info("LeanStore starting ...");
+  SCOPED_DEFER(Log::Info("LeanStore started"));
 
   // Expose the metrics
   if (mStoreOption.mEnableMetrics) {
@@ -135,13 +135,13 @@ void LeanStore::initPageAndWalFd() {
     auto dbFilePath = mStoreOption.GetDbFilePath();
     mPageFd = open(dbFilePath.c_str(), flags, 0666);
     if (mPageFd == -1) {
-      LOG(FATAL) << "Could not open file at: " << dbFilePath;
+      Log::Fatal("Could not open file at: {}", dbFilePath);
     }
 
     auto walFilePath = mStoreOption.GetWalFilePath();
     mWalFd = open(walFilePath.c_str(), flags, 0666);
     if (mPageFd == -1) {
-      LOG(FATAL) << "Could not open file at: " << walFilePath;
+      Log::Fatal("Could not open file at: {}", walFilePath);
     }
     return;
   }
@@ -152,27 +152,24 @@ void LeanStore::initPageAndWalFd() {
   auto dbFilePath = mStoreOption.GetDbFilePath();
   mPageFd = open(dbFilePath.c_str(), flags, 0666);
   if (mPageFd == -1) {
-    LOG(FATAL) << std::format(
-        "Recover failed, could not open file at: {}. The data is lost, please "
-        "create a new DB file and start a new instance from it",
-        dbFilePath);
+    Log::Fatal("Recover failed, could not open file at: {}. The data is lost, "
+               "please create a new DB file and start a new instance from it",
+               dbFilePath);
   }
 
   auto walFilePath = mStoreOption.GetWalFilePath();
   mWalFd = open(walFilePath.c_str(), flags, 0666);
   if (mPageFd == -1) {
-    LOG(FATAL) << std::format(
-        "Recover failed, could not open file at: {}. The data is lost, please "
-        "create a new WAL file and start a new instance from it",
-        walFilePath);
+    Log::Fatal("Recover failed, could not open file at: {}. The data is lost, "
+               "please create a new WAL file and start a new instance from it",
+               walFilePath);
   }
 }
 
 LeanStore::~LeanStore() {
-  LOG(INFO) << "LeanStore stopping ...";
+  Log::Info("LeanStore stopping ...");
   SCOPED_DEFER({
-    LOG(INFO) << "LeanStore stopped";
-
+    Log::Info("LeanStore stopped");
     // deinit logging in the last
     if (google::IsGoogleLoggingInitialized()) {
       google::ShutdownGoogleLogging();
@@ -190,9 +187,8 @@ LeanStore::~LeanStore() {
 
     uint64_t numEntries(0);
     ExecSync(0, [&]() { numEntries = btree->CountEntries(); });
-
-    LOG(INFO) << "[TransactionKV] name=" << treeName << ", btreeId=" << treeId
-              << ", height=" << btree->mHeight << ", numEntries=" << numEntries;
+    Log::Info("[TransactionKV] name={}, btreeId={}, height={}, numEntries={}",
+              treeName, treeId, btree->mHeight.load(), numEntries);
   }
 
   // Stop transaction workers and group committer
@@ -216,21 +212,20 @@ LeanStore::~LeanStore() {
   if (close(mPageFd) == -1) {
     perror("Failed to close page file: ");
   } else {
-    LOG(INFO) << "page file closed";
+    Log::Info("Page file closed");
   }
 
   {
     auto walFilePath = mStoreOption.GetWalFilePath();
     struct stat st;
     if (stat(walFilePath.c_str(), &st) == 0) {
-      DLOG(INFO) << std::format("The size of {} is {} bytes", walFilePath,
-                                st.st_size);
+      Log::Debug("The size of {} is {} bytes", walFilePath, st.st_size);
     }
   }
   if (close(mWalFd) == -1) {
     perror("Failed to close WAL file: ");
   } else {
-    LOG(INFO) << "WAL file closed";
+    Log::Info("WAL file closed");
   }
 }
 
@@ -260,8 +255,8 @@ void LeanStore::WaitAll() {
 #define META_KEY_FLAGS "flags"
 
 void LeanStore::serializeMeta() {
-  LOG(INFO) << "serializeMeta started";
-  SCOPED_DEFER(LOG(INFO) << "serializeMeta ended");
+  Log::Info("serializeMeta started");
+  SCOPED_DEFER(Log::Info("serializeMeta ended"));
 
   // serialize data structure instances
   std::ofstream metaFile;
@@ -345,8 +340,8 @@ void LeanStore::serializeMeta() {
 }
 
 void LeanStore::serializeFlags(rapidjson::Document& doc) {
-  LOG(INFO) << "serializeFlags started";
-  SCOPED_DEFER(LOG(INFO) << "serializeFlags ended");
+  Log::Info("serializeFlags started");
+  SCOPED_DEFER(Log::Info("serializeFlags ended"));
 
   rapidjson::Value flagsJsonObj(rapidjson::kObjectType);
   auto& allocator = doc.GetAllocator();
@@ -355,8 +350,8 @@ void LeanStore::serializeFlags(rapidjson::Document& doc) {
 }
 
 void LeanStore::deserializeMeta() {
-  LOG(INFO) << "deserializeMeta started";
-  SCOPED_DEFER(LOG(INFO) << "deserializeMeta ended");
+  Log::Info("deserializeMeta started");
+  SCOPED_DEFER(Log::Info("deserializeMeta ended"));
 
   std::ifstream metaFile;
   metaFile.open(mStoreOption.GetMetaFilePath());
@@ -418,10 +413,9 @@ void LeanStore::deserializeMeta() {
         auto res = storage::btree::BasicKV::Create(this, graveyardName,
                                                    graveyardConfig);
         if (!res) {
-          LOG(ERROR) << "Failed to create TransactionKV graveyard"
-                     << ", btreeVI=" << btreeName
-                     << ", graveyardName=" << graveyardName
-                     << ", error=" << res.error().ToString();
+          Log::Error("Failed to create TransactionKV graveyard"
+                     ", btreeVI={}, graveyardName={}, error={}",
+                     btreeName, graveyardName, res.error().ToString());
           return;
         }
         btree->mGraveyard = res.value();
@@ -431,8 +425,8 @@ void LeanStore::deserializeMeta() {
       break;
     }
     default: {
-      LOG(FATAL) << "deserializeMeta failed"
-                 << ", unsupported btree type=" << btreeType;
+      Log::Fatal("deserializeMeta failed, unsupported btree type={}",
+                 btreeType);
     }
     }
     mTreeRegistry->Deserialize(btreeId, btreeMetaMap);
@@ -440,8 +434,8 @@ void LeanStore::deserializeMeta() {
 }
 
 void LeanStore::deserializeFlags() {
-  LOG(INFO) << "deserializeFlags started";
-  SCOPED_DEFER(LOG(INFO) << "deserializeFlags ended");
+  Log::Info("deserializeFlags started");
+  SCOPED_DEFER(Log::Info("deserializeFlags ended"));
 
   std::ifstream jsonFile;
   jsonFile.open(mStoreOption.GetMetaFilePath());
@@ -474,8 +468,7 @@ void LeanStore::DropBasicKV(const std::string& name) {
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
   auto res = mTreeRegistry->UnregisterTree(name);
   if (!res) {
-    LOG(ERROR) << "UnRegister BasicKV failed"
-               << ", error=" << res.error().ToString();
+    Log::Error("UnRegister BasicKV failed, error={}", res.error().ToString());
   }
 }
 
@@ -491,9 +484,9 @@ Result<storage::btree::TransactionKV*> LeanStore::CreateTransactionKV(
   if (auto res =
           storage::btree::BasicKV::Create(this, graveyardName, graveyardConfig);
       !res) {
-    LOG(ERROR) << std::format("Failed to create TransactionKV graveyard, "
-                              "btreeVI={}, graveyardName={}, error={}",
-                              name, graveyardName, res.error().ToString());
+    Log::Error("Failed to create TransactionKV graveyard"
+               ", btreeVI={}, graveyardName={}, error={}",
+               name, graveyardName, res.error().ToString());
     return std::unexpected(std::move(res.error()));
   } else {
     graveyard = res.value();
@@ -507,9 +500,9 @@ Result<storage::btree::TransactionKV*> LeanStore::CreateTransactionKV(
         *static_cast<leanstore::storage::btree::BTreeGeneric*>(graveyard));
     auto res2 = mTreeRegistry->UnRegisterTree(graveyard->mTreeId);
     if (!res2) {
-      LOG(ERROR) << std::format("UnRegister TransactionKV graveyard failed, "
-                                "graveyardName={}, error={}",
-                                graveyardName, res2.error().ToString());
+      Log::Error("UnRegister TransactionKV graveyard failed, graveyardName={}, "
+                 "error={}",
+                 graveyardName, res2.error().ToString());
     }
   }
   return res;
@@ -528,8 +521,8 @@ void LeanStore::DropTransactionKV(const std::string& name) {
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
   auto res = mTreeRegistry->UnregisterTree(name);
   if (!res) {
-    LOG(ERROR) << "UnRegister TransactionKV failed"
-               << ", error=" << res.error().ToString();
+    Log::Error("UnRegister TransactionKV failed, error={}",
+               res.error().ToString());
   }
 
   auto graveyardName = "_" + name + "_graveyard";
@@ -539,8 +532,8 @@ void LeanStore::DropTransactionKV(const std::string& name) {
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
   res = mTreeRegistry->UnregisterTree(graveyardName);
   if (!res) {
-    LOG(ERROR) << "UnRegister TransactionKV graveyard failed"
-               << ", error=" << res.error().ToString();
+    Log::Error("UnRegister TransactionKV graveyard failed, error={}",
+               res.error().ToString());
   }
 }
 

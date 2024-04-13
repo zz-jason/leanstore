@@ -7,8 +7,7 @@
 #include "leanstore/Units.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "sync/HybridLatch.hpp"
-
-#include "glog/logging.h"
+#include "utils/Log.hpp"
 
 #include <atomic>
 #include <limits>
@@ -109,15 +108,15 @@ public:
   virtual void Checkpoint(BufferFrame& bf, void* dest) override;
 
   virtual void undo(const uint8_t*, const uint64_t) override {
-    LOG(FATAL) << "undo is unsupported";
+    Log::Fatal("undo is unsupported");
   }
 
   virtual void GarbageCollect(const uint8_t*, WORKERID, TXID, bool) override {
-    LOG(FATAL) << "GarbageCollect is unsupported";
+    Log::Fatal("GarbageCollect is unsupported");
   }
 
   virtual void unlock(const uint8_t*) override {
-    LOG(FATAL) << "unlock is unsupported";
+    Log::Fatal("unlock is unsupported");
   }
 
   virtual StringMap Serialize() override;

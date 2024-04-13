@@ -7,6 +7,7 @@
 #include "concurrency/WalEntry.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "sync/HybridGuard.hpp"
+#include "utils/Log.hpp"
 
 #include <cstdint>
 #include <expected>
@@ -57,7 +58,7 @@ Result<void> Recovery::analysis() {
       continue;
     }
     default: {
-      LOG(FATAL) << "Unrecognized WalEntry type: " << walEntry->TypeName();
+      Log::Fatal("Unrecognized WalEntry type: {}", walEntry->TypeName());
     }
     }
   }

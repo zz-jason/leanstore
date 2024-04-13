@@ -15,10 +15,9 @@
 #include "telemetry/MetricsManager.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
+#include "utils/Log.hpp"
 #include "utils/Misc.hpp"
 #include "utils/Result.hpp"
-
-#include <glog/logging.h>
 
 #include <cstring>
 #include <format>
@@ -149,10 +148,8 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
           mGraveyard->Lookup(key, [&](Slice) {}) == OpCode::kOK) {
         JUMPMU_RETURN OpCode::kAbortTx;
       }
-
-      LOG(ERROR) << "Update failed, key not found"
-                 << ", key=" << key.ToString()
-                 << ", txMode=" << ToString(cr::ActiveTx().mTxMode);
+      Log::Error("Update failed, key not found, key={}, txMode={}",
+                 key.ToString(), ToString(cr::ActiveTx().mTxMode));
       JUMPMU_RETURN OpCode::kNotFound;
     }
 
@@ -212,8 +209,8 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
         JUMPMU_RETURN OpCode::kOK;
       }
       default: {
-        LOG(ERROR) << "Unhandled tuple format: "
-                   << TupleFormatUtil::ToString(tuple.mFormat);
+        Log::Error("Unhandled tuple format: {}",
+                   TupleFormatUtil::ToString(tuple.mFormat));
       }
       }
     }
@@ -254,28 +251,32 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
 
       // conflict on tuple not visible for me
       if (!visibleForMe) {
-        LOG(INFO) << "Insert conflicted, current transaction should be aborted"
-                  << ", workerId=" << cr::Worker::My().mWorkerId
-                  << ", startTs=" << cr::Worker::My().mActiveTx.mStartTs
-                  << ", key=" << ToString(key)
-                  << ", tupleLastWriter=" << chainedTuple->mWorkerId
-                  << ", tupleLastTxId=" << chainedTuple->mTxId
-                  << ", tupleIsWriteLocked=" << chainedTuple->IsWriteLocked()
-                  << ", tupleIsRemoved=" << chainedTuple->mIsTombstone
-                  << ", tupleVisibleForMe=" << visibleForMe;
+        auto lastWorkerId = chainedTuple->mWorkerId;
+        auto lastTxId = chainedTuple->mTxId;
+        auto isWriteLocked = chainedTuple->IsWriteLocked();
+        auto isTombsone = chainedTuple->mIsTombstone;
+        Log::Info("Insert conflicted, current transaction should be aborted"
+                  ", workerId={}, startTs={}, key={}, tupleLastWriter={}, "
+                  "tupleLastTxId={}, tupleIsWriteLocked={}, tupleIsRemoved={}, "
+                  "tupleVisibleForMe={}",
+                  cr::Worker::My().mWorkerId,
+                  cr::Worker::My().mActiveTx.mStartTs, ToString(key),
+                  lastWorkerId, lastTxId, isWriteLocked, isTombsone,
+                  visibleForMe);
         return OpCode::kAbortTx;
       }
 
       // duplicated on tuple inserted by former committed transactions
-      LOG(INFO) << "Insert duplicated"
-                << ", workerId=" << cr::Worker::My().mWorkerId
-                << ", startTs=" << cr::Worker::My().mActiveTx.mStartTs
-                << ", key=" << ToString(key)
-                << ", tupleLastWriter=" << chainedTuple->mWorkerId
-                << ", tupleLastTxId=" << chainedTuple->mTxId
-                << ", tupleIsWriteLocked=" << chainedTuple->IsWriteLocked()
-                << ", tupleIsRemoved=" << chainedTuple->mIsTombstone
-                << ", tupleVisibleForMe=" << visibleForMe;
+      auto lastWorkerId = chainedTuple->mWorkerId;
+      auto lastTxId = chainedTuple->mTxId;
+      auto isWriteLocked = chainedTuple->IsWriteLocked();
+      auto isTombsone = chainedTuple->mIsTombstone;
+      Log::Info("Insert duplicated, workerId={}, startTs={}, key={}, "
+                "tupleLastWriter={}, tupleLastTxId={}, tupleIsWriteLocked={}, "
+                "tupleIsRemoved={}, tupleVisibleForMe={}",
+                cr::Worker::My().mWorkerId, cr::Worker::My().mActiveTx.mStartTs,
+                key.ToString(), lastWorkerId, lastTxId, isWriteLocked,
+                isTombsone, visibleForMe);
       return OpCode::kDuplicated;
     }
 
@@ -374,23 +375,22 @@ OpCode TransactionKV::Remove(Slice key) {
 
     // remove fat tuple is not supported yet
     if (tuple->mFormat == TupleFormat::kFat) {
-      LOG(ERROR) << "Remove failed, fat tuple is not supported yet";
+      Log::Error("Remove failed, fat tuple is not supported yet");
       JUMPMU_RETURN OpCode::kNotFound;
     }
 
     // remove the chained tuple
     auto& chainedTuple = *static_cast<ChainedTuple*>(tuple);
+    auto lastWorkerId = chainedTuple.mWorkerId;
+    auto lastTxId = chainedTuple.mTxId;
     if (chainedTuple.IsWriteLocked() ||
-        !cr::Worker::My().mCc.VisibleForMe(chainedTuple.mWorkerId,
-                                           chainedTuple.mTxId)) {
-      LOG(INFO) << "Conflict detected, please abort and retry"
-                << ", workerId=" << cr::Worker::My().mWorkerId
-                << ", startTs=" << cr::Worker::My().mActiveTx.mStartTs
-                << ", tupleLastWriter=" << chainedTuple.mWorkerId
-                << ", tupleLastStartTs=" << chainedTuple.mTxId
-                << ", visibleForMe="
-                << cr::Worker::My().mCc.VisibleForMe(chainedTuple.mWorkerId,
-                                                     chainedTuple.mTxId);
+        !cr::Worker::My().mCc.VisibleForMe(lastWorkerId, lastTxId)) {
+      Log::Info("Remove conflicted, current transaction should be aborted, "
+                "workerId={}, startTs={}, key={}, tupleLastWriter={}, "
+                "tupleLastStartTs={}, tupleVisibleForMe={}",
+                cr::Worker::My().mWorkerId, cr::Worker::My().mActiveTx.mStartTs,
+                key.ToString(), lastWorkerId, lastTxId,
+                cr::Worker::My().mCc.VisibleForMe(lastWorkerId, lastTxId));
       JUMPMU_RETURN OpCode::kAbortTx;
     }
 
@@ -475,7 +475,7 @@ void TransactionKV::undo(const uint8_t* walPayloadPtr,
     return undoLastRemove(static_cast<const WalTxRemove*>(&walPayload));
   }
   default: {
-    LOG(ERROR) << "Unknown wal payload type: " << (uint64_t)walPayload.mType;
+    Log::Error("Unknown wal payload type: {}", (uint64_t)walPayload.mType);
   }
   }
 }
@@ -511,22 +511,22 @@ void TransactionKV::undoLastInsert(const WalTxInsert* walInsert) {
         // It's the first insert of of the value, remove the whole key-value
         // from the btree.
         auto ret = xIter.RemoveCurrent();
-        LOG_IF(ERROR, ret != OpCode::kOK)
-            << "Undo last insert failed, failed to remove current key"
-            << ", workerId=" << cr::Worker::My().mWorkerId
-            << ", startTs=" << cr::Worker::My().mActiveTx.mStartTs
-            << ", key=" << key.ToString() << ", ret=" << ToString(ret);
+        Log::ErrorIf(ret != OpCode::kOK,
+                     "Undo last insert failed, failed to remove current key, "
+                     "workerId={}, startTs={}, key={}, ret={}",
+                     cr::Worker::My().mWorkerId,
+                     cr::Worker::My().mActiveTx.mStartTs, key.ToString(),
+                     ToString(ret));
       }
 
       xIter.TryMergeIfNeeded();
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
-      LOG_IF(WARNING, retry % 100 == 0)
-          << "Undo insert failed"
-          << ", workerId=" << cr::Worker::My().mWorkerId
-          << ", startTs=" << cr::Worker::My().mActiveTx.mStartTs
-          << ", retry=" << retry;
+      Log::WarnIf(retry % 100 == 0,
+                  "Undo insert failed, workerId={}, startTs={}, retry={}",
+                  cr::Worker::My().mWorkerId,
+                  cr::Worker::My().mActiveTx.mStartTs, retry);
     }
   }
 }
@@ -574,11 +574,10 @@ void TransactionKV::undoLastUpdate(const WalTxUpdate* walUpdate) {
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
-      LOG_IF(WARNING, retry % 100 == 0)
-          << "Undo update failed"
-          << ", workerId=" << cr::Worker::My().mWorkerId
-          << ", startTs=" << cr::Worker::My().mActiveTx.mStartTs
-          << ", retry=" << retry;
+      Log::WarnIf(retry % 100 == 0,
+                  "Undo update failed, workerId={}, startTs={}, retry={}",
+                  cr::Worker::My().mWorkerId,
+                  cr::Worker::My().mActiveTx.mStartTs, retry);
     }
   }
 }
@@ -618,11 +617,10 @@ void TransactionKV::undoLastRemove(const WalTxRemove* walRemove) {
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
-      LOG_IF(WARNING, retry % 100 == 0)
-          << "Undo remove failed"
-          << ", workerId=" << cr::Worker::My().mWorkerId
-          << ", startTs=" << cr::Worker::My().mActiveTx.mStartTs
-          << ", retry=" << retry;
+      Log::WarnIf(retry % 100 == 0,
+                  "Undo remove failed, workerId={}, startTs={}, retry={}",
+                  cr::Worker::My().mWorkerId,
+                  cr::Worker::My().mActiveTx.mStartTs, retry);
     }
   }
 }
@@ -735,12 +733,10 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData,
 
   // Delete tombstones caused by transactions below mCc.mLocalWmkOfAllTx.
   if (versionTxId <= cr::Worker::My().mCc.mLocalWmkOfAllTx) {
-    DLOG(INFO) << "Delete tombstones caused by transactions below "
-               << "mCc.mLocalWmkOfAllTx"
-               << ", versionWorkerId=" << versionWorkerId
-               << ", versionTxId=" << versionTxId
-               << ", removedKey=" << ToString(version.RemovedKey());
-    DCHECK(version.mDanglingPointer.mBf != nullptr);
+    Log::Debug("Delete tombstones caused by transactions below "
+               "mCc.mLocalWmkOfAllTx, versionWorkerId={}, versionTxId={}",
+               versionWorkerId, versionTxId);
+    Log::DebugCheck(version.mDanglingPointer.mBf != nullptr);
     JUMPMU_TRY() {
       BTreePessimisticExclusiveIterator xIter(
           *static_cast<BTreeGeneric*>(this), version.mDanglingPointer.mBf,
@@ -757,9 +753,9 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData,
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
-      DLOG(INFO)
-          << "Delete tombstones caused by transactions below "
-          << "mCc.mLocalWmkOfAllTx page has been modified since last delete";
+      Log::Debug(
+          "Delete tombstones caused by transactions below mCc.mLocalWmkOfAllTx "
+          "page has been modified since last delete");
     }
     return;
   }
@@ -768,25 +764,22 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData,
 
   // Delete the removedKey from graveyard since no transaction needs it
   if (calledBefore) {
-    DLOG(INFO) << "Meet the removedKey again, delete it from graveyard"
-               << ", versionWorkerId=" << versionWorkerId
-               << ", versionTxId=" << versionTxId
-               << ", removedKey=" << ToString(removedKey);
+    Log::Debug("Meet the removedKey again, delete it from graveyard, "
+               "versionWorkerId={}, versionTxId={}, removedKey={}",
+               versionWorkerId, versionTxId, removedKey.ToString());
     JUMPMU_TRY() {
       auto xIter = mGraveyard->GetExclusiveIterator();
       if (xIter.SeekExact(removedKey)) {
         auto ret = xIter.RemoveCurrent();
-        DCHECK(ret == OpCode::kOK)
-            << "Failed to delete the removedKey from graveyard"
-            << ", ret=" << ToString(ret)
-            << ", versionWorkerId=" << versionWorkerId
-            << ", versionTxId=" << versionTxId
-            << ", removedKey=" << ToString(removedKey);
+        Log::DebugCheck(
+            ret == OpCode::kOK,
+            "Failed to delete the removedKey from graveyard, ret={}, "
+            "versionWorkerId={}, versionTxId={}, removedKey={}",
+            ToString(ret), versionWorkerId, versionTxId, removedKey.ToString());
       } else {
-        DLOG(FATAL) << "Cannot find the removedKey in graveyard"
-                    << ", versionWorkerId=" << versionWorkerId
-                    << ", versionTxId=" << versionTxId
-                    << ", removedKey=" << ToString(removedKey);
+        Log::Fatal("Cannot find the removedKey in graveyard, "
+                   "versionWorkerId={}, versionTxId={}, removedKey={}",
+                   versionWorkerId, versionTxId, removedKey.ToString());
       }
     }
     JUMPMU_CATCH() {
@@ -801,30 +794,26 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData,
   JUMPMU_TRY() {
     auto xIter = GetExclusiveIterator();
     if (!xIter.SeekExact(removedKey)) {
-      DLOG(FATAL)
-          << "Cannot find the removedKey in TransactionKV, should not happen"
-          << ", versionWorkerId=" << versionWorkerId
-          << ", versionTxId=" << versionTxId
-          << ", removedKey=" << ToString(removedKey);
+      Log::Fatal("Cannot find the removedKey in TransactionKV, should not "
+                 "happen, versionWorkerId={}, versionTxId={}, removedKey={}",
+                 versionWorkerId, versionTxId, removedKey.ToString());
       JUMPMU_RETURN;
     }
 
     MutableSlice mutRawVal = xIter.MutableVal();
     auto& tuple = *Tuple::From(mutRawVal.Data());
     if (tuple.mFormat == TupleFormat::kFat) {
-      DLOG(INFO) << "Skip moving removedKey to graveyard for FatTuple"
-                 << ", versionWorkerId=" << versionWorkerId
-                 << ", versionTxId=" << versionTxId
-                 << ", removedKey=" << ToString(removedKey);
+      Log::Debug("Skip moving removedKey to graveyard for FatTuple, "
+                 "versionWorkerId={}, versionTxId={}, removedKey={}",
+                 versionWorkerId, versionTxId, removedKey.ToString());
       JUMPMU_RETURN;
     }
 
     ChainedTuple& chainedTuple = *ChainedTuple::From(mutRawVal.Data());
     if (chainedTuple.IsWriteLocked()) {
-      DLOG(FATAL) << "The removedKey is write locked, should not happen"
-                  << ", versionWorkerId=" << versionWorkerId
-                  << ", versionTxId=" << versionTxId
-                  << ", removedKey=" << ToString(removedKey);
+      Log::Fatal("The removedKey is write locked, should not happen, "
+                 "versionWorkerId={}, versionTxId={}, removedKey={}",
+                 versionWorkerId, versionTxId, removedKey.ToString());
       JUMPMU_RETURN;
     }
 
@@ -847,20 +836,18 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData,
       //   }
       // }
       if (chainedTuple.mTxId <= cr::Worker::My().mCc.mLocalWmkOfShortTx) {
-        DLOG(INFO) << "Move the removedKey to graveyard"
-                   << ", versionWorkerId=" << versionWorkerId
-                   << ", versionTxId=" << versionTxId
-                   << ", removedKey=" << ToString(removedKey);
+        Log::Debug("Move the removedKey to graveyard, versionWorkerId={}, "
+                   "versionTxId={}, removedKey={}",
+                   versionWorkerId, versionTxId, removedKey.ToString());
         // insert the removed key value to graveyard
         auto graveyardXIter = mGraveyard->GetExclusiveIterator();
         auto gRet = graveyardXIter.InsertKV(removedKey, xIter.value());
-        DCHECK(gRet == OpCode::kOK)
-            << "Failed to insert the removedKey to graveyard"
-            << ", ret=" << ToString(gRet)
-            << ", versionWorkerId=" << versionWorkerId
-            << ", versionTxId=" << versionTxId
-            << ", removedKey=" << ToString(removedKey)
-            << ", removedVal=" << ToString(xIter.value());
+        Log::DebugCheck(gRet == OpCode::kOK,
+                        "Failed to insert the removedKey to graveyard, ret={}, "
+                        "versionWorkerId={}, versionTxId={}, removedKey={}, "
+                        "removedVal={}",
+                        ToString(gRet), versionWorkerId, versionTxId,
+                        removedKey.ToString(), xIter.value().ToString());
 
         // remove the tombsone from main tree
         auto ret = xIter.RemoveCurrent();
@@ -875,30 +862,22 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData,
           WorkerCounters::MyCounters().cc_todo_moved_gy[mTreeId]++;
         }
       } else {
-        DLOG(FATAL) << "Meet a remove version upper than "
-                       "mCc.mLocalWmkOfShortTx, should not happen"
-                    << ", mCc.mLocalWmkOfShortTx="
-                    << cr::Worker::My().mCc.mLocalWmkOfShortTx
-                    << ", versionWorkerId=" << versionWorkerId
-                    << ", versionTxId=" << versionTxId
-                    << ", removedKey=" << ToString(removedKey);
+        Log::Fatal("Meet a remove version upper than mCc.mLocalWmkOfShortTx, "
+                   "should not happen, mCc.mLocalWmkOfShortTx={}, "
+                   "versionWorkerId={}, versionTxId={}, removedKey={}",
+                   cr::Worker::My().mCc.mLocalWmkOfShortTx, versionWorkerId,
+                   versionTxId, removedKey.ToString());
       }
     } else {
-      DLOG(INFO)
-          << "Skip moving removedKey to graveyard, tuple changed after remove"
-          << ", chainedTuple.mWorkerId=" << chainedTuple.mWorkerId
-          << ", chainedTuple.mTxId=" << chainedTuple.mTxId
-          << ", chainedTuple.mIsTombstone=" << chainedTuple.mIsTombstone
-          << ", versionWorkerId=" << versionWorkerId
-          << ", versionTxId=" << versionTxId
-          << ", removedKey=" << ToString(removedKey);
+      Log::Debug("Skip moving removedKey to graveyard, tuple changed after "
+                 "remove, versionWorkerId={}, versionTxId={}, removedKey={}",
+                 versionWorkerId, versionTxId, removedKey.ToString());
     }
   }
   JUMPMU_CATCH() {
-    DLOG(INFO) << "GarbageCollect failed, try for next round"
-               << ", versionWorkerId=" << versionWorkerId
-               << ", versionTxId=" << versionTxId
-               << ", removedKey=" << ToString(removedKey);
+    Log::Debug("GarbageCollect failed, try for next round, "
+               "versionWorkerId={}, versionTxId={}, removedKey={}",
+               versionWorkerId, versionTxId, removedKey.ToString());
   }
 }
 

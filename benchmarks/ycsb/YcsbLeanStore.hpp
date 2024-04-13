@@ -7,10 +7,10 @@
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Store.hpp"
 #include "utils/Defer.hpp"
+#include "utils/Log.hpp"
 #include "utils/RandomGenerator.hpp"
 #include "utils/ScrambledZipfGenerator.hpp"
 
-#include <glog/logging.h>
 #include <gperftools/heap-profiler.h>
 #include <gperftools/profiler.h>
 
@@ -64,8 +64,8 @@ public:
       mStore->ExecSync(0, [&]() {
         auto res = mStore->CreateTransactionKV(tableName, config);
         if (!res) {
-          LOG(FATAL) << std::format("Failed to create table: name={}, error={}",
-                                    tableName, res.error().ToString());
+          Log::Fatal("Failed to create table: name={}, error={}", tableName,
+                     res.error().ToString());
         }
         table = res.value();
       });
@@ -77,8 +77,8 @@ public:
     mStore->ExecSync(0, [&]() {
       auto res = mStore->CreateBasicKV(tableName, config);
       if (!res) {
-        LOG(FATAL) << std::format("Failed to create table: name={}, error={}",
-                                  tableName, res.error().ToString());
+        Log::Fatal("Failed to create table: name={}, error={}", tableName,
+                   res.error().ToString());
       }
       table = res.value();
     });
@@ -224,8 +224,8 @@ public:
               break;
             }
             default: {
-              LOG(FATAL) << "Unsupported workload type: "
-                         << static_cast<uint8_t>(workloadType);
+              Log::Fatal("Unsupported workload type: {}",
+                         static_cast<uint8_t>(workloadType));
             }
             }
             threadCommitted[cr::Worker::My().mWorkerId]++;

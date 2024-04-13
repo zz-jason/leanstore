@@ -5,8 +5,8 @@
 #include "leanstore/Exceptions.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "utils/Defer.hpp"
+#include "utils/Log.hpp"
 
-#include <glog/logging.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
@@ -51,7 +51,7 @@ void Logging::ReserveContiguousBuffer(uint32_t bytesRequired) {
 void Logging::WriteWalTxAbort() {
   WalEntry* entry;
   SCOPED_DEFER({
-    DLOG(INFO) << std::format(
+    Log::Debug(
         "WriteWalTxAbort, workerId={}, startTs={}, curGSN={}, walJson={}",
         Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
         GetCurrentGsn(), WalEntry::ToJsonString(entry));
@@ -74,7 +74,7 @@ void Logging::WriteWalTxAbort() {
 void Logging::WriteWalTxFinish() {
   WalEntry* entry [[maybe_unused]];
   SCOPED_DEFER({
-      // DLOG(INFO) << std::format(
+      // Log::Debug(
       //     "WriteWalTxFinish, workerId={}, startTs={}, curGSN={}, walJson={}",
       //     Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
       //     GetCurrentGsn(), WalEntry::ToJsonString(entry));
@@ -108,10 +108,10 @@ void Logging::WriteWalCarriageReturn() {
 /// @param totalSize is the size of the wal record to be flush.
 void Logging::SubmitWALEntryComplex(uint64_t totalSize) {
   SCOPED_DEFER({
-      // DLOG(INFO) << std::format(
-      //     "SubmitWal, workerId={}, startTs={}, curGSN={}, walJson={}",
-      //     Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
-      //     GetCurrentGsn(), WalEntry::ToJsonString(mActiveWALEntryComplex));
+      // Log::Debug("SubmitWal, workerId={}, startTs={}, curGSN={}, walJson={}",
+      //            Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
+      //            GetCurrentGsn(),
+      //            WalEntry::ToJsonString(mActiveWALEntryComplex));
   });
 
   mActiveWALEntryComplex->mCrc32 = mActiveWALEntryComplex->ComputeCRC32();

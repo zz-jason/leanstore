@@ -3,8 +3,7 @@
 #include "HybridLatch.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "utils/JumpMU.hpp"
-
-#include <glog/logging.h>
+#include "utils/Log.hpp"
 
 #include <atomic>
 #include <shared_mutex>
@@ -80,9 +79,9 @@ public:
            mVersion == mLatch->mVersion.load());
     if (mState == GuardState::kOptimisticShared &&
         mVersion != mLatch->mVersion.load()) {
-      DLOG(INFO) << "Jump because of contention"
-                 << ", mVersion(expected)=" << mVersion
-                 << ", mLatch->mVersion(actual)=" << mLatch->mVersion.load();
+      Log::Debug("JumpIfModifiedByOthers, mVersion(expected)={}, "
+                 "mLatch->mVersion(actual)={}",
+                 mVersion, mLatch->mVersion.load());
       jumpmu::Jump();
     }
   }

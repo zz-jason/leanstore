@@ -6,9 +6,8 @@
 #include "btree/core/BTreeNode.hpp"
 #include "concurrency/CRManager.hpp"
 #include "concurrency/Worker.hpp"
+#include "utils/Log.hpp"
 #include "utils/Misc.hpp"
-
-#include <glog/logging.h>
 
 #include <unordered_map>
 
@@ -131,10 +130,10 @@ bool Tuple::ToFat(BTreePessimisticExclusiveIterator& xIter) {
   const uint16_t fatTupleSize = sizeof(FatTuple) + fatTuple->mPayloadCapacity;
   if (xIter.value().size() < fatTupleSize) {
     auto succeed = xIter.ExtendPayload(fatTupleSize);
-    LOG_IF(FATAL, !succeed)
-        << "Failed to extend current value buffer to fit the FatTuple"
-        << ", fatTupleSize=" << fatTupleSize
-        << ", current value buffer size=" << xIter.value().size();
+    Log::FatalIf(!succeed,
+                 "Failed to extend current value buffer to fit the FatTuple, "
+                 "fatTupleSize={}, current value buffer size={}",
+                 fatTupleSize, xIter.value().size());
   } else {
     xIter.ShortenWithoutCompaction(fatTupleSize);
   }

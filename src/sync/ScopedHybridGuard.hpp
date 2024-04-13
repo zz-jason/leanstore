@@ -2,8 +2,7 @@
 
 #include "sync/HybridLatch.hpp"
 #include "utils/JumpMU.hpp"
-
-#include <glog/logging.h>
+#include "utils/Log.hpp"
 
 #include <atomic>
 #include <functional>
@@ -197,7 +196,7 @@ inline void ScopedHybridGuard::Lock() {
     break;
   }
   default: {
-    LOG(ERROR) << "Unsupported latch mode: " << (uint64_t)mLatchMode;
+    Log::Error("Unsupported latch mode: {}", (uint64_t)mLatchMode);
   }
   }
   mLocked = true;
@@ -226,7 +225,7 @@ inline void ScopedHybridGuard::Unlock() {
     break;
   }
   default: {
-    LOG(ERROR) << "Unsupported latch mode: " << (uint64_t)mLatchMode;
+    Log::Error("Unsupported latch mode: {}", (uint64_t)mLatchMode);
   }
   }
 
@@ -238,9 +237,9 @@ inline void ScopedHybridGuard::lockOptimisticOrJump() {
   mVersionOnLock = mLatch->mVersion.load();
   if (HasExclusiveMark(mVersionOnLock)) {
     mEncounteredContention = true;
-    DLOG(INFO) << "lockOptimisticOrJump() failed, target latch"
-               << " (" << (void*)&mLatch << ")"
-               << " is exclusive locked by others, jump";
+    Log::Debug(
+        "lockOptimisticOrJump() failed, target latch, latch={}, version={}",
+        (void*)&mLatch, mVersionOnLock);
     jumpmu::Jump();
   }
 }
@@ -265,10 +264,9 @@ inline void ScopedHybridGuard::jumpIfModifiedByOthers() {
   auto curVersion = mLatch->mVersion.load();
   if (mVersionOnLock != curVersion) {
     mEncounteredContention = true;
-    DLOG(INFO)
-        << "unlockOptimisticOrJump() failed, object protected by target latch"
-        << " (" << (void*)&mLatch << ")"
-        << " has been modified, jump";
+    Log::Debug("jumpIfModifiedByOthers() failed, target latch, latch={}, "
+               "version(expected)={}, version(actual)={}",
+               (void*)&mLatch, mVersionOnLock, curVersion);
     jumpmu::Jump();
   }
 }
