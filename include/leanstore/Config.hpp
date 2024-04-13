@@ -52,7 +52,7 @@ DECLARE_bool(reclaim_page_ids);
 DECLARE_bool(wal);
 DECLARE_bool(wal_fsync);
 DECLARE_uint64(wal_buffer_size);
-DECLARE_bool(init);
+DECLARE_bool(create_from_scratch);
 
 // MVCC && GC
 DECLARE_string(isolation_level);

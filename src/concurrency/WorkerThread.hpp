@@ -1,9 +1,10 @@
 #pragma once
 
+#include "leanstore/LeanStore.hpp"
+#include "leanstore/Units.hpp"
 #include "profiling/counters/CPUCounters.hpp"
 #include "profiling/counters/CRCounters.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
-#include "leanstore/Units.hpp"
 #include "utils/UserThread.hpp"
 
 #include <condition_variable>
@@ -28,8 +29,8 @@ public:
 
 public:
   /// Constructor.
-  WorkerThread(WORKERID workerId, int cpu)
-      : utils::UserThread("Worker" + std::to_string(workerId), cpu),
+  WorkerThread(LeanStore* store, WORKERID workerId, int cpu)
+      : utils::UserThread(store, "Worker" + std::to_string(workerId), cpu),
         mWorkerId(workerId),
         mJob(nullptr) {
   }
@@ -57,7 +58,7 @@ protected:
 };
 
 inline void WorkerThread::runImpl() {
-  if (FLAGS_cpu_counters) {
+  if (utils::tlsStore->mStoreOption.mEnableCpuCounters) {
     CPUCounters::registerThread(mThreadName, false);
   }
 

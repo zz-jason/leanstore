@@ -329,7 +329,7 @@ inline void BTreeGeneric::IterateChildSwips(
 }
 
 inline SpaceCheckResult BTreeGeneric::CheckSpaceUtilization(BufferFrame& bf) {
-  if (!FLAGS_xmerge) {
+  if (!mStore->mStoreOption.mEnableXMerge) {
     return SpaceCheckResult::kNothing;
   }
 

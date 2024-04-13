@@ -19,11 +19,12 @@ CRManager::CRManager(leanstore::LeanStore* store)
       mGroupCommitter(nullptr) {
   auto& storeOption = store->mStoreOption;
   // start all worker threads
-  mWorkers.resize(storeOption.mNumTxWorkers);
-  mWorkerThreads.reserve(storeOption.mNumTxWorkers);
-  for (uint64_t workerId = 0; workerId < storeOption.mNumTxWorkers;
+  mWorkers.resize(storeOption.mWorkerThreads);
+  mWorkerThreads.reserve(storeOption.mWorkerThreads);
+  for (uint64_t workerId = 0; workerId < storeOption.mWorkerThreads;
        workerId++) {
-    auto workerThread = std::make_unique<WorkerThread>(workerId, workerId);
+    auto workerThread =
+        std::make_unique<WorkerThread>(store, workerId, workerId);
     workerThread->Start();
 
     // create thread-local transaction executor on each worker thread
@@ -37,8 +38,8 @@ CRManager::CRManager(leanstore::LeanStore* store)
   }
 
   // start group commit thread
-  if (FLAGS_wal) {
-    const int cpu = storeOption.mNumTxWorkers;
+  if (mStore->mStoreOption.mEnableWal) {
+    const int cpu = storeOption.mWorkerThreads;
     mGroupCommitter =
         std::make_unique<GroupCommitter>(mStore, mStore->mWalFd, mWorkers, cpu);
     mGroupCommitter->Start();
@@ -61,7 +62,7 @@ CRManager::~CRManager() {
 }
 
 void CRManager::setupHistoryStorage4EachWorker() {
-  for (uint64_t i = 0; i < mStore->mStoreOption.mNumTxWorkers; i++) {
+  for (uint64_t i = 0; i < mStore->mStoreOption.mWorkerThreads; i++) {
     storage::btree::BTreeConfig config = {.mEnableWal = false,
                                           .mUseBulkInsert = true};
     // setup update tree

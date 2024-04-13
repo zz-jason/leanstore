@@ -19,7 +19,7 @@ static std::string kTargetBasicKv = "basickv";
 static std::string kTargetRocksDb = "rocksdb";
 
 int main(int argc, char** argv) {
-  FLAGS_init = true;
+  FLAGS_create_from_scratch = true;
   FLAGS_enable_metrics = true;
   FLAGS_metrics_port = 8080;
   FLAGS_data_dir = "/tmp/ycsb/" + FLAGS_ycsb_workload;

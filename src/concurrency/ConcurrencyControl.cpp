@@ -220,7 +220,7 @@ void ConcurrencyControl::GarbageCollection() {
   }
 
   // move tombstones to graveyard
-  if (FLAGS_enable_long_running_transaction &&
+  if (mStore->mStoreOption.mEnableLongRunningTx &&
       mLocalWmkOfAllTx < mLocalWmkOfShortTx &&
       mCleanedWmkOfShortTx <= mLocalWmkOfShortTx) {
     utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_graveyard);
@@ -318,7 +318,7 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
   mStore->mCRManager->mGlobalWmkInfo.UpdateActiveTxInfo(
       oldestTxId, oldestShortTxId, newestLongTxId);
 
-  LOG_IF(FATAL, !FLAGS_enable_long_running_transaction &&
+  LOG_IF(FATAL, !mStore->mStoreOption.mEnableLongRunningTx &&
                     mStore->mCRManager->mGlobalWmkInfo.mOldestActiveTx !=
                         mStore->mCRManager->mGlobalWmkInfo.mOldestActiveShortTx)
       << "Oldest transaction id should be equal to the oldest short-running "
@@ -419,7 +419,7 @@ void ConcurrencyControl::updateLocalWatermarks() {
     }
   }
 
-  DCHECK(!FLAGS_enable_long_running_transaction ||
+  DCHECK(!mStore->mStoreOption.mEnableLongRunningTx ||
          mLocalWmkOfAllTx <= mLocalWmkOfShortTx)
       << "Lower watermark of all transactions should be no higher than the "
          "lower watermark of short-running transactions"

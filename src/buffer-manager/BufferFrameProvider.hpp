@@ -89,7 +89,7 @@ public:
                       uint64_t numBfs, uint8_t* bfs, uint64_t numPartitions,
                       uint64_t partitionMask,
                       std::vector<std::unique_ptr<Partition>>& partitions)
-      : utils::UserThread(threadName, runningCPU),
+      : utils::UserThread(store, threadName, runningCPU),
         mStore(store),
         mNumBfs(numBfs),
         mBufferPool(bfs),
@@ -100,7 +100,7 @@ public:
         mCoolCandidateBfs(),
         mEvictCandidateBfs(),
         mAsyncWriteBuffer(store->mPageFd, store->mStoreOption.mPageSize,
-                          FLAGS_write_buffer_size),
+                          mStore->mStoreOption.mBufferWriteBatchSize),
         mFreeBfList() {
     mCoolCandidateBfs.reserve(FLAGS_buffer_frame_recycle_batch_size);
     mEvictCandidateBfs.reserve(FLAGS_buffer_frame_recycle_batch_size);
@@ -156,7 +156,7 @@ private:
 
   inline BufferFrame* randomBufferFrame() {
     auto i = utils::RandomGenerator::Rand<uint64_t>(0, mNumBfs);
-    auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
+    auto* bfAddr = &mBufferPool[i * mStore->mStoreOption.mBufferFrameSize];
     return reinterpret_cast<BufferFrame*>(bfAddr);
   }
 
@@ -177,11 +177,6 @@ using Time = decltype(std::chrono::high_resolution_clock::now());
 
 inline void BufferFrameProvider::runImpl() {
   CPUCounters::registerThread(mThreadName);
-  if (FLAGS_root) {
-    // https://linux.die.net/man/2/setpriority
-    POSIX_CHECK(setpriority(PRIO_PROCESS, 0, -20) == 0);
-  }
-
   while (mKeepRunning) {
     auto& targetPartition = randomPartition();
     if (!targetPartition.NeedMoreFreeBfs()) {
@@ -215,7 +210,7 @@ inline void BufferFrameProvider::evictFlushedBf(
   BMExclusiveUpgradeIfNeeded parentWriteGuard(parentHandler.mParentGuard);
   optimisticGuard.mGuard.ToExclusiveMayJump();
 
-  if (FLAGS_crc_check && cooledBf.mHeader.mCrc) {
+  if (mStore->mStoreOption.mEnableBufferCrcCheck && cooledBf.mHeader.mCrc) {
     DCHECK(cooledBf.mPage.CRC() == cooledBf.mHeader.mCrc);
   }
   DCHECK(!cooledBf.IsDirty());
@@ -231,7 +226,7 @@ inline void BufferFrameProvider::evictFlushedBf(
 
   mFreeBfList.PushFront(cooledBf);
   if (mFreeBfList.Size() <=
-      std::min<uint64_t>(mStore->mStoreOption.mNumTxWorkers, 128)) {
+      std::min<uint64_t>(mStore->mStoreOption.mWorkerThreads, 128)) {
     mFreeBfList.PopTo(targetPartition);
   }
 
@@ -487,7 +482,7 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
                                                   std::memory_order_release);
 
       // performs crc check if necessary
-      if (FLAGS_crc_check) {
+      if (mStore->mStoreOption.mEnableBufferCrcCheck) {
         cooledBf->mHeader.mCrc = cooledBf->mPage.CRC();
       }
 

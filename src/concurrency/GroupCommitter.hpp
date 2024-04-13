@@ -48,7 +48,7 @@ public:
 public:
   GroupCommitter(leanstore::LeanStore* store, int32_t walFd,
                  std::vector<Worker*>& workers, int cpu)
-      : UserThread("GroupCommitter", cpu),
+      : UserThread(store, "GroupCommitter", cpu),
         mStore(store),
         mWalFd(walFd),
         mWalSize(0),

@@ -19,7 +19,7 @@
 namespace leanstore::test {
 
 static void BenchUpdateInsert(benchmark::State& state) {
-  FLAGS_init = true;
+  FLAGS_create_from_scratch = true;
   FLAGS_worker_threads = 4;
   FLAGS_data_dir = "/tmp/InsertUpdateBench";
 

@@ -17,6 +17,7 @@
 #include "utils/Misc.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
+#include "utils/UserThread.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -34,8 +35,10 @@ namespace leanstore {
 namespace storage {
 
 BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
-  mNumBfs = mStore->mStoreOption.mBufferPoolSize / BufferFrame::Size();
-  const uint64_t totalMemSize = BufferFrame::Size() * (mNumBfs + mNumSaftyBfs);
+  auto bpSize = mStore->mStoreOption.mBufferPoolSize;
+  auto bfSize = mStore->mStoreOption.mBufferFrameSize;
+  mNumBfs = bpSize / bfSize;
+  const uint64_t totalMemSize = bfSize * (mNumBfs + mNumSaftyBfs);
 
   // Init buffer pool with zero-initialized buffer frames. Use mmap with flags
   // MAP_PRIVATE and MAP_ANONYMOUS, no underlying file desciptor to allocate
@@ -55,7 +58,7 @@ BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
   mNumPartitions = mStore->mStoreOption.mNumPartitions;
   mPartitionsMask = mNumPartitions - 1;
   const uint64_t freeBfsLimitPerPartition =
-      std::ceil((FLAGS_free_pct * 1.0 * mNumBfs / 100.0) /
+      std::ceil((mStore->mStoreOption.mFreePct * 1.0 * mNumBfs / 100.0) /
                 static_cast<double>(mNumPartitions));
   for (uint64_t i = 0; i < mNumPartitions; i++) {
     mPartitions.push_back(std::make_unique<Partition>(
@@ -67,7 +70,7 @@ BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
     uint64_t partitionId = 0;
     for (uint64_t i = begin; i < end; i++) {
       auto& partition = GetPartition(partitionId);
-      auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
+      auto* bfAddr = &mBufferPool[i * mStore->mStoreOption.mBufferFrameSize];
       partition.mFreeBfList.PushFront(*new (bfAddr) BufferFrame());
       partitionId = (partitionId + 1) % mNumPartitions;
     }
@@ -89,7 +92,8 @@ void BufferManager::StartBufferFrameProviders() {
       threadName += std::to_string(i);
     }
 
-    auto runningCPU = mStore->mStoreOption.mNumTxWorkers + FLAGS_wal + i;
+    auto runningCPU = mStore->mStoreOption.mWorkerThreads +
+                      mStore->mStoreOption.mEnableWal + i;
     mBfProviders.push_back(std::make_unique<BufferFrameProvider>(
         mStore, threadName, runningCPU, mNumBfs, mBufferPool, mNumPartitions,
         mPartitionsMask, mPartitions));
@@ -132,7 +136,7 @@ void BufferManager::CheckpointAllBufferFrames() {
     utils::AsyncIo aio(1);
 
     for (uint64_t i = begin; i < end; i++) {
-      auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
+      auto* bfAddr = &mBufferPool[i * mStore->mStoreOption.mBufferFrameSize];
       auto& bf = *reinterpret_cast<BufferFrame*>(bfAddr);
       bf.mHeader.mLatch.LockExclusively();
       if (!bf.IsFree()) {
@@ -205,14 +209,14 @@ Partition& BufferManager::RandomPartition() {
 
 BufferFrame& BufferManager::RandomBufferFrame() {
   auto i = utils::RandomGenerator::Rand<uint64_t>(0, mNumBfs);
-  auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
+  auto* bfAddr = &mBufferPool[i * mStore->mStoreOption.mBufferFrameSize];
   return *reinterpret_cast<BufferFrame*>(bfAddr);
 }
 
 BufferFrame& BufferManager::AllocNewPage(TREEID treeId) {
   Partition& partition = RandomPartition();
   BufferFrame& freeBf = partition.mFreeBfList.PopFrontMayJump();
-  memset((void*)&freeBf, 0, BufferFrame::Size());
+  memset((void*)&freeBf, 0, mStore->mStoreOption.mBufferFrameSize);
   new (&freeBf) BufferFrame();
   freeBf.Init(partition.NextPageId());
 
@@ -309,7 +313,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
     bf.mHeader.mFlushedGsn = bf.mPage.mGSN;
     bf.mHeader.mState = State::kLoaded;
     bf.mHeader.mPageId = pageId;
-    if (FLAGS_crc_check) {
+    if (mStore->mStoreOption.mEnableBufferCrcCheck) {
       bf.mHeader.mCrc = bf.mPage.CRC();
     }
 
@@ -492,7 +496,8 @@ void BufferManager::StopBufferFrameProviders() {
 
 BufferManager::~BufferManager() {
   StopBufferFrameProviders();
-  uint64_t totalMemSize = BufferFrame::Size() * (mNumBfs + mNumSaftyBfs);
+  uint64_t totalMemSize =
+      mStore->mStoreOption.mBufferFrameSize * (mNumBfs + mNumSaftyBfs);
   munmap(mBufferPool, totalMemSize);
 }
 
@@ -503,7 +508,7 @@ void BufferManager::DoWithBufferFrameIf(
     DCHECK(condition != nullptr);
     DCHECK(action != nullptr);
     for (uint64_t i = begin; i < end; i++) {
-      auto* bfAddr = &mBufferPool[i * BufferFrame::Size()];
+      auto* bfAddr = &mBufferPool[i * mStore->mStoreOption.mBufferFrameSize];
       auto& bf = *reinterpret_cast<BufferFrame*>(bfAddr);
       bf.mHeader.mLatch.LockExclusively();
       if (condition(bf)) {

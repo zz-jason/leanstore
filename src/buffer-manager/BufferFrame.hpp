@@ -2,9 +2,11 @@
 
 #include "buffer-manager/Swip.hpp"
 #include "leanstore/Config.hpp"
+#include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "sync/HybridLatch.hpp"
 #include "utils/Misc.hpp"
+#include "utils/UserThread.hpp"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -149,7 +151,8 @@ public:
 
 public:
   uint64_t CRC() {
-    return utils::CRC(mPayload, FLAGS_page_size - sizeof(Page));
+    return utils::CRC(mPayload,
+                      utils::tlsStore->mStoreOption.mPageSize - sizeof(Page));
   }
 };
 
@@ -174,27 +177,26 @@ public:
   // write-ahead log of the page.
   alignas(512) Page mPage;
 
-public:
   BufferFrame() = default;
 
   bool operator==(const BufferFrame& other) {
     return this == &other;
   }
 
-  inline bool IsDirty() const {
+  bool IsDirty() const {
     return mPage.mGSN != mHeader.mFlushedGsn;
   }
 
-  inline bool IsFree() const {
+  bool IsFree() const {
     return mHeader.mState == State::kFree;
   }
 
-  inline bool ShouldRemainInMem() {
+  bool ShouldRemainInMem() {
     return mHeader.mKeepInMemory || mHeader.mIsBeingWrittenBack ||
            mHeader.mLatch.IsLockedExclusively();
   }
 
-  inline void Init(PID pageId) {
+  void Init(PID pageId) {
     DCHECK(mHeader.mState == State::kFree);
     mHeader.mPageId = pageId;
     mHeader.mState = State::kHot;
@@ -210,11 +212,6 @@ public:
 
   void ToJson(rapidjson::Value* resultObj,
               rapidjson::Value::AllocatorType& allocator);
-
-public:
-  static size_t Size() {
-    return 512 + FLAGS_page_size;
-  }
 };
 
 // -----------------------------------------------------------------------------

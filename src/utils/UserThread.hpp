@@ -13,13 +13,21 @@
 #include <pthread.h>
 
 namespace leanstore {
-namespace utils {
 
+class LeanStore;
+
+} // namespace leanstore
+
+namespace leanstore::utils {
+
+inline thread_local LeanStore* tlsStore = nullptr;
 inline thread_local std::string tlsThreadName = "";
 
 /// User thread with custom thread name.
 class UserThread {
 protected:
+  LeanStore* mStore = nullptr;
+
   std::string mThreadName = "";
 
   int mRunningCPU = -1;
@@ -29,10 +37,9 @@ protected:
   std::atomic<bool> mKeepRunning = false;
 
 public:
-  UserThread() = default;
-
-  UserThread(const std::string& name, int runningCPU = -1)
-      : mThreadName(name),
+  UserThread(LeanStore* store, const std::string& name, int runningCPU = -1)
+      : mStore(store),
+        mThreadName(name),
         mRunningCPU(runningCPU) {
     LOG_IF(ERROR, mThreadName.size() > 15)
         << "Thread name should be restricted to 15 characters"
@@ -67,6 +74,8 @@ public:
 
 protected:
   void run() {
+    tlsStore = mStore;
+
     // set thread-local thread name at the very beging so that logs printed by
     // the thread can get it.
     tlsThreadName = mThreadName;
@@ -92,5 +101,4 @@ protected:
   virtual void runImpl() = 0;
 };
 
-} // namespace utils
-} // namespace leanstore
+} // namespace leanstore::utils

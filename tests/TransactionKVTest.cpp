@@ -32,7 +32,7 @@ protected:
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" +
                        std::string(curTest->name());
-    FLAGS_init = true;
+    FLAGS_create_from_scratch = true;
     FLAGS_logtostdout = true;
     FLAGS_data_dir = "/tmp/" + curTestName;
     FLAGS_worker_threads = 3;

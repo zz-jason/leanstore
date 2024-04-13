@@ -12,13 +12,29 @@ static bool PageSizeValidator(const char* flagname, google::uint32 value) {
   return true;
 }
 
+// -----------------------------------------------------------------------------
+// Store related options
+// -----------------------------------------------------------------------------
+
+DEFINE_bool(create_from_scratch, true, "Whether to create store from scratch");
+
+DEFINE_string(data_dir, "~/.leanstore",
+              "Where to put all the database files, meta file, and log files");
+
+// -----------------------------------------------------------------------------
+// Worker thread related options
+// -----------------------------------------------------------------------------
+
+DEFINE_uint32(worker_threads, 4, "The number of worker threads");
+
+DEFINE_uint64(wal_buffer_size, 10 << 20,
+              "WAL buffer size for each worker (Bytes)");
+
 // Buffer management
 DEFINE_uint32(page_size, 4096, "The page size (bytes)"); // 4 KiB
 DEFINE_validator(page_size, &PageSizeValidator);
 DEFINE_uint64(buffer_pool_size, 1073741824,
               "The buffer pool size (bytes)"); // 1 GiB
-DEFINE_string(data_dir, "~/.leanstore",
-              "Where to put all the database files, meta file, and log files");
 
 // Config for TransactionKV
 DEFINE_bool(enable_fat_tuple, false, "");
@@ -30,19 +46,10 @@ DEFINE_uint32(partition_bits, 6, "bits per partition");
 DEFINE_uint32(pp_threads, 1, "number of page provider threads");
 DEFINE_uint32(write_buffer_size, 1024, "");
 
-DEFINE_string(csv_path, "./log", "");
-DEFINE_bool(csv_truncate, false, "");
-
-// -------------------------------------------------------------------------------------
-DEFINE_bool(profiling, false, "");
-DEFINE_bool(profile_latency, false, "");
 DEFINE_bool(crc_check, false, "");
-// -------------------------------------------------------------------------------------
-DEFINE_uint32(worker_threads, 4, "");
+
 DEFINE_bool(cpu_counters, true,
             "Disable if HW does not have enough counters for all threads");
-// -------------------------------------------------------------------------------------
-DEFINE_bool(root, false, "does this process have root rights ?");
 
 DEFINE_bool(contention_split, true, "Whether contention split is enabled");
 DEFINE_uint64(contention_split_sample_probability, 7,
@@ -50,10 +57,11 @@ DEFINE_uint64(contention_split_sample_probability, 7,
 DEFINE_uint64(cm_period, 14, "Contention split probability, as exponent of 2");
 DEFINE_uint64(contention_split_threshold_pct, 1,
               "Contention percentage to trigger the contention split");
-// -------------------------------------------------------------------------------------
+
 DEFINE_bool(xmerge, false, "");
 DEFINE_uint64(xmerge_k, 5, "");
 DEFINE_double(xmerge_target_pct, 80, "");
+
 // -------------------------------------------------------------------------------------
 DEFINE_bool(
     optimistic_scan, true,
@@ -79,10 +87,6 @@ DEFINE_bool(reclaim_page_ids, true, "Whether to reclaim unused free page ids");
 // logging && recovery
 DEFINE_bool(wal, true, "Whether wal is enabled");
 DEFINE_bool(wal_fsync, true, "Whether to explicitly flush wal to disk");
-DEFINE_uint64(wal_buffer_size, 1024 * 1024 * 10,
-              "WAL buffer size for each worker (Bytes)");
-
-DEFINE_bool(init, true, "When enabled, the store is initialized from scratch");
 
 // MVCC && GC
 DEFINE_string(isolation_level, "si",

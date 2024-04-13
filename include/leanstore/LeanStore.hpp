@@ -9,11 +9,9 @@
 #include <gflags/gflags.h>
 #include <rapidjson/document.h>
 
-#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <expected>
-#include <limits>
 #include <memory>
 
 namespace leanstore::storage::btree {
@@ -45,7 +43,6 @@ class LeanStore {
 public:
   static Result<std::unique_ptr<LeanStore>> Open();
 
-public:
   /// The storage option for leanstore
   StoreOption mStoreOption;
 
@@ -76,12 +73,10 @@ public:
   utils::DebugFlagsRegistry mDebugFlagsRegistry;
 #endif
 
-public:
   LeanStore();
 
   ~LeanStore();
 
-public:
   /// Create a BasicKV
   ///
   /// @param name The unique name of the btree
@@ -127,8 +122,6 @@ public:
     return mTimestampOracle.fetch_add(1);
   }
 
-  Result<std::unique_ptr<TxWorker>> GetTxWorker(WORKERID workerId);
-
   /// Execute a custom user function on a worker thread.
   /// @param workerId worker to compute job
   /// @param job job
@@ -159,11 +152,11 @@ private:
   /// deserializeFlags deserializes the flags.
   void deserializeFlags();
 
-  void initStoreOption();
-
   void initGoogleLog();
 
   void initPageAndWalFd();
+
+  static StoreOption defaultStoreOption();
 };
 
 } // namespace leanstore

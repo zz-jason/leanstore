@@ -1,13 +1,14 @@
 #include "Parallelize.hpp"
 
+#include "utils/UserThread.hpp"
+
 #include <glog/logging.h>
 
 #include <functional>
 #include <thread>
 #include <vector>
 
-namespace leanstore {
-namespace utils {
+namespace leanstore::utils {
 
 void Parallelize::Range(
     uint64_t numThreads, uint64_t numJobs,
@@ -29,6 +30,7 @@ void Parallelize::Range(
 void Parallelize::ParallelRange(
     uint64_t numJobs,
     std::function<void(uint64_t jobBegin, uint64_t jobEnd)> jobHandler) {
+  auto* store = tlsStore;
   std::vector<std::thread> threads;
   const uint64_t numThread = std::thread::hardware_concurrency();
   const uint64_t jobsPerThread = numJobs / numThread;
@@ -48,13 +50,15 @@ void Parallelize::ParallelRange(
     }
     numProceedTasks = end;
     threads.emplace_back(
-        [&](uint64_t begin, uint64_t end) { jobHandler(begin, end); }, begin,
-        end);
+        [&](uint64_t begin, uint64_t end) {
+          tlsStore = store;
+          jobHandler(begin, end);
+        },
+        begin, end);
   }
   for (auto& thread : threads) {
     thread.join();
   }
 }
 
-} // namespace utils
-} // namespace leanstore
+} // namespace leanstore::utils

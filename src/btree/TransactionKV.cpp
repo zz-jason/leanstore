@@ -197,7 +197,8 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
 
         // convert to fat tuple if it's frequently updated by me and other
         // workers
-        if (FLAGS_enable_fat_tuple && chainedTuple.ShouldConvertToFatTuple()) {
+        if (mStore->mStoreOption.mEnableFatTuple &&
+            chainedTuple.ShouldConvertToFatTuple()) {
           chainedTuple.mTotalUpdates = 0;
           auto succeed = Tuple::ToFat(xIter);
           if (succeed) {
@@ -687,7 +688,7 @@ bool TransactionKV::UpdateInFatTuple(BTreePessimisticExclusiveIterator& xIter,
 }
 
 SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
-  if (!FLAGS_xmerge) {
+  if (!mStore->mStoreOption.mEnableXMerge) {
     return SpaceCheckResult::kNothing;
   }
 

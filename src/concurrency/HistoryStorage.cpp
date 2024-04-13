@@ -9,6 +9,7 @@
 #include "sync/HybridLatch.hpp"
 #include "sync/ScopedHybridGuard.hpp"
 #include "utils/Misc.hpp"
+#include "utils/UserThread.hpp"
 
 #include <functional>
 
@@ -136,11 +137,11 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
                                    RemoveVersionCallback onRemoveVersion,
                                    [[maybe_unused]] const uint64_t limit) {
   auto keySize = sizeof(toTxId);
-  uint8_t keyBuffer[FLAGS_page_size];
+  uint8_t keyBuffer[utils::tlsStore->mStoreOption.mPageSize];
   utils::Fold(keyBuffer, fromTxId);
   Slice key(keyBuffer, keySize);
 
-  uint8_t payload[FLAGS_page_size];
+  uint8_t payload[utils::tlsStore->mStoreOption.mPageSize];
   uint16_t payloadSize;
   uint64_t versionsRemoved = 0;
 
@@ -306,12 +307,12 @@ void HistoryStorage::VisitRemovedVersions(
     TXID fromTxId, TXID toTxId, RemoveVersionCallback onRemoveVersion) {
   auto* removeTree = mRemoveIndex;
   auto keySize = sizeof(toTxId);
-  uint8_t keyBuffer[FLAGS_page_size];
+  uint8_t keyBuffer[utils::tlsStore->mStoreOption.mPageSize];
 
   uint64_t offset = 0;
   offset += utils::Fold(keyBuffer + offset, fromTxId);
   Slice key(keyBuffer, keySize);
-  uint8_t payload[FLAGS_page_size];
+  uint8_t payload[utils::tlsStore->mStoreOption.mPageSize];
   uint16_t payloadSize;
 
   JUMPMU_TRY() {

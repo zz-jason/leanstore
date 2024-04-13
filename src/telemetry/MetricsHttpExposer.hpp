@@ -24,7 +24,7 @@ const std::string kContentType("text/plain; version=0.0.4; charset=utf-8");
 
 class MetricsHttpExposer : public utils::UserThread {
 public:
-  MetricsHttpExposer() : UserThread("MetricsExposer") {
+  MetricsHttpExposer(LeanStore* store) : UserThread(store, "MetricsExposer") {
     mServer.new_task_queue = [] { return new httplib::ThreadPool(1); };
     mServer.Get("/metrics",
                 [&](const httplib::Request& req, httplib::Response& res) {

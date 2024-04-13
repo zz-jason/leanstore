@@ -92,7 +92,7 @@ public:
 
 public:
   LeanStoreMVCC(const std::string& storeDir, uint32_t sessionLimit) {
-    FLAGS_init = true;
+    FLAGS_create_from_scratch = true;
     FLAGS_logtostdout = true;
     FLAGS_data_dir = storeDir;
     FLAGS_worker_threads = sessionLimit;

@@ -1,6 +1,5 @@
 #include "leanstore/LeanStore.hpp"
 
-#include "TxWorkerImpl.hpp"
 #include "btree/BasicKV.hpp"
 #include "btree/TransactionKV.hpp"
 #include "btree/core/BTreeGeneric.hpp"
@@ -40,28 +39,33 @@
 namespace leanstore {
 
 Result<std::unique_ptr<LeanStore>> LeanStore::Open() {
-  if (FLAGS_init) {
-    std::cout << "Clean data dir: " << FLAGS_data_dir << std::endl;
-    std::filesystem::path dirPath = FLAGS_data_dir;
+  return std::make_unique<LeanStore>();
+}
+
+LeanStore::LeanStore()
+    : mStoreOption(defaultStoreOption()),
+      mMetricsManager(this) {
+  utils::tlsStore = this;
+
+  if (mStoreOption.mCreateFromScratch) {
+    std::cout << "Clean store dir: " << mStoreOption.mStoreDir << std::endl;
+    std::filesystem::path dirPath = mStoreOption.mStoreDir;
     std::filesystem::remove_all(dirPath);
     std::filesystem::create_directories(dirPath);
     std::filesystem::create_directories(GetLogDir());
   }
 
   // for glog
-  FLAGS_log_dir = GetLogDir();
-  return std::make_unique<LeanStore>();
-}
-
-LeanStore::LeanStore() : mMetricsManager() {
-  initStoreOption();
-  initGoogleLog();
+  {
+    FLAGS_log_dir = GetLogDir();
+    initGoogleLog();
+  }
 
   LOG(INFO) << "LeanStore starting ...";
   SCOPED_DEFER(LOG(INFO) << "LeanStore started");
 
   // Expose the metrics
-  if (FLAGS_enable_metrics) {
+  if (mStoreOption.mEnableMetrics) {
     mMetricsManager.Expose();
   }
 
@@ -90,17 +94,57 @@ LeanStore::LeanStore() : mMetricsManager() {
 
 // TODO: abandon the usage of gflags, init a StoreOption before creating the
 // store. StoreOption is designed to be used to create a store.
-void LeanStore::initStoreOption() {
-  mStoreOption.mStoreDir = FLAGS_data_dir;
-  mStoreOption.mCreateFromScratch = FLAGS_init;
-  mStoreOption.mNumPartitions = 1 << FLAGS_partition_bits;
-  mStoreOption.mBufferPoolSize = FLAGS_buffer_pool_size;
-  mStoreOption.mPageSize = FLAGS_page_size;
-  mStoreOption.mWalRingBufferSize = FLAGS_wal_buffer_size;
-  mStoreOption.mNumTxWorkers = FLAGS_worker_threads;
-  mStoreOption.mNumBufferProviders = FLAGS_pp_threads;
-  mStoreOption.mEnableGc = FLAGS_enable_garbage_collection;
-  mStoreOption.mEnableEagerGc = FLAGS_enable_eager_garbage_collection;
+StoreOption LeanStore::defaultStoreOption() {
+  return StoreOption{
+      // store options
+      .mCreateFromScratch = FLAGS_create_from_scratch,
+      .mStoreDir = FLAGS_data_dir,
+
+      // worker thread options
+      .mWorkerThreads = FLAGS_worker_threads,
+      .mWalBufferSize = FLAGS_wal_buffer_size,
+
+      // buffer pool options
+      .mPageSize = FLAGS_page_size,
+      .mNumPartitions = 1u << FLAGS_partition_bits,
+      .mBufferPoolSize = FLAGS_buffer_pool_size,
+      .mFreePct = FLAGS_free_pct,
+      .mNumBufferProviders = FLAGS_pp_threads,
+      .mBufferWriteBatchSize = FLAGS_write_buffer_size,
+      .mEnableBufferCrcCheck = FLAGS_crc_check,
+
+      // logging and recovery options
+      .mEnableWal = FLAGS_wal,
+      .mEnableWalFsync = FLAGS_wal_fsync,
+
+      // btree options
+      .mEnableXMerge = FLAGS_xmerge,
+      .mXMergeK = FLAGS_xmerge_k,
+      .mXMergeTargetPct = FLAGS_xmerge_target_pct,
+
+      .mEnableContentionSplit = FLAGS_contention_split,
+      .mContentionSplitProbility = FLAGS_cm_period,
+      .mContentionSplitSampleProbability =
+          FLAGS_contention_split_sample_probability,
+      .mContentionSplitThresholdPct = FLAGS_contention_split_threshold_pct,
+
+      .mBTreeHints = FLAGS_btree_hints,
+
+      // basic kv options
+
+      // transaction kv options
+      .mEnableLongRunningTx = FLAGS_enable_long_running_transaction,
+      .mEnableFatTuple = FLAGS_enable_fat_tuple,
+
+      // concurrency control options
+      .mEnableGc = FLAGS_enable_garbage_collection,
+      .mEnableEagerGc = FLAGS_enable_eager_garbage_collection,
+
+      // metrics options
+      .mEnableMetrics = FLAGS_enable_metrics,
+      .mMetricsPort = FLAGS_metrics_port,
+      .mEnableCpuCounters = FLAGS_cpu_counters,
+  };
 }
 
 void LeanStore::initGoogleLog() {
@@ -241,10 +285,6 @@ LeanStore::~LeanStore() {
   }
 }
 
-Result<std::unique_ptr<TxWorker>> LeanStore::GetTxWorker(WORKERID workerId) {
-  return std::make_unique<TxWorkerImpl>(this, workerId);
-}
-
 void LeanStore::ExecSync(uint64_t workerId, std::function<void()> job) {
   mCRManager->mWorkerThreads[workerId]->SetJob(job);
   mCRManager->mWorkerThreads[workerId]->Wait();
@@ -260,7 +300,7 @@ void LeanStore::Wait(WORKERID workerId) {
 }
 
 void LeanStore::WaitAll() {
-  for (uint32_t i = 0; i < mStoreOption.mNumTxWorkers; i++) {
+  for (uint32_t i = 0; i < mStoreOption.mWorkerThreads; i++) {
     mCRManager->mWorkerThreads[i]->Wait();
   }
 }

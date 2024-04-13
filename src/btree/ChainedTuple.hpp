@@ -6,6 +6,7 @@
 #include "btree/core/BTreeWalPayload.hpp"
 #include "concurrency/CRManager.hpp"
 #include "concurrency/Worker.hpp"
+#include "leanstore/Config.hpp"
 #include "leanstore/Units.hpp"
 
 #include <glog/logging.h>
@@ -84,7 +85,7 @@ public:
         cr::Worker::My()
             .mStore->mCRManager->mGlobalWmkInfo.HasActiveLongRunningTx();
     bool frequentlyUpdated =
-        mTotalUpdates > cr::Worker::My().mStore->mStoreOption.mNumTxWorkers;
+        mTotalUpdates > cr::Worker::My().mStore->mStoreOption.mWorkerThreads;
     bool recentUpdatedByOthers = mWorkerId != cr::Worker::My().mWorkerId ||
                                  mTxId != cr::ActiveTx().mStartTs;
     return commandValid && hasLongRunningOLAP && recentUpdatedByOthers &&

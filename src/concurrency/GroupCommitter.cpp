@@ -84,7 +84,7 @@ void GroupCommitter::prepareIOCBs(uint64_t& minFlushedGSN,
     // prepare IOCBs on demand
     const uint64_t buffered = reqCopy.mWalBuffered;
     const uint64_t flushed = logging.mWalFlushed;
-    const uint64_t bufferEnd = FLAGS_wal_buffer_size;
+    const uint64_t bufferEnd = mStore->mStoreOption.mWalBufferSize;
     if (buffered > flushed) {
       setUpIOCB(logging.mWalBuffer, flushed, buffered);
     } else if (buffered < flushed) {
@@ -93,7 +93,7 @@ void GroupCommitter::prepareIOCBs(uint64_t& minFlushedGSN,
     }
   }
 
-  if (!mAIo.IsEmpty() && FLAGS_wal_fsync) {
+  if (!mAIo.IsEmpty() && mStore->mStoreOption.mEnableWalFsync) {
     mAIo.PrepareFsync(mWalFd);
   }
 }
@@ -119,7 +119,7 @@ void GroupCommitter::writeIOCBs() {
   }
 
   /// sync the metadata in the end.
-  if (FLAGS_wal_fsync) {
+  if (mStore->mStoreOption.mEnableWalFsync) {
     auto failed = fdatasync(mWalFd);
     LOG_IF(ERROR, failed) << std::format(
         "fdatasync failed, mWalFd={}, errno={}, error={}", mWalFd, errno,

@@ -31,7 +31,7 @@ protected:
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" +
                        std::string(curTest->name());
-    FLAGS_init = true;
+    FLAGS_create_from_scratch = true;
     FLAGS_logtostdout = true;
     FLAGS_data_dir = "/tmp/" + curTestName;
     FLAGS_worker_threads = 2;
@@ -88,7 +88,7 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
   mStore.reset(nullptr);
 
   // recreate the store, it's expected that all the meta and pages are rebult.
-  FLAGS_init = false;
+  FLAGS_create_from_scratch = false;
   auto res = LeanStore::Open();
   EXPECT_TRUE(res);
 
@@ -169,7 +169,7 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
-  FLAGS_init = false;
+  FLAGS_create_from_scratch = false;
   auto res = LeanStore::Open();
   EXPECT_TRUE(res);
 
@@ -285,7 +285,7 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
-  FLAGS_init = false;
+  FLAGS_create_from_scratch = false;
   auto res = LeanStore::Open();
   EXPECT_TRUE(res);
 
@@ -371,7 +371,7 @@ TEST_F(RecoveringTest, RecoverAfterRemove) {
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
-  FLAGS_init = false;
+  FLAGS_create_from_scratch = false;
   auto res = LeanStore::Open();
   EXPECT_TRUE(res);
 

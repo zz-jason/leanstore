@@ -3,6 +3,7 @@
 #include "buffer-manager/BufferFrame.hpp"
 #include "buffer-manager/GuardedBufferFrame.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "utils/UserThread.hpp"
 
 #include <glog/logging.h>
 #include <rapidjson/document.h>
@@ -13,9 +14,7 @@
 using namespace std;
 using namespace leanstore::storage;
 
-namespace leanstore {
-namespace storage {
-namespace btree {
+namespace leanstore::storage::btree {
 
 class BTreeNode;
 using HeadType = uint32_t;
@@ -650,7 +649,8 @@ public:
   }
 
   inline static uint16_t Size() {
-    return static_cast<uint16_t>(FLAGS_page_size - sizeof(Page));
+    return static_cast<uint16_t>(utils::tlsStore->mStoreOption.mPageSize -
+                                 sizeof(Page));
   }
 
   inline static uint16_t UnderFullSize() {
@@ -658,6 +658,4 @@ public:
   }
 };
 
-} // namespace btree
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage::btree

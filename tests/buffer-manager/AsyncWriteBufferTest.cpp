@@ -83,7 +83,7 @@ protected:
 };
 
 TEST_F(AsyncWriteBufferTest, Basic) {
-  FLAGS_init = false;
+  FLAGS_create_from_scratch = false;
 
   auto testFile = getRandTestFile();
   auto testFd = openFile(testFile);

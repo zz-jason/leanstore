@@ -114,30 +114,33 @@ public:
       std::cout << summary << std::endl;
     });
 
-    utils::Parallelize::Range(
-        FLAGS_worker_threads, FLAGS_ycsb_record_count,
-        [&](uint64_t workerId, uint64_t begin, uint64_t end) {
-          mStore->ExecAsync(workerId, [&, begin, end]() {
-            for (uint64_t i = begin; i < end; i++) {
-              // generate key
-              uint8_t key[FLAGS_ycsb_key_size];
-              GenYcsbKey(zipfRandom, key);
+    auto numWorkers = mStore->mStoreOption.mWorkerThreads;
+    auto avg = FLAGS_ycsb_record_count / numWorkers;
+    auto rem = FLAGS_ycsb_record_count % numWorkers;
+    for (auto workerId = 0u, begin = 0u; workerId < numWorkers;) {
+      auto end = begin + avg + (rem-- > 0 ? 1 : 0);
+      mStore->ExecAsync(workerId, [&, begin, end]() {
+        for (uint64_t i = begin; i < end; i++) {
+          // generate key
+          uint8_t key[FLAGS_ycsb_key_size];
+          GenYcsbKey(zipfRandom, key);
 
-              // generate value
-              uint8_t val[FLAGS_ycsb_val_size];
-              utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
+          // generate value
+          uint8_t val[FLAGS_ycsb_val_size];
+          utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
 
-              if (mBenchTransactionKv) {
-                cr::Worker::My().StartTx();
-              }
-              table->Insert(Slice(key, FLAGS_ycsb_key_size),
-                            Slice(val, FLAGS_ycsb_val_size));
-              if (mBenchTransactionKv) {
-                cr::Worker::My().CommitTx();
-              }
-            }
-          });
-        });
+          if (mBenchTransactionKv) {
+            cr::Worker::My().StartTx();
+          }
+          table->Insert(Slice(key, FLAGS_ycsb_key_size),
+                        Slice(val, FLAGS_ycsb_val_size));
+          if (mBenchTransactionKv) {
+            cr::Worker::My().CommitTx();
+          }
+        }
+      });
+      workerId++, begin = end;
+    }
     mStore->WaitAll();
   }
 

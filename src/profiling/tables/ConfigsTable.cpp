@@ -1,6 +1,8 @@
 #include "ConfigsTable.hpp"
 
 #include "leanstore/Config.hpp"
+#include "leanstore/LeanStore.hpp"
+#include "utils/UserThread.hpp"
 
 namespace leanstore {
 namespace profiling {
@@ -17,30 +19,53 @@ void ConfigsTable::open() {
   columns.emplace("c_worker_threads",
                   [&](Column& col) { col << FLAGS_worker_threads; });
 
-  columns.emplace("c_free_pct", [&](Column& col) { col << FLAGS_free_pct; });
-  columns.emplace("c_pp_threads",
-                  [&](Column& col) { col << FLAGS_pp_threads; });
-  columns.emplace("c_partition_bits",
-                  [&](Column& col) { col << FLAGS_partition_bits; });
-  columns.emplace("c_buffer_pool_size",
-                  [&](Column& col) { col << FLAGS_buffer_pool_size; });
+  columns.emplace("c_free_pct", [&](Column& col) {
+    col << utils::tlsStore->mStoreOption.mFreePct;
+  });
+
+  columns.emplace("c_buffer_frame_providers", [&](Column& col) {
+    col << utils::tlsStore->mStoreOption.mNumBufferProviders;
+  });
+
+  columns.emplace("c_num_partitions", [&](Column& col) {
+    col << utils::tlsStore->mStoreOption.mNumPartitions;
+  });
+
+  columns.emplace("c_buffer_pool_size", [&](Column& col) {
+    col << utils::tlsStore->mStoreOption.mBufferPoolSize;
+  });
+
   columns.emplace("c_bulk_insert",
                   [&](Column& col) { col << FLAGS_bulk_insert; });
 
-  columns.emplace("c_contention_split",
-                  [&](Column& col) { col << FLAGS_contention_split; });
-  columns.emplace("c_contention_split_sample_probability", [&](Column& col) {
-    col << FLAGS_contention_split_sample_probability;
-  });
-  columns.emplace("c_cm_period", [&](Column& col) { col << FLAGS_cm_period; });
-  columns.emplace("c_contention_split_threshold_pct", [&](Column& col) {
-    col << FLAGS_contention_split_threshold_pct;
+  columns.emplace("c_contention_split", [&](Column& col) {
+    col << utils::tlsStore->mStoreOption.mEnableContentionSplit;
   });
 
-  columns.emplace("c_xmerge_k", [&](Column& col) { col << FLAGS_xmerge_k; });
-  columns.emplace("c_xmerge", [&](Column& col) { col << FLAGS_xmerge; });
-  columns.emplace("c_xmerge_target_pct",
-                  [&](Column& col) { col << FLAGS_xmerge_target_pct; });
+  columns.emplace("c_contention_split_sample_probability", [&](Column& col) {
+    col << utils::tlsStore->mStoreOption.mContentionSplitSampleProbability;
+  });
+
+  columns.emplace("c_cm_period", [&](Column& col) {
+    col << utils::tlsStore->mStoreOption.mContentionSplitProbility;
+  });
+
+  columns.emplace("c_contention_split_threshold_pct", [&](Column& col) {
+    col << utils::tlsStore->mStoreOption.mContentionSplitThresholdPct;
+  });
+
+  columns.emplace("c_xmerge", [&](Column& col) {
+    col << utils::tlsStore->mStoreOption.mEnableXMerge;
+  });
+
+  columns.emplace("c_xmerge_k", [&](Column& col) {
+    col << utils::tlsStore->mStoreOption.mXMergeK;
+  });
+
+  columns.emplace("c_xmerge_target_pct", [&](Column& col) {
+    col << utils::tlsStore->mStoreOption.mXMergeTargetPct;
+  });
+
   columns.emplace("c_btree_heads",
                   [&](Column& col) { col << FLAGS_btree_heads; });
   columns.emplace("c_btree_hints",
@@ -56,7 +81,7 @@ void ConfigsTable::open() {
   columns.emplace("c_isolation_level",
                   [&](Column& col) { col << FLAGS_isolation_level; });
   columns.emplace("c_enable_long_running_transaction", [&](Column& col) {
-    col << FLAGS_enable_long_running_transaction;
+    col << utils::tlsStore->mStoreOption.mEnableLongRunningTx;
   });
 
   for (auto& c : columns) {

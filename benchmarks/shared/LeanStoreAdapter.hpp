@@ -20,7 +20,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
   }
 
   LeanStoreAdapter(LeanStore& db, std::string name) : name(name) {
-    if (!FLAGS_init) {
+    if (!FLAGS_create_from_scratch) {
       leanstore::storage::btree::TransactionKV* tree;
       db.GetTransactionKV(name, &tree);
       btree = reinterpret_cast<leanstore::KVInterface*>(tree);

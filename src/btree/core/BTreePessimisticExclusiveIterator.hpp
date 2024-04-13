@@ -2,6 +2,7 @@
 
 #include "BTreePessimisticIterator.hpp"
 #include "leanstore/KVInterface.hpp"
+#include "utils/UserThread.hpp"
 
 #include <glog/logging.h>
 
@@ -140,14 +141,15 @@ public:
   /// @brief UpdateContentionStats updates the contention statistics after each
   /// slot modification on the page.
   virtual void UpdateContentionStats() {
-    if (!FLAGS_contention_split) {
+    if (!utils::tlsStore->mStoreOption.mEnableContentionSplit) {
       return;
     }
     const uint64_t randomNumber = utils::RandomGenerator::RandU64();
 
     // haven't met the contention stats update probability
-    if ((randomNumber &
-         ((1ull << FLAGS_contention_split_sample_probability) - 1)) != 0) {
+    if ((randomNumber & ((1ull << utils::tlsStore->mStoreOption
+                                      .mContentionSplitSampleProbability) -
+                         1)) != 0) {
       return;
     }
     auto& contentionStats = mGuardedLeaf.mBf->mHeader.mContentionStats;
@@ -159,13 +161,16 @@ public:
                << mGuardedLeaf.EncounteredContention();
 
     // haven't met the contention split validation probability
-    if ((randomNumber & ((1ull << FLAGS_cm_period) - 1)) != 0) {
+    if ((randomNumber &
+         ((1ull << utils::tlsStore->mStoreOption.mContentionSplitProbility) -
+          1)) != 0) {
       return;
     }
     auto contentionPct = contentionStats.ContentionPercentage();
     contentionStats.Reset();
     if (lastUpdatedSlot != mSlotId &&
-        contentionPct >= FLAGS_contention_split_threshold_pct &&
+        contentionPct >=
+            utils::tlsStore->mStoreOption.mContentionSplitThresholdPct &&
         mGuardedLeaf->mNumSeps > 2) {
       int16_t splitSlot = std::min<int16_t>(lastUpdatedSlot, mSlotId);
       mGuardedLeaf.unlock();
