@@ -8,7 +8,6 @@
 #include "utils/JumpMU.hpp"
 #include "utils/RandomGenerator.hpp"
 
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <rapidjson/document.h>
 

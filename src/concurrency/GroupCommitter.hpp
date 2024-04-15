@@ -5,8 +5,6 @@
 #include "utils/AsyncIo.hpp"
 #include "utils/UserThread.hpp"
 
-#include <glog/logging.h>
-
 #include <string>
 
 #include <libaio.h>

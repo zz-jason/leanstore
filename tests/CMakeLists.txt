@@ -33,7 +33,7 @@ function(leanstore_add_test_in_dir TARGET_DIR)
     target_link_libraries(
       ${TEST_NAME}
       GTest::gtest
-      # GTest::gtest_main
+      GTest::gtest_main
       leanstore
     )
     gtest_discover_tests(${TEST_NAME})
@@ -42,20 +42,19 @@ function(leanstore_add_test_in_dir TARGET_DIR)
 endfunction(leanstore_add_test_in_dir)
 
 
-# # Add tests
-# leanstore_add_test(BasicKVTest)
-# leanstore_add_test(RecoveryTest)
-# leanstore_add_test(OptimisticGuardedTest)
-# leanstore_add_test(TransactionKVTest)
-# leanstore_add_test(MvccTest)
-# leanstore_add_test(AnomaliesTest)
-# leanstore_add_test(AbortTest)
-# leanstore_add_test(LongRunningTxTest)
+# Add tests
+leanstore_add_test(BasicKVTest)
+leanstore_add_test(RecoveryTest)
+leanstore_add_test(OptimisticGuardedTest)
+leanstore_add_test(TransactionKVTest)
+leanstore_add_test(MvccTest)
+leanstore_add_test(AnomaliesTest)
+leanstore_add_test(AbortTest)
+leanstore_add_test(LongRunningTxTest)
 
 # tests in btree
 leanstore_add_test_in_dir(btree)
-# leanstore_add_test_in_dir(buffer-manager)
-# leanstore_add_test_in_dir(concurrency)
-# leanstore_add_test_in_dir(sync)
-# leanstore_add_test_in_dir(telemetry)
-#
+leanstore_add_test_in_dir(buffer-manager)
+leanstore_add_test_in_dir(concurrency)
+leanstore_add_test_in_dir(sync)
+leanstore_add_test_in_dir(telemetry)

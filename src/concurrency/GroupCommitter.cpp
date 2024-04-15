@@ -116,8 +116,10 @@ void GroupCommitter::writeIOCBs() {
   /// sync the metadata in the end.
   if (mStore->mStoreOption.mEnableWalFsync) {
     auto failed = fdatasync(mWalFd);
-    Log::ErrorIf(failed, "fdatasync failed, errno={}, error={}", errno,
+    if (failed) {
+      Log::Error("fdatasync failed, errno={}, error={}", errno,
                  strerror(errno));
+    }
   }
 }
 

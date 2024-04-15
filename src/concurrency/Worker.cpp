@@ -48,10 +48,10 @@ Worker::~Worker() {
 
 void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   Transaction prevTx = mActiveTx;
-  DCHECK(prevTx.mState != TxState::kStarted)
-      << "Previous transaction not ended"
-      << ", workerId=" << mWorkerId << ", startTs=" << prevTx.mStartTs
-      << ", txState=" << TxStatUtil::ToString(prevTx.mState);
+  Log::DebugCheck(
+      prevTx.mState != TxState::kStarted,
+      "Previous transaction not ended, workerId={}, startTs={}, txState={}",
+      mWorkerId, prevTx.mStartTs, TxStatUtil::ToString(prevTx.mState));
   SCOPED_DEFER({
     Log::Debug(
         "Start transaction, workerId={}, startTs={}, txReadSnapshot(GSN)={}, "
@@ -209,9 +209,8 @@ void Worker::AbortTx() {
   }
 
   // TODO(jian.z): support reading from WAL file once
-  DCHECK(!mActiveTx.mWalExceedBuffer)
-      << "Aborting from WAL file is not supported yet";
-
+  Log::DebugCheck(!mActiveTx.mWalExceedBuffer,
+                  "Aborting from WAL file is not supported yet");
   std::vector<const WalEntry*> entries;
   mLogging.IterateCurrentTxWALs([&](const WalEntry& entry) {
     if (entry.mType == WalEntry::Type::kComplex) {

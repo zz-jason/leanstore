@@ -45,8 +45,8 @@ bool Tuple::ToFat(BTreePessimisticExclusiveIterator& xIter) {
   // Process the chain tuple
   MutableSlice mutRawVal = xIter.MutableVal();
   auto& chainedTuple = *ChainedTuple::From(mutRawVal.Data());
-  DCHECK(chainedTuple.IsWriteLocked());
-  DCHECK(chainedTuple.mFormat == TupleFormat::kChained);
+  Log::DebugCheck(chainedTuple.IsWriteLocked());
+  Log::DebugCheck(chainedTuple.mFormat == TupleFormat::kChained);
 
   auto tmpBufSize = MaxFatTupleLength();
   auto tmpBuf = utils::JumpScopedArray<uint8_t>(tmpBufSize);
@@ -74,8 +74,8 @@ bool Tuple::ToFat(BTreePessimisticExclusiveIterator& xIter) {
             [&](const uint8_t* version, uint64_t) {
               numDeltasToReplace++;
               const auto& chainedDelta = *UpdateVersion::From(version);
-              DCHECK(chainedDelta.mType == VersionType::kUpdate);
-              DCHECK(chainedDelta.mIsDelta);
+              Log::DebugCheck(chainedDelta.mType == VersionType::kUpdate);
+              Log::DebugCheck(chainedDelta.mIsDelta);
 
               auto& updateDesc = *UpdateDesc::From(chainedDelta.mPayload);
               auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
@@ -123,17 +123,18 @@ bool Tuple::ToFat(BTreePessimisticExclusiveIterator& xIter) {
     return false;
   }
 
-  DCHECK(fatTuple->mPayloadCapacity >= fatTuple->mPayloadSize);
+  Log::DebugCheck(fatTuple->mPayloadCapacity >= fatTuple->mPayloadSize);
 
   // Finalize the new FatTuple
   // TODO: corner cases, more careful about space usage
   const uint16_t fatTupleSize = sizeof(FatTuple) + fatTuple->mPayloadCapacity;
   if (xIter.value().size() < fatTupleSize) {
     auto succeed = xIter.ExtendPayload(fatTupleSize);
-    Log::FatalIf(!succeed,
-                 "Failed to extend current value buffer to fit the FatTuple, "
+    if (!succeed) {
+      Log::Fatal("Failed to extend current value buffer to fit the FatTuple, "
                  "fatTupleSize={}, current value buffer size={}",
                  fatTupleSize, xIter.value().size());
+    }
   } else {
     xIter.ShortenWithoutCompaction(fatTupleSize);
   }
@@ -317,14 +318,14 @@ void FatTuple::GarbageCollection() {
   }
 
   std::memcpy(this, buffer->get(), bufferSize);
-  DCHECK(mPayloadCapacity >= mPayloadSize);
+  Log::DebugCheck(mPayloadCapacity >= mPayloadSize);
 
   DEBUG_BLOCK() {
     uint32_t spaceUsed = mValSize;
     for (uint32_t i = 0; i < mNumDeltas; i++) {
       spaceUsed += sizeof(uint16_t) + getDelta(i).TotalSize();
     }
-    DCHECK(mPayloadSize == spaceUsed);
+    Log::DebugCheck(mPayloadSize == spaceUsed);
   }
 }
 
@@ -337,8 +338,8 @@ bool FatTuple::HasSpaceFor(const UpdateDesc& updateDesc) {
 
 template <typename... Args>
 FatTupleDelta& FatTuple::NewDelta(uint32_t totalDeltaSize, Args&&... args) {
-  DCHECK((mPayloadCapacity - mPayloadSize) >=
-         (totalDeltaSize + sizeof(uint16_t)));
+  Log::DebugCheck((mPayloadCapacity - mPayloadSize) >=
+                  (totalDeltaSize + sizeof(uint16_t)));
   mPayloadSize += totalDeltaSize + sizeof(uint16_t);
   mDataOffset -= totalDeltaSize;
   const uint32_t deltaId = mNumDeltas++;
@@ -368,7 +369,7 @@ std::tuple<OpCode, uint16_t> FatTuple::GetVisibleTuple(
     return {OpCode::kOK, 1};
   }
 
-  DCHECK(cr::ActiveTx().IsLongRunning());
+  Log::DebugCheck(cr::ActiveTx().IsLongRunning());
 
   if (mNumDeltas > 0) {
     auto copiedVal = utils::JumpScopedArray<uint8_t>(mValSize);
@@ -406,8 +407,8 @@ void FatTuple::resize(const uint32_t newSize) {
   std::memcpy(newFatTuple.mPayload, mPayload, mValSize); // Copy value
   auto appendDelta = [](FatTuple& fatTuple, uint8_t* delta,
                         uint16_t deltaSize) {
-    DCHECK(fatTuple.mPayloadCapacity >=
-           (fatTuple.mPayloadSize + deltaSize + sizeof(uint16_t)));
+    Log::DebugCheck(fatTuple.mPayloadCapacity >=
+                    (fatTuple.mPayloadSize + deltaSize + sizeof(uint16_t)));
     const uint16_t i = fatTuple.mNumDeltas++;
     fatTuple.mPayloadSize += deltaSize + sizeof(uint16_t);
     fatTuple.mDataOffset -= deltaSize;
@@ -419,7 +420,7 @@ void FatTuple::resize(const uint32_t newSize) {
                 getDelta(i).TotalSize());
   }
   std::memcpy(this, tmpPage->get(), tmpPageSize);
-  DCHECK(mPayloadCapacity >= mPayloadSize);
+  Log::DebugCheck(mPayloadCapacity >= mPayloadSize);
 }
 
 void FatTuple::ConvertToChained(TREEID treeId) {

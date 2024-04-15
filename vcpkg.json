@@ -3,13 +3,6 @@
     "benchmark",
     "gflags",
     {
-      "name": "glog",
-      "features": [
-        "customprefix"
-      ],
-      "version>=": "0.6.0"
-    },
-    {
       "name": "spdlog",
       "version>=": "1.13.0"
     },

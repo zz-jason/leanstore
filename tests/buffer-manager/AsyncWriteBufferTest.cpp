@@ -34,7 +34,6 @@ protected:
   };
 
   void SetUp() override {
-    FLAGS_logtostdout = true;
     // remove the test directory if it exists
     TearDown();
 

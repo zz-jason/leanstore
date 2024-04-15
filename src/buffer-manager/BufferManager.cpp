@@ -44,10 +44,11 @@ BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
   // totalmemSize buffer pool with zero-initialized contents.
   void* underlyingBuf = mmap(NULL, totalMemSize, PROT_READ | PROT_WRITE,
                              MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  Log::FatalIf(underlyingBuf == MAP_FAILED,
-               "Failed to allocate memory for the buffer pool, "
+  if (underlyingBuf == MAP_FAILED) {
+    Log::Fatal("Failed to allocate memory for the buffer pool, "
                "bufferPoolSize={}, totalMemSize={}",
                mStore->mStoreOption.mBufferPoolSize, totalMemSize);
+  }
 
   mBufferPool = reinterpret_cast<uint8_t*>(underlyingBuf);
   madvise(mBufferPool, totalMemSize, MADV_HUGEPAGE);
@@ -83,7 +84,7 @@ void BufferManager::StartBufferFrameProviders() {
     return;
   }
 
-  DCHECK(numBufferProviders <= mNumPartitions);
+  Log::DebugCheck(numBufferProviders <= mNumPartitions);
   mBfProviders.reserve(numBufferProviders);
   for (auto i = 0u; i < numBufferProviders; ++i) {
     std::string threadName = "BuffProvider";
@@ -173,10 +174,10 @@ Result<void> BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
     aio.PrepareWrite(mStore->mPageFd, buffer, mStore->mStoreOption.mPageSize,
                      bf.mHeader.mPageId * mStore->mStoreOption.mPageSize);
     if (auto res = aio.SubmitAll(); !res) {
-      return std::unexpected(res.error());
+      return std::unexpected(std::move(res.error()));
     }
     if (auto res = aio.WaitAll(); !res) {
-      return std::unexpected(res.error());
+      return std::unexpected(std::move(res.error()));
     }
   }
   bf.mHeader.mLatch.UnlockExclusively();
@@ -249,7 +250,7 @@ void BufferManager::ReclaimPage(BufferFrame& bf) {
 // Returns a non-latched BufguardedSwipferFrame, called by worker threads
 BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
                                                Swip& childSwip) {
-  DCHECK(parentNodeGuard.mState == GuardState::kOptimisticShared);
+  Log::DebugCheck(parentNodeGuard.mState == GuardState::kOptimisticShared);
   if (childSwip.IsHot()) {
     // Resolve swip from hot state
     auto* bf = &childSwip.AsBufferFrame();
@@ -291,8 +292,8 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
   if (!frameHandler) {
     // 1. Randomly get a buffer frame from partitions
     BufferFrame& bf = RandomPartition().mFreeBfList.PopFrontMayJump();
-    DCHECK(!bf.mHeader.mLatch.IsLockedExclusively());
-    DCHECK(bf.mHeader.mState == State::kFree);
+    Log::DebugCheck(!bf.mHeader.mLatch.IsLockedExclusively());
+    Log::DebugCheck(bf.mHeader.mState == State::kFree);
 
     // 2. Create an IO frame in the current partition
     IOFrame& ioFrame = partition.mInflightIOs.Insert(pageId);
@@ -308,7 +309,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
     }
 
     // 4. Intialize the buffer frame header
-    DCHECK(!bf.mHeader.mIsBeingWrittenBack);
+    Log::DebugCheck(!bf.mHeader.mIsBeingWrittenBack);
     bf.mHeader.mFlushedGsn = bf.mPage.mGSN;
     bf.mHeader.mState = State::kLoaded;
     bf.mHeader.mPageId = pageId;
@@ -368,16 +369,16 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
     {
       // We have to exclusively lock the bf because the page provider thread
       // will try to evict them when its IO is done
-      DCHECK(!bf->mHeader.mLatch.IsLockedExclusively());
-      DCHECK(bf->mHeader.mState == State::kLoaded);
+      Log::DebugCheck(!bf->mHeader.mLatch.IsLockedExclusively());
+      Log::DebugCheck(bf->mHeader.mState == State::kLoaded);
       BMOptimisticGuard bfGuard(bf->mHeader.mLatch);
       BMExclusiveUpgradeIfNeeded swipXGuard(parentNodeGuard);
       BMExclusiveGuard bfXGuard(bfGuard);
       ioFrame.bf = nullptr;
       childSwip.MarkHOT(bf);
-      DCHECK(bf->mHeader.mPageId == pageId);
-      DCHECK(childSwip.IsHot());
-      DCHECK(bf->mHeader.mState == State::kLoaded);
+      Log::DebugCheck(bf->mHeader.mPageId == pageId);
+      Log::DebugCheck(childSwip.IsHot());
+      Log::DebugCheck(bf->mHeader.mState == State::kLoaded);
       bf->mHeader.mState = State::kHot;
 
       if (ioFrame.readers_counter.fetch_add(-1) == 1) {
@@ -398,7 +399,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
     break;
   }
   default: {
-    DCHECK(false);
+    Log::DebugCheck(false);
   }
   }
   assert(false);
@@ -406,7 +407,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& parentNodeGuard,
 }
 
 void BufferManager::ReadPageSync(PID pageId, void* pageBuffer) {
-  DCHECK(uint64_t(pageBuffer) % 512 == 0);
+  Log::DebugCheck(uint64_t(pageBuffer) % 512 == 0);
   int64_t bytesLeft = mStore->mStoreOption.mPageSize;
   while (bytesLeft > 0) {
     auto totalRead = mStore->mStoreOption.mPageSize - bytesLeft;
@@ -500,8 +501,8 @@ void BufferManager::DoWithBufferFrameIf(
     std::function<bool(BufferFrame& bf)> condition,
     std::function<void(BufferFrame& bf)> action) {
   utils::Parallelize::ParallelRange(mNumBfs, [&](uint64_t begin, uint64_t end) {
-    DCHECK(condition != nullptr);
-    DCHECK(action != nullptr);
+    Log::DebugCheck(condition != nullptr);
+    Log::DebugCheck(action != nullptr);
     for (uint64_t i = begin; i < end; i++) {
       auto* bfAddr = &mBufferPool[i * mStore->mStoreOption.mBufferFrameSize];
       auto& bf = *reinterpret_cast<BufferFrame*>(bfAddr);

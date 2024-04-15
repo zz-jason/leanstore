@@ -40,10 +40,11 @@ public:
       : mStore(store),
         mThreadName(name),
         mRunningCPU(runningCPU) {
-    Log::ErrorIf(
-        mThreadName.size() > 15,
-        "Thread name should be restricted to 15 characters, name={}, size={}",
-        name, name.size());
+    if (mThreadName.size() > 15) {
+      Log::Error(
+          "Thread name should be restricted to 15 characters, name={}, size={}",
+          name, name.size());
+    }
   }
 
   virtual ~UserThread() {

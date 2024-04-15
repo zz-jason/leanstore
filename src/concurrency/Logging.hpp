@@ -5,7 +5,6 @@
 #include "leanstore/Units.hpp"
 #include "sync/OptimisticGuarded.hpp"
 
-#include <glog/logging.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 

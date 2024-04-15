@@ -222,7 +222,7 @@ public:
   }
 
   inline Swip* ChildSwip(uint16_t slotId) {
-    DCHECK(slotId < mNumSeps);
+    Log::DebugCheck(slotId < mNumSeps);
     return reinterpret_cast<Swip*>(ValData(slotId));
   }
 
@@ -232,16 +232,17 @@ public:
 
   // Attention: the caller has to hold a copy of the existing payload
   inline void shortenPayload(uint16_t slotId, uint16_t targetSize) {
-    DCHECK(targetSize <= slot[slotId].mValSize);
+    Log::DebugCheck(targetSize <= slot[slotId].mValSize);
     const uint16_t freeSpace = slot[slotId].mValSize - targetSize;
     mSpaceUsed -= freeSpace;
     slot[slotId].mValSize = targetSize;
   }
 
   inline bool CanExtendPayload(uint16_t slotId, uint16_t targetSize) {
-    DCHECK(targetSize > ValSize(slotId))
-        << "Target size must be larger than current size"
-        << ", targetSize=" << targetSize << ", currentSize=" << ValSize(slotId);
+    Log::DebugCheck(targetSize > ValSize(slotId),
+                    "Target size must be larger than current size, "
+                    "targetSize={}, currentSize={}",
+                    targetSize, ValSize(slotId));
 
     const uint16_t extraSpaceNeeded = targetSize - ValSize(slotId);
     return FreeSpaceAfterCompaction() >= extraSpaceNeeded;
@@ -249,11 +250,11 @@ public:
 
   // Move key | payload to a new location
   void ExtendPayload(uint16_t slotId, uint16_t targetSize) {
-    DCHECK(CanExtendPayload(slotId, targetSize))
-        << "ExtendPayload failed, not enough space in the current node"
-        << ", slotId=" << slotId << ", targetSize=" << targetSize
-        << ", freeSpace=" << FreeSpaceAfterCompaction()
-        << ", currentSize=" << ValSize(slotId);
+    Log::DebugCheck(
+        CanExtendPayload(slotId, targetSize),
+        "ExtendPayload failed, not enough space in the current node, "
+        "slotId={}, targetSize={}, freeSpace={}, currentSize={}",
+        slotId, targetSize, FreeSpaceAfterCompaction(), ValSize(slotId));
     // const uint16_t extraSpaceNeeded = targetSize - ValSize(slotId);
     // requestSpaceFor(extraSpaceNeeded);
 
@@ -274,7 +275,7 @@ public:
     if (freeSpace() < newTotalSize) {
       compactify();
     }
-    DCHECK(freeSpace() >= newTotalSize);
+    Log::DebugCheck(freeSpace() >= newTotalSize);
     mSpaceUsed += newTotalSize;
     mDataOffset -= newTotalSize;
     slot[slotId].offset = mDataOffset;
@@ -428,8 +429,8 @@ public:
         (bcmp(key.data(), getLowerFenceKey(), mPrefixSize) != 0)) {
       return -1;
     }
-    DCHECK(key.size() >= mPrefixSize &&
-           bcmp(key.data(), getLowerFenceKey(), mPrefixSize) == 0);
+    Log::DebugCheck(key.size() >= mPrefixSize &&
+                    bcmp(key.data(), getLowerFenceKey(), mPrefixSize) == 0);
 
     // the compared key has the same prefix
     key.remove_prefix(mPrefixSize);

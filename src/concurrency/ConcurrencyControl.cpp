@@ -23,7 +23,7 @@ namespace leanstore::cr {
 //------------------------------------------------------------------------------
 
 void CommitTree::AppendCommitLog(TXID startTs, TXID commitTs) {
-  DCHECK(mCommitLog.size() < mCapacity);
+  Log::DebugCheck(mCommitLog.size() < mCapacity);
   utils::Timer timer(CRCounters::MyCounters().cc_ms_committing);
   std::unique_lock xGuard(mMutex);
   mCommitLog.push_back({commitTs, startTs});
@@ -100,7 +100,7 @@ std::optional<std::pair<TXID, TXID>> CommitTree::lcbNoLatch(TXID startTs) {
     return {};
   }
   it--;
-  DCHECK(it->second < startTs);
+  Log::DebugCheck(it->second < startTs);
   return *it;
 }
 
@@ -311,12 +311,13 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
   mStore->mCRManager->mGlobalWmkInfo.UpdateActiveTxInfo(
       oldestTxId, oldestShortTxId, newestLongTxId);
 
-  Log::FatalIf(
-      !mStore->mStoreOption.mEnableLongRunningTx &&
-          mStore->mCRManager->mGlobalWmkInfo.mOldestActiveTx !=
-              mStore->mCRManager->mGlobalWmkInfo.mOldestActiveShortTx,
-      "Oldest transaction id should be equal to the oldest short-running "
-      "transaction id when long-running transaction is disabled");
+  if (!mStore->mStoreOption.mEnableLongRunningTx &&
+      mStore->mCRManager->mGlobalWmkInfo.mOldestActiveTx !=
+          mStore->mCRManager->mGlobalWmkInfo.mOldestActiveShortTx) {
+    Log::Fatal("Oldest transaction id should be equal to the oldest "
+               "short-running transaction id when long-running transaction is "
+               "disabled");
+  }
 
   // Update global lower watermarks based on the three transaction ids
   TXID globalWmkOfAllTx = std::numeric_limits<TXID>::max();
@@ -411,13 +412,13 @@ void ConcurrencyControl::updateLocalWatermarks() {
     }
   }
 
-  DCHECK(!mStore->mStoreOption.mEnableLongRunningTx ||
-         mLocalWmkOfAllTx <= mLocalWmkOfShortTx)
-      << "Lower watermark of all transactions should be no higher than the "
-         "lower watermark of short-running transactions"
-      << ", workerId=" << Worker::My().mWorkerId
-      << ", mLocalWmkOfAllTx=" << mLocalWmkOfAllTx
-      << ", mLocalWmkOfShortTx=" << mLocalWmkOfShortTx;
+  Log::DebugCheck(
+      !mStore->mStoreOption.mEnableLongRunningTx ||
+          mLocalWmkOfAllTx <= mLocalWmkOfShortTx,
+      "Lower watermark of all transactions should be no higher than the lower "
+      "watermark of short-running transactions, workerId={}, "
+      "mLocalWmkOfAllTx={}, mLocalWmkOfShortTx={}",
+      Worker::My().mWorkerId, mLocalWmkOfAllTx, mLocalWmkOfShortTx);
 }
 
 } // namespace leanstore::cr

@@ -52,15 +52,15 @@ public:
   }
 
   virtual void InsertToCurrentNode(Slice key, uint16_t valSize) {
-    DCHECK(KeyInCurrentNode(key));
-    DCHECK(HasEnoughSpaceFor(key.size(), valSize));
+    Log::DebugCheck(KeyInCurrentNode(key));
+    Log::DebugCheck(HasEnoughSpaceFor(key.size(), valSize));
     mSlotId = mGuardedLeaf->insertDoNotCopyPayload(key, valSize, mSlotId);
   }
 
   virtual void InsertToCurrentNode(Slice key, Slice val) {
-    DCHECK(KeyInCurrentNode(key));
-    DCHECK(HasEnoughSpaceFor(key.size(), val.size()));
-    DCHECK(mSlotId != -1);
+    Log::DebugCheck(KeyInCurrentNode(key));
+    Log::DebugCheck(HasEnoughSpaceFor(key.size(), val.size()));
+    Log::DebugCheck(mSlotId != -1);
     mSlotId = mGuardedLeaf->insertDoNotCopyPayload(key, val.size(), mSlotId);
     std::memcpy(mGuardedLeaf->ValData(mSlotId), val.data(), val.size());
   }
@@ -94,7 +94,7 @@ public:
       if (ret != OpCode::kOK) {
         return ret;
       }
-      DCHECK(KeyInCurrentNode(key));
+      Log::DebugCheck(KeyInCurrentNode(key));
       if (!HasEnoughSpaceFor(key.size(), val.length())) {
         SplitForKey(key);
         continue;
@@ -115,7 +115,8 @@ public:
     if (targetSize >= BTreeNode::Size()) {
       return false;
     }
-    DCHECK(mSlotId != -1 && targetSize > mGuardedLeaf->ValSize(mSlotId));
+    Log::DebugCheck(mSlotId != -1 &&
+                    targetSize > mGuardedLeaf->ValSize(mSlotId));
     while (!mGuardedLeaf->CanExtendPayload(mSlotId, targetSize)) {
       if (mGuardedLeaf->mNumSeps == 1) {
         return false;
@@ -124,9 +125,9 @@ public:
       Slice key = this->key();
       SplitForKey(key);
       auto succeed = SeekExact(key);
-      DCHECK(succeed);
+      Log::DebugCheck(succeed);
     }
-    DCHECK(mSlotId != -1);
+    Log::DebugCheck(mSlotId != -1);
     mGuardedLeaf->ExtendPayload(mSlotId, targetSize);
     return true;
   }
@@ -206,9 +207,8 @@ public:
   virtual OpCode RemoveCurrent() {
     if (!(mGuardedLeaf.mBf != nullptr && mSlotId >= 0 &&
           mSlotId < mGuardedLeaf->mNumSeps)) {
-      DCHECK(false) << "RemoveCurrent failed"
-                    << ", pageId=" << mGuardedLeaf.mBf->mHeader.mPageId
-                    << ", slotId=" << mSlotId;
+      Log::DebugCheck(false, "RemoveCurrent failed, pageId={}, slotId={}",
+                      mGuardedLeaf.mBf->mHeader.mPageId, mSlotId);
       return OpCode::kOther;
     }
     mGuardedLeaf->removeSlot(mSlotId);

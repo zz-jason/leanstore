@@ -207,17 +207,18 @@ inline void BufferFrameProvider::evictFlushedBf(
   ParentSwipHandler parentHandler =
       mStore->mTreeRegistry->FindParent(btreeId, cooledBf);
 
-  DCHECK(parentHandler.mParentGuard.mState == GuardState::kOptimisticShared);
+  Log::DebugCheck(parentHandler.mParentGuard.mState ==
+                  GuardState::kOptimisticShared);
   BMExclusiveUpgradeIfNeeded parentWriteGuard(parentHandler.mParentGuard);
   optimisticGuard.mGuard.ToExclusiveMayJump();
 
   if (mStore->mStoreOption.mEnableBufferCrcCheck && cooledBf.mHeader.mCrc) {
-    DCHECK(cooledBf.mPage.CRC() == cooledBf.mHeader.mCrc);
+    Log::DebugCheck(cooledBf.mPage.CRC() == cooledBf.mHeader.mCrc);
   }
-  DCHECK(!cooledBf.IsDirty());
-  DCHECK(!cooledBf.mHeader.mIsBeingWrittenBack);
-  DCHECK(cooledBf.mHeader.mState == State::kCool);
-  DCHECK(parentHandler.mChildSwip.IsCool());
+  Log::DebugCheck(!cooledBf.IsDirty());
+  Log::DebugCheck(!cooledBf.mHeader.mIsBeingWrittenBack);
+  Log::DebugCheck(cooledBf.mHeader.mState == State::kCool);
+  Log::DebugCheck(parentHandler.mChildSwip.IsCool());
 
   parentHandler.mChildSwip.Evict(cooledBf.mHeader.mPageId);
 
@@ -361,10 +362,10 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         auto parentHandler =
             mStore->mTreeRegistry->FindParent(btreeId, *coolCandidate);
 
-        DCHECK(parentHandler.mParentGuard.mState ==
-               GuardState::kOptimisticShared);
-        DCHECK(parentHandler.mParentGuard.mLatch !=
-               reinterpret_cast<HybridLatch*>(0x99));
+        Log::DebugCheck(parentHandler.mParentGuard.mState ==
+                        GuardState::kOptimisticShared);
+        Log::DebugCheck(parentHandler.mParentGuard.mLatch !=
+                        reinterpret_cast<HybridLatch*>(0x99));
         COUNTERS_BLOCK() {
           findParentEnd = std::chrono::high_resolution_clock::now();
           PPCounters::MyCounters().mFindParentMS +=
@@ -393,12 +394,13 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
               parentHandler.mParentGuard);
           BMExclusiveGuard writeGuard(readGuard);
 
-          DCHECK(coolCandidate->mHeader.mPageId == pageId);
-          DCHECK(coolCandidate->mHeader.mState == State::kHot);
-          DCHECK(coolCandidate->mHeader.mIsBeingWrittenBack == false);
-          DCHECK(parentHandler.mParentGuard.mVersion ==
-                 parentHandler.mParentGuard.mLatch->GetOptimisticVersion());
-          DCHECK(parentHandler.mChildSwip.mBf == coolCandidate);
+          Log::DebugCheck(coolCandidate->mHeader.mPageId == pageId);
+          Log::DebugCheck(coolCandidate->mHeader.mState == State::kHot);
+          Log::DebugCheck(coolCandidate->mHeader.mIsBeingWrittenBack == false);
+          Log::DebugCheck(
+              parentHandler.mParentGuard.mVersion ==
+              parentHandler.mParentGuard.mLatch->GetOptimisticVersion());
+          Log::DebugCheck(parentHandler.mChildSwip.mBf == coolCandidate);
 
           // mark the buffer frame in cool state
           coolCandidate->mHeader.mState = State::kCool;
@@ -480,7 +482,7 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
       }
 
       BMExclusiveGuard exclusiveGuard(optimisticGuard);
-      DCHECK(!cooledBf->mHeader.mIsBeingWrittenBack);
+      Log::DebugCheck(!cooledBf->mHeader.mIsBeingWrittenBack);
       cooledBf->mHeader.mIsBeingWrittenBack.store(true,
                                                   std::memory_order_release);
 
@@ -537,8 +539,8 @@ inline void BufferFrameProvider::FlushAndRecycleBufferFrames(
           // while trying to acquire a new page
           BMOptimisticGuard optimisticGuard(writtenBf.mHeader.mLatch);
           BMExclusiveGuard exclusiveGuard(optimisticGuard);
-          DCHECK(writtenBf.mHeader.mIsBeingWrittenBack);
-          DCHECK(writtenBf.mHeader.mFlushedGsn < flushedGsn);
+          Log::DebugCheck(writtenBf.mHeader.mIsBeingWrittenBack);
+          Log::DebugCheck(writtenBf.mHeader.mFlushedGsn < flushedGsn);
 
           // For recovery, so much has to be done here...
           writtenBf.mHeader.mFlushedGsn = flushedGsn;

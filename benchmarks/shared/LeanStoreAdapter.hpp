@@ -64,7 +64,8 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     const OpCode res =
         btree->Insert(Slice(foldedKey, foldedKeySize),
                       Slice((uint8_t*)(&record), sizeof(Record)));
-    DCHECK(res == leanstore::OpCode::kOK || res == leanstore::OpCode::kAbortTx);
+    Log::DebugCheck(res == leanstore::OpCode::kOK ||
+                    res == leanstore::OpCode::kAbortTx);
     if (res == leanstore::OpCode::kAbortTx) {
       cr::Worker::My().AbortTx();
     }
@@ -82,7 +83,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     if (res == leanstore::OpCode::kAbortTx) {
       cr::Worker::My().AbortTx();
     }
-    DCHECK(res == leanstore::OpCode::kOK);
+    Log::DebugCheck(res == leanstore::OpCode::kOK);
   }
 
   void update1(const typename Record::Key& key,
@@ -94,12 +95,12 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     const OpCode res = btree->UpdatePartial(
         Slice(foldedKey, foldedKeySize),
         [&](MutableSlice mutRawVal) {
-          DCHECK(mutRawVal.Size() == sizeof(Record));
+          Log::DebugCheck(mutRawVal.Size() == sizeof(Record));
           auto& record = *reinterpret_cast<Record*>(mutRawVal.Data());
           cb(record);
         },
         updateDesc);
-    DCHECK(res != leanstore::OpCode::kNotFound);
+    Log::DebugCheck(res != leanstore::OpCode::kNotFound);
     if (res == leanstore::OpCode::kAbortTx) {
       cr::Worker::My().AbortTx();
     }
@@ -152,7 +153,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     if (res == leanstore::OpCode::kAbortTx) {
       cr::Worker::My().AbortTx();
     }
-    DCHECK(res == OpCode::kOK);
+    Log::DebugCheck(res == OpCode::kOK);
     return local_f;
   }
 

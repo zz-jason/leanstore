@@ -205,9 +205,10 @@ public:
                                 std::function<bool(Swip&)> callback) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
-    Log::FatalIf(it == mTrees.end(),
-                 "BufferManagedTree not find, address={}, treeId={}",
+    if (it == mTrees.end()) {
+      Log::Fatal("BufferManagedTree not find, address={}, treeId={}",
                  (void*)&bf, treeId);
+    }
     auto& [tree, treeName] = it->second;
     tree->IterateChildSwips(bf, callback);
   }
@@ -215,9 +216,10 @@ public:
   inline ParentSwipHandler FindParent(TREEID treeId, BufferFrame& bf) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
-    Log::FatalIf(it == mTrees.end(),
-                 "BufferManagedTree not find, address={}, treeId={}",
+    if (it == mTrees.end()) {
+      Log::Fatal("BufferManagedTree not find, address={}, treeId={}",
                  (void*)&bf, treeId);
+    }
     auto& [tree, treeName] = it->second;
     return tree->FindParent(bf);
   }
@@ -226,9 +228,10 @@ public:
                                                 BufferFrame& bf) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
-    Log::FatalIf(it == mTrees.end(),
-                 "BufferManagedTree not find, address={}, treeId={}",
+    if (it == mTrees.end()) {
+      Log::Fatal("BufferManagedTree not find, address={}, treeId={}",
                  (void*)&bf, treeId);
+    }
     auto& [tree, treeName] = it->second;
     return tree->CheckSpaceUtilization(bf);
   }
@@ -237,9 +240,10 @@ public:
   inline void Checkpoint(TREEID treeId, BufferFrame& bf, void* dest) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
-    Log::FatalIf(it == mTrees.end(),
-                 "BufferManagedTree not find, address={}, treeId={}",
+    if (it == mTrees.end()) {
+      Log::Fatal("BufferManagedTree not find, address={}, treeId={}",
                  (void*)&bf, treeId);
+    }
     auto& [tree, treeName] = it->second;
     return tree->Checkpoint(bf, dest);
   }
@@ -247,8 +251,9 @@ public:
   // Recovery / SI
   inline void undo(TREEID treeId, const uint8_t* walEntry, uint64_t tts) {
     auto it = mTrees.find(treeId);
-    Log::FatalIf(it == mTrees.end(), "BufferManagedTree not find, treeId={}",
-                 treeId);
+    if (it == mTrees.end()) {
+      Log::Fatal("BufferManagedTree not find, treeId={}", treeId);
+    }
     auto& [tree, treeName] = it->second;
     return tree->undo(walEntry, tts);
   }
@@ -259,9 +264,10 @@ public:
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
     if (it == mTrees.end()) {
-      Log::Info("Skip GarbageCollect on non-existing tree, it is probably that "
-                "the tree is already dropped, treeId={}",
-                treeId);
+      Log::Debug(
+          "Skip GarbageCollect on non-existing tree, it is probably that "
+          "the tree is already dropped, treeId={}",
+          treeId);
       return;
     }
     auto& [tree, treeName] = it->second;
@@ -272,8 +278,9 @@ public:
   inline void unlock(TREEID treeId, const uint8_t* entry) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
-    Log::FatalIf(it == mTrees.end(), "BufferManagedTree not find, treeId={}",
-                 treeId);
+    if (it == mTrees.end()) {
+      Log::Fatal("BufferManagedTree not find, treeId={}", treeId);
+    }
     auto& [tree, treeName] = it->second;
     return tree->unlock(entry);
   }
@@ -282,8 +289,9 @@ public:
   inline StringMap Serialize(TREEID treeId) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
-    Log::FatalIf(it == mTrees.end(), "BufferManagedTree not find, treeId={}",
-                 treeId);
+    if (it == mTrees.end()) {
+      Log::Fatal("BufferManagedTree not find, treeId={}", treeId);
+    }
     auto& [tree, treeName] = it->second;
     return tree->Serialize();
   }
@@ -291,8 +299,9 @@ public:
   inline void Deserialize(TREEID treeId, StringMap map) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
-    Log::FatalIf(it == mTrees.end(), "BufferManagedTree not find, treeId={}",
-                 treeId);
+    if (it == mTrees.end()) {
+      Log::Fatal("BufferManagedTree not find, treeId={}", treeId);
+    }
     auto& [tree, treeName] = it->second;
     return tree->Deserialize(map);
   }

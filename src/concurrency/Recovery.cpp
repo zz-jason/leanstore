@@ -31,13 +31,13 @@ Result<void> Recovery::analysis() {
     switch (walEntry->mType) {
     case WalEntry::Type::kTxAbort: {
       auto* wal = reinterpret_cast<WalTxAbort*>(walEntryPtr);
-      DCHECK(mActiveTxTable.find(wal->mTxId) != mActiveTxTable.end());
+      Log::DebugCheck(mActiveTxTable.find(wal->mTxId) != mActiveTxTable.end());
       mActiveTxTable[wal->mTxId] = offset;
       continue;
     }
     case WalEntry::Type::kTxFinish: {
       auto* wal = reinterpret_cast<WalTxFinish*>(walEntryPtr);
-      DCHECK(mActiveTxTable.find(wal->mTxId) != mActiveTxTable.end());
+      Log::DebugCheck(mActiveTxTable.find(wal->mTxId) != mActiveTxTable.end());
       mActiveTxTable.erase(wal->mTxId);
       continue;
     }
@@ -125,8 +125,8 @@ Result<void> Recovery::redo() {
       break;
     }
     default: {
-      DCHECK(false) << "Unhandled WalPayload::Type: "
-                    << std::to_string(static_cast<uint64_t>(walPayload->mType));
+      Log::DebugCheck(false, "Unhandled WalPayload::Type: {}",
+                      std::to_string(static_cast<uint64_t>(walPayload->mType)));
     }
     }
   }
@@ -199,7 +199,7 @@ void Recovery::redoTxInsert(storage::BufferFrame& bf,
 
 void Recovery::redoUpdate(storage::BufferFrame& bf [[maybe_unused]],
                           WalEntryComplex* complexEntry [[maybe_unused]]) {
-  DCHECK(false) << "Unsupported";
+  Log::Fatal("Unsupported");
 }
 
 void Recovery::redoTxUpdate(storage::BufferFrame& bf,
@@ -211,11 +211,11 @@ void Recovery::redoTxUpdate(storage::BufferFrame& bf,
   auto* updateDesc = wal->GetUpdateDesc();
   auto key = wal->GetKey();
   auto slotId = guardedNode->lowerBound<true>(key);
-  DCHECK(slotId != -1) << "Key not found in WalTxUpdate";
+  Log::DebugCheck(slotId != -1, "Key not found in WalTxUpdate");
 
   auto* mutRawVal = guardedNode->ValData(slotId);
-  DCHECK(Tuple::From(mutRawVal)->mFormat == TupleFormat::kChained)
-      << "Only chained tuple is supported";
+  Log::DebugCheck(Tuple::From(mutRawVal)->mFormat == TupleFormat::kChained,
+                  "Only chained tuple is supported");
   auto* chainedTuple = ChainedTuple::From(mutRawVal);
 
   // update the chained tuple
@@ -237,7 +237,7 @@ void Recovery::redoTxUpdate(storage::BufferFrame& bf,
 
 void Recovery::redoRemove(storage::BufferFrame& bf [[maybe_unused]],
                           WalEntryComplex* complexEntry [[maybe_unused]]) {
-  DCHECK(false) << "Unsupported";
+  Log::Fatal("Unsupported");
 }
 
 void Recovery::redoTxRemove(storage::BufferFrame& bf,
@@ -248,12 +248,11 @@ void Recovery::redoTxRemove(storage::BufferFrame& bf,
                                             std::move(guard), &bf);
   auto key = wal->RemovedKey();
   auto slotId = guardedNode->lowerBound<true>(key);
-  DCHECK(slotId != -1) << "Key not found, key="
-                       << std::string((char*)key.data(), key.size());
+  Log::DebugCheck(slotId != -1, "Key not found, key={}", key.ToString());
 
   auto* mutRawVal = guardedNode->ValData(slotId);
-  DCHECK(Tuple::From(mutRawVal)->mFormat == TupleFormat::kChained)
-      << "Only chained tuple is supported";
+  Log::DebugCheck(Tuple::From(mutRawVal)->mFormat == TupleFormat::kChained,
+                  "Only chained tuple is supported");
   auto* chainedTuple = ChainedTuple::From(mutRawVal);
 
   // remove the chained tuple

@@ -37,7 +37,7 @@
 namespace leanstore {
 
 Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption option) {
-  FLAGS_logtostdout = true;
+  Log::Init();
   return std::make_unique<LeanStore>(std::move(option));
 }
 
@@ -47,17 +47,11 @@ LeanStore::LeanStore(StoreOption option)
   utils::tlsStore = this;
 
   if (mStoreOption.mCreateFromScratch) {
-    std::cout << "Clean store dir: " << mStoreOption.mStoreDir << std::endl;
+    Log::Info("Clean store dir: {}", mStoreOption.mStoreDir);
     std::filesystem::path dirPath = mStoreOption.mStoreDir;
     std::filesystem::remove_all(dirPath);
     std::filesystem::create_directories(dirPath);
     std::filesystem::create_directories(mStoreOption.GetLogDir());
-  }
-
-  // for glog
-  {
-    FLAGS_log_dir = mStoreOption.GetLogDir();
-    initGoogleLog();
   }
 
   Log::Info("LeanStore starting ...");
@@ -91,42 +85,10 @@ LeanStore::LeanStore(StoreOption option)
   }
 }
 
-void LeanStore::initGoogleLog() {
-  if (google::IsGoogleLoggingInitialized()) {
-    return;
-  }
-  // google::InitGoogleLogging("leanstore");
-
-  auto customPrefixCallback = [](std::ostream& s,
-                                 const google::LogMessageInfo& m, void*) {
-    // severity
-    s << "[" << std::string(m.severity) << "]";
-
-    // YYYY-MM-DD hh:mm::ss.xxxxxx
-    s << " [" << setw(4) << 1900 + m.time.year() << "-" << setw(2)
-      << 1 + m.time.month() << "-" << setw(2) << m.time.day() << ' ' << setw(2)
-      << m.time.hour() << ':' << setw(2) << m.time.min() << ':' << setw(2)
-      << m.time.sec() << "." << setw(6) << m.time.usec() << ']';
-
-    // thread id and name
-    if (utils::tlsThreadName.size() > 0) {
-      s << " [" << setfill(' ') << setw(5) << m.thread_id << setfill('0') << " "
-        << utils::tlsThreadName << ']';
-    } else {
-      s << " [" << setfill(' ') << setw(5) << m.thread_id << setfill('0')
-        << ']';
-    }
-
-    // filename and line number
-    s << " [" << m.filename << ':' << m.line_number << "]";
-  };
-  google::InitGoogleLogging("leanstore", customPrefixCallback, nullptr);
-}
-
 void LeanStore::initPageAndWalFd() {
   SCOPED_DEFER({
-    DCHECK(fcntl(mPageFd, F_GETFL) != -1);
-    DCHECK(fcntl(mWalFd, F_GETFL) != -1);
+    Log::DebugCheck(fcntl(mPageFd, F_GETFL) != -1);
+    Log::DebugCheck(fcntl(mWalFd, F_GETFL) != -1);
   });
 
   // Create a new instance on the specified DB file
@@ -168,13 +130,7 @@ void LeanStore::initPageAndWalFd() {
 
 LeanStore::~LeanStore() {
   Log::Info("LeanStore stopping ...");
-  SCOPED_DEFER({
-    Log::Info("LeanStore stopped");
-    // deinit logging in the last
-    if (google::IsGoogleLoggingInitialized()) {
-      google::ShutdownGoogleLogging();
-    }
-  });
+  SCOPED_DEFER({ Log::Info("LeanStore stopped"); });
 
   // wait all concurrent jobs to finsh
   WaitAll();
@@ -380,9 +336,9 @@ void LeanStore::deserializeMeta() {
   }
 
   auto& btreeJsonArray = doc[META_KEY_REGISTERED_DATASTRUCTURES];
-  DCHECK(btreeJsonArray.IsArray());
+  Log::DebugCheck(btreeJsonArray.IsArray());
   for (auto& btreeJsonObj : btreeJsonArray.GetArray()) {
-    DCHECK(btreeJsonObj.IsObject());
+    Log::DebugCheck(btreeJsonObj.IsObject());
     const TREEID btreeId = btreeJsonObj["id"].GetInt64();
     const auto btreeType = btreeJsonObj["type"].GetInt();
     const std::string btreeName = btreeJsonObj["name"].GetString();
@@ -462,7 +418,7 @@ void LeanStore::GetBasicKV(const std::string& name,
 }
 
 void LeanStore::DropBasicKV(const std::string& name) {
-  DCHECK(cr::Worker::My().IsTxStarted());
+  Log::DebugCheck(cr::Worker::My().IsTxStarted());
   auto* btree =
       dynamic_cast<btree::BTreeGeneric*>(mTreeRegistry->GetTree(name));
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
@@ -515,7 +471,7 @@ void LeanStore::GetTransactionKV(const std::string& name,
 }
 
 void LeanStore::DropTransactionKV(const std::string& name) {
-  DCHECK(cr::Worker::My().IsTxStarted());
+  Log::DebugCheck(cr::Worker::My().IsTxStarted());
   auto* btree =
       DownCast<storage::btree::BTreeGeneric*>(mTreeRegistry->GetTree(name));
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
@@ -528,7 +484,7 @@ void LeanStore::DropTransactionKV(const std::string& name) {
   auto graveyardName = "_" + name + "_graveyard";
   btree = DownCast<storage::btree::BTreeGeneric*>(
       mTreeRegistry->GetTree(graveyardName));
-  DCHECK(btree != nullptr) << "graveyard not found";
+  Log::DebugCheck(btree != nullptr, "graveyard not found");
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
   res = mTreeRegistry->UnregisterTree(graveyardName);
   if (!res) {

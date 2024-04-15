@@ -9,9 +9,8 @@
 #include "leanstore/Units.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
+#include "utils/Log.hpp"
 #include "utils/Result.hpp"
-
-#include <glog/logging.h>
 
 #include <cstring>
 #include <expected>
@@ -173,7 +172,7 @@ inline Session* LeanStoreMVCC::GetSession(WORKERID sessionId) {
     mSessions.emplace(sessionId, LeanStoreMVCCSession(sessionId, this));
   }
   auto it = mSessions.find(sessionId);
-  DCHECK(it != mSessions.end());
+  Log::DebugCheck(it != mSessions.end());
   return &it->second;
 }
 

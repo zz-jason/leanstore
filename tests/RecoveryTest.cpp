@@ -16,18 +16,17 @@
 
 #include <cstddef>
 #include <format>
-#include <ostream>
 #include <string>
 
 using namespace leanstore::storage::btree;
 
 namespace leanstore::test {
 
-class RecoveringTest : public ::testing::Test {
+class RecoveryTest : public ::testing::Test {
 protected:
   std::unique_ptr<LeanStore> mStore;
 
-  RecoveringTest() {
+  RecoveryTest() {
     // Create a leanstore instance for the test case
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" +
@@ -41,10 +40,10 @@ protected:
     mStore = std::move(res.value());
   }
 
-  ~RecoveringTest() = default;
+  ~RecoveryTest() = default;
 };
 
-TEST_F(RecoveringTest, SerializeAndDeserialize) {
+TEST_F(RecoveryTest, SerializeAndDeserialize) {
   TransactionKV* btree;
 
   // prepare key-value pairs to insert
@@ -81,12 +80,12 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
   });
 
   // meta file should be serialized during destructor.
+  auto storeOption = mStore->mStoreOption;
   mStore.reset(nullptr);
 
   // recreate the store, it's expected that all the meta and pages are rebult.
-  auto res = LeanStore::Open(StoreOption{
-      .mCreateFromScratch = false,
-  });
+  storeOption.mCreateFromScratch = false;
+  auto res = LeanStore::Open(std::move(storeOption));
   EXPECT_TRUE(res);
 
   mStore = std::move(res.value());
@@ -118,7 +117,7 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
   mStore = nullptr;
 }
 
-TEST_F(RecoveringTest, RecoverAfterInsert) {
+TEST_F(RecoveryTest, RecoverAfterInsert) {
 #ifndef DEBUG
   GTEST_SKIP() << "This test only works in debug mode";
 #endif
@@ -162,13 +161,13 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
   // skip dumpping buffer frames on exit
   LS_DEBUG_ENABLE(mStore, "skip_CheckpointAllBufferFrames");
   SCOPED_DEFER(LS_DEBUG_DISABLE(mStore, "skip_CheckpointAllBufferFrames"));
+  auto storeOption = mStore->mStoreOption;
   mStore.reset(nullptr);
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
-  auto res = LeanStore::Open(StoreOption{
-      .mCreateFromScratch = false,
-  });
+  storeOption.mCreateFromScratch = false;
+  auto res = LeanStore::Open(std::move(storeOption));
   EXPECT_TRUE(res);
 
   mStore = std::move(res.value());
@@ -209,7 +208,7 @@ static std::string GenerateValue(int ordinalPrefix, size_t valSize) {
          utils::RandomGenerator::RandAlphString(valSize - prefix.size());
 }
 
-TEST_F(RecoveringTest, RecoverAfterUpdate) {
+TEST_F(RecoveryTest, RecoverAfterUpdate) {
 #ifndef DEBUG
   GTEST_SKIP() << "This test only works in debug mode";
 #endif
@@ -278,13 +277,13 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
   // skip dumpping buffer frames on exit
   LS_DEBUG_ENABLE(mStore, "skip_CheckpointAllBufferFrames");
   SCOPED_DEFER(LS_DEBUG_DISABLE(mStore, "skip_CheckpointAllBufferFrames"));
+  auto storeOption = mStore->mStoreOption;
   mStore.reset(nullptr);
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
-  auto res = LeanStore::Open(StoreOption{
-      .mCreateFromScratch = false,
-  });
+  storeOption.mCreateFromScratch = false;
+  auto res = LeanStore::Open(std::move(storeOption));
   EXPECT_TRUE(res);
 
   mStore = std::move(res.value());
@@ -313,7 +312,7 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
   });
 }
 
-TEST_F(RecoveringTest, RecoverAfterRemove) {
+TEST_F(RecoveryTest, RecoverAfterRemove) {
 #ifndef DEBUG
   GTEST_SKIP() << "This test only works in debug mode";
 #endif
@@ -365,13 +364,13 @@ TEST_F(RecoveringTest, RecoverAfterRemove) {
   // skip dumpping buffer frames on exit
   LS_DEBUG_ENABLE(mStore, "skip_CheckpointAllBufferFrames");
   SCOPED_DEFER(LS_DEBUG_DISABLE(mStore, "skip_CheckpointAllBufferFrames"));
+  auto storeOption = mStore->mStoreOption;
   mStore.reset(nullptr);
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
-  auto res = LeanStore::Open(StoreOption{
-      .mCreateFromScratch = false,
-  });
+  storeOption.mCreateFromScratch = false;
+  auto res = LeanStore::Open(std::move(storeOption));
   EXPECT_TRUE(res);
 
   mStore = std::move(res.value());

@@ -152,8 +152,6 @@ private:
   /// deserializeFlags deserializes the flags.
   void deserializeFlags();
 
-  void initGoogleLog();
-
   void initPageAndWalFd();
 };
 

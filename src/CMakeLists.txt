@@ -15,9 +15,7 @@ set(leanstore_deps
   aio
   tabulate::tabulate
   rapidjson
-  glog::glog
   spdlog::spdlog_header_only
-  gflags::gflags
   Crc32c::crc32c
   httplib::httplib
   prometheus-cpp::core

@@ -2,8 +2,7 @@
 
 #include "buffer-manager/BufferFrame.hpp"
 #include "leanstore/Units.hpp"
-
-#include <glog/logging.h>
+#include "utils/Log.hpp"
 
 namespace leanstore {
 namespace storage {
@@ -68,13 +67,13 @@ public:
   }
 
   uint64_t AsPageId() {
-    DCHECK(IsEvicted());
+    Log::DebugCheck(IsEvicted());
     return mPageId & sEvictedMask;
   }
 
   /// return the underlying buffer frame from a hot buffer frame.
   BufferFrame& AsBufferFrame() {
-    DCHECK(IsHot());
+    Log::DebugCheck(IsHot());
     return *mBf;
   }
 
@@ -92,7 +91,7 @@ public:
   }
 
   void MarkHOT() {
-    DCHECK(IsCool());
+    Log::DebugCheck(IsCool());
     this->mPageId = mPageId & ~sCoolBit;
   }
 

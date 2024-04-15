@@ -63,7 +63,8 @@ public:
         mBf(bf),
         mGuard(mBf->mHeader.mLatch, GuardState::kUninitialized),
         mKeepAlive(keepAlive) {
-    DCHECK(!HasExclusiveMark(mBf->mHeader.mLatch.GetOptimisticVersion()));
+    Log::DebugCheck(
+        !HasExclusiveMark(mBf->mHeader.mLatch.GetOptimisticVersion()));
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
@@ -141,11 +142,11 @@ public:
 
 public:
   inline void SyncGSNBeforeWrite() {
-    DCHECK(mBf != nullptr);
-    DCHECK(mBf->mPage.mGSN <= cr::Worker::My().mLogging.GetCurrentGsn())
-        << "Page GSN should <= worker GSN"
-        << ", pageGSN=" << mBf->mPage.mGSN
-        << ", workerGSN=" << cr::Worker::My().mLogging.GetCurrentGsn();
+    Log::DebugCheck(mBf != nullptr);
+    Log::DebugCheck(mBf->mPage.mGSN <=
+                        cr::Worker::My().mLogging.GetCurrentGsn(),
+                    "Page GSN should <= worker GSN, pageGSN={}, workerGSN={}",
+                    mBf->mPage.mGSN, cr::Worker::My().mLogging.GetCurrentGsn());
 
     // update last writer worker
     mBf->mHeader.mLastWriterWorker = cr::Worker::My().mWorkerId;
@@ -179,8 +180,8 @@ public:
   template <typename WT, typename... Args>
   inline cr::WalPayloadHandler<WT> ReserveWALPayload(uint64_t walSize,
                                                      Args&&... args) {
-    DCHECK(cr::ActiveTx().mIsDurable);
-    DCHECK(mGuard.mState == GuardState::kPessimisticExclusive);
+    Log::DebugCheck(cr::ActiveTx().mIsDurable);
+    Log::DebugCheck(mGuard.mState == GuardState::kPessimisticExclusive);
 
     const auto pageId = mBf->mHeader.mPageId;
     const auto treeId = mBf->mPage.mBTreeId;
@@ -274,8 +275,8 @@ protected:
       break;
     }
     default: {
-      DCHECK(false) << "Unhandled LatchMode: "
-                    << std::to_string(static_cast<uint64_t>(latchMode));
+      Log::DebugCheck(false, "Unhandled LatchMode: {}",
+                      std::to_string(static_cast<uint64_t>(latchMode)));
     }
     }
   }

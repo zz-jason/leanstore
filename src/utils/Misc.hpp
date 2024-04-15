@@ -10,7 +10,7 @@
 namespace leanstore {
 
 template <typename T1, typename T2> T1 DownCast(T2 ptr) {
-  DCHECK(dynamic_cast<T1>(ptr) != nullptr);
+  Log::DebugCheck(dynamic_cast<T1>(ptr) != nullptr);
   return static_cast<T1>(ptr);
 }
 

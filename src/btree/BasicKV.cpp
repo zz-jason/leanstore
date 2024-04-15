@@ -64,7 +64,7 @@ bool BasicKV::IsRangeEmpty(Slice startKey, Slice endKey) {
       FindLeafCanJump(startKey, guardedLeaf);
 
       Slice upperFence = guardedLeaf->GetUpperFence();
-      DCHECK(startKey >= guardedLeaf->GetLowerFence());
+      Log::DebugCheck(startKey >= guardedLeaf->GetLowerFence());
 
       if ((guardedLeaf->mUpperFence.offset == 0 || endKey <= upperFence) &&
           guardedLeaf->mNumSeps == 0) {
@@ -259,7 +259,7 @@ OpCode BasicKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
     }
     auto currentVal = xIter.MutableVal();
     if (mConfig.mEnableWal) {
-      DCHECK(updateDesc.mNumSlots > 0);
+      Log::DebugCheck(updateDesc.mNumSlots > 0);
       auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
       auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WalUpdate>(
           key.length() + sizeOfDescAndDelta);

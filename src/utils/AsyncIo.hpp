@@ -30,12 +30,16 @@ public:
 
     std::memset(&mAioCtx, 0, sizeof(mAioCtx));
     auto ret = io_setup(mMaxReqs, &mAioCtx);
-    Log::FatalIf(ret < 0, "io_setup failed, error={}", ret);
+    if (ret < 0) {
+      Log::Fatal("io_setup failed, error={}", ret);
+    }
   }
 
   ~AsyncIo() {
     auto ret = io_destroy(mAioCtx);
-    Log::FatalIf(ret < 0, "io_destroy failed, error={}", ret);
+    if (ret < 0) {
+      Log::Fatal("io_destroy failed, error={}", ret);
+    }
   }
 
   size_t GetNumRequests() {
@@ -51,7 +55,7 @@ public:
   }
 
   void PrepareWrite(int32_t fd, void* buf, size_t count, uint64_t offset) {
-    DCHECK(!IsFull());
+    Log::DebugCheck(!IsFull());
     auto slot = mNumReqs++;
     io_prep_pwrite(&mIocbs[slot], fd, buf, count, offset);
     mIocbs[slot].data = buf;
@@ -59,7 +63,7 @@ public:
 
   // Even for direct IO, fsync is still needed to flush file metadata.
   void PrepareFsync(int32_t fd) {
-    DCHECK(!IsFull());
+    Log::DebugCheck(!IsFull());
     auto slot = mNumReqs++;
     io_prep_fsync(&mIocbs[slot], fd);
   }

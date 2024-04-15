@@ -95,8 +95,9 @@ void Logging::WriteWalTxFinish() {
 }
 
 void Logging::WriteWalCarriageReturn() {
-  DCHECK(mWalFlushed <= mWalBuffered)
-      << "CarriageReturn should only used for the last bytes in the wal buffer";
+  Log::DebugCheck(
+      mWalFlushed <= mWalBuffered,
+      "CarriageReturn should only used for the last bytes in the wal buffer");
   auto entrySize = mWalBufferSize - mWalBuffered;
   auto* entryPtr = mWalBuffer + mWalBuffered;
   new (entryPtr) WalCarriageReturn(entrySize);

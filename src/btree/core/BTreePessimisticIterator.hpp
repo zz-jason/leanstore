@@ -11,10 +11,7 @@
 
 using namespace leanstore::storage;
 
-namespace leanstore {
-namespace storage {
-namespace btree {
-
+namespace leanstore::storage::btree {
 using LeafCallback =
     std::function<void(GuardedBufferFrame<BTreeNode>& guardedLeaf)>;
 
@@ -422,7 +419,7 @@ public:
   }
 
   virtual Slice key() override {
-    DCHECK(mBuffer.size() >= mGuardedLeaf->getFullKeyLen(mSlotId));
+    Log::DebugCheck(mBuffer.size() >= mGuardedLeaf->getFullKeyLen(mSlotId));
     return Slice(&mBuffer[0], mGuardedLeaf->getFullKeyLen(mSlotId));
   }
 
@@ -439,8 +436,8 @@ public:
   }
 
   bool IsLastOne() {
-    DCHECK(mSlotId != -1);
-    DCHECK(mSlotId != mGuardedLeaf->mNumSeps);
+    Log::DebugCheck(mSlotId != -1);
+    Log::DebugCheck(mSlotId != mGuardedLeaf->mNumSeps);
     return (mSlotId + 1) == mGuardedLeaf->mNumSeps;
   }
 
@@ -468,11 +465,9 @@ private:
   }
 
   inline Slice assembedFence() {
-    DCHECK(mBuffer.size() >= mFenceSize);
+    Log::DebugCheck(mBuffer.size() >= mFenceSize);
     return Slice(&mBuffer[0], mFenceSize);
   }
 };
 
-} // namespace btree
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage::btree

@@ -75,6 +75,7 @@ inline WorkloadSpec GetWorkloadSpec(Workload workload) {
   default:
     Log::Fatal("Unknown workload: {}", static_cast<uint8_t>(workload));
   }
+  return {};
 }
 
 inline double CalculateTps(std::chrono::high_resolution_clock::time_point begin,

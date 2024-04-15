@@ -4,10 +4,10 @@
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "sync/HybridLatch.hpp"
+#include "utils/Log.hpp"
 #include "utils/Misc.hpp"
 #include "utils/UserThread.hpp"
 
-#include <glog/logging.h>
 #include <rapidjson/document.h>
 
 #include <atomic>
@@ -92,8 +92,8 @@ public:
 public:
   // Prerequisite: the buffer frame is exclusively locked
   void Reset() {
-    DCHECK(!mIsBeingWrittenBack);
-    DCHECK(mLatch.IsLockedExclusively());
+    Log::DebugCheck(!mIsBeingWrittenBack);
+    Log::DebugCheck(mLatch.IsLockedExclusively());
 
     mState = State::kFree;
     mKeepInMemory = false;
@@ -194,7 +194,7 @@ public:
   }
 
   void Init(PID pageId) {
-    DCHECK(mHeader.mState == State::kFree);
+    Log::DebugCheck(mHeader.mState == State::kFree);
     mHeader.mPageId = pageId;
     mHeader.mState = State::kHot;
     mHeader.mFlushedGsn = 0;
@@ -216,7 +216,7 @@ public:
 // -----------------------------------------------------------------------------
 inline void BufferFrame::ToJson(rapidjson::Value* resultObj,
                                 rapidjson::Value::AllocatorType& allocator) {
-  DCHECK(resultObj->IsObject());
+  Log::DebugCheck(resultObj->IsObject());
 
   // header
   rapidjson::Value headerObj(rapidjson::kObjectType);

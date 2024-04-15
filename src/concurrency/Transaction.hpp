@@ -5,8 +5,6 @@
 #include "leanstore/Units.hpp"
 #include "utils/UserThread.hpp"
 
-#include <glog/logging.h>
-
 namespace leanstore {
 namespace cr {
 
