@@ -1,10 +1,13 @@
 #pragma once
 
+#include "buffer-manager/BufferFrame.hpp"
 #include "buffer-manager/BufferFrameProvider.hpp"
 #include "buffer-manager/Partition.hpp"
 #include "buffer-manager/Swip.hpp"
+#include "leanstore/Exceptions.hpp"
 #include "leanstore/Units.hpp"
 #include "profiling/tables/BMTable.hpp"
+#include "utils/Result.hpp"
 
 #include <expected>
 
@@ -45,10 +48,6 @@ template <typename T> class GuardedBufferFrame;
 ///
 /// TODO: revisit the comments after switching to clock replacement strategy
 class BufferManager {
-private:
-  friend class leanstore::LeanStore;
-  friend class leanstore::profiling::BMTable;
-
 public:
   /// The LeanStore instance.
   leanstore::LeanStore* mStore;
@@ -72,12 +71,10 @@ public:
   /// All the buffer frame provider threads.
   std::vector<std::unique_ptr<BufferFrameProvider>> mBfProviders;
 
-public:
   BufferManager(leanstore::LeanStore* store);
 
   ~BufferManager();
 
-public:
   /// Get the partition ID of the page.
   uint64_t GetPartitionID(PID);
 
@@ -96,8 +93,7 @@ public:
   /// exclusively locked.
   BufferFrame& AllocNewPage(TREEID treeId);
 
-  BufferFrame* ResolveSwipMayJump(HybridGuard& parentNodeGuard,
-                                  Swip& childSwip);
+  BufferFrame* ResolveSwipMayJump(HybridGuard& nodeGuard, Swip& swipInNode);
 
   void ReclaimPage(BufferFrame& bf);
 
@@ -141,6 +137,27 @@ public:
   /// Do something on all the buffer frames which satisify the condition
   void DoWithBufferFrameIf(std::function<bool(BufferFrame& bf)> condition,
                            std::function<void(BufferFrame& bf)> action);
+
+private:
+  Result<void> writePage(PID pageId, void* buffer) {
+    utils::AsyncIo aio(1);
+    const auto pageSize = mStore->mStoreOption.mPageSize;
+    DEBUG_BLOCK() {
+      auto* page = reinterpret_cast<Page*>(buffer);
+      Log::Debug("page write, pageId={}, btreeId={}", pageId, page->mBTreeId);
+    }
+    aio.PrepareWrite(mStore->mPageFd, buffer, pageSize, pageId * pageSize);
+    if (auto res = aio.SubmitAll(); !res) {
+      return std::unexpected(std::move(res.error()));
+    }
+    if (auto res = aio.WaitAll(); !res) {
+      return std::unexpected(std::move(res.error()));
+    }
+    return {};
+  }
+
+  friend class leanstore::LeanStore;
+  friend class leanstore::profiling::BMTable;
 };
 
 } // namespace storage

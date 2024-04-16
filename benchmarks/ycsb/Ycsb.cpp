@@ -2,13 +2,13 @@
 
 #include "YcsbLeanStore.hpp"
 #include "YcsbRocksDb.hpp"
-#include "leanstore/Config.hpp"
+#include "utils/Log.hpp"
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
 
 #include <algorithm>
 #include <cctype>
+#include <format>
 #include <string>
 
 // For data preparation
@@ -19,10 +19,6 @@ static std::string kTargetBasicKv = "basickv";
 static std::string kTargetRocksDb = "rocksdb";
 
 int main(int argc, char** argv) {
-  FLAGS_init = true;
-  FLAGS_enable_metrics = true;
-  FLAGS_metrics_port = 8080;
-  FLAGS_data_dir = "/tmp/ycsb/" + FLAGS_ycsb_workload;
 
   gflags::SetUsageMessage("Ycsb Benchmark");
   gflags::ParseCommandLineFlags(&argc, &argv, true);
@@ -43,7 +39,7 @@ int main(int argc, char** argv) {
                  [](unsigned char c) { return std::tolower(c); });
 
   if (FLAGS_ycsb_key_size < 8) {
-    LOG(FATAL) << "Key size must be >= 8";
+    leanstore::Log::Fatal("Key size must be >= 8");
   }
 
   leanstore::ycsb::YcsbExecutor* executor = nullptr;
@@ -56,7 +52,7 @@ int main(int argc, char** argv) {
   }
 
   if (executor == nullptr) {
-    LOG(FATAL) << "Unknown target: " << FLAGS_ycsb_target;
+    leanstore::Log::Fatal(std::format("Unknown target: {}", FLAGS_ycsb_target));
   }
 
   if (FLAGS_ycsb_cmd == kCmdLoad) {
@@ -70,6 +66,6 @@ int main(int argc, char** argv) {
     return 0;
   }
 
-  LOG(FATAL) << "Unknown command: " << FLAGS_ycsb_cmd;
+  leanstore::Log::Fatal(std::format("Unknown command: {}", FLAGS_ycsb_cmd));
   return 0;
 }

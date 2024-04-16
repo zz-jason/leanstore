@@ -1,18 +1,13 @@
 #pragma once
 
 #include "concurrency/GroupCommitter.hpp"
-#include "concurrency/Transaction.hpp"
-#include "concurrency/WalEntry.hpp"
 #include "concurrency/Worker.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "utils/Defer.hpp"
 
-#include <glog/logging.h>
 #include <rapidjson/document.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
-
-#include <iostream>
 
 namespace leanstore::cr {
 
@@ -56,11 +51,10 @@ template <typename T> inline void WalPayloadHandler<T>::SubmitWal() {
       // rapidjson::StringBuffer buffer;
       // rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
       // walDoc.Accept(writer);
-      // LOG(INFO) << "SubmitWal"
-      //           << ", workerId=" << Worker::My().mWorkerId
-      //           << ", startTs=" << Worker::My().mActiveTx.mStartTs
-      //           << ", curGSN=" << Worker::My().mLogging.GetCurrentGsn()
-      //           << ", walJson=" << buffer.GetString();
+      // Log::Debug("SubmitWal, workerId={}, startTs={}, curGsn={}, walJson={}",
+      //            Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
+      //            Worker::My().mLogging.GetCurrentGsn(),
+      //            WalEntry::ToJsonString(mWalPayload));
   });
 
   cr::Worker::My().mLogging.SubmitWALEntryComplex(mTotalSize);

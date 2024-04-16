@@ -7,10 +7,8 @@
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "sync/HybridLatch.hpp"
+#include "utils/Log.hpp"
 #include "utils/Misc.hpp"
-
-#include <gflags/gflags.h>
-#include <glog/logging.h>
 
 #include <format>
 
@@ -21,7 +19,7 @@ namespace leanstore::storage::btree {
 
 Result<BasicKV*> BasicKV::Create(leanstore::LeanStore* store,
                                  const std::string& treeName,
-                                 BTreeConfig& config) {
+                                 BTreeConfig config) {
   auto [treePtr, treeId] = store->mTreeRegistry->CreateTree(treeName, [&]() {
     return std::unique_ptr<BufferManagedTree>(
         static_cast<BufferManagedTree*>(new BasicKV()));
@@ -31,7 +29,7 @@ Result<BasicKV*> BasicKV::Create(leanstore::LeanStore* store,
         utils::Error::General("Tree name has been taken"));
   }
   auto* tree = DownCast<BasicKV*>(treePtr);
-  tree->Init(store, treeId, config);
+  tree->Init(store, treeId, std::move(config));
   return tree;
 }
 
@@ -51,7 +49,7 @@ OpCode BasicKV::Lookup(Slice key, ValCallback valCallback) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
     JUMPMU_CATCH() {
-      DLOG(WARNING) << "BasicKV::Lookup retried";
+      Log::Debug("BasicKV::Lookup retried");
       WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
     }
   }
@@ -66,7 +64,7 @@ bool BasicKV::IsRangeEmpty(Slice startKey, Slice endKey) {
       FindLeafCanJump(startKey, guardedLeaf);
 
       Slice upperFence = guardedLeaf->GetUpperFence();
-      DCHECK(startKey >= guardedLeaf->GetLowerFence());
+      Log::DebugCheck(startKey >= guardedLeaf->GetLowerFence());
 
       if ((guardedLeaf->mUpperFence.offset == 0 || endKey <= upperFence) &&
           guardedLeaf->mNumSeps == 0) {
@@ -146,15 +144,14 @@ OpCode BasicKV::Insert(Slice key, Slice val) {
     auto ret = xIter.InsertKV(key, val);
 
     if (ret == OpCode::kDuplicated) {
-      LOG(INFO) << std::format("Insert duplicated, workerId={}, key={}",
-                               cr::Worker::My().mWorkerId, key.ToString());
+      Log::Info("Insert duplicated, workerId={}, key={}, treeId={}",
+                cr::Worker::My().mWorkerId, key.ToString(), mTreeId);
       JUMPMU_RETURN OpCode::kDuplicated;
     }
 
     if (ret != OpCode::kOK) {
-      LOG(INFO) << std::format("Insert failed, workerId={}, key={}, ret={}",
-                               cr::Worker::My().mWorkerId, key.ToString(),
-                               ToString(ret));
+      Log::Info("Insert failed, workerId={}, key={}, ret={}",
+                cr::Worker::My().mWorkerId, key.ToString(), ToString(ret));
       JUMPMU_RETURN ret;
     }
 
@@ -262,7 +259,7 @@ OpCode BasicKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
     }
     auto currentVal = xIter.MutableVal();
     if (mConfig.mEnableWal) {
-      DCHECK(updateDesc.mNumSlots > 0);
+      Log::DebugCheck(updateDesc.mNumSlots > 0);
       auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
       auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WalUpdate>(
           key.length() + sizeOfDescAndDelta);

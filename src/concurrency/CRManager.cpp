@@ -6,8 +6,7 @@
 #include "concurrency/Worker.hpp"
 #include "concurrency/WorkerThread.hpp"
 #include "leanstore/LeanStore.hpp"
-
-#include <glog/logging.h>
+#include "utils/Log.hpp"
 
 #include <memory>
 #include <vector>
@@ -19,11 +18,12 @@ CRManager::CRManager(leanstore::LeanStore* store)
       mGroupCommitter(nullptr) {
   auto& storeOption = store->mStoreOption;
   // start all worker threads
-  mWorkers.resize(storeOption.mNumTxWorkers);
-  mWorkerThreads.reserve(storeOption.mNumTxWorkers);
-  for (uint64_t workerId = 0; workerId < storeOption.mNumTxWorkers;
+  mWorkers.resize(storeOption.mWorkerThreads);
+  mWorkerThreads.reserve(storeOption.mWorkerThreads);
+  for (uint64_t workerId = 0; workerId < storeOption.mWorkerThreads;
        workerId++) {
-    auto workerThread = std::make_unique<WorkerThread>(workerId, workerId);
+    auto workerThread =
+        std::make_unique<WorkerThread>(store, workerId, workerId);
     workerThread->Start();
 
     // create thread-local transaction executor on each worker thread
@@ -37,8 +37,8 @@ CRManager::CRManager(leanstore::LeanStore* store)
   }
 
   // start group commit thread
-  if (FLAGS_wal) {
-    const int cpu = storeOption.mNumTxWorkers;
+  if (mStore->mStoreOption.mEnableWal) {
+    const int cpu = storeOption.mWorkerThreads;
     mGroupCommitter =
         std::make_unique<GroupCommitter>(mStore, mStore->mWalFd, mWorkers, cpu);
     mGroupCommitter->Start();
@@ -61,26 +61,28 @@ CRManager::~CRManager() {
 }
 
 void CRManager::setupHistoryStorage4EachWorker() {
-  for (uint64_t i = 0; i < mStore->mStoreOption.mNumTxWorkers; i++) {
-    storage::btree::BTreeConfig config = {.mEnableWal = false,
-                                          .mUseBulkInsert = true};
+  for (uint64_t i = 0; i < mStore->mStoreOption.mWorkerThreads; i++) {
     // setup update tree
     std::string updateBtreeName = std::format("_history_tree_{}_updates", i);
-    auto res = storage::btree::BasicKV::Create(mStore, updateBtreeName, config);
+    auto res = storage::btree::BasicKV::Create(
+        mStore, updateBtreeName,
+        BTreeConfig{.mEnableWal = false, .mUseBulkInsert = true});
     if (!res) {
-      LOG(FATAL) << "Failed to set up update history tree"
-                 << ", updateBTreeName=" << updateBtreeName
-                 << ", error=" << res.error().ToString();
+      Log::Fatal(
+          "Failed to set up update history tree, updateBtreeName={}, error={}",
+          updateBtreeName, res.error().ToString());
     }
     auto* updateIndex = res.value();
 
     // setup delete tree
     std::string removeBtreeName = std::format("_history_tree_{}_removes", i);
-    res = storage::btree::BasicKV::Create(mStore, removeBtreeName, config);
+    res = storage::btree::BasicKV::Create(
+        mStore, removeBtreeName,
+        BTreeConfig{.mEnableWal = false, .mUseBulkInsert = true});
     if (!res) {
-      LOG(FATAL) << "Failed to set up remove history tree"
-                 << ", removeBtreeName=" << removeBtreeName
-                 << ", error=" << res.error().ToString();
+      Log::Fatal(
+          "Failed to set up remove history tree, removeBtreeName={}, error={}",
+          removeBtreeName, res.error().ToString());
     }
     auto* removeIndex = res.value();
     mWorkers[i]->mCc.mHistoryStorage.SetUpdateIndex(updateIndex);

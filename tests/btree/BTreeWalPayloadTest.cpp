@@ -3,8 +3,6 @@
 #include "btree/core/BTreeNode.hpp"
 #include "leanstore/KVInterface.hpp"
 
-#include <gflags/gflags.h>
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <rapidjson/document.h>
 

@@ -6,14 +6,12 @@
 #include "concurrency/Logging.hpp"
 #include "concurrency/Transaction.hpp"
 #include "concurrency/WalEntry.hpp"
-#include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "profiling/counters/CRCounters.hpp"
 #include "telemetry/MetricOnlyTimer.hpp"
 #include "telemetry/MetricsManager.hpp"
 #include "utils/Defer.hpp"
-
-#include <glog/logging.h>
+#include "utils/Log.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -34,7 +32,7 @@ Worker::Worker(uint64_t workerId, std::vector<Worker*>& allWorkers,
   CRCounters::MyCounters().mWorkerId = workerId;
 
   // init wal buffer
-  mLogging.mWalBufferSize = mStore->mStoreOption.mWalRingBufferSize;
+  mLogging.mWalBufferSize = mStore->mStoreOption.mWalBufferSize;
   mLogging.mWalBuffer =
       (uint8_t*)(std::aligned_alloc(512, mLogging.mWalBufferSize));
   std::memset(mLogging.mWalBuffer, 0, mLogging.mWalBufferSize);
@@ -50,20 +48,18 @@ Worker::~Worker() {
 
 void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   Transaction prevTx = mActiveTx;
-  DCHECK(prevTx.mState != TxState::kStarted)
-      << "Previous transaction not ended"
-      << ", workerId=" << mWorkerId << ", startTs=" << prevTx.mStartTs
-      << ", txState=" << TxStatUtil::ToString(prevTx.mState);
+  Log::DebugCheck(
+      prevTx.mState != TxState::kStarted,
+      "Previous transaction not ended, workerId={}, startTs={}, txState={}",
+      mWorkerId, prevTx.mStartTs, TxStatUtil::ToString(prevTx.mState));
   SCOPED_DEFER({
-    DLOG(INFO) << "Start transaction"
-               << ", workerId=" << mWorkerId
-               << ", startTs=" << mActiveTx.mStartTs
-               << ", txReadSnapshot(GSN)=" << mLogging.mTxReadSnapshot
-               << ", workerGSN=" << mLogging.GetCurrentGsn()
-               << ", globalMinFlushedGSN="
-               << mStore->mCRManager->mGroupCommitter->mGlobalMinFlushedGSN
-               << ", globalMaxFlushedGSN="
-               << mStore->mCRManager->mGroupCommitter->mGlobalMaxFlushedGSN;
+    Log::Debug(
+        "Start transaction, workerId={}, startTs={}, txReadSnapshot(GSN)={}, "
+        "workerGSN={}, globalMinFlushedGSN={}, globalMaxFlushedGSN={}",
+        mWorkerId, mActiveTx.mStartTs, mLogging.mTxReadSnapshot,
+        mLogging.GetCurrentGsn(),
+        mStore->mCRManager->mGroupCommitter->mGlobalMinFlushedGSN.load(),
+        mStore->mCRManager->mGroupCommitter->mGlobalMaxFlushedGSN.load());
   });
 
   mActiveTx.Start(mode, level);
@@ -91,8 +87,7 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
 
   // For now, we only support SI and SSI
   if (level < IsolationLevel::kSnapshotIsolation) {
-    LOG(FATAL) << "Unsupported isolation level: "
-               << static_cast<uint64_t>(level);
+    Log::Fatal("Unsupported isolation level: {}", static_cast<uint64_t>(level));
   }
 
   // Draw TXID from global counter and publish it with the TX type (i.e.
@@ -107,7 +102,7 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
     mActiveTx.mStartTs = mStore->AllocTs();
   }
   auto curTxId = mActiveTx.mStartTs;
-  if (FLAGS_enable_long_running_transaction && mActiveTx.IsLongRunning()) {
+  if (mStore->mStoreOption.mEnableLongRunningTx && mActiveTx.IsLongRunning()) {
     // Mark as long-running transaction
     curTxId |= kLongRunningBit;
   }
@@ -134,10 +129,10 @@ void Worker::CommitTx() {
     mCc.mCommitTree.AppendCommitLog(mActiveTx.mStartTs, mActiveTx.mCommitTs);
     mCc.mLatestCommitTs.store(mActiveTx.mCommitTs, std::memory_order_release);
   } else {
-    DLOG(INFO) << "Transaction has no writes, skip assigning commitTs, append "
-                  "log to commit tree, and group commit"
-               << ", workerId=" << My().mWorkerId
-               << ", actual startTs=" << mActiveTx.mStartTs;
+    Log::Debug(
+        "Transaction has no writes, skip assigning commitTs, append log to "
+        "commit tree, and group commit, workerId={}, actual startTs={}",
+        mWorkerId, mActiveTx.mStartTs);
   }
 
   // Reset startTs so that other transactions can safely update the global
@@ -159,21 +154,19 @@ void Worker::CommitTx() {
     // for group commit
     std::unique_lock<std::mutex> g(mLogging.mTxToCommitMutex);
     mLogging.mTxToCommit.push_back(mActiveTx);
-    DLOG(INFO) << "Puting transaction with remote dependency to mTxToCommit"
-               << ", workerId=" << mWorkerId
-               << ", startTs=" << mActiveTx.mStartTs
-               << ", commitTs=" << mActiveTx.mCommitTs
-               << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
+    Log::Debug("Puting transaction with remote dependency to mTxToCommit"
+               ", workerId={}, startTs={}, commitTs={}, maxObservedGSN={}",
+               mWorkerId, mActiveTx.mStartTs, mActiveTx.mCommitTs,
+               mActiveTx.mMaxObservedGSN);
   } else {
     // for group commit
     std::unique_lock<std::mutex> g(mLogging.mRfaTxToCommitMutex);
     CRCounters::MyCounters().rfa_committed_tx++;
     mLogging.mRfaTxToCommit.push_back(mActiveTx);
-    DLOG(INFO) << "Puting transaction (RFA) to mRfaTxToCommit"
-               << ", workerId=" << mWorkerId
-               << ", startTs=" << mActiveTx.mStartTs
-               << ", commitTs=" << mActiveTx.mCommitTs
-               << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
+    Log::Debug("Puting transaction (RFA) to mRfaTxToCommit, workerId={}, "
+               "startTs={}, commitTs={}, maxObservedGSN={}",
+               mWorkerId, mActiveTx.mStartTs, mActiveTx.mCommitTs,
+               mActiveTx.mMaxObservedGSN);
   }
 
   // Cleanup versions in history tree
@@ -205,11 +198,10 @@ void Worker::AbortTx() {
     mActiveTx.mState = TxState::kAborted;
     METRIC_COUNTER_INC(mStore->mMetricsManager, tx_abort_total, 1);
     mActiveTxId.store(0, std::memory_order_release);
-    LOG(INFO) << "Transaction aborted"
-              << ", workerId=" << mWorkerId
-              << ", startTs=" << mActiveTx.mStartTs
-              << ", commitTs=" << mActiveTx.mCommitTs
-              << ", maxObservedGSN=" << mActiveTx.mMaxObservedGSN;
+    Log::Info("Transaction aborted, workerId={}, startTs={}, commitTs={}, "
+              "maxObservedGSN={}",
+              mWorkerId, mActiveTx.mStartTs, mActiveTx.mCommitTs,
+              mActiveTx.mMaxObservedGSN);
   });
 
   if (!(mActiveTx.mState == TxState::kStarted && mActiveTx.mIsDurable)) {
@@ -217,9 +209,8 @@ void Worker::AbortTx() {
   }
 
   // TODO(jian.z): support reading from WAL file once
-  DCHECK(!mActiveTx.mWalExceedBuffer)
-      << "Aborting from WAL file is not supported yet";
-
+  Log::DebugCheck(!mActiveTx.mWalExceedBuffer,
+                  "Aborting from WAL file is not supported yet");
   std::vector<const WalEntry*> entries;
   mLogging.IterateCurrentTxWALs([&](const WalEntry& entry) {
     if (entry.mType == WalEntry::Type::kComplex) {

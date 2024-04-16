@@ -6,7 +6,7 @@
 CPUPROFILE=ycsb.cpu.profile CPUPROFILESIGNAL=12 \
 HEAPPROFILE=ycsb.heap.profile HEAPPROFILESIGNAL=13 \
 ./build/release/benchmarks/ycsb/ycsb \
-  --worker_threads=8 \
+  --ycsb_threads=8 \
   --ycsb_record_count=100000 \
   --ycsb_workload=c \
   --ycsb_run_for_seconds=600 \

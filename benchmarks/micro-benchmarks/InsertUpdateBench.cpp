@@ -1,10 +1,9 @@
 #include "btree/BasicKV.hpp"
 #include "btree/TransactionKV.hpp"
-#include "btree/core/BTreeGeneric.hpp"
 #include "buffer-manager/BufferManager.hpp"
 #include "concurrency/CRManager.hpp"
-#include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
+#include "leanstore/StoreOption.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <benchmark/benchmark.h>
@@ -19,25 +18,21 @@
 namespace leanstore::test {
 
 static void BenchUpdateInsert(benchmark::State& state) {
-  FLAGS_init = true;
-  FLAGS_worker_threads = 4;
-  FLAGS_data_dir = "/tmp/InsertUpdateBench";
-
-  std::filesystem::path dirPath = FLAGS_data_dir;
+  std::filesystem::path dirPath = "/tmp/InsertUpdateBench";
   std::filesystem::remove_all(dirPath);
   std::filesystem::create_directories(dirPath);
-  auto sLeanStore = std::make_unique<leanstore::LeanStore>();
+  auto sLeanStore = std::make_unique<leanstore::LeanStore>(StoreOption{
+      .mCreateFromScratch = true,
+      .mStoreDir = "/tmp/InsertUpdateBench",
+      .mWorkerThreads = 4,
+  });
 
   storage::btree::TransactionKV* btree;
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = leanstore::storage::btree::BTreeConfig{
-      .mEnableWal = FLAGS_wal,
-      .mUseBulkInsert = FLAGS_bulk_insert,
-  };
   sLeanStore->ExecSync(0, [&]() {
-    auto res = sLeanStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = sLeanStore->CreateTransactionKV(btreeName);
     EXPECT_TRUE(res);
     EXPECT_NE(res.value(), nullptr);
     btree = res.value();

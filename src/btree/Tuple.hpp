@@ -1,14 +1,10 @@
 #pragma once
 
-#include "leanstore/Units.hpp"
 #include "btree/core/BTreePessimisticExclusiveIterator.hpp"
+#include "leanstore/Units.hpp"
+#include "utils/Log.hpp"
 
-#include <glog/logging.h>
-
-namespace leanstore {
-namespace storage {
-namespace btree {
-
+namespace leanstore::storage::btree {
 /// Plan: we should handle frequently and infrequently updated tuples
 /// differently when it comes to maintaining versions in the b-tree. For
 /// frequently updated tuples, we store them in a FatTuple
@@ -267,12 +263,12 @@ private:
   void resize(uint32_t newSize);
 
   inline FatTupleDelta& getDelta(uint16_t i) {
-    DCHECK(i < mNumDeltas);
+    Log::DebugCheck(i < mNumDeltas);
     return *reinterpret_cast<FatTupleDelta*>(mPayload + getDeltaOffsets()[i]);
   }
 
   inline const FatTupleDelta& getDelta(uint16_t i) const {
-    DCHECK(i < mNumDeltas);
+    Log::DebugCheck(i < mNumDeltas);
     return *reinterpret_cast<const FatTupleDelta*>(mPayload +
                                                    getDeltaOffsets()[i]);
   }
@@ -455,6 +451,4 @@ public:
   }
 };
 
-} // namespace btree
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage::btree

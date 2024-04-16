@@ -1,18 +1,15 @@
 #include "Ycsb.hpp"
 #include "btree/TransactionKV.hpp"
-#include "btree/core/BTreeGeneric.hpp"
 #include "concurrency/CRManager.hpp"
 #include "concurrency/Worker.hpp"
-#include "leanstore/Config.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
+#include "leanstore/StoreOption.hpp"
 #include "utils/Defer.hpp"
-#include "utils/Parallelize.hpp"
+#include "utils/Log.hpp"
 #include "utils/RandomGenerator.hpp"
 #include "utils/ScrambledZipfGenerator.hpp"
 
-#include <gflags/gflags.h>
-#include <glog/logging.h>
 #include <gperftools/heap-profiler.h>
 #include <gperftools/profiler.h>
 
@@ -37,7 +34,13 @@ private:
 public:
   YcsbLeanStore(bool benchTransactionKv)
       : mBenchTransactionKv(benchTransactionKv) {
-    auto res = LeanStore::Open();
+    auto res = LeanStore::Open(StoreOption{
+        .mCreateFromScratch = true,
+        .mStoreDir = "/tmp/ycsb/" + FLAGS_ycsb_workload,
+        .mWorkerThreads = FLAGS_ycsb_threads,
+        .mEnableMetrics = true,
+        .mMetricsPort = 8080,
+    });
     if (!res) {
       std::cerr << "Failed to open leanstore: " << res.error().ToString()
                 << std::endl;
@@ -49,19 +52,14 @@ public:
 
   KVInterface* CreateTable() {
     auto tableName = "ycsb_" + FLAGS_ycsb_workload;
-    auto config = btree::BTreeConfig{
-        .mEnableWal = FLAGS_wal,
-        .mUseBulkInsert = FLAGS_bulk_insert,
-    };
-
     // create table with transaction kv
     if (mBenchTransactionKv) {
       btree::TransactionKV* table;
       mStore->ExecSync(0, [&]() {
-        auto res = mStore->CreateTransactionKV(tableName, config);
+        auto res = mStore->CreateTransactionKV(tableName);
         if (!res) {
-          LOG(FATAL) << std::format("Failed to create table: name={}, error={}",
-                                    tableName, res.error().ToString());
+          Log::Fatal("Failed to create table: name={}, error={}", tableName,
+                     res.error().ToString());
         }
         table = res.value();
       });
@@ -71,10 +69,10 @@ public:
     // create table with basic kv
     btree::BasicKV* table;
     mStore->ExecSync(0, [&]() {
-      auto res = mStore->CreateBasicKV(tableName, config);
+      auto res = mStore->CreateBasicKV(tableName);
       if (!res) {
-        LOG(FATAL) << std::format("Failed to create table: name={}, error={}",
-                                  tableName, res.error().ToString());
+        Log::Fatal("Failed to create table: name={}, error={}", tableName,
+                   res.error().ToString());
       }
       table = res.value();
     });
@@ -96,7 +94,7 @@ public:
   void HandleCmdLoad() override {
     auto* table = CreateTable();
     auto zipfRandom = utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count,
-                                                    FLAGS_zipf_factor);
+                                                    FLAGS_ycsb_zipf_factor);
 
     // record the start and end time, calculating throughput in the end
     auto start = std::chrono::high_resolution_clock::now();
@@ -114,30 +112,33 @@ public:
       std::cout << summary << std::endl;
     });
 
-    utils::Parallelize::Range(
-        FLAGS_worker_threads, FLAGS_ycsb_record_count,
-        [&](uint64_t workerId, uint64_t begin, uint64_t end) {
-          mStore->ExecAsync(workerId, [&, begin, end]() {
-            for (uint64_t i = begin; i < end; i++) {
-              // generate key
-              uint8_t key[FLAGS_ycsb_key_size];
-              GenYcsbKey(zipfRandom, key);
+    auto numWorkers = mStore->mStoreOption.mWorkerThreads;
+    auto avg = FLAGS_ycsb_record_count / numWorkers;
+    auto rem = FLAGS_ycsb_record_count % numWorkers;
+    for (auto workerId = 0u, begin = 0u; workerId < numWorkers;) {
+      auto end = begin + avg + (rem-- > 0 ? 1 : 0);
+      mStore->ExecAsync(workerId, [&, begin, end]() {
+        for (uint64_t i = begin; i < end; i++) {
+          // generate key
+          uint8_t key[FLAGS_ycsb_key_size];
+          GenYcsbKey(zipfRandom, key);
 
-              // generate value
-              uint8_t val[FLAGS_ycsb_val_size];
-              utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
+          // generate value
+          uint8_t val[FLAGS_ycsb_val_size];
+          utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
 
-              if (mBenchTransactionKv) {
-                cr::Worker::My().StartTx();
-              }
-              table->Insert(Slice(key, FLAGS_ycsb_key_size),
-                            Slice(val, FLAGS_ycsb_val_size));
-              if (mBenchTransactionKv) {
-                cr::Worker::My().CommitTx();
-              }
-            }
-          });
-        });
+          if (mBenchTransactionKv) {
+            cr::Worker::My().StartTx();
+          }
+          table->Insert(Slice(key, FLAGS_ycsb_key_size),
+                        Slice(val, FLAGS_ycsb_val_size));
+          if (mBenchTransactionKv) {
+            cr::Worker::My().CommitTx();
+          }
+        }
+      });
+      workerId++, begin = end;
+    }
     mStore->WaitAll();
   }
 
@@ -146,10 +147,12 @@ public:
     auto workloadType = static_cast<Workload>(FLAGS_ycsb_workload[0] - 'a');
     auto workload = GetWorkloadSpec(workloadType);
     auto zipfRandom = utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count,
-                                                    FLAGS_zipf_factor);
+                                                    FLAGS_ycsb_zipf_factor);
     atomic<bool> keepRunning = true;
-    std::vector<std::atomic<uint64_t>> threadCommitted(FLAGS_worker_threads);
-    std::vector<std::atomic<uint64_t>> threadAborted(FLAGS_worker_threads);
+    std::vector<std::atomic<uint64_t>> threadCommitted(
+        mStore->mStoreOption.mWorkerThreads);
+    std::vector<std::atomic<uint64_t>> threadAborted(
+        mStore->mStoreOption.mWorkerThreads);
     // init counters
     for (auto& c : threadCommitted) {
       c = 0;
@@ -158,7 +161,8 @@ public:
       a = 0;
     }
 
-    for (uint64_t workerId = 0; workerId < FLAGS_worker_threads; workerId++) {
+    for (uint64_t workerId = 0; workerId < mStore->mStoreOption.mWorkerThreads;
+         workerId++) {
       mStore->ExecAsync(workerId, [&]() {
         uint8_t key[FLAGS_ycsb_key_size];
         std::string valRead;
@@ -214,8 +218,8 @@ public:
               break;
             }
             default: {
-              LOG(FATAL) << "Unsupported workload type: "
-                         << static_cast<uint8_t>(workloadType);
+              Log::Fatal("Unsupported workload type: {}",
+                         static_cast<uint8_t>(workloadType));
             }
             }
             threadCommitted[cr::Worker::My().mWorkerId]++;
@@ -249,7 +253,7 @@ public:
       auto abortRate = (aborted)*1.0 / (committed + aborted);
       auto summary = std::format("[{} thds] [{}s] [tps={:.2f}] [committed={}] "
                                  "[conflicted={}] [conflict rate={:.2f}]",
-                                 FLAGS_worker_threads, i,
+                                 mStore->mStoreOption.mWorkerThreads, i,
                                  (committed + aborted) * 1.0 / reportPeriod,
                                  committed, aborted, abortRate);
       std::cout << summary << std::endl;

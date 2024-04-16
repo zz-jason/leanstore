@@ -3,8 +3,9 @@
 #include "buffer-manager/BufferFrame.hpp"
 #include "buffer-manager/GuardedBufferFrame.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "utils/Log.hpp"
+#include "utils/UserThread.hpp"
 
-#include <glog/logging.h>
 #include <rapidjson/document.h>
 
 #include <algorithm>
@@ -13,9 +14,7 @@
 using namespace std;
 using namespace leanstore::storage;
 
-namespace leanstore {
-namespace storage {
-namespace btree {
+namespace leanstore::storage::btree {
 
 class BTreeNode;
 using HeadType = uint32_t;
@@ -223,7 +222,7 @@ public:
   }
 
   inline Swip* ChildSwip(uint16_t slotId) {
-    DCHECK(slotId < mNumSeps);
+    Log::DebugCheck(slotId < mNumSeps);
     return reinterpret_cast<Swip*>(ValData(slotId));
   }
 
@@ -233,16 +232,17 @@ public:
 
   // Attention: the caller has to hold a copy of the existing payload
   inline void shortenPayload(uint16_t slotId, uint16_t targetSize) {
-    DCHECK(targetSize <= slot[slotId].mValSize);
+    Log::DebugCheck(targetSize <= slot[slotId].mValSize);
     const uint16_t freeSpace = slot[slotId].mValSize - targetSize;
     mSpaceUsed -= freeSpace;
     slot[slotId].mValSize = targetSize;
   }
 
   inline bool CanExtendPayload(uint16_t slotId, uint16_t targetSize) {
-    DCHECK(targetSize > ValSize(slotId))
-        << "Target size must be larger than current size"
-        << ", targetSize=" << targetSize << ", currentSize=" << ValSize(slotId);
+    Log::DebugCheck(targetSize > ValSize(slotId),
+                    "Target size must be larger than current size, "
+                    "targetSize={}, currentSize={}",
+                    targetSize, ValSize(slotId));
 
     const uint16_t extraSpaceNeeded = targetSize - ValSize(slotId);
     return FreeSpaceAfterCompaction() >= extraSpaceNeeded;
@@ -250,11 +250,11 @@ public:
 
   // Move key | payload to a new location
   void ExtendPayload(uint16_t slotId, uint16_t targetSize) {
-    DCHECK(CanExtendPayload(slotId, targetSize))
-        << "ExtendPayload failed, not enough space in the current node"
-        << ", slotId=" << slotId << ", targetSize=" << targetSize
-        << ", freeSpace=" << FreeSpaceAfterCompaction()
-        << ", currentSize=" << ValSize(slotId);
+    Log::DebugCheck(
+        CanExtendPayload(slotId, targetSize),
+        "ExtendPayload failed, not enough space in the current node, "
+        "slotId={}, targetSize={}, freeSpace={}, currentSize={}",
+        slotId, targetSize, FreeSpaceAfterCompaction(), ValSize(slotId));
     // const uint16_t extraSpaceNeeded = targetSize - ValSize(slotId);
     // requestSpaceFor(extraSpaceNeeded);
 
@@ -275,7 +275,7 @@ public:
     if (freeSpace() < newTotalSize) {
       compactify();
     }
-    DCHECK(freeSpace() >= newTotalSize);
+    Log::DebugCheck(freeSpace() >= newTotalSize);
     mSpaceUsed += newTotalSize;
     mDataOffset -= newTotalSize;
     slot[slotId].offset = mDataOffset;
@@ -364,7 +364,7 @@ public:
 
   void searchHint(HeadType key_head, uint16_t& lower_out, uint16_t& upper_out) {
     if (mNumSeps > sHintCount * 2) {
-      if (FLAGS_btree_hints == 2) {
+      if (utils::tlsStore->mStoreOption.mBTreeHints == 2) {
 #ifdef __AVX512F__
         const uint16_t dist = mNumSeps / (sHintCount + 1);
         uint16_t pos, pos2;
@@ -385,9 +385,9 @@ public:
           upper_out = (pos2 + 1) * dist;
         }
 #else
-        LOG(ERROR) << "Search hint with AVX512 failed: __AVX512F__ not found";
+        Log::Error("Search hint with AVX512 failed: __AVX512F__ not found");
 #endif
-      } else if (FLAGS_btree_hints == 1) {
+      } else if (utils::tlsStore->mStoreOption.mBTreeHints == 1) {
         const uint16_t dist = mNumSeps / (sHintCount + 1);
         uint16_t pos, pos2;
 
@@ -429,8 +429,8 @@ public:
         (bcmp(key.data(), getLowerFenceKey(), mPrefixSize) != 0)) {
       return -1;
     }
-    DCHECK(key.size() >= mPrefixSize &&
-           bcmp(key.data(), getLowerFenceKey(), mPrefixSize) == 0);
+    Log::DebugCheck(key.size() >= mPrefixSize &&
+                    bcmp(key.data(), getLowerFenceKey(), mPrefixSize) == 0);
 
     // the compared key has the same prefix
     key.remove_prefix(mPrefixSize);
@@ -510,7 +510,7 @@ public:
     searchHint(keyHead, lower, upper);
     while (lower < upper) {
       bool foundEqual(false);
-      if (FLAGS_btree_heads) {
+      if (utils::tlsStore->mStoreOption.mEnableHeadOptimization) {
         foundEqual = shrinkSearchRangeWithHead(lower, upper, key, keyHead);
       } else {
         foundEqual = shrinkSearchRange(lower, upper, key);
@@ -650,7 +650,8 @@ public:
   }
 
   inline static uint16_t Size() {
-    return static_cast<uint16_t>(FLAGS_page_size - sizeof(Page));
+    return static_cast<uint16_t>(utils::tlsStore->mStoreOption.mPageSize -
+                                 sizeof(Page));
   }
 
   inline static uint16_t UnderFullSize() {
@@ -658,6 +659,4 @@ public:
   }
 };
 
-} // namespace btree
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage::btree

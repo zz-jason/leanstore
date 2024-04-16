@@ -1,16 +1,15 @@
 #pragma once
 
 #include "leanstore/Units.hpp"
+#include "utils/Log.hpp"
 #include "utils/Misc.hpp"
 
-#include <glog/logging.h>
 #include <rapidjson/document.h>
 #include <rapidjson/rapidjson.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
 #include <cstdint>
-#include <format>
 #include <string>
 
 namespace leanstore::cr {
@@ -169,9 +168,8 @@ public:
       rapidjson::StringBuffer buffer;
       rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
       doc.Accept(writer);
-      LOG(FATAL) << std::format(
-          "CRC32 mismatch, actual={}, expected={}, walJson={}", actualCRC,
-          mCrc32, buffer.GetString());
+      Log::Fatal("CRC32 mismatch, actual={}, expected={}, walJson={}",
+                 actualCRC, mCrc32, buffer.GetString());
     }
   }
 };
@@ -202,7 +200,7 @@ inline size_t WalEntry::Size(const WalEntry* entry) {
   case WalEntry::Type::kCarriageReturn:
     return static_cast<const WalCarriageReturn*>(entry)->mSize;
   default:
-    LOG(FATAL) << "Unknown WalEntry type: " << static_cast<int>(entry->mType);
+    Log::Fatal("Unknown WalEntry type: {}", static_cast<int>(entry->mType));
   }
   return 0;
 }

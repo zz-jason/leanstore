@@ -3,13 +3,11 @@
 #include "BTreeNode.hpp"
 #include "buffer-manager/BufferManager.hpp"
 #include "buffer-manager/GuardedBufferFrame.hpp"
-#include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "sync/HybridLatch.hpp"
-
-#include "glog/logging.h"
+#include "utils/Log.hpp"
 
 #include <atomic>
 #include <limits>
@@ -27,12 +25,6 @@ enum class BTreeType : uint8_t {
 class BTreePessimisticSharedIterator;
 class BTreePessimisticExclusiveIterator;
 using BTreeNodeCallback = std::function<int64_t(BTreeNode&)>;
-
-class BTreeConfig {
-public:
-  bool mEnableWal = true;
-  bool mUseBulkInsert = false;
-};
 
 class BTreeGeneric : public leanstore::storage::BufferManagedTree {
 public:
@@ -110,15 +102,15 @@ public:
   virtual void Checkpoint(BufferFrame& bf, void* dest) override;
 
   virtual void undo(const uint8_t*, const uint64_t) override {
-    LOG(FATAL) << "undo is unsupported";
+    Log::Fatal("undo is unsupported");
   }
 
   virtual void GarbageCollect(const uint8_t*, WORKERID, TXID, bool) override {
-    LOG(FATAL) << "GarbageCollect is unsupported";
+    Log::Fatal("GarbageCollect is unsupported");
   }
 
   virtual void unlock(const uint8_t*) override {
-    LOG(FATAL) << "unlock is unsupported";
+    Log::Fatal("unlock is unsupported");
   }
 
   virtual StringMap Serialize() override;
@@ -207,7 +199,7 @@ public:
   }
 
   static void ToJson(BTreeGeneric& btree, rapidjson::Document* resultDoc) {
-    DCHECK(resultDoc->IsObject());
+    Log::DebugCheck(resultDoc->IsObject());
     auto& allocator = resultDoc->GetAllocator();
 
     // meta node
@@ -270,7 +262,7 @@ inline void BTreeGeneric::toJsonRecursive(
     BTreeGeneric& btree, GuardedBufferFrame<BTreeNode>& guardedNode,
     rapidjson::Value* resultObj, rapidjson::Value::AllocatorType& allocator) {
 
-  DCHECK(resultObj->IsObject());
+  Log::DebugCheck(resultObj->IsObject());
   // buffer frame header
   guardedNode.mBf->ToJson(resultObj, allocator);
 
@@ -329,7 +321,7 @@ inline void BTreeGeneric::IterateChildSwips(
 }
 
 inline SpaceCheckResult BTreeGeneric::CheckSpaceUtilization(BufferFrame& bf) {
-  if (!FLAGS_xmerge) {
+  if (!mStore->mStoreOption.mEnableXMerge) {
     return SpaceCheckResult::kNothing;
   }
 
@@ -392,7 +384,7 @@ inline void BTreeGeneric::FindLeafCanJump(
     }
 
     auto& childSwip = guardedTarget->lookupInner(key);
-    DCHECK(!childSwip.IsEmpty());
+    Log::DebugCheck(!childSwip.IsEmpty());
     guardedParent = std::move(guardedTarget);
     if (level == mHeight - 1) {
       guardedTarget = GuardedBufferFrame<BTreeNode>(
@@ -489,8 +481,8 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
     jumpmu::Jump();
   }
 
-  DCHECK(posInParent != std::numeric_limits<uint32_t>::max())
-      << "Invalid posInParent=" << posInParent;
+  Log::DebugCheck(posInParent != std::numeric_limits<uint32_t>::max(),
+                  "Invalid posInParent={}", posInParent);
   ParentSwipHandler parentHandler = {.mParentGuard =
                                          std::move(guardedChild.mGuard),
                                      .mParentBf = guardedChild.mBf,

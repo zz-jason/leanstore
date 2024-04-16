@@ -1,11 +1,8 @@
 #pragma once
 
 #include "Adapter.hpp"
-#include "btree/core/BTreeGeneric.hpp"
-#include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
-
-#include <glog/logging.h>
+#include "utils/Log.hpp"
 
 #include <functional>
 
@@ -20,20 +17,18 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
   }
 
   LeanStoreAdapter(LeanStore& db, std::string name) : name(name) {
-    if (!FLAGS_init) {
+    if (!db.mStoreOption.mCreateFromScratch) {
       leanstore::storage::btree::TransactionKV* tree;
       db.GetTransactionKV(name, &tree);
       btree = reinterpret_cast<leanstore::KVInterface*>(tree);
     } else {
       leanstore::storage::btree::TransactionKV* tree;
-      storage::btree::BTreeConfig config{.mEnableWal = FLAGS_wal,
-                                         .mUseBulkInsert = false};
-      auto res = db.CreateTransactionKV(name, config);
+      auto res = db.CreateTransactionKV(name);
       if (res) {
         tree = res.value();
       } else {
-        LOG(FATAL) << std::format("failed to create transaction kv, error={}",
-                                  res.error().ToString());
+        Log::Fatal(std::format("failed to create transaction kv, error={}",
+                               res.error().ToString()));
       }
       btree = reinterpret_cast<leanstore::KVInterface*>(tree);
     }
@@ -66,7 +61,8 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     const OpCode res =
         btree->Insert(Slice(foldedKey, foldedKeySize),
                       Slice((uint8_t*)(&record), sizeof(Record)));
-    DCHECK(res == leanstore::OpCode::kOK || res == leanstore::OpCode::kAbortTx);
+    Log::DebugCheck(res == leanstore::OpCode::kOK ||
+                    res == leanstore::OpCode::kAbortTx);
     if (res == leanstore::OpCode::kAbortTx) {
       cr::Worker::My().AbortTx();
     }
@@ -84,7 +80,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     if (res == leanstore::OpCode::kAbortTx) {
       cr::Worker::My().AbortTx();
     }
-    DCHECK(res == leanstore::OpCode::kOK);
+    Log::DebugCheck(res == leanstore::OpCode::kOK);
   }
 
   void update1(const typename Record::Key& key,
@@ -96,12 +92,12 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     const OpCode res = btree->UpdatePartial(
         Slice(foldedKey, foldedKeySize),
         [&](MutableSlice mutRawVal) {
-          DCHECK(mutRawVal.Size() == sizeof(Record));
+          Log::DebugCheck(mutRawVal.Size() == sizeof(Record));
           auto& record = *reinterpret_cast<Record*>(mutRawVal.Data());
           cb(record);
         },
         updateDesc);
-    DCHECK(res != leanstore::OpCode::kNotFound);
+    Log::DebugCheck(res != leanstore::OpCode::kNotFound);
     if (res == leanstore::OpCode::kAbortTx) {
       cr::Worker::My().AbortTx();
     }
@@ -154,7 +150,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
     if (res == leanstore::OpCode::kAbortTx) {
       cr::Worker::My().AbortTx();
     }
-    DCHECK(res == OpCode::kOK);
+    Log::DebugCheck(res == OpCode::kOK);
     return local_f;
   }
 

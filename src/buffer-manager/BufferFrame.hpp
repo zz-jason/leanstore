@@ -1,17 +1,16 @@
 #pragma once
 
 #include "buffer-manager/Swip.hpp"
-#include "leanstore/Config.hpp"
+#include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "sync/HybridLatch.hpp"
+#include "utils/Log.hpp"
 #include "utils/Misc.hpp"
+#include "utils/UserThread.hpp"
 
-#include <gflags/gflags.h>
-#include <glog/logging.h>
 #include <rapidjson/document.h>
 
 #include <atomic>
-#include <cstring>
 #include <limits>
 #include <sstream>
 
@@ -93,8 +92,8 @@ public:
 public:
   // Prerequisite: the buffer frame is exclusively locked
   void Reset() {
-    DCHECK(!mIsBeingWrittenBack);
-    DCHECK(mLatch.IsLockedExclusively());
+    Log::DebugCheck(!mIsBeingWrittenBack);
+    Log::DebugCheck(mLatch.IsLockedExclusively());
 
     mState = State::kFree;
     mKeepInMemory = false;
@@ -149,7 +148,8 @@ public:
 
 public:
   uint64_t CRC() {
-    return utils::CRC(mPayload, FLAGS_page_size - sizeof(Page));
+    return utils::CRC(mPayload,
+                      utils::tlsStore->mStoreOption.mPageSize - sizeof(Page));
   }
 };
 
@@ -174,28 +174,27 @@ public:
   // write-ahead log of the page.
   alignas(512) Page mPage;
 
-public:
   BufferFrame() = default;
 
   bool operator==(const BufferFrame& other) {
     return this == &other;
   }
 
-  inline bool IsDirty() const {
+  bool IsDirty() const {
     return mPage.mGSN != mHeader.mFlushedGsn;
   }
 
-  inline bool IsFree() const {
+  bool IsFree() const {
     return mHeader.mState == State::kFree;
   }
 
-  inline bool ShouldRemainInMem() {
+  bool ShouldRemainInMem() {
     return mHeader.mKeepInMemory || mHeader.mIsBeingWrittenBack ||
            mHeader.mLatch.IsLockedExclusively();
   }
 
-  inline void Init(PID pageId) {
-    DCHECK(mHeader.mState == State::kFree);
+  void Init(PID pageId) {
+    Log::DebugCheck(mHeader.mState == State::kFree);
     mHeader.mPageId = pageId;
     mHeader.mState = State::kHot;
     mHeader.mFlushedGsn = 0;
@@ -210,11 +209,6 @@ public:
 
   void ToJson(rapidjson::Value* resultObj,
               rapidjson::Value::AllocatorType& allocator);
-
-public:
-  static size_t Size() {
-    return 512 + FLAGS_page_size;
-  }
 };
 
 // -----------------------------------------------------------------------------
@@ -222,7 +216,7 @@ public:
 // -----------------------------------------------------------------------------
 inline void BufferFrame::ToJson(rapidjson::Value* resultObj,
                                 rapidjson::Value::AllocatorType& allocator) {
-  DCHECK(resultObj->IsObject());
+  Log::DebugCheck(resultObj->IsObject());
 
   // header
   rapidjson::Value headerObj(rapidjson::kObjectType);

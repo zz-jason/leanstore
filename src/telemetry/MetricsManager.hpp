@@ -2,6 +2,7 @@
 
 #include "leanstore/Exceptions.hpp"
 #include "telemetry/MetricsHttpExposer.hpp"
+#include "utils/UserThread.hpp"
 
 #include <prometheus/counter.h>
 #include <prometheus/exposer.h>
@@ -115,7 +116,7 @@ const std::vector<double> kBoundariesUs{
 /// LeanStore. It's expected to be a singleton inside a LeanStore instance.
 class MetricsManager {
 public:
-  MetricsManager() : mExposer() {
+  MetricsManager(LeanStore* store) : mExposer(store) {
     // create a metrics registry
     mRegistry = std::make_shared<prometheus::Registry>();
 

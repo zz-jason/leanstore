@@ -1,9 +1,10 @@
 #pragma once
 
+#include "utils/Log.hpp"
 #include "utils/ScrambledZipfGenerator.hpp"
 
 #include <gflags/gflags.h>
-#include <glog/logging.h>
+#include <gflags/gflags_declare.h>
 
 #include <chrono>
 #include <cstdint>
@@ -14,13 +15,14 @@
 DECLARE_string(ycsb_target);
 DECLARE_string(ycsb_cmd);
 DECLARE_string(ycsb_workload);
+DECLARE_uint32(ycsb_threads);
 DECLARE_uint64(ycsb_run_for_seconds);
 
 // For the data preparation
 DECLARE_uint64(ycsb_key_size);
 DECLARE_uint64(ycsb_val_size);
 DECLARE_uint64(ycsb_record_count);
-DECLARE_double(zipf_factor);
+DECLARE_double(ycsb_zipf_factor);
 
 namespace leanstore::ycsb {
 
@@ -71,8 +73,9 @@ inline WorkloadSpec GetWorkloadSpec(Workload workload) {
   case Workload::kF:
     return {0.5, 0.0, 0.0, 0.5};
   default:
-    LOG(FATAL) << "Unknown workload: " << static_cast<uint8_t>(workload);
+    Log::Fatal("Unknown workload: {}", static_cast<uint8_t>(workload));
   }
+  return {};
 }
 
 inline double CalculateTps(std::chrono::high_resolution_clock::time_point begin,

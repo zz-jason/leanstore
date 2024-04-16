@@ -1,10 +1,10 @@
 #include "btree/BasicKV.hpp"
 
 #include "btree/TransactionKV.hpp"
-#include "btree/core/BTreeGeneric.hpp"
 #include "buffer-manager/BufferManager.hpp"
 #include "concurrency/CRManager.hpp"
 #include "leanstore/LeanStore.hpp"
+#include "leanstore/StoreOption.hpp"
 #include "utils/Defer.hpp"
 
 #include <gtest/gtest.h>
@@ -17,9 +17,7 @@ class BasicKVTest : public ::testing::Test {
 protected:
   std::unique_ptr<LeanStore> mStore;
 
-  BasicKVTest() {
-    FLAGS_bulk_insert = false;
-  }
+  BasicKVTest() = default;
 
   ~BasicKVTest() = default;
 
@@ -28,14 +26,15 @@ protected:
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" +
                        std::string(curTest->name());
-    FLAGS_init = true;
-    FLAGS_logtostdout = true;
-    FLAGS_data_dir = "/tmp/" + curTestName;
-    FLAGS_worker_threads = 2;
-    FLAGS_enable_eager_garbage_collection = true;
-    auto res = LeanStore::Open();
-    ASSERT_TRUE(res);
 
+    auto res = LeanStore::Open(StoreOption{
+        .mCreateFromScratch = true,
+        .mStoreDir = "/tmp/" + curTestName,
+        .mWorkerThreads = 2,
+        .mEnableBulkInsert = false,
+        .mEnableEagerGc = true,
+    });
+    ASSERT_TRUE(res);
     mStore = std::move(res.value());
   }
 };
@@ -43,33 +42,29 @@ protected:
 TEST_F(BasicKVTest, BasicKVCreate) {
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = leanstore::storage::btree::BTreeConfig{
-      .mEnableWal = FLAGS_wal,
-      .mUseBulkInsert = FLAGS_bulk_insert,
-  };
 
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateBasicKV(btreeName, btreeConfig);
+    auto res = mStore->CreateBasicKV(btreeName);
     EXPECT_TRUE(res);
     EXPECT_NE(res.value(), nullptr);
   });
 
   // create btree with same should fail in the same worker
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateBasicKV(btreeName, btreeConfig);
+    auto res = mStore->CreateBasicKV(btreeName);
     EXPECT_FALSE(res);
   });
 
   // create btree with same should also fail in other workers
   mStore->ExecSync(1, [&]() {
-    auto res = mStore->CreateBasicKV(btreeName, btreeConfig);
+    auto res = mStore->CreateBasicKV(btreeName);
     EXPECT_FALSE(res);
   });
 
   // create btree with another different name should success
   btreeName = "testTree2";
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateBasicKV(btreeName, btreeConfig);
+    auto res = mStore->CreateBasicKV(btreeName);
     EXPECT_TRUE(res);
     EXPECT_NE(res.value(), nullptr);
   });
@@ -89,12 +84,8 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = leanstore::storage::btree::BTreeConfig{
-      .mEnableWal = FLAGS_wal,
-      .mUseBulkInsert = FLAGS_bulk_insert,
-  };
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateBasicKV(btreeName, btreeConfig);
+    auto res = mStore->CreateBasicKV(btreeName);
     EXPECT_TRUE(res);
     EXPECT_NE(res.value(), nullptr);
 

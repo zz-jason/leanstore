@@ -6,15 +6,12 @@
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/Units.hpp"
 #include "sync/HybridLatch.hpp"
-
-#include <glog/logging.h>
+#include "utils/Log.hpp"
+#include "utils/UserThread.hpp"
 
 using namespace leanstore::storage;
 
-namespace leanstore {
-namespace storage {
-namespace btree {
-
+namespace leanstore::storage::btree {
 using LeafCallback =
     std::function<void(GuardedBufferFrame<BTreeNode>& guardedLeaf)>;
 
@@ -130,7 +127,7 @@ protected:
         mMode == LatchMode::kPessimisticExclusive) {
       findLeafAndLatch(mGuardedLeaf, key, mMode);
     } else {
-      DLOG(FATAL) << "Unsupported latch mode: " << uint64_t(mMode);
+      Log::Fatal("Unsupported latch mode: {}", uint64_t(mMode));
     }
   }
 
@@ -241,7 +238,8 @@ public:
         mFuncCleanUp = nullptr;
       }
 
-      if (FLAGS_optimistic_scan && mLeafPosInParent != -1) {
+      if (utils::tlsStore->mStoreOption.mEnableOptimisticScan &&
+          mLeafPosInParent != -1) {
         JUMPMU_TRY() {
           if ((mLeafPosInParent + 1) <= mGuardedParent->mNumSeps) {
             int32_t nextLeafPos = mLeafPosInParent + 1;
@@ -345,7 +343,8 @@ public:
         mFuncCleanUp = nullptr;
       }
 
-      if (FLAGS_optimistic_scan && mLeafPosInParent != -1) {
+      if (utils::tlsStore->mStoreOption.mEnableOptimisticScan &&
+          mLeafPosInParent != -1) {
         JUMPMU_TRY() {
           if ((mLeafPosInParent - 1) >= 0) {
             int32_t nextLeafPos = mLeafPosInParent - 1;
@@ -420,7 +419,7 @@ public:
   }
 
   virtual Slice key() override {
-    DCHECK(mBuffer.size() >= mGuardedLeaf->getFullKeyLen(mSlotId));
+    Log::DebugCheck(mBuffer.size() >= mGuardedLeaf->getFullKeyLen(mSlotId));
     return Slice(&mBuffer[0], mGuardedLeaf->getFullKeyLen(mSlotId));
   }
 
@@ -437,8 +436,8 @@ public:
   }
 
   bool IsLastOne() {
-    DCHECK(mSlotId != -1);
-    DCHECK(mSlotId != mGuardedLeaf->mNumSeps);
+    Log::DebugCheck(mSlotId != -1);
+    Log::DebugCheck(mSlotId != mGuardedLeaf->mNumSeps);
     return (mSlotId + 1) == mGuardedLeaf->mNumSeps;
   }
 
@@ -466,11 +465,9 @@ private:
   }
 
   inline Slice assembedFence() {
-    DCHECK(mBuffer.size() >= mFenceSize);
+    Log::DebugCheck(mBuffer.size() >= mFenceSize);
     return Slice(&mBuffer[0], mFenceSize);
   }
 };
 
-} // namespace btree
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage::btree

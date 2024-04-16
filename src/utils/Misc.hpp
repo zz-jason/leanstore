@@ -1,9 +1,7 @@
 #pragma once
 
-#include "JumpMU.hpp"
-#include "leanstore/Config.hpp"
-
-#include <glog/logging.h>
+#include "utils/JumpMU.hpp"
+#include "utils/Log.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -12,11 +10,13 @@
 namespace leanstore {
 
 template <typename T1, typename T2> T1 DownCast(T2 ptr) {
-  DCHECK(dynamic_cast<T1>(ptr) != nullptr);
+  Log::DebugCheck(dynamic_cast<T1>(ptr) != nullptr);
   return static_cast<T1>(ptr);
 }
 
-namespace utils {
+} // namespace leanstore
+
+namespace leanstore::utils {
 
 inline uint32_t GetBitsNeeded(uint64_t input) {
   return std::max(std::floor(std::log2(input)) + 1, 1.0);
@@ -39,8 +39,7 @@ inline void PinThisThread(const uint64_t workerId) {
   CPU_SET(workerId, &cpuset);
   pthread_t currentThread = pthread_self();
   if (pthread_setaffinity_np(currentThread, sizeof(cpu_set_t), &cpuset) != 0) {
-    DLOG(ERROR)
-        << "Could not pin a thread, maybe because of over subscription?";
+    Log::Debug("Could not pin a thread, maybe because of over subscription?");
   }
 }
 
@@ -173,23 +172,9 @@ struct Timer {
 
   std::chrono::high_resolution_clock::time_point mStartTimePoint;
 
-  Timer(std::atomic<uint64_t>& timeCounterUS) : mTimeCounterUS(timeCounterUS) {
-    if (FLAGS_measure_time) {
-      mStartTimePoint = std::chrono::high_resolution_clock::now();
-    }
-  }
+  Timer(std::atomic<uint64_t>& timeCounterUS);
 
-  ~Timer() {
-    if (FLAGS_measure_time) {
-      auto endTimePoint = std::chrono::high_resolution_clock::now();
-      const uint64_t duration =
-          std::chrono::duration_cast<std::chrono::microseconds>(endTimePoint -
-                                                                mStartTimePoint)
-              .count();
-      mTimeCounterUS += duration;
-    }
-  }
+  ~Timer();
 };
 
-} // namespace utils
-} // namespace leanstore
+} // namespace leanstore::utils

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "leanstore/Config.hpp"
 #include "utils/RandomGenerator.hpp"
 #include "utils/UserThread.hpp"
 
@@ -12,7 +11,6 @@
 #include <prometheus/collectable.h>
 #include <prometheus/text_serializer.h>
 
-#include <cstdio>
 #include <mutex>
 
 #include <fcntl.h>
@@ -24,21 +22,7 @@ const std::string kContentType("text/plain; version=0.0.4; charset=utf-8");
 
 class MetricsHttpExposer : public utils::UserThread {
 public:
-  MetricsHttpExposer() : UserThread("MetricsExposer") {
-    mServer.new_task_queue = [] { return new httplib::ThreadPool(1); };
-    mServer.Get("/metrics",
-                [&](const httplib::Request& req, httplib::Response& res) {
-                  handleMetrics(req, res);
-                });
-
-    mServer.Get("/heap", [&](const httplib::Request& req,
-                             httplib::Response& res) { handleHeap(req, res); });
-
-    mServer.Get("/profile",
-                [&](const httplib::Request& req, httplib::Response& res) {
-                  handleProfile(req, res);
-                });
-  }
+  MetricsHttpExposer(LeanStore* store);
 
   ~MetricsHttpExposer() override {
     mServer.stop();
@@ -52,7 +36,7 @@ public:
 protected:
   void runImpl() override {
     while (mKeepRunning) {
-      mServer.listen("0.0.0.0", FLAGS_metrics_port);
+      mServer.listen("0.0.0.0", mPort);
     }
   }
 
@@ -144,6 +128,8 @@ private:
 
   /// The http server
   httplib::Server mServer;
+
+  int32_t mPort;
 
   /// The mutex to protect mCollectable
   std::mutex mCollectableMutex;
