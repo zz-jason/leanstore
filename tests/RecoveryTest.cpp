@@ -1,6 +1,7 @@
 #include "btree/BasicKV.hpp"
 #include "btree/TransactionKV.hpp"
 #include "btree/core/BTreeGeneric.hpp"
+#include "buffer-manager/BufferFrame.hpp"
 #include "buffer-manager/BufferManager.hpp"
 #include "concurrency/CRManager.hpp"
 #include "leanstore/KVInterface.hpp"
@@ -77,6 +78,20 @@ TEST_F(RecoveryTest, SerializeAndDeserialize) {
       const auto& [key, val] = kvToTest[i];
       EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
     }
+  });
+
+  Log::Debug("Buffer Pool Before Shutdown:");
+  mStore->mBufferManager->DoWithBufferFrameIf(
+      [](BufferFrame& bf) { return !bf.IsFree(); },
+      [](BufferFrame& bf) {
+        Log::Debug("pageId={}, treeId={}, isDirty={}", bf.mHeader.mPageId,
+                   bf.mPage.mBTreeId, bf.IsDirty());
+      });
+
+  mStore->ExecSync(0, [&]() {
+    rapidjson::Document doc(rapidjson::kObjectType);
+    leanstore::storage::btree::BTreeGeneric::ToJson(*btree, &doc);
+    Log::Debug("BTree before destroy:\n{}", leanstore::utils::JsonToStr(&doc));
   });
 
   // meta file should be serialized during destructor.
