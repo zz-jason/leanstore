@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Adapter.hpp"
-#include "btree/core/BTreeGeneric.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "utils/Log.hpp"
 
@@ -24,9 +23,7 @@ template <class Record> struct LeanStoreAdapter : Adapter<Record> {
       btree = reinterpret_cast<leanstore::KVInterface*>(tree);
     } else {
       leanstore::storage::btree::TransactionKV* tree;
-      storage::btree::BTreeConfig config{
-          .mEnableWal = db.mStoreOption.mEnableWal, .mUseBulkInsert = false};
-      auto res = db.CreateTransactionKV(name, config);
+      auto res = db.CreateTransactionKV(name);
       if (res) {
         tree = res.value();
       } else {

@@ -122,7 +122,7 @@ private:
 public:
   static Result<TransactionKV*> Create(leanstore::LeanStore* store,
                                        const std::string& treeName,
-                                       BTreeConfig& config, BasicKV* graveyard);
+                                       BTreeConfig config, BasicKV* graveyard);
 
   inline static void InsertToNode(GuardedBufferFrame<BTreeNode>& guardedNode,
                                   Slice key, Slice val, WORKERID workerId,

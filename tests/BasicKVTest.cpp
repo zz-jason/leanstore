@@ -1,11 +1,10 @@
 #include "btree/BasicKV.hpp"
 
 #include "btree/TransactionKV.hpp"
-#include "btree/core/BTreeGeneric.hpp"
 #include "buffer-manager/BufferManager.hpp"
 #include "concurrency/CRManager.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/Store.hpp"
+#include "leanstore/StoreOption.hpp"
 #include "utils/Defer.hpp"
 
 #include <gtest/gtest.h>
@@ -43,33 +42,29 @@ protected:
 TEST_F(BasicKVTest, BasicKVCreate) {
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = leanstore::storage::btree::BTreeConfig{
-      .mEnableWal = mStore->mStoreOption.mEnableWal,
-      .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-  };
 
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateBasicKV(btreeName, btreeConfig);
+    auto res = mStore->CreateBasicKV(btreeName);
     EXPECT_TRUE(res);
     EXPECT_NE(res.value(), nullptr);
   });
 
   // create btree with same should fail in the same worker
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateBasicKV(btreeName, btreeConfig);
+    auto res = mStore->CreateBasicKV(btreeName);
     EXPECT_FALSE(res);
   });
 
   // create btree with same should also fail in other workers
   mStore->ExecSync(1, [&]() {
-    auto res = mStore->CreateBasicKV(btreeName, btreeConfig);
+    auto res = mStore->CreateBasicKV(btreeName);
     EXPECT_FALSE(res);
   });
 
   // create btree with another different name should success
   btreeName = "testTree2";
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateBasicKV(btreeName, btreeConfig);
+    auto res = mStore->CreateBasicKV(btreeName);
     EXPECT_TRUE(res);
     EXPECT_NE(res.value(), nullptr);
   });
@@ -89,12 +84,8 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = leanstore::storage::btree::BTreeConfig{
-      .mEnableWal = mStore->mStoreOption.mEnableWal,
-      .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-  };
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateBasicKV(btreeName, btreeConfig);
+    auto res = mStore->CreateBasicKV(btreeName);
     EXPECT_TRUE(res);
     EXPECT_NE(res.value(), nullptr);
 

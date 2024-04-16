@@ -5,7 +5,7 @@
 #include "concurrency/CRManager.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/Store.hpp"
+#include "leanstore/StoreOption.hpp"
 #include "leanstore/Units.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
@@ -205,14 +205,9 @@ inline void LeanStoreMVCCSession::AbortTx() {
 // DDL operations
 inline Result<TableRef*> LeanStoreMVCCSession::CreateTable(
     const std::string& tblName, bool implicitTx [[maybe_unused]]) {
-  auto config = storage::btree::BTreeConfig{
-      .mEnableWal = mStore->mLeanStore->mStoreOption.mEnableWal,
-      .mUseBulkInsert = mStore->mLeanStore->mStoreOption.mEnableBulkInsert,
-  };
-
   storage::btree::TransactionKV* btree{nullptr};
   mStore->mLeanStore->ExecSync(mWorkerId, [&]() {
-    auto res = mStore->mLeanStore->CreateTransactionKV(tblName, config);
+    auto res = mStore->mLeanStore->CreateTransactionKV(tblName);
     if (res) {
       btree = res.value();
     }

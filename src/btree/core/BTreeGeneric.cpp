@@ -22,7 +22,7 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId,
                         BTreeConfig config) {
   this->mStore = store;
   this->mTreeId = btreeId;
-  this->mConfig = config;
+  this->mConfig = std::move(config);
 
   mMetaNodeSwip = &mStore->mBufferManager->AllocNewPage(btreeId);
   mMetaNodeSwip.AsBufferFrame().mHeader.mKeepInMemory = true;

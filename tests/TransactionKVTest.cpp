@@ -5,7 +5,7 @@
 #include "concurrency/CRManager.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/Store.hpp"
+#include "leanstore/StoreOption.hpp"
 #include "utils/Defer.hpp"
 #include "utils/JsonUtil.hpp"
 #include "utils/Log.hpp"
@@ -49,33 +49,29 @@ protected:
 TEST_F(TransactionKVTest, Create) {
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = leanstore::storage::btree::BTreeConfig{
-      .mEnableWal = mStore->mStoreOption.mEnableWal,
-      .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-  };
 
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     EXPECT_TRUE(res);
     EXPECT_NE(res.value(), nullptr);
   });
 
   // create btree with same should fail in the same worker
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     EXPECT_FALSE(res);
   });
 
   // create btree with same should also fail in other workers
   mStore->ExecSync(1, [&]() {
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     EXPECT_FALSE(res);
   });
 
   // create btree with another different name should success
   const auto* btreeName2 = "testTree2";
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateTransactionKV(btreeName2, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName2);
     EXPECT_TRUE(res);
     EXPECT_NE(res.value(), nullptr);
   });
@@ -102,12 +98,8 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = leanstore::storage::btree::BTreeConfig{
-      .mEnableWal = mStore->mStoreOption.mEnableWal,
-      .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-  };
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
 
@@ -169,12 +161,8 @@ TEST_F(TransactionKVTest, Insert1000KVs) {
 
     // create leanstore btree for table records
     const auto* btreeName = "testTree1";
-    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
-        .mEnableWal = mStore->mStoreOption.mEnableWal,
-        .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-    };
 
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
 
@@ -208,12 +196,8 @@ TEST_F(TransactionKVTest, InsertDuplicates) {
 
     // create leanstore btree for table records
     const auto* btreeName = "testTree1";
-    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
-        .mEnableWal = mStore->mStoreOption.mEnableWal,
-        .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-    };
 
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
 
@@ -255,12 +239,8 @@ TEST_F(TransactionKVTest, Remove) {
 
     // create leanstore btree for table records
     const auto* btreeName = "testTree1";
-    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
-        .mEnableWal = mStore->mStoreOption.mEnableWal,
-        .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-    };
 
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
 
@@ -310,12 +290,8 @@ TEST_F(TransactionKVTest, RemoveNotExisted) {
 
     // create leanstore btree for table records
     const auto* btreeName = "testTree1";
-    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
-        .mEnableWal = mStore->mStoreOption.mEnableWal,
-        .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-    };
 
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
 
@@ -366,12 +342,8 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
 
   mStore->ExecSync(0, [&]() {
     // create leanstore btree for table records
-    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
-        .mEnableWal = mStore->mStoreOption.mEnableWal,
-        .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-    };
 
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
 
@@ -446,12 +418,8 @@ TEST_F(TransactionKVTest, ToJson) {
     }
     // create leanstore btree for table records
     const auto* btreeName = "testTree1";
-    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
-        .mEnableWal = mStore->mStoreOption.mEnableWal,
-        .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-    };
 
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
 
@@ -491,13 +459,8 @@ TEST_F(TransactionKVTest, Update) {
   const auto* btreeName = "testTree1";
 
   mStore->ExecSync(0, [&]() {
-    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
-        .mEnableWal = mStore->mStoreOption.mEnableWal,
-        .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-    };
-
     // create btree
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
 
@@ -583,13 +546,8 @@ TEST_F(TransactionKVTest, ScanAsc) {
   const auto* btreeName = "testTree1";
 
   mStore->ExecSync(0, [&]() {
-    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
-        .mEnableWal = mStore->mStoreOption.mEnableWal,
-        .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-    };
-
     // create btree
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
 
@@ -669,13 +627,8 @@ TEST_F(TransactionKVTest, ScanDesc) {
   const auto* btreeName = "testTree1";
 
   mStore->ExecSync(0, [&]() {
-    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
-        .mEnableWal = mStore->mStoreOption.mEnableWal,
-        .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-    };
-
     // create btree
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
 
@@ -760,13 +713,8 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
   };
 
   mStore->ExecSync(0, [&]() {
-    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
-        .mEnableWal = mStore->mStoreOption.mEnableWal,
-        .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-    };
-
     // create btree
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
 
@@ -874,13 +822,8 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
   };
 
   mStore->ExecSync(0, [&]() {
-    auto btreeConfig = leanstore::storage::btree::BTreeConfig{
-        .mEnableWal = mStore->mStoreOption.mEnableWal,
-        .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-    };
-
     // create btree
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
 

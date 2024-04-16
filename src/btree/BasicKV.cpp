@@ -19,7 +19,7 @@ namespace leanstore::storage::btree {
 
 Result<BasicKV*> BasicKV::Create(leanstore::LeanStore* store,
                                  const std::string& treeName,
-                                 BTreeConfig& config) {
+                                 BTreeConfig config) {
   auto [treePtr, treeId] = store->mTreeRegistry->CreateTree(treeName, [&]() {
     return std::unique_ptr<BufferManagedTree>(
         static_cast<BufferManagedTree*>(new BasicKV()));
@@ -29,7 +29,7 @@ Result<BasicKV*> BasicKV::Create(leanstore::LeanStore* store,
         utils::Error::General("Tree name has been taken"));
   }
   auto* tree = DownCast<BasicKV*>(treePtr);
-  tree->Init(store, treeId, config);
+  tree->Init(store, treeId, std::move(config));
   return tree;
 }
 

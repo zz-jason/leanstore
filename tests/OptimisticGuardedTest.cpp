@@ -3,7 +3,7 @@
 #include "buffer-manager/BufferManager.hpp"
 #include "concurrency/CRManager.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/Store.hpp"
+#include "leanstore/StoreOption.hpp"
 
 #include <gtest/gtest.h>
 

@@ -164,4 +164,10 @@ public:
   }
 };
 
+class BTreeConfig {
+public:
+  bool mEnableWal = true;
+  bool mUseBulkInsert = false;
+};
+
 } // namespace leanstore

@@ -26,12 +26,6 @@ class BTreePessimisticSharedIterator;
 class BTreePessimisticExclusiveIterator;
 using BTreeNodeCallback = std::function<int64_t(BTreeNode&)>;
 
-class BTreeConfig {
-public:
-  bool mEnableWal = true;
-  bool mUseBulkInsert = false;
-};
-
 class BTreeGeneric : public leanstore::storage::BufferManagedTree {
 public:
   friend class BTreePessimisticIterator;

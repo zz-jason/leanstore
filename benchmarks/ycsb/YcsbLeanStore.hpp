@@ -1,11 +1,10 @@
 #include "Ycsb.hpp"
 #include "btree/TransactionKV.hpp"
-#include "btree/core/BTreeGeneric.hpp"
 #include "concurrency/CRManager.hpp"
 #include "concurrency/Worker.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/Store.hpp"
+#include "leanstore/StoreOption.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Log.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -53,16 +52,11 @@ public:
 
   KVInterface* CreateTable() {
     auto tableName = "ycsb_" + FLAGS_ycsb_workload;
-    auto config = btree::BTreeConfig{
-        .mEnableWal = mStore->mStoreOption.mEnableWal,
-        .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-    };
-
     // create table with transaction kv
     if (mBenchTransactionKv) {
       btree::TransactionKV* table;
       mStore->ExecSync(0, [&]() {
-        auto res = mStore->CreateTransactionKV(tableName, config);
+        auto res = mStore->CreateTransactionKV(tableName);
         if (!res) {
           Log::Fatal("Failed to create table: name={}, error={}", tableName,
                      res.error().ToString());
@@ -75,7 +69,7 @@ public:
     // create table with basic kv
     btree::BasicKV* table;
     mStore->ExecSync(0, [&]() {
-      auto res = mStore->CreateBasicKV(tableName, config);
+      auto res = mStore->CreateBasicKV(tableName);
       if (!res) {
         Log::Fatal("Failed to create table: name={}, error={}", tableName,
                    res.error().ToString());

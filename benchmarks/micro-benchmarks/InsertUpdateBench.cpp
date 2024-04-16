@@ -1,10 +1,9 @@
 #include "btree/BasicKV.hpp"
 #include "btree/TransactionKV.hpp"
-#include "btree/core/BTreeGeneric.hpp"
 #include "buffer-manager/BufferManager.hpp"
 #include "concurrency/CRManager.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/Store.hpp"
+#include "leanstore/StoreOption.hpp"
 #include "utils/RandomGenerator.hpp"
 
 #include <benchmark/benchmark.h>
@@ -32,12 +31,8 @@ static void BenchUpdateInsert(benchmark::State& state) {
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = leanstore::storage::btree::BTreeConfig{
-      .mEnableWal = sLeanStore->mStoreOption.mEnableWal,
-      .mUseBulkInsert = sLeanStore->mStoreOption.mEnableBulkInsert,
-  };
   sLeanStore->ExecSync(0, [&]() {
-    auto res = sLeanStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = sLeanStore->CreateTransactionKV(btreeName);
     EXPECT_TRUE(res);
     EXPECT_NE(res.value(), nullptr);
     btree = res.value();

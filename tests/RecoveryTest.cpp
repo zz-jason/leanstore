@@ -6,7 +6,7 @@
 #include "concurrency/CRManager.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/Store.hpp"
+#include "leanstore/StoreOption.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Defer.hpp"
 #include "utils/JsonUtil.hpp"
@@ -58,13 +58,9 @@ TEST_F(RecoveryTest, SerializeAndDeserialize) {
 
   // create btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = BTreeConfig{
-      .mEnableWal = mStore->mStoreOption.mEnableWal,
-      .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-  };
 
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     ASSERT_TRUE(res);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
@@ -150,13 +146,9 @@ TEST_F(RecoveryTest, RecoverAfterInsert) {
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = BTreeConfig{
-      .mEnableWal = mStore->mStoreOption.mEnableWal,
-      .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-  };
 
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
 
@@ -242,9 +234,6 @@ TEST_F(RecoveryTest, RecoverAfterUpdate) {
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig =
-      BTreeConfig{.mEnableWal = mStore->mStoreOption.mEnableWal,
-                  .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert};
 
   // update all the values to this newVal
   const uint64_t updateDescBufSize = UpdateDesc::Size(1);
@@ -256,7 +245,7 @@ TEST_F(RecoveryTest, RecoverAfterUpdate) {
 
   mStore->ExecSync(0, [&]() {
     // create btree
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
 
@@ -347,11 +336,7 @@ TEST_F(RecoveryTest, RecoverAfterRemove) {
 
   mStore->ExecSync(0, [&]() {
     // create btree
-    auto btreeConfig = BTreeConfig{
-        .mEnableWal = mStore->mStoreOption.mEnableWal,
-        .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-    };
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
 

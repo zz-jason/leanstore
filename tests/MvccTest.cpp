@@ -1,10 +1,9 @@
 #include "btree/BasicKV.hpp"
 #include "btree/TransactionKV.hpp"
-#include "btree/core/BTreeGeneric.hpp"
 #include "buffer-manager/BufferManager.hpp"
 #include "concurrency/CRManager.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/Store.hpp"
+#include "leanstore/StoreOption.hpp"
 #include "utils/Defer.hpp"
 #include "utils/RandomGenerator.hpp"
 
@@ -42,12 +41,8 @@ protected:
   void SetUp() override {
     // create a btree name for test
     mTreeName = RandomGenerator::RandAlphString(10);
-    auto config = BTreeConfig{
-        .mEnableWal = mStore->mStoreOption.mEnableWal,
-        .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-    };
     mStore->ExecSync(0, [&]() {
-      auto res = mStore->CreateTransactionKV(mTreeName, config);
+      auto res = mStore->CreateTransactionKV(mTreeName);
       ASSERT_TRUE(res);
       mBTree = res.value();
       ASSERT_NE(mBTree, nullptr);

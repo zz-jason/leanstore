@@ -27,7 +27,7 @@ namespace leanstore::storage::btree {
 
 Result<TransactionKV*> TransactionKV::Create(leanstore::LeanStore* store,
                                              const std::string& treeName,
-                                             BTreeConfig& config,
+                                             BTreeConfig config,
                                              BasicKV* graveyard) {
   auto [treePtr, treeId] = store->mTreeRegistry->CreateTree(treeName, [&]() {
     return std::unique_ptr<BufferManagedTree>(
@@ -41,7 +41,7 @@ Result<TransactionKV*> TransactionKV::Create(leanstore::LeanStore* store,
   }
 
   auto* tree = DownCast<TransactionKV*>(treePtr);
-  tree->Init(store, treeId, config, graveyard);
+  tree->Init(store, treeId, std::move(config), graveyard);
 
   return tree;
 }
@@ -49,7 +49,7 @@ Result<TransactionKV*> TransactionKV::Create(leanstore::LeanStore* store,
 void TransactionKV::Init(leanstore::LeanStore* store, TREEID treeId,
                          BTreeConfig config, BasicKV* graveyard) {
   this->mGraveyard = graveyard;
-  BasicKV::Init(store, treeId, config);
+  BasicKV::Init(store, treeId, std::move(config));
 }
 
 OpCode TransactionKV::lookupOptimistic(Slice key, ValCallback valCallback) {

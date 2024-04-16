@@ -6,7 +6,7 @@
 #include "concurrency/Worker.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/Store.hpp"
+#include "leanstore/StoreOption.hpp"
 #include "utils/Defer.hpp"
 #include "utils/RandomGenerator.hpp"
 
@@ -48,12 +48,8 @@ protected:
 
     // Worker 0, create a btree for test
     mTreeName = RandomGenerator::RandAlphString(10);
-    auto config = BTreeConfig{
-        .mEnableWal = mStore->mStoreOption.mEnableWal,
-        .mUseBulkInsert = mStore->mStoreOption.mEnableBulkInsert,
-    };
     mStore->ExecSync(0, [&]() {
-      auto res = mStore->CreateTransactionKV(mTreeName, config);
+      auto res = mStore->CreateTransactionKV(mTreeName);
       ASSERT_TRUE(res);
       mKv = res.value();
       ASSERT_NE(mKv, nullptr);

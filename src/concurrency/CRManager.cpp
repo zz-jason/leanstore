@@ -62,11 +62,11 @@ CRManager::~CRManager() {
 
 void CRManager::setupHistoryStorage4EachWorker() {
   for (uint64_t i = 0; i < mStore->mStoreOption.mWorkerThreads; i++) {
-    storage::btree::BTreeConfig config = {.mEnableWal = false,
-                                          .mUseBulkInsert = true};
     // setup update tree
     std::string updateBtreeName = std::format("_history_tree_{}_updates", i);
-    auto res = storage::btree::BasicKV::Create(mStore, updateBtreeName, config);
+    auto res = storage::btree::BasicKV::Create(
+        mStore, updateBtreeName,
+        BTreeConfig{.mEnableWal = false, .mUseBulkInsert = true});
     if (!res) {
       Log::Fatal(
           "Failed to set up update history tree, updateBtreeName={}, error={}",
@@ -76,7 +76,9 @@ void CRManager::setupHistoryStorage4EachWorker() {
 
     // setup delete tree
     std::string removeBtreeName = std::format("_history_tree_{}_removes", i);
-    res = storage::btree::BasicKV::Create(mStore, removeBtreeName, config);
+    res = storage::btree::BasicKV::Create(
+        mStore, removeBtreeName,
+        BTreeConfig{.mEnableWal = false, .mUseBulkInsert = true});
     if (!res) {
       Log::Fatal(
           "Failed to set up remove history tree, removeBtreeName={}, error={}",
