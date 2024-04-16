@@ -5,12 +5,12 @@
 #include "concurrency/CRManager.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
+#include "leanstore/StoreOption.hpp"
 #include "leanstore/Units.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
+#include "utils/Log.hpp"
 #include "utils/Result.hpp"
-
-#include <glog/logging.h>
 
 #include <cstring>
 #include <expected>
@@ -92,11 +92,11 @@ public:
 
 public:
   LeanStoreMVCC(const std::string& storeDir, uint32_t sessionLimit) {
-    FLAGS_init = true;
-    FLAGS_logtostdout = true;
-    FLAGS_data_dir = storeDir;
-    FLAGS_worker_threads = sessionLimit;
-    auto res = LeanStore::Open();
+    auto res = LeanStore::Open(StoreOption{
+        .mCreateFromScratch = true,
+        .mStoreDir = storeDir,
+        .mWorkerThreads = sessionLimit,
+    });
     mLeanStore = std::move(res.value());
   }
 
@@ -172,7 +172,7 @@ inline Session* LeanStoreMVCC::GetSession(WORKERID sessionId) {
     mSessions.emplace(sessionId, LeanStoreMVCCSession(sessionId, this));
   }
   auto it = mSessions.find(sessionId);
-  DCHECK(it != mSessions.end());
+  Log::DebugCheck(it != mSessions.end());
   return &it->second;
 }
 
@@ -205,14 +205,9 @@ inline void LeanStoreMVCCSession::AbortTx() {
 // DDL operations
 inline Result<TableRef*> LeanStoreMVCCSession::CreateTable(
     const std::string& tblName, bool implicitTx [[maybe_unused]]) {
-  auto config = storage::btree::BTreeConfig{
-      .mEnableWal = FLAGS_wal,
-      .mUseBulkInsert = FLAGS_bulk_insert,
-  };
-
   storage::btree::TransactionKV* btree{nullptr};
   mStore->mLeanStore->ExecSync(mWorkerId, [&]() {
-    auto res = mStore->mLeanStore->CreateTransactionKV(tblName, config);
+    auto res = mStore->mLeanStore->CreateTransactionKV(tblName);
     if (res) {
       btree = res.value();
     }

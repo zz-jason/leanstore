@@ -1,9 +1,9 @@
 #include "sync/OptimisticGuarded.hpp"
 
-#include "concurrency/CRManager.hpp"
-#include "leanstore/Config.hpp"
-#include "leanstore/LeanStore.hpp"
 #include "buffer-manager/BufferManager.hpp"
+#include "concurrency/CRManager.hpp"
+#include "leanstore/LeanStore.hpp"
+#include "leanstore/StoreOption.hpp"
 
 #include <gtest/gtest.h>
 
@@ -21,18 +21,17 @@ protected:
   std::unique_ptr<LeanStore> mStore;
 
   OptimisticGuardedTest() {
-    FLAGS_worker_threads = 2;
   }
 
   void SetUp() override {
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" +
                        std::string(curTest->name());
-    FLAGS_init = true;
-    FLAGS_logtostdout = true;
-    FLAGS_data_dir = "/tmp/" + curTestName;
-    FLAGS_worker_threads = 2;
-    auto res = LeanStore::Open();
+    auto res = LeanStore::Open(StoreOption{
+        .mCreateFromScratch = true,
+        .mStoreDir = "/tmp/" + curTestName,
+        .mWorkerThreads = 2,
+    });
 
     ASSERT_TRUE(res);
     mStore = std::move(res.value());

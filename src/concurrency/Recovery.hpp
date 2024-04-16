@@ -7,9 +7,8 @@
 #include "leanstore/Units.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
+#include "utils/Log.hpp"
 #include "utils/Result.hpp"
-
-#include <glog/logging.h>
 
 #include <expected>
 #include <map>
@@ -129,21 +128,21 @@ inline bool Recovery::Run() {
     if (it->second->IsFree()) {
       continue;
     }
-    DLOG(INFO) << "Resolved page after analysis"
-               << ", address: " << it->second << ", pageId: " << it->first
-               << ", btreeId: " << it->second->mPage.mBTreeId;
+    Log::Debug("Resolved page after analysis"
+               ", address={}, pageId={}, btreeId={}",
+               (void*)it->second, it->first, it->second->mPage.mBTreeId);
   }
   // print resulting active transaction table
-  DLOG(INFO) << "Active transaction table size: " << mActiveTxTable.size();
+  Log::Debug("Active transaction table size: {}", mActiveTxTable.size());
   for (auto it = mActiveTxTable.begin(); it != mActiveTxTable.end(); ++it) {
-    DLOG(INFO) << "Active transaction table after analysis"
-               << ", txId: " << it->first << ", offset: " << it->second;
+    Log::Debug("Active transaction table after analysis, txId={}, offset={}",
+               it->first, it->second);
   }
   // print dirty page table
-  DLOG(INFO) << "Dirty page table size: " << mDirtyPageTable.size();
+  Log::Debug("Dirty page table size: {}", mDirtyPageTable.size());
   for (auto it = mDirtyPageTable.begin(); it != mDirtyPageTable.end(); ++it) {
-    DLOG(INFO) << "Dirty page table after analysis"
-               << ", pageId: " << it->first << ", offset: " << it->second;
+    Log::Debug("Dirty page table after analysis, pageId: {}, offset: {}",
+               it->first, it->second);
   }
 
   redo();
@@ -174,7 +173,7 @@ inline storage::BufferFrame& Recovery::resolvePage(PID pageId) {
 
 inline Result<void> Recovery::readFromWalFile(int64_t offset, size_t nbytes,
                                               void* destination) {
-  auto fileName = GetWALFilePath();
+  auto fileName = mStore->mStoreOption.GetWalFilePath();
   FILE* fp = fopen(fileName.c_str(), "rb");
   if (fp == nullptr) {
     return std::unexpected(

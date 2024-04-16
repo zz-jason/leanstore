@@ -1,10 +1,9 @@
 #pragma once
 
-#include "leanstore/Config.hpp"
 #include "leanstore/KVInterface.hpp"
+#include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
-
-#include <glog/logging.h>
+#include "utils/UserThread.hpp"
 
 namespace leanstore {
 namespace cr {
@@ -84,7 +83,7 @@ public:
     mTxMode = mode;
     mTxIsolationLevel = level;
     mHasWrote = false;
-    mIsDurable = FLAGS_wal;
+    mIsDurable = utils::tlsStore->mStoreOption.mEnableWal;
     mWalExceedBuffer = false;
   }
 

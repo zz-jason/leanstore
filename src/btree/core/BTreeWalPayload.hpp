@@ -3,8 +3,8 @@
 #include "btree/core/BTreeNode.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/Units.hpp"
+#include "utils/Log.hpp"
 
-#include <glog/logging.h>
 #include <rapidjson/document.h>
 
 #include <string>
@@ -152,7 +152,8 @@ public:
 
   uint8_t mPayload[];
 
-  WalUpdate() : WalPayload(WalPayload::Type::kWalUpdate) {}
+  WalUpdate() : WalPayload(WalPayload::Type::kWalUpdate) {
+  }
 };
 
 class WalTxUpdate : public WalPayload {
@@ -195,10 +196,11 @@ public:
 
   inline const UpdateDesc* GetUpdateDesc() const {
     auto* updateDesc = UpdateDesc::From(mPayload + mKeySize);
-    DCHECK(updateDesc->Size() == mUpdateDescSize)
-        << "Malformed WalTxUpdate: updateDesc->Size() != mUpdateDescSize"
-        << ", updateDesc->Size() = " << updateDesc->Size()
-        << ", mUpdateDescSize = " << mUpdateDescSize;
+    Log::DebugCheck(
+        updateDesc->Size() == mUpdateDescSize,
+        "Malformed WalTxUpdate: updateDesc->Size() != mUpdateDescSize, "
+        "updateDesc->Size()={}, mUpdateDescSize={}",
+        updateDesc->Size(), mUpdateDescSize);
     return updateDesc;
   }
 

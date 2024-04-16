@@ -7,8 +7,10 @@ set(YCSB_SRC
   YcsbFlags.cpp
 )
 
+find_package(gflags CONFIG REQUIRED)
 set(YCSB_DEPS
   leanstore
+  gflags::gflags
 )
 
 option(ENABLE_ROCKSDB "Enable benchmarking rocksdb" OFF)

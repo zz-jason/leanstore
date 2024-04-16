@@ -7,14 +7,12 @@
 #include "buffer-manager/BufferFrame.hpp"
 #include "buffer-manager/BufferManager.hpp"
 #include "buffer-manager/GuardedBufferFrame.hpp"
-#include "leanstore/Config.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 #include "utils/Defer.hpp"
+#include "utils/Log.hpp"
 #include "utils/Misc.hpp"
-
-#include <glog/logging.h>
 
 using namespace leanstore::storage;
 
@@ -24,12 +22,12 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId,
                         BTreeConfig config) {
   this->mStore = store;
   this->mTreeId = btreeId;
-  this->mConfig = config;
+  this->mConfig = std::move(config);
 
   mMetaNodeSwip = &mStore->mBufferManager->AllocNewPage(btreeId);
   mMetaNodeSwip.AsBufferFrame().mHeader.mKeepInMemory = true;
-  DCHECK(mMetaNodeSwip.AsBufferFrame().mHeader.mLatch.GetOptimisticVersion() ==
-         0);
+  Log::DebugCheck(
+      mMetaNodeSwip.AsBufferFrame().mHeader.mLatch.GetOptimisticVersion() == 0);
 
   auto guardedRoot = GuardedBufferFrame<BTreeNode>(
       mStore->mBufferManager.get(),
@@ -73,10 +71,10 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit,
   auto guardedChild = GuardedBufferFrame<BTreeNode>(
       mStore->mBufferManager.get(), guardedParent, parentHandler.mChildSwip);
   if (guardedChild->mNumSeps <= 1) {
-    DLOG(WARNING) << "Split failed, not enough separators in node"
-                  << ", toSplit.mHeader.mPageId=" << toSplit.mHeader.mPageId
-                  << ", favoredSplitPos=" << favoredSplitPos
-                  << ", guardedChild->mNumSeps=" << guardedChild->mNumSeps;
+    Log::Warn("Split failed, not enough separators in node, "
+              "toSplit.mHeader.mPageId={}, favoredSplitPos={}, "
+              "guardedChild->mNumSeps={}",
+              toSplit.mHeader.mPageId, favoredSplitPos, guardedChild->mNumSeps);
     return;
   }
 
@@ -149,8 +147,8 @@ void BTreeGeneric::splitRootMayJump(
   auto xGuardedOldRoot = ExclusiveGuardedBufferFrame(std::move(guardedOldRoot));
   auto* bm = mStore->mBufferManager.get();
 
-  DCHECK(isMetaNode(guardedMeta)) << "Parent should be meta node";
-  DCHECK(mHeight == 1 || !xGuardedOldRoot->mIsLeaf);
+  Log::DebugCheck(isMetaNode(guardedMeta), "Parent should be meta node");
+  Log::DebugCheck(mHeight == 1 || !xGuardedOldRoot->mIsLeaf);
 
   // 1. create new left, lock it exclusively, write wal on demand
   auto* newLeftBf = &bm->AllocNewPage(mTreeId);
@@ -205,8 +203,8 @@ void BTreeGeneric::splitNonRootMayJump(
   auto xGuardedParent = ExclusiveGuardedBufferFrame(std::move(guardedParent));
   auto xGuardedChild = ExclusiveGuardedBufferFrame(std::move(guardedChild));
 
-  DCHECK(!isMetaNode(guardedParent)) << "Parent should not be meta node";
-  DCHECK(!xGuardedParent->mIsLeaf) << "Parent should not be leaf node";
+  Log::DebugCheck(!isMetaNode(guardedParent), "Parent should not be meta node");
+  Log::DebugCheck(!xGuardedParent->mIsLeaf, "Parent should not be leaf node");
 
   // 1. create new left, lock it exclusively, write wal on demand
   auto* newLeftBf = &mStore->mBufferManager->AllocNewPage(mTreeId);
@@ -253,10 +251,10 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
     return false;
   }
 
-  DCHECK(posInParent <= guardedParent->mNumSeps)
-      << "Invalid position in parent"
-      << ", posInParent=" << posInParent
-      << ", childSizeOfParent=" << guardedParent->mNumSeps;
+  Log::DebugCheck(
+      posInParent <= guardedParent->mNumSeps,
+      "Invalid position in parent, posInParent={}, childSizeOfParent={}",
+      posInParent, guardedParent->mNumSeps);
   guardedParent.JumpIfModifiedByOthers();
   guardedChild.JumpIfModifiedByOthers();
 
@@ -272,7 +270,7 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
     auto xGuardedChild = ExclusiveGuardedBufferFrame(std::move(guardedChild));
     auto xGuardedLeft = ExclusiveGuardedBufferFrame(std::move(guardedLeft));
 
-    DCHECK(xGuardedChild->mIsLeaf == xGuardedLeft->mIsLeaf);
+    Log::DebugCheck(xGuardedChild->mIsLeaf == xGuardedLeft->mIsLeaf);
 
     if (!xGuardedLeft->merge(posInParent - 1, xGuardedParent, xGuardedChild)) {
       guardedParent = std::move(xGuardedParent);
@@ -305,7 +303,7 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
     auto xGuardedChild = ExclusiveGuardedBufferFrame(std::move(guardedChild));
     auto xGuardedRight = ExclusiveGuardedBufferFrame(std::move(guardedRight));
 
-    DCHECK(xGuardedChild->mIsLeaf == xGuardedRight->mIsLeaf);
+    Log::DebugCheck(xGuardedChild->mIsLeaf == xGuardedRight->mIsLeaf);
 
     if (!xGuardedChild->merge(posInParent, xGuardedParent, xGuardedRight)) {
       guardedParent = std::move(xGuardedParent);
@@ -469,7 +467,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
     return XMergeReturnCode::kNothing;
   }
 
-  int64_t maxMergePages = FLAGS_xmerge_k;
+  int64_t maxMergePages = mStore->mStoreOption.mXMergeK;
   GuardedBufferFrame<BTreeNode> guardedNodes[maxMergePages];
   bool fullyMerged[maxMergePages];
 
@@ -551,7 +549,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(
       } else if (ret == 0) {
         break;
       } else {
-        DLOG(FATAL) << "Invalid return code from mergeLeftIntoRight";
+        Log::Fatal("Invalid return code from mergeLeftIntoRight");
       }
     }
   }
@@ -645,12 +643,13 @@ void BTreeGeneric::PrintInfo(uint64_t totalSize) {
 }
 
 StringMap BTreeGeneric::Serialize() {
-  DCHECK(mMetaNodeSwip.AsBufferFrame().mPage.mBTreeId == mTreeId);
+  Log::DebugCheck(mMetaNodeSwip.AsBufferFrame().mPage.mBTreeId == mTreeId);
   auto& metaBf = mMetaNodeSwip.AsBufferFrame();
   auto metaPageId = metaBf.mHeader.mPageId;
   auto res = mStore->mBufferManager->CheckpointBufferFrame(metaBf);
-  DLOG_IF(FATAL, !res) << "Failed to checkpoint meta node: "
-                       << res.error().ToString();
+  if (!res) {
+    Log::Fatal("Failed to checkpoint meta node: {}", res.error().ToString());
+  }
   return {{kTreeId, std::to_string(mTreeId)},
           {kHeight, std::to_string(mHeight.load())},
           {kMetaPageId, std::to_string(metaPageId)}};
@@ -675,11 +674,18 @@ void BTreeGeneric::Deserialize(StringMap map) {
     }
     JUMPMU_CATCH() {
       failcounter++;
-      LOG_IF(FATAL, failcounter >= 100) << "Failed to load MetaNode";
+      if (failcounter % 100 == 0) {
+        Log::Warn("Failed to load MetaNode, retrying, failcounter={}",
+                  failcounter);
+      }
     }
   }
   mMetaNodeSwip.AsBufferFrame().mHeader.mKeepInMemory = true;
-  DCHECK(mMetaNodeSwip.AsBufferFrame().mPage.mBTreeId == mTreeId);
+  Log::DebugCheck(
+      mMetaNodeSwip.AsBufferFrame().mPage.mBTreeId == mTreeId,
+      "MetaNode has wrong BTreeId, pageId={}, expected={}, actual={}",
+      mMetaNodeSwip.AsBufferFrame().mHeader.mPageId, mTreeId,
+      mMetaNodeSwip.AsBufferFrame().mPage.mBTreeId);
 }
 
 } // namespace leanstore::storage::btree

@@ -2,12 +2,11 @@
 
 #include "buffer-manager/BufferFrame.hpp"
 #include "buffer-manager/Swip.hpp"
-#include "leanstore/Config.hpp"
 #include "utils/Defer.hpp"
+#include "utils/Log.hpp"
 #include "utils/Misc.hpp"
 #include "utils/RandomGenerator.hpp"
 
-#include <gflags/gflags.h>
 #include <gtest/gtest.h>
 
 #include <cstddef>
@@ -46,11 +45,6 @@ protected:
   }
 
   void TearDown() override {
-    // remove the test directory
-    // auto ret = system(std::format("rm -rf {}", mTestDir).c_str());
-    // EXPECT_EQ(ret, 0) << std::format(
-    //     "Failed to remove test directory, testDir={}, errno={}, error={}",
-    //     mTestDir, errno, strerror(errno));
   }
 
   std::string getRandTestFile() {
@@ -83,14 +77,11 @@ protected:
 };
 
 TEST_F(AsyncWriteBufferTest, Basic) {
-  FLAGS_init = false;
-
   auto testFile = getRandTestFile();
   auto testFd = openFile(testFile);
   SCOPED_DEFER({
     closeFile(testFd);
-    LOG(INFO) << "Test file=" << testFile;
-    // removeFile(testFile);
+    Log::Info("Test file={}", testFile);
   });
 
   auto testPageSize = 512;

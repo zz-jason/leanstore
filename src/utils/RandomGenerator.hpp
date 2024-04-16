@@ -1,6 +1,6 @@
 #pragma once
 
-#include <glog/logging.h>
+#include "utils/Log.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -43,9 +43,10 @@ public:
   /// range [min, max)
   static uint64_t RandU64(uint64_t min, uint64_t max) {
     uint64_t rand = min + (tlsMtGenerator.Rand() % (max - min));
-    DCHECK(min <= rand && rand < max)
-        << "Random number should be in range [min, max)"
-        << ", min=" << min << ", max=" << max << ", rand=" << rand;
+    Log::DebugCheck(min <= rand && rand < max,
+                    "Random number should be in range [min, max), but min={}, "
+                    "max={}, rand={}",
+                    min, max, rand);
     return rand;
   }
 

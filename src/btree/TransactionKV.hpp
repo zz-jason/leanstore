@@ -11,9 +11,8 @@
 #include "concurrency/Worker.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/Units.hpp"
+#include "utils/Log.hpp"
 #include "utils/Result.hpp"
-
-#include <glog/logging.h>
 
 #include <expected>
 #include <string>
@@ -101,8 +100,8 @@ private:
           JUMPMU_RETURN ret;
         }
         default: {
-          LOG(ERROR) << "Unhandled tuple format: "
-                     << TupleFormatUtil::ToString(tuple->mFormat);
+          Log::Error("Unhandled tuple format: {}",
+                     TupleFormatUtil::ToString(tuple->mFormat));
         }
         }
       }
@@ -123,7 +122,7 @@ private:
 public:
   static Result<TransactionKV*> Create(leanstore::LeanStore* store,
                                        const std::string& treeName,
-                                       BTreeConfig& config, BasicKV* graveyard);
+                                       BTreeConfig config, BasicKV* graveyard);
 
   inline static void InsertToNode(GuardedBufferFrame<BTreeNode>& guardedNode,
                                   Slice key, Slice val, WORKERID workerId,
@@ -135,7 +134,7 @@ public:
   }
 
   inline static uint64_t ConvertToFatTupleThreshold() {
-    return cr::Worker::My().mStore->mStoreOption.mNumTxWorkers;
+    return cr::Worker::My().mStore->mStoreOption.mWorkerThreads;
   }
 
   /// Updates the value stored in FatTuple. The former newest version value is

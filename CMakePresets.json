@@ -52,6 +52,20 @@
                 "CMAKE_BUILD_TYPE": "Release",
                 "COUNTERS_LEVEL": "none"
             }
+        },
+        {
+            "name": "debug_performance",
+            "binaryDir": "${sourceDir}/build/debug",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc-13",
+                "CMAKE_CXX_COMPILER": "g++-13",
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_BUILD_TYPE": "Debug",
+                "COUNTERS_LEVEL": "none",
+                "ENABLE_PROFILING": "ON",
+                "ENABLE_ROCKSDB": "ON"
+            }
         }
     ]
 }

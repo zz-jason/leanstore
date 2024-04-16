@@ -4,6 +4,7 @@
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "profiling/counters/CRCounters.hpp"
+#include "utils/Log.hpp"
 #include "utils/Misc.hpp"
 
 #include <atomic>
@@ -102,10 +103,10 @@ struct WaterMarkInfo {
     mOldestActiveTx.store(oldestTx, std::memory_order_release);
     mOldestActiveShortTx.store(oldestShortTx, std::memory_order_release);
     mNewestActiveLongTx.store(newestLongTx, std::memory_order_release);
-    DLOG(INFO) << "Global watermark updated"
-               << ", oldestActiveTx=" << mOldestActiveTx
-               << ", oldestActiveShortTx=" << mOldestActiveShortTx
-               << ", netestActiveLongTx=" << mNewestActiveLongTx;
+    Log::Debug("Global watermark updated, oldestActiveTx={}, "
+               "oldestActiveShortTx={}, netestActiveLongTx={}",
+               mOldestActiveTx.load(), mOldestActiveShortTx.load(),
+               mNewestActiveLongTx.load());
   }
 
   /// Update the global watermarks.
@@ -113,9 +114,8 @@ struct WaterMarkInfo {
   void UpdateWmks(TXID wmkOfAll, TXID wmkOfShort) {
     mWmkOfAllTx.store(wmkOfAll, std::memory_order_release);
     mWmkOfShortTx.store(wmkOfShort, std::memory_order_release);
-    DLOG(INFO) << "Global watermarks updated"
-               << ", wmkOfAllTx=" << mWmkOfAllTx
-               << ", wmkOfShortTx=" << mWmkOfShortTx;
+    Log::Debug("Global watermarks updated, wmkOfAllTx={}, wmkOfShortTx={}",
+               mWmkOfAllTx.load(), mWmkOfShortTx.load());
   }
 
   /// Whether there is any active long-running transaction.

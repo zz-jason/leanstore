@@ -2,9 +2,7 @@
 
 #include "buffer-manager/GuardedBufferFrame.hpp"
 #include "utils/JsonUtil.hpp"
-
-#include <gflags/gflags.h>
-#include <glog/logging.h>
+#include "utils/Log.hpp"
 
 namespace leanstore::storage::btree {
 
@@ -53,7 +51,7 @@ bool BTreeNode::prepareInsert(uint16_t keySize, uint16_t valSize) {
 
 int16_t BTreeNode::insertDoNotCopyPayload(Slice key, uint16_t valSize,
                                           int32_t pos) {
-  DCHECK(canInsert(key.size(), valSize));
+  Log::DebugCheck(canInsert(key.size(), valSize));
   prepareInsert(key.size(), valSize);
 
   int32_t slotId = (pos == -1) ? lowerBound<false>(key) : pos;
@@ -117,7 +115,7 @@ void BTreeNode::compactify() {
 
 uint32_t BTreeNode::mergeSpaceUpperBound(
     ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedRight) {
-  DCHECK(xGuardedRight->mIsLeaf);
+  Log::DebugCheck(xGuardedRight->mIsLeaf);
 
   auto tmpNodeBuf = utils::JumpScopedArray<uint8_t>(BTreeNode::Size());
   auto* tmp = BTreeNode::Init(tmpNodeBuf->get(), true);
@@ -175,8 +173,8 @@ bool BTreeNode::merge(uint16_t slotId,
   }
 
   // Inner node
-  DCHECK(!xGuardedRight->mIsLeaf);
-  DCHECK(xGuardedParent->isInner());
+  Log::DebugCheck(!xGuardedRight->mIsLeaf);
+  Log::DebugCheck(xGuardedParent->isInner());
 
   auto tmpNodeBuf = utils::JumpScopedArray<uint8_t>(BTreeNode::Size());
   auto* tmp = BTreeNode::Init(tmpNodeBuf->get(), mIsLeaf);
@@ -290,8 +288,9 @@ void BTreeNode::insertFence(BTreeNodeHeader::FenceKey& fk, Slice key) {
 void BTreeNode::setFences(Slice lowerKey, Slice upperKey) {
   insertFence(mLowerFence, lowerKey);
   insertFence(mUpperFence, upperKey);
-  DCHECK(getLowerFenceKey() == nullptr || getUpperFenceKey() == nullptr ||
-         *getLowerFenceKey() <= *getUpperFenceKey());
+  Log::DebugCheck(getLowerFenceKey() == nullptr ||
+                  getUpperFenceKey() == nullptr ||
+                  *getLowerFenceKey() <= *getUpperFenceKey());
 
   // prefix compression
   for (mPrefixSize = 0; (mPrefixSize < min(lowerKey.size(), upperKey.size())) &&
@@ -321,7 +320,7 @@ uint16_t BTreeNode::commonPrefix(uint16_t slotA, uint16_t slotB) {
 }
 
 BTreeNode::SeparatorInfo BTreeNode::findSep() {
-  DCHECK(mNumSeps > 1);
+  Log::DebugCheck(mNumSeps > 1);
 
   // Inner nodes are split in the middle
   if (isInner()) {
@@ -391,7 +390,7 @@ Swip& BTreeNode::lookupInner(Slice key) {
 void BTreeNode::Split(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
                       ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedNewLeft,
                       const BTreeNode::SeparatorInfo& sepInfo) {
-  DCHECK(xGuardedParent->canInsert(sepInfo.mSize, sizeof(Swip)));
+  Log::DebugCheck(xGuardedParent->canInsert(sepInfo.mSize, sizeof(Swip)));
 
   // generate separator key
   uint8_t sepKey[sepInfo.mSize];
@@ -455,7 +454,7 @@ using leanstore::utils::AddMemberToJson;
 
 void BTreeNode::ToJson(rapidjson::Value* resultObj,
                        rapidjson::Value::AllocatorType& allocator) {
-  DCHECK(resultObj->IsObject());
+  Log::DebugCheck(resultObj->IsObject());
 
   auto lowerFence = GetLowerFence();
   if (lowerFence.size() == 0) {

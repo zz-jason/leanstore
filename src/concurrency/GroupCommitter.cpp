@@ -77,14 +77,11 @@ void GroupCommitter::prepareIOCBs(uint64_t& minFlushedGSN,
     maxFlushedGSN = std::max<uint64_t>(maxFlushedGSN, reqCopy.mCurrGSN);
     minFlushedGSN = std::min<uint64_t>(minFlushedGSN, reqCopy.mCurrGSN);
     minFlushedTxId = std::min<TXID>(minFlushedTxId, reqCopy.mCurrTxId);
-    DLOG_IF(INFO, reqCopy.mCurrGSN == 27 || reqCopy.mCurrGSN == 28)
-        << "minFlushedGSN=" << minFlushedGSN
-        << ", workerGSN=" << reqCopy.mCurrGSN << ", workerId=" << workerId;
 
     // prepare IOCBs on demand
     const uint64_t buffered = reqCopy.mWalBuffered;
     const uint64_t flushed = logging.mWalFlushed;
-    const uint64_t bufferEnd = FLAGS_wal_buffer_size;
+    const uint64_t bufferEnd = mStore->mStoreOption.mWalBufferSize;
     if (buffered > flushed) {
       setUpIOCB(logging.mWalBuffer, flushed, buffered);
     } else if (buffered < flushed) {
@@ -93,7 +90,7 @@ void GroupCommitter::prepareIOCBs(uint64_t& minFlushedGSN,
     }
   }
 
-  if (!mAIo.IsEmpty() && FLAGS_wal_fsync) {
+  if (!mAIo.IsEmpty() && mStore->mStoreOption.mEnableWalFsync) {
     mAIo.PrepareFsync(mWalFd);
   }
 }
@@ -107,23 +104,22 @@ void GroupCommitter::writeIOCBs() {
 
   // submit all log writes using a single system call.
   if (auto res = mAIo.SubmitAll(); !res) {
-    LOG(ERROR) << std::format("Failed to submit all IO, error={}",
-                              res.error().ToString());
+    Log::Error("Failed to submit all IO, error={}", res.error().ToString());
   }
 
   /// wait all to finish.
   timespec timeout = {1, 0}; // 1s
   if (auto res = mAIo.WaitAll(&timeout); !res) {
-    LOG(ERROR) << std::format("Failed to wait all IO, error={}",
-                              res.error().ToString());
+    Log::Error("Failed to wait all IO, error={}", res.error().ToString());
   }
 
   /// sync the metadata in the end.
-  if (FLAGS_wal_fsync) {
+  if (mStore->mStoreOption.mEnableWalFsync) {
     auto failed = fdatasync(mWalFd);
-    LOG_IF(ERROR, failed) << std::format(
-        "fdatasync failed, mWalFd={}, errno={}, error={}", mWalFd, errno,
-        strerror(errno));
+    if (failed) {
+      Log::Error("fdatasync failed, errno={}, error={}", errno,
+                 strerror(errno));
+    }
   }
 }
 
@@ -156,12 +152,11 @@ void GroupCommitter::commitTXs(
         }
         maxCommitTs = std::max<TXID>(maxCommitTs, tx.mCommitTs);
         tx.mState = TxState::kCommitted;
-        DLOG(INFO) << "Transaction with remote dependency committed"
-                   << ", workerId=" << workerId << ", startTs=" << tx.mStartTs
-                   << ", commitTs=" << tx.mCommitTs
-                   << ", minFlushedGSN=" << minFlushedGSN
-                   << ", maxFlushedGSN=" << maxFlushedGSN
-                   << ", minFlushedTxId=" << minFlushedTxId;
+        Log::Debug("Transaction with remote dependency committed"
+                   ", workerId={}, startTs={}, commitTs={}, minFlushedGSN={}, "
+                   "maxFlushedGSN={}, minFlushedTxId={}",
+                   workerId, tx.mStartTs, tx.mCommitTs, minFlushedGSN,
+                   maxFlushedGSN, minFlushedTxId);
       }
       if (i > 0) {
         logging.mTxToCommit.erase(logging.mTxToCommit.begin(),
@@ -179,12 +174,11 @@ void GroupCommitter::commitTXs(
         auto& tx = logging.mRfaTxToCommit[i];
         maxCommitTsRfa = std::max<TXID>(maxCommitTsRfa, tx.mCommitTs);
         tx.mState = TxState::kCommitted;
-        DLOG(INFO) << "Transaction (RFA) committed"
-                   << ", workerId=" << workerId << ", startTs=" << tx.mStartTs
-                   << ", commitTs=" << tx.mCommitTs
-                   << ", minFlushedGSN=" << minFlushedGSN
-                   << ", maxFlushedGSN=" << maxFlushedGSN
-                   << ", minFlushedTxId=" << minFlushedTxId;
+        Log::Debug("Transaction without remote dependency committed"
+                   ", workerId={}, startTs={}, commitTs={}, minFlushedGSN={}, "
+                   "maxFlushedGSN={}, minFlushedTxId={}",
+                   workerId, tx.mStartTs, tx.mCommitTs, minFlushedGSN,
+                   maxFlushedGSN, minFlushedTxId);
       }
 
       if (i > 0) {
@@ -208,8 +202,8 @@ void GroupCommitter::commitTXs(
   }
 
   if (minFlushedGSN < std::numeric_limits<uint64_t>::max()) {
-    DLOG(INFO) << "Update globalMinFlushedGSN=" << minFlushedGSN
-               << ", globalMaxFlushedGSN=" << maxFlushedGSN;
+    Log::Debug("Group commit finished, minFlushedGSN={}, maxFlushedGSN={}",
+               minFlushedGSN, maxFlushedGSN);
     mGlobalMinFlushedGSN.store(minFlushedGSN, std::memory_order_release);
     mGlobalMaxFlushedGSN.store(maxFlushedGSN, std::memory_order_release);
   }

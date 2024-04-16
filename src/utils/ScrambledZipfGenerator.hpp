@@ -2,8 +2,7 @@
 
 #include "ZipfGenerator.hpp"
 
-namespace leanstore {
-namespace utils {
+namespace leanstore::utils {
 
 class ScrambledZipfGenerator {
 public:
@@ -23,5 +22,4 @@ public:
   uint64_t rand();
 };
 
-} // namespace utils
-} // namespace leanstore
+} // namespace leanstore::utils

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <glog/logging.h>
+#include "utils/Log.hpp"
 
 #include <atomic>
 #include <shared_mutex>
@@ -44,13 +44,13 @@ public:
 
 public:
   void LockExclusively() {
-    DCHECK(!IsLockedExclusively());
+    Log::DebugCheck(!IsLockedExclusively());
     mMutex.lock();
     mVersion.fetch_add(kLatchExclusiveBit, std::memory_order_release);
   }
 
   void UnlockExclusively() {
-    DCHECK(IsLockedExclusively());
+    Log::DebugCheck(IsLockedExclusively());
     mVersion.fetch_add(kLatchExclusiveBit, std::memory_order_release);
     mMutex.unlock();
   }

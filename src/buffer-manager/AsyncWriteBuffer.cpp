@@ -3,9 +3,8 @@
 #include "buffer-manager/BufferFrame.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
+#include "utils/Log.hpp"
 #include "utils/Result.hpp"
-
-#include <glog/logging.h>
 
 namespace leanstore::storage {
 
@@ -26,7 +25,8 @@ bool AsyncWriteBuffer::IsFull() {
 }
 
 void AsyncWriteBuffer::Add(const BufferFrame& bf) {
-  DCHECK(uint64_t(&bf.mPage) % 512 == 0) << "Page is not aligned to 512 bytes";
+  Log::DebugCheck(uint64_t(&bf) % 512 == 0,
+                  "BufferFrame is not aligned to 512 bytes");
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().dt_page_writes[bf.mPage.mBTreeId]++;
   }

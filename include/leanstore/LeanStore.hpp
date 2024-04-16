@@ -1,24 +1,20 @@
 #pragma once
 
-#include "leanstore/Store.hpp"
+#include "leanstore/StoreOption.hpp"
 #include "leanstore/Units.hpp"
 #include "telemetry/MetricsManager.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Result.hpp"
 
-#include <gflags/gflags.h>
 #include <rapidjson/document.h>
 
-#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <expected>
-#include <limits>
 #include <memory>
 
 namespace leanstore::storage::btree {
 
-class BTreeConfig;
 class BTreeGeneric;
 class Config;
 class BasicKV;
@@ -43,9 +39,9 @@ namespace leanstore {
 
 class LeanStore {
 public:
-  static Result<std::unique_ptr<LeanStore>> Open();
+  static Result<std::unique_ptr<LeanStore>> Open(
+      StoreOption option = StoreOption{});
 
-public:
   /// The storage option for leanstore
   StoreOption mStoreOption;
 
@@ -76,46 +72,33 @@ public:
   utils::DebugFlagsRegistry mDebugFlagsRegistry;
 #endif
 
-public:
-  LeanStore();
+  LeanStore(StoreOption option = StoreOption{});
 
   ~LeanStore();
 
-public:
   /// Create a BasicKV
-  ///
-  /// @param name The unique name of the btree
-  /// @param config The config of the btree
   Result<storage::btree::BasicKV*> CreateBasicKV(
-      const std::string& name, storage::btree::BTreeConfig& config);
+      const std::string& name,
+      BTreeConfig config = BTreeConfig{.mEnableWal = true,
+                                       .mUseBulkInsert = false});
 
   /// Get a registered BasicKV
-  ///
-  /// @param name The unique name of the btree
-  /// @param btree The pointer to store the found btree
   void GetBasicKV(const std::string& name, storage::btree::BasicKV** btree);
 
   /// Unregister a BasicKV
-  /// @param name The unique name of the btree
   void DropBasicKV(const std::string& name);
 
   /// Register a TransactionKV
-  ///
-  /// @param name The unique name of the btree
-  /// @param config The config of the btree
-  /// @param btree The pointer to store the registered btree
   Result<storage::btree::TransactionKV*> CreateTransactionKV(
-      const std::string& name, storage::btree::BTreeConfig& config);
+      const std::string& name,
+      BTreeConfig config = BTreeConfig{.mEnableWal = true,
+                                       .mUseBulkInsert = false});
 
   /// Get a registered TransactionKV
-  ///
-  /// @param name The unique name of the btree
-  /// @param btree The pointer to store the found btree
   void GetTransactionKV(const std::string& name,
                         storage::btree::TransactionKV** btree);
 
   /// Unregister a TransactionKV
-  /// @param name The unique name of the btree
   void DropTransactionKV(const std::string& name);
 
   uint64_t GetTs() {
@@ -127,16 +110,10 @@ public:
     return mTimestampOracle.fetch_add(1);
   }
 
-  Result<std::unique_ptr<TxWorker>> GetTxWorker(WORKERID workerId);
-
   /// Execute a custom user function on a worker thread.
-  /// @param workerId worker to compute job
-  /// @param job job
   void ExecSync(uint64_t workerId, std::function<void()> fn);
 
   /// Execute a custom user function on a worker thread asynchronously.
-  /// @param workerId worker to compute job
-  /// @param job job
   void ExecAsync(uint64_t workerId, std::function<void()> fn);
 
   /// Waits for the worker to complete.
@@ -158,10 +135,6 @@ private:
 
   /// deserializeFlags deserializes the flags.
   void deserializeFlags();
-
-  void initStoreOption();
-
-  void initGoogleLog();
 
   void initPageAndWalFd();
 };

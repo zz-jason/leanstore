@@ -2,8 +2,7 @@
 
 #include "Defer.hpp"
 #include "Misc.hpp"
-
-#include <glog/logging.h>
+#include "utils/Log.hpp"
 
 #include <atomic>
 #include <memory>
@@ -13,13 +12,21 @@
 #include <pthread.h>
 
 namespace leanstore {
-namespace utils {
 
+class LeanStore;
+
+} // namespace leanstore
+
+namespace leanstore::utils {
+
+inline thread_local LeanStore* tlsStore = nullptr;
 inline thread_local std::string tlsThreadName = "";
 
 /// User thread with custom thread name.
 class UserThread {
 protected:
+  LeanStore* mStore = nullptr;
+
   std::string mThreadName = "";
 
   int mRunningCPU = -1;
@@ -29,14 +36,15 @@ protected:
   std::atomic<bool> mKeepRunning = false;
 
 public:
-  UserThread() = default;
-
-  UserThread(const std::string& name, int runningCPU = -1)
-      : mThreadName(name),
+  UserThread(LeanStore* store, const std::string& name, int runningCPU = -1)
+      : mStore(store),
+        mThreadName(name),
         mRunningCPU(runningCPU) {
-    LOG_IF(ERROR, mThreadName.size() > 15)
-        << "Thread name should be restricted to 15 characters"
-        << ", name=" << name << ", size=" << name.size();
+    if (mThreadName.size() > 15) {
+      Log::Error(
+          "Thread name should be restricted to 15 characters, name={}, size={}",
+          name, name.size());
+    }
   }
 
   virtual ~UserThread() {
@@ -67,13 +75,15 @@ public:
 
 protected:
   void run() {
+    tlsStore = mStore;
+
     // set thread-local thread name at the very beging so that logs printed by
     // the thread can get it.
     tlsThreadName = mThreadName;
 
     // log info about thread start and stop events
-    LOG(INFO) << mThreadName << " thread started";
-    SCOPED_DEFER(LOG(INFO) << mThreadName << " thread stopped");
+    Log::Info("{} thread started", mThreadName);
+    SCOPED_DEFER(Log::Info("{} thread stopped", mThreadName));
 
     // setup thread name
     pthread_setname_np(pthread_self(), mThreadName.c_str());
@@ -81,7 +91,7 @@ protected:
     // pin the thread to a specific CPU
     if (mRunningCPU != -1) {
       utils::PinThisThread(mRunningCPU);
-      LOG(INFO) << mThreadName << " pined to CPU " << mRunningCPU;
+      Log::Info("{} pined to CPU {}", mThreadName, mRunningCPU);
     }
 
     // run custom thread loop
@@ -92,5 +102,4 @@ protected:
   virtual void runImpl() = 0;
 };
 
-} // namespace utils
-} // namespace leanstore
+} // namespace leanstore::utils

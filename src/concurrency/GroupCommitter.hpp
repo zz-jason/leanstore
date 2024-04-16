@@ -5,8 +5,6 @@
 #include "utils/AsyncIo.hpp"
 #include "utils/UserThread.hpp"
 
-#include <glog/logging.h>
-
 #include <string>
 
 #include <libaio.h>
@@ -48,7 +46,7 @@ public:
 public:
   GroupCommitter(leanstore::LeanStore* store, int32_t walFd,
                  std::vector<Worker*>& workers, int cpu)
-      : UserThread("GroupCommitter", cpu),
+      : UserThread(store, "GroupCommitter", cpu),
         mStore(store),
         mWalFd(walFd),
         mWalSize(0),

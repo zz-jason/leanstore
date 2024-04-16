@@ -1,54 +1,50 @@
 #include "btree/BasicKV.hpp"
 #include "btree/TransactionKV.hpp"
 #include "btree/core/BTreeGeneric.hpp"
+#include "buffer-manager/BufferFrame.hpp"
 #include "buffer-manager/BufferManager.hpp"
 #include "concurrency/CRManager.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
+#include "leanstore/StoreOption.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Defer.hpp"
 #include "utils/JsonUtil.hpp"
+#include "utils/Log.hpp"
 #include "utils/RandomGenerator.hpp"
 
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 
 #include <cstddef>
 #include <format>
-#include <ostream>
 #include <string>
 
 using namespace leanstore::storage::btree;
 
 namespace leanstore::test {
 
-class RecoveringTest : public ::testing::Test {
+class RecoveryTest : public ::testing::Test {
 protected:
   std::unique_ptr<LeanStore> mStore;
 
-  RecoveringTest() {
+  RecoveryTest() {
     // Create a leanstore instance for the test case
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" +
                        std::string(curTest->name());
-    FLAGS_init = true;
-    FLAGS_logtostdout = true;
-    FLAGS_data_dir = "/tmp/" + curTestName;
-    FLAGS_worker_threads = 2;
-    FLAGS_enable_eager_garbage_collection = true;
-    auto res = LeanStore::Open();
+    auto res = LeanStore::Open(StoreOption{
+        .mCreateFromScratch = true,
+        .mStoreDir = "/tmp/" + curTestName,
+        .mWorkerThreads = 2,
+        .mEnableEagerGc = true,
+    });
     mStore = std::move(res.value());
   }
 
-  ~RecoveringTest() = default;
-
-  static uint64_t randomWorkerId() {
-    auto numWorkers = FLAGS_worker_threads;
-    return utils::RandomGenerator::Rand<uint64_t>(0, numWorkers);
-  }
+  ~RecoveryTest() = default;
 };
 
-TEST_F(RecoveringTest, SerializeAndDeserialize) {
+TEST_F(RecoveryTest, SerializeAndDeserialize) {
   TransactionKV* btree;
 
   // prepare key-value pairs to insert
@@ -62,13 +58,9 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
 
   // create btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = BTreeConfig{
-      .mEnableWal = FLAGS_wal,
-      .mUseBulkInsert = FLAGS_bulk_insert,
-  };
 
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     ASSERT_TRUE(res);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
@@ -84,12 +76,27 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
     }
   });
 
+  Log::Debug("Buffer Pool Before Shutdown:");
+  mStore->mBufferManager->DoWithBufferFrameIf(
+      [](BufferFrame& bf) { return !bf.IsFree(); },
+      [](BufferFrame& bf) {
+        Log::Debug("pageId={}, treeId={}, isDirty={}", bf.mHeader.mPageId,
+                   bf.mPage.mBTreeId, bf.IsDirty());
+      });
+
+  mStore->ExecSync(0, [&]() {
+    rapidjson::Document doc(rapidjson::kObjectType);
+    leanstore::storage::btree::BTreeGeneric::ToJson(*btree, &doc);
+    Log::Debug("BTree before destroy:\n{}", leanstore::utils::JsonToStr(&doc));
+  });
+
   // meta file should be serialized during destructor.
+  auto storeOption = mStore->mStoreOption;
   mStore.reset(nullptr);
 
   // recreate the store, it's expected that all the meta and pages are rebult.
-  FLAGS_init = false;
-  auto res = LeanStore::Open();
+  storeOption.mCreateFromScratch = false;
+  auto res = LeanStore::Open(std::move(storeOption));
   EXPECT_TRUE(res);
 
   mStore = std::move(res.value());
@@ -121,7 +128,7 @@ TEST_F(RecoveringTest, SerializeAndDeserialize) {
   mStore = nullptr;
 }
 
-TEST_F(RecoveringTest, RecoverAfterInsert) {
+TEST_F(RecoveryTest, RecoverAfterInsert) {
 #ifndef DEBUG
   GTEST_SKIP() << "This test only works in debug mode";
 #endif
@@ -139,13 +146,9 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = BTreeConfig{
-      .mEnableWal = FLAGS_wal,
-      .mUseBulkInsert = FLAGS_bulk_insert,
-  };
 
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
 
@@ -159,18 +162,19 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
 
     rapidjson::Document doc(rapidjson::kObjectType);
     leanstore::storage::btree::BTreeGeneric::ToJson(*btree, &doc);
-    LOG(INFO) << "BTree before destroy:\n" << leanstore::utils::JsonToStr(&doc);
+    Log::Debug("BTree before destroy:\n{}", leanstore::utils::JsonToStr(&doc));
   });
 
   // skip dumpping buffer frames on exit
   LS_DEBUG_ENABLE(mStore, "skip_CheckpointAllBufferFrames");
   SCOPED_DEFER(LS_DEBUG_DISABLE(mStore, "skip_CheckpointAllBufferFrames"));
+  auto storeOption = mStore->mStoreOption;
   mStore.reset(nullptr);
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
-  FLAGS_init = false;
-  auto res = LeanStore::Open();
+  storeOption.mCreateFromScratch = false;
+  auto res = LeanStore::Open(std::move(storeOption));
   EXPECT_TRUE(res);
 
   mStore = std::move(res.value());
@@ -181,7 +185,7 @@ TEST_F(RecoveringTest, RecoverAfterInsert) {
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     rapidjson::Document doc(rapidjson::kObjectType);
     BTreeGeneric::ToJson(*static_cast<BTreeGeneric*>(btree), &doc);
-    DLOG(INFO) << "TransactionKV after recovery: " << utils::JsonToStr(&doc);
+    Log::Debug("TransactionKV after recovery: {}", utils::JsonToStr(&doc));
   });
 
   // lookup the restored btree
@@ -211,7 +215,7 @@ static std::string GenerateValue(int ordinalPrefix, size_t valSize) {
          utils::RandomGenerator::RandAlphString(valSize - prefix.size());
 }
 
-TEST_F(RecoveringTest, RecoverAfterUpdate) {
+TEST_F(RecoveryTest, RecoverAfterUpdate) {
 #ifndef DEBUG
   GTEST_SKIP() << "This test only works in debug mode";
 #endif
@@ -230,10 +234,6 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
 
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
-  auto btreeConfig = BTreeConfig{
-      .mEnableWal = FLAGS_wal,
-      .mUseBulkInsert = FLAGS_bulk_insert,
-  };
 
   // update all the values to this newVal
   const uint64_t updateDescBufSize = UpdateDesc::Size(1);
@@ -245,7 +245,7 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
 
   mStore->ExecSync(0, [&]() {
     // create btree
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
 
@@ -275,18 +275,19 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
 
     rapidjson::Document doc(rapidjson::kObjectType);
     leanstore::storage::btree::BTreeGeneric::ToJson(*btree, &doc);
-    LOG(INFO) << "BTree before destroy:\n" << leanstore::utils::JsonToStr(&doc);
+    Log::Debug("BTree before destroy:\n{}", leanstore::utils::JsonToStr(&doc));
   });
 
   // skip dumpping buffer frames on exit
   LS_DEBUG_ENABLE(mStore, "skip_CheckpointAllBufferFrames");
   SCOPED_DEFER(LS_DEBUG_DISABLE(mStore, "skip_CheckpointAllBufferFrames"));
+  auto storeOption = mStore->mStoreOption;
   mStore.reset(nullptr);
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
-  FLAGS_init = false;
-  auto res = LeanStore::Open();
+  storeOption.mCreateFromScratch = false;
+  auto res = LeanStore::Open(std::move(storeOption));
   EXPECT_TRUE(res);
 
   mStore = std::move(res.value());
@@ -297,7 +298,7 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     rapidjson::Document doc(rapidjson::kObjectType);
     BTreeGeneric::ToJson(*static_cast<BTreeGeneric*>(btree), &doc);
-    DLOG(INFO) << "TransactionKV after recovery: " << utils::JsonToStr(&doc);
+    Log::Debug("TransactionKV after recovery: {}", utils::JsonToStr(&doc));
   });
 
   // lookup the restored btree
@@ -315,7 +316,7 @@ TEST_F(RecoveringTest, RecoverAfterUpdate) {
   });
 }
 
-TEST_F(RecoveringTest, RecoverAfterRemove) {
+TEST_F(RecoveryTest, RecoverAfterRemove) {
 #ifndef DEBUG
   GTEST_SKIP() << "This test only works in debug mode";
 #endif
@@ -335,11 +336,7 @@ TEST_F(RecoveringTest, RecoverAfterRemove) {
 
   mStore->ExecSync(0, [&]() {
     // create btree
-    auto btreeConfig = BTreeConfig{
-        .mEnableWal = FLAGS_wal,
-        .mUseBulkInsert = FLAGS_bulk_insert,
-    };
-    auto res = mStore->CreateTransactionKV(btreeName, btreeConfig);
+    auto res = mStore->CreateTransactionKV(btreeName);
     btree = res.value();
     EXPECT_NE(btree, nullptr);
 
@@ -361,18 +358,19 @@ TEST_F(RecoveringTest, RecoverAfterRemove) {
 
     rapidjson::Document doc(rapidjson::kObjectType);
     leanstore::storage::btree::BTreeGeneric::ToJson(*btree, &doc);
-    LOG(INFO) << "BTree before destroy:\n" << leanstore::utils::JsonToStr(&doc);
+    Log::Debug("BTree before destroy:\n{}", leanstore::utils::JsonToStr(&doc));
   });
 
   // skip dumpping buffer frames on exit
   LS_DEBUG_ENABLE(mStore, "skip_CheckpointAllBufferFrames");
   SCOPED_DEFER(LS_DEBUG_DISABLE(mStore, "skip_CheckpointAllBufferFrames"));
+  auto storeOption = mStore->mStoreOption;
   mStore.reset(nullptr);
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
-  FLAGS_init = false;
-  auto res = LeanStore::Open();
+  storeOption.mCreateFromScratch = false;
+  auto res = LeanStore::Open(std::move(storeOption));
   EXPECT_TRUE(res);
 
   mStore = std::move(res.value());

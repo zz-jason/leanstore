@@ -49,7 +49,7 @@ public:
 public:
   static Result<BasicKV*> Create(leanstore::LeanStore* store,
                                  const std::string& treeName,
-                                 BTreeConfig& config);
+                                 BTreeConfig config);
 
   /// Copy the slots from the value to the buffer.
   ///
