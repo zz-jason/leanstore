@@ -199,7 +199,7 @@ public:
   }
 
   static void ToJson(BTreeGeneric& btree, rapidjson::Document* resultDoc) {
-    Log::DebugCheck(resultDoc->IsObject());
+    LS_DCHECK(resultDoc->IsObject());
     auto& allocator = resultDoc->GetAllocator();
 
     // meta node
@@ -262,7 +262,7 @@ inline void BTreeGeneric::toJsonRecursive(
     BTreeGeneric& btree, GuardedBufferFrame<BTreeNode>& guardedNode,
     rapidjson::Value* resultObj, rapidjson::Value::AllocatorType& allocator) {
 
-  Log::DebugCheck(resultObj->IsObject());
+  LS_DCHECK(resultObj->IsObject());
   // buffer frame header
   guardedNode.mBf->ToJson(resultObj, allocator);
 
@@ -384,7 +384,7 @@ inline void BTreeGeneric::FindLeafCanJump(
     }
 
     auto& childSwip = guardedTarget->lookupInner(key);
-    Log::DebugCheck(!childSwip.IsEmpty());
+    LS_DCHECK(!childSwip.IsEmpty());
     guardedParent = std::move(guardedTarget);
     if (level == mHeight - 1) {
       guardedTarget = GuardedBufferFrame<BTreeNode>(
@@ -481,8 +481,8 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
     jumpmu::Jump();
   }
 
-  Log::DebugCheck(posInParent != std::numeric_limits<uint32_t>::max(),
-                  "Invalid posInParent={}", posInParent);
+  LS_DCHECK(posInParent != std::numeric_limits<uint32_t>::max(),
+            "Invalid posInParent={}", posInParent);
   ParentSwipHandler parentHandler = {.mParentGuard =
                                          std::move(guardedChild.mGuard),
                                      .mParentBf = guardedChild.mBf,

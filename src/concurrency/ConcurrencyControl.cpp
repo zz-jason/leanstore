@@ -23,12 +23,12 @@ namespace leanstore::cr {
 //------------------------------------------------------------------------------
 
 void CommitTree::AppendCommitLog(TXID startTs, TXID commitTs) {
-  Log::DebugCheck(mCommitLog.size() < mCapacity);
+  LS_DCHECK(mCommitLog.size() < mCapacity);
   utils::Timer timer(CRCounters::MyCounters().cc_ms_committing);
   std::unique_lock xGuard(mMutex);
   mCommitLog.push_back({commitTs, startTs});
-  Log::Debug("Commit log appended, workerId={}, startTs={}, commitTs={}",
-             Worker::My().mWorkerId, startTs, commitTs);
+  LS_DLOG("Commit log appended, workerId={}, startTs={}, commitTs={}",
+          Worker::My().mWorkerId, startTs, commitTs);
 }
 
 void CommitTree::CompactCommitLog() {
@@ -72,12 +72,8 @@ void CommitTree::CompactCommitLog() {
   }
 
   DEBUG_BLOCK() {
-    Log::Debug("Commit log cleaned up, workerId={}, mCommitLog.size()={}",
-               Worker::My().mWorkerId, mCommitLog.size());
-    for (auto [commitTs, startTs] : mCommitLog) {
-      Log::Debug("Commit log entry: startTs={}, commitTs={}", startTs,
-                 commitTs);
-    }
+    LS_DLOG("Commit log cleaned up, workerId={}, mCommitLog.size()={}",
+            Worker::My().mWorkerId, mCommitLog.size());
   }
 }
 
@@ -100,7 +96,7 @@ std::optional<std::pair<TXID, TXID>> CommitTree::lcbNoLatch(TXID startTs) {
     return {};
   }
   it--;
-  Log::DebugCheck(it->second < startTs);
+  LS_DCHECK(it->second < startTs);
   return *it;
 }
 
@@ -190,9 +186,9 @@ void ConcurrencyControl::GarbageCollection() {
   // remove versions that are nolonger needed by any transaction
   if (mCleanedWmkOfShortTx <= mLocalWmkOfAllTx) {
     utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_history_tree);
-    Log::Debug("Garbage collect history tree"
-               ", workerId={}, fromTxId={}, toTxId(mLocalWmkOfAllTx)={}",
-               Worker::My().mWorkerId, 0, mLocalWmkOfAllTx);
+    LS_DLOG("Garbage collect history tree"
+            ", workerId={}, fromTxId={}, toTxId(mLocalWmkOfAllTx)={}",
+            Worker::My().mWorkerId, 0, mLocalWmkOfAllTx);
     mHistoryStorage.PurgeVersions(
         0, mLocalWmkOfAllTx,
         [&](const TXID versionTxId, const TREEID treeId,
@@ -208,9 +204,9 @@ void ConcurrencyControl::GarbageCollection() {
         0);
     mCleanedWmkOfShortTx = mLocalWmkOfAllTx + 1;
   } else {
-    Log::Debug("Skip garbage collect history tree, workerId={}, "
-               "mCleanedWmkOfShortTx={}, mLocalWmkOfAllTx={}",
-               Worker::My().mWorkerId, mCleanedWmkOfShortTx, mLocalWmkOfAllTx);
+    LS_DLOG("Skip garbage collect history tree, workerId={}, "
+            "mCleanedWmkOfShortTx={}, mLocalWmkOfAllTx={}",
+            Worker::My().mWorkerId, mCleanedWmkOfShortTx, mLocalWmkOfAllTx);
   }
 
   // move tombstones to graveyard
@@ -218,10 +214,9 @@ void ConcurrencyControl::GarbageCollection() {
       mLocalWmkOfAllTx < mLocalWmkOfShortTx &&
       mCleanedWmkOfShortTx <= mLocalWmkOfShortTx) {
     utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_graveyard);
-    Log::Debug("Garbage collect graveyard, workerId={}, fromTxId={}, "
-               "toTxId(mLocalWmkOfShortTx)={}",
-               Worker::My().mWorkerId, mCleanedWmkOfShortTx,
-               mLocalWmkOfShortTx);
+    LS_DLOG("Garbage collect graveyard, workerId={}, fromTxId={}, "
+            "toTxId(mLocalWmkOfShortTx)={}",
+            Worker::My().mWorkerId, mCleanedWmkOfShortTx, mLocalWmkOfShortTx);
     mHistoryStorage.VisitRemovedVersions(
         mCleanedWmkOfShortTx, mLocalWmkOfShortTx,
         [&](const TXID versionTxId, const TREEID treeId,
@@ -235,10 +230,9 @@ void ConcurrencyControl::GarbageCollection() {
         });
     mCleanedWmkOfShortTx = mLocalWmkOfShortTx + 1;
   } else {
-    Log::Debug("Skip garbage collect graveyard, workerId={}, "
-               "mCleanedWmkOfShortTx={}, mLocalWmkOfShortTx={}",
-               Worker::My().mWorkerId, mCleanedWmkOfShortTx,
-               mLocalWmkOfShortTx);
+    LS_DLOG("Skip garbage collect graveyard, workerId={}, "
+            "mCleanedWmkOfShortTx={}, mLocalWmkOfShortTx={}",
+            Worker::My().mWorkerId, mCleanedWmkOfShortTx, mLocalWmkOfShortTx);
   }
 }
 
@@ -257,7 +251,7 @@ ConcurrencyControl& ConcurrencyControl::Other(WORKERID otherWorkerId) {
 // collection.
 void ConcurrencyControl::updateGlobalTxWatermarks() {
   if (!mStore->mStoreOption.mEnableGc) {
-    Log::Debug("Skip updating global watermarks, GC is disabled");
+    LS_DLOG("Skip updating global watermarks, GC is disabled");
     return;
   }
 
@@ -268,7 +262,7 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
   auto performGc = meetGcProbability &&
                    mStore->mCRManager->mGlobalWmkInfo.mGlobalMutex.try_lock();
   if (!performGc) {
-    Log::Debug(
+    LS_DLOG(
         "Skip updating global watermarks, meetGcProbability={}, performGc={}",
         meetGcProbability, performGc);
     return;
@@ -325,9 +319,9 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
   for (WORKERID i = 0; i < Worker::My().mAllWorkers.size(); i++) {
     ConcurrencyControl& mCc = Other(i);
     if (mCc.mUpdatedLatestCommitTs == mCc.mLatestCommitTs) {
-      Log::Debug("Skip updating watermarks for worker {}, no transaction "
-                 "committed since last round, mLatestCommitTs={}",
-                 i, mCc.mLatestCommitTs.load());
+      LS_DLOG("Skip updating watermarks for worker {}, no transaction "
+              "committed since last round, mLatestCommitTs={}",
+              i, mCc.mLatestCommitTs.load());
       TXID wmkOfAllTx = mCc.mWmkOfAllTx;
       TXID wmkOfShortTx = mCc.mWmkOfShortTx;
       if (wmkOfAllTx > 0 || wmkOfShortTx > 0) {
@@ -350,10 +344,10 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
                           std::memory_order_release);
     mCc.mUpdatedLatestCommitTs.store(mCc.mLatestCommitTs,
                                      std::memory_order_release);
-    Log::Debug("Watermarks updated for worker {}, mWmkOfAllTx=LCB({})={}, "
-               "mWmkOfShortTx=LCB({})={}",
-               i, wmkOfAllTx, mCc.mWmkOfAllTx.load(), wmkOfShortTx,
-               mCc.mWmkOfShortTx.load());
+    LS_DLOG("Watermarks updated for worker {}, mWmkOfAllTx=LCB({})={}, "
+            "mWmkOfShortTx=LCB({})={}",
+            i, wmkOfAllTx, mCc.mWmkOfAllTx.load(), wmkOfShortTx,
+            mCc.mWmkOfShortTx.load());
 
     // The lower watermarks of current worker only matters when there are
     // transactions started before global oldestActiveTx
@@ -370,9 +364,9 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
   // lower watermarks is not necessary in this case.
   if (mStore->mCRManager->mGlobalWmkInfo.mWmkOfAllTx == globalWmkOfAllTx &&
       mStore->mCRManager->mGlobalWmkInfo.mWmkOfShortTx == globalWmkOfShortTx) {
-    Log::Debug("Skip updating global watermarks, global watermarks are the "
-               "same as last round, globalWmkOfAllTx={}, globalWmkOfShortTx={}",
-               globalWmkOfAllTx, globalWmkOfShortTx);
+    LS_DLOG("Skip updating global watermarks, global watermarks are the "
+            "same as last round, globalWmkOfAllTx={}, globalWmkOfShortTx={}",
+            globalWmkOfAllTx, globalWmkOfShortTx);
     return;
   }
 
@@ -380,9 +374,9 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
   // TXID globalWmkOfShortTx = std::numeric_limits<TXID>::max();
   if (globalWmkOfAllTx == std::numeric_limits<TXID>::max() ||
       globalWmkOfShortTx == std::numeric_limits<TXID>::max()) {
-    Log::Debug("Skip updating global watermarks, can not find any valid lower "
-               "watermarks, globalWmkOfAllTx={}, globalWmkOfShortTx={}",
-               globalWmkOfAllTx, globalWmkOfShortTx);
+    LS_DLOG("Skip updating global watermarks, can not find any valid lower "
+            "watermarks, globalWmkOfAllTx={}, globalWmkOfShortTx={}",
+            globalWmkOfAllTx, globalWmkOfShortTx);
     return;
   }
 
@@ -391,10 +385,10 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
 }
 
 void ConcurrencyControl::updateLocalWatermarks() {
-  SCOPED_DEFER(Log::Debug("Local watermarks updated, workerId={}, "
-                          "mLocalWmkOfAllTx={}, mLocalWmkOfShortTx={}",
-                          Worker::My().mWorkerId, mLocalWmkOfAllTx,
-                          mLocalWmkOfShortTx));
+  SCOPED_DEFER(LS_DLOG("Local watermarks updated, workerId={}, "
+                       "mLocalWmkOfAllTx={}, mLocalWmkOfShortTx={}",
+                       Worker::My().mWorkerId, mLocalWmkOfAllTx,
+                       mLocalWmkOfShortTx));
   while (true) {
     uint64_t version = mWmkVersion.load();
 
@@ -412,7 +406,7 @@ void ConcurrencyControl::updateLocalWatermarks() {
     }
   }
 
-  Log::DebugCheck(
+  LS_DCHECK(
       !mStore->mStoreOption.mEnableLongRunningTx ||
           mLocalWmkOfAllTx <= mLocalWmkOfShortTx,
       "Lower watermark of all transactions should be no higher than the lower "

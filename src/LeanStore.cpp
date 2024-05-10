@@ -37,7 +37,7 @@
 namespace leanstore {
 
 Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption option) {
-  Log::Init();
+  Log::Init(option);
   return std::make_unique<LeanStore>(std::move(option));
 }
 
@@ -51,7 +51,6 @@ LeanStore::LeanStore(StoreOption option)
     std::filesystem::path dirPath = mStoreOption.mStoreDir;
     std::filesystem::remove_all(dirPath);
     std::filesystem::create_directories(dirPath);
-    std::filesystem::create_directories(mStoreOption.GetLogDir());
   }
 
   Log::Info("LeanStore starting ...");
@@ -87,8 +86,8 @@ LeanStore::LeanStore(StoreOption option)
 
 void LeanStore::initPageAndWalFd() {
   SCOPED_DEFER({
-    Log::DebugCheck(fcntl(mPageFd, F_GETFL) != -1);
-    Log::DebugCheck(fcntl(mWalFd, F_GETFL) != -1);
+    LS_DCHECK(fcntl(mPageFd, F_GETFL) != -1);
+    LS_DCHECK(fcntl(mWalFd, F_GETFL) != -1);
   });
 
   // Create a new instance on the specified DB file
@@ -175,7 +174,7 @@ LeanStore::~LeanStore() {
     auto walFilePath = mStoreOption.GetWalFilePath();
     struct stat st;
     if (stat(walFilePath.c_str(), &st) == 0) {
-      Log::Debug("The size of {} is {} bytes", walFilePath, st.st_size);
+      LS_DLOG("The size of {} is {} bytes", walFilePath, st.st_size);
     }
   }
   if (close(mWalFd) == -1) {
@@ -336,9 +335,9 @@ void LeanStore::deserializeMeta() {
   }
 
   auto& btreeJsonArray = doc[META_KEY_REGISTERED_DATASTRUCTURES];
-  Log::DebugCheck(btreeJsonArray.IsArray());
+  LS_DCHECK(btreeJsonArray.IsArray());
   for (auto& btreeJsonObj : btreeJsonArray.GetArray()) {
-    Log::DebugCheck(btreeJsonObj.IsObject());
+    LS_DCHECK(btreeJsonObj.IsObject());
     const TREEID btreeId = btreeJsonObj["id"].GetInt64();
     const auto btreeType = btreeJsonObj["type"].GetInt();
     const std::string btreeName = btreeJsonObj["name"].GetString();
@@ -417,7 +416,7 @@ void LeanStore::GetBasicKV(const std::string& name,
 }
 
 void LeanStore::DropBasicKV(const std::string& name) {
-  Log::DebugCheck(cr::Worker::My().IsTxStarted());
+  LS_DCHECK(cr::Worker::My().IsTxStarted());
   auto* btree =
       dynamic_cast<btree::BTreeGeneric*>(mTreeRegistry->GetTree(name));
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
@@ -467,7 +466,7 @@ void LeanStore::GetTransactionKV(const std::string& name,
 }
 
 void LeanStore::DropTransactionKV(const std::string& name) {
-  Log::DebugCheck(cr::Worker::My().IsTxStarted());
+  LS_DCHECK(cr::Worker::My().IsTxStarted());
   auto* btree =
       DownCast<storage::btree::BTreeGeneric*>(mTreeRegistry->GetTree(name));
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
@@ -480,7 +479,7 @@ void LeanStore::DropTransactionKV(const std::string& name) {
   auto graveyardName = "_" + name + "_graveyard";
   btree = DownCast<storage::btree::BTreeGeneric*>(
       mTreeRegistry->GetTree(graveyardName));
-  Log::DebugCheck(btree != nullptr, "graveyard not found");
+  LS_DCHECK(btree != nullptr, "graveyard not found");
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
   res = mTreeRegistry->UnregisterTree(graveyardName);
   if (!res) {

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "btree/TransactionKV.hpp"
-#include "btree/core/BTreeGeneric.hpp"
 #include "concurrency/CRManager.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
@@ -172,7 +171,7 @@ inline Session* LeanStoreMVCC::GetSession(WORKERID sessionId) {
     mSessions.emplace(sessionId, LeanStoreMVCCSession(sessionId, this));
   }
   auto it = mSessions.find(sessionId);
-  Log::DebugCheck(it != mSessions.end());
+  LS_DCHECK(it != mSessions.end());
   return &it->second;
 }
 

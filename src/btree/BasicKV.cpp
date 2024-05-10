@@ -49,7 +49,6 @@ OpCode BasicKV::Lookup(Slice key, ValCallback valCallback) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
     JUMPMU_CATCH() {
-      Log::Debug("BasicKV::Lookup retried");
       WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
     }
   }
@@ -64,7 +63,7 @@ bool BasicKV::IsRangeEmpty(Slice startKey, Slice endKey) {
       FindLeafCanJump(startKey, guardedLeaf);
 
       Slice upperFence = guardedLeaf->GetUpperFence();
-      Log::DebugCheck(startKey >= guardedLeaf->GetLowerFence());
+      LS_DCHECK(startKey >= guardedLeaf->GetLowerFence());
 
       if ((guardedLeaf->mUpperFence.offset == 0 || endKey <= upperFence) &&
           guardedLeaf->mNumSeps == 0) {
@@ -259,7 +258,7 @@ OpCode BasicKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
     }
     auto currentVal = xIter.MutableVal();
     if (mConfig.mEnableWal) {
-      Log::DebugCheck(updateDesc.mNumSlots > 0);
+      LS_DCHECK(updateDesc.mNumSlots > 0);
       auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
       auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WalUpdate>(
           key.length() + sizeOfDescAndDelta);

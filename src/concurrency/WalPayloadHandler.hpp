@@ -51,7 +51,7 @@ template <typename T> inline void WalPayloadHandler<T>::SubmitWal() {
       // rapidjson::StringBuffer buffer;
       // rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
       // walDoc.Accept(writer);
-      // Log::Debug("SubmitWal, workerId={}, startTs={}, curGsn={}, walJson={}",
+      // LS_DLOG("SubmitWal, workerId={}, startTs={}, curGsn={}, walJson={}",
       //            Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
       //            Worker::My().mLogging.GetCurrentGsn(),
       //            WalEntry::ToJsonString(mWalPayload));

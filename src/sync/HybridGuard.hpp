@@ -74,13 +74,13 @@ public:
 
 public:
   void JumpIfModifiedByOthers() {
-    Log::DebugCheck(mState == GuardState::kOptimisticShared ||
-                    mVersion == mLatch->mVersion.load());
+    LS_DCHECK(mState == GuardState::kOptimisticShared ||
+              mVersion == mLatch->mVersion.load());
     if (mState == GuardState::kOptimisticShared &&
         mVersion != mLatch->mVersion.load()) {
-      Log::Debug("JumpIfModifiedByOthers, mVersion(expected)={}, "
-                 "mLatch->mVersion(actual)={}",
-                 mVersion, mLatch->mVersion.load());
+      LS_DLOG("JumpIfModifiedByOthers, mVersion(expected)={}, "
+              "mLatch->mVersion(actual)={}",
+              mVersion, mLatch->mVersion.load());
       jumpmu::Jump();
     }
   }
@@ -99,13 +99,13 @@ public:
       break;
     }
     }
-    Log::DebugCheck(mState == GuardState::kMoved ||
-                    mState == GuardState::kUninitialized ||
-                    mState == GuardState::kOptimisticShared);
+    LS_DCHECK(mState == GuardState::kMoved ||
+              mState == GuardState::kUninitialized ||
+              mState == GuardState::kOptimisticShared);
   }
 
   inline void ToOptimisticSpin() {
-    Log::DebugCheck(mState == GuardState::kUninitialized && mLatch != nullptr);
+    LS_DCHECK(mState == GuardState::kUninitialized && mLatch != nullptr);
     mVersion = mLatch->mVersion.load();
     while (HasExclusiveMark(mVersion)) {
       mEncounteredContention = true;
@@ -115,7 +115,7 @@ public:
   }
 
   inline void ToOptimisticOrJump() {
-    Log::DebugCheck(mState == GuardState::kUninitialized && mLatch != nullptr);
+    LS_DCHECK(mState == GuardState::kUninitialized && mLatch != nullptr);
     mVersion = mLatch->mVersion.load();
     if (HasExclusiveMark(mVersion)) {
       mEncounteredContention = true;
@@ -129,7 +129,7 @@ public:
         mState == GuardState::kPessimisticShared) {
       return;
     }
-    Log::DebugCheck(mState == GuardState::kUninitialized || mLatch != nullptr);
+    LS_DCHECK(mState == GuardState::kUninitialized || mLatch != nullptr);
     mVersion = mLatch->mVersion.load();
     if (HasExclusiveMark(mVersion)) {
       lockShared();
@@ -140,7 +140,7 @@ public:
   }
 
   inline void ToOptimisticOrExclusive() {
-    Log::DebugCheck(mState == GuardState::kUninitialized && mLatch != nullptr);
+    LS_DCHECK(mState == GuardState::kUninitialized && mLatch != nullptr);
     mVersion = mLatch->mVersion.load();
     if (HasExclusiveMark(mVersion)) {
       lockExclusive();
@@ -151,7 +151,7 @@ public:
   }
 
   inline void ToExclusiveMayJump() {
-    Log::DebugCheck(mState != GuardState::kPessimisticShared);
+    LS_DCHECK(mState != GuardState::kPessimisticShared);
     if (mState == GuardState::kPessimisticExclusive) {
       return;
     }
@@ -173,8 +173,8 @@ public:
   }
 
   inline void ToSharedMayJump() {
-    Log::DebugCheck(mState == GuardState::kOptimisticShared ||
-                    mState == GuardState::kPessimisticShared);
+    LS_DCHECK(mState == GuardState::kOptimisticShared ||
+              mState == GuardState::kPessimisticShared);
     if (mState == GuardState::kPessimisticShared) {
       return;
     }
@@ -192,7 +192,7 @@ public:
 
   // For buffer management
   inline void TryToExclusiveMayJump() {
-    Log::DebugCheck(mState == GuardState::kOptimisticShared);
+    LS_DCHECK(mState == GuardState::kOptimisticShared);
     const uint64_t newVersion = mVersion + kLatchExclusiveBit;
     uint64_t expected = mVersion;
 
@@ -209,7 +209,7 @@ public:
   }
 
   inline void TryToSharedMayJump() {
-    Log::DebugCheck(mState == GuardState::kOptimisticShared);
+    LS_DCHECK(mState == GuardState::kOptimisticShared);
     if (!mLatch->mMutex.try_lock_shared()) {
       jumpmu::Jump();
     }
@@ -223,30 +223,30 @@ public:
 private:
   inline void lockExclusive() {
     mLatch->mMutex.lock();
-    Log::DebugCheck(!HasExclusiveMark(mLatch->mVersion));
+    LS_DCHECK(!HasExclusiveMark(mLatch->mVersion));
     mVersion = mLatch->mVersion.load() + kLatchExclusiveBit;
     mLatch->mVersion.store(mVersion, std::memory_order_release);
     mState = GuardState::kPessimisticExclusive;
   }
 
   inline void unlockExclusive() {
-    Log::DebugCheck(HasExclusiveMark(mLatch->mVersion));
+    LS_DCHECK(HasExclusiveMark(mLatch->mVersion));
     mVersion += kLatchExclusiveBit;
     mLatch->mVersion.store(mVersion, std::memory_order_release);
-    Log::DebugCheck(!HasExclusiveMark(mLatch->mVersion));
+    LS_DCHECK(!HasExclusiveMark(mLatch->mVersion));
     mLatch->mMutex.unlock();
     mState = GuardState::kOptimisticShared;
   }
 
   inline void lockShared() {
     mLatch->mMutex.lock_shared();
-    Log::DebugCheck(!HasExclusiveMark(mLatch->mVersion));
+    LS_DCHECK(!HasExclusiveMark(mLatch->mVersion));
     mVersion = mLatch->mVersion.load();
     mState = GuardState::kPessimisticShared;
   }
 
   inline void unlockShared() {
-    Log::DebugCheck(!HasExclusiveMark(mLatch->mVersion));
+    LS_DCHECK(!HasExclusiveMark(mLatch->mVersion));
     mLatch->mMutex.unlock_shared();
     mState = GuardState::kOptimisticShared;
   }

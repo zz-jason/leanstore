@@ -2,7 +2,7 @@
     "version": 3,
     "configurePresets": [
         {
-            "name": "default",
+            "name": "debug",
             "binaryDir": "${sourceDir}/build/debug",
             "cacheVariables": {
                 "CMAKE_C_COMPILER": "gcc-13",
@@ -36,8 +36,7 @@
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "CMAKE_BUILD_TYPE": "Release",
                 "COUNTERS_LEVEL": "none",
-                "ENABLE_PROFILING": "ON",
-                "ENABLE_ROCKSDB": "ON"
+                "ENABLE_PROFILING": "ON"
             }
         },
         {
@@ -54,17 +53,17 @@
             }
         },
         {
-            "name": "debug_performance",
-            "binaryDir": "${sourceDir}/build/debug",
+            "name": "performance_profile",
+            "binaryDir": "${sourceDir}/build/release",
             "cacheVariables": {
                 "CMAKE_C_COMPILER": "gcc-13",
                 "CMAKE_CXX_COMPILER": "g++-13",
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "CMAKE_BUILD_TYPE": "Debug",
+                "ENABLE_ROCKSDB": "ON",
+                "CMAKE_BUILD_TYPE": "Release",
                 "COUNTERS_LEVEL": "none",
-                "ENABLE_PROFILING": "ON",
-                "ENABLE_ROCKSDB": "ON"
+                "ENABLE_PROFILING": "ON"
             }
         }
     ]

@@ -330,7 +330,7 @@ void HistoryStorage::VisitRemovedVersions(
       auto& versionContainer = *VersionMeta::From(xIter.MutableVal().Data());
       const TREEID treeId = versionContainer.mTreeId;
       const bool calledBefore = versionContainer.mCalledBefore;
-      Log::DebugCheck(
+      LS_DCHECK(
           calledBefore == false,
           "Each remove version should be visited only once, treeId={}, txId={}",
           treeId, curTxId);

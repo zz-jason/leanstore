@@ -135,7 +135,7 @@ void WalPayload::toJson(const WalTxInsert* wal [[maybe_unused]],
 
 void WalPayload::toJson(const WalUpdate* wal [[maybe_unused]],
                         rapidjson::Document* doc [[maybe_unused]]) {
-  Log::Debug("toJson for WalUpdate not implemented");
+  Log::Warn("toJson for WalUpdate not implemented");
   rapidjson::Value member;
   member.SetString("Not implemented", doc->GetAllocator());
   doc->AddMember("mVal", member, doc->GetAllocator());
@@ -143,7 +143,7 @@ void WalPayload::toJson(const WalUpdate* wal [[maybe_unused]],
 
 void WalPayload::toJson(const WalTxUpdate* wal [[maybe_unused]],
                         rapidjson::Document* doc [[maybe_unused]]) {
-  Log::Debug("toJson for WalTxUpdate not implemented");
+  Log::Warn("toJson for WalTxUpdate not implemented");
   rapidjson::Value member;
   member.SetString("Not implemented", doc->GetAllocator());
   doc->AddMember("mVal", member, doc->GetAllocator());
@@ -151,7 +151,7 @@ void WalPayload::toJson(const WalTxUpdate* wal [[maybe_unused]],
 
 void WalPayload::toJson(const WalRemove* wal [[maybe_unused]],
                         rapidjson::Document* doc [[maybe_unused]]) {
-  Log::Debug("toJson for WalRemove not implemented");
+  Log::Warn("toJson for WalRemove not implemented");
   rapidjson::Value member;
   member.SetString("Not implemented", doc->GetAllocator());
   doc->AddMember("mVal", member, doc->GetAllocator());
@@ -159,7 +159,7 @@ void WalPayload::toJson(const WalRemove* wal [[maybe_unused]],
 
 void WalPayload::toJson(const WalTxRemove* wal [[maybe_unused]],
                         rapidjson::Document* doc [[maybe_unused]]) {
-  Log::Debug("toJson for WalTxRemove not implemented");
+  Log::Warn("toJson for WalTxRemove not implemented");
   rapidjson::Value member;
   member.SetString("Not implemented", doc->GetAllocator());
   doc->AddMember("mVal", member, doc->GetAllocator());

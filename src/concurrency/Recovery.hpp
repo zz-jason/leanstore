@@ -128,21 +128,21 @@ inline bool Recovery::Run() {
     if (it->second->IsFree()) {
       continue;
     }
-    Log::Debug("Resolved page after analysis"
-               ", address={}, pageId={}, btreeId={}",
-               (void*)it->second, it->first, it->second->mPage.mBTreeId);
+    LS_DLOG("Resolved page after analysis"
+            ", address={}, pageId={}, btreeId={}",
+            (void*)it->second, it->first, it->second->mPage.mBTreeId);
   }
   // print resulting active transaction table
-  Log::Debug("Active transaction table size: {}", mActiveTxTable.size());
+  LS_DLOG("Active transaction table size: {}", mActiveTxTable.size());
   for (auto it = mActiveTxTable.begin(); it != mActiveTxTable.end(); ++it) {
-    Log::Debug("Active transaction table after analysis, txId={}, offset={}",
-               it->first, it->second);
+    LS_DLOG("Active transaction table after analysis, txId={}, offset={}",
+            it->first, it->second);
   }
   // print dirty page table
-  Log::Debug("Dirty page table size: {}", mDirtyPageTable.size());
+  LS_DLOG("Dirty page table size: {}", mDirtyPageTable.size());
   for (auto it = mDirtyPageTable.begin(); it != mDirtyPageTable.end(); ++it) {
-    Log::Debug("Dirty page table after analysis, pageId: {}, offset: {}",
-               it->first, it->second);
+    LS_DLOG("Dirty page table after analysis, pageId: {}, offset: {}",
+            it->first, it->second);
   }
 
   redo();

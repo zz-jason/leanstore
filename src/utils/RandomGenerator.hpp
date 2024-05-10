@@ -43,10 +43,10 @@ public:
   /// range [min, max)
   static uint64_t RandU64(uint64_t min, uint64_t max) {
     uint64_t rand = min + (tlsMtGenerator.Rand() % (max - min));
-    Log::DebugCheck(min <= rand && rand < max,
-                    "Random number should be in range [min, max), but min={}, "
-                    "max={}, rand={}",
-                    min, max, rand);
+    LS_DCHECK(min <= rand && rand < max,
+              "Random number should be in range [min, max), but min={}, "
+              "max={}, rand={}",
+              min, max, rand);
     return rand;
   }
 

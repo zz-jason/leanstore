@@ -31,6 +31,7 @@ public:
     uint16_t mSlotId;
 
     // TODO: ???
+    // NOLINTNEXTLINE.
     bool trunc;
 
     SeparatorInfo(uint16_t size = 0, uint16_t slotId = 0, bool trunc = false)
@@ -41,7 +42,10 @@ public:
   };
 
   struct FenceKey {
+    // NOLINTNEXTLINE.
     uint16_t offset;
+
+    // NOLINTNEXTLINE.
     uint16_t length;
   };
 
@@ -78,6 +82,7 @@ public:
 
   uint16_t mPrefixSize = 0;
 
+  // NOLINTNEXTLINE.
   uint32_t hint[sHintCount];
 
   /// Needed for GC
@@ -97,31 +102,31 @@ public:
     return reinterpret_cast<uint8_t*>(this);
   }
 
-  inline bool isInner() {
+  inline bool IsInner() {
     return !mIsLeaf;
   }
 
   inline Slice GetLowerFence() {
-    return Slice(getLowerFenceKey(), mLowerFence.length);
+    return Slice(GetLowerFenceKey(), mLowerFence.length);
   }
 
-  inline uint8_t* getLowerFenceKey() {
+  inline uint8_t* GetLowerFenceKey() {
     return mLowerFence.offset ? RawPtr() + mLowerFence.offset : nullptr;
   }
 
   inline Slice GetUpperFence() {
-    return Slice(getUpperFenceKey(), mUpperFence.length);
+    return Slice(GetUpperFenceKey(), mUpperFence.length);
   }
 
-  inline uint8_t* getUpperFenceKey() {
+  inline uint8_t* GetUpperFenceKey() {
     return mUpperFence.offset ? RawPtr() + mUpperFence.offset : nullptr;
   }
 
-  inline bool isUpperFenceInfinity() {
+  inline bool IsUpperFenceInfinity() {
     return !mUpperFence.offset;
   }
 
-  inline bool isLowerFenceInfinity() {
+  inline bool IsLowerFenceInfinity() {
     return !mLowerFence.offset;
   }
 };
@@ -130,17 +135,17 @@ class BTreeNode : public BTreeNodeHeader {
 public:
   struct __attribute__((packed)) Slot {
     // Layout:  key wihtout prefix | Payload
-    uint16_t offset;
+    uint16_t offset; // NOLINT
     uint16_t mKeySizeWithoutPrefix;
     uint16_t mValSize;
     union {
-      HeadType head;
+      HeadType head; // NOLINT
       uint8_t mHeadBytes[4];
     };
   };
 
 public:
-  Slot slot[];
+  Slot slot[]; // NOLINT
 
 public:
   /// Creates a BTreeNode. Since BTreeNode creations and utilizations are
@@ -156,7 +161,7 @@ public:
   }
 
 public:
-  uint16_t freeSpace() {
+  uint16_t FreeSpace() {
     return mDataOffset -
            (reinterpret_cast<uint8_t*>(slot + mNumSeps) - RawPtr());
   }
@@ -167,18 +172,18 @@ public:
            mSpaceUsed;
   }
 
-  double fillFactorAfterCompaction() {
+  double FillFactorAfterCompaction() {
     return (1 - (FreeSpaceAfterCompaction() * 1.0 / BTreeNode::Size()));
   }
 
-  bool hasEnoughSpaceFor(uint32_t space_needed) {
-    return (space_needed <= freeSpace() ||
-            space_needed <= FreeSpaceAfterCompaction());
+  bool HasEnoughSpaceFor(uint32_t spaceNeeded) {
+    return (spaceNeeded <= FreeSpace() ||
+            spaceNeeded <= FreeSpaceAfterCompaction());
   }
 
   // ATTENTION: this method has side effects !
-  bool requestSpaceFor(uint16_t spaceNeeded) {
-    if (spaceNeeded <= freeSpace())
+  bool RequestSpaceFor(uint16_t spaceNeeded) {
+    if (spaceNeeded <= FreeSpace())
       return true;
     if (spaceNeeded <= FreeSpaceAfterCompaction()) {
       compactify();
@@ -222,27 +227,28 @@ public:
   }
 
   inline Swip* ChildSwip(uint16_t slotId) {
-    Log::DebugCheck(slotId < mNumSeps);
+    LS_DCHECK(slotId < mNumSeps);
     return reinterpret_cast<Swip*>(ValData(slotId));
   }
 
+  // NOLINTBEGIN
   inline uint16_t getKVConsumedSpace(uint16_t slotId) {
     return sizeof(Slot) + KeySizeWithoutPrefix(slotId) + ValSize(slotId);
   }
 
   // Attention: the caller has to hold a copy of the existing payload
   inline void shortenPayload(uint16_t slotId, uint16_t targetSize) {
-    Log::DebugCheck(targetSize <= slot[slotId].mValSize);
-    const uint16_t freeSpace = slot[slotId].mValSize - targetSize;
-    mSpaceUsed -= freeSpace;
+    LS_DCHECK(targetSize <= slot[slotId].mValSize);
+    const uint16_t FreeSpace = slot[slotId].mValSize - targetSize;
+    mSpaceUsed -= FreeSpace;
     slot[slotId].mValSize = targetSize;
   }
 
   inline bool CanExtendPayload(uint16_t slotId, uint16_t targetSize) {
-    Log::DebugCheck(targetSize > ValSize(slotId),
-                    "Target size must be larger than current size, "
-                    "targetSize={}, currentSize={}",
-                    targetSize, ValSize(slotId));
+    LS_DCHECK(targetSize > ValSize(slotId),
+              "Target size must be larger than current size, "
+              "targetSize={}, currentSize={}",
+              targetSize, ValSize(slotId));
 
     const uint16_t extraSpaceNeeded = targetSize - ValSize(slotId);
     return FreeSpaceAfterCompaction() >= extraSpaceNeeded;
@@ -250,13 +256,12 @@ public:
 
   // Move key | payload to a new location
   void ExtendPayload(uint16_t slotId, uint16_t targetSize) {
-    Log::DebugCheck(
-        CanExtendPayload(slotId, targetSize),
-        "ExtendPayload failed, not enough space in the current node, "
-        "slotId={}, targetSize={}, freeSpace={}, currentSize={}",
-        slotId, targetSize, FreeSpaceAfterCompaction(), ValSize(slotId));
+    LS_DCHECK(CanExtendPayload(slotId, targetSize),
+              "ExtendPayload failed, not enough space in the current node, "
+              "slotId={}, targetSize={}, FreeSpace={}, currentSize={}",
+              slotId, targetSize, FreeSpaceAfterCompaction(), ValSize(slotId));
     // const uint16_t extraSpaceNeeded = targetSize - ValSize(slotId);
-    // requestSpaceFor(extraSpaceNeeded);
+    // RequestSpaceFor(extraSpaceNeeded);
 
     auto keySizeWithoutPrefix = KeySizeWithoutPrefix(slotId);
     const uint16_t oldTotalSize = keySizeWithoutPrefix + ValSize(slotId);
@@ -272,10 +277,10 @@ public:
 
     slot[slotId].mValSize = 0;
     slot[slotId].mKeySizeWithoutPrefix = 0;
-    if (freeSpace() < newTotalSize) {
+    if (FreeSpace() < newTotalSize) {
       compactify();
     }
-    Log::DebugCheck(freeSpace() >= newTotalSize);
+    LS_DCHECK(FreeSpace() >= newTotalSize);
     mSpaceUsed += newTotalSize;
     mDataOffset -= newTotalSize;
     slot[slotId].offset = mDataOffset;
@@ -285,15 +290,15 @@ public:
   }
 
   inline Slice KeyPrefix() {
-    return Slice(getLowerFenceKey(), mPrefixSize);
+    return Slice(GetLowerFenceKey(), mPrefixSize);
   }
 
   inline uint8_t* getPrefix() {
-    return getLowerFenceKey();
+    return GetLowerFenceKey();
   }
 
   inline void copyPrefix(uint8_t* out) {
-    memcpy(out, getLowerFenceKey(), mPrefixSize);
+    memcpy(out, GetLowerFenceKey(), mPrefixSize);
   }
 
   inline void copyKeyWithoutPrefix(uint16_t slotId, uint8_t* out_after_prefix) {
@@ -426,11 +431,11 @@ public:
                                bool higher = true) {
     // EXP
     if (key.size() < mPrefixSize ||
-        (bcmp(key.data(), getLowerFenceKey(), mPrefixSize) != 0)) {
+        (bcmp(key.data(), GetLowerFenceKey(), mPrefixSize) != 0)) {
       return -1;
     }
-    Log::DebugCheck(key.size() >= mPrefixSize &&
-                    bcmp(key.data(), getLowerFenceKey(), mPrefixSize) == 0);
+    LS_DCHECK(key.size() >= mPrefixSize &&
+              bcmp(key.data(), GetLowerFenceKey(), mPrefixSize) == 0);
 
     // the compared key has the same prefix
     key.remove_prefix(mPrefixSize);
@@ -486,12 +491,12 @@ public:
     // compare prefix firstly
     if (equalityOnly) {
       if ((key.size() < mPrefixSize) ||
-          (bcmp(key.data(), getLowerFenceKey(), mPrefixSize) != 0)) {
+          (bcmp(key.data(), GetLowerFenceKey(), mPrefixSize) != 0)) {
         return -1;
       }
     } else if (mPrefixSize != 0) {
       Slice keyPrefix(key.data(), min<uint16_t>(key.size(), mPrefixSize));
-      Slice lowerFencePrefix(getLowerFenceKey(), mPrefixSize);
+      Slice lowerFencePrefix(GetLowerFenceKey(), mPrefixSize);
       int cmpPrefix = CmpKeys(keyPrefix, lowerFencePrefix);
       if (cmpPrefix < 0) {
         return 0;
@@ -575,6 +580,8 @@ public:
   // Not synchronized or todo section
   bool removeSlot(uint16_t slotId);
 
+  // NOLINTEND
+
   bool Remove(Slice key);
 
   void Reset();
@@ -585,7 +592,7 @@ public:
 private:
   inline void generateSeparator(const SeparatorInfo& sepInfo, uint8_t* sepKey) {
     // prefix
-    memcpy(sepKey, getLowerFenceKey(), mPrefixSize);
+    memcpy(sepKey, GetLowerFenceKey(), mPrefixSize);
 
     if (sepInfo.trunc) {
       memcpy(sepKey + mPrefixSize, KeyDataWithoutPrefix(sepInfo.mSlotId + 1),

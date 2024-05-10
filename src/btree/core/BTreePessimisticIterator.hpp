@@ -326,7 +326,7 @@ public:
       if (mBuffer.size() < mFenceSize) {
         mBuffer.resize(mFenceSize, 0);
       }
-      std::memcpy(&mBuffer[0], mGuardedLeaf->getLowerFenceKey(), mFenceSize);
+      std::memcpy(&mBuffer[0], mGuardedLeaf->GetLowerFenceKey(), mFenceSize);
 
       // callback before exiting current leaf
       if (mFuncExitLeaf != nullptr) {
@@ -419,7 +419,7 @@ public:
   }
 
   virtual Slice key() override {
-    Log::DebugCheck(mBuffer.size() >= mGuardedLeaf->getFullKeyLen(mSlotId));
+    LS_DCHECK(mBuffer.size() >= mGuardedLeaf->getFullKeyLen(mSlotId));
     return Slice(&mBuffer[0], mGuardedLeaf->getFullKeyLen(mSlotId));
   }
 
@@ -436,8 +436,8 @@ public:
   }
 
   bool IsLastOne() {
-    Log::DebugCheck(mSlotId != -1);
-    Log::DebugCheck(mSlotId != mGuardedLeaf->mNumSeps);
+    LS_DCHECK(mSlotId != -1);
+    LS_DCHECK(mSlotId != mGuardedLeaf->mNumSeps);
     return (mSlotId + 1) == mGuardedLeaf->mNumSeps;
   }
 
@@ -459,13 +459,13 @@ private:
     if (mBuffer.size() < mFenceSize) {
       mBuffer.resize(mFenceSize, 0);
     }
-    std::memcpy(mBuffer.data(), mGuardedLeaf->getUpperFenceKey(),
+    std::memcpy(mBuffer.data(), mGuardedLeaf->GetUpperFenceKey(),
                 mGuardedLeaf->mUpperFence.length);
     mBuffer[mFenceSize - 1] = 0;
   }
 
   inline Slice assembedFence() {
-    Log::DebugCheck(mBuffer.size() >= mFenceSize);
+    LS_DCHECK(mBuffer.size() >= mFenceSize);
     return Slice(&mBuffer[0], mFenceSize);
   }
 };

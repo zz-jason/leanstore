@@ -52,15 +52,15 @@ public:
   }
 
   virtual void InsertToCurrentNode(Slice key, uint16_t valSize) {
-    Log::DebugCheck(KeyInCurrentNode(key));
-    Log::DebugCheck(HasEnoughSpaceFor(key.size(), valSize));
+    LS_DCHECK(KeyInCurrentNode(key));
+    LS_DCHECK(HasEnoughSpaceFor(key.size(), valSize));
     mSlotId = mGuardedLeaf->insertDoNotCopyPayload(key, valSize, mSlotId);
   }
 
   virtual void InsertToCurrentNode(Slice key, Slice val) {
-    Log::DebugCheck(KeyInCurrentNode(key));
-    Log::DebugCheck(HasEnoughSpaceFor(key.size(), val.size()));
-    Log::DebugCheck(mSlotId != -1);
+    LS_DCHECK(KeyInCurrentNode(key));
+    LS_DCHECK(HasEnoughSpaceFor(key.size(), val.size()));
+    LS_DCHECK(mSlotId != -1);
     mSlotId = mGuardedLeaf->insertDoNotCopyPayload(key, val.size(), mSlotId);
     std::memcpy(mGuardedLeaf->ValData(mSlotId), val.data(), val.size());
   }
@@ -94,7 +94,7 @@ public:
       if (ret != OpCode::kOK) {
         return ret;
       }
-      Log::DebugCheck(KeyInCurrentNode(key));
+      LS_DCHECK(KeyInCurrentNode(key));
       if (!HasEnoughSpaceFor(key.size(), val.length())) {
         SplitForKey(key);
         continue;
@@ -115,8 +115,7 @@ public:
     if (targetSize >= BTreeNode::Size()) {
       return false;
     }
-    Log::DebugCheck(mSlotId != -1 &&
-                    targetSize > mGuardedLeaf->ValSize(mSlotId));
+    LS_DCHECK(mSlotId != -1 && targetSize > mGuardedLeaf->ValSize(mSlotId));
     while (!mGuardedLeaf->CanExtendPayload(mSlotId, targetSize)) {
       if (mGuardedLeaf->mNumSeps == 1) {
         return false;
@@ -124,10 +123,10 @@ public:
       AssembleKey();
       Slice key = this->key();
       SplitForKey(key);
-      auto succeed = SeekExact(key);
-      Log::DebugCheck(succeed);
+      auto succeed [[maybe_unused]] = SeekExact(key);
+      LS_DCHECK(succeed);
     }
-    Log::DebugCheck(mSlotId != -1);
+    LS_DCHECK(mSlotId != -1);
     mGuardedLeaf->ExtendPayload(mSlotId, targetSize);
     return true;
   }
@@ -154,11 +153,10 @@ public:
     auto& contentionStats = mGuardedLeaf.mBf->mHeader.mContentionStats;
     auto lastUpdatedSlot = contentionStats.mLastUpdatedSlot;
     contentionStats.Update(mGuardedLeaf.EncounteredContention(), mSlotId);
-    Log::Debug(
-        "[Contention Split] ContentionStats updated, pageId={}, slot={}, "
-        "encountered contention={}",
-        mGuardedLeaf.mBf->mHeader.mPageId, mSlotId,
-        mGuardedLeaf.EncounteredContention());
+    LS_DLOG("[Contention Split] ContentionStats updated, pageId={}, slot={}, "
+            "encountered contention={}",
+            mGuardedLeaf.mBf->mHeader.mPageId, mSlotId,
+            mGuardedLeaf.EncounteredContention());
 
     // haven't met the contention split validation probability
     if ((randomNumber &
@@ -179,7 +177,7 @@ public:
       JUMPMU_TRY() {
         mBTree.TrySplitMayJump(*mGuardedLeaf.mBf, splitSlot);
 
-        Log::Debug(
+        LS_DLOG(
             "[Contention Split] succeed, pageId={}, contention pct={}, split "
             "slot={}",
             mGuardedLeaf.mBf->mHeader.mPageId, contentionPct, splitSlot);
@@ -207,8 +205,8 @@ public:
   virtual OpCode RemoveCurrent() {
     if (!(mGuardedLeaf.mBf != nullptr && mSlotId >= 0 &&
           mSlotId < mGuardedLeaf->mNumSeps)) {
-      Log::DebugCheck(false, "RemoveCurrent failed, pageId={}, slotId={}",
-                      mGuardedLeaf.mBf->mHeader.mPageId, mSlotId);
+      LS_DCHECK(false, "RemoveCurrent failed, pageId={}, slotId={}",
+                mGuardedLeaf.mBf->mHeader.mPageId, mSlotId);
       return OpCode::kOther;
     }
     mGuardedLeaf->removeSlot(mSlotId);
@@ -225,8 +223,8 @@ public:
         mBTree.TryMergeMayJump(*mGuardedLeaf.mBf);
       }
       JUMPMU_CATCH() {
-        Log::Debug("TryMergeIfNeeded failed, pageId={}",
-                   mGuardedLeaf.mBf->mHeader.mPageId);
+        LS_DLOG("TryMergeIfNeeded failed, pageId={}",
+                mGuardedLeaf.mBf->mHeader.mPageId);
       }
       return true;
     }

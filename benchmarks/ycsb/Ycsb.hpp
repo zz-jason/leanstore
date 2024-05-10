@@ -88,15 +88,18 @@ inline double CalculateTps(std::chrono::high_resolution_clock::time_point begin,
   return numOperations / sec;
 }
 
-inline void GenYcsbKey(utils::ScrambledZipfGenerator& zipfRandom,
-                       uint8_t* keyBuf) {
-  auto zipfKey = zipfRandom.rand();
-  auto zipfKeyStr = std::to_string(zipfKey);
-  auto prefixSize = FLAGS_ycsb_key_size - zipfKeyStr.size() > 0
-                        ? FLAGS_ycsb_key_size - zipfKeyStr.size()
+inline void GenKey(uint64_t key, uint8_t* keyBuf) {
+  auto keyStr = std::to_string(key);
+  auto prefixSize = FLAGS_ycsb_key_size - keyStr.size() > 0
+                        ? FLAGS_ycsb_key_size - keyStr.size()
                         : 0;
   std::memset(keyBuf, 'k', prefixSize);
-  std::memcpy(keyBuf + prefixSize, zipfKeyStr.data(), zipfKeyStr.size());
+  std::memcpy(keyBuf + prefixSize, keyStr.data(), keyStr.size());
+}
+
+inline void GenYcsbKey(utils::ScrambledZipfGenerator& zipfRandom,
+                       uint8_t* keyBuf) {
+  GenKey(zipfRandom.rand(), keyBuf);
 }
 
 } // namespace leanstore::ycsb

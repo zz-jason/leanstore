@@ -10,18 +10,18 @@ namespace utils {
 
 #ifdef DEBUG
 #define LS_DEBUG_EXECUTE(store, name, action)                                  \
-  if (store->mDebugFlagsRegistry.IsExists(name)) {                             \
+  if (store != nullptr && store->mDebugFlagsRegistry.IsExists(name)) {         \
     action;                                                                    \
   }
 #define LS_DEBUG_ENABLE(store, name)                                           \
-  do {                                                                         \
+  if (store != nullptr) {                                                      \
     store->mDebugFlagsRegistry.Insert(name);                                   \
-  } while (false);
+  }
 
 #define LS_DEBUG_DISABLE(store, name)                                          \
-  do {                                                                         \
+  if (store != nullptr) {                                                      \
     store->mDebugFlagsRegistry.Erase(name);                                    \
-  } while (false);
+  }
 #else
 #define LS_DEBUG_EXECUTE(store, name, action)
 #define LS_DEBUG_ENABLE(store, name)
