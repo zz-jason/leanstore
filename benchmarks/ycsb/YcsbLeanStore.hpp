@@ -93,8 +93,6 @@ public:
 
   void HandleCmdLoad() override {
     auto* table = CreateTable();
-    auto zipfRandom = utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count,
-                                                    FLAGS_ycsb_zipf_factor);
 
     // record the start and end time, calculating throughput in the end
     auto start = std::chrono::high_resolution_clock::now();
@@ -119,9 +117,9 @@ public:
       auto end = begin + avg + (rem-- > 0 ? 1 : 0);
       mStore->ExecAsync(workerId, [&, begin, end]() {
         for (uint64_t i = begin; i < end; i++) {
-          // generate key
+          // generate key for insert
           uint8_t key[FLAGS_ycsb_key_size];
-          GenYcsbKey(zipfRandom, key);
+          GenKey(i, key);
 
           // generate value
           uint8_t val[FLAGS_ycsb_val_size];

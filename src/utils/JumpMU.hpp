@@ -75,29 +75,26 @@ public:
 /// JUMPMU_CATCH supplements normal execution path which is to remove the last
 /// jump point set by JUMPMU_TRY, adds the execution path once jump happens
 #define JUMPMU_CATCH()                                                         \
-  leanstore::Log::Debug("Jump point {} caught", jumpmu::tlsNumJumpPoints - 1); \
+  LS_DLOG("Jump point {} caught", jumpmu::tlsNumJumpPoints - 1);               \
   jumpmu::tlsNumJumpPoints--;                                                  \
   }                                                                            \
   else
 
 /// JUMPMU_RETURN removes the last jump point and finish the function execution
 #define JUMPMU_RETURN                                                          \
-  leanstore::Log::Debug("Jump point {} returned",                              \
-                        jumpmu::tlsNumJumpPoints - 1);                         \
+  LS_DLOG("Jump point {} returned", jumpmu::tlsNumJumpPoints - 1);             \
   jumpmu::tlsNumJumpPoints--;                                                  \
   return
 
 /// JUMPMU_BREAK removes the last jump point and breaks the current loop
 #define JUMPMU_BREAK                                                           \
-  leanstore::Log::Debug("Jump point {} breaked",                               \
-                        jumpmu::tlsNumJumpPoints - 1);                         \
+  LS_DLOG("Jump point {} breaked", jumpmu::tlsNumJumpPoints - 1);              \
   jumpmu::tlsNumJumpPoints--;                                                  \
   break
 
 /// JUMPMU_CONTINUE removes the last jump point and continues the current loop
 #define JUMPMU_CONTINUE                                                        \
-  leanstore::Log::Debug("Jump point {} continued",                             \
-                        jumpmu::tlsNumJumpPoints - 1);                         \
+  LS_DLOG("Jump point {} continued", jumpmu::tlsNumJumpPoints - 1);            \
   jumpmu::tlsNumJumpPoints--;                                                  \
   continue
 

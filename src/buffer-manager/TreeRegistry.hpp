@@ -264,10 +264,9 @@ public:
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
     if (it == mTrees.end()) {
-      Log::Debug(
-          "Skip GarbageCollect on non-existing tree, it is probably that "
-          "the tree is already dropped, treeId={}",
-          treeId);
+      LS_DLOG("Skip GarbageCollect on non-existing tree, it is probably that "
+              "the tree is already dropped, treeId={}",
+              treeId);
       return;
     }
     auto& [tree, treeName] = it->second;

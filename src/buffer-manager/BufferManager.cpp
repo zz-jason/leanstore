@@ -11,7 +11,6 @@
 #include "sync/HybridLatch.hpp"
 #include "sync/ScopedHybridGuard.hpp"
 #include "utils/DebugFlags.hpp"
-#include "utils/Defer.hpp"
 #include "utils/Error.hpp"
 #include "utils/Log.hpp"
 #include "utils/Parallelize.hpp"
@@ -82,7 +81,7 @@ void BufferManager::StartBufferFrameProviders() {
     return;
   }
 
-  Log::DebugCheck(numBufferProviders <= mNumPartitions);
+  LS_DCHECK(numBufferProviders <= mNumPartitions);
   mBfProviders.reserve(numBufferProviders);
   for (auto i = 0u; i < numBufferProviders; ++i) {
     std::string threadName = "BuffProvider";
@@ -207,8 +206,8 @@ BufferFrame& BufferManager::AllocNewPage(TREEID treeId) {
 
   freeBf.mPage.mBTreeId = treeId;
   freeBf.mPage.mGSN++; // mark as dirty
-  Log::Debug("Alloc new page, pageId={}, btreeId={}", freeBf.mHeader.mPageId,
-             freeBf.mPage.mBTreeId);
+  LS_DLOG("Alloc new page, pageId={}, btreeId={}", freeBf.mHeader.mPageId,
+          freeBf.mPage.mBTreeId);
   return freeBf;
 }
 
@@ -233,13 +232,7 @@ void BufferManager::ReclaimPage(BufferFrame& bf) {
 // Returns a non-latched BufguardedSwipferFrame, called by worker threads
 BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard,
                                                Swip& swipInNode) {
-  SCOPED_DEFER({
-    auto& bf = swipInNode.AsBufferFrame();
-    Log::Debug("zz-jason, ResolveSwipMayJump, pageId={}, btreeId={}",
-               bf.mHeader.mPageId, bf.mPage.mBTreeId);
-  });
-
-  Log::DebugCheck(nodeGuard.mState == GuardState::kOptimisticShared);
+  LS_DCHECK(nodeGuard.mState == GuardState::kOptimisticShared);
   if (swipInNode.IsHot()) {
     // Resolve swip from hot state
     auto* bf = &swipInNode.AsBufferFrame();
@@ -281,8 +274,8 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard,
   if (!frameHandler) {
     // 1. Randomly get a buffer frame from partitions
     BufferFrame& bf = RandomPartition().mFreeBfList.PopFrontMayJump();
-    Log::DebugCheck(!bf.mHeader.mLatch.IsLockedExclusively());
-    Log::DebugCheck(bf.mHeader.mState == State::kFree);
+    LS_DCHECK(!bf.mHeader.mLatch.IsLockedExclusively());
+    LS_DCHECK(bf.mHeader.mState == State::kFree);
 
     // 2. Create an IO frame in the current partition
     IOFrame& ioFrame = partition.mInflightIOs.Insert(pageId);
@@ -300,7 +293,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard,
     }
 
     // 4. Intialize the buffer frame header
-    Log::DebugCheck(!bf.mHeader.mIsBeingWrittenBack);
+    LS_DCHECK(!bf.mHeader.mIsBeingWrittenBack);
     bf.mHeader.mFlushedGsn = bf.mPage.mGSN;
     bf.mHeader.mState = State::kLoaded;
     bf.mHeader.mPageId = pageId;
@@ -360,16 +353,16 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard,
     {
       // We have to exclusively lock the bf because the page provider thread
       // will try to evict them when its IO is done
-      Log::DebugCheck(!bf->mHeader.mLatch.IsLockedExclusively());
-      Log::DebugCheck(bf->mHeader.mState == State::kLoaded);
+      LS_DCHECK(!bf->mHeader.mLatch.IsLockedExclusively());
+      LS_DCHECK(bf->mHeader.mState == State::kLoaded);
       BMOptimisticGuard bfGuard(bf->mHeader.mLatch);
       BMExclusiveUpgradeIfNeeded swipXGuard(nodeGuard);
       BMExclusiveGuard bfXGuard(bfGuard);
       ioFrame.bf = nullptr;
       swipInNode.MarkHOT(bf);
-      Log::DebugCheck(bf->mHeader.mPageId == pageId);
-      Log::DebugCheck(swipInNode.IsHot());
-      Log::DebugCheck(bf->mHeader.mState == State::kLoaded);
+      LS_DCHECK(bf->mHeader.mPageId == pageId);
+      LS_DCHECK(swipInNode.IsHot());
+      LS_DCHECK(bf->mHeader.mState == State::kLoaded);
       bf->mHeader.mState = State::kHot;
 
       if (ioFrame.readers_counter.fetch_add(-1) == 1) {
@@ -390,7 +383,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard,
     break;
   }
   default: {
-    Log::DebugCheck(false);
+    LS_DCHECK(false);
   }
   }
   assert(false);
@@ -398,7 +391,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard,
 }
 
 void BufferManager::ReadPageSync(PID pageId, void* pageBuffer) {
-  Log::DebugCheck(uint64_t(pageBuffer) % 512 == 0);
+  LS_DCHECK(uint64_t(pageBuffer) % 512 == 0);
   int64_t bytesLeft = mStore->mStoreOption.mPageSize;
   while (bytesLeft > 0) {
     auto totalRead = mStore->mStoreOption.mPageSize - bytesLeft;
@@ -486,8 +479,8 @@ void BufferManager::DoWithBufferFrameIf(
     std::function<bool(BufferFrame& bf)> condition,
     std::function<void(BufferFrame& bf)> action) {
   utils::Parallelize::ParallelRange(mNumBfs, [&](uint64_t begin, uint64_t end) {
-    Log::DebugCheck(condition != nullptr);
-    Log::DebugCheck(action != nullptr);
+    LS_DCHECK(condition != nullptr);
+    LS_DCHECK(action != nullptr);
     for (uint64_t i = begin; i < end; i++) {
       auto* bfAddr = &mBufferPool[i * mStore->mStoreOption.mBufferFrameSize];
       auto& bf = *reinterpret_cast<BufferFrame*>(bfAddr);

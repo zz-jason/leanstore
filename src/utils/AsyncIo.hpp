@@ -55,7 +55,7 @@ public:
   }
 
   void PrepareWrite(int32_t fd, void* buf, size_t count, uint64_t offset) {
-    Log::DebugCheck(!IsFull());
+    LS_DCHECK(!IsFull());
     auto slot = mNumReqs++;
     io_prep_pwrite(&mIocbs[slot], fd, buf, count, offset);
     mIocbs[slot].data = buf;
@@ -63,7 +63,7 @@ public:
 
   // Even for direct IO, fsync is still needed to flush file metadata.
   void PrepareFsync(int32_t fd) {
-    Log::DebugCheck(!IsFull());
+    LS_DCHECK(!IsFull());
     auto slot = mNumReqs++;
     io_prep_fsync(&mIocbs[slot], fd);
   }

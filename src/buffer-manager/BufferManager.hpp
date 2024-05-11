@@ -143,8 +143,8 @@ private:
     utils::AsyncIo aio(1);
     const auto pageSize = mStore->mStoreOption.mPageSize;
     DEBUG_BLOCK() {
-      auto* page = reinterpret_cast<Page*>(buffer);
-      Log::Debug("page write, pageId={}, btreeId={}", pageId, page->mBTreeId);
+      auto* page [[maybe_unused]] = reinterpret_cast<Page*>(buffer);
+      LS_DLOG("page write, pageId={}, btreeId={}", pageId, page->mBTreeId);
     }
     aio.PrepareWrite(mStore->mPageFd, buffer, pageSize, pageId * pageSize);
     if (auto res = aio.SubmitAll(); !res) {

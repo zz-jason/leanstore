@@ -196,11 +196,10 @@ public:
 
   inline const UpdateDesc* GetUpdateDesc() const {
     auto* updateDesc = UpdateDesc::From(mPayload + mKeySize);
-    Log::DebugCheck(
-        updateDesc->Size() == mUpdateDescSize,
-        "Malformed WalTxUpdate: updateDesc->Size() != mUpdateDescSize, "
-        "updateDesc->Size()={}, mUpdateDescSize={}",
-        updateDesc->Size(), mUpdateDescSize);
+    LS_DCHECK(updateDesc->Size() == mUpdateDescSize,
+              "Malformed WalTxUpdate: updateDesc->Size() != mUpdateDescSize, "
+              "updateDesc->Size()={}, mUpdateDescSize={}",
+              updateDesc->Size(), mUpdateDescSize);
     return updateDesc;
   }
 

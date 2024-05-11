@@ -31,13 +31,13 @@ Result<void> Recovery::analysis() {
     switch (walEntry->mType) {
     case WalEntry::Type::kTxAbort: {
       auto* wal = reinterpret_cast<WalTxAbort*>(walEntryPtr);
-      Log::DebugCheck(mActiveTxTable.find(wal->mTxId) != mActiveTxTable.end());
+      LS_DCHECK(mActiveTxTable.find(wal->mTxId) != mActiveTxTable.end());
       mActiveTxTable[wal->mTxId] = offset;
       continue;
     }
     case WalEntry::Type::kTxFinish: {
       auto* wal = reinterpret_cast<WalTxFinish*>(walEntryPtr);
-      Log::DebugCheck(mActiveTxTable.find(wal->mTxId) != mActiveTxTable.end());
+      LS_DCHECK(mActiveTxTable.find(wal->mTxId) != mActiveTxTable.end());
       mActiveTxTable.erase(wal->mTxId);
       continue;
     }
@@ -125,8 +125,8 @@ Result<void> Recovery::redo() {
       break;
     }
     default: {
-      Log::DebugCheck(false, "Unhandled WalPayload::Type: {}",
-                      std::to_string(static_cast<uint64_t>(walPayload->mType)));
+      LS_DCHECK(false, "Unhandled WalPayload::Type: {}",
+                std::to_string(static_cast<uint64_t>(walPayload->mType)));
     }
     }
   }
@@ -211,11 +211,11 @@ void Recovery::redoTxUpdate(storage::BufferFrame& bf,
   auto* updateDesc = wal->GetUpdateDesc();
   auto key = wal->GetKey();
   auto slotId = guardedNode->lowerBound<true>(key);
-  Log::DebugCheck(slotId != -1, "Key not found in WalTxUpdate");
+  LS_DCHECK(slotId != -1, "Key not found in WalTxUpdate");
 
   auto* mutRawVal = guardedNode->ValData(slotId);
-  Log::DebugCheck(Tuple::From(mutRawVal)->mFormat == TupleFormat::kChained,
-                  "Only chained tuple is supported");
+  LS_DCHECK(Tuple::From(mutRawVal)->mFormat == TupleFormat::kChained,
+            "Only chained tuple is supported");
   auto* chainedTuple = ChainedTuple::From(mutRawVal);
 
   // update the chained tuple
@@ -248,11 +248,11 @@ void Recovery::redoTxRemove(storage::BufferFrame& bf,
                                             std::move(guard), &bf);
   auto key = wal->RemovedKey();
   auto slotId = guardedNode->lowerBound<true>(key);
-  Log::DebugCheck(slotId != -1, "Key not found, key={}", key.ToString());
+  LS_DCHECK(slotId != -1, "Key not found, key={}", key.ToString());
 
   auto* mutRawVal = guardedNode->ValData(slotId);
-  Log::DebugCheck(Tuple::From(mutRawVal)->mFormat == TupleFormat::kChained,
-                  "Only chained tuple is supported");
+  LS_DCHECK(Tuple::From(mutRawVal)->mFormat == TupleFormat::kChained,
+            "Only chained tuple is supported");
   auto* chainedTuple = ChainedTuple::From(mutRawVal);
 
   // remove the chained tuple
@@ -362,7 +362,7 @@ void Recovery::redoSplitNonRoot(storage::BufferFrame& bf,
 
   const uint16_t spaceNeededForSeparator =
       guardedParent->spaceNeeded(sepInfo.mSize, sizeof(Swip));
-  xGuardedParent->requestSpaceFor(spaceNeededForSeparator);
+  xGuardedParent->RequestSpaceFor(spaceNeededForSeparator);
   xGuardedChild->Split(xGuardedParent, xGuardedNewLeft, sepInfo);
 }
 

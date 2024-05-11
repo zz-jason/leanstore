@@ -152,11 +152,11 @@ void GroupCommitter::commitTXs(
         }
         maxCommitTs = std::max<TXID>(maxCommitTs, tx.mCommitTs);
         tx.mState = TxState::kCommitted;
-        Log::Debug("Transaction with remote dependency committed"
-                   ", workerId={}, startTs={}, commitTs={}, minFlushedGSN={}, "
-                   "maxFlushedGSN={}, minFlushedTxId={}",
-                   workerId, tx.mStartTs, tx.mCommitTs, minFlushedGSN,
-                   maxFlushedGSN, minFlushedTxId);
+        LS_DLOG("Transaction with remote dependency committed"
+                ", workerId={}, startTs={}, commitTs={}, minFlushedGSN={}, "
+                "maxFlushedGSN={}, minFlushedTxId={}",
+                workerId, tx.mStartTs, tx.mCommitTs, minFlushedGSN,
+                maxFlushedGSN, minFlushedTxId);
       }
       if (i > 0) {
         logging.mTxToCommit.erase(logging.mTxToCommit.begin(),
@@ -174,11 +174,11 @@ void GroupCommitter::commitTXs(
         auto& tx = logging.mRfaTxToCommit[i];
         maxCommitTsRfa = std::max<TXID>(maxCommitTsRfa, tx.mCommitTs);
         tx.mState = TxState::kCommitted;
-        Log::Debug("Transaction without remote dependency committed"
-                   ", workerId={}, startTs={}, commitTs={}, minFlushedGSN={}, "
-                   "maxFlushedGSN={}, minFlushedTxId={}",
-                   workerId, tx.mStartTs, tx.mCommitTs, minFlushedGSN,
-                   maxFlushedGSN, minFlushedTxId);
+        LS_DLOG("Transaction without remote dependency committed"
+                ", workerId={}, startTs={}, commitTs={}, minFlushedGSN={}, "
+                "maxFlushedGSN={}, minFlushedTxId={}",
+                workerId, tx.mStartTs, tx.mCommitTs, minFlushedGSN,
+                maxFlushedGSN, minFlushedTxId);
       }
 
       if (i > 0) {
@@ -202,8 +202,8 @@ void GroupCommitter::commitTXs(
   }
 
   if (minFlushedGSN < std::numeric_limits<uint64_t>::max()) {
-    Log::Debug("Group commit finished, minFlushedGSN={}, maxFlushedGSN={}",
-               minFlushedGSN, maxFlushedGSN);
+    LS_DLOG("Group commit finished, minFlushedGSN={}, maxFlushedGSN={}",
+            minFlushedGSN, maxFlushedGSN);
     mGlobalMinFlushedGSN.store(minFlushedGSN, std::memory_order_release);
     mGlobalMaxFlushedGSN.store(maxFlushedGSN, std::memory_order_release);
   }

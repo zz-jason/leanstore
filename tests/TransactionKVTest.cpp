@@ -774,8 +774,8 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
     }
   });
 
-  Log::Debug("InsertAfterRemoveDifferentWorkers, key={}, val={}, newVal={}",
-             kvToTest.begin()->first, kvToTest.begin()->second, newVal);
+  LS_DLOG("InsertAfterRemoveDifferentWorkers, key={}, val={}, newVal={}",
+          kvToTest.begin()->first, kvToTest.begin()->second, newVal);
   mStore->ExecSync(1, [&]() {
     // lookup the new value
     cr::Worker::My().StartTx();

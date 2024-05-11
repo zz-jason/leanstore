@@ -14,7 +14,7 @@ void Parallelize::Range(
     std::function<void(uint64_t threadId, uint64_t jobBegin, uint64_t jobEnd)>
         jobHandler) {
   const uint64_t jobsPerThread = numJobs / numThreads;
-  Log::DebugCheck(jobsPerThread > 0, "Jobs per thread must be > 0");
+  LS_DCHECK(jobsPerThread > 0, "Jobs per thread must be > 0");
 
   for (uint64_t i = 0; i < numThreads; i++) {
     uint64_t begin = (i * jobsPerThread);
@@ -35,7 +35,7 @@ void Parallelize::ParallelRange(
   const uint64_t jobsPerThread = numJobs / numThread;
   uint64_t numRemaining = numJobs % numThread;
   uint64_t numProceedTasks = 0;
-  Log::DebugCheck(jobsPerThread > 0);
+  LS_DCHECK(jobsPerThread > 0);
 
   // To balance the workload among all threads:
   // - the first numRemaining threads process jobsPerThread+1 tasks
