@@ -75,7 +75,7 @@ jobs:
           name: "Test project"
           command: |
             source ~/.bashrc
-            TSAN_OPTIONS="suppressions=$(pwd)/tsan_suppression" ctest --test-dir build/debug_tsan --output-on-failure -j 2
+            TSAN_OPTIONS="suppressions=$(pwd)/tests/tsan.supp" ctest --test-dir build/debug_tsan --output-on-failure -j 2
           no_output_timeout: 5m
 
       - run:
