@@ -9,7 +9,7 @@
 LeanStore is a larger-than-memory database, optimized for NVMe SSD and multi-core CPU, achieves performance close to in-memory systems without having to keep all data in memory.
 
 <div align='center'>
-<img align="center" src="./docs/images/Architecture.jpg" />
+<img align="center" width=80% src="./docs/images/Architecture.jpg" />
 </div>
 
 ## Getting started
