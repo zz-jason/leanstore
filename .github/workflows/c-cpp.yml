@@ -44,9 +44,9 @@ jobs:
 
     - name: Config project
       run: |
-        export VCPKG_ROOT=/opt/vcpkg';
-        export PATH=$VCPKG_ROOT:$PATH';
-        export VCPKG_FORCE_SYSTEM_BINARIES=1';
+        export VCPKG_ROOT=/opt/vcpkg;
+        export PATH=$VCPKG_ROOT:$PATH;
+        export VCPKG_FORCE_SYSTEM_BINARIES=1;
         which vcpkg;
         cmake --preset debug_tsan;
 
