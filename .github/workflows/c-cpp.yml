@@ -43,7 +43,9 @@ jobs:
         sudo rm -rf /var/lib/apt/lists/*;
 
     - name: Config project
-      run: cmake --preset debug_tsan
+      run: |
+        source ~/.bashrc;
+        cmake --preset debug_tsan;
 
     - name: Cppcheck
       run: cppcheck --project=build/debug/compile_commands.json -i tests --error-exitcode=1
