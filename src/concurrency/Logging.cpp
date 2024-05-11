@@ -11,7 +11,6 @@
 #include <rapidjson/writer.h>
 
 #include <cstring>
-#include <format>
 
 namespace leanstore::cr {
 
@@ -49,12 +48,11 @@ void Logging::ReserveContiguousBuffer(uint32_t bytesRequired) {
 }
 
 void Logging::WriteWalTxAbort() {
-  WalEntry* entry;
+  WalEntry* entry [[maybe_unused]];
   SCOPED_DEFER({
-    Log::Debug(
-        "WriteWalTxAbort, workerId={}, startTs={}, curGSN={}, walJson={}",
-        Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
-        GetCurrentGsn(), WalEntry::ToJsonString(entry));
+    LS_DLOG("WriteWalTxAbort, workerId={}, startTs={}, curGSN={}, walJson={}",
+            Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
+            GetCurrentGsn(), WalEntry::ToJsonString(entry));
   });
 
   // Reserve space
@@ -74,7 +72,7 @@ void Logging::WriteWalTxAbort() {
 void Logging::WriteWalTxFinish() {
   WalEntry* entry [[maybe_unused]];
   SCOPED_DEFER({
-      // Log::Debug(
+      // LS_DLOG(
       //     "WriteWalTxFinish, workerId={}, startTs={}, curGSN={}, walJson={}",
       //     Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
       //     GetCurrentGsn(), WalEntry::ToJsonString(entry));
@@ -95,7 +93,7 @@ void Logging::WriteWalTxFinish() {
 }
 
 void Logging::WriteWalCarriageReturn() {
-  Log::DebugCheck(
+  LS_DCHECK(
       mWalFlushed <= mWalBuffered,
       "CarriageReturn should only used for the last bytes in the wal buffer");
   auto entrySize = mWalBufferSize - mWalBuffered;
@@ -109,7 +107,7 @@ void Logging::WriteWalCarriageReturn() {
 /// @param totalSize is the size of the wal record to be flush.
 void Logging::SubmitWALEntryComplex(uint64_t totalSize) {
   SCOPED_DEFER({
-      // Log::Debug("SubmitWal, workerId={}, startTs={}, curGSN={}, walJson={}",
+      // LS_DLOG("SubmitWal, workerId={}, startTs={}, curGSN={}, walJson={}",
       //            Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
       //            GetCurrentGsn(),
       //            WalEntry::ToJsonString(mActiveWALEntryComplex));

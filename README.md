@@ -6,25 +6,20 @@
 
 # LeanStore
 
-[LeanStore](https://db.in.tum.de/~leis/papers/leanstore.pdf) is a
-high-performance storage engine optimized for many-core CPUs and NVMe SSDs.
-It's goal is to achieve performance comparable to in-memory systems when the
-data set fits into RAM, while being able to fully exploit the bandwidth of fast
-NVMe SSDs for large data sets.
+LeanStore is a larger-than-memory database, optimized for NVMe SSD and multi-core CPU, achieves performance close to in-memory systems without having to keep all data in memory.
 
 <div align='center'>
-<img align="center" height='500' src="./docs/images/Architecture.jpg" />
+<img align="center" width=80% src="./docs/images/Architecture.jpg" />
 </div>
 
 ## Getting started
 
-It's recommanded to develop the project inside the docker container, which can
-be built from the Dockerfile defined in
-[docker/Dockerfile](./docker/Dockerfile).
+It's recommanded to develop the project inside a docker container, which can be
+built from the [Dockerfile](./docker/Dockerfile):
 
 ```sh
 # build and test
-cmake --preset default
+cmake --preset debug
 cmake --build build/debug -j `nproc`
 ctest --test-dir build/debug
 ```
@@ -43,5 +38,4 @@ details.
 ## Acknowledgments
 
 Thanks the LeanStore authors for the great
-[leanstore](http://github.com/leanstore/leanstore) project and the idea behind
-it.
+[leanstore](http://github.com/leanstore/leanstore) project and ideas behind it.

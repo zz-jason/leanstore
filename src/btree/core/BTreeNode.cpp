@@ -35,7 +35,7 @@ uint16_t BTreeNode::spaceNeeded(uint16_t keySize, uint16_t valSize) {
 
 bool BTreeNode::canInsert(uint16_t keySize, uint16_t valSize) {
   const uint16_t numSpaceNeeded = spaceNeeded(keySize, valSize);
-  if (!hasEnoughSpaceFor(numSpaceNeeded)) {
+  if (!HasEnoughSpaceFor(numSpaceNeeded)) {
     return false; // no space, insert fails
   }
   return true;
@@ -43,7 +43,7 @@ bool BTreeNode::canInsert(uint16_t keySize, uint16_t valSize) {
 
 bool BTreeNode::prepareInsert(uint16_t keySize, uint16_t valSize) {
   const uint16_t numSpaceNeeded = spaceNeeded(keySize, valSize);
-  if (!requestSpaceFor(numSpaceNeeded)) {
+  if (!RequestSpaceFor(numSpaceNeeded)) {
     return false;
   }
   return true;
@@ -51,7 +51,7 @@ bool BTreeNode::prepareInsert(uint16_t keySize, uint16_t valSize) {
 
 int16_t BTreeNode::insertDoNotCopyPayload(Slice key, uint16_t valSize,
                                           int32_t pos) {
-  Log::DebugCheck(canInsert(key.size(), valSize));
+  LS_DCHECK(canInsert(key.size(), valSize));
   prepareInsert(key.size(), valSize);
 
   int32_t slotId = (pos == -1) ? lowerBound<false>(key) : pos;
@@ -110,12 +110,12 @@ void BTreeNode::compactify() {
   tmp->mRightMostChildSwip = mRightMostChildSwip;
   memcpy(reinterpret_cast<char*>(this), tmp, BTreeNode::Size());
   makeHint();
-  assert(freeSpace() == should);
+  assert(FreeSpace() == should);
 }
 
 uint32_t BTreeNode::mergeSpaceUpperBound(
     ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedRight) {
-  Log::DebugCheck(xGuardedRight->mIsLeaf);
+  LS_DCHECK(xGuardedRight->mIsLeaf);
 
   auto tmpNodeBuf = utils::JumpScopedArray<uint8_t>(BTreeNode::Size());
   auto* tmp = BTreeNode::Init(tmpNodeBuf->get(), true);
@@ -144,7 +144,7 @@ bool BTreeNode::merge(uint16_t slotId,
                       ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedRight) {
   if (mIsLeaf) {
     assert(xGuardedRight->mIsLeaf);
-    assert(xGuardedParent->isInner());
+    assert(xGuardedParent->IsInner());
 
     auto tmpNodeBuf = utils::JumpScopedArray<uint8_t>(BTreeNode::Size());
     auto* tmp = BTreeNode::Init(tmpNodeBuf->get(), true);
@@ -173,8 +173,8 @@ bool BTreeNode::merge(uint16_t slotId,
   }
 
   // Inner node
-  Log::DebugCheck(!xGuardedRight->mIsLeaf);
-  Log::DebugCheck(xGuardedParent->isInner());
+  LS_DCHECK(!xGuardedRight->mIsLeaf);
+  LS_DCHECK(xGuardedParent->IsInner());
 
   auto tmpNodeBuf = utils::JumpScopedArray<uint8_t>(BTreeNode::Size());
   auto* tmp = BTreeNode::Init(tmpNodeBuf->get(), mIsLeaf);
@@ -233,7 +233,8 @@ void BTreeNode::copyKeyValueRange(BTreeNode* dst, uint16_t dstSlot,
     // Fast path
     memcpy(dst->slot + dstSlot, slot + srcSlot, sizeof(Slot) * count);
     DEBUG_BLOCK() {
-      uint32_t totalSpaceUsed = mUpperFence.length + mLowerFence.length;
+      uint32_t totalSpaceUsed [[maybe_unused]] =
+          mUpperFence.length + mLowerFence.length;
       for (uint16_t i = 0; i < this->mNumSeps; i++) {
         totalSpaceUsed += KeySizeWithoutPrefix(i) + ValSize(i);
       }
@@ -276,7 +277,7 @@ void BTreeNode::insertFence(BTreeNodeHeader::FenceKey& fk, Slice key) {
   if (!key.data()) {
     return;
   }
-  assert(freeSpace() >= key.size());
+  assert(FreeSpace() >= key.size());
 
   mDataOffset -= key.size();
   mSpaceUsed += key.size();
@@ -288,9 +289,8 @@ void BTreeNode::insertFence(BTreeNodeHeader::FenceKey& fk, Slice key) {
 void BTreeNode::setFences(Slice lowerKey, Slice upperKey) {
   insertFence(mLowerFence, lowerKey);
   insertFence(mUpperFence, upperKey);
-  Log::DebugCheck(getLowerFenceKey() == nullptr ||
-                  getUpperFenceKey() == nullptr ||
-                  *getLowerFenceKey() <= *getUpperFenceKey());
+  LS_DCHECK(GetLowerFenceKey() == nullptr || GetUpperFenceKey() == nullptr ||
+            *GetLowerFenceKey() <= *GetUpperFenceKey());
 
   // prefix compression
   for (mPrefixSize = 0; (mPrefixSize < min(lowerKey.size(), upperKey.size())) &&
@@ -320,10 +320,10 @@ uint16_t BTreeNode::commonPrefix(uint16_t slotA, uint16_t slotB) {
 }
 
 BTreeNode::SeparatorInfo BTreeNode::findSep() {
-  Log::DebugCheck(mNumSeps > 1);
+  LS_DCHECK(mNumSeps > 1);
 
   // Inner nodes are split in the middle
-  if (isInner()) {
+  if (IsInner()) {
     uint16_t slotId = mNumSeps / 2;
     return SeparatorInfo{getFullKeyLen(slotId), slotId, false};
   }
@@ -390,7 +390,7 @@ Swip& BTreeNode::lookupInner(Slice key) {
 void BTreeNode::Split(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
                       ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedNewLeft,
                       const BTreeNode::SeparatorInfo& sepInfo) {
-  Log::DebugCheck(xGuardedParent->canInsert(sepInfo.mSize, sizeof(Swip)));
+  LS_DCHECK(xGuardedParent->canInsert(sepInfo.mSize, sizeof(Swip)));
 
   // generate separator key
   uint8_t sepKey[sepInfo.mSize];
@@ -454,7 +454,7 @@ using leanstore::utils::AddMemberToJson;
 
 void BTreeNode::ToJson(rapidjson::Value* resultObj,
                        rapidjson::Value::AllocatorType& allocator) {
-  Log::DebugCheck(resultObj->IsObject());
+  LS_DCHECK(resultObj->IsObject());
 
   auto lowerFence = GetLowerFence();
   if (lowerFence.size() == 0) {

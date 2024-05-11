@@ -5,9 +5,12 @@
 
 namespace leanstore {
 
-class StoreOption;
-
-using TableRef = void*;
+enum class LogLevel : uint8_t {
+  kDebug = 0,
+  kInfo,
+  kWarn,
+  kError,
+};
 
 class StoreOption {
 public:
@@ -20,6 +23,13 @@ public:
 
   /// The directory for all the database files.
   std::string mStoreDir = "~/.leanstore";
+
+  // ---------------------------------------------------------------------------
+  // log related options
+  // ---------------------------------------------------------------------------
+
+  /// The log level
+  LogLevel mLogLevel = LogLevel::kInfo;
 
   // ---------------------------------------------------------------------------
   // Worker thread related options
@@ -148,7 +158,7 @@ public:
   bool mEnableTimeMeasure = false;
 
   std::string GetMetaFilePath() const {
-    return mStoreDir + "/meta.json";
+    return mStoreDir + "/db.meta.json";
   }
 
   std::string GetDbFilePath() const {
@@ -156,11 +166,11 @@ public:
   }
 
   std::string GetWalFilePath() const {
-    return mStoreDir + "/wal.log";
+    return mStoreDir + "/db.wal";
   }
 
-  std::string GetLogDir() const {
-    return mStoreDir + "/logs";
+  std::string GetLogPath() const {
+    return mStoreDir + "/db.log";
   }
 };
 

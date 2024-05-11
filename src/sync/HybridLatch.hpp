@@ -44,13 +44,13 @@ public:
 
 public:
   void LockExclusively() {
-    Log::DebugCheck(!IsLockedExclusively());
+    LS_DCHECK(!IsLockedExclusively());
     mMutex.lock();
     mVersion.fetch_add(kLatchExclusiveBit, std::memory_order_release);
   }
 
   void UnlockExclusively() {
-    Log::DebugCheck(IsLockedExclusively());
+    LS_DCHECK(IsLockedExclusively());
     mVersion.fetch_add(kLatchExclusiveBit, std::memory_order_release);
     mMutex.unlock();
   }

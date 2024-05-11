@@ -10,7 +10,7 @@
 namespace leanstore {
 
 template <typename T1, typename T2> T1 DownCast(T2 ptr) {
-  Log::DebugCheck(dynamic_cast<T1>(ptr) != nullptr);
+  LS_DCHECK(dynamic_cast<T1>(ptr) != nullptr);
   return static_cast<T1>(ptr);
 }
 
@@ -39,7 +39,7 @@ inline void PinThisThread(const uint64_t workerId) {
   CPU_SET(workerId, &cpuset);
   pthread_t currentThread = pthread_self();
   if (pthread_setaffinity_np(currentThread, sizeof(cpu_set_t), &cpuset) != 0) {
-    Log::Debug("Could not pin a thread, maybe because of over subscription?");
+    Log::Warn("Could not pin a thread, maybe because of over subscription?");
   }
 }
 

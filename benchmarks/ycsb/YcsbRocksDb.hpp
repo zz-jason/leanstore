@@ -45,8 +45,6 @@ public:
   void HandleCmdLoad() override {
 #ifdef ENABLE_ROCKSDB
     // load data with FLAGS_ycsb_threads
-    auto zipfRandom = utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count,
-                                                    FLAGS_ycsb_zipf_factor);
     auto start = std::chrono::high_resolution_clock::now();
     std::cout << "Inserting " << FLAGS_ycsb_record_count << " values"
               << std::endl;
@@ -68,7 +66,7 @@ public:
           for (uint64_t i = begin; i < end; i++) {
             // generate key
             uint8_t key[FLAGS_ycsb_key_size];
-            GenYcsbKey(zipfRandom, key);
+            GenKey(i, key);
 
             // generate value
             uint8_t val[FLAGS_ycsb_val_size];

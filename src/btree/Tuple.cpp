@@ -45,8 +45,8 @@ bool Tuple::ToFat(BTreePessimisticExclusiveIterator& xIter) {
   // Process the chain tuple
   MutableSlice mutRawVal = xIter.MutableVal();
   auto& chainedTuple = *ChainedTuple::From(mutRawVal.Data());
-  Log::DebugCheck(chainedTuple.IsWriteLocked());
-  Log::DebugCheck(chainedTuple.mFormat == TupleFormat::kChained);
+  LS_DCHECK(chainedTuple.IsWriteLocked());
+  LS_DCHECK(chainedTuple.mFormat == TupleFormat::kChained);
 
   auto tmpBufSize = MaxFatTupleLength();
   auto tmpBuf = utils::JumpScopedArray<uint8_t>(tmpBufSize);
@@ -74,8 +74,8 @@ bool Tuple::ToFat(BTreePessimisticExclusiveIterator& xIter) {
             [&](const uint8_t* version, uint64_t) {
               numDeltasToReplace++;
               const auto& chainedDelta = *UpdateVersion::From(version);
-              Log::DebugCheck(chainedDelta.mType == VersionType::kUpdate);
-              Log::DebugCheck(chainedDelta.mIsDelta);
+              LS_DCHECK(chainedDelta.mType == VersionType::kUpdate);
+              LS_DCHECK(chainedDelta.mIsDelta);
 
               auto& updateDesc = *UpdateDesc::From(chainedDelta.mPayload);
               auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
@@ -123,7 +123,7 @@ bool Tuple::ToFat(BTreePessimisticExclusiveIterator& xIter) {
     return false;
   }
 
-  Log::DebugCheck(fatTuple->mPayloadCapacity >= fatTuple->mPayloadSize);
+  LS_DCHECK(fatTuple->mPayloadCapacity >= fatTuple->mPayloadSize);
 
   // Finalize the new FatTuple
   // TODO: corner cases, more careful about space usage
@@ -173,6 +173,8 @@ void FatTuple::UndoLastUpdate() {
   auto* xorData = delta.GetDeltaPtr();
   BasicKV::CopyToValue(updateDesc, xorData, GetValPtr());
 }
+
+// NOLINTBEGIN
 
 // Attention: we have to disable garbage collection if the latest delta was from
 // us and not committed yet! Otherwise we would crash during undo although the
@@ -230,7 +232,9 @@ void FatTuple::GarbageCollection() {
       TXID it = getDelta(m).mTxId;
       if (it == upper_bound) {
         return m;
-      } else if (it < upper_bound) {
+      }
+
+      if (it < upper_bound) {
         l = m + 1;
       } else {
         r = m - 1;
@@ -318,16 +322,18 @@ void FatTuple::GarbageCollection() {
   }
 
   std::memcpy(this, buffer->get(), bufferSize);
-  Log::DebugCheck(mPayloadCapacity >= mPayloadSize);
+  LS_DCHECK(mPayloadCapacity >= mPayloadSize);
 
   DEBUG_BLOCK() {
-    uint32_t spaceUsed = mValSize;
+    uint32_t spaceUsed [[maybe_unused]] = mValSize;
     for (uint32_t i = 0; i < mNumDeltas; i++) {
       spaceUsed += sizeof(uint16_t) + getDelta(i).TotalSize();
     }
-    Log::DebugCheck(mPayloadSize == spaceUsed);
+    LS_DCHECK(mPayloadSize == spaceUsed);
   }
 }
+
+// NOLINTEND
 
 bool FatTuple::HasSpaceFor(const UpdateDesc& updateDesc) {
   const uint32_t spaceNeeded =
@@ -338,8 +344,8 @@ bool FatTuple::HasSpaceFor(const UpdateDesc& updateDesc) {
 
 template <typename... Args>
 FatTupleDelta& FatTuple::NewDelta(uint32_t totalDeltaSize, Args&&... args) {
-  Log::DebugCheck((mPayloadCapacity - mPayloadSize) >=
-                  (totalDeltaSize + sizeof(uint16_t)));
+  LS_DCHECK((mPayloadCapacity - mPayloadSize) >=
+            (totalDeltaSize + sizeof(uint16_t)));
   mPayloadSize += totalDeltaSize + sizeof(uint16_t);
   mDataOffset -= totalDeltaSize;
   const uint32_t deltaId = mNumDeltas++;
@@ -369,7 +375,7 @@ std::tuple<OpCode, uint16_t> FatTuple::GetVisibleTuple(
     return {OpCode::kOK, 1};
   }
 
-  Log::DebugCheck(cr::ActiveTx().IsLongRunning());
+  LS_DCHECK(cr::ActiveTx().IsLongRunning());
 
   if (mNumDeltas > 0) {
     auto copiedVal = utils::JumpScopedArray<uint8_t>(mValSize);
@@ -407,8 +413,8 @@ void FatTuple::resize(const uint32_t newSize) {
   std::memcpy(newFatTuple.mPayload, mPayload, mValSize); // Copy value
   auto appendDelta = [](FatTuple& fatTuple, uint8_t* delta,
                         uint16_t deltaSize) {
-    Log::DebugCheck(fatTuple.mPayloadCapacity >=
-                    (fatTuple.mPayloadSize + deltaSize + sizeof(uint16_t)));
+    LS_DCHECK(fatTuple.mPayloadCapacity >=
+              (fatTuple.mPayloadSize + deltaSize + sizeof(uint16_t)));
     const uint16_t i = fatTuple.mNumDeltas++;
     fatTuple.mPayloadSize += deltaSize + sizeof(uint16_t);
     fatTuple.mDataOffset -= deltaSize;
@@ -420,7 +426,7 @@ void FatTuple::resize(const uint32_t newSize) {
                 getDelta(i).TotalSize());
   }
   std::memcpy(this, tmpPage->get(), tmpPageSize);
-  Log::DebugCheck(mPayloadCapacity >= mPayloadSize);
+  LS_DCHECK(mPayloadCapacity >= mPayloadSize);
 }
 
 void FatTuple::ConvertToChained(TREEID treeId) {

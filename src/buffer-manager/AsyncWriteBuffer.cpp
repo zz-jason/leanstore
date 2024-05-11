@@ -25,8 +25,8 @@ bool AsyncWriteBuffer::IsFull() {
 }
 
 void AsyncWriteBuffer::Add(const BufferFrame& bf) {
-  Log::DebugCheck(uint64_t(&bf) % 512 == 0,
-                  "BufferFrame is not aligned to 512 bytes");
+  LS_DCHECK(uint64_t(&bf) % 512 == 0,
+            "BufferFrame is not aligned to 512 bytes");
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().dt_page_writes[bf.mPage.mBTreeId]++;
   }

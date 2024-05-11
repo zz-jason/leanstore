@@ -92,8 +92,8 @@ public:
 public:
   // Prerequisite: the buffer frame is exclusively locked
   void Reset() {
-    Log::DebugCheck(!mIsBeingWrittenBack);
-    Log::DebugCheck(mLatch.IsLockedExclusively());
+    LS_DCHECK(!mIsBeingWrittenBack);
+    LS_DCHECK(mLatch.IsLockedExclusively());
 
     mState = State::kFree;
     mKeepInMemory = false;
@@ -194,7 +194,7 @@ public:
   }
 
   void Init(PID pageId) {
-    Log::DebugCheck(mHeader.mState == State::kFree);
+    LS_DCHECK(mHeader.mState == State::kFree);
     mHeader.mPageId = pageId;
     mHeader.mState = State::kHot;
     mHeader.mFlushedGsn = 0;
@@ -216,7 +216,7 @@ public:
 // -----------------------------------------------------------------------------
 inline void BufferFrame::ToJson(rapidjson::Value* resultObj,
                                 rapidjson::Value::AllocatorType& allocator) {
-  Log::DebugCheck(resultObj->IsObject());
+  LS_DCHECK(resultObj->IsObject());
 
   // header
   rapidjson::Value headerObj(rapidjson::kObjectType);

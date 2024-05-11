@@ -67,13 +67,13 @@ public:
   }
 
   uint64_t AsPageId() {
-    Log::DebugCheck(IsEvicted());
+    LS_DCHECK(IsEvicted());
     return mPageId & sEvictedMask;
   }
 
   /// return the underlying buffer frame from a hot buffer frame.
   BufferFrame& AsBufferFrame() {
-    Log::DebugCheck(IsHot());
+    LS_DCHECK(IsHot());
     return *mBf;
   }
 
@@ -91,7 +91,7 @@ public:
   }
 
   void MarkHOT() {
-    Log::DebugCheck(IsCool());
+    LS_DCHECK(IsCool());
     this->mPageId = mPageId & ~sCoolBit;
   }
 

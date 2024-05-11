@@ -63,8 +63,7 @@ public:
         mBf(bf),
         mGuard(mBf->mHeader.mLatch, GuardState::kUninitialized),
         mKeepAlive(keepAlive) {
-    Log::DebugCheck(
-        !HasExclusiveMark(mBf->mHeader.mLatch.GetOptimisticVersion()));
+    LS_DCHECK(!HasExclusiveMark(mBf->mHeader.mLatch.GetOptimisticVersion()));
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
@@ -142,11 +141,10 @@ public:
 
 public:
   inline void SyncGSNBeforeWrite() {
-    Log::DebugCheck(mBf != nullptr);
-    Log::DebugCheck(mBf->mPage.mGSN <=
-                        cr::Worker::My().mLogging.GetCurrentGsn(),
-                    "Page GSN should <= worker GSN, pageGSN={}, workerGSN={}",
-                    mBf->mPage.mGSN, cr::Worker::My().mLogging.GetCurrentGsn());
+    LS_DCHECK(mBf != nullptr);
+    LS_DCHECK(mBf->mPage.mGSN <= cr::Worker::My().mLogging.GetCurrentGsn(),
+              "Page GSN should <= worker GSN, pageGSN={}, workerGSN={}",
+              mBf->mPage.mGSN, cr::Worker::My().mLogging.GetCurrentGsn());
 
     // update last writer worker
     mBf->mHeader.mLastWriterWorker = cr::Worker::My().mWorkerId;
@@ -163,11 +161,11 @@ public:
         mBf->mPage.mGSN > cr::Worker::My().mLogging.mTxReadSnapshot &&
         mBf->mHeader.mLastWriterWorker != cr::Worker::My().mWorkerId) {
       cr::Worker::My().mLogging.mHasRemoteDependency = true;
-      Log::Debug("Detected remote dependency, workerId={}, "
-                 "txReadSnapshot(GSN)={}, pageLastWriterWorker={}, pageGSN={}",
-                 cr::Worker::My().mWorkerId,
-                 cr::Worker::My().mLogging.mTxReadSnapshot,
-                 mBf->mHeader.mLastWriterWorker, mBf->mPage.mGSN);
+      LS_DLOG("Detected remote dependency, workerId={}, "
+              "txReadSnapshot(GSN)={}, pageLastWriterWorker={}, pageGSN={}",
+              cr::Worker::My().mWorkerId,
+              cr::Worker::My().mLogging.mTxReadSnapshot,
+              mBf->mHeader.mLastWriterWorker, mBf->mPage.mGSN);
     }
 
     const auto workerGSN = cr::Worker::My().mLogging.GetCurrentGsn();
@@ -180,8 +178,8 @@ public:
   template <typename WT, typename... Args>
   inline cr::WalPayloadHandler<WT> ReserveWALPayload(uint64_t walSize,
                                                      Args&&... args) {
-    Log::DebugCheck(cr::ActiveTx().mIsDurable);
-    Log::DebugCheck(mGuard.mState == GuardState::kPessimisticExclusive);
+    LS_DCHECK(cr::ActiveTx().mIsDurable);
+    LS_DCHECK(mGuard.mState == GuardState::kPessimisticExclusive);
 
     const auto pageId = mBf->mHeader.mPageId;
     const auto treeId = mBf->mPage.mBTreeId;
@@ -204,6 +202,8 @@ public:
   inline bool EncounteredContention() {
     return mGuard.mEncounteredContention;
   }
+
+  // NOLINTBEGIN
 
   inline void unlock() {
     mGuard.Unlock();
@@ -275,8 +275,8 @@ protected:
       break;
     }
     default: {
-      Log::DebugCheck(false, "Unhandled LatchMode: {}",
-                      std::to_string(static_cast<uint64_t>(latchMode)));
+      LS_DCHECK(false, "Unhandled LatchMode: {}",
+                std::to_string(static_cast<uint64_t>(latchMode)));
     }
     }
   }
@@ -382,6 +382,8 @@ public:
   inline Swip swip() {
     return Swip(mRefGuard.mBf);
   }
+
+  // NOLINTEND
 
   inline T* operator->() {
     return reinterpret_cast<T*>(mRefGuard.mBf->mPage.mPayload);
