@@ -9,8 +9,7 @@
 #include <mutex>
 #include <vector>
 
-namespace leanstore {
-namespace storage {
+namespace leanstore::storage {
 
 struct IOFrame {
   enum class State : uint8_t {
@@ -67,33 +66,37 @@ struct HashTable {
   HashTable(uint64_t size_in_bits);
 };
 
+//! The I/O partition for the underlying pages. Page read/write operations are
+//! dispatched to partitions based on the page id.
 class Partition {
 public:
-  /// protect mInflightIOs
+  //! Protects the concurrent access to mInflightIOs.
   std::mutex mInflightIOMutex;
 
+  //! Stores all the inflight IOs in the partition.
   HashTable mInflightIOs;
 
+  //! The maximum number of free buffer frames in the partition.
   const uint64_t mFreeBfsLimit;
 
-  /// @brief mFreeBfList stores all the free buffer frames in the partition.
+  //! Stores all the free buffer frames in the partition.
   FreeList mFreeBfList;
 
-  /// @brief mReclaimedPageIdsMutex is used to protect mReclaimedPageIds.
+  //! Protects the concurrent access to mReclaimedPageIds.
   std::mutex mReclaimedPageIdsMutex;
 
-  /// @brief mReclaimedPageIds stores the reclaimed page ids. Only when a page
-  /// is removed and reclaimed, its page id can be reused for new pages.
+  //! Stores all the reclaimed page ids in the partition. Page id is reclaimed
+  //! when the page is removed. The reclaimed page id can be reused when a new
+  //! page is allocated.
   std::vector<PID> mReclaimedPageIds;
 
+  //! The next page id to be allocated.
   uint64_t mNextPageId;
 
+  //! The distance between two consecutive allocated page ids.
   const uint64_t mPageIdDistance;
 
 public:
-  //---------------------------------------------------------------------------
-  // Constructor and Destructors
-  //---------------------------------------------------------------------------
   Partition(uint64_t firstPageId, uint64_t pageIdDistance,
             uint64_t freeBfsLimit)
       : mInflightIOs(utils::GetBitsNeeded(freeBfsLimit)),
@@ -102,15 +105,13 @@ public:
         mPageIdDistance(pageIdDistance) {
   }
 
-public:
-  //---------------------------------------------------------------------------
-  // Object Utils
-  //---------------------------------------------------------------------------
-  inline bool NeedMoreFreeBfs() {
+  //! Whether the partition needs more free buffer frames.
+  bool NeedMoreFreeBfs() {
     return mFreeBfList.mSize < mFreeBfsLimit;
   }
 
-  inline PID NextPageId() {
+  //! Allocates a new page id.
+  PID NextPageId() {
     std::unique_lock<std::mutex> guard(mReclaimedPageIdsMutex);
     if (mReclaimedPageIds.size()) {
       const uint64_t pageId = mReclaimedPageIds.back();
@@ -123,20 +124,22 @@ public:
     return pageId;
   }
 
-  inline void ReclaimPageId(PID pageId) {
+  //! Reclaims a freed page id.
+  void ReclaimPageId(PID pageId) {
     std::unique_lock<std::mutex> guard(mReclaimedPageIdsMutex);
     mReclaimedPageIds.push_back(pageId);
   }
 
-  inline uint64_t NumAllocatedPages() {
+  //! How many pages have been allocated.
+  uint64_t NumAllocatedPages() {
     return mNextPageId / mPageIdDistance;
   }
 
-  inline uint64_t NumReclaimedPages() {
+  //! How many pages have been reclaimed.
+  uint64_t NumReclaimedPages() {
     std::unique_lock<std::mutex> guard(mReclaimedPageIdsMutex);
     return mReclaimedPageIds.size();
   }
 };
 
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage

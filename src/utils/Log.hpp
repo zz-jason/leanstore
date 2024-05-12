@@ -38,7 +38,7 @@ public:
 
     std::unique_lock writeLock(sInitMutex);
 
-    auto logger = spdlog::basic_logger_mt("basic_logger", "/tmp/leanstore.log");
+    auto logger = spdlog::basic_logger_mt("basic_logger", option.GetLogPath());
     SCOPED_DEFER({
       spdlog::set_default_logger(logger);
       spdlog::flush_every(std::chrono::seconds(3));

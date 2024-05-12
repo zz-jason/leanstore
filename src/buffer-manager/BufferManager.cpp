@@ -1,5 +1,6 @@
 #include "buffer-manager/BufferManager.hpp"
 
+#include "buffer-manager/AsyncWriteBuffer.hpp"
 #include "buffer-manager/BufferFrame.hpp"
 #include "concurrency/CRManager.hpp"
 #include "concurrency/GroupCommitter.hpp"
@@ -10,6 +11,7 @@
 #include "profiling/counters/WorkerCounters.hpp"
 #include "sync/HybridLatch.hpp"
 #include "sync/ScopedHybridGuard.hpp"
+#include "utils/AsyncIo.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Error.hpp"
 #include "utils/Log.hpp"
@@ -22,8 +24,10 @@
 #include <cstring>
 #include <expected>
 #include <format>
+#include <vector>
 
 #include <fcntl.h>
+#include <linux/perf_event.h>
 #include <sys/resource.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -121,6 +125,7 @@ void BufferManager::Deserialize(StringMap map) {
 }
 
 void BufferManager::CheckpointAllBufferFrames() {
+  Log::Info("CheckpointAllBufferFrames, mNumBfs={}", mNumBfs);
   LS_DEBUG_EXECUTE(mStore, "skip_CheckpointAllBufferFrames", {
     Log::Error("CheckpointAllBufferFrames skipped due to debug flag");
     return;
@@ -129,22 +134,33 @@ void BufferManager::CheckpointAllBufferFrames() {
   StopBufferFrameProviders();
 
   utils::Parallelize::ParallelRange(mNumBfs, [&](uint64_t begin, uint64_t end) {
-    alignas(512) uint8_t buffer[mStore->mStoreOption.mPageSize];
-    for (uint64_t i = begin; i < end; i++) {
-      auto* bfAddr = &mBufferPool[i * mStore->mStoreOption.mBufferFrameSize];
-      auto& bf = *reinterpret_cast<BufferFrame*>(bfAddr);
+    auto batchSize = mStore->mStoreOption.mBufferWriteBatchSize;
+    alignas(512) uint8_t buffer[mStore->mStoreOption.mPageSize * batchSize];
+    auto batchPos = 0u;
+    utils::AsyncIo aio(batchSize);
 
-      bf.mHeader.mLatch.LockExclusively();
-      if (!bf.IsFree()) {
-        mStore->mTreeRegistry->Checkpoint(bf.mPage.mBTreeId, bf, buffer);
-        auto res = writePage(bf.mHeader.mPageId, buffer);
-        if (!res) {
-          Log::Fatal("Failed to write page to disk, pageId={}, error={}",
-                     bf.mHeader.mPageId, res.error().ToString());
+    for (uint64_t i = begin; i < end; i++) {
+      while (batchPos < batchSize && i < end) {
+        auto* bfAddr = &mBufferPool[i * mStore->mStoreOption.mBufferFrameSize];
+        auto& bf = *reinterpret_cast<BufferFrame*>(bfAddr);
+        if (!bf.IsFree()) {
+          auto* tmpBuffer = buffer + batchPos * mStore->mStoreOption.mPageSize;
+          auto pageOffset = bf.mHeader.mPageId * mStore->mStoreOption.mPageSize;
+          mStore->mTreeRegistry->Checkpoint(bf.mPage.mBTreeId, bf, tmpBuffer);
+          aio.PrepareWrite(mStore->mPageFd, tmpBuffer,
+                           mStore->mStoreOption.mPageSize, pageOffset);
+          bf.mHeader.mFlushedGsn = bf.mPage.mGSN;
+          batchPos++;
         }
-        bf.mHeader.mFlushedGsn = bf.mPage.mGSN;
+
+        i++;
       }
-      bf.mHeader.mLatch.UnlockExclusively();
+      if (auto res = aio.SubmitAll(); !res) {
+        Log::Fatal("Failed to submit aio, error={}", res.error().ToString());
+      }
+      if (auto res = aio.WaitAll(); !res) {
+        Log::Fatal("Failed to wait aio, error={}", res.error().ToString());
+      }
     }
   });
 }
@@ -324,7 +340,9 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard,
       ioFrame.bf = &bf;
       ioFrame.state = IOFrame::State::kReady;
       inflightIOGuard->unlock();
-      ioFrameGuard->unlock();
+      if (ioFrameGuard->owns_lock()) {
+        ioFrameGuard->unlock();
+      }
       jumpmu::Jump();
     }
   }

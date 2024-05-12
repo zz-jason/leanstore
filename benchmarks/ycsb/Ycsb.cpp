@@ -2,6 +2,7 @@
 
 #include "YcsbLeanStore.hpp"
 #include "YcsbRocksDb.hpp"
+#include "utils/Defer.hpp"
 #include "utils/Log.hpp"
 
 #include <gflags/gflags.h>
@@ -19,7 +20,6 @@ static std::string kTargetBasicKv = "basickv";
 static std::string kTargetRocksDb = "rocksdb";
 
 int main(int argc, char** argv) {
-
   gflags::SetUsageMessage("Ycsb Benchmark");
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
@@ -43,10 +43,14 @@ int main(int argc, char** argv) {
   }
 
   leanstore::ycsb::YcsbExecutor* executor = nullptr;
+  SCOPED_DEFER(if (executor != nullptr) { delete executor; });
+
   if (FLAGS_ycsb_target == kTargetTransactionKv ||
       FLAGS_ycsb_target == kTargetBasicKv) {
     bool benchTransactionKv = FLAGS_ycsb_target == kTargetTransactionKv;
-    executor = new leanstore::ycsb::YcsbLeanStore(benchTransactionKv);
+    bool createFromScratch = FLAGS_ycsb_cmd == kCmdLoad;
+    executor = new leanstore::ycsb::YcsbLeanStore(benchTransactionKv,
+                                                  createFromScratch);
   } else if (FLAGS_ycsb_target == kTargetRocksDb) {
     executor = new leanstore::ycsb::YcsbRocksDb();
   }
@@ -61,7 +65,6 @@ int main(int argc, char** argv) {
   }
 
   if (FLAGS_ycsb_cmd == kCmdRun) {
-    executor->HandleCmdLoad();
     executor->HandleCmdRun();
     return 0;
   }

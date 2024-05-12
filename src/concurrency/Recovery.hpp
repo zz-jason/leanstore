@@ -5,6 +5,7 @@
 #include "concurrency/WalEntry.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
+#include "utils/AsyncIo.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Error.hpp"
 #include "utils/Log.hpp"
@@ -173,24 +174,14 @@ inline storage::BufferFrame& Recovery::resolvePage(PID pageId) {
 
 inline Result<void> Recovery::readFromWalFile(int64_t offset, size_t nbytes,
                                               void* destination) {
-  auto fileName = mStore->mStoreOption.GetWalFilePath();
-  FILE* fp = fopen(fileName.c_str(), "rb");
-  if (fp == nullptr) {
-    return std::unexpected(
-        utils::Error::FileOpen(fileName, errno, strerror(errno)));
+  utils::AsyncIo aio(1);
+  aio.PrepareRead(mStore->mWalFd, destination, nbytes, offset);
+  if (auto res = aio.SubmitAll(); !res) {
+    return std::unexpected(std::move(res.error()));
   }
-  SCOPED_DEFER(fclose(fp));
-
-  if (fseek(fp, offset, SEEK_SET) != 0) {
-    return std::unexpected(
-        utils::Error::FileSeek(fileName, errno, strerror(errno)));
+  if (auto res = aio.WaitAll(); !res) {
+    return std::unexpected(std::move(res.error()));
   }
-
-  if (fread(destination, 1, nbytes, fp) != nbytes) {
-    return std::unexpected(
-        utils::Error::FileRead(fileName, errno, strerror(errno)));
-  }
-
   return {};
 }
 

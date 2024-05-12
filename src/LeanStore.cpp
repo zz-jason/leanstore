@@ -37,6 +37,14 @@
 namespace leanstore {
 
 Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption option) {
+  if (option.mCreateFromScratch) {
+    std::cout << std::format("Clean store dir: {}", option.mStoreDir)
+              << std::endl;
+    std::filesystem::path dirPath = option.mStoreDir;
+    std::filesystem::remove_all(dirPath);
+    std::filesystem::create_directories(dirPath);
+  }
+
   Log::Init(option);
   return std::make_unique<LeanStore>(std::move(option));
 }
@@ -45,13 +53,6 @@ LeanStore::LeanStore(StoreOption option)
     : mStoreOption(std::move(option)),
       mMetricsManager(this) {
   utils::tlsStore = this;
-
-  if (mStoreOption.mCreateFromScratch) {
-    Log::Info("Clean store dir: {}", mStoreOption.mStoreDir);
-    std::filesystem::path dirPath = mStoreOption.mStoreDir;
-    std::filesystem::remove_all(dirPath);
-    std::filesystem::create_directories(dirPath);
-  }
 
   Log::Info("LeanStore starting ...");
   SCOPED_DEFER(Log::Info("LeanStore started"));
@@ -80,7 +81,7 @@ LeanStore::LeanStore(StoreOption option)
   // recover from disk
   if (!mStoreOption.mCreateFromScratch) {
     deserializeMeta();
-    mBufferManager->RecoverFromDisk();
+    // mBufferManager->RecoverFromDisk();
   }
 }
 
@@ -120,7 +121,7 @@ void LeanStore::initPageAndWalFd() {
 
   auto walFilePath = mStoreOption.GetWalFilePath();
   mWalFd = open(walFilePath.c_str(), flags, 0666);
-  if (mPageFd == -1) {
+  if (mWalFd == -1) {
     Log::Fatal("Recover failed, could not open file at: {}. The data is lost, "
                "please create a new WAL file and start a new instance from it",
                walFilePath);
@@ -139,11 +140,8 @@ LeanStore::~LeanStore() {
     auto treeId = it.first;
     auto& [treePtr, treeName] = it.second;
     auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(treePtr.get());
-
-    uint64_t numEntries(0);
-    ExecSync(0, [&]() { numEntries = btree->CountEntries(); });
-    Log::Info("[TransactionKV] name={}, btreeId={}, height={}, numEntries={}",
-              treeName, treeId, btree->mHeight.load(), numEntries);
+    Log::Info("[TransactionKV] name={}, btreeId={}, height={}", treeName,
+              treeId, btree->mHeight.load());
   }
 
   // Stop transaction workers and group committer

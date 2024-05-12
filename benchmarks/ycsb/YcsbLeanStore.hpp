@@ -32,12 +32,13 @@ private:
   bool mBenchTransactionKv;
 
 public:
-  YcsbLeanStore(bool benchTransactionKv)
+  YcsbLeanStore(bool benchTransactionKv, bool createFromScratch)
       : mBenchTransactionKv(benchTransactionKv) {
     auto res = LeanStore::Open(StoreOption{
-        .mCreateFromScratch = true,
-        .mStoreDir = "/tmp/ycsb/" + FLAGS_ycsb_workload,
+        .mCreateFromScratch = createFromScratch,
+        .mStoreDir = FLAGS_ycsb_data_dir + "/leanstore/" + FLAGS_ycsb_workload,
         .mWorkerThreads = FLAGS_ycsb_threads,
+        .mBufferPoolSize = FLAGS_ycsb_mem_gb * 1024 * 1024 * 1024,
         .mEnableMetrics = true,
         .mMetricsPort = 8080,
     });
@@ -48,6 +49,10 @@ public:
     }
 
     mStore = std::move(res.value());
+  }
+
+  ~YcsbLeanStore() override {
+    mStore.reset(nullptr);
   }
 
   KVInterface* CreateTable() {

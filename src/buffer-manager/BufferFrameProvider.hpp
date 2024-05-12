@@ -282,9 +282,9 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
 
         if (coolCandidate->mHeader.mState == State::kCool) {
           mEvictCandidateBfs.push_back(coolCandidate);
-          Log::Info("Find a cool buffer frame, added to mEvictCandidateBfs, "
-                    "pageId={}",
-                    coolCandidate->mHeader.mPageId);
+          LS_DLOG("Find a cool buffer frame, added to mEvictCandidateBfs, "
+                  "pageId={}",
+                  coolCandidate->mHeader.mPageId);
           // TODO: maybe without failedAttempts?
           failedAttempts = failedAttempts + 1;
           LS_DLOG("Cool candidate discarded, it's already cool, pageId={}",
@@ -316,11 +316,12 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         }
 
         mStore->mTreeRegistry->IterateChildSwips(
-            coolCandidate->mPage.mBTreeId, *coolCandidate, [&](Swip& swip) {
+            coolCandidate->mPage.mBTreeId, *coolCandidate,
+            [&](Swip& childSwip) {
               // Ignore when it has a child in the cooling stage
-              allChildrenEvicted &= swip.IsEvicted();
-              if (swip.IsHot()) {
-                BufferFrame* childBf = &swip.AsBufferFrame();
+              allChildrenEvicted = allChildrenEvicted && childSwip.IsEvicted();
+              if (childSwip.IsHot()) {
+                BufferFrame* childBf = &childSwip.AsBufferFrame();
                 readGuard.JumpIfModifiedByOthers();
                 pickedAChild = true;
                 mCoolCandidateBfs.push_back(childBf);

@@ -10,6 +10,7 @@
 #include "utils/Log.hpp"
 
 #include <atomic>
+#include <cstddef>
 #include <limits>
 
 using namespace leanstore::storage;
@@ -308,16 +309,18 @@ inline void BTreeGeneric::toJsonRecursive(
 inline void BTreeGeneric::IterateChildSwips(
     BufferFrame& bf, std::function<bool(Swip&)> callback) {
   // Pre: bf is read locked
-  auto& childNode = *reinterpret_cast<BTreeNode*>(bf.mPage.mPayload);
-  if (childNode.mIsLeaf) {
+  auto& btreeNode = *reinterpret_cast<BTreeNode*>(bf.mPage.mPayload);
+  if (btreeNode.mIsLeaf) {
     return;
   }
-  for (uint16_t i = 0; i < childNode.mNumSeps; i++) {
-    if (!callback(*childNode.ChildSwip(i))) {
+  for (uint16_t i = 0; i < btreeNode.mNumSeps; i++) {
+    if (!callback(*btreeNode.ChildSwip(i))) {
       return;
     }
   }
-  callback(childNode.mRightMostChildSwip);
+  if (btreeNode.mRightMostChildSwip != nullptr) {
+    callback(btreeNode.mRightMostChildSwip);
+  }
 }
 
 inline SpaceCheckResult BTreeGeneric::CheckSpaceUtilization(BufferFrame& bf) {
@@ -356,7 +359,8 @@ inline void BTreeGeneric::Checkpoint(BufferFrame& bf, void* dest) {
       }
     }
     // Replace right most child swip to page id
-    if (!destNode->mRightMostChildSwip.IsEvicted()) {
+    if (destNode->mRightMostChildSwip != nullptr &&
+        !destNode->mRightMostChildSwip.IsEvicted()) {
       auto& childBf = destNode->mRightMostChildSwip.AsBufferFrameMasked();
       destNode->mRightMostChildSwip.Evict(childBf.mHeader.mPageId);
     }
