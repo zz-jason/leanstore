@@ -13,8 +13,8 @@ __thread void* tlsObjs[JUMPMU_STACK_OBJECTS_LIMIT];
 __thread void (*tlsObjDtors[JUMPMU_STACK_OBJECTS_LIMIT])(void*);
 
 void Jump() {
-  LS_DCHECK(tlsNumJumpPoints > 0, "tlsNumJumpPoints={}", tlsNumJumpPoints);
-  LS_DCHECK(tlsNumStackObjs >= 0, "tlsNumStackObjs={}", tlsNumStackObjs);
+  ZZ_JASON_CHECK(tlsNumJumpPoints > 0, "tlsNumJumpPoints={}", tlsNumJumpPoints);
+  ZZ_JASON_CHECK(tlsNumStackObjs >= 0, "tlsNumStackObjs={}", tlsNumStackObjs);
   auto numJumpStackObjs = tlsJumpPointNumStackObjs[tlsNumJumpPoints - 1];
 
   // Release resource hold by stack objects in reverse (FILO) order.

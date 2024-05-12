@@ -10,11 +10,14 @@
 #include "profiling/counters/WorkerCounters.hpp"
 #include "sync/HybridLatch.hpp"
 #include "sync/ScopedHybridGuard.hpp"
+#include "telemetry/MetricOnlyTimer.hpp"
 #include "utils/AsyncIo.hpp"
 #include "utils/DebugFlags.hpp"
+#include "utils/Defer.hpp"
 #include "utils/Error.hpp"
 #include "utils/JumpMU.hpp"
 #include "utils/Log.hpp"
+#include "utils/Misc.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
 #include "utils/UserThread.hpp"
@@ -125,7 +128,13 @@ void BufferManager::Deserialize(StringMap map) {
 }
 
 void BufferManager::CheckpointAllBufferFrames() {
+  telemetry::MetricOnlyTimer timer;
   Log::Info("CheckpointAllBufferFrames, mNumBfs={}", mNumBfs);
+  SCOPED_DEFER(COUNTERS_BLOCK() {
+    Log::Info("CheckpointAllBufferFrames finished, timeElasped={:.6f}s",
+              timer.ElaspedUs() / 1000000.0);
+  });
+
   LS_DEBUG_EXECUTE(mStore, "skip_CheckpointAllBufferFrames", {
     Log::Error("CheckpointAllBufferFrames skipped due to debug flag");
     return;
@@ -134,33 +143,42 @@ void BufferManager::CheckpointAllBufferFrames() {
   StopBufferFrameProviders();
 
   utils::Parallelize::ParallelRange(mNumBfs, [&](uint64_t begin, uint64_t end) {
-    auto batchSize = mStore->mStoreOption.mBufferWriteBatchSize;
-    alignas(512) uint8_t buffer[mStore->mStoreOption.mPageSize * batchSize];
-    auto batchPos = 0u;
-    utils::AsyncIo aio(batchSize);
+    const auto bufferFrameSize = mStore->mStoreOption.mBufferFrameSize;
+    const auto pageSize = mStore->mStoreOption.mPageSize;
 
-    for (uint64_t i = begin; i < end; i++) {
-      while (batchPos < batchSize && i < end) {
-        auto* bfAddr = &mBufferPool[i * mStore->mStoreOption.mBufferFrameSize];
-        auto& bf = *reinterpret_cast<BufferFrame*>(bfAddr);
+    // the underlying batch for aio
+    const auto batchCapacity = mStore->mStoreOption.mBufferWriteBatchSize;
+    alignas(512) uint8_t buffer[pageSize * batchCapacity];
+    auto batchSize = 0u;
+
+    // the aio itself
+    utils::AsyncIo aio(batchCapacity);
+
+    for (uint64_t i = begin; i < end;) {
+      // collect a batch of pages for async write
+      for (; batchSize < batchCapacity && i < end; i++) {
+        auto& bf =
+            *reinterpret_cast<BufferFrame*>(&mBufferPool[i * bufferFrameSize]);
         if (!bf.IsFree()) {
-          auto* tmpBuffer = buffer + batchPos * mStore->mStoreOption.mPageSize;
-          auto pageOffset = bf.mHeader.mPageId * mStore->mStoreOption.mPageSize;
+          auto* tmpBuffer = buffer + batchSize * pageSize;
+          auto pageOffset = bf.mHeader.mPageId * pageSize;
           mStore->mTreeRegistry->Checkpoint(bf.mPage.mBTreeId, bf, tmpBuffer);
-          aio.PrepareWrite(mStore->mPageFd, tmpBuffer,
-                           mStore->mStoreOption.mPageSize, pageOffset);
+          aio.PrepareWrite(mStore->mPageFd, tmpBuffer, pageSize, pageOffset);
           bf.mHeader.mFlushedGsn = bf.mPage.mGSN;
-          batchPos++;
+          batchSize++;
         }
-
-        i++;
       }
+
+      // write the batch of pages
       if (auto res = aio.SubmitAll(); !res) {
         Log::Fatal("Failed to submit aio, error={}", res.error().ToString());
       }
       if (auto res = aio.WaitAll(); !res) {
         Log::Fatal("Failed to wait aio, error={}", res.error().ToString());
       }
+
+      // reset batch size
+      batchSize = 0;
     }
   });
 }

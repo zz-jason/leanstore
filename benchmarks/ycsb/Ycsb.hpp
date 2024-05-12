@@ -6,10 +6,15 @@
 #include <gflags/gflags.h>
 #include <gflags/gflags_declare.h>
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <iostream>
 #include <string>
+#include <vector>
+
+#include <unistd.h>
 
 // For the benchmark driver
 DECLARE_string(ycsb_target);
@@ -57,6 +62,37 @@ public:
   virtual void HandleCmdLoad() = 0;
 
   virtual void HandleCmdRun() = 0;
+
+protected:
+  void printTpsSummary(uint64_t reportPeriod, uint64_t runForSeconds,
+                       uint64_t numThreads,
+                       std::vector<std::atomic<uint64_t>>& threadCommitted,
+                       std::vector<std::atomic<uint64_t>>& threadAborted) {
+    for (uint64_t i = 0; i < runForSeconds; i += reportPeriod) {
+      sleep(reportPeriod);
+      auto committed = 0;
+      auto aborted = 0;
+      for (auto& c : threadCommitted) {
+        committed += c.exchange(0);
+      }
+      for (auto& a : threadAborted) {
+        aborted += a.exchange(0);
+      }
+      printTps(numThreads, i, committed, aborted, reportPeriod);
+    }
+  }
+
+private:
+  void printTps(uint64_t numThreads, uint64_t timeElaspedSec,
+                uint64_t committed, uint64_t aborted, uint64_t reportPeriod) {
+    auto abortRate = (aborted)*1.0 / (committed + aborted);
+    auto summary = std::format("[{} thds] [{}s] [tps={:.2f}] [committed={}] "
+                               "[conflicted={}] [conflict rate={:.2f}]",
+                               numThreads, timeElaspedSec,
+                               (committed + aborted) * 1.0 / reportPeriod,
+                               committed, aborted, abortRate);
+    std::cout << summary << std::endl;
+  }
 };
 
 // Generate workload spec from workload type

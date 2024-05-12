@@ -8,6 +8,7 @@
 #include "leanstore/StoreOption.hpp"
 #include "utils/Defer.hpp"
 #include "utils/JsonUtil.hpp"
+#include "utils/JumpMU.hpp"
 #include "utils/Log.hpp"
 #include "utils/RandomGenerator.hpp"
 #include "utils/ScrambledZipfGenerator.hpp"
@@ -51,43 +52,51 @@ public:
     }
 
     mStore = std::move(res.value());
-
-    if (!createFromScratch) {
-      mStore->ExecSync(0, [&]() {
-        cr::Worker::My().StartTx();
-        SCOPED_DEFER(cr::Worker::My().CommitTx());
-        rapidjson::Document doc(rapidjson::kObjectType);
-        auto* table = GetTable();
-        if (mBenchTransactionKv) {
-          storage::btree::BTreeGeneric::ToJson(
-              *reinterpret_cast<storage::btree::TransactionKV*>(table), &doc);
-        } else {
-          storage::btree::BTreeGeneric::ToJson(
-              *reinterpret_cast<storage::btree::BasicKV*>(table), &doc);
-        }
-        Log::Info("BTree under disk: {}", utils::JsonToStr(&doc));
-      });
-    }
+    // if (!createFromScratch) {
+    //   mStore->ExecSync(0, [&]() {
+    //     cr::Worker::My().StartTx();
+    //     SCOPED_DEFER(cr::Worker::My().CommitTx());
+    //     rapidjson::Document doc(rapidjson::kObjectType);
+    //     auto* table = GetTable();
+    //     if (mBenchTransactionKv) {
+    //       storage::btree::BTreeGeneric::ToJson(
+    //           *reinterpret_cast<storage::btree::TransactionKV*>(table),
+    //           &doc);
+    //     } else {
+    //       storage::btree::BTreeGeneric::ToJson(
+    //           *reinterpret_cast<storage::btree::BasicKV*>(table), &doc);
+    //     }
+    //     Log::Info("BTree under disk: {}", utils::JsonToStr(&doc));
+    //   });
+    // }
   }
 
   ~YcsbLeanStore() override {
     std::cout << "~YcsbLeanStore" << std::endl;
-    mStore->ExecSync(0, [&]() {
-      cr::Worker::My().StartTx();
-      SCOPED_DEFER(cr::Worker::My().CommitTx());
-      rapidjson::Document doc(rapidjson::kObjectType);
-      auto* table = GetTable();
-      if (mBenchTransactionKv) {
-        storage::btree::BTreeGeneric::ToJson(
-            *reinterpret_cast<storage::btree::TransactionKV*>(table), &doc);
-      } else {
-        storage::btree::BTreeGeneric::ToJson(
-            *reinterpret_cast<storage::btree::BasicKV*>(table), &doc);
-      }
-      std::cout << "BTree before shutdown: " << utils::JsonToStr(&doc)
-                << std::endl;
-      Log::Info("BTree before shutdown: {}", utils::JsonToStr(&doc));
-    });
+    // mStore->ExecSync(0, [&]() {
+    //   cr::Worker::My().StartTx();
+    //   SCOPED_DEFER(cr::Worker::My().CommitTx());
+    //   while (true) {
+    //     JUMPMU_TRY() {
+    //       rapidjson::Document doc(rapidjson::kObjectType);
+    //       auto* table = GetTable();
+    //       if (mBenchTransactionKv) {
+    //         storage::btree::BTreeGeneric::ToJson(
+    //             *reinterpret_cast<storage::btree::TransactionKV*>(table),
+    //             &doc);
+    //       } else {
+    //         storage::btree::BTreeGeneric::ToJson(
+    //             *reinterpret_cast<storage::btree::BasicKV*>(table), &doc);
+    //       }
+    //       std::cout << "BTree before shutdown: " << utils::JsonToStr(&doc)
+    //                 << std::endl;
+    //       Log::Info("BTree before shutdown: {}", utils::JsonToStr(&doc));
+    //       JUMPMU_BREAK;
+    //     }
+    //     JUMPMU_CATCH() {
+    //     }
+    //   }
+    // });
 
     mStore.reset(nullptr);
   }
@@ -158,20 +167,23 @@ public:
     for (auto workerId = 0u, begin = 0u; workerId < numWorkers;) {
       auto end = begin + avg + (rem-- > 0 ? 1 : 0);
       mStore->ExecAsync(workerId, [&, begin, end]() {
-        for (uint64_t i = begin; i < end; i++) {
-          // generate key for insert
-          uint8_t key[FLAGS_ycsb_key_size];
-          GenKey(i, key);
+        uint8_t key[FLAGS_ycsb_key_size];
+        uint8_t val[FLAGS_ycsb_val_size];
 
-          // generate value
-          uint8_t val[FLAGS_ycsb_val_size];
+        for (uint64_t i = begin; i < end; i++) {
+          // generate key-value for insert
+          GenKey(i, key);
           utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
 
           if (mBenchTransactionKv) {
             cr::Worker::My().StartTx();
           }
-          table->Insert(Slice(key, FLAGS_ycsb_key_size),
-                        Slice(val, FLAGS_ycsb_val_size));
+          auto opCode = table->Insert(Slice(key, FLAGS_ycsb_key_size),
+                                      Slice(val, FLAGS_ycsb_val_size));
+          if (opCode != OpCode::kOK) {
+            Log::Fatal("Failed to insert, opCode={}",
+                       static_cast<uint8_t>(opCode));
+          }
           if (mBenchTransactionKv) {
             cr::Worker::My().CommitTx();
           }
@@ -279,25 +291,9 @@ public:
       a = 0;
     }
 
-    auto reportPeriod = 1;
-    for (uint64_t i = 0; i < FLAGS_ycsb_run_for_seconds; i += reportPeriod) {
-      sleep(reportPeriod);
-      auto committed = 0;
-      auto aborted = 0;
-      for (auto& c : threadCommitted) {
-        committed += c.exchange(0);
-      }
-      for (auto& a : threadAborted) {
-        aborted += a.exchange(0);
-      }
-      auto abortRate = (aborted)*1.0 / (committed + aborted);
-      auto summary = std::format("[{} thds] [{}s] [tps={:.2f}] [committed={}] "
-                                 "[conflicted={}] [conflict rate={:.2f}]",
-                                 mStore->mStoreOption.mWorkerThreads, i,
-                                 (committed + aborted) * 1.0 / reportPeriod,
-                                 committed, aborted, abortRate);
-      std::cout << summary << std::endl;
-    }
+    printTpsSummary(1, FLAGS_ycsb_run_for_seconds,
+                    mStore->mStoreOption.mWorkerThreads, threadCommitted,
+                    threadAborted);
 
     // Shutdown threads
     keepRunning = false;

@@ -378,9 +378,19 @@ int32_t BTreeNode::compareKeyWithBoundaries(Slice key) {
 Swip& BTreeNode::lookupInner(Slice key) {
   int32_t slotId = lowerBound<false>(key);
   if (slotId == mNumSeps) {
+    if (mRightMostChildSwip.IsEmpty()) {
+      Log::Info("[zz-jason] returns mRightMostChildSwip, slotId={}, "
+                "mRightMostChildSwip.IsEmpty={}",
+                slotId, mRightMostChildSwip.IsEmpty());
+    }
     return mRightMostChildSwip;
   }
-  return *ChildSwip(slotId);
+  auto* childSwip = ChildSwip(slotId);
+  if (childSwip->IsEmpty()) {
+    Log::Info("[zz-jason] returns slotId={}, childSwip.IsEmpty()={}", slotId,
+              childSwip->IsEmpty());
+  }
+  return *childSwip;
 }
 
 /// This = right
