@@ -24,14 +24,14 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId,
   this->mTreeId = btreeId;
   this->mConfig = std::move(config);
 
-  mMetaNodeSwip = &mStore->mBufferManager->AllocNewPage(btreeId);
+  mMetaNodeSwip = &mStore->mBufferManager->AllocNewPageMayJump(btreeId);
   mMetaNodeSwip.AsBufferFrame().mHeader.mKeepInMemory = true;
   LS_DCHECK(
       mMetaNodeSwip.AsBufferFrame().mHeader.mLatch.GetOptimisticVersion() == 0);
 
   auto guardedRoot = GuardedBufferFrame<BTreeNode>(
       mStore->mBufferManager.get(),
-      &mStore->mBufferManager->AllocNewPage(btreeId));
+      &mStore->mBufferManager->AllocNewPageMayJump(btreeId));
   auto xGuardedRoot =
       ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedRoot));
   xGuardedRoot.InitPayload(true);
@@ -151,7 +151,7 @@ void BTreeGeneric::splitRootMayJump(
   LS_DCHECK(mHeight == 1 || !xGuardedOldRoot->mIsLeaf);
 
   // 1. create new left, lock it exclusively, write wal on demand
-  auto* newLeftBf = &bm->AllocNewPage(mTreeId);
+  auto* newLeftBf = &bm->AllocNewPageMayJump(mTreeId);
   auto guardedNewLeft = GuardedBufferFrame<BTreeNode>(bm, newLeftBf);
   auto xGuardedNewLeft =
       ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
@@ -161,7 +161,7 @@ void BTreeGeneric::splitRootMayJump(
   xGuardedNewLeft.InitPayload(xGuardedOldRoot->mIsLeaf);
 
   // 2. create new root, lock it exclusively, write wal on demand
-  auto* newRootBf = &bm->AllocNewPage(mTreeId);
+  auto* newRootBf = &bm->AllocNewPageMayJump(mTreeId);
   auto guardedNewRoot = GuardedBufferFrame<BTreeNode>(bm, newRootBf);
   auto xGuardedNewRoot =
       ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewRoot));
@@ -207,7 +207,7 @@ void BTreeGeneric::splitNonRootMayJump(
   LS_DCHECK(!xGuardedParent->mIsLeaf, "Parent should not be leaf node");
 
   // 1. create new left, lock it exclusively, write wal on demand
-  auto* newLeftBf = &mStore->mBufferManager->AllocNewPage(mTreeId);
+  auto* newLeftBf = &mStore->mBufferManager->AllocNewPageMayJump(mTreeId);
   auto guardedNewLeft =
       GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(), newLeftBf);
   auto xGuardedNewLeft =
@@ -663,8 +663,15 @@ void BTreeGeneric::Deserialize(StringMap map) {
   HybridLatch dummyLatch;
   HybridGuard dummyGuard(&dummyLatch);
   dummyGuard.ToOptimisticSpin();
-  mMetaNodeSwip =
-      mStore->mBufferManager->ResolveSwipMayJump(dummyGuard, mMetaNodeSwip);
+  while (true) {
+    JUMPMU_TRY() {
+      mMetaNodeSwip =
+          mStore->mBufferManager->ResolveSwipMayJump(dummyGuard, mMetaNodeSwip);
+      JUMPMU_BREAK;
+    }
+    JUMPMU_CATCH() {
+    }
+  }
   mMetaNodeSwip.AsBufferFrame().mHeader.mKeepInMemory = true;
   LS_DCHECK(mMetaNodeSwip.AsBufferFrame().mPage.mBTreeId == mTreeId,
             "MetaNode has wrong BTreeId, pageId={}, expected={}, actual={}",

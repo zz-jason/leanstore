@@ -87,11 +87,9 @@ public:
   /// Randomly pick a buffer frame.
   BufferFrame& RandomBufferFrame();
 
-  /// Get a buffer frame from a random partition for new page.
-  ///
-  /// NOTE: The buffer frame is initialized with an unused page ID, and is
-  /// exclusively locked.
-  BufferFrame& AllocNewPage(TREEID treeId);
+  /// Get a buffer frame from a random partition for the new page. The buffer
+  /// frame is initialized with an unused page ID, and is exclusively locked.
+  BufferFrame& AllocNewPageMayJump(TREEID treeId);
 
   BufferFrame* ResolveSwipMayJump(HybridGuard& nodeGuard, Swip& swipInNode);
 
@@ -155,8 +153,6 @@ private:
     }
     return {};
   }
-
-  BufferFrame& allocNewPageMayJump(TREEID treeId);
 
   friend class leanstore::LeanStore;
   friend class leanstore::profiling::BMTable;

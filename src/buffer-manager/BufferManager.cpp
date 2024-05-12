@@ -209,18 +209,7 @@ BufferFrame& BufferManager::RandomBufferFrame() {
   return *reinterpret_cast<BufferFrame*>(bfAddr);
 }
 
-BufferFrame& BufferManager::AllocNewPage(TREEID treeId) {
-  while (true) {
-    JUMPMU_TRY() {
-      auto& freeBf = allocNewPageMayJump(treeId);
-      JUMPMU_RETURN freeBf;
-    }
-    JUMPMU_CATCH() {
-    }
-  }
-}
-
-BufferFrame& BufferManager::allocNewPageMayJump(TREEID treeId) {
+BufferFrame& BufferManager::AllocNewPageMayJump(TREEID treeId) {
   Partition& partition = RandomPartition();
   BufferFrame& freeBf = partition.mFreeBfList.PopFrontMayJump();
   memset((void*)&freeBf, 0, mStore->mStoreOption.mBufferFrameSize);
@@ -457,8 +446,14 @@ BufferFrame& BufferManager::ReadPageSync(PID pageId) {
   Swip swip;
   swip.Evict(pageId);
 
-  swip = ResolveSwipMayJump(dummyParentGuard, swip);
-  return swip.AsBufferFrame();
+  while (true) {
+    JUMPMU_TRY() {
+      swip = ResolveSwipMayJump(dummyParentGuard, swip);
+      JUMPMU_RETURN swip.AsBufferFrame();
+    }
+    JUMPMU_CATCH() {
+    }
+  }
 }
 
 Result<void> BufferManager::WritePageSync(BufferFrame& bf) {
