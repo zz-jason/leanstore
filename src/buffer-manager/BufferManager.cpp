@@ -1,6 +1,5 @@
 #include "buffer-manager/BufferManager.hpp"
 
-#include "buffer-manager/AsyncWriteBuffer.hpp"
 #include "buffer-manager/BufferFrame.hpp"
 #include "concurrency/CRManager.hpp"
 #include "concurrency/GroupCommitter.hpp"
@@ -14,6 +13,7 @@
 #include "utils/AsyncIo.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Error.hpp"
+#include "utils/JumpMU.hpp"
 #include "utils/Log.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -210,6 +210,17 @@ BufferFrame& BufferManager::RandomBufferFrame() {
 }
 
 BufferFrame& BufferManager::AllocNewPage(TREEID treeId) {
+  while (true) {
+    JUMPMU_TRY() {
+      auto& freeBf = allocNewPageMayJump(treeId);
+      JUMPMU_RETURN freeBf;
+    }
+    JUMPMU_CATCH() {
+    }
+  }
+}
+
+BufferFrame& BufferManager::allocNewPageMayJump(TREEID treeId) {
   Partition& partition = RandomPartition();
   BufferFrame& freeBf = partition.mFreeBfList.PopFrontMayJump();
   memset((void*)&freeBf, 0, mStore->mStoreOption.mBufferFrameSize);
@@ -446,14 +457,8 @@ BufferFrame& BufferManager::ReadPageSync(PID pageId) {
   Swip swip;
   swip.Evict(pageId);
 
-  while (true) {
-    JUMPMU_TRY() {
-      swip = ResolveSwipMayJump(dummyParentGuard, swip);
-      JUMPMU_RETURN swip.AsBufferFrame();
-    }
-    JUMPMU_CATCH() {
-    }
-  }
+  swip = ResolveSwipMayJump(dummyParentGuard, swip);
+  return swip.AsBufferFrame();
 }
 
 Result<void> BufferManager::WritePageSync(BufferFrame& bf) {

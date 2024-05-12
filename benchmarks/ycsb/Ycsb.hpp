@@ -16,7 +16,7 @@ DECLARE_string(ycsb_target);
 DECLARE_string(ycsb_cmd);
 DECLARE_string(ycsb_workload);
 DECLARE_uint32(ycsb_threads);
-DECLARE_uint64(ycsb_mem_gb);
+DECLARE_uint64(ycsb_mem_kb);
 DECLARE_uint64(ycsb_run_for_seconds);
 
 // For the data preparation

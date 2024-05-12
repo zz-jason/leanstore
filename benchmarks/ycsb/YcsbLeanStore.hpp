@@ -1,4 +1,5 @@
 #include "Ycsb.hpp"
+#include "btree/BasicKV.hpp"
 #include "btree/TransactionKV.hpp"
 #include "concurrency/CRManager.hpp"
 #include "concurrency/Worker.hpp"
@@ -6,6 +7,7 @@
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/StoreOption.hpp"
 #include "utils/Defer.hpp"
+#include "utils/JsonUtil.hpp"
 #include "utils/Log.hpp"
 #include "utils/RandomGenerator.hpp"
 #include "utils/ScrambledZipfGenerator.hpp"
@@ -38,7 +40,7 @@ public:
         .mCreateFromScratch = createFromScratch,
         .mStoreDir = FLAGS_ycsb_data_dir + "/leanstore/" + FLAGS_ycsb_workload,
         .mWorkerThreads = FLAGS_ycsb_threads,
-        .mBufferPoolSize = FLAGS_ycsb_mem_gb * 1024 * 1024 * 1024,
+        .mBufferPoolSize = FLAGS_ycsb_mem_kb * 1024,
         .mEnableMetrics = true,
         .mMetricsPort = 8080,
     });
@@ -49,9 +51,44 @@ public:
     }
 
     mStore = std::move(res.value());
+
+    if (!createFromScratch) {
+      mStore->ExecSync(0, [&]() {
+        cr::Worker::My().StartTx();
+        SCOPED_DEFER(cr::Worker::My().CommitTx());
+        rapidjson::Document doc(rapidjson::kObjectType);
+        auto* table = GetTable();
+        if (mBenchTransactionKv) {
+          storage::btree::BTreeGeneric::ToJson(
+              *reinterpret_cast<storage::btree::TransactionKV*>(table), &doc);
+        } else {
+          storage::btree::BTreeGeneric::ToJson(
+              *reinterpret_cast<storage::btree::BasicKV*>(table), &doc);
+        }
+        Log::Info("BTree under disk: {}", utils::JsonToStr(&doc));
+      });
+    }
   }
 
   ~YcsbLeanStore() override {
+    std::cout << "~YcsbLeanStore" << std::endl;
+    mStore->ExecSync(0, [&]() {
+      cr::Worker::My().StartTx();
+      SCOPED_DEFER(cr::Worker::My().CommitTx());
+      rapidjson::Document doc(rapidjson::kObjectType);
+      auto* table = GetTable();
+      if (mBenchTransactionKv) {
+        storage::btree::BTreeGeneric::ToJson(
+            *reinterpret_cast<storage::btree::TransactionKV*>(table), &doc);
+      } else {
+        storage::btree::BTreeGeneric::ToJson(
+            *reinterpret_cast<storage::btree::BasicKV*>(table), &doc);
+      }
+      std::cout << "BTree before shutdown: " << utils::JsonToStr(&doc)
+                << std::endl;
+      Log::Info("BTree before shutdown: {}", utils::JsonToStr(&doc));
+    });
+
     mStore.reset(nullptr);
   }
 

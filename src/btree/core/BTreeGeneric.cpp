@@ -663,22 +663,8 @@ void BTreeGeneric::Deserialize(StringMap map) {
   HybridLatch dummyLatch;
   HybridGuard dummyGuard(&dummyLatch);
   dummyGuard.ToOptimisticSpin();
-
-  uint16_t failcounter = 0;
-  while (true) {
-    JUMPMU_TRY() {
-      mMetaNodeSwip =
-          mStore->mBufferManager->ResolveSwipMayJump(dummyGuard, mMetaNodeSwip);
-      JUMPMU_BREAK;
-    }
-    JUMPMU_CATCH() {
-      failcounter++;
-      if (failcounter % 100 == 0) {
-        Log::Warn("Failed to load MetaNode, retrying, failcounter={}",
-                  failcounter);
-      }
-    }
-  }
+  mMetaNodeSwip =
+      mStore->mBufferManager->ResolveSwipMayJump(dummyGuard, mMetaNodeSwip);
   mMetaNodeSwip.AsBufferFrame().mHeader.mKeepInMemory = true;
   LS_DCHECK(mMetaNodeSwip.AsBufferFrame().mPage.mBTreeId == mTreeId,
             "MetaNode has wrong BTreeId, pageId={}, expected={}, actual={}",

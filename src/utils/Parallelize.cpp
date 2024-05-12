@@ -31,11 +31,13 @@ void Parallelize::ParallelRange(
     std::function<void(uint64_t jobBegin, uint64_t jobEnd)> jobHandler) {
   auto* store = tlsStore;
   std::vector<std::thread> threads;
-  const uint64_t numThread = std::thread::hardware_concurrency();
-  const uint64_t jobsPerThread = numJobs / numThread;
+  uint64_t numThread = std::thread::hardware_concurrency();
+  uint64_t jobsPerThread = numJobs / numThread;
   uint64_t numRemaining = numJobs % numThread;
   uint64_t numProceedTasks = 0;
-  LS_DCHECK(jobsPerThread > 0);
+  if (jobsPerThread < numThread) {
+    numThread = numRemaining;
+  }
 
   // To balance the workload among all threads:
   // - the first numRemaining threads process jobsPerThread+1 tasks

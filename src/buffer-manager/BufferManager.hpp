@@ -156,6 +156,8 @@ private:
     return {};
   }
 
+  BufferFrame& allocNewPageMayJump(TREEID treeId);
+
   friend class leanstore::LeanStore;
   friend class leanstore::profiling::BMTable;
 };
