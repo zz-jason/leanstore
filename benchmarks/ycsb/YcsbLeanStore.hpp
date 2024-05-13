@@ -7,7 +7,6 @@
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/StoreOption.hpp"
 #include "utils/Defer.hpp"
-#include "utils/JsonUtil.hpp"
 #include "utils/JumpMU.hpp"
 #include "utils/Log.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -28,6 +27,8 @@
 
 namespace leanstore::ycsb {
 
+constexpr std::string kTableName = "ycsb_leanstore";
+
 class YcsbLeanStore : public YcsbExecutor {
 private:
   std::unique_ptr<LeanStore> mStore;
@@ -39,7 +40,7 @@ public:
       : mBenchTransactionKv(benchTransactionKv) {
     auto res = LeanStore::Open(StoreOption{
         .mCreateFromScratch = createFromScratch,
-        .mStoreDir = FLAGS_ycsb_data_dir + "/leanstore/" + FLAGS_ycsb_workload,
+        .mStoreDir = FLAGS_ycsb_data_dir + "/leanstore",
         .mWorkerThreads = FLAGS_ycsb_threads,
         .mBufferPoolSize = FLAGS_ycsb_mem_kb * 1024,
         .mEnableMetrics = true,
@@ -52,64 +53,21 @@ public:
     }
 
     mStore = std::move(res.value());
-    // if (!createFromScratch) {
-    //   mStore->ExecSync(0, [&]() {
-    //     cr::Worker::My().StartTx();
-    //     SCOPED_DEFER(cr::Worker::My().CommitTx());
-    //     rapidjson::Document doc(rapidjson::kObjectType);
-    //     auto* table = GetTable();
-    //     if (mBenchTransactionKv) {
-    //       storage::btree::BTreeGeneric::ToJson(
-    //           *reinterpret_cast<storage::btree::TransactionKV*>(table),
-    //           &doc);
-    //     } else {
-    //       storage::btree::BTreeGeneric::ToJson(
-    //           *reinterpret_cast<storage::btree::BasicKV*>(table), &doc);
-    //     }
-    //     Log::Info("BTree under disk: {}", utils::JsonToStr(&doc));
-    //   });
-    // }
   }
 
   ~YcsbLeanStore() override {
     std::cout << "~YcsbLeanStore" << std::endl;
-    // mStore->ExecSync(0, [&]() {
-    //   cr::Worker::My().StartTx();
-    //   SCOPED_DEFER(cr::Worker::My().CommitTx());
-    //   while (true) {
-    //     JUMPMU_TRY() {
-    //       rapidjson::Document doc(rapidjson::kObjectType);
-    //       auto* table = GetTable();
-    //       if (mBenchTransactionKv) {
-    //         storage::btree::BTreeGeneric::ToJson(
-    //             *reinterpret_cast<storage::btree::TransactionKV*>(table),
-    //             &doc);
-    //       } else {
-    //         storage::btree::BTreeGeneric::ToJson(
-    //             *reinterpret_cast<storage::btree::BasicKV*>(table), &doc);
-    //       }
-    //       std::cout << "BTree before shutdown: " << utils::JsonToStr(&doc)
-    //                 << std::endl;
-    //       Log::Info("BTree before shutdown: {}", utils::JsonToStr(&doc));
-    //       JUMPMU_BREAK;
-    //     }
-    //     JUMPMU_CATCH() {
-    //     }
-    //   }
-    // });
-
     mStore.reset(nullptr);
   }
 
   KVInterface* CreateTable() {
-    auto tableName = "ycsb_" + FLAGS_ycsb_workload;
     // create table with transaction kv
     if (mBenchTransactionKv) {
       btree::TransactionKV* table;
       mStore->ExecSync(0, [&]() {
-        auto res = mStore->CreateTransactionKV(tableName);
+        auto res = mStore->CreateTransactionKV(kTableName);
         if (!res) {
-          Log::Fatal("Failed to create table: name={}, error={}", tableName,
+          Log::Fatal("Failed to create table: name={}, error={}", kTableName,
                      res.error().ToString());
         }
         table = res.value();
@@ -120,9 +78,9 @@ public:
     // create table with basic kv
     btree::BasicKV* table;
     mStore->ExecSync(0, [&]() {
-      auto res = mStore->CreateBasicKV(tableName);
+      auto res = mStore->CreateBasicKV(kTableName);
       if (!res) {
-        Log::Fatal("Failed to create table: name={}, error={}", tableName,
+        Log::Fatal("Failed to create table: name={}, error={}", kTableName,
                    res.error().ToString());
       }
       table = res.value();
@@ -131,14 +89,13 @@ public:
   }
 
   KVInterface* GetTable() {
-    auto tableName = "ycsb_" + FLAGS_ycsb_workload;
     if (mBenchTransactionKv) {
       btree::TransactionKV* table;
-      mStore->GetTransactionKV(tableName, &table);
+      mStore->GetTransactionKV(kTableName, &table);
       return table;
     }
     btree::BasicKV* table;
-    mStore->GetBasicKV(tableName, &table);
+    mStore->GetBasicKV(kTableName, &table);
     return table;
   }
 

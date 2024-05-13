@@ -69,7 +69,7 @@ LeanStore::LeanStore(StoreOption option)
 
   // create global buffer manager and buffer frame providers
   mBufferManager = std::make_unique<storage::BufferManager>(this);
-  mBufferManager->StartBufferFrameProviders();
+  mBufferManager->StartPageEvictors();
 
   // create global transaction worker and group committer
   //
@@ -140,8 +140,9 @@ LeanStore::~LeanStore() {
     auto treeId = it.first;
     auto& [treePtr, treeName] = it.second;
     auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(treePtr.get());
-    Log::Info("[TransactionKV] name={}, btreeId={}, height={}", treeName,
-              treeId, btree->mHeight.load());
+    Log::Info("btreeName={}, btreeId={}, btreeType={}, btreeHeight={}",
+              treeName, treeId, static_cast<uint8_t>(btree->mTreeType),
+              btree->mHeight.load());
   }
 
   // Stop transaction workers and group committer

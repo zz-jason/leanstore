@@ -1,8 +1,9 @@
 #pragma once
 
-#include "BTreeNode.hpp"
+#include "btree/core/BTreeNode.hpp"
 #include "buffer-manager/BufferManager.hpp"
 #include "buffer-manager/GuardedBufferFrame.hpp"
+#include "buffer-manager/TreeRegistry.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
@@ -10,7 +11,6 @@
 #include "utils/Log.hpp"
 
 #include <atomic>
-#include <cstddef>
 #include <limits>
 
 using namespace leanstore::storage;

@@ -1,6 +1,7 @@
 #include "buffer-manager/BufferManager.hpp"
 
 #include "buffer-manager/BufferFrame.hpp"
+#include "buffer-manager/TreeRegistry.hpp"
 #include "concurrency/CRManager.hpp"
 #include "concurrency/GroupCommitter.hpp"
 #include "concurrency/Recovery.hpp"
@@ -17,7 +18,6 @@
 #include "utils/Error.hpp"
 #include "utils/JumpMU.hpp"
 #include "utils/Log.hpp"
-#include "utils/Misc.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
 #include "utils/UserThread.hpp"
@@ -61,13 +61,15 @@ BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
   // Initialize mPartitions
   mNumPartitions = mStore->mStoreOption.mNumPartitions;
   mPartitionsMask = mNumPartitions - 1;
-  const uint64_t freeBfsLimitPerPartition =
-      std::ceil((mStore->mStoreOption.mFreePct * 1.0 * mNumBfs / 100.0) /
-                static_cast<double>(mNumPartitions));
+  const uint64_t freeBfsLimitPerPartition = std::ceil(
+      (mStore->mStoreOption.mFreePct * 1.0 * mNumBfs / 100.0) / mNumPartitions);
   for (uint64_t i = 0; i < mNumPartitions; i++) {
     mPartitions.push_back(std::make_unique<Partition>(
         i, mNumPartitions, freeBfsLimitPerPartition));
   }
+  Log::Info(
+      "Init buffer manager, IO partitions={}, freeBfsLimitPerPartition={}",
+      mNumPartitions, freeBfsLimitPerPartition);
 
   // spread these buffer frames to all the partitions
   utils::Parallelize::ParallelRange(mNumBfs, [&](uint64_t begin, uint64_t end) {
@@ -81,7 +83,7 @@ BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
   });
 }
 
-void BufferManager::StartBufferFrameProviders() {
+void BufferManager::StartPageEvictors() {
   auto numBufferProviders = mStore->mStoreOption.mNumBufferProviders;
   // make it optional for pure in-memory experiments
   if (numBufferProviders <= 0) {
@@ -89,22 +91,22 @@ void BufferManager::StartBufferFrameProviders() {
   }
 
   LS_DCHECK(numBufferProviders <= mNumPartitions);
-  mBfProviders.reserve(numBufferProviders);
+  mPageEvictors.reserve(numBufferProviders);
   for (auto i = 0u; i < numBufferProviders; ++i) {
-    std::string threadName = "BuffProvider";
+    std::string threadName = "PageEvictor";
     if (numBufferProviders > 1) {
       threadName += std::to_string(i);
     }
 
     auto runningCPU = mStore->mStoreOption.mWorkerThreads +
                       mStore->mStoreOption.mEnableWal + i;
-    mBfProviders.push_back(std::make_unique<BufferFrameProvider>(
+    mPageEvictors.push_back(std::make_unique<PageEvictor>(
         mStore, threadName, runningCPU, mNumBfs, mBufferPool, mNumPartitions,
         mPartitionsMask, mPartitions));
   }
 
-  for (auto i = 0u; i < mBfProviders.size(); ++i) {
-    mBfProviders[i]->Start();
+  for (auto i = 0u; i < mPageEvictors.size(); ++i) {
+    mPageEvictors[i]->Start();
   }
 }
 
@@ -140,7 +142,7 @@ void BufferManager::CheckpointAllBufferFrames() {
     return;
   });
 
-  StopBufferFrameProviders();
+  StopPageEvictors();
 
   utils::Parallelize::ParallelRange(mNumBfs, [&](uint64_t begin, uint64_t end) {
     const auto bufferFrameSize = mStore->mStoreOption.mBufferFrameSize;
@@ -320,8 +322,8 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard,
 
     // 3. Read page at pageId to the target buffer frame
     ReadPageSync(pageId, &bf.mPage);
-    Log::Info("Read page from disk, pageId={}, btreeId={}", pageId,
-              bf.mPage.mBTreeId);
+    LS_DLOG("Read page from disk, pageId={}, btreeId={}", pageId,
+            bf.mPage.mBTreeId);
     COUNTERS_BLOCK() {
       WorkerCounters::MyCounters().dt_page_reads[bf.mPage.mBTreeId]++;
     }
@@ -500,12 +502,12 @@ Partition& BufferManager::GetPartition(PID pageId) {
   return *mPartitions[partitionId];
 }
 
-void BufferManager::StopBufferFrameProviders() {
-  mBfProviders.clear();
+void BufferManager::StopPageEvictors() {
+  mPageEvictors.clear();
 }
 
 BufferManager::~BufferManager() {
-  StopBufferFrameProviders();
+  StopPageEvictors();
   uint64_t totalMemSize =
       mStore->mStoreOption.mBufferFrameSize * (mNumBfs + mNumSaftyBfs);
   munmap(mBufferPool, totalMemSize);

@@ -29,6 +29,9 @@ void Log::Init(const StoreOption& option) {
   // set log pattern
   logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
 
+  // set flush strategy
+  logger->flush_on(spdlog::level::info);
+
   // set log level
   switch (option.mLogLevel) {
   case LogLevel::kDebug: {

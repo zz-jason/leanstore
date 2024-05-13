@@ -1,5 +1,6 @@
 #include "DTTable.hpp"
 
+#include "buffer-manager/TreeRegistry.hpp"
 #include "profiling/counters/WorkerCounters.hpp"
 
 namespace leanstore {
