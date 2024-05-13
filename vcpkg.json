@@ -8,7 +8,6 @@
     },
     "gtest",
     "rapidjson",
-    "rocksdb",
     "gperftools",
     "tabulate",
     {

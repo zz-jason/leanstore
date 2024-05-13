@@ -81,7 +81,7 @@ LeanStore::LeanStore(StoreOption option)
   // recover from disk
   if (!mStoreOption.mCreateFromScratch) {
     deserializeMeta();
-    // mBufferManager->RecoverFromDisk();
+    mBufferManager->RecoverFromDisk();
   }
 }
 
