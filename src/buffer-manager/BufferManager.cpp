@@ -149,7 +149,8 @@ void BufferManager::CheckpointAllBufferFrames() {
     const auto pageSize = mStore->mStoreOption.mPageSize;
 
     // the underlying batch for aio
-    const auto batchCapacity = mStore->mStoreOption.mBufferWriteBatchSize;
+    // const auto batchCapacity = mStore->mStoreOption.mBufferWriteBatchSize;
+    const auto batchCapacity = 1;
     alignas(512) uint8_t buffer[pageSize * batchCapacity];
     auto batchSize = 0u;
 
