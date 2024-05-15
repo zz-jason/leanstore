@@ -122,7 +122,7 @@ public:
   [[nodiscard]] Result<void> CheckpointBufferFrame(BufferFrame& bf);
 
   /// Checkpoints all the buffer frames.
-  void CheckpointAllBufferFrames();
+  [[nodiscard]] Result<void> CheckpointAllBufferFrames();
 
   void RecoverFromDisk();
 

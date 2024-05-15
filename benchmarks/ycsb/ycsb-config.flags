@@ -2,7 +2,7 @@
 --ycsb_key_size=16
 --ycsb_val_size=200
 # --ycsb_record_count=300000000
---ycsb_record_count=3000000
+--ycsb_record_count=30000000
 --ycsb_workload=c
 --ycsb_threads=24
 --ycsb_mem_kb=1048576

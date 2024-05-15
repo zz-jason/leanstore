@@ -129,7 +129,7 @@ void BufferManager::Deserialize(StringMap map) {
   }
 }
 
-void BufferManager::CheckpointAllBufferFrames() {
+Result<void> BufferManager::CheckpointAllBufferFrames() {
   telemetry::MetricOnlyTimer timer;
   Log::Info("CheckpointAllBufferFrames, mNumBfs={}", mNumBfs);
   SCOPED_DEFER(COUNTERS_BLOCK() {
@@ -139,7 +139,7 @@ void BufferManager::CheckpointAllBufferFrames() {
 
   LS_DEBUG_EXECUTE(mStore, "skip_CheckpointAllBufferFrames", {
     Log::Error("CheckpointAllBufferFrames skipped due to debug flag");
-    return;
+    return std::unexpected(utils::Error::General("skipped due to debug flag"));
   });
 
   StopPageEvictors();
@@ -149,8 +149,8 @@ void BufferManager::CheckpointAllBufferFrames() {
     const auto pageSize = mStore->mStoreOption.mPageSize;
 
     // the underlying batch for aio
-    // const auto batchCapacity = mStore->mStoreOption.mBufferWriteBatchSize;
-    const auto batchCapacity = 1;
+    const auto batchCapacity = mStore->mStoreOption.mBufferWriteBatchSize;
+    // const auto batchCapacity = 1;
     alignas(512) uint8_t buffer[pageSize * batchCapacity];
     auto batchSize = 0u;
 
@@ -184,6 +184,8 @@ void BufferManager::CheckpointAllBufferFrames() {
       batchSize = 0;
     }
   });
+
+  return {};
 }
 
 Result<void> BufferManager::CheckpointBufferFrame(BufferFrame& bf) {

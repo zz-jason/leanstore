@@ -9,6 +9,7 @@
     "gtest",
     "rapidjson",
     "gperftools",
+    "rocksdb",
     "tabulate",
     {
       "name": "prometheus-cpp",

@@ -82,8 +82,14 @@ LeanStore::LeanStore(StoreOption option)
 
   // recover from disk
   if (!mStoreOption.mCreateFromScratch) {
-    deserializeMeta();
-    mBufferManager->RecoverFromDisk();
+    auto allPagesUpToDate = deserializeMeta();
+    if (!allPagesUpToDate) {
+      Log::Info("Not all pages up-to-date, recover from disk");
+      mBufferManager->RecoverFromDisk();
+    } else {
+      Log::Info("All pages up-to-date, skip resovering");
+      // TODO: truncate wal files
+    }
   }
 }
 
@@ -159,8 +165,12 @@ LeanStore::~LeanStore() {
   mCRManager->Stop();
 
   // persist all the metadata and pages before exit
-  serializeMeta();
-  mBufferManager->CheckpointAllBufferFrames();
+  bool allPagesUpToDate = true;
+  if (auto res = mBufferManager->CheckpointAllBufferFrames(); !res) {
+    allPagesUpToDate = false;
+  }
+  serializeMeta(allPagesUpToDate);
+
   mBufferManager->SyncAllPageWrites();
 
   // destroy and Stop all foreground workers
@@ -218,7 +228,7 @@ constexpr char kMetaKeyBufferManager[] = "buffer_manager";
 constexpr char kMetaKeyBTrees[] = "btrees";
 constexpr char kMetaKeyFlags[] = "flags";
 
-void LeanStore::serializeMeta() {
+void LeanStore::serializeMeta(bool allPagesUpToDate) {
   Log::Info("serializeMeta started");
   SCOPED_DEFER(Log::Info("serializeMeta ended"));
 
@@ -293,6 +303,12 @@ void LeanStore::serializeMeta() {
     doc.AddMember(kMetaKeyBTrees, btreeJsonArray, allocator);
   }
 
+  // pages_up_to_date
+  {
+    rapidjson::Value updateToDate(allPagesUpToDate);
+    doc.AddMember("pages_up_to_date", allPagesUpToDate, doc.GetAllocator());
+  }
+
   // flags
   serializeFlags(doc);
 
@@ -312,7 +328,7 @@ void LeanStore::serializeFlags(rapidjson::Document& doc) {
   doc.AddMember(kMetaKeyFlags, flagsJsonObj, allocator);
 }
 
-void LeanStore::deserializeMeta() {
+bool LeanStore::deserializeMeta() {
   Log::Info("deserializeMeta started");
   SCOPED_DEFER(Log::Info("deserializeMeta ended"));
 
@@ -341,6 +357,12 @@ void LeanStore::deserializeMeta() {
     }
     mBufferManager->Deserialize(bmMetaMap);
   }
+
+  // pages_up_to_date
+  // rapidjson::Value updateToDate(allPagesUpToDate);
+  // doc.AddMember("pages_up_to_date", allPagesUpToDate, doc.GetAllocator());
+  auto& updateToDate = doc["pages_up_to_date"];
+  auto allPagesUpToDate = updateToDate.GetBool();
 
   auto& btreeJsonArray = doc[kMetaKeyBTrees];
   LS_DCHECK(btreeJsonArray.IsArray());
@@ -393,6 +415,8 @@ void LeanStore::deserializeMeta() {
     }
     mTreeRegistry->Deserialize(btreeId, btreeMetaMap);
   }
+
+  return allPagesUpToDate;
 }
 
 void LeanStore::deserializeFlags() {
