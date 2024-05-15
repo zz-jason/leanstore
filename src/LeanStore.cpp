@@ -16,9 +16,11 @@
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
 #include <rapidjson/prettywriter.h>
+#include <rapidjson/rapidjson.h>
 #include <rapidjson/stringbuffer.h>
 #include <tabulate/table.hpp>
 
+#include <cstdint>
 #include <expected>
 #include <filesystem>
 #include <format>
@@ -211,10 +213,10 @@ void LeanStore::WaitAll() {
   }
 }
 
-#define META_KEY_CR_MANAGER "cr_manager"
-#define META_KEY_BUFFER_MANAGER "buffer_manager"
-#define META_KEY_REGISTERED_DATASTRUCTURES "registered_datastructures"
-#define META_KEY_FLAGS "flags"
+constexpr char kMetaKeyCrManager[] = "cr_manager";
+constexpr char kMetaKeyBufferManager[] = "buffer_manager";
+constexpr char kMetaKeyBTrees[] = "btrees";
+constexpr char kMetaKeyFlags[] = "flags";
 
 void LeanStore::serializeMeta() {
   Log::Info("serializeMeta started");
@@ -238,7 +240,7 @@ void LeanStore::serializeMeta() {
       v.SetString(val.data(), val.size(), allocator);
       crJsonObj.AddMember(k, v, allocator);
     }
-    doc.AddMember(META_KEY_CR_MANAGER, crJsonObj, allocator);
+    doc.AddMember(kMetaKeyCrManager, crJsonObj, allocator);
   }
 
   // buffer_manager
@@ -251,7 +253,7 @@ void LeanStore::serializeMeta() {
       v.SetString(val.data(), val.size(), allocator);
       bmJsonObj.AddMember(k, v, allocator);
     }
-    doc.AddMember(META_KEY_BUFFER_MANAGER, bmJsonObj, allocator);
+    doc.AddMember(kMetaKeyBufferManager, bmJsonObj, allocator);
   }
 
   // registered_datastructures, i.e. btrees
@@ -288,8 +290,7 @@ void LeanStore::serializeMeta() {
 
       btreeJsonArray.PushBack(btreeJsonObj, allocator);
     }
-    doc.AddMember(META_KEY_REGISTERED_DATASTRUCTURES, btreeJsonArray,
-                  allocator);
+    doc.AddMember(kMetaKeyBTrees, btreeJsonArray, allocator);
   }
 
   // flags
@@ -308,7 +309,7 @@ void LeanStore::serializeFlags(rapidjson::Document& doc) {
   rapidjson::Value flagsJsonObj(rapidjson::kObjectType);
   auto& allocator = doc.GetAllocator();
 
-  doc.AddMember(META_KEY_FLAGS, flagsJsonObj, allocator);
+  doc.AddMember(kMetaKeyFlags, flagsJsonObj, allocator);
 }
 
 void LeanStore::deserializeMeta() {
@@ -323,7 +324,7 @@ void LeanStore::deserializeMeta() {
 
   // Deserialize concurrent resource manager
   {
-    auto& crJsonObj = doc[META_KEY_CR_MANAGER];
+    auto& crJsonObj = doc[kMetaKeyCrManager];
     StringMap crMetaMap;
     for (auto it = crJsonObj.MemberBegin(); it != crJsonObj.MemberEnd(); ++it) {
       crMetaMap[it->name.GetString()] = it->value.GetString();
@@ -333,7 +334,7 @@ void LeanStore::deserializeMeta() {
 
   // Deserialize buffer manager
   {
-    auto& bmJsonObj = doc[META_KEY_BUFFER_MANAGER];
+    auto& bmJsonObj = doc[kMetaKeyBufferManager];
     StringMap bmMetaMap;
     for (auto it = bmJsonObj.MemberBegin(); it != bmJsonObj.MemberEnd(); ++it) {
       bmMetaMap[it->name.GetString()] = it->value.GetString();
@@ -341,7 +342,7 @@ void LeanStore::deserializeMeta() {
     mBufferManager->Deserialize(bmMetaMap);
   }
 
-  auto& btreeJsonArray = doc[META_KEY_REGISTERED_DATASTRUCTURES];
+  auto& btreeJsonArray = doc[kMetaKeyBTrees];
   LS_DCHECK(btreeJsonArray.IsArray());
   for (auto& btreeJsonObj : btreeJsonArray.GetArray()) {
     LS_DCHECK(btreeJsonObj.IsObject());
@@ -404,7 +405,7 @@ void LeanStore::deserializeFlags() {
   rapidjson::Document doc;
   doc.ParseStream(isw);
 
-  const rapidjson::Value& flagsJsonObj = doc[META_KEY_FLAGS];
+  const rapidjson::Value& flagsJsonObj = doc[kMetaKeyFlags];
   StringMap serializedFlags;
   for (auto it = flagsJsonObj.MemberBegin(); it != flagsJsonObj.MemberEnd();
        ++it) {

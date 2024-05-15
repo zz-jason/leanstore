@@ -20,7 +20,7 @@ using namespace leanstore::storage;
 using namespace leanstore::utils;
 using namespace leanstore::storage::btree;
 
-inline bool Recovery::Run() {
+bool Recovery::Run() {
   bool error(false);
 
   analysis();

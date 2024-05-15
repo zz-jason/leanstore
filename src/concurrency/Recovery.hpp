@@ -5,11 +5,8 @@
 #include "concurrency/WalEntry.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
-#include "utils/Error.hpp"
-#include "utils/Log.hpp"
 #include "utils/Result.hpp"
 
-#include <cerrno>
 #include <cstring>
 #include <expected>
 #include <map>
