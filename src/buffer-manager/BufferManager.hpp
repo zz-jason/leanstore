@@ -1,7 +1,7 @@
 #pragma once
 
 #include "buffer-manager/BufferFrame.hpp"
-#include "buffer-manager/BufferFrameProvider.hpp"
+#include "buffer-manager/PageEvictor.hpp"
 #include "buffer-manager/Partition.hpp"
 #include "buffer-manager/Swip.hpp"
 #include "leanstore/Exceptions.hpp"
@@ -69,7 +69,7 @@ public:
   std::vector<std::unique_ptr<Partition>> mPartitions;
 
   /// All the buffer frame provider threads.
-  std::vector<std::unique_ptr<BufferFrameProvider>> mBfProviders;
+  std::vector<std::unique_ptr<PageEvictor>> mPageEvictors;
 
   BufferManager(leanstore::LeanStore* store);
 
@@ -87,11 +87,9 @@ public:
   /// Randomly pick a buffer frame.
   BufferFrame& RandomBufferFrame();
 
-  /// Get a buffer frame from a random partition for new page.
-  ///
-  /// NOTE: The buffer frame is initialized with an unused page ID, and is
-  /// exclusively locked.
-  BufferFrame& AllocNewPage(TREEID treeId);
+  /// Get a buffer frame from a random partition for the new page. The buffer
+  /// frame is initialized with an unused page ID, and is exclusively locked.
+  BufferFrame& AllocNewPageMayJump(TREEID treeId);
 
   BufferFrame* ResolveSwipMayJump(HybridGuard& nodeGuard, Swip& swipInNode);
 
@@ -114,9 +112,9 @@ public:
   /// Sync all the data written to disk, harden all the writes on mPageFd
   void SyncAllPageWrites();
 
-  void StartBufferFrameProviders();
+  void StartPageEvictors();
 
-  void StopBufferFrameProviders();
+  void StopPageEvictors();
 
   /// Checkpoints a buffer frame to disk. The buffer frame content is copied to
   /// a tmp memory buffer, swips in the tmp memory buffer are changed to page
@@ -124,7 +122,7 @@ public:
   [[nodiscard]] Result<void> CheckpointBufferFrame(BufferFrame& bf);
 
   /// Checkpoints all the buffer frames.
-  void CheckpointAllBufferFrames();
+  [[nodiscard]] Result<void> CheckpointAllBufferFrames();
 
   void RecoverFromDisk();
 

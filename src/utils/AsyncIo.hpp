@@ -54,6 +54,13 @@ public:
     return mNumReqs <= 0;
   }
 
+  void PrepareRead(int32_t fd, void* buf, size_t count, uint64_t offset) {
+    LS_DCHECK(!IsFull());
+    auto slot = mNumReqs++;
+    io_prep_pread(&mIocbs[slot], fd, buf, count, offset);
+    mIocbs[slot].data = buf;
+  }
+
   void PrepareWrite(int32_t fd, void* buf, size_t count, uint64_t offset) {
     LS_DCHECK(!IsFull());
     auto slot = mNumReqs++;

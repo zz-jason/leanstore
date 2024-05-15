@@ -1,6 +1,7 @@
 #include "buffer-manager/BufferManager.hpp"
 
 #include "buffer-manager/BufferFrame.hpp"
+#include "buffer-manager/TreeRegistry.hpp"
 #include "concurrency/CRManager.hpp"
 #include "concurrency/GroupCommitter.hpp"
 #include "concurrency/Recovery.hpp"
@@ -10,8 +11,12 @@
 #include "profiling/counters/WorkerCounters.hpp"
 #include "sync/HybridLatch.hpp"
 #include "sync/ScopedHybridGuard.hpp"
+#include "telemetry/MetricOnlyTimer.hpp"
+#include "utils/AsyncIo.hpp"
 #include "utils/DebugFlags.hpp"
+#include "utils/Defer.hpp"
 #include "utils/Error.hpp"
+#include "utils/JumpMU.hpp"
 #include "utils/Log.hpp"
 #include "utils/Parallelize.hpp"
 #include "utils/RandomGenerator.hpp"
@@ -22,8 +27,10 @@
 #include <cstring>
 #include <expected>
 #include <format>
+#include <vector>
 
 #include <fcntl.h>
+#include <linux/perf_event.h>
 #include <sys/resource.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -54,13 +61,15 @@ BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
   // Initialize mPartitions
   mNumPartitions = mStore->mStoreOption.mNumPartitions;
   mPartitionsMask = mNumPartitions - 1;
-  const uint64_t freeBfsLimitPerPartition =
-      std::ceil((mStore->mStoreOption.mFreePct * 1.0 * mNumBfs / 100.0) /
-                static_cast<double>(mNumPartitions));
+  const uint64_t freeBfsLimitPerPartition = std::ceil(
+      (mStore->mStoreOption.mFreePct * 1.0 * mNumBfs / 100.0) / mNumPartitions);
   for (uint64_t i = 0; i < mNumPartitions; i++) {
     mPartitions.push_back(std::make_unique<Partition>(
         i, mNumPartitions, freeBfsLimitPerPartition));
   }
+  Log::Info(
+      "Init buffer manager, IO partitions={}, freeBfsLimitPerPartition={}",
+      mNumPartitions, freeBfsLimitPerPartition);
 
   // spread these buffer frames to all the partitions
   utils::Parallelize::ParallelRange(mNumBfs, [&](uint64_t begin, uint64_t end) {
@@ -74,7 +83,7 @@ BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
   });
 }
 
-void BufferManager::StartBufferFrameProviders() {
+void BufferManager::StartPageEvictors() {
   auto numBufferProviders = mStore->mStoreOption.mNumBufferProviders;
   // make it optional for pure in-memory experiments
   if (numBufferProviders <= 0) {
@@ -82,22 +91,22 @@ void BufferManager::StartBufferFrameProviders() {
   }
 
   LS_DCHECK(numBufferProviders <= mNumPartitions);
-  mBfProviders.reserve(numBufferProviders);
+  mPageEvictors.reserve(numBufferProviders);
   for (auto i = 0u; i < numBufferProviders; ++i) {
-    std::string threadName = "BuffProvider";
+    std::string threadName = "PageEvictor";
     if (numBufferProviders > 1) {
       threadName += std::to_string(i);
     }
 
     auto runningCPU = mStore->mStoreOption.mWorkerThreads +
                       mStore->mStoreOption.mEnableWal + i;
-    mBfProviders.push_back(std::make_unique<BufferFrameProvider>(
+    mPageEvictors.push_back(std::make_unique<PageEvictor>(
         mStore, threadName, runningCPU, mNumBfs, mBufferPool, mNumPartitions,
         mPartitionsMask, mPartitions));
   }
 
-  for (auto i = 0u; i < mBfProviders.size(); ++i) {
-    mBfProviders[i]->Start();
+  for (auto i = 0u; i < mPageEvictors.size(); ++i) {
+    mPageEvictors[i]->Start();
   }
 }
 
@@ -120,33 +129,63 @@ void BufferManager::Deserialize(StringMap map) {
   }
 }
 
-void BufferManager::CheckpointAllBufferFrames() {
+Result<void> BufferManager::CheckpointAllBufferFrames() {
+  telemetry::MetricOnlyTimer timer;
+  Log::Info("CheckpointAllBufferFrames, mNumBfs={}", mNumBfs);
+  SCOPED_DEFER(COUNTERS_BLOCK() {
+    Log::Info("CheckpointAllBufferFrames finished, timeElasped={:.6f}s",
+              timer.ElaspedUs() / 1000000.0);
+  });
+
   LS_DEBUG_EXECUTE(mStore, "skip_CheckpointAllBufferFrames", {
     Log::Error("CheckpointAllBufferFrames skipped due to debug flag");
-    return;
+    return std::unexpected(utils::Error::General("skipped due to debug flag"));
   });
 
-  StopBufferFrameProviders();
+  StopPageEvictors();
 
   utils::Parallelize::ParallelRange(mNumBfs, [&](uint64_t begin, uint64_t end) {
-    alignas(512) uint8_t buffer[mStore->mStoreOption.mPageSize];
-    for (uint64_t i = begin; i < end; i++) {
-      auto* bfAddr = &mBufferPool[i * mStore->mStoreOption.mBufferFrameSize];
-      auto& bf = *reinterpret_cast<BufferFrame*>(bfAddr);
+    const auto bufferFrameSize = mStore->mStoreOption.mBufferFrameSize;
+    const auto pageSize = mStore->mStoreOption.mPageSize;
 
-      bf.mHeader.mLatch.LockExclusively();
-      if (!bf.IsFree()) {
-        mStore->mTreeRegistry->Checkpoint(bf.mPage.mBTreeId, bf, buffer);
-        auto res = writePage(bf.mHeader.mPageId, buffer);
-        if (!res) {
-          Log::Fatal("Failed to write page to disk, pageId={}, error={}",
-                     bf.mHeader.mPageId, res.error().ToString());
+    // the underlying batch for aio
+    const auto batchCapacity = mStore->mStoreOption.mBufferWriteBatchSize;
+    // const auto batchCapacity = 1;
+    alignas(512) uint8_t buffer[pageSize * batchCapacity];
+    auto batchSize = 0u;
+
+    // the aio itself
+    utils::AsyncIo aio(batchCapacity);
+
+    for (uint64_t i = begin; i < end;) {
+      // collect a batch of pages for async write
+      for (; batchSize < batchCapacity && i < end; i++) {
+        auto& bf =
+            *reinterpret_cast<BufferFrame*>(&mBufferPool[i * bufferFrameSize]);
+        if (!bf.IsFree()) {
+          auto* tmpBuffer = buffer + batchSize * pageSize;
+          auto pageOffset = bf.mHeader.mPageId * pageSize;
+          mStore->mTreeRegistry->Checkpoint(bf.mPage.mBTreeId, bf, tmpBuffer);
+          aio.PrepareWrite(mStore->mPageFd, tmpBuffer, pageSize, pageOffset);
+          bf.mHeader.mFlushedGsn = bf.mPage.mGSN;
+          batchSize++;
         }
-        bf.mHeader.mFlushedGsn = bf.mPage.mGSN;
       }
-      bf.mHeader.mLatch.UnlockExclusively();
+
+      // write the batch of pages
+      if (auto res = aio.SubmitAll(); !res) {
+        Log::Fatal("Failed to submit aio, error={}", res.error().ToString());
+      }
+      if (auto res = aio.WaitAll(); !res) {
+        Log::Fatal("Failed to wait aio, error={}", res.error().ToString());
+      }
+
+      // reset batch size
+      batchSize = 0;
     }
   });
+
+  return {};
 }
 
 Result<void> BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
@@ -193,7 +232,7 @@ BufferFrame& BufferManager::RandomBufferFrame() {
   return *reinterpret_cast<BufferFrame*>(bfAddr);
 }
 
-BufferFrame& BufferManager::AllocNewPage(TREEID treeId) {
+BufferFrame& BufferManager::AllocNewPageMayJump(TREEID treeId) {
   Partition& partition = RandomPartition();
   BufferFrame& freeBf = partition.mFreeBfList.PopFrontMayJump();
   memset((void*)&freeBf, 0, mStore->mStoreOption.mBufferFrameSize);
@@ -286,8 +325,8 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard,
 
     // 3. Read page at pageId to the target buffer frame
     ReadPageSync(pageId, &bf.mPage);
-    Log::Info("Read page from disk, pageId={}, btreeId={}", pageId,
-              bf.mPage.mBTreeId);
+    LS_DLOG("Read page from disk, pageId={}, btreeId={}", pageId,
+            bf.mPage.mBTreeId);
     COUNTERS_BLOCK() {
       WorkerCounters::MyCounters().dt_page_reads[bf.mPage.mBTreeId]++;
     }
@@ -324,7 +363,9 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard,
       ioFrame.bf = &bf;
       ioFrame.state = IOFrame::State::kReady;
       inflightIOGuard->unlock();
-      ioFrameGuard->unlock();
+      if (ioFrameGuard->owns_lock()) {
+        ioFrameGuard->unlock();
+      }
       jumpmu::Jump();
     }
   }
@@ -404,16 +445,22 @@ void BufferManager::ReadPageSync(PID pageId, void* pageBuffer) {
       memset(pageBuffer, 0, mStore->mStoreOption.mPageSize);
       auto* page = new (pageBuffer) BufferFrame();
       page->Init(pageId);
-      Log::Error(
-          "Failed to read page, error={}, fileName={}, fd={}, pageId={}, "
-          "bytesRead={}, bytesLeft={}",
-          strerror(errno), mStore->mStoreOption.GetDbFilePath(),
-          mStore->mPageFd, pageId, bytesRead, bytesLeft);
+      if (bytesRead == 0) {
+        Log::Warn("Read empty page, pageId={}, fd={}, bytesRead={}, "
+                  "bytesLeft={}, file={}",
+                  pageId, mStore->mPageFd, bytesRead, bytesLeft,
+                  mStore->mStoreOption.GetDbFilePath());
+      } else {
+        Log::Error("Failed to read page, errno={}, error={}, pageId={}, fd={}, "
+                   "bytesRead={}, bytesLeft={}, file={}",
+                   errno, strerror(errno), pageId, mStore->mPageFd, bytesRead,
+                   bytesLeft, mStore->mStoreOption.GetDbFilePath());
+      }
       return;
     }
 
     bytesLeft -= bytesRead;
-  };
+  }
 
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().read_operations_counter++;
@@ -464,12 +511,12 @@ Partition& BufferManager::GetPartition(PID pageId) {
   return *mPartitions[partitionId];
 }
 
-void BufferManager::StopBufferFrameProviders() {
-  mBfProviders.clear();
+void BufferManager::StopPageEvictors() {
+  mPageEvictors.clear();
 }
 
 BufferManager::~BufferManager() {
-  StopBufferFrameProviders();
+  StopPageEvictors();
   uint64_t totalMemSize =
       mStore->mStoreOption.mBufferFrameSize * (mNumBfs + mNumSaftyBfs);
   munmap(mBufferPool, totalMemSize);

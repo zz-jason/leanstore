@@ -10,6 +10,7 @@
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "CMAKE_BUILD_TYPE": "Debug",
+                "ENABLE_PROFILING": "ON",
                 "ENABLE_COVERAGE": "ON"
             }
         },
@@ -41,20 +42,7 @@
         },
         {
             "name": "performance",
-            "binaryDir": "${sourceDir}/build/release",
-            "cacheVariables": {
-                "CMAKE_C_COMPILER": "gcc-13",
-                "CMAKE_CXX_COMPILER": "g++-13",
-                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "ENABLE_ROCKSDB": "ON",
-                "CMAKE_BUILD_TYPE": "Release",
-                "COUNTERS_LEVEL": "none"
-            }
-        },
-        {
-            "name": "performance_profile",
-            "binaryDir": "${sourceDir}/build/release",
+            "binaryDir": "${sourceDir}/build/performance",
             "cacheVariables": {
                 "CMAKE_C_COMPILER": "gcc-13",
                 "CMAKE_CXX_COMPILER": "g++-13",

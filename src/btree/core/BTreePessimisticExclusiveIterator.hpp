@@ -82,8 +82,6 @@ public:
         JUMPMU_BREAK;
       }
       JUMPMU_CATCH() {
-        Log::Info("SplitForKey failed, treeId={}, pageId={}", mBTree.mTreeId,
-                  mGuardedLeaf.mBf->mHeader.mPageId);
       }
     }
   }

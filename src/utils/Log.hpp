@@ -1,22 +1,11 @@
 #pragma once
 
 #include "leanstore/StoreOption.hpp"
-#include "utils/Defer.hpp"
 
-#include <spdlog/common.h>
-#include <spdlog/sinks/basic_file_sink.h>
-#include <spdlog/spdlog.h>
-
-#include <atomic>
-#include <cassert>
-#include <cstdlib>
 #include <format>
-#include <iostream>
 #include <mutex>
-#include <string>
-#include <string_view>
 
-#ifndef NDEBUG
+#ifdef DEBUG
 #define LS_DLOG(...) leanstore::Log::Debug(__VA_ARGS__);
 #define LS_DCHECK(...) leanstore::Log::DebugCheck(__VA_ARGS__);
 #else
@@ -31,110 +20,49 @@ public:
   inline static bool sInited = false;
   inline static std::mutex sInitMutex;
 
-  static void Init(const StoreOption& option) {
-    if (sInited) {
-      return;
-    }
+  static void Init(const StoreOption& option);
 
-    std::unique_lock writeLock(sInitMutex);
+  static void DebugCheck(bool condition, const std::string& msg = "");
 
-    auto logger = spdlog::basic_logger_mt("basic_logger", "/tmp/leanstore.log");
-    SCOPED_DEFER({
-      spdlog::set_default_logger(logger);
-      spdlog::flush_every(std::chrono::seconds(3));
-      sInited = true;
-    });
+  static void Debug(const std::string& msg);
 
-    // set log pattern
-    logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
+  static void Info(const std::string& msg);
 
-    // set log level
-    switch (option.mLogLevel) {
-    case LogLevel::kDebug: {
-      logger->set_level(spdlog::level::debug);
-      break;
-    }
-    case LogLevel::kInfo: {
-      logger->set_level(spdlog::level::info);
-      break;
-    }
-    case LogLevel::kWarn: {
-      logger->set_level(spdlog::level::warn);
-      break;
-    }
-    case LogLevel::kError: {
-      logger->set_level(spdlog::level::err);
-      break;
-    }
-    default: {
-      std::cerr << std::format("unsupported log level: {}",
-                               static_cast<uint8_t>(option.mLogLevel));
-      std::abort();
-    }
-    }
-  }
+  static void Warn(const std::string& msg);
+
+  static void Error(const std::string& msg);
+
+  static void Fatal(const std::string& msg);
 
   template <typename... Args>
   static void DebugCheck(bool condition, std::format_string<Args...> fmt,
                          Args&&... args) {
-    if (!condition) {
-      spdlog::critical(std::format(fmt, std::forward<Args>(args)...));
-      assert(false);
-    }
-  }
-
-  static void DebugCheck(bool condition, std::string_view msg = "") {
-    if (!condition) {
-      spdlog::critical(msg);
-      assert(false);
-    }
-  }
-
-  static void Debug(std::string_view msg) {
-    spdlog::debug(msg);
-  }
-
-  static void Info(std::string_view msg) {
-    spdlog::info(msg);
-  }
-
-  static void Warn(std::string_view msg) {
-    spdlog::warn(msg);
-  }
-
-  static void Error(std::string_view msg) {
-    spdlog::error(msg);
-  }
-
-  static void Fatal(std::string_view msg) {
-    spdlog::critical(msg);
-    assert(false);
+    DebugCheck(condition, std::format(fmt, std::forward<Args>(args)...));
   }
 
   template <typename... Args>
   static void Debug(std::format_string<Args...> fmt, Args&&... args) {
-    spdlog::debug(std::format(fmt, std::forward<Args>(args)...));
+    Debug(std::format(fmt, std::forward<Args>(args)...));
   }
 
   template <typename... Args>
   static void Info(std::format_string<Args...> fmt, Args&&... args) {
-    spdlog::info(std::format(fmt, std::forward<Args>(args)...));
+    Info(std::format(fmt, std::forward<Args>(args)...));
   }
 
   template <typename... Args>
   static void Warn(std::format_string<Args...> fmt, Args&&... args) {
-    spdlog::warn(std::format(fmt, std::forward<Args>(args)...));
+    Warn(std::format(fmt, std::forward<Args>(args)...));
   }
 
   template <typename... Args>
   static void Error(std::format_string<Args...> fmt, Args&&... args) {
-    spdlog::error(std::format(fmt, std::forward<Args>(args)...));
+    Error(std::format(fmt, std::forward<Args>(args)...));
   }
 
   template <typename... Args>
   static void Fatal(std::format_string<Args...> fmt, Args&&... args) {
-    spdlog::critical(std::format(fmt, std::forward<Args>(args)...));
-    assert(false);
+    Fatal(std::format(fmt, std::forward<Args>(args)...));
   }
 };
 

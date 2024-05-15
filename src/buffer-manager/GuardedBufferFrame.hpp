@@ -157,6 +157,11 @@ public:
 
   // TODO: don't sync on temporary table pages like history trees
   inline void SyncGSNBeforeRead() {
+    // skip if not running inside a worker
+    if (!cr::Worker::InWorker()) {
+      return;
+    }
+
     if (!cr::Worker::My().mLogging.mHasRemoteDependency &&
         mBf->mPage.mGSN > cr::Worker::My().mLogging.mTxReadSnapshot &&
         mBf->mHeader.mLastWriterWorker != cr::Worker::My().mWorkerId) {

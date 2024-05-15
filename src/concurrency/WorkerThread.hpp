@@ -36,7 +36,7 @@ public:
   }
 
   /// Destructor.
-  ~WorkerThread() {
+  ~WorkerThread() override {
     Stop();
   }
 
