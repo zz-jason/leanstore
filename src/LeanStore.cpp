@@ -93,23 +93,28 @@ void LeanStore::initPageAndWalFd() {
 
   // Create a new instance on the specified DB file
   if (mStoreOption.mCreateFromScratch) {
+    Log::Info("Create new page and wal files");
     int flags = O_TRUNC | O_CREAT | O_RDWR | O_DIRECT;
     auto dbFilePath = mStoreOption.GetDbFilePath();
     mPageFd = open(dbFilePath.c_str(), flags, 0666);
     if (mPageFd == -1) {
       Log::Fatal("Could not open file at: {}", dbFilePath);
     }
+    Log::Info("Init page fd succeed, pageFd={}, pageFile={}", mPageFd,
+              dbFilePath);
 
     auto walFilePath = mStoreOption.GetWalFilePath();
     mWalFd = open(walFilePath.c_str(), flags, 0666);
-    if (mPageFd == -1) {
+    if (mWalFd == -1) {
       Log::Fatal("Could not open file at: {}", walFilePath);
     }
+    Log::Info("Init wal fd succeed, walFd={}, walFile={}", mWalFd, walFilePath);
     return;
   }
 
   // Recover pages and WAL from existing files
   deserializeFlags();
+  Log::Info("Reopen existing page and wal files");
   int flags = O_RDWR | O_DIRECT;
   auto dbFilePath = mStoreOption.GetDbFilePath();
   mPageFd = open(dbFilePath.c_str(), flags, 0666);
@@ -118,6 +123,8 @@ void LeanStore::initPageAndWalFd() {
                "please create a new DB file and start a new instance from it",
                dbFilePath);
   }
+  Log::Info("Init page fd succeed, pageFd={}, pageFile={}", mPageFd,
+            dbFilePath);
 
   auto walFilePath = mStoreOption.GetWalFilePath();
   mWalFd = open(walFilePath.c_str(), flags, 0666);
@@ -126,6 +133,7 @@ void LeanStore::initPageAndWalFd() {
                "please create a new WAL file and start a new instance from it",
                walFilePath);
   }
+  Log::Info("Init wal fd succeed, walFd={}, walFile={}", mWalFd, walFilePath);
 }
 
 LeanStore::~LeanStore() {

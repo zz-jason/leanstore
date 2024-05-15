@@ -76,18 +76,18 @@ TEST_F(RecoveryTest, SerializeAndDeserialize) {
     }
   });
 
-  LS_DLOG("Buffer Pool Before Shutdown:");
+  Log::Info("Buffer Pool Before Shutdown:");
   mStore->mBufferManager->DoWithBufferFrameIf(
       [](BufferFrame& bf) { return !bf.IsFree(); },
       [](BufferFrame& bf [[maybe_unused]]) {
-        LS_DLOG("pageId={}, treeId={}, isDirty={}", bf.mHeader.mPageId,
-                bf.mPage.mBTreeId, bf.IsDirty());
+        Log::Info("pageId={}, treeId={}, isDirty={}", bf.mHeader.mPageId,
+                  bf.mPage.mBTreeId, bf.IsDirty());
       });
 
   mStore->ExecSync(0, [&]() {
     rapidjson::Document doc(rapidjson::kObjectType);
     leanstore::storage::btree::BTreeGeneric::ToJson(*btree, &doc);
-    LS_DLOG("BTree before destroy:\n{}", leanstore::utils::JsonToStr(&doc));
+    Log::Info("BTree before destroy:\n{}", leanstore::utils::JsonToStr(&doc));
   });
 
   // meta file should be serialized during destructor.
@@ -162,7 +162,7 @@ TEST_F(RecoveryTest, RecoverAfterInsert) {
 
     rapidjson::Document doc(rapidjson::kObjectType);
     leanstore::storage::btree::BTreeGeneric::ToJson(*btree, &doc);
-    LS_DLOG("BTree before destroy:\n{}", leanstore::utils::JsonToStr(&doc));
+    Log::Info("BTree before destroy:\n{}", leanstore::utils::JsonToStr(&doc));
   });
 
   // skip dumpping buffer frames on exit
@@ -185,7 +185,7 @@ TEST_F(RecoveryTest, RecoverAfterInsert) {
     SCOPED_DEFER(cr::Worker::My().CommitTx());
     rapidjson::Document doc(rapidjson::kObjectType);
     BTreeGeneric::ToJson(*static_cast<BTreeGeneric*>(btree), &doc);
-    LS_DLOG("TransactionKV after recovery: {}", utils::JsonToStr(&doc));
+    Log::Info("TransactionKV after recovery: {}", utils::JsonToStr(&doc));
   });
 
   // lookup the restored btree

@@ -443,16 +443,22 @@ void BufferManager::ReadPageSync(PID pageId, void* pageBuffer) {
       memset(pageBuffer, 0, mStore->mStoreOption.mPageSize);
       auto* page = new (pageBuffer) BufferFrame();
       page->Init(pageId);
-      Log::Error(
-          "Failed to read page, error={}, fileName={}, fd={}, pageId={}, "
-          "bytesRead={}, bytesLeft={}",
-          strerror(errno), mStore->mStoreOption.GetDbFilePath(),
-          mStore->mPageFd, pageId, bytesRead, bytesLeft);
+      if (bytesRead == 0) {
+        Log::Warn("Read empty page, pageId={}, fd={}, bytesRead={}, "
+                  "bytesLeft={}, file={}",
+                  pageId, mStore->mPageFd, bytesRead, bytesLeft,
+                  mStore->mStoreOption.GetDbFilePath());
+      } else {
+        Log::Error("Failed to read page, errno={}, error={}, pageId={}, fd={}, "
+                   "bytesRead={}, bytesLeft={}, file={}",
+                   errno, strerror(errno), pageId, mStore->mPageFd, bytesRead,
+                   bytesLeft, mStore->mStoreOption.GetDbFilePath());
+      }
       return;
     }
 
     bytesLeft -= bytesRead;
-  };
+  }
 
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().read_operations_counter++;
