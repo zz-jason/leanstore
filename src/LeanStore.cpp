@@ -16,9 +16,11 @@
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
 #include <rapidjson/prettywriter.h>
+#include <rapidjson/rapidjson.h>
 #include <rapidjson/stringbuffer.h>
 #include <tabulate/table.hpp>
 
+#include <cstdint>
 #include <expected>
 #include <filesystem>
 #include <format>
@@ -37,6 +39,14 @@
 namespace leanstore {
 
 Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption option) {
+  if (option.mCreateFromScratch) {
+    std::cout << std::format("Clean store dir: {}", option.mStoreDir)
+              << std::endl;
+    std::filesystem::path dirPath = option.mStoreDir;
+    std::filesystem::remove_all(dirPath);
+    std::filesystem::create_directories(dirPath);
+  }
+
   Log::Init(option);
   return std::make_unique<LeanStore>(std::move(option));
 }
@@ -45,13 +55,6 @@ LeanStore::LeanStore(StoreOption option)
     : mStoreOption(std::move(option)),
       mMetricsManager(this) {
   utils::tlsStore = this;
-
-  if (mStoreOption.mCreateFromScratch) {
-    Log::Info("Clean store dir: {}", mStoreOption.mStoreDir);
-    std::filesystem::path dirPath = mStoreOption.mStoreDir;
-    std::filesystem::remove_all(dirPath);
-    std::filesystem::create_directories(dirPath);
-  }
 
   Log::Info("LeanStore starting ...");
   SCOPED_DEFER(Log::Info("LeanStore started"));
@@ -68,7 +71,7 @@ LeanStore::LeanStore(StoreOption option)
 
   // create global buffer manager and buffer frame providers
   mBufferManager = std::make_unique<storage::BufferManager>(this);
-  mBufferManager->StartBufferFrameProviders();
+  mBufferManager->StartPageEvictors();
 
   // create global transaction worker and group committer
   //
@@ -79,8 +82,14 @@ LeanStore::LeanStore(StoreOption option)
 
   // recover from disk
   if (!mStoreOption.mCreateFromScratch) {
-    deserializeMeta();
-    mBufferManager->RecoverFromDisk();
+    auto allPagesUpToDate = deserializeMeta();
+    if (!allPagesUpToDate) {
+      Log::Info("Not all pages up-to-date, recover from disk");
+      mBufferManager->RecoverFromDisk();
+    } else {
+      Log::Info("All pages up-to-date, skip resovering");
+      // TODO: truncate wal files
+    }
   }
 }
 
@@ -92,23 +101,28 @@ void LeanStore::initPageAndWalFd() {
 
   // Create a new instance on the specified DB file
   if (mStoreOption.mCreateFromScratch) {
+    Log::Info("Create new page and wal files");
     int flags = O_TRUNC | O_CREAT | O_RDWR | O_DIRECT;
     auto dbFilePath = mStoreOption.GetDbFilePath();
     mPageFd = open(dbFilePath.c_str(), flags, 0666);
     if (mPageFd == -1) {
       Log::Fatal("Could not open file at: {}", dbFilePath);
     }
+    Log::Info("Init page fd succeed, pageFd={}, pageFile={}", mPageFd,
+              dbFilePath);
 
     auto walFilePath = mStoreOption.GetWalFilePath();
     mWalFd = open(walFilePath.c_str(), flags, 0666);
-    if (mPageFd == -1) {
+    if (mWalFd == -1) {
       Log::Fatal("Could not open file at: {}", walFilePath);
     }
+    Log::Info("Init wal fd succeed, walFd={}, walFile={}", mWalFd, walFilePath);
     return;
   }
 
   // Recover pages and WAL from existing files
   deserializeFlags();
+  Log::Info("Reopen existing page and wal files");
   int flags = O_RDWR | O_DIRECT;
   auto dbFilePath = mStoreOption.GetDbFilePath();
   mPageFd = open(dbFilePath.c_str(), flags, 0666);
@@ -117,14 +131,17 @@ void LeanStore::initPageAndWalFd() {
                "please create a new DB file and start a new instance from it",
                dbFilePath);
   }
+  Log::Info("Init page fd succeed, pageFd={}, pageFile={}", mPageFd,
+            dbFilePath);
 
   auto walFilePath = mStoreOption.GetWalFilePath();
   mWalFd = open(walFilePath.c_str(), flags, 0666);
-  if (mPageFd == -1) {
+  if (mWalFd == -1) {
     Log::Fatal("Recover failed, could not open file at: {}. The data is lost, "
                "please create a new WAL file and start a new instance from it",
                walFilePath);
   }
+  Log::Info("Init wal fd succeed, walFd={}, walFile={}", mWalFd, walFilePath);
 }
 
 LeanStore::~LeanStore() {
@@ -139,19 +156,21 @@ LeanStore::~LeanStore() {
     auto treeId = it.first;
     auto& [treePtr, treeName] = it.second;
     auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(treePtr.get());
-
-    uint64_t numEntries(0);
-    ExecSync(0, [&]() { numEntries = btree->CountEntries(); });
-    Log::Info("[TransactionKV] name={}, btreeId={}, height={}, numEntries={}",
-              treeName, treeId, btree->mHeight.load(), numEntries);
+    Log::Info("btreeName={}, btreeId={}, btreeType={}, btreeHeight={}",
+              treeName, treeId, static_cast<uint8_t>(btree->mTreeType),
+              btree->mHeight.load());
   }
 
   // Stop transaction workers and group committer
   mCRManager->Stop();
 
   // persist all the metadata and pages before exit
-  serializeMeta();
-  mBufferManager->CheckpointAllBufferFrames();
+  bool allPagesUpToDate = true;
+  if (auto res = mBufferManager->CheckpointAllBufferFrames(); !res) {
+    allPagesUpToDate = false;
+  }
+  serializeMeta(allPagesUpToDate);
+
   mBufferManager->SyncAllPageWrites();
 
   // destroy and Stop all foreground workers
@@ -204,12 +223,12 @@ void LeanStore::WaitAll() {
   }
 }
 
-#define META_KEY_CR_MANAGER "cr_manager"
-#define META_KEY_BUFFER_MANAGER "buffer_manager"
-#define META_KEY_REGISTERED_DATASTRUCTURES "registered_datastructures"
-#define META_KEY_FLAGS "flags"
+constexpr char kMetaKeyCrManager[] = "cr_manager";
+constexpr char kMetaKeyBufferManager[] = "buffer_manager";
+constexpr char kMetaKeyBTrees[] = "btrees";
+constexpr char kMetaKeyFlags[] = "flags";
 
-void LeanStore::serializeMeta() {
+void LeanStore::serializeMeta(bool allPagesUpToDate) {
   Log::Info("serializeMeta started");
   SCOPED_DEFER(Log::Info("serializeMeta ended"));
 
@@ -231,7 +250,7 @@ void LeanStore::serializeMeta() {
       v.SetString(val.data(), val.size(), allocator);
       crJsonObj.AddMember(k, v, allocator);
     }
-    doc.AddMember(META_KEY_CR_MANAGER, crJsonObj, allocator);
+    doc.AddMember(kMetaKeyCrManager, crJsonObj, allocator);
   }
 
   // buffer_manager
@@ -244,7 +263,7 @@ void LeanStore::serializeMeta() {
       v.SetString(val.data(), val.size(), allocator);
       bmJsonObj.AddMember(k, v, allocator);
     }
-    doc.AddMember(META_KEY_BUFFER_MANAGER, bmJsonObj, allocator);
+    doc.AddMember(kMetaKeyBufferManager, bmJsonObj, allocator);
   }
 
   // registered_datastructures, i.e. btrees
@@ -281,8 +300,13 @@ void LeanStore::serializeMeta() {
 
       btreeJsonArray.PushBack(btreeJsonObj, allocator);
     }
-    doc.AddMember(META_KEY_REGISTERED_DATASTRUCTURES, btreeJsonArray,
-                  allocator);
+    doc.AddMember(kMetaKeyBTrees, btreeJsonArray, allocator);
+  }
+
+  // pages_up_to_date
+  {
+    rapidjson::Value updateToDate(allPagesUpToDate);
+    doc.AddMember("pages_up_to_date", allPagesUpToDate, doc.GetAllocator());
   }
 
   // flags
@@ -301,10 +325,10 @@ void LeanStore::serializeFlags(rapidjson::Document& doc) {
   rapidjson::Value flagsJsonObj(rapidjson::kObjectType);
   auto& allocator = doc.GetAllocator();
 
-  doc.AddMember(META_KEY_FLAGS, flagsJsonObj, allocator);
+  doc.AddMember(kMetaKeyFlags, flagsJsonObj, allocator);
 }
 
-void LeanStore::deserializeMeta() {
+bool LeanStore::deserializeMeta() {
   Log::Info("deserializeMeta started");
   SCOPED_DEFER(Log::Info("deserializeMeta ended"));
 
@@ -316,7 +340,7 @@ void LeanStore::deserializeMeta() {
 
   // Deserialize concurrent resource manager
   {
-    auto& crJsonObj = doc[META_KEY_CR_MANAGER];
+    auto& crJsonObj = doc[kMetaKeyCrManager];
     StringMap crMetaMap;
     for (auto it = crJsonObj.MemberBegin(); it != crJsonObj.MemberEnd(); ++it) {
       crMetaMap[it->name.GetString()] = it->value.GetString();
@@ -326,7 +350,7 @@ void LeanStore::deserializeMeta() {
 
   // Deserialize buffer manager
   {
-    auto& bmJsonObj = doc[META_KEY_BUFFER_MANAGER];
+    auto& bmJsonObj = doc[kMetaKeyBufferManager];
     StringMap bmMetaMap;
     for (auto it = bmJsonObj.MemberBegin(); it != bmJsonObj.MemberEnd(); ++it) {
       bmMetaMap[it->name.GetString()] = it->value.GetString();
@@ -334,7 +358,13 @@ void LeanStore::deserializeMeta() {
     mBufferManager->Deserialize(bmMetaMap);
   }
 
-  auto& btreeJsonArray = doc[META_KEY_REGISTERED_DATASTRUCTURES];
+  // pages_up_to_date
+  // rapidjson::Value updateToDate(allPagesUpToDate);
+  // doc.AddMember("pages_up_to_date", allPagesUpToDate, doc.GetAllocator());
+  auto& updateToDate = doc["pages_up_to_date"];
+  auto allPagesUpToDate = updateToDate.GetBool();
+
+  auto& btreeJsonArray = doc[kMetaKeyBTrees];
   LS_DCHECK(btreeJsonArray.IsArray());
   for (auto& btreeJsonObj : btreeJsonArray.GetArray()) {
     LS_DCHECK(btreeJsonObj.IsObject());
@@ -385,6 +415,8 @@ void LeanStore::deserializeMeta() {
     }
     mTreeRegistry->Deserialize(btreeId, btreeMetaMap);
   }
+
+  return allPagesUpToDate;
 }
 
 void LeanStore::deserializeFlags() {
@@ -397,7 +429,7 @@ void LeanStore::deserializeFlags() {
   rapidjson::Document doc;
   doc.ParseStream(isw);
 
-  const rapidjson::Value& flagsJsonObj = doc[META_KEY_FLAGS];
+  const rapidjson::Value& flagsJsonObj = doc[kMetaKeyFlags];
   StringMap serializedFlags;
   for (auto it = flagsJsonObj.MemberBegin(); it != flagsJsonObj.MemberEnd();
        ++it) {

@@ -1,196 +1,33 @@
-#pragma once
+#include "buffer-manager/PageEvictor.hpp"
 
-#include "buffer-manager/AsyncWriteBuffer.hpp"
-#include "buffer-manager/BMPlainGuard.hpp"
-#include "buffer-manager/BufferFrame.hpp"
-#include "buffer-manager/FreeList.hpp"
-#include "buffer-manager/Partition.hpp"
-#include "buffer-manager/Swip.hpp"
 #include "buffer-manager/TreeRegistry.hpp"
-#include "leanstore/Exceptions.hpp"
-#include "leanstore/LeanStore.hpp"
-#include "leanstore/Units.hpp"
 #include "profiling/counters/CPUCounters.hpp"
 #include "profiling/counters/PPCounters.hpp"
 #include "utils/Defer.hpp"
 #include "utils/Log.hpp"
-#include "utils/RandomGenerator.hpp"
-#include "utils/UserThread.hpp"
 
-#include <cstdint>
 #include <mutex>
 
-#include <fcntl.h>
-#include <sys/resource.h>
-#include <sys/time.h>
-#include <unistd.h>
-
-namespace leanstore {
-
-namespace storage {
-
-class FreeBfList {
-private:
-  BufferFrame* mFirst = nullptr;
-
-  BufferFrame* mLast = nullptr;
-
-  uint64_t mSize = 0;
-
-public:
-  void Reset() {
-    mFirst = nullptr;
-    mLast = nullptr;
-    mSize = 0;
-  }
-
-  void PopTo(Partition& partition) {
-    partition.mFreeBfList.PushFront(mFirst, mLast, mSize);
-    Reset();
-  }
-
-  uint64_t Size() {
-    return mSize;
-  }
-
-  void PushFront(BufferFrame& bf) {
-    bf.mHeader.mNextFreeBf = mFirst;
-    mFirst = &bf;
-    mSize++;
-    if (mLast == nullptr) {
-      mLast = &bf;
-    }
-  }
-};
-
-/// BufferFrameProvider provides free buffer frames for partitions.
-class BufferFrameProvider : public utils::UserThread {
-public:
-  leanstore::LeanStore* mStore;
-  const uint64_t mNumBfs;
-  uint8_t* mBufferPool;
-
-  const uint64_t mNumPartitions;
-  const uint64_t mPartitionsMask;
-  std::vector<std::unique_ptr<Partition>>& mPartitions;
-
-  const int mFD;
-
-  std::vector<BufferFrame*> mCoolCandidateBfs;  // input of phase 1
-  std::vector<BufferFrame*> mEvictCandidateBfs; // output of phase 1
-  AsyncWriteBuffer mAsyncWriteBuffer;           // output of phase 2
-  FreeBfList mFreeBfList;                       // output of phase 3
-
-public:
-  BufferFrameProvider(leanstore::LeanStore* store,
-                      const std::string& threadName, uint64_t runningCPU,
-                      uint64_t numBfs, uint8_t* bfs, uint64_t numPartitions,
-                      uint64_t partitionMask,
-                      std::vector<std::unique_ptr<Partition>>& partitions)
-      : utils::UserThread(store, threadName, runningCPU),
-        mStore(store),
-        mNumBfs(numBfs),
-        mBufferPool(bfs),
-        mNumPartitions(numPartitions),
-        mPartitionsMask(partitionMask),
-        mPartitions(partitions),
-        mFD(store->mPageFd),
-        mCoolCandidateBfs(),
-        mEvictCandidateBfs(),
-        mAsyncWriteBuffer(store->mPageFd, store->mStoreOption.mPageSize,
-                          mStore->mStoreOption.mBufferWriteBatchSize),
-        mFreeBfList() {
-    mCoolCandidateBfs.reserve(
-        mStore->mStoreOption.mBufferFrameRecycleBatchSize);
-    mEvictCandidateBfs.reserve(
-        mStore->mStoreOption.mBufferFrameRecycleBatchSize);
-  }
-
-  // no copy and assign
-  BufferFrameProvider(const BufferFrameProvider&) = delete;
-  BufferFrameProvider& operator=(const BufferFrameProvider&) = delete;
-
-  // no move construct and assign
-  BufferFrameProvider(BufferFrameProvider&& other) = delete;
-  BufferFrameProvider& operator=(BufferFrameProvider&& other) = delete;
-
-  ~BufferFrameProvider() {
-    Stop();
-  }
-
-public:
-  /// Randomly picks a batch of buffer frames from the whole memory, gather the
-  /// cool buffer frames for the next round to evict, cools the hot buffer
-  /// frames if all their children are evicted.
-  ///
-  /// NOTE:
-  /// 1. Only buffer frames that are cool are added in the eviction batch and
-  ///    being evicted in the next phase.
-  ///
-  /// 2. Only buffer frames that are hot and all the children are evicted
-  ///    can be cooled at this phase. Buffer frames cooled at this phase won't
-  ///    be evicted in the next phase directly, they will be added to the
-  ///    eviction batch in the future round of PickBufferFramesToCool() if they
-  ///    stay cool at that time.
-  ///
-  /// @param targetPartition the target partition which needs more buffer frames
-  /// to load pages for worker threads.
-  void PickBufferFramesToCool(Partition& targetPartition);
-
-  void PrepareAsyncWriteBuffer(Partition& targetPartition);
-
-  void FlushAndRecycleBufferFrames(Partition& targetPartition);
-
-protected:
-  void runImpl() override;
-
-private:
-  inline void randomBufferFramesToCoolOrEvict() {
-    mCoolCandidateBfs.clear();
-    for (auto i = 0u; i < mStore->mStoreOption.mBufferFrameRecycleBatchSize;
-         i++) {
-      auto* randomBf = randomBufferFrame();
-      DO_NOT_OPTIMIZE(randomBf->mHeader.mState);
-      mCoolCandidateBfs.push_back(randomBf);
-    }
-  }
-
-  inline BufferFrame* randomBufferFrame() {
-    auto i = utils::RandomGenerator::Rand<uint64_t>(0, mNumBfs);
-    auto* bfAddr = &mBufferPool[i * mStore->mStoreOption.mBufferFrameSize];
-    return reinterpret_cast<BufferFrame*>(bfAddr);
-  }
-
-  inline Partition& randomPartition() {
-    auto i = utils::RandomGenerator::Rand<uint64_t>(0, mNumPartitions);
-    return *mPartitions[i];
-  }
-
-  inline uint64_t getPartitionId(PID pageId) {
-    return pageId & mPartitionsMask;
-  }
-
-  void evictFlushedBf(BufferFrame& cooledBf, BMOptimisticGuard& optimisticGuard,
-                      Partition& targetPartition);
-};
+namespace leanstore::storage {
 
 using Time = decltype(std::chrono::high_resolution_clock::now());
 
-inline void BufferFrameProvider::runImpl() {
+void PageEvictor::runImpl() {
   CPUCounters::registerThread(mThreadName);
+
   while (mKeepRunning) {
     auto& targetPartition = randomPartition();
     if (!targetPartition.NeedMoreFreeBfs()) {
       continue;
     }
 
-    // Phase 1:
+    // Phase 1
     PickBufferFramesToCool(targetPartition);
 
-    // Phase 2:
+    // Phase 2
     PrepareAsyncWriteBuffer(targetPartition);
 
-    // Phase 3:
+    // Phase 3
     FlushAndRecycleBufferFrames(targetPartition);
 
     COUNTERS_BLOCK() {
@@ -199,49 +36,7 @@ inline void BufferFrameProvider::runImpl() {
   }
 }
 
-inline void BufferFrameProvider::evictFlushedBf(
-    BufferFrame& cooledBf, BMOptimisticGuard& optimisticGuard,
-    Partition& targetPartition) {
-  TREEID btreeId = cooledBf.mPage.mBTreeId;
-  optimisticGuard.JumpIfModifiedByOthers();
-  ParentSwipHandler parentHandler =
-      mStore->mTreeRegistry->FindParent(btreeId, cooledBf);
-
-  LS_DCHECK(parentHandler.mParentGuard.mState == GuardState::kOptimisticShared);
-  BMExclusiveUpgradeIfNeeded parentWriteGuard(parentHandler.mParentGuard);
-  optimisticGuard.mGuard.ToExclusiveMayJump();
-
-  if (mStore->mStoreOption.mEnableBufferCrcCheck && cooledBf.mHeader.mCrc) {
-    LS_DCHECK(cooledBf.mPage.CRC() == cooledBf.mHeader.mCrc);
-  }
-  LS_DCHECK(!cooledBf.IsDirty());
-  LS_DCHECK(!cooledBf.mHeader.mIsBeingWrittenBack);
-  LS_DCHECK(cooledBf.mHeader.mState == State::kCool);
-  LS_DCHECK(parentHandler.mChildSwip.IsCool());
-
-  parentHandler.mChildSwip.Evict(cooledBf.mHeader.mPageId);
-
-  // Reclaim buffer frame
-  cooledBf.Reset();
-  cooledBf.mHeader.mLatch.UnlockExclusively();
-
-  mFreeBfList.PushFront(cooledBf);
-  if (mFreeBfList.Size() <=
-      std::min<uint64_t>(mStore->mStoreOption.mWorkerThreads, 128)) {
-    mFreeBfList.PopTo(targetPartition);
-  }
-
-  COUNTERS_BLOCK() {
-    PPCounters::MyCounters().evicted_pages++;
-  }
-};
-
-// phase 1: find cool candidates and cool them
-// hot and all the children are evicted: cool it
-// hot but one of the chidren is cool: choose the child and restart
-// cool: evict it
-inline void BufferFrameProvider::PickBufferFramesToCool(
-    Partition& targetPartition) {
+void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
   LS_DLOG("Phase1: PickBufferFramesToCool begins");
   SCOPED_DEFER(LS_DLOG(
       "Phase1: PickBufferFramesToCool ended, mEvictCandidateBfs.size={}",
@@ -282,9 +77,9 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
 
         if (coolCandidate->mHeader.mState == State::kCool) {
           mEvictCandidateBfs.push_back(coolCandidate);
-          Log::Info("Find a cool buffer frame, added to mEvictCandidateBfs, "
-                    "pageId={}",
-                    coolCandidate->mHeader.mPageId);
+          LS_DLOG("Find a cool buffer frame, added to mEvictCandidateBfs, "
+                  "pageId={}",
+                  coolCandidate->mHeader.mPageId);
           // TODO: maybe without failedAttempts?
           failedAttempts = failedAttempts + 1;
           LS_DLOG("Cool candidate discarded, it's already cool, pageId={}",
@@ -316,11 +111,12 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
         }
 
         mStore->mTreeRegistry->IterateChildSwips(
-            coolCandidate->mPage.mBTreeId, *coolCandidate, [&](Swip& swip) {
+            coolCandidate->mPage.mBTreeId, *coolCandidate,
+            [&](Swip& childSwip) {
               // Ignore when it has a child in the cooling stage
-              allChildrenEvicted &= swip.IsEvicted();
-              if (swip.IsHot()) {
-                BufferFrame* childBf = &swip.AsBufferFrame();
+              allChildrenEvicted = allChildrenEvicted && childSwip.IsEvicted();
+              if (childSwip.IsHot()) {
+                BufferFrame* childBf = &childSwip.AsBufferFrame();
                 readGuard.JumpIfModifiedByOthers();
                 pickedAChild = true;
                 mCoolCandidateBfs.push_back(childBf);
@@ -423,8 +219,7 @@ inline void BufferFrameProvider::PickBufferFramesToCool(
   }
 }
 
-inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
-    Partition& targetPartition) {
+void PageEvictor::PrepareAsyncWriteBuffer(Partition& targetPartition) {
   LS_DLOG("Phase2: PrepareAsyncWriteBuffer begins");
   SCOPED_DEFER(LS_DLOG("Phase2: PrepareAsyncWriteBuffer ended, "
                        "mAsyncWriteBuffer.PendingRequests={}",
@@ -506,8 +301,7 @@ inline void BufferFrameProvider::PrepareAsyncWriteBuffer(
   mEvictCandidateBfs.clear();
 }
 
-inline void BufferFrameProvider::FlushAndRecycleBufferFrames(
-    Partition& targetPartition) {
+void PageEvictor::FlushAndRecycleBufferFrames(Partition& targetPartition) {
   LS_DLOG("Phase3: FlushAndRecycleBufferFrames begins");
   SCOPED_DEFER(LS_DLOG("Phase3: FlushAndRecycleBufferFrames ended"));
 
@@ -566,5 +360,41 @@ inline void BufferFrameProvider::FlushAndRecycleBufferFrames(
   }
 }
 
-} // namespace storage
-} // namespace leanstore
+void PageEvictor::evictFlushedBf(BufferFrame& cooledBf,
+                                 BMOptimisticGuard& optimisticGuard,
+                                 Partition& targetPartition) {
+  TREEID btreeId = cooledBf.mPage.mBTreeId;
+  optimisticGuard.JumpIfModifiedByOthers();
+  ParentSwipHandler parentHandler =
+      mStore->mTreeRegistry->FindParent(btreeId, cooledBf);
+
+  LS_DCHECK(parentHandler.mParentGuard.mState == GuardState::kOptimisticShared);
+  BMExclusiveUpgradeIfNeeded parentWriteGuard(parentHandler.mParentGuard);
+  optimisticGuard.mGuard.ToExclusiveMayJump();
+
+  if (mStore->mStoreOption.mEnableBufferCrcCheck && cooledBf.mHeader.mCrc) {
+    LS_DCHECK(cooledBf.mPage.CRC() == cooledBf.mHeader.mCrc);
+  }
+  LS_DCHECK(!cooledBf.IsDirty());
+  LS_DCHECK(!cooledBf.mHeader.mIsBeingWrittenBack);
+  LS_DCHECK(cooledBf.mHeader.mState == State::kCool);
+  LS_DCHECK(parentHandler.mChildSwip.IsCool());
+
+  parentHandler.mChildSwip.Evict(cooledBf.mHeader.mPageId);
+
+  // Reclaim buffer frame
+  cooledBf.Reset();
+  cooledBf.mHeader.mLatch.UnlockExclusively();
+
+  mFreeBfList.PushFront(cooledBf);
+  if (mFreeBfList.Size() <=
+      std::min<uint64_t>(mStore->mStoreOption.mWorkerThreads, 128)) {
+    mFreeBfList.PopTo(targetPartition);
+  }
+
+  COUNTERS_BLOCK() {
+    PPCounters::MyCounters().evicted_pages++;
+  }
+};
+
+} // namespace leanstore::storage

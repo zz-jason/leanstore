@@ -1,12 +1,14 @@
 #pragma once
 
-#include "leanstore/PerfEvent.hpp"
-
 #include <memory>
 #include <mutex>
 #include <unordered_map>
 
+class PerfEvent;
+
 namespace leanstore {
+
+// NOLINTBEGIN
 
 struct CPUCounters {
   std::unique_ptr<PerfEvent> e;
@@ -23,5 +25,7 @@ struct CPUCounters {
 
   static void removeThread(uint64_t id);
 };
+
+// NOLINTEND
 
 } // namespace leanstore

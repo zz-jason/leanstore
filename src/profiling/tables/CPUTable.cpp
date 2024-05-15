@@ -1,5 +1,6 @@
 #include "CPUTable.hpp"
 
+#include "leanstore/PerfEvent.hpp"
 #include "profiling/counters/CPUCounters.hpp"
 
 namespace leanstore {

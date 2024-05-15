@@ -1,4 +1,5 @@
 #include "Ycsb.hpp"
+#include "btree/BasicKV.hpp"
 #include "btree/TransactionKV.hpp"
 #include "concurrency/CRManager.hpp"
 #include "concurrency/Worker.hpp"
@@ -6,6 +7,7 @@
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/StoreOption.hpp"
 #include "utils/Defer.hpp"
+#include "utils/JumpMU.hpp"
 #include "utils/Log.hpp"
 #include "utils/RandomGenerator.hpp"
 #include "utils/ScrambledZipfGenerator.hpp"
@@ -25,6 +27,8 @@
 
 namespace leanstore::ycsb {
 
+constexpr std::string kTableName = "ycsb_leanstore";
+
 class YcsbLeanStore : public YcsbExecutor {
 private:
   std::unique_ptr<LeanStore> mStore;
@@ -32,12 +36,13 @@ private:
   bool mBenchTransactionKv;
 
 public:
-  YcsbLeanStore(bool benchTransactionKv)
+  YcsbLeanStore(bool benchTransactionKv, bool createFromScratch)
       : mBenchTransactionKv(benchTransactionKv) {
     auto res = LeanStore::Open(StoreOption{
-        .mCreateFromScratch = true,
-        .mStoreDir = "/tmp/ycsb/" + FLAGS_ycsb_workload,
+        .mCreateFromScratch = createFromScratch,
+        .mStoreDir = FLAGS_ycsb_data_dir + "/leanstore",
         .mWorkerThreads = FLAGS_ycsb_threads,
+        .mBufferPoolSize = FLAGS_ycsb_mem_kb * 1024,
         .mEnableMetrics = true,
         .mMetricsPort = 8080,
     });
@@ -50,15 +55,19 @@ public:
     mStore = std::move(res.value());
   }
 
+  ~YcsbLeanStore() override {
+    std::cout << "~YcsbLeanStore" << std::endl;
+    mStore.reset(nullptr);
+  }
+
   KVInterface* CreateTable() {
-    auto tableName = "ycsb_" + FLAGS_ycsb_workload;
     // create table with transaction kv
     if (mBenchTransactionKv) {
       btree::TransactionKV* table;
       mStore->ExecSync(0, [&]() {
-        auto res = mStore->CreateTransactionKV(tableName);
+        auto res = mStore->CreateTransactionKV(kTableName);
         if (!res) {
-          Log::Fatal("Failed to create table: name={}, error={}", tableName,
+          Log::Fatal("Failed to create table: name={}, error={}", kTableName,
                      res.error().ToString());
         }
         table = res.value();
@@ -69,9 +78,9 @@ public:
     // create table with basic kv
     btree::BasicKV* table;
     mStore->ExecSync(0, [&]() {
-      auto res = mStore->CreateBasicKV(tableName);
+      auto res = mStore->CreateBasicKV(kTableName);
       if (!res) {
-        Log::Fatal("Failed to create table: name={}, error={}", tableName,
+        Log::Fatal("Failed to create table: name={}, error={}", kTableName,
                    res.error().ToString());
       }
       table = res.value();
@@ -80,14 +89,13 @@ public:
   }
 
   KVInterface* GetTable() {
-    auto tableName = "ycsb_" + FLAGS_ycsb_workload;
     if (mBenchTransactionKv) {
       btree::TransactionKV* table;
-      mStore->GetTransactionKV(tableName, &table);
+      mStore->GetTransactionKV(kTableName, &table);
       return table;
     }
     btree::BasicKV* table;
-    mStore->GetBasicKV(tableName, &table);
+    mStore->GetBasicKV(kTableName, &table);
     return table;
   }
 
@@ -116,20 +124,23 @@ public:
     for (auto workerId = 0u, begin = 0u; workerId < numWorkers;) {
       auto end = begin + avg + (rem-- > 0 ? 1 : 0);
       mStore->ExecAsync(workerId, [&, begin, end]() {
-        for (uint64_t i = begin; i < end; i++) {
-          // generate key for insert
-          uint8_t key[FLAGS_ycsb_key_size];
-          GenKey(i, key);
+        uint8_t key[FLAGS_ycsb_key_size];
+        uint8_t val[FLAGS_ycsb_val_size];
 
-          // generate value
-          uint8_t val[FLAGS_ycsb_val_size];
+        for (uint64_t i = begin; i < end; i++) {
+          // generate key-value for insert
+          GenKey(i, key);
           utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
 
           if (mBenchTransactionKv) {
             cr::Worker::My().StartTx();
           }
-          table->Insert(Slice(key, FLAGS_ycsb_key_size),
-                        Slice(val, FLAGS_ycsb_val_size));
+          auto opCode = table->Insert(Slice(key, FLAGS_ycsb_key_size),
+                                      Slice(val, FLAGS_ycsb_val_size));
+          if (opCode != OpCode::kOK) {
+            Log::Fatal("Failed to insert, opCode={}",
+                       static_cast<uint8_t>(opCode));
+          }
           if (mBenchTransactionKv) {
             cr::Worker::My().CommitTx();
           }
@@ -237,25 +248,9 @@ public:
       a = 0;
     }
 
-    auto reportPeriod = 1;
-    for (uint64_t i = 0; i < FLAGS_ycsb_run_for_seconds; i += reportPeriod) {
-      sleep(reportPeriod);
-      auto committed = 0;
-      auto aborted = 0;
-      for (auto& c : threadCommitted) {
-        committed += c.exchange(0);
-      }
-      for (auto& a : threadAborted) {
-        aborted += a.exchange(0);
-      }
-      auto abortRate = (aborted)*1.0 / (committed + aborted);
-      auto summary = std::format("[{} thds] [{}s] [tps={:.2f}] [committed={}] "
-                                 "[conflicted={}] [conflict rate={:.2f}]",
-                                 mStore->mStoreOption.mWorkerThreads, i,
-                                 (committed + aborted) * 1.0 / reportPeriod,
-                                 committed, aborted, abortRate);
-      std::cout << summary << std::endl;
-    }
+    printTpsSummary(1, FLAGS_ycsb_run_for_seconds,
+                    mStore->mStoreOption.mWorkerThreads, threadCommitted,
+                    threadAborted);
 
     // Shutdown threads
     keepRunning = false;

@@ -78,8 +78,12 @@ public:
   static constexpr uint64_t kCleanBitsMask = ~(kRcBit | kLongRunningBit);
 
 public:
-  inline static Worker& My() {
+  static Worker& My() {
     return *Worker::sTlsWorkerRaw;
+  }
+
+  static bool InWorker() {
+    return Worker::sTlsWorkerRaw != nullptr;
   }
 };
 

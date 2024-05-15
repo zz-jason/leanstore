@@ -125,13 +125,13 @@ public:
 private:
   /// serializeMeta serializes all the metadata about concurrent resources,
   /// buffer manager, btrees, and flags
-  void serializeMeta();
+  void serializeMeta(bool allPagesUpToDate);
 
   /// serializeFlags serializes all the persisted flags to the provided json.
   void serializeFlags(rapidjson::Document& d);
 
   /// deserializeMeta deserializes all the metadata except for the flags.
-  void deserializeMeta();
+  bool deserializeMeta();
 
   /// deserializeFlags deserializes the flags.
   void deserializeFlags();

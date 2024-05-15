@@ -5,16 +5,15 @@
 #include "concurrency/WalEntry.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
-#include "utils/Defer.hpp"
-#include "utils/Error.hpp"
-#include "utils/Log.hpp"
 #include "utils/Result.hpp"
 
+#include <cstring>
 #include <expected>
 #include <map>
 
-namespace leanstore {
-namespace cr {
+#include <unistd.h>
+
+namespace leanstore::cr {
 
 class Recovery {
 private:
@@ -108,7 +107,8 @@ private:
   /// active at crash time. In the case of an aborted transaction, it’s possible
   /// to traverse the log file in reverse order using the previous sequence
   /// numbers, undoing all actions taken within the specific transaction.
-  bool undo();
+  void undo() {
+  }
 
   /// Return the buffer frame containing the required dirty page
   storage::BufferFrame& resolvePage(PID pageId);
@@ -120,79 +120,4 @@ private:
                                void* destination);
 };
 
-inline bool Recovery::Run() {
-  bool error(false);
-
-  analysis();
-  for (auto it = mResolvedPages.begin(); it != mResolvedPages.end(); ++it) {
-    if (it->second->IsFree()) {
-      continue;
-    }
-    LS_DLOG("Resolved page after analysis"
-            ", address={}, pageId={}, btreeId={}",
-            (void*)it->second, it->first, it->second->mPage.mBTreeId);
-  }
-  // print resulting active transaction table
-  LS_DLOG("Active transaction table size: {}", mActiveTxTable.size());
-  for (auto it = mActiveTxTable.begin(); it != mActiveTxTable.end(); ++it) {
-    LS_DLOG("Active transaction table after analysis, txId={}, offset={}",
-            it->first, it->second);
-  }
-  // print dirty page table
-  LS_DLOG("Dirty page table size: {}", mDirtyPageTable.size());
-  for (auto it = mDirtyPageTable.begin(); it != mDirtyPageTable.end(); ++it) {
-    LS_DLOG("Dirty page table after analysis, pageId: {}, offset: {}",
-            it->first, it->second);
-  }
-
-  redo();
-
-  // if (Undo()) {
-  //   return true;
-  // }
-
-  return error;
-}
-
-inline bool Recovery::undo() {
-  return false;
-}
-
-inline storage::BufferFrame& Recovery::resolvePage(PID pageId) {
-  auto it = mResolvedPages.find(pageId);
-  if (it != mResolvedPages.end()) {
-    return *it->second;
-  }
-
-  auto& bf = mStore->mBufferManager->ReadPageSync(pageId);
-  // prevent the buffer frame from being evicted by buffer frame providers
-  bf.mHeader.mKeepInMemory = true;
-  mResolvedPages.emplace(pageId, &bf);
-  return bf;
-}
-
-inline Result<void> Recovery::readFromWalFile(int64_t offset, size_t nbytes,
-                                              void* destination) {
-  auto fileName = mStore->mStoreOption.GetWalFilePath();
-  FILE* fp = fopen(fileName.c_str(), "rb");
-  if (fp == nullptr) {
-    return std::unexpected(
-        utils::Error::FileOpen(fileName, errno, strerror(errno)));
-  }
-  SCOPED_DEFER(fclose(fp));
-
-  if (fseek(fp, offset, SEEK_SET) != 0) {
-    return std::unexpected(
-        utils::Error::FileSeek(fileName, errno, strerror(errno)));
-  }
-
-  if (fread(destination, 1, nbytes, fp) != nbytes) {
-    return std::unexpected(
-        utils::Error::FileRead(fileName, errno, strerror(errno)));
-  }
-
-  return {};
-}
-
-} // namespace cr
-} // namespace leanstore
+} // namespace leanstore::cr

@@ -7,6 +7,7 @@
 #include "concurrency/WalEntry.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "sync/HybridGuard.hpp"
+#include "utils/Defer.hpp"
 #include "utils/Log.hpp"
 
 #include <cstdint>
@@ -19,11 +20,51 @@ using namespace leanstore::storage;
 using namespace leanstore::utils;
 using namespace leanstore::storage::btree;
 
+bool Recovery::Run() {
+  bool error(false);
+
+  analysis();
+  Log::Info("[Recovery] resolved page size: {}", mResolvedPages.size());
+  for (auto it = mResolvedPages.begin(); it != mResolvedPages.end(); ++it) {
+    if (it->second->IsFree()) {
+      continue;
+    }
+    LS_DLOG("Resolved page after analysis"
+            ", address={}, pageId={}, btreeId={}",
+            (void*)it->second, it->first, it->second->mPage.mBTreeId);
+  }
+
+  // print resulting active transaction table
+  Log::Info("[Recovery] active transaction table size: {}",
+            mActiveTxTable.size());
+  for (auto it = mActiveTxTable.begin(); it != mActiveTxTable.end(); ++it) {
+    LS_DLOG("Active transaction table after analysis, txId={}, offset={}",
+            it->first, it->second);
+  }
+
+  // print dirty page table
+  Log::Info("[Recovery] dirty page table size: {}", mDirtyPageTable.size());
+  for (auto it = mDirtyPageTable.begin(); it != mDirtyPageTable.end(); ++it) {
+    LS_DLOG("Dirty page table after analysis, pageId: {}, offset: {}",
+            it->first, it->second);
+  }
+
+  redo();
+
+  undo();
+
+  return error;
+}
+
 Result<void> Recovery::analysis() {
+  Log::Info("[Recovery] analysis phase begins");
+  SCOPED_DEFER(Log::Info("[Recovery] analysis phase ends"))
+
   // asume that each WalEntry is smaller than the page size
   utils::AlignedBuffer<512> alignedBuffer(mStore->mStoreOption.mPageSize);
   uint8_t* walEntryPtr = alignedBuffer.Get();
   for (auto offset = mWalStartOffset; offset < mWalSize;) {
+    auto startOffset = offset;
     if (auto res = readWalEntry(offset, walEntryPtr); !res) {
       return std::unexpected(std::move(res.error()));
     }
@@ -58,7 +99,9 @@ Result<void> Recovery::analysis() {
       continue;
     }
     default: {
-      Log::Fatal("Unrecognized WalEntry type: {}", walEntry->TypeName());
+      Log::Fatal("Unrecognized WalEntry type: {}, offset={}, walFd={}",
+                 static_cast<uint8_t>(walEntry->mType), startOffset,
+                 mStore->mWalFd);
     }
     }
   }
@@ -66,14 +109,21 @@ Result<void> Recovery::analysis() {
 }
 
 Result<void> Recovery::redo() {
+  Log::Info("[Recovery] redo phase begins");
+  SCOPED_DEFER(Log::Info("[Recovery] redo phase ends"))
+
   // asume that each WalEntry is smaller than the page size
   utils::AlignedBuffer<512> alignedBuffer(mStore->mStoreOption.mPageSize);
   auto* complexEntry = reinterpret_cast<WalEntryComplex*>(alignedBuffer.Get());
 
   for (auto offset = mWalStartOffset; offset < mWalSize;) {
+    auto startOffset = offset;
     auto res = nextWalComplexToRedo(offset, complexEntry);
     if (!res) {
       // met error
+      Log::Error(
+          "[Recovery] failed to get next WalComplex, offset={}, error={}",
+          startOffset, res.error().ToString());
       return std::unexpected(res.error());
     }
 
@@ -428,6 +478,43 @@ Result<void> Recovery::readWalEntry(uint64_t& offset, uint8_t* dest) {
     return {};
   }
   }
+  return {};
+}
+
+storage::BufferFrame& Recovery::resolvePage(PID pageId) {
+  auto it = mResolvedPages.find(pageId);
+  if (it != mResolvedPages.end()) {
+    return *it->second;
+  }
+
+  auto& bf = mStore->mBufferManager->ReadPageSync(pageId);
+  // prevent the buffer frame from being evicted by buffer frame providers
+  bf.mHeader.mKeepInMemory = true;
+  mResolvedPages.emplace(pageId, &bf);
+  return bf;
+}
+
+// TODO(zz-jason): refactor with aio
+Result<void> Recovery::readFromWalFile(int64_t offset, size_t nbytes,
+                                       void* destination) {
+  auto fileName = mStore->mStoreOption.GetWalFilePath();
+  FILE* fp = fopen(fileName.c_str(), "rb");
+  if (fp == nullptr) {
+    return std::unexpected(
+        utils::Error::FileOpen(fileName, errno, strerror(errno)));
+  }
+  SCOPED_DEFER(fclose(fp));
+
+  if (fseek(fp, offset, SEEK_SET) != 0) {
+    return std::unexpected(
+        utils::Error::FileSeek(fileName, errno, strerror(errno)));
+  }
+
+  if (fread(destination, 1, nbytes, fp) != nbytes) {
+    return std::unexpected(
+        utils::Error::FileRead(fileName, errno, strerror(errno)));
+  }
+
   return {};
 }
 

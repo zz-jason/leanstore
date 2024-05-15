@@ -378,9 +378,12 @@ int32_t BTreeNode::compareKeyWithBoundaries(Slice key) {
 Swip& BTreeNode::lookupInner(Slice key) {
   int32_t slotId = lowerBound<false>(key);
   if (slotId == mNumSeps) {
+    LS_DCHECK(!mRightMostChildSwip.IsEmpty());
     return mRightMostChildSwip;
   }
-  return *ChildSwip(slotId);
+  auto* childSwip = ChildSwip(slotId);
+  LS_DCHECK(!childSwip->IsEmpty(), "childSwip is empty, slotId={}", slotId);
+  return *childSwip;
 }
 
 /// This = right

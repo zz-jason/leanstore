@@ -13,16 +13,29 @@ void Parallelize::Range(
     uint64_t numThreads, uint64_t numJobs,
     std::function<void(uint64_t threadId, uint64_t jobBegin, uint64_t jobEnd)>
         jobHandler) {
+  auto* store = tlsStore;
+  std::vector<std::thread> threads;
   const uint64_t jobsPerThread = numJobs / numThreads;
   LS_DCHECK(jobsPerThread > 0, "Jobs per thread must be > 0");
 
-  for (uint64_t i = 0; i < numThreads; i++) {
-    uint64_t begin = (i * jobsPerThread);
+  for (uint64_t threadId = 0; threadId < numThreads; threadId++) {
+    uint64_t begin = (threadId * jobsPerThread);
     uint64_t end = begin + (jobsPerThread);
-    if (i == numThreads - 1) {
+    if (threadId == numThreads - 1) {
       end = numJobs;
     }
-    jobHandler(i, begin, end);
+
+    threads.emplace_back(
+        [&](uint64_t begin, uint64_t end) {
+          tlsStore = store;
+          jobHandler(threadId, begin, end);
+        },
+        begin, end);
+  }
+
+  // wait all threads to finish
+  for (auto& thread : threads) {
+    thread.join();
   }
 }
 
@@ -31,11 +44,13 @@ void Parallelize::ParallelRange(
     std::function<void(uint64_t jobBegin, uint64_t jobEnd)> jobHandler) {
   auto* store = tlsStore;
   std::vector<std::thread> threads;
-  const uint64_t numThread = std::thread::hardware_concurrency();
-  const uint64_t jobsPerThread = numJobs / numThread;
+  uint64_t numThread = std::thread::hardware_concurrency();
+  uint64_t jobsPerThread = numJobs / numThread;
   uint64_t numRemaining = numJobs % numThread;
   uint64_t numProceedTasks = 0;
-  LS_DCHECK(jobsPerThread > 0);
+  if (jobsPerThread < numThread) {
+    numThread = numRemaining;
+  }
 
   // To balance the workload among all threads:
   // - the first numRemaining threads process jobsPerThread+1 tasks

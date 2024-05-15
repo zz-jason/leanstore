@@ -51,6 +51,7 @@ public:
 
 public:
   /// The swip of the right-most child.
+  /// TODO(zz-jason): can it be moved to the slot array?
   Swip mRightMostChildSwip = nullptr;
 
   /// The lower fence of the node. Exclusive.

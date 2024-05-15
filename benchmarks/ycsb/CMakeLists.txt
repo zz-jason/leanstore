@@ -17,7 +17,7 @@ option(ENABLE_ROCKSDB "Enable benchmarking rocksdb" OFF)
 if(ENABLE_ROCKSDB)
   find_package(RocksDB CONFIG REQUIRED)
   list(APPEND YCSB_DEPS RocksDB::rocksdb)
-  list(APPEND YCSB_DEPS RocksDB::rocksdb-shared)
+  # list(APPEND YCSB_DEPS RocksDB::rocksdb-shared)
 endif(ENABLE_ROCKSDB)
 
 find_package(PkgConfig REQUIRED)

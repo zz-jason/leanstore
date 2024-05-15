@@ -53,6 +53,10 @@ CRManager::CRManager(leanstore::LeanStore* store)
 
 void CRManager::Stop() {
   mGroupCommitter->Stop();
+
+  for (auto& workerThread : mWorkerThreads) {
+    workerThread->Stop();
+  }
   mWorkerThreads.clear();
 }
 
