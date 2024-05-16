@@ -11,7 +11,6 @@
 #include "profiling/counters/WorkerCounters.hpp"
 #include "sync/HybridLatch.hpp"
 #include "sync/ScopedHybridGuard.hpp"
-#include "telemetry/MetricOnlyTimer.hpp"
 #include "utils/AsyncIo.hpp"
 #include "utils/DebugFlags.hpp"
 #include "utils/Defer.hpp"
@@ -130,11 +129,15 @@ void BufferManager::Deserialize(StringMap map) {
 }
 
 Result<void> BufferManager::CheckpointAllBufferFrames() {
-  telemetry::MetricOnlyTimer timer;
+  auto startAt = std::chrono::steady_clock::now();
   Log::Info("CheckpointAllBufferFrames, mNumBfs={}", mNumBfs);
-  SCOPED_DEFER(COUNTERS_BLOCK() {
+  SCOPED_DEFER({
+    auto stoppedAt = std::chrono::steady_clock::now();
+    auto elaspedNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                         stoppedAt - startAt)
+                         .count();
     Log::Info("CheckpointAllBufferFrames finished, timeElasped={:.6f}s",
-              timer.ElaspedUs() / 1000000.0);
+              elaspedNs / 1000000000.0);
   });
 
   LS_DEBUG_EXECUTE(mStore, "skip_CheckpointAllBufferFrames", {
@@ -512,6 +515,9 @@ Partition& BufferManager::GetPartition(PID pageId) {
 }
 
 void BufferManager::StopPageEvictors() {
+  for (auto& pageEvictor : mPageEvictors) {
+    pageEvictor->Stop();
+  }
   mPageEvictors.clear();
 }
 
