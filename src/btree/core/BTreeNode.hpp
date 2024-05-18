@@ -80,8 +80,7 @@ public:
 
   uint16_t mPrefixSize = 0;
 
-  // NOLINTNEXTLINE.
-  uint32_t hint[sHintCount];
+  uint32_t mHint[sHintCount];
 
   //! Needed for GC
   bool mHasGarbage = false;
@@ -380,7 +379,7 @@ public:
         lower_out = pos * dist;
         // -------------------------------------------------------------------------------------
         for (pos2 = pos; pos2 < sHintCount; pos2++) {
-          if (hint[pos2] != key_head) {
+          if (mHint[pos2] != key_head) {
             break;
           }
         }
@@ -395,12 +394,12 @@ public:
         uint16_t pos, pos2;
 
         for (pos = 0; pos < sHintCount; pos++) {
-          if (hint[pos] >= key_head) {
+          if (mHint[pos] >= key_head) {
             break;
           }
         }
         for (pos2 = pos; pos2 < sHintCount; pos2++) {
-          if (hint[pos2] != key_head) {
+          if (mHint[pos2] != key_head) {
             break;
           }
         }

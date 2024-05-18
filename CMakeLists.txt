@@ -12,11 +12,10 @@ endif ()
 enable_language(ASM)
 
 set(CMAKE_CXX_STANDARD 23)
-add_compile_definitions(__cpp_concepts=202002L)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -Wextra -rdynamic -fno-omit-frame-pointer -pthread")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -Wextra -rdynamic -fno-omit-frame-pointer -pthread -Wno-unused-command-line-argument")
 if (CMAKE_BUILD_TYPE MATCHES Debug)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDEBUG -O0 -g3")
 else()
@@ -81,3 +80,38 @@ add_subdirectory(benchmarks)
 # tests
 include(CTest)
 add_subdirectory(tests)
+
+
+# ---------------------------------------------------------------------------
+# clang-format
+# ---------------------------------------------------------------------------
+
+file(GLOB_RECURSE ALL_SOURCE_FILES
+  "src/*.cpp" "src/*.hpp",
+  "include/*.hpp",
+  "tests/*.cpp", "tests/*.hpp"
+  "benchmarks/*.cpp", "benchmarks/*.hpp")
+
+# check-format
+add_custom_target(check-format
+  COMMAND clang-format --style=file --dry-run -Werror -i ${ALL_SOURCE_FILES}
+  VERBATIM
+)
+
+# fix format
+add_custom_target(format
+  COMMAND clang-format --style=file -i ${ALL_SOURCE_FILES}
+  VERBATIM
+)
+
+
+# ---------------------------------------------------------------------------
+# clang-tidy
+# ---------------------------------------------------------------------------
+
+# clang-tidy
+add_custom_target(check-tidy
+    COMMAND clang-tidy -p=${CMAKE_BINARY_DIR} --config-file=${CMAKE_SOURCE_DIR}/.clang-tidy ${ALL_SOURCE_FILES} -extra-arg='--std=c++2b'
+    COMMENT "Running Clang-Tidy"
+    VERBATIM
+)

@@ -17,6 +17,7 @@ jobs:
 
     - name: Install dependencies
       run: |
+        cat /etc/lsb-release;
         sudo apt update;
         sudo apt install -y build-essential git cmake make gcc-13 g++-13;
         sudo apt install -y libaio-dev python3-pip cppcheck ninja-build;
@@ -49,6 +50,12 @@ jobs:
         export VCPKG_FORCE_SYSTEM_BINARIES=1;
         which vcpkg;
         cmake --preset debug_tsan;
+
+    - name: Check format
+      run: |
+        which clang-format;
+        clang-format --version;
+        cmake --build build/debug_tsan --target check-format;
 
     - name: Cppcheck
       run: cppcheck --project=build/debug_tsan/compile_commands.json -i tests --error-exitcode=1

@@ -9,7 +9,7 @@ namespace leanstore::storage::btree {
 void BTreeNode::makeHint() {
   uint16_t dist = mNumSeps / (sHintCount + 1);
   for (uint16_t i = 0; i < sHintCount; i++)
-    hint[i] = slot[dist * (i + 1)].head;
+    mHint[i] = slot[dist * (i + 1)].head;
 }
 
 void BTreeNode::updateHint(uint16_t slotId) {
@@ -19,9 +19,9 @@ void BTreeNode::updateHint(uint16_t slotId) {
       (((mNumSeps - 1) / (sHintCount + 1)) == dist) && ((slotId / dist) > 1))
     begin = (slotId / dist) - 1;
   for (uint16_t i = begin; i < sHintCount; i++)
-    hint[i] = slot[dist * (i + 1)].head;
+    mHint[i] = slot[dist * (i + 1)].head;
   for (uint16_t i = 0; i < sHintCount; i++)
-    assert(hint[i] == slot[dist * (i + 1)].head);
+    assert(mHint[i] == slot[dist * (i + 1)].head);
 }
 
 uint16_t BTreeNode::spaceNeeded(uint16_t keySize, uint16_t valSize,
@@ -484,7 +484,7 @@ void BTreeNode::ToJson(rapidjson::Value* resultObj,
     rapidjson::Value memberArray(rapidjson::kArrayType);
     for (auto i = 0; i < sHintCount; ++i) {
       rapidjson::Value hintJson;
-      hintJson.SetUint64(hint[i]);
+      hintJson.SetUint64(mHint[i]);
       memberArray.PushBack(hintJson, allocator);
     }
     resultObj->AddMember("mHints", memberArray, allocator);
