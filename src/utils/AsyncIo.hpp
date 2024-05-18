@@ -16,6 +16,8 @@
 
 namespace leanstore::utils {
 
+constexpr size_t kAlignment = 512;
+
 class AsyncIo {
 public:
   AsyncIo(uint64_t maxBatchSize)
@@ -55,6 +57,7 @@ public:
   }
 
   void PrepareRead(int32_t fd, void* buf, size_t count, uint64_t offset) {
+    LS_DCHECK((reinterpret_cast<uint64_t>(buf) & (kAlignment - 1)) == 0);
     LS_DCHECK(!IsFull());
     auto slot = mNumReqs++;
     io_prep_pread(&mIocbs[slot], fd, buf, count, offset);
@@ -62,6 +65,7 @@ public:
   }
 
   void PrepareWrite(int32_t fd, void* buf, size_t count, uint64_t offset) {
+    LS_DCHECK((reinterpret_cast<uint64_t>(buf) & (kAlignment - 1)) == 0);
     LS_DCHECK(!IsFull());
     auto slot = mNumReqs++;
     io_prep_pwrite(&mIocbs[slot], fd, buf, count, offset);

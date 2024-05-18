@@ -1,5 +1,6 @@
 #include "buffer-manager/PageEvictor.hpp"
 
+#include "buffer-manager/BufferManager.hpp"
 #include "buffer-manager/TreeRegistry.hpp"
 #include "profiling/counters/CPUCounters.hpp"
 #include "profiling/counters/PPCounters.hpp"
@@ -16,7 +17,7 @@ void PageEvictor::runImpl() {
   CPUCounters::registerThread(mThreadName);
 
   while (mKeepRunning) {
-    auto& targetPartition = randomPartition();
+    auto& targetPartition = mStore->mBufferManager->RandomPartition();
     if (!targetPartition.NeedMoreFreeBfs()) {
       continue;
     }
@@ -219,6 +220,16 @@ void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
   }
 }
 
+void PageEvictor::randomBufferFramesToCoolOrEvict() {
+  mCoolCandidateBfs.clear();
+  for (auto i = 0u; i < mStore->mStoreOption.mBufferFrameRecycleBatchSize;
+       i++) {
+    auto* randomBf = &mStore->mBufferManager->RandomBufferFrame();
+    DO_NOT_OPTIMIZE(randomBf->mHeader.mState);
+    mCoolCandidateBfs.push_back(randomBf);
+  }
+}
+
 void PageEvictor::PrepareAsyncWriteBuffer(Partition& targetPartition) {
   LS_DLOG("Phase2: PrepareAsyncWriteBuffer begins");
   SCOPED_DEFER(LS_DLOG("Phase2: PrepareAsyncWriteBuffer ended, "
@@ -240,8 +251,8 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& targetPartition) {
                 cooledBf->mHeader.mIsBeingWrittenBack.load());
         JUMPMU_CONTINUE;
       }
-      const PID cooledPageId = cooledBf->mHeader.mPageId;
-      const uint64_t partitionId = getPartitionId(cooledPageId);
+      PID cooledPageId = cooledBf->mHeader.mPageId;
+      auto partitionId = mStore->mBufferManager->GetPartitionID(cooledPageId);
 
       // Prevent evicting a page that already has an IO Frame with (possibly)
       // threads working on it.

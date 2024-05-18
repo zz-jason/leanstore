@@ -14,8 +14,6 @@
 
 namespace leanstore::cr {
 
-/// @brief Calculate the continuous free space left in the wal ring buffer.
-/// @return Size of the contiguous free space
 uint32_t Logging::walContiguousFreeSpace() {
   const auto flushed = mWalFlushed.load();
   if (flushed <= mWalBuffered) {
@@ -103,8 +101,6 @@ void Logging::WriteWalCarriageReturn() {
   publishWalBufferedOffset();
 }
 
-/// Submits the wal record to group committer when it is ready to flush to disk.
-/// @param totalSize is the size of the wal record to be flush.
 void Logging::SubmitWALEntryComplex(uint64_t totalSize) {
   SCOPED_DEFER({
       // LS_DLOG("SubmitWal, workerId={}, startTs={}, curGSN={}, walJson={}",

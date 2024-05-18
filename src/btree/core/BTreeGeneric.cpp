@@ -385,7 +385,7 @@ int16_t BTreeGeneric::mergeLeftIntoRight(
                        xGuardedLeft->KeySizeWithoutPrefix(i) +
                        xGuardedLeft->ValSize(i);
     if (spaceUpperBound + (xGuardedLeft->getFullKeyLen(i) -
-                           xGuardedRight->mLowerFence.length) <
+                           xGuardedRight->mLowerFence.mLength) <
         BTreeNode::Size() * 1.0) {
       tillSlotId = i + 1;
       break;
@@ -396,7 +396,7 @@ int16_t BTreeGeneric::mergeLeftIntoRight(
   }
 
   assert((spaceUpperBound + (xGuardedLeft->getFullKeyLen(tillSlotId - 1) -
-                             xGuardedRight->mLowerFence.length)) <
+                             xGuardedRight->mLowerFence.mLength)) <
          BTreeNode::Size() * 1.0);
   assert(tillSlotId > 0);
 
@@ -445,11 +445,11 @@ int16_t BTreeGeneric::mergeLeftIntoRight(
                Slice(newLeftUpperFence, newLeftUpperFenceSize)) == 0);
     // -------------------------------------------------------------------------------------
     xGuardedParent->removeSlot(lhsSlotId);
-    ENSURE(xGuardedParent->prepareInsert(xGuardedLeft->mUpperFence.length,
+    ENSURE(xGuardedParent->prepareInsert(xGuardedLeft->mUpperFence.mLength,
                                          sizeof(Swip)));
     auto swip = xGuardedLeft.swip();
     Slice key(xGuardedLeft->GetUpperFenceKey(),
-              xGuardedLeft->mUpperFence.length);
+              xGuardedLeft->mUpperFence.mLength);
     Slice val(reinterpret_cast<uint8_t*>(&swip), sizeof(Swip));
     xGuardedParent->Insert(key, val);
   }

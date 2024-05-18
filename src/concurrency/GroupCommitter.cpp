@@ -13,8 +13,10 @@
 #include <ctime>
 #include <format>
 
-namespace leanstore {
-namespace cr {
+namespace leanstore::cr {
+
+//! The alignment of the WAL record
+constexpr size_t kAligment = 4096;
 
 void GroupCommitter::runImpl() {
   CPUCounters::registerThread(mThreadName, false);
@@ -25,28 +27,27 @@ void GroupCommitter::runImpl() {
   std::vector<uint64_t> numRfaTxs(mWorkers.size(), 0);
   std::vector<WalFlushReq> walFlushReqCopies(mWorkers.size());
 
-  /// write WAL records from every worker thread to SSD.
+  // write WAL records from every worker thread to SSD.
   while (mKeepRunning) {
-
     // phase 1
-    prepareIOCBs(minFlushedGSN, maxFlushedGSN, minFlushedTxId, numRfaTxs,
-                 walFlushReqCopies);
+    collectWalRecords(minFlushedGSN, maxFlushedGSN, minFlushedTxId, numRfaTxs,
+                      walFlushReqCopies);
 
+    // phase 2
     if (!mAIo.IsEmpty()) {
-      // phase 2
-      writeIOCBs();
+      flushWalRecords();
     }
 
     // phase 3
-    commitTXs(minFlushedGSN, maxFlushedGSN, minFlushedTxId, numRfaTxs,
-              walFlushReqCopies);
+    determineCommitableTx(minFlushedGSN, maxFlushedGSN, minFlushedTxId,
+                          numRfaTxs, walFlushReqCopies);
   }
 }
 
-void GroupCommitter::prepareIOCBs(uint64_t& minFlushedGSN,
-                                  uint64_t& maxFlushedGSN, TXID& minFlushedTxId,
-                                  std::vector<uint64_t>& numRfaTxs,
-                                  std::vector<WalFlushReq>& walFlushReqCopies) {
+void GroupCommitter::collectWalRecords(
+    uint64_t& minFlushedGSN, uint64_t& maxFlushedGSN, TXID& minFlushedTxId,
+    std::vector<uint64_t>& numRfaTxs,
+    std::vector<WalFlushReq>& walFlushReqCopies) {
   leanstore::telemetry::MetricOnlyTimer timer;
   SCOPED_DEFER({
     METRIC_HIST_OBSERVE(mStore->mMetricsManager, group_committer_prep_iocbs_us,
@@ -83,10 +84,10 @@ void GroupCommitter::prepareIOCBs(uint64_t& minFlushedGSN,
     const uint64_t flushed = logging.mWalFlushed;
     const uint64_t bufferEnd = mStore->mStoreOption.mWalBufferSize;
     if (buffered > flushed) {
-      setUpIOCB(logging.mWalBuffer, flushed, buffered);
+      append(logging.mWalBuffer, flushed, buffered);
     } else if (buffered < flushed) {
-      setUpIOCB(logging.mWalBuffer, flushed, bufferEnd);
-      setUpIOCB(logging.mWalBuffer, 0, buffered);
+      append(logging.mWalBuffer, flushed, bufferEnd);
+      append(logging.mWalBuffer, 0, buffered);
     }
   }
 
@@ -95,7 +96,7 @@ void GroupCommitter::prepareIOCBs(uint64_t& minFlushedGSN,
   }
 }
 
-void GroupCommitter::writeIOCBs() {
+void GroupCommitter::flushWalRecords() {
   leanstore::telemetry::MetricOnlyTimer timer;
   SCOPED_DEFER({
     METRIC_HIST_OBSERVE(mStore->mMetricsManager, group_committer_write_iocbs_us,
@@ -123,7 +124,7 @@ void GroupCommitter::writeIOCBs() {
   }
 }
 
-void GroupCommitter::commitTXs(
+void GroupCommitter::determineCommitableTx(
     uint64_t minFlushedGSN, uint64_t maxFlushedGSN, TXID minFlushedTxId,
     const std::vector<uint64_t>& numRfaTxs,
     const std::vector<WalFlushReq>& walFlushReqCopies) {
@@ -165,7 +166,6 @@ void GroupCommitter::commitTXs(
     }
 
     // commit transactions without remote dependency
-    // TODO(jian.z): commit these transactions in the worker itself
     TXID maxCommitTsRfa = 0;
     {
       std::unique_lock<std::mutex> g(logging.mRfaTxToCommitMutex);
@@ -209,9 +209,7 @@ void GroupCommitter::commitTXs(
   }
 }
 
-void GroupCommitter::setUpIOCB(uint8_t* buf, uint64_t lower, uint64_t upper) {
-  constexpr size_t kAligment = 4096;
-
+void GroupCommitter::append(uint8_t* buf, uint64_t lower, uint64_t upper) {
   auto lowerAligned = utils::AlignDown(lower, kAligment);
   auto upperAligned = utils::AlignUp(upper, kAligment);
   auto* bufAligned = buf + lowerAligned;
@@ -225,5 +223,4 @@ void GroupCommitter::setUpIOCB(uint8_t* buf, uint64_t lower, uint64_t upper) {
                      countAligned);
 };
 
-} // namespace cr
-} // namespace leanstore
+} // namespace leanstore::cr

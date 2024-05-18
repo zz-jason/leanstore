@@ -65,7 +65,7 @@ bool BasicKV::IsRangeEmpty(Slice startKey, Slice endKey) {
       Slice upperFence = guardedLeaf->GetUpperFence();
       LS_DCHECK(startKey >= guardedLeaf->GetLowerFence());
 
-      if ((guardedLeaf->mUpperFence.offset == 0 || endKey <= upperFence) &&
+      if ((guardedLeaf->mUpperFence.mOffset == 0 || endKey <= upperFence) &&
           guardedLeaf->mNumSeps == 0) {
         int32_t pos = guardedLeaf->lowerBound<false>(startKey);
         if (pos == guardedLeaf->mNumSeps) {
