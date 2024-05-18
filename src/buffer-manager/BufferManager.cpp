@@ -341,7 +341,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard,
         partition.mInflightIOs.Remove(pageId);
       }
 
-      JUMPMU_RETURN& bf;
+      JUMPMU_RETURN & bf;
     }
     JUMPMU_CATCH() {
       // Change state to ready if contention is encountered

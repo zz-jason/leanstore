@@ -103,7 +103,9 @@ public:
 /// JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP() and
 /// JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP()
 #define JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP(T)                                \
-  static void DestructBeforeJump(void* obj) { reinterpret_cast<T*>(obj)->~T(); }
+  static void DestructBeforeJump(void* obj) {                                  \
+    reinterpret_cast<T*>(obj)->~T();                                           \
+  }
 
 /// JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP pushes the desctructor to be called
 /// before jump to the thread local stack.

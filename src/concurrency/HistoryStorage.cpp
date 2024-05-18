@@ -148,7 +148,7 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
   // purge remove versions
   auto* btree = mRemoveIndex;
   JUMPMU_TRY() {
-  restartrem : {
+  restartrem: {
     auto xIter = btree->GetExclusiveIterator();
     xIter.SetExitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
       if (guardedLeaf->FreeSpaceAfterCompaction() >=
@@ -316,7 +316,7 @@ void HistoryStorage::VisitRemovedVersions(
   uint16_t payloadSize;
 
   JUMPMU_TRY() {
-  restart : {
+  restart: {
     auto xIter = removeTree->GetExclusiveIterator();
     while (xIter.Seek(key)) {
       // skip versions out of the transaction range

@@ -82,7 +82,9 @@ const std::vector<double> kBoundariesUs{
 /// Macro to define a function to increase a counter metric
 #define DEFINE_METRIC_FUNC_COUNTER_INC(metricName, help, ...)                  \
   void inc_##metricName(double val = 1) {                                      \
-    COUNTERS_BLOCK() { m_##metricName->Increment(val); }                       \
+    COUNTERS_BLOCK() {                                                         \
+      m_##metricName->Increment(val);                                          \
+    }                                                                          \
   }
 
 // -----------------------------------------------------------------------------
@@ -101,7 +103,9 @@ const std::vector<double> kBoundariesUs{
 /// Macro to define a function to observe a value to a histogram
 #define DEFINE_METRIC_FUNC_HIST_OBSERVE(metricName, boundaries, help, ...)     \
   void observe_##metricName(double val) {                                      \
-    COUNTERS_BLOCK() { m_##metricName->Observe(val); }                         \
+    COUNTERS_BLOCK() {                                                         \
+      m_##metricName->Observe(val);                                            \
+    }                                                                          \
   }
 
 // -----------------------------------------------------------------------------
@@ -110,7 +114,9 @@ const std::vector<double> kBoundariesUs{
 
 /// Macro to define a function to get the current value of a counter metric
 #define DEFINE_METRIC_FUNC_GET(metricName, help, ...)                          \
-  double get_##metricName() { return m_##metricName->Value(); }
+  double get_##metricName() {                                                  \
+    return m_##metricName->Value();                                            \
+  }
 
 /// The MetricsManager class is used to manage all the metrics for one
 /// LeanStore. It's expected to be a singleton inside a LeanStore instance.

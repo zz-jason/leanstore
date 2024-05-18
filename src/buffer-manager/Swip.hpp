@@ -26,7 +26,7 @@ public:
 
 public:
   /// Create an empty swip.
-  Swip() : mPageId(0){};
+  Swip() : mPageId(0) {};
 
   /// Create an swip pointing to the buffer frame.
   Swip(BufferFrame* bf) : mBf(bf) {
