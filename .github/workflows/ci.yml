@@ -23,6 +23,7 @@ jobs:
         sudo apt install -y libaio-dev python3-pip cppcheck ninja-build;
         sudo apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu;
         sudo apt install -y curl zip unzip tar pkg-config;
+        sudo apt install -y lsb-release wget software-properties-common gnupg;
         sudo apt install -y autoconf libtool;
         sudo ln -sf /usr/bin/cpp-13        /usr/bin/cpp;
         sudo ln -sf /usr/bin/g++-13        /usr/bin/g++;
@@ -42,6 +43,11 @@ jobs:
         echo 'export PATH=$VCPKG_ROOT:$PATH' >> ~/.bashrc;
         echo 'export VCPKG_FORCE_SYSTEM_BINARIES=1' >> ~/.bashrc;
         sudo rm -rf /var/lib/apt/lists/*;
+        wget https://apt.llvm.org/llvm.sh;
+        chmod u+x llvm.sh;
+        sudo ./llvm.sh 18 all;
+        sudo ln -sf /usr/bin/clang-format-18 /usr/bin/clang-format;
+        sudo ln -sf /usr/bin/clang-tidy-18 /usr/bin/clang-tidy;
 
     - name: Config project
       run: |
