@@ -171,27 +171,25 @@ void Worker::CommitTx() {
   // Cleanup versions in history tree
   mCc.GarbageCollection();
 
-  // Wait transaction to be committed
+  // Wait logs to be flushed
   telemetry::MetricOnlyTimer timer;
-  while (mLogging.TxUnCommitted(mActiveTx.mCommitTs)) {
+  while (!mLogging.SafeToCommit(mActiveTx.mCommitTs)) {
   }
+
   METRIC_HIST_OBSERVE(mStore->mMetricsManager, tx_commit_wal_wait_us,
                       timer.ElaspedUs());
 }
 
-/// TODO(jian.z): revert changes made in-place on the btree
-/// process of a transaction abort:
-///
-/// 1. Read previous wal entries
-///
-/// 2. Undo the changes via btree operations
-///
-/// 3. Write compensation wal entries during the undo process
-///
-/// 4. Purge versions in history tree, clean garbages made by the aborted
-///    transaction
-///
-/// It may share the same code with the recovery process?
+//! TODO(jian.z): revert changes made in-place on the btree
+//! process of a transaction abort:
+//!
+//! 1. Read previous wal entries
+//! 2. Undo the changes via btree operations
+//! 3. Write compensation wal entries during the undo process
+//! 4. Purge versions in history tree, clean garbages made by the aborted
+//!    transaction
+//!
+//! It may share the same code with the recovery process?
 void Worker::AbortTx() {
   SCOPED_DEFER({
     mActiveTx.mState = TxState::kAborted;

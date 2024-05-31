@@ -90,16 +90,3 @@ elseif(CHECKS_LEVEL STREQUAL "benchmark")
   target_compile_definitions(leanstore PUBLIC MACRO_CHECK_BENCHMARK)
 endif()
 
-
-# ---------------------------------------------------------------------------
-# clang-tidy
-# ---------------------------------------------------------------------------
-
-# # clang-tidy
-# add_custom_target(run-clang-tidy
-#     COMMAND clang-tidy -p=${CMAKE_BINARY_DIR} --config-file=${CMAKE_SOURCE_DIR}/.clang-tidy ${LEANSTORE_SRC}
-#     COMMENT "Running Clang-Tidy"
-#     VERBATIM
-# )
-#
-# add_dependencies(leanstore run-clang-tidy)

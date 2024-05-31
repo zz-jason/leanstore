@@ -438,7 +438,7 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree,
   }
 
   auto& nodeToFind = *reinterpret_cast<BTreeNode*>(bfToFind.mPage.mPayload);
-  const auto isInfinity = nodeToFind.mUpperFence.offset == 0;
+  const auto isInfinity = nodeToFind.mUpperFence.mOffset == 0;
   const auto keyToFind = nodeToFind.GetUpperFence();
 
   auto posInParent = std::numeric_limits<uint32_t>::max();

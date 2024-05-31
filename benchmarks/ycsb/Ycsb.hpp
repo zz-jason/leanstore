@@ -85,7 +85,7 @@ protected:
 private:
   void printTps(uint64_t numThreads, uint64_t timeElaspedSec,
                 uint64_t committed, uint64_t aborted, uint64_t reportPeriod) {
-    auto abortRate = (aborted)*1.0 / (committed + aborted);
+    auto abortRate = (aborted) * 1.0 / (committed + aborted);
     auto summary = std::format("[{} thds] [{}s] [tps={:.2f}] [committed={}] "
                                "[conflicted={}] [conflict rate={:.2f}]",
                                numThreads, timeElaspedSec,

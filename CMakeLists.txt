@@ -12,7 +12,6 @@ endif ()
 enable_language(ASM)
 
 set(CMAKE_CXX_STANDARD 23)
-add_compile_definitions(__cpp_concepts=202002L)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -23,6 +22,16 @@ else()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNDEBUG -O3 -g")
   add_compile_options()
 endif()
+
+# for clangd
+add_compile_definitions(__cpp_concepts=202002L)
+
+# TODO(jian.z): support compile with clang
+# # compile flags for clang
+# if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+#   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-command-line-argument")
+#   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} __cpp_concepts=202002L")
+# endif()
 
 # platform specific flags
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
@@ -81,3 +90,38 @@ add_subdirectory(benchmarks)
 # tests
 include(CTest)
 add_subdirectory(tests)
+
+
+# ---------------------------------------------------------------------------
+# clang-format
+# ---------------------------------------------------------------------------
+
+file(GLOB_RECURSE ALL_SOURCE_FILES
+  "src/*.cpp" "src/*.hpp",
+  "include/*.hpp",
+  "tests/*.cpp", "tests/*.hpp"
+  "benchmarks/*.cpp", "benchmarks/*.hpp")
+
+# check-format
+add_custom_target(check-format
+  COMMAND clang-format --style=file --dry-run -Werror -i ${ALL_SOURCE_FILES}
+  VERBATIM
+)
+
+# fix format
+add_custom_target(format
+  COMMAND clang-format --style=file -i ${ALL_SOURCE_FILES}
+  VERBATIM
+)
+
+
+# ---------------------------------------------------------------------------
+# clang-tidy
+# ---------------------------------------------------------------------------
+
+# clang-tidy
+add_custom_target(check-tidy
+    COMMAND clang-tidy -p=${CMAKE_BINARY_DIR} --config-file=${CMAKE_SOURCE_DIR}/.clang-tidy ${ALL_SOURCE_FILES} -extra-arg='--std=c++2b'
+    COMMENT "Running Clang-Tidy"
+    VERBATIM
+)

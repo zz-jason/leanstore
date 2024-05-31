@@ -15,16 +15,16 @@ void* MallocHuge(size_t size) {
   return p;
 }
 
-HashTable::Entry::Entry(PID key) : key(key) {
+HashTable::Entry::Entry(PID key) : mKey(key) {
 }
 
 HashTable::HashTable(uint64_t sizeInBits) {
   uint64_t size = (1ull << sizeInBits);
-  mask = size - 1;
-  entries = (Entry**)MallocHuge(size * sizeof(Entry*));
+  mMask = size - 1;
+  mEntries = (Entry**)MallocHuge(size * sizeof(Entry*));
 }
 
-uint64_t HashTable::hashKey(PID k) {
+uint64_t HashTable::HashKey(PID k) {
   // MurmurHash64A
   const uint64_t m = 0xc6a4a7935bd1e995ull;
   const int r = 47;
@@ -42,28 +42,28 @@ uint64_t HashTable::hashKey(PID k) {
 
 IOFrame& HashTable::Insert(PID key) {
   auto* e = new Entry(key);
-  uint64_t pos = hashKey(key) & mask;
-  e->next = entries[pos];
-  entries[pos] = e;
-  return e->value;
+  uint64_t pos = HashKey(key) & mMask;
+  e->mNext = mEntries[pos];
+  mEntries[pos] = e;
+  return e->mValue;
 }
 
 HashTable::Handler HashTable::Lookup(PID key) {
-  uint64_t pos = hashKey(key) & mask;
-  Entry** ePtr = entries + pos;
+  uint64_t pos = HashKey(key) & mMask;
+  Entry** ePtr = mEntries + pos;
   Entry* e = *ePtr; // e is only here for readability
   while (e) {
-    if (e->key == key)
+    if (e->mKey == key)
       return {ePtr};
-    ePtr = &(e->next);
-    e = e->next;
+    ePtr = &(e->mNext);
+    e = e->mNext;
   }
   return {nullptr};
 }
 
 void HashTable::Remove(HashTable::Handler& handler) {
-  Entry* toDelete = *handler.holder;
-  *handler.holder = (*handler.holder)->next;
+  Entry* toDelete = *handler.mHolder;
+  *handler.mHolder = (*handler.mHolder)->mNext;
   delete toDelete;
 }
 
@@ -73,13 +73,13 @@ void HashTable::Remove(uint64_t key) {
   Remove(handler);
 }
 
-bool HashTable::has(uint64_t key) {
-  uint64_t pos = hashKey(key) & mask;
-  auto* e = entries[pos];
+bool HashTable::Has(uint64_t key) {
+  uint64_t pos = HashKey(key) & mMask;
+  auto* e = mEntries[pos];
   while (e) {
-    if (e->key == key)
+    if (e->mKey == key)
       return true;
-    e = e->next;
+    e = e->mNext;
   }
   return false;
 }

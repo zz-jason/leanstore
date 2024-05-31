@@ -4,19 +4,18 @@
 #include "leanstore/Units.hpp"
 #include "utils/Log.hpp"
 
-namespace leanstore {
-namespace storage {
+namespace leanstore::storage {
 
 class BufferFrame;
 
-/// Swip represents either the page id or the pointer to the buffer frame
-/// which contains the page. It can be the following 3 stats:
-/// 1. hot. the swip represents the memory pointer to a buffer frame. the 2 most
-///    significant bits are both 0s.
-/// 2. cool. the swip represents the memory pointer to a buffer frame. but the
-///    2nd most most significant bits is 1 which marks the pointer as "cool".
-/// 3. evicted. the swip represents a page id. the most most significant bit is
-///    1 which marks the swip as "EVICTED".
+//! Swip represents either the page id or the pointer to the buffer frame
+//! which contains the page. It can be the following 3 stats:
+//! 1. hot. the swip represents the memory pointer to a buffer frame. the 2 most
+//!    significant bits are both 0s.
+//! 2. cool. the swip represents the memory pointer to a buffer frame. but the
+//!    2nd most most significant bits is 1 which marks the pointer as "cool".
+//! 3. evicted. the swip represents a page id. the most most significant bit is
+//!    1 which marks the swip as "EVICTED".
 class Swip {
 public:
   union {
@@ -24,26 +23,14 @@ public:
     BufferFrame* mBf;
   };
 
-public:
-  /// Create an empty swip.
-  Swip() : mPageId(0){};
+  //! Create an empty swip.
+  Swip() : mPageId(0) {};
 
-  /// Create an swip pointing to the buffer frame.
+  //! Create an swip pointing to the buffer frame.
   Swip(BufferFrame* bf) : mBf(bf) {
   }
 
-  // /// Copy construct from another swip.
-  // Swip(const Swip& other) {
-  //   *this = other;
-  // }
-
-  // Swip& operator=(const Swip& other) {
-  //   mPageId = other.mPageId;
-  //   return *this;
-  // }
-
-public:
-  /// Whether two swip is equal.
+  //! Whether two swip is equal.
   bool operator==(const Swip& other) const {
     return (Raw() == other.Raw());
   }
@@ -60,8 +47,8 @@ public:
     return mPageId & sEvictedBit;
   }
 
-  /// Indicates whether this swip points to nothing: no evicted bit, no cool
-  /// bit, the memory pointer is nullptr
+  //! Indicates whether this swip points to nothing: no evicted bit, no cool
+  //! bit, the memory pointer is nullptr
   bool IsEmpty() {
     return mPageId == 0;
   }
@@ -71,13 +58,13 @@ public:
     return mPageId & sEvictedMask;
   }
 
-  /// return the underlying buffer frame from a hot buffer frame.
+  //! return the underlying buffer frame from a hot buffer frame.
   BufferFrame& AsBufferFrame() {
     LS_DCHECK(IsHot());
     return *mBf;
   }
 
-  /// Return the underlying buffer frame from a cool buffer frame.
+  //! Return the underlying buffer frame from a cool buffer frame.
   BufferFrame& AsBufferFrameMasked() {
     return *reinterpret_cast<BufferFrame*>(mPageId & sHotMask);
   }
@@ -119,5 +106,4 @@ private:
   static_assert(sHotMask == 0x3FFFFFFFFFFFFFFF, "");
 };
 
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage

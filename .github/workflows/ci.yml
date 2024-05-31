@@ -2,13 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "main" ]
 
 jobs:
   ut_coverage:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: Unit Tests - Coverage
     steps:
 
@@ -17,6 +17,7 @@ jobs:
 
     - name: Install dependencies
       run: |
+        cat /etc/lsb-release;
         sudo apt update;
         sudo apt install -y build-essential git cmake make gcc-13 g++-13;
         sudo apt install -y libaio-dev python3-pip cppcheck ninja-build;
@@ -35,7 +36,7 @@ jobs:
         sudo ln -sf /usr/bin/lto-dump-13   /usr/bin/lto-dump;
         sudo ln -sf /usr/bin/g++-13        /usr/bin/c++;
         sudo ln -sf /usr/bin/gcc-13        /usr/bin/cc;
-        pip3 install gcovr==6.0;
+        pip3 install gcovr==6.0 --break-system-packages;
         sudo git clone https://github.com/Microsoft/vcpkg.git /opt/vcpkg;
         echo 'export VCPKG_ROOT=/opt/vcpkg' >> ~/.bashrc;
         echo 'export PATH=$VCPKG_ROOT:$PATH' >> ~/.bashrc;
@@ -69,55 +70,3 @@ jobs:
       with:
         files: coverage.xml
         verbose: true
-
-#   ut_matrix:
-#     strategy:
-#       matrix:
-#         build_type: [Debug, Release]
-#         enable_asan: [0, 1]
-#         enable_tsan: [0, 1]
-#         exclude:
-#           - enable_asn: 1
-#           - enable_tsan: 1
-#     runs-on: ubuntu-latest
-#     name: Unit Test Matrix - ${{ matrix.build_type }} ENABLE_ASAN=${{ matrix.enable_asan }} ENABLE_TSAN=${{ matrix.enable_tsan }}
-#     steps:
-#     - name: Check out repository
-#       uses: actions/checkout@v3
-#
-#     - name: Install dependencies
-#       run: |
-#         sudo apt update
-#         sudo apt install -y build-essential git cmake make gcc-13 g++-13
-#         sudo apt install -y libaio-dev python3-pip cppcheck ninja-build
-#         sudo apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-#         sudo apt install -y curl zip unzip tar pkg-config
-#         sudo apt install -y autoconf libtool
-#         ln -sf /usr/bin/cpp-13        /usr/bin/cpp
-#         ln -sf /usr/bin/g++-13        /usr/bin/g++
-#         ln -sf /usr/bin/gcc-13        /usr/bin/gcc
-#         ln -sf /usr/bin/gcc-ar-13     /usr/bin/gcc-ar
-#         ln -sf /usr/bin/gcc-nm-13     /usr/bin/gcc-nm
-#         ln -sf /usr/bin/gcc-ranlib-13 /usr/bin/gcc-ranlib
-#         ln -sf /usr/bin/gcov-13       /usr/bin/gcov
-#         ln -sf /usr/bin/gcov-dump-13  /usr/bin/gcov-dump
-#         ln -sf /usr/bin/gcov-tool-13  /usr/bin/gcov-tool
-#         ln -sf /usr/bin/lto-dump-13   /usr/bin/lto-dump
-#         ln -sf /usr/bin/g++-13        /usr/bin/c++
-#         ln -sf /usr/bin/gcc-13        /usr/bin/cc
-#         pip3 install gcovr==6.0 --break-system-packages
-#         git clone https://github.com/Microsoft/vcpkg.git /opt/vcpkg
-#         echo 'export VCPKG_ROOT=/opt/vcpkg' >> ~/.bashrc
-#         echo 'export PATH=$VCPKG_ROOT:$PATH' >> ~/.bashrc
-#         echo 'export VCPKG_FORCE_SYSTEM_BINARIES=1' >> ~/.bashrc
-#         sudo rm -rf /var/lib/apt/lists/*
-#
-#     - name: Config project
-#       run: cmake -B build -S . -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DENABLE_ASAN=${{ matrix.enable_asan }} -DENABLE_TSAN=${{ matrix.enable_tsan }}
-#
-#     - name: Build project
-#       run: cmake --build build -j `nproc`
-#
-#     - name: Test
-#       run: TSAN_OPTIONS="suppressions=$(pwd)/tests/tsan.supp" ctest --test-dir build
-#

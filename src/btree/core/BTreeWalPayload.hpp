@@ -303,7 +303,7 @@ public:
         mMetaNode(metaNode),
         mSplitSlot(sepInfo.mSlotId),
         mSeparatorSize(sepInfo.mSize),
-        mSeparatorTruncated(sepInfo.trunc) {
+        mSeparatorTruncated(sepInfo.mTrunc) {
   }
 };
 
@@ -329,7 +329,7 @@ public:
         mNewLeft(newLeft),
         mSplitSlot(sepInfo.mSlotId),
         mSeparatorSize(sepInfo.mSize),
-        mSeparatorTruncated(sepInfo.trunc) {
+        mSeparatorTruncated(sepInfo.mTrunc) {
   }
 };
 

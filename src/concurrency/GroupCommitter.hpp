@@ -12,8 +12,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-namespace leanstore {
-namespace cr {
+namespace leanstore::cr {
 
 class Worker;
 class WalFlushReq;
@@ -22,25 +21,26 @@ class GroupCommitter : public leanstore::utils::UserThread {
 public:
   leanstore::LeanStore* mStore;
 
-  /// File descriptor of the underlying WAL file.
+  //! File descriptor of the underlying WAL file.
   const int32_t mWalFd;
 
-  /// Start file offset of the next WalEntry.
+  //! Start file offset of the next WalEntry.
   uint64_t mWalSize;
 
-  /// The minimum flushed GSN among all worker threads. Transactions whose max
-  /// observed GSN not larger than it can be committed safely.
+  //! The minimum flushed GSN among all worker threads. Transactions whose max
+  //! observed GSN not larger than it can be committed safely.
   std::atomic<uint64_t> mGlobalMinFlushedGSN;
 
-  /// The maximum flushed GSN among all worker threads in each group commit
-  /// round. It is updated by the group commit thread and used to update the GCN
-  /// counter of the current worker thread to prevent GSN from skewing and
-  /// undermining RFA.
+  //! The maximum flushed GSN among all worker threads in each group commit
+  //! round. It is updated by the group commit thread and used to update the GCN
+  //! counter of the current worker thread to prevent GSN from skewing and
+  //! undermining RFA.
   std::atomic<uint64_t> mGlobalMaxFlushedGSN;
 
-  /// All the workers.
+  //! All the workers.
   std::vector<Worker*>& mWorkers;
 
+  //! The libaio wrapper.
   utils::AsyncIo mAIo;
 
 public:
@@ -62,36 +62,40 @@ protected:
   virtual void runImpl() override;
 
 private:
-  /// Phase 1: Prepare IOCBs
-  ///
-  /// libaio is used to batch all log writes, these log writes are then
-  /// submitted using a single system call.
-  ///
-  /// @param[out] minFlushedGSN the min flushed GSN among all the wal records
-  /// @param[out] maxFlushedGSN the max flushed GSN among all the wal records
-  /// @param[out] minFlushedTxId the min flushed transaction ID
-  /// @param[out] numRfaTxs number of transactions without dependency
-  /// @param[out] walFlushReqCopies snapshot of the flush requests
-  void prepareIOCBs(uint64_t& minFlushedGSN, uint64_t& maxFlushedGSN,
-                    TXID& minFlushedTxId, std::vector<uint64_t>& numRfaTxs,
-                    std::vector<WalFlushReq>& walFlushReqCopies);
+  //! Phase 1: collect wal records from all the worker threads. Collected
+  //! wal records are written to libaio IOCBs.
+  //!
+  //! @param[out] minFlushedGSN the min flushed GSN among all the wal records
+  //! @param[out] maxFlushedGSN the max flushed GSN among all the wal records
+  //! @param[out] minFlushedTxId the min flushed transaction ID
+  //! @param[out] numRfaTxs number of transactions without dependency
+  //! @param[out] walFlushReqCopies snapshot of the flush requests
+  void collectWalRecords(uint64_t& minFlushedGSN, uint64_t& maxFlushedGSN,
+                         TXID& minFlushedTxId, std::vector<uint64_t>& numRfaTxs,
+                         std::vector<WalFlushReq>& walFlushReqCopies);
 
-  /// Phase 2: write all the prepared IOCBs
-  void writeIOCBs();
+  //! Phase 2: write all the collected wal records to the wal file with libaio.
+  void flushWalRecords();
 
-  /// Phase 3: commit transactions
-  ///
-  /// @param[in] minFlushedGSN the min flushed GSN among all the wal records
-  /// @param[in] maxFlushedGSN the max flushed GSN among all the wal records
-  /// @param[in] minFlushedTxId the min flushed transaction ID
-  /// @param[in] numRfaTxs number of transactions without dependency
-  /// @param[in] walFlushReqCopies snapshot of the flush requests
-  void commitTXs(uint64_t minFlushedGSN, uint64_t maxFlushedGSN,
-                 TXID minFlushedTxId, const std::vector<uint64_t>& numRfaTxs,
-                 const std::vector<WalFlushReq>& walFlushReqCopies);
+  //! Phase 3: determine the commitable transactions based on minFlushedGSN
+  //! and minFlushedTxId.
+  //!
+  //! @param[in] minFlushedGSN the min flushed GSN among all the wal records
+  //! @param[in] maxFlushedGSN the max flushed GSN among all the wal records
+  //! @param[in] minFlushedTxId the min flushed transaction ID
+  //! @param[in] numRfaTxs number of transactions without dependency
+  //! @param[in] walFlushReqCopies snapshot of the flush requests
+  void determineCommitableTx(uint64_t minFlushedGSN, uint64_t maxFlushedGSN,
+                             TXID minFlushedTxId,
+                             const std::vector<uint64_t>& numRfaTxs,
+                             const std::vector<WalFlushReq>& walFlushReqCopies);
 
-  void setUpIOCB(uint8_t* buf, uint64_t lower, uint64_t upper);
+  //! Append a wal entry to libaio IOCBs.
+  //!
+  //! @param[in] buf the wal entry buffer
+  //! @param[in] lower the begin offset of the wal entry in the buffer
+  //! @param[in] upper the end offset of the wal entry in the buffer
+  void append(uint8_t* buf, uint64_t lower, uint64_t upper);
 };
 
-} // namespace cr
-} // namespace leanstore
+} // namespace leanstore::cr
