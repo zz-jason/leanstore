@@ -23,11 +23,15 @@ else()
   add_compile_options()
 endif()
 
-# compile flags for clang
-if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-command-line-argument")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} __cpp_concepts=202002L")
-endif()
+# for clangd
+add_compile_definitions(__cpp_concepts=202002L)
+
+# TODO(jian.z): support compile with clang
+# # compile flags for clang
+# if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+#   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-command-line-argument")
+#   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} __cpp_concepts=202002L")
+# endif()
 
 # platform specific flags
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")

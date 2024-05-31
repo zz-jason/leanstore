@@ -59,7 +59,7 @@ public:
   //! The free percentage of the buffer pool. In the range of [0, 100].
   uint32_t mFreePct = 1;
 
-  //! The number of buffer provider threads.
+  //! The number of page evictor threads.
   uint32_t mNumBufferProviders = 1;
 
   //! The async buffer
@@ -69,8 +69,8 @@ public:
   bool mEnableBufferCrcCheck = false;
 
   //! BufferFrame recycle batch size. Everytime a batch of buffer frames is
-  //! randomly picked and verified by the buffer frame provider, some of them
-  //! are COOLed, some of them are EVICted.
+  //! randomly picked and verified by page evictors, some of them are COOLed,
+  //! some of them are EVICted.
   uint64_t mBufferFrameRecycleBatchSize = 64;
 
   //! Whether to reclaim unused free page ids

@@ -378,8 +378,8 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard,
   case IOFrame::State::kReady: {
     BufferFrame* bf = ioFrame.mBf;
     {
-      // We have to exclusively lock the bf because the page provider thread
-      // will try to evict them when its IO is done
+      // We have to exclusively lock the bf because the page evictor thread will
+      // try to evict them when its IO is done
       LS_DCHECK(!bf->mHeader.mLatch.IsLockedExclusively());
       LS_DCHECK(bf->mHeader.mState == State::kLoaded);
       BMOptimisticGuard bfGuard(bf->mHeader.mLatch);

@@ -64,7 +64,7 @@ public:
 
   std::vector<std::unique_ptr<Partition>> mPartitions;
 
-  //! All the buffer frame provider threads.
+  //! All the page evictor threads.
   std::vector<std::unique_ptr<PageEvictor>> mPageEvictors;
 
   BufferManager(leanstore::LeanStore* store);
