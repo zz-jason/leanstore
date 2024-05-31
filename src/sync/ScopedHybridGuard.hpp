@@ -20,31 +20,31 @@ class ScopedHybridGuardTest;
 namespace leanstore {
 namespace storage {
 
-/// A scoped guard for the hybrid latch. It locks the latch in the specified
-/// mode when constructed, and unlocks the latch when destructed.
-/// The guard is movable but not copyable.
+//! A scoped guard for the hybrid latch. It locks the latch in the specified
+//! mode when constructed, and unlocks the latch when destructed.
+//! The guard is movable but not copyable.
 class ScopedHybridGuard {
 private:
-  /// The latch to guard.
+  //! The latch to guard.
   HybridLatch* mLatch;
 
-  /// The latch mode.
+  //! The latch mode.
   LatchMode mLatchMode;
 
-  /// The version of the latch when it was optimistically locked.
+  //! The version of the latch when it was optimistically locked.
   uint64_t mVersionOnLock;
 
-  /// Whether the guard has encountered contention, checked when the latch is
-  /// optimistically locked.
+  //! Whether the guard has encountered contention, checked when the latch is
+  //! optimistically locked.
   bool mEncounteredContention;
 
-  /// Whether the guard has locked the latch.
+  //! Whether the guard has locked the latch.
   bool mLocked;
 
 public:
-  /// Construct a guard for the latch, lock it immediately in the specified
-  /// latch mode. It may jump if latchMode is kOptimisticOrJump and the latch is
-  /// exclusive locked by others.
+  //! Construct a guard for the latch, lock it immediately in the specified
+  //! latch mode. It may jump if latchMode is kOptimisticOrJump and the latch is
+  //! exclusive locked by others.
   ScopedHybridGuard(HybridLatch& latch, LatchMode latchMode)
       : mLatch(&latch),
         mLatchMode(latchMode),
@@ -54,9 +54,9 @@ public:
     Lock();
   }
 
-  /// Construct a guard for the latch, lock it in kOptimisticOrJump mode with
-  /// the specified version. It may jump if the optimistic version does not
-  /// match the current version.
+  //! Construct a guard for the latch, lock it in kOptimisticOrJump mode with
+  //! the specified version. It may jump if the optimistic version does not
+  //! match the current version.
   ScopedHybridGuard(HybridLatch& latch, uint64_t version)
       : mLatch(&latch),
         mLatchMode(LatchMode::kOptimisticOrJump),
@@ -68,23 +68,23 @@ public:
     mLocked = true;
   }
 
-  /// Destruct the guard, unlock the latch if it is locked.
+  //! Destruct the guard, unlock the latch if it is locked.
   ~ScopedHybridGuard() {
     Unlock();
   }
 
-  /// No copy construct
+  //! No copy construct
   ScopedHybridGuard(const ScopedHybridGuard&) = delete;
 
-  /// No copy assign
+  //! No copy assign
   ScopedHybridGuard& operator=(const ScopedHybridGuard& other) = delete;
 
-  /// Move construct
+  //! Move construct
   ScopedHybridGuard(ScopedHybridGuard&& other) {
     *this = std::move(other);
   }
 
-  /// Move assign
+  //! Move assign
   ScopedHybridGuard& operator=(ScopedHybridGuard&& other) {
     Unlock();
 
@@ -97,10 +97,10 @@ public:
     return *this;
   }
 
-  /// Lock the latch in the specified mode if it is not locked.
+  //! Lock the latch in the specified mode if it is not locked.
   void Lock();
 
-  /// Unlock the latch if it is locked.
+  //! Unlock the latch if it is locked.
   void Unlock();
 
   static void GetOptimistic(HybridLatch& latch, LatchMode latchMode,
@@ -109,32 +109,32 @@ public:
   static void Get(HybridLatch& latch, std::function<void()> copier);
 
 private:
-  /// Lock the latch in kOptimisticOrJump mode.
+  //! Lock the latch in kOptimisticOrJump mode.
   void lockOptimisticOrJump();
 
-  /// Lock the latch in kOptimisticSpin mode.
+  //! Lock the latch in kOptimisticSpin mode.
   void lockOptimisticSpin();
 
-  /// Unlock the latch in kOptimisticOrJump or kOptimisticSpin mode.
+  //! Unlock the latch in kOptimisticOrJump or kOptimisticSpin mode.
   void unlockOptimisticOrJump();
 
-  /// Jump if the latch has been modified by others.
+  //! Jump if the latch has been modified by others.
   void jumpIfModifiedByOthers();
 
-  /// Lock the latch in kPessimisticShared mode.
+  //! Lock the latch in kPessimisticShared mode.
   void lockPessimisticShared();
 
-  /// Unlock the latch in kPessimisticShared mode.
+  //! Unlock the latch in kPessimisticShared mode.
   void unlockPessimisticShared();
 
-  /// Lock the latch in kPessimisticExclusive mode.
+  //! Lock the latch in kPessimisticExclusive mode.
   void lockPessimisticExclusive();
 
-  /// Unlock the latch in kPessimisticExclusive mode.
+  //! Unlock the latch in kPessimisticExclusive mode.
   void unlockPessimisticExclusive();
 
 private:
-  /// Allow the test class to access private members.
+  //! Allow the test class to access private members.
   friend class leanstore::test::ScopedHybridGuardTest;
 };
 
