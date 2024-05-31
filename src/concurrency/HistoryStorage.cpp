@@ -148,7 +148,7 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
   // purge remove versions
   auto* btree = mRemoveIndex;
   JUMPMU_TRY() {
-  restartrem : {
+  restartrem: {
     auto xIter = btree->GetExclusiveIterator();
     xIter.SetExitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
       if (guardedLeaf->FreeSpaceAfterCompaction() >=
@@ -216,7 +216,7 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
 
       // lock successfull, check whether the page can be purged
       auto* leafNode = reinterpret_cast<BTreeNode*>(bf->mPage.mPayload);
-      if (leafNode->mLowerFence.length == 0 && leafNode->mNumSeps > 0) {
+      if (leafNode->mLowerFence.mLength == 0 && leafNode->mNumSeps > 0) {
         auto lastKeySize = leafNode->getFullKeyLen(leafNode->mNumSeps - 1);
         uint8_t lastKey[lastKeySize];
         leafNode->copyFullKey(leafNode->mNumSeps - 1, lastKey);
@@ -316,7 +316,7 @@ void HistoryStorage::VisitRemovedVersions(
   uint16_t payloadSize;
 
   JUMPMU_TRY() {
-  restart : {
+  restart: {
     auto xIter = removeTree->GetExclusiveIterator();
     while (xIter.Seek(key)) {
       // skip versions out of the transaction range

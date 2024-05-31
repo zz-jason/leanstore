@@ -6,10 +6,7 @@
 #include "buffer-manager/FreeList.hpp"
 #include "buffer-manager/Partition.hpp"
 #include "buffer-manager/Swip.hpp"
-#include "leanstore/Exceptions.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/Units.hpp"
-#include "utils/RandomGenerator.hpp"
 #include "utils/UserThread.hpp"
 
 #include <cstdint>
@@ -55,7 +52,7 @@ public:
   }
 };
 
-/// PageEvictor provides free buffer frames for partitions.
+//! Evicts in-memory pages, provides free BufferFrames for partitions.
 class PageEvictor : public utils::UserThread {
 public:
   leanstore::LeanStore* mStore;
@@ -105,7 +102,7 @@ public:
   PageEvictor(PageEvictor&& other) = delete;
   PageEvictor& operator=(PageEvictor&& other) = delete;
 
-  ~PageEvictor() {
+  ~PageEvictor() override {
     Stop();
   }
 
@@ -134,36 +131,14 @@ public:
   //!   - cool: evict it
   void PrepareAsyncWriteBuffer(Partition& targetPartition);
 
+  //! Writes all picked pages, push free BufferFrames to target partition.
   void FlushAndRecycleBufferFrames(Partition& targetPartition);
 
 protected:
   void runImpl() override;
 
 private:
-  void randomBufferFramesToCoolOrEvict() {
-    mCoolCandidateBfs.clear();
-    for (auto i = 0u; i < mStore->mStoreOption.mBufferFrameRecycleBatchSize;
-         i++) {
-      auto* randomBf = randomBufferFrame();
-      DO_NOT_OPTIMIZE(randomBf->mHeader.mState);
-      mCoolCandidateBfs.push_back(randomBf);
-    }
-  }
-
-  BufferFrame* randomBufferFrame() {
-    auto i = utils::RandomGenerator::Rand<uint64_t>(0, mNumBfs);
-    auto* bfAddr = &mBufferPool[i * mStore->mStoreOption.mBufferFrameSize];
-    return reinterpret_cast<BufferFrame*>(bfAddr);
-  }
-
-  Partition& randomPartition() {
-    auto i = utils::RandomGenerator::Rand<uint64_t>(0, mNumPartitions);
-    return *mPartitions[i];
-  }
-
-  uint64_t getPartitionId(PID pageId) {
-    return pageId & mPartitionsMask;
-  }
+  void randomBufferFramesToCoolOrEvict();
 
   void evictFlushedBf(BufferFrame& cooledBf, BMOptimisticGuard& optimisticGuard,
                       Partition& targetPartition);

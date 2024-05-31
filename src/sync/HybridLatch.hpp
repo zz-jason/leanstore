@@ -7,8 +7,10 @@
 
 #include <unistd.h>
 
-namespace leanstore {
-namespace storage {
+namespace leanstore::storage {
+
+class ScopedHybridGuard;
+class HybridGuard;
 
 enum class LatchMode : uint8_t {
   kOptimisticOrJump = 0,
@@ -23,30 +25,31 @@ inline bool HasExclusiveMark(uint64_t version) {
   return (version & kLatchExclusiveBit) == kLatchExclusiveBit;
 }
 
-class ScopedHybridGuard;
-class HybridGuard;
-
-/// An alternative to std::mutex and std::shared_mutex. A hybrid latch can be
-/// latched optimistically, pessimistically in shared or exclusive mode:
-///   - latch optimistically: for low-contention scenarios. At this mode, the
-///     version number is used to detech latch contention.
-///   - latch pessimistically in shared mode: for high-contention scenarios.
-///   - latch pessimistically in exclusive mode: for high-contention scenarios.
+//! An alternative to std::mutex and std::shared_mutex. A hybrid latch can be
+//! latched optimistically, pessimistically in shared or exclusive mode:
+//! - optimistic shared: in shared mode, for low-contention scenarios. At this
+//!   mode, the version number is used to detech latch contention.
+//! - pessimistic shared: in shared mode, for high-contention scenarios.
+//! - pessimistic exclusive: in exclusive mode, for high-contention scenarios.
 class alignas(64) HybridLatch {
 private:
+  //! The optimistic version.
   std::atomic<uint64_t> mVersion = 0;
 
+  //! The pessimistic shared mutex.
   std::shared_mutex mMutex;
+
+  friend class HybridGuard;
+  friend class ScopedHybridGuard;
 
 public:
   HybridLatch(uint64_t version = 0) : mVersion(version) {
   }
 
-public:
   void LockExclusively() {
-    LS_DCHECK(!IsLockedExclusively());
     mMutex.lock();
     mVersion.fetch_add(kLatchExclusiveBit, std::memory_order_release);
+    LS_DCHECK(IsLockedExclusively());
   }
 
   void UnlockExclusively() {
@@ -62,13 +65,8 @@ public:
   bool IsLockedExclusively() {
     return HasExclusiveMark(mVersion.load());
   }
-
-private:
-  friend class HybridGuard;
-  friend class ScopedHybridGuard;
 };
 
 static_assert(sizeof(HybridLatch) == 64, "");
 
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage

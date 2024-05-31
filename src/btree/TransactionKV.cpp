@@ -984,7 +984,7 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
 
     // Now it begins
     graveyardUpperBound = Slice(iter.mGuardedLeaf->GetUpperFenceKey(),
-                                iter.mGuardedLeaf->mUpperFence.length);
+                                iter.mGuardedLeaf->mUpperFence.mLength);
     auto gRange = [&]() {
       gIter.Reset();
       if (mGraveyard->IsRangeEmpty(graveyardLowerBound, graveyardUpperBound)) {
@@ -1031,7 +1031,7 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
         }
         graveyardLowerBound = Slice(&iter.mBuffer[0], iter.mFenceSize + 1);
         graveyardUpperBound = Slice(iter.mGuardedLeaf->GetUpperFenceKey(),
-                                    iter.mGuardedLeaf->mUpperFence.length);
+                                    iter.mGuardedLeaf->mUpperFence.mLength);
         gRange();
       }
       return true;

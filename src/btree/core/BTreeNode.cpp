@@ -9,7 +9,7 @@ namespace leanstore::storage::btree {
 void BTreeNode::makeHint() {
   uint16_t dist = mNumSeps / (sHintCount + 1);
   for (uint16_t i = 0; i < sHintCount; i++)
-    hint[i] = slot[dist * (i + 1)].head;
+    mHint[i] = slot[dist * (i + 1)].head;
 }
 
 void BTreeNode::updateHint(uint16_t slotId) {
@@ -19,9 +19,9 @@ void BTreeNode::updateHint(uint16_t slotId) {
       (((mNumSeps - 1) / (sHintCount + 1)) == dist) && ((slotId / dist) > 1))
     begin = (slotId / dist) - 1;
   for (uint16_t i = begin; i < sHintCount; i++)
-    hint[i] = slot[dist * (i + 1)].head;
+    mHint[i] = slot[dist * (i + 1)].head;
   for (uint16_t i = 0; i < sHintCount; i++)
-    assert(hint[i] == slot[dist * (i + 1)].head);
+    assert(mHint[i] == slot[dist * (i + 1)].head);
 }
 
 uint16_t BTreeNode::spaceNeeded(uint16_t keySize, uint16_t valSize,
@@ -66,7 +66,7 @@ int16_t BTreeNode::insertDoNotCopyPayload(Slice key, uint16_t valSize,
   const uint16_t space = key.size() + valSize;
   mDataOffset -= space;
   mSpaceUsed += space;
-  slot[slotId].offset = mDataOffset;
+  slot[slotId].mOffset = mDataOffset;
   memcpy(KeyDataWithoutPrefix(slotId), key.data(), key.size());
 
   mNumSeps++;
@@ -220,7 +220,7 @@ void BTreeNode::storeKeyValue(uint16_t slotId, Slice key, Slice val) {
   const uint16_t space = key.size() + val.size();
   mDataOffset -= space;
   mSpaceUsed += space;
-  slot[slotId].offset = mDataOffset;
+  slot[slotId].mOffset = mDataOffset;
   memcpy(KeyDataWithoutPrefix(slotId), key.data(), key.size());
   memcpy(ValData(slotId), val.data(), val.size());
   assert(RawPtr() + mDataOffset >= reinterpret_cast<uint8_t*>(slot + mNumSeps));
@@ -234,7 +234,7 @@ void BTreeNode::copyKeyValueRange(BTreeNode* dst, uint16_t dstSlot,
     memcpy(dst->slot + dstSlot, slot + srcSlot, sizeof(Slot) * count);
     DEBUG_BLOCK() {
       uint32_t totalSpaceUsed [[maybe_unused]] =
-          mUpperFence.length + mLowerFence.length;
+          mUpperFence.mLength + mLowerFence.mLength;
       for (uint16_t i = 0; i < this->mNumSeps; i++) {
         totalSpaceUsed += KeySizeWithoutPrefix(i) + ValSize(i);
       }
@@ -245,7 +245,7 @@ void BTreeNode::copyKeyValueRange(BTreeNode* dst, uint16_t dstSlot,
           KeySizeWithoutPrefix(srcSlot + i) + ValSize(srcSlot + i);
       dst->mDataOffset -= kvSize;
       dst->mSpaceUsed += kvSize;
-      dst->slot[dstSlot + i].offset = dst->mDataOffset;
+      dst->slot[dstSlot + i].mOffset = dst->mDataOffset;
       DEBUG_BLOCK() {
         [[maybe_unused]] int64_t offBy =
             reinterpret_cast<uint8_t*>(dst->slot + dstSlot + count) -
@@ -253,7 +253,7 @@ void BTreeNode::copyKeyValueRange(BTreeNode* dst, uint16_t dstSlot,
         assert(offBy <= 0);
       }
       memcpy(dst->RawPtr() + dst->mDataOffset,
-             RawPtr() + slot[srcSlot + i].offset, kvSize);
+             RawPtr() + slot[srcSlot + i].mOffset, kvSize);
     }
   } else {
     for (uint16_t i = 0; i < count; i++)
@@ -281,8 +281,8 @@ void BTreeNode::insertFence(BTreeNodeHeader::FenceKey& fk, Slice key) {
 
   mDataOffset -= key.size();
   mSpaceUsed += key.size();
-  fk.offset = mDataOffset;
-  fk.length = key.size();
+  fk.mOffset = mDataOffset;
+  fk.mLength = key.size();
   memcpy(RawPtr() + mDataOffset, key.data(), key.size());
 }
 
@@ -361,13 +361,13 @@ BTreeNode::SeparatorInfo BTreeNode::findSep() {
 
 int32_t BTreeNode::compareKeyWithBoundaries(Slice key) {
   // Lower Bound exclusive, upper bound inclusive
-  if (mLowerFence.offset) {
+  if (mLowerFence.mOffset) {
     int cmp = CmpKeys(key, GetLowerFence());
     if (!(cmp > 0))
       return 1; // Key lower or equal LF
   }
 
-  if (mUpperFence.offset) {
+  if (mUpperFence.mOffset) {
     int cmp = CmpKeys(key, GetUpperFence());
     if (!(cmp <= 0))
       return -1; // Key higher than UF
@@ -448,7 +448,7 @@ bool BTreeNode::Remove(Slice key) {
 }
 
 void BTreeNode::Reset() {
-  mSpaceUsed = mUpperFence.length + mLowerFence.length;
+  mSpaceUsed = mUpperFence.mLength + mLowerFence.mLength;
   mDataOffset = BTreeNode::Size() - mSpaceUsed;
   mNumSeps = 0;
 }
@@ -484,7 +484,7 @@ void BTreeNode::ToJson(rapidjson::Value* resultObj,
     rapidjson::Value memberArray(rapidjson::kArrayType);
     for (auto i = 0; i < sHintCount; ++i) {
       rapidjson::Value hintJson;
-      hintJson.SetUint64(hint[i]);
+      hintJson.SetUint64(mHint[i]);
       memberArray.PushBack(hintJson, allocator);
     }
     resultObj->AddMember("mHints", memberArray, allocator);
@@ -498,7 +498,7 @@ void BTreeNode::ToJson(rapidjson::Value* resultObj,
     for (auto i = 0; i < mNumSeps; ++i) {
       rapidjson::Value arrayElement(rapidjson::kObjectType);
       AddMemberToJson(&arrayElement, allocator, "mOffset",
-                      static_cast<uint64_t>(slot[i].offset));
+                      static_cast<uint64_t>(slot[i].mOffset));
       AddMemberToJson(&arrayElement, allocator, "mKeyLen",
                       static_cast<uint64_t>(slot[i].mKeySizeWithoutPrefix));
       AddMemberToJson(&arrayElement, allocator, "mKey", KeyWithoutPrefix(i));

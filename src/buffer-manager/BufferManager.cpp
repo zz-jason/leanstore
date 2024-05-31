@@ -18,7 +18,6 @@
 #include "utils/JumpMU.hpp"
 #include "utils/Log.hpp"
 #include "utils/Parallelize.hpp"
-#include "utils/RandomGenerator.hpp"
 #include "utils/UserThread.hpp"
 
 #include <cerrno>
@@ -222,19 +221,6 @@ uint64_t BufferManager::ConsumedPages() {
   return totalUsedBfs - totalFreeBfs;
 }
 
-// Buffer Frames Management
-
-Partition& BufferManager::RandomPartition() {
-  auto randOrdinal = utils::RandomGenerator::Rand<uint64_t>(0, mNumPartitions);
-  return GetPartition(randOrdinal);
-}
-
-BufferFrame& BufferManager::RandomBufferFrame() {
-  auto i = utils::RandomGenerator::Rand<uint64_t>(0, mNumBfs);
-  auto* bfAddr = &mBufferPool[i * mStore->mStoreOption.mBufferFrameSize];
-  return *reinterpret_cast<BufferFrame*>(bfAddr);
-}
-
 BufferFrame& BufferManager::AllocNewPageMayJump(TREEID treeId) {
   Partition& partition = RandomPartition();
   BufferFrame& freeBf = partition.mFreeBfList.PopFrontMayJump();
@@ -253,8 +239,6 @@ BufferFrame& BufferManager::AllocNewPageMayJump(TREEID treeId) {
   return freeBf;
 }
 
-// Pre: bf is exclusively locked
-// ATTENTION: this function unlocks it !!
 void BufferManager::ReclaimPage(BufferFrame& bf) {
   Partition& partition = GetPartition(bf.mHeader.mPageId);
   if (mStore->mStoreOption.mEnableReclaimPageIds) {
@@ -271,7 +255,6 @@ void BufferManager::ReclaimPage(BufferFrame& bf) {
   }
 }
 
-// Returns a non-latched BufguardedSwipferFrame, called by worker threads
 BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard,
                                                Swip& swipInNode) {
   LS_DCHECK(nodeGuard.mState == GuardState::kOptimisticShared);
@@ -321,9 +304,9 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard,
 
     // 2. Create an IO frame in the current partition
     IOFrame& ioFrame = partition.mInflightIOs.Insert(pageId);
-    ioFrame.state = IOFrame::State::kReading;
-    ioFrame.readers_counter = 1;
-    JumpScoped<std::unique_lock<std::mutex>> ioFrameGuard(ioFrame.mutex);
+    ioFrame.mState = IOFrame::State::kReading;
+    ioFrame.mNumReaders = 1;
+    JumpScoped<std::unique_lock<std::mutex>> ioFrameGuard(ioFrame.mMutex);
     inflightIOGuard->unlock();
 
     // 3. Read page at pageId to the target buffer frame
@@ -354,17 +337,17 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard,
       swipInNode.MarkHOT(&bf);
       bf.mHeader.mState = State::kHot;
 
-      if (ioFrame.readers_counter.fetch_add(-1) == 1) {
+      if (ioFrame.mNumReaders.fetch_add(-1) == 1) {
         partition.mInflightIOs.Remove(pageId);
       }
 
-      JUMPMU_RETURN& bf;
+      JUMPMU_RETURN & bf;
     }
     JUMPMU_CATCH() {
       // Change state to ready if contention is encountered
       inflightIOGuard->lock();
-      ioFrame.bf = &bf;
-      ioFrame.state = IOFrame::State::kReady;
+      ioFrame.mBf = &bf;
+      ioFrame.mState = IOFrame::State::kReady;
       inflightIOGuard->unlock();
       if (ioFrameGuard->owns_lock()) {
         ioFrameGuard->unlock();
@@ -373,18 +356,18 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard,
     }
   }
 
-  IOFrame& ioFrame = frameHandler.frame();
-  switch (ioFrame.state) {
+  IOFrame& ioFrame = frameHandler.Frame();
+  switch (ioFrame.mState) {
   case IOFrame::State::kReading: {
-    ioFrame.readers_counter++; // incremented while holding partition lock
+    ioFrame.mNumReaders++; // incremented while holding partition lock
     inflightIOGuard->unlock();
 
     // wait untile the reading is finished
-    JumpScoped<std::unique_lock<std::mutex>> ioFrameGuard(ioFrame.mutex);
+    JumpScoped<std::unique_lock<std::mutex>> ioFrameGuard(ioFrame.mMutex);
     ioFrameGuard->unlock(); // no need to hold the mutex anymore
-    if (ioFrame.readers_counter.fetch_add(-1) == 1) {
+    if (ioFrame.mNumReaders.fetch_add(-1) == 1) {
       inflightIOGuard->lock();
-      if (ioFrame.readers_counter == 0) {
+      if (ioFrame.mNumReaders == 0) {
         partition.mInflightIOs.Remove(pageId);
       }
       inflightIOGuard->unlock();
@@ -393,33 +376,33 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard,
     break;
   }
   case IOFrame::State::kReady: {
-    BufferFrame* bf = ioFrame.bf;
+    BufferFrame* bf = ioFrame.mBf;
     {
-      // We have to exclusively lock the bf because the page provider thread
-      // will try to evict them when its IO is done
+      // We have to exclusively lock the bf because the page evictor thread will
+      // try to evict them when its IO is done
       LS_DCHECK(!bf->mHeader.mLatch.IsLockedExclusively());
       LS_DCHECK(bf->mHeader.mState == State::kLoaded);
       BMOptimisticGuard bfGuard(bf->mHeader.mLatch);
       BMExclusiveUpgradeIfNeeded swipXGuard(nodeGuard);
       BMExclusiveGuard bfXGuard(bfGuard);
-      ioFrame.bf = nullptr;
+      ioFrame.mBf = nullptr;
       swipInNode.MarkHOT(bf);
       LS_DCHECK(bf->mHeader.mPageId == pageId);
       LS_DCHECK(swipInNode.IsHot());
       LS_DCHECK(bf->mHeader.mState == State::kLoaded);
       bf->mHeader.mState = State::kHot;
 
-      if (ioFrame.readers_counter.fetch_add(-1) == 1) {
+      if (ioFrame.mNumReaders.fetch_add(-1) == 1) {
         partition.mInflightIOs.Remove(pageId);
       } else {
-        ioFrame.state = IOFrame::State::kToDelete;
+        ioFrame.mState = IOFrame::State::kToDelete;
       }
       inflightIOGuard->unlock();
       return bf;
     }
   }
   case IOFrame::State::kToDelete: {
-    if (ioFrame.readers_counter == 0) {
+    if (ioFrame.mNumReaders == 0) {
       partition.mInflightIOs.Remove(pageId);
     }
     inflightIOGuard->unlock();
@@ -499,19 +482,6 @@ Result<void> BufferManager::WritePageSync(BufferFrame& bf) {
   guard.Unlock();
   partition.mFreeBfList.PushFront(bf);
   return {};
-}
-
-void BufferManager::SyncAllPageWrites() {
-  fdatasync(mStore->mPageFd);
-}
-
-uint64_t BufferManager::GetPartitionID(PID pageId) {
-  return pageId & mPartitionsMask;
-}
-
-Partition& BufferManager::GetPartition(PID pageId) {
-  const uint64_t partitionId = GetPartitionID(pageId);
-  return *mPartitions[partitionId];
 }
 
 void BufferManager::StopPageEvictors() {

@@ -220,7 +220,7 @@ public:
       }
 
       // No more keys in the BTree, return false
-      if (mGuardedLeaf->mUpperFence.length == 0) {
+      if (mGuardedLeaf->mUpperFence.mLength == 0) {
         return false;
       }
 
@@ -316,12 +316,12 @@ public:
       }
 
       // No more keys in the BTree, return false
-      if (mGuardedLeaf->mLowerFence.length == 0) {
+      if (mGuardedLeaf->mLowerFence.mLength == 0) {
         return false;
       }
 
       // Seek to the previous leaf
-      mFenceSize = mGuardedLeaf->mLowerFence.length;
+      mFenceSize = mGuardedLeaf->mLowerFence.mLength;
       mIsUsingUpperFence = false;
       if (mBuffer.size() < mFenceSize) {
         mBuffer.resize(mFenceSize, 0);
@@ -454,13 +454,13 @@ public:
 
 private:
   void assembleUpperFence() {
-    mFenceSize = mGuardedLeaf->mUpperFence.length + 1;
+    mFenceSize = mGuardedLeaf->mUpperFence.mLength + 1;
     mIsUsingUpperFence = true;
     if (mBuffer.size() < mFenceSize) {
       mBuffer.resize(mFenceSize, 0);
     }
     std::memcpy(mBuffer.data(), mGuardedLeaf->GetUpperFenceKey(),
-                mGuardedLeaf->mUpperFence.length);
+                mGuardedLeaf->mUpperFence.mLength);
     mBuffer[mFenceSize - 1] = 0;
   }
 

@@ -69,7 +69,7 @@ LeanStore::LeanStore(StoreOption option)
   // create global btree catalog
   mTreeRegistry = std::make_unique<storage::TreeRegistry>();
 
-  // create global buffer manager and buffer frame providers
+  // create global buffer manager and page evictors
   mBufferManager = std::make_unique<storage::BufferManager>(this);
   mBufferManager->StartPageEvictors();
 
@@ -177,6 +177,7 @@ LeanStore::~LeanStore() {
   mCRManager = nullptr;
 
   // destroy buffer manager (buffer frame providers)
+  mBufferManager->StopPageEvictors();
   mBufferManager = nullptr;
 
   // destroy global btree catalog

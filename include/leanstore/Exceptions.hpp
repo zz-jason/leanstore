@@ -16,7 +16,9 @@
       printf("Throwing exception: %s(%s)\n", #name, msg.c_str());              \
     }                                                                          \
     ~name() = default;                                                         \
-    virtual const char* what() const noexcept override { return msg.c_str(); } \
+    virtual const char* what() const noexcept override {                       \
+      return msg.c_str();                                                      \
+    }                                                                          \
   };                                                                           \
 //--------------------------------------------------------------------------------------
 namespace leanstore {

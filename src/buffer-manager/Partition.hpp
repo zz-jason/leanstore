@@ -18,40 +18,48 @@ struct IOFrame {
     kToDelete = 2,
     kUndefined = 3 // for debugging
   };
-  std::mutex mutex;
-  State state = State::kUndefined;
-  BufferFrame* bf = nullptr;
 
-  // Everything in CIOFrame is protected by partition lock
-  // except the following counter which is decremented outside to determine
-  // whether it is time to remove it
-  std::atomic<int64_t> readers_counter = 0;
+  std::mutex mMutex;
+
+  State mState = State::kUndefined;
+
+  BufferFrame* mBf = nullptr;
+
+  //! Everything in CIOFrame is protected by partition lock except the following
+  //! counter which is decremented outside to determine whether it is time to
+  //! remove it
+  std::atomic<int64_t> mNumReaders = 0;
 };
 
 struct HashTable {
   struct Entry {
-    uint64_t key;
-    Entry* next;
-    IOFrame value;
+    uint64_t mKey;
+
+    Entry* mNext;
+
+    IOFrame mValue;
+
     Entry(uint64_t key);
   };
 
   struct Handler {
-    Entry** holder;
+    Entry** mHolder;
+
     operator bool() const {
-      return holder != nullptr;
+      return mHolder != nullptr;
     }
-    IOFrame& frame() const {
-      assert(holder != nullptr);
-      return *reinterpret_cast<IOFrame*>(&((*holder)->value));
+
+    IOFrame& Frame() const {
+      assert(mHolder != nullptr);
+      return *reinterpret_cast<IOFrame*>(&((*mHolder)->mValue));
     }
   };
 
-  uint64_t mask;
+  uint64_t mMask;
 
-  Entry** entries;
+  Entry** mEntries;
 
-  uint64_t hashKey(uint64_t k);
+  uint64_t HashKey(uint64_t k);
 
   IOFrame& Insert(uint64_t key);
 
@@ -61,9 +69,9 @@ struct HashTable {
 
   void Remove(uint64_t key);
 
-  bool has(uint64_t key); // for debugging
+  bool Has(uint64_t key); // for debugging
 
-  HashTable(uint64_t size_in_bits);
+  HashTable(uint64_t sizeInBits);
 };
 
 //! The I/O partition for the underlying pages. Page read/write operations are

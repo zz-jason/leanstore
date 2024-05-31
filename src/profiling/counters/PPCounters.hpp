@@ -6,12 +6,14 @@
 
 namespace leanstore {
 
+// NOLINTBEGIN
+
 class PPCounters {
 public:
   PPCounters() = default;
 
 public:
-  // ATTENTION: These counters should be only used by page provider threads or
+  // ATTENTION: These counters should be only used by page evictor threads or
   // slow path worker code
   std::atomic<int64_t> mPhase1MS = 0;
 
@@ -51,5 +53,7 @@ public:
     return *sCounters.Local();
   }
 };
+
+// NOLINTEND
 
 } // namespace leanstore

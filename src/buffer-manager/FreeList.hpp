@@ -5,8 +5,7 @@
 
 #include <mutex>
 
-namespace leanstore {
-namespace storage {
+namespace leanstore::storage {
 
 class FreeList {
 public:
@@ -53,5 +52,4 @@ inline BufferFrame& FreeList::PopFrontMayJump() {
   return *freeBf;
 }
 
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage
