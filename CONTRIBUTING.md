@@ -2,12 +2,11 @@
 
 ### Setup VS Code and Docker development environment
 
-Currently, LeanStore requires libaio, c++23. It's recommanded to develop the
-project inside a docker container for convenience, which can be built from the
-[Dockerfile][0].
+LeanStore requires libaio, c++23. It's recommanded to develop the project inside
+a docker container for convenience, which can be built from this [Dockerfile][0].
 
 For VS Code, it's recommanded to install the ["C/C++ Extension Pack"][1] and
-["clangd"][2] plugins
+["clangd"][2] plugins.
 
 ### Get the code, build and run
 
@@ -16,11 +15,10 @@ git clone git@github.com:zz-jason/leanstore.git
 cd leanstore
 ```
 
-LeanStore uses [vcpkg][3] to manage dependencies, all the dependencies can be
-found in the [vcpkg.json][5] file. LeanStore uses [CMakePresets.json][4] to
-manage build configs for common build purposes, when open the project in VS
-Code, you can choose one of these cmake presets. To compile LeanStore in debug
-mode:
+[vcpkg][3] is used to manage dependencies, all the dependencies can be found in
+[vcpkg.json][5]. [CMakePresets.json][4] is used to manage common build configs.
+You can choose one of these cmake presets when open the project in VS Code. To
+compile LeanStore in debug mode:
 
 ```sh
 cmake --preset debug
@@ -46,7 +44,8 @@ To run simple ycsb benchmarks:
 
 ### Commit and submit a pull request
 
-TODO
+[Conventional Commits][6] is used for pull request titles, all the available
+types can be found in [conventional-commits.yml][7].
 
 [0]: ./docker/Dockerfile
 [1]: https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools-extension-pack
@@ -54,3 +53,5 @@ TODO
 [3]: https://github.com/microsoft/vcpkg
 [4]: ./CMakePresets.json
 [5]: ./vcpkg.json
+[6]: https://www.conventionalcommits.org/en/v1.0.0/
+[7]: ./.github/workflows/conventional-commits.yml

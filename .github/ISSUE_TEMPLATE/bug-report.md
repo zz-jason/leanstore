@@ -5,11 +5,11 @@ about: Bug report
 
 ## Bug Report
 
-### 1. Minimal reproduce step
+### Minimal reproduce step
 
-<!-- a step by step guide for reproducing the bug. -->
+<!-- steps to reproduce the bug -->
 
-### 2. Expected result
+### Expected result
 
-### 3. Actual result
+### Actual result
 
