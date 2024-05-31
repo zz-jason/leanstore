@@ -46,13 +46,6 @@ void Logging::ReserveContiguousBuffer(uint32_t bytesRequired) {
 }
 
 void Logging::WriteWalTxAbort() {
-  WalEntry* entry [[maybe_unused]];
-  SCOPED_DEFER({
-    LS_DLOG("WriteWalTxAbort, workerId={}, startTs={}, curGSN={}, walJson={}",
-            Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
-            GetCurrentGsn(), WalEntry::ToJsonString(entry));
-  });
-
   // Reserve space
   auto size = sizeof(WalTxAbort);
   ReserveContiguousBuffer(size);
@@ -60,22 +53,18 @@ void Logging::WriteWalTxAbort() {
   // Initialize a WalTxAbort
   auto* data = mWalBuffer + mWalBuffered;
   std::memset(data, 0, size);
-  entry = new (data) WalTxAbort(size);
+  auto* entry = new (data) WalTxAbort(size);
 
   // Submit the WalTxAbort to group committer
   mWalBuffered += size;
   publishWalFlushReq();
+
+  LS_DLOG("WriteWalTxAbort, workerId={}, startTs={}, curGSN={}, walJson={}",
+          Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
+          GetCurrentGsn(), WalEntry::ToJsonString(entry));
 }
 
 void Logging::WriteWalTxFinish() {
-  WalEntry* entry [[maybe_unused]];
-  SCOPED_DEFER({
-      // LS_DLOG(
-      //     "WriteWalTxFinish, workerId={}, startTs={}, curGSN={}, walJson={}",
-      //     Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
-      //     GetCurrentGsn(), WalEntry::ToJsonString(entry));
-  });
-
   // Reserve space
   auto size = sizeof(WalTxFinish);
   ReserveContiguousBuffer(size);
@@ -83,11 +72,15 @@ void Logging::WriteWalTxFinish() {
   // Initialize a WalTxFinish
   auto* data = mWalBuffer + mWalBuffered;
   std::memset(data, 0, size);
-  entry = new (data) WalTxFinish(Worker::My().mActiveTx.mStartTs);
+  auto* entry = new (data) WalTxFinish(Worker::My().mActiveTx.mStartTs);
 
   // Submit the WalTxAbort to group committer
   mWalBuffered += size;
   publishWalFlushReq();
+
+  LS_DLOG("WriteWalTxFinish, workerId={}, startTs={}, curGSN={}, walJson={}",
+          Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
+          GetCurrentGsn(), WalEntry::ToJsonString(entry));
 }
 
 void Logging::WriteWalCarriageReturn() {
@@ -102,13 +95,6 @@ void Logging::WriteWalCarriageReturn() {
 }
 
 void Logging::SubmitWALEntryComplex(uint64_t totalSize) {
-  SCOPED_DEFER({
-      // LS_DLOG("SubmitWal, workerId={}, startTs={}, curGSN={}, walJson={}",
-      //            Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
-      //            GetCurrentGsn(),
-      //            WalEntry::ToJsonString(mActiveWALEntryComplex));
-  });
-
   mActiveWALEntryComplex->mCrc32 = mActiveWALEntryComplex->ComputeCRC32();
   mWalBuffered += totalSize;
   publishWalFlushReq();
@@ -116,6 +102,9 @@ void Logging::SubmitWALEntryComplex(uint64_t totalSize) {
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().wal_write_bytes += totalSize;
   }
+  LS_DLOG("SubmitWal, workerId={}, startTs={}, curGSN={}, walJson={}",
+          Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
+          GetCurrentGsn(), WalEntry::ToJsonString(mActiveWALEntryComplex));
 }
 
 void Logging::publishWalBufferedOffset() {
