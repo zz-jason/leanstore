@@ -35,8 +35,8 @@ public:
     options.error_if_exists = false;
     options.arena_block_size = FLAGS_ycsb_mem_kb * 1024;
 
-    auto status = rocksdb::DB::Open(
-        options, FLAGS_ycsb_data_dir + "/rocksdb/" + FLAGS_ycsb_workload, &mDb);
+    auto status =
+        rocksdb::DB::Open(options, FLAGS_ycsb_data_dir + "/rocksdb/" + FLAGS_ycsb_workload, &mDb);
     if (!status.ok()) {
       Log::Fatal("Failed to open rocksdb: {}", status.ToString());
     }
@@ -47,17 +47,13 @@ public:
 #ifdef ENABLE_ROCKSDB
     // load data with FLAGS_ycsb_threads
     auto start = std::chrono::high_resolution_clock::now();
-    std::cout << "Inserting " << FLAGS_ycsb_record_count << " values"
-              << std::endl;
+    std::cout << "Inserting " << FLAGS_ycsb_record_count << " values" << std::endl;
     SCOPED_DEFER({
       auto end = std::chrono::high_resolution_clock::now();
-      auto duration =
-          std::chrono::duration_cast<std::chrono::microseconds>(end - start)
-              .count();
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
       std::cout << "Done inserting"
                 << ", time elapsed: " << duration / 1000000.0 << " seconds"
-                << ", throughput: "
-                << CalculateTps(start, end, FLAGS_ycsb_record_count) << " tps"
+                << ", throughput: " << CalculateTps(start, end, FLAGS_ycsb_record_count) << " tps"
                 << std::endl;
     });
 
@@ -73,9 +69,8 @@ public:
             GenKey(i, key);
             utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
 
-            auto status = mDb->Put(
-                writeOption, rocksdb::Slice((char*)key, FLAGS_ycsb_key_size),
-                rocksdb::Slice((char*)val, FLAGS_ycsb_val_size));
+            auto status = mDb->Put(writeOption, rocksdb::Slice((char*)key, FLAGS_ycsb_key_size),
+                                   rocksdb::Slice((char*)val, FLAGS_ycsb_val_size));
             if (!status.ok()) {
               Log::Fatal("Failed to insert: {}", status.ToString());
             }
@@ -89,8 +84,8 @@ public:
     // Run the benchmark in FLAGS_ycsb_threads
     auto workloadType = static_cast<Workload>(FLAGS_ycsb_workload[0] - 'a');
     auto workload = GetWorkloadSpec(workloadType);
-    auto zipfRandom = utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count,
-                                                    FLAGS_ycsb_zipf_factor);
+    auto zipfRandom =
+        utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count, FLAGS_ycsb_zipf_factor);
     std::atomic<bool> keepRunning = true;
     std::vector<std::atomic<uint64_t>> threadCommitted(FLAGS_ycsb_threads);
     std::vector<std::atomic<uint64_t>> threadAborted(FLAGS_ycsb_threads);
@@ -110,10 +105,8 @@ public:
                 if (readProbability <= workload.mReadProportion * 100) {
                   // generate key for read
                   GenYcsbKey(zipfRandom, key);
-                  auto status =
-                      mDb->Get(rocksdb::ReadOptions(),
-                               rocksdb::Slice((char*)key, FLAGS_ycsb_key_size),
-                               &valRead);
+                  auto status = mDb->Get(rocksdb::ReadOptions(),
+                                         rocksdb::Slice((char*)key, FLAGS_ycsb_key_size), &valRead);
                   if (!status.ok()) {
                     Log::Fatal("Failed to read: {}", status.ToString());
                   }
@@ -121,10 +114,9 @@ public:
                   // generate key for update
                   GenYcsbKey(zipfRandom, key);
                   // generate val for update
-                  auto status =
-                      mDb->Put(rocksdb::WriteOptions(),
-                               rocksdb::Slice((char*)key, FLAGS_ycsb_key_size),
-                               rocksdb::Slice((char*)key, FLAGS_ycsb_val_size));
+                  auto status = mDb->Put(rocksdb::WriteOptions(),
+                                         rocksdb::Slice((char*)key, FLAGS_ycsb_key_size),
+                                         rocksdb::Slice((char*)key, FLAGS_ycsb_val_size));
                   if (!status.ok()) {
                     threadAborted[threadId]++;
                   }
@@ -132,8 +124,7 @@ public:
                 break;
               }
               default: {
-                Log::Fatal("Unsupported workload type: {}",
-                           static_cast<uint8_t>(workloadType));
+                Log::Fatal("Unsupported workload type: {}", static_cast<uint8_t>(workloadType));
               }
               }
               threadCommitted[threadId]++;
@@ -150,8 +141,8 @@ public:
       a = 0;
     }
 
-    printTpsSummary(1, FLAGS_ycsb_run_for_seconds, FLAGS_ycsb_threads,
-                    threadCommitted, threadAborted);
+    printTpsSummary(1, FLAGS_ycsb_run_for_seconds, FLAGS_ycsb_threads, threadCommitted,
+                    threadAborted);
 
     keepRunning.store(false);
     for (auto& thread : threads) {

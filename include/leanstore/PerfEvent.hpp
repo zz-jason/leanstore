@@ -56,9 +56,8 @@ struct PerfEvent {
     read_format data;
 
     double readCounter() {
-      double multiplexingCorrection =
-          static_cast<double>(data.time_enabled - prev.time_enabled) /
-          (data.time_running - prev.time_running);
+      double multiplexingCorrection = static_cast<double>(data.time_enabled - prev.time_enabled) /
+                                      (data.time_running - prev.time_running);
       return (data.value - prev.value) * multiplexingCorrection;
     }
   };
@@ -76,9 +75,7 @@ struct PerfEvent {
     // EAX=0: Highest Function Parameter and Manufacturer ID
     // ecx is often an input as well as an output
     unsigned eax = 0, ebx, ecx = 0, edx;
-    asm volatile("cpuid"
-                 : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx)
-                 : "0"(0), "2"(ecx));
+    asm volatile("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "0"(0), "2"(ecx));
     return ecx == 0x6c65746e;
 #else
     return false;
@@ -86,16 +83,13 @@ struct PerfEvent {
   }
   PerfEvent(bool inherit = true) : inherit(inherit), printHeader(true) {
     registerCounter("cycle", PERF_TYPE_HARDWARE, PERF_COUNT_HW_CPU_CYCLES);
-    registerCounter("cycle-kernel", PERF_TYPE_HARDWARE,
-                    PERF_COUNT_HW_CPU_CYCLES, 1);
+    registerCounter("cycle-kernel", PERF_TYPE_HARDWARE, PERF_COUNT_HW_CPU_CYCLES, 1);
     registerCounter("instr", PERF_TYPE_HARDWARE, PERF_COUNT_HW_INSTRUCTIONS);
     registerCounter("L1-miss", PERF_TYPE_HW_CACHE,
-                    PERF_COUNT_HW_CACHE_L1D |
-                        (PERF_COUNT_HW_CACHE_OP_READ << 8) |
+                    PERF_COUNT_HW_CACHE_L1D | (PERF_COUNT_HW_CACHE_OP_READ << 8) |
                         (PERF_COUNT_HW_CACHE_RESULT_MISS << 16));
     if (isIntel())
-      registerCounter("LLC-miss", PERF_TYPE_HARDWARE,
-                      PERF_COUNT_HW_CACHE_MISSES);
+      registerCounter("LLC-miss", PERF_TYPE_HARDWARE, PERF_COUNT_HW_CACHE_MISSES);
     registerCounter("br-miss", PERF_TYPE_HARDWARE, PERF_COUNT_HW_BRANCH_MISSES);
     registerCounter("task", PERF_TYPE_SOFTWARE, PERF_COUNT_SW_TASK_CLOCK);
     // additional counters can be found in linux/perf_event.h
@@ -128,8 +122,7 @@ struct PerfEvent {
     pe.exclude_user = excludeUser;
     pe.exclude_kernel = false;
     pe.exclude_hv = false;
-    pe.read_format =
-        PERF_FORMAT_TOTAL_TIME_ENABLED | PERF_FORMAT_TOTAL_TIME_RUNNING;
+    pe.read_format = PERF_FORMAT_TOTAL_TIME_ENABLED | PERF_FORMAT_TOTAL_TIME_RUNNING;
   }
 
   void startCounters() {
@@ -137,8 +130,7 @@ struct PerfEvent {
       auto& event = events[i];
       ioctl(event.fd, PERF_EVENT_IOC_RESET, 0);
       ioctl(event.fd, PERF_EVENT_IOC_ENABLE, 0);
-      if (read(event.fd, &event.prev, sizeof(uint64_t) * 3) !=
-          sizeof(uint64_t) * 3)
+      if (read(event.fd, &event.prev, sizeof(uint64_t) * 3) != sizeof(uint64_t) * 3)
         std::cerr << "Error reading counter " << names[i] << std::endl;
     }
     startTime = std::chrono::steady_clock::now();
@@ -154,8 +146,7 @@ struct PerfEvent {
     stopTime = std::chrono::steady_clock::now();
     for (unsigned i = 0; i < events.size(); i++) {
       auto& event = events[i];
-      if (read(event.fd, &event.data, sizeof(uint64_t) * 3) !=
-          sizeof(uint64_t) * 3)
+      if (read(event.fd, &event.data, sizeof(uint64_t) * 3) != sizeof(uint64_t) * 3)
         std::cerr << "Error reading counter " << names[i] << std::endl;
       ioctl(event.fd, PERF_EVENT_IOC_DISABLE, 0);
     }
@@ -184,18 +175,16 @@ struct PerfEvent {
     return -1;
   }
 
-  static void printCounter(std::ostream& headerOut, std::ostream& dataOut,
-                           std::string name, std::string counterValue,
-                           bool addComma = true) {
+  static void printCounter(std::ostream& headerOut, std::ostream& dataOut, std::string name,
+                           std::string counterValue, bool addComma = true) {
     auto width = std::max(name.length(), counterValue.length());
     headerOut << std::setw(width) << name << (addComma ? "," : "") << " ";
     dataOut << std::setw(width) << counterValue << (addComma ? "," : "") << " ";
   }
 
   template <typename T>
-  static void printCounter(std::ostream& headerOut, std::ostream& dataOut,
-                           std::string name, T counterValue,
-                           bool addComma = true) {
+  static void printCounter(std::ostream& headerOut, std::ostream& dataOut, std::string name,
+                           T counterValue, bool addComma = true) {
     std::stringstream stream;
     stream << std::fixed << std::setprecision(2) << counterValue;
     PerfEvent::printCounter(headerOut, dataOut, name, stream.str(), addComma);
@@ -209,15 +198,13 @@ struct PerfEvent {
     out << data.str() << std::endl;
   }
 
-  void printReport(std::ostream& headerOut, std::ostream& dataOut,
-                   uint64_t normalizationConstant) {
+  void printReport(std::ostream& headerOut, std::ostream& dataOut, uint64_t normalizationConstant) {
     if (!events.size())
       return;
 
     // print all metrics
     for (unsigned i = 0; i < events.size(); i++) {
-      printCounter(headerOut, dataOut, names[i],
-                   events[i].readCounter() / normalizationConstant);
+      printCounter(headerOut, dataOut, names[i], events[i].readCounter() / normalizationConstant);
     }
 
     printCounter(headerOut, dataOut, "scale", normalizationConstant);
@@ -290,7 +277,8 @@ struct PerfEvent {
     params[name] = value;
   }
 
-  template <typename T> void setParam(const std::string& name, T value) {
+  template <typename T>
+  void setParam(const std::string& name, T value) {
     setParam(name, std::to_string(value));
   }
 

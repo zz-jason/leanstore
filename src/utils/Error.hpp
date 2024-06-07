@@ -59,9 +59,7 @@ public:
   Error& operator=(const Error& other) = default;
 
   // move construct
-  Error(Error&& other) noexcept
-      : mCode(other.mCode),
-        mMessage(std::move(other.mMessage)) {
+  Error(Error&& other) noexcept : mCode(other.mCode), mMessage(std::move(other.mMessage)) {
   }
 
   // move assign
@@ -86,7 +84,8 @@ public:
   }
 
 public:
-  template <typename... Args> inline static Error General(Args&&... args) {
+  template <typename... Args>
+  inline static Error General(Args&&... args) {
     const std::string msg = "{}";
     return Error(ErrorCode::kGeneral, msg, std::forward<Args>(args)...);
   }
@@ -99,61 +98,57 @@ public:
   }
 
   // File
-  template <typename... Args> inline static Error FileOpen(Args&&... args) {
+  template <typename... Args>
+  inline static Error FileOpen(Args&&... args) {
     const std::string msg = "Fail to open file, file={}, errno={}, strerror={}";
     return Error(ErrorCode::kFileOpen, msg, std::forward<Args>(args)...);
   }
 
-  template <typename... Args> inline static Error FileClose(Args&&... args) {
-    const std::string msg =
-        "Fail to close file, file={}, errno={}, strerror={}";
+  template <typename... Args>
+  inline static Error FileClose(Args&&... args) {
+    const std::string msg = "Fail to close file, file={}, errno={}, strerror={}";
     return Error(ErrorCode::kFileClose, msg, std::forward<Args>(args)...);
   }
 
-  template <typename... Args> inline static Error FileSeek(Args&&... args) {
+  template <typename... Args>
+  inline static Error FileSeek(Args&&... args) {
     const std::string msg = "Fail to seek file, file={}, errno={}, strerror={}";
     return Error(ErrorCode::kFileSeek, msg, std::forward<Args>(args)...);
   }
 
-  template <typename... Args> inline static Error FileRead(Args&&... args) {
+  template <typename... Args>
+  inline static Error FileRead(Args&&... args) {
     const std::string msg = "Fail to read file, file={}, errno={}, strerror={}";
     return Error(ErrorCode::kFileRead, msg, std::forward<Args>(args)...);
   }
 
-  template <typename... Args> inline static Error FileWrite(Args&&... args) {
-    const std::string msg =
-        "Fail to write file, file={}, errno={}, strerror={}";
+  template <typename... Args>
+  inline static Error FileWrite(Args&&... args) {
+    const std::string msg = "Fail to write file, file={}, errno={}, strerror={}";
     return Error(ErrorCode::kFileWrite, msg, std::forward<Args>(args)...);
   }
 
   static Error ErrorAio(int retCode, const std::string& apiName) {
     switch (-retCode) {
     case EAGAIN:
-      return Error(
-          ErrorCode::kAioAgain,
-          std::format("AIO({}) failed with EAGAIN, insufficient resources",
-                      apiName));
+      return Error(ErrorCode::kAioAgain,
+                   std::format("AIO({}) failed with EAGAIN, insufficient resources", apiName));
     case EBADF:
-      return Error(ErrorCode::kAioBadf,
-                   "AIO({}) failed with EBADF, bad file descriptor", apiName);
+      return Error(ErrorCode::kAioBadf, "AIO({}) failed with EBADF, bad file descriptor", apiName);
     case EFAULT:
       return Error(ErrorCode::kAioFault,
                    "AIO({}) failed with EFAULT, one of the data structures "
                    "points to invalid data",
                    apiName);
     case EINVAL:
-      return Error(ErrorCode::kAioInvalid,
-                   "AIO({}) failed with EINVAL, invalid argument", apiName);
+      return Error(ErrorCode::kAioInvalid, "AIO({}) failed with EINVAL, invalid argument", apiName);
     case ENOSYS:
-      return Error(ErrorCode::kAioNoSys,
-                   "AIO({}) failed with ENOSYS, not implemented", apiName);
+      return Error(ErrorCode::kAioNoSys, "AIO({}) failed with ENOSYS, not implemented", apiName);
     case EPERM:
-      return Error(ErrorCode::kAioPerm,
-                   "AIO({}) failed with EPERM, operation not permitted",
+      return Error(ErrorCode::kAioPerm, "AIO({}) failed with EPERM, operation not permitted",
                    apiName);
     default:
-      return Error(ErrorCode::kAioUnknown,
-                   "AIO({}) failed with unknown error code {}", apiName,
+      return Error(ErrorCode::kAioUnknown, "AIO({}) failed with unknown error code {}", apiName,
                    retCode);
     }
   }

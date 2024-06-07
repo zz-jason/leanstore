@@ -2,9 +2,10 @@
 BasedOnStyle: LLVM
 # BreakBeforeBraces: Linux
 # SpaceInEmptyParentheses: 'false'
-ColumnLimit: 80
+ColumnLimit: 100
 IndentWidth: 2
 PointerAlignment: Left
+AlwaysBreakTemplateDeclarations: true
 
 PenaltyReturnTypeOnItsOwnLine: 1000
 

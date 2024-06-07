@@ -59,9 +59,8 @@ void Logging::WriteWalTxAbort() {
   mWalBuffered += size;
   publishWalFlushReq();
 
-  LS_DLOG("WriteWalTxAbort, workerId={}, startTs={}, curGSN={}, walJson={}",
-          Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
-          GetCurrentGsn(), WalEntry::ToJsonString(entry));
+  LS_DLOG("WriteWalTxAbort, workerId={}, startTs={}, curGSN={}, walJson={}", Worker::My().mWorkerId,
+          Worker::My().mActiveTx.mStartTs, GetCurrentGsn(), WalEntry::ToJsonString(entry));
 }
 
 void Logging::WriteWalTxFinish() {
@@ -79,14 +78,13 @@ void Logging::WriteWalTxFinish() {
   publishWalFlushReq();
 
   LS_DLOG("WriteWalTxFinish, workerId={}, startTs={}, curGSN={}, walJson={}",
-          Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
-          GetCurrentGsn(), WalEntry::ToJsonString(entry));
+          Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs, GetCurrentGsn(),
+          WalEntry::ToJsonString(entry));
 }
 
 void Logging::WriteWalCarriageReturn() {
-  LS_DCHECK(
-      mWalFlushed <= mWalBuffered,
-      "CarriageReturn should only used for the last bytes in the wal buffer");
+  LS_DCHECK(mWalFlushed <= mWalBuffered,
+            "CarriageReturn should only used for the last bytes in the wal buffer");
   auto entrySize = mWalBufferSize - mWalBuffered;
   auto* entryPtr = mWalBuffer + mWalBuffered;
   new (entryPtr) WalCarriageReturn(entrySize);
@@ -102,9 +100,9 @@ void Logging::SubmitWALEntryComplex(uint64_t totalSize) {
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().wal_write_bytes += totalSize;
   }
-  LS_DLOG("SubmitWal, workerId={}, startTs={}, curGSN={}, walJson={}",
-          Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs,
-          GetCurrentGsn(), WalEntry::ToJsonString(mActiveWALEntryComplex));
+  LS_DLOG("SubmitWal, workerId={}, startTs={}, curGSN={}, walJson={}", Worker::My().mWorkerId,
+          Worker::My().mActiveTx.mStartTs, GetCurrentGsn(),
+          WalEntry::ToJsonString(mActiveWALEntryComplex));
 }
 
 void Logging::publishWalBufferedOffset() {
@@ -112,14 +110,12 @@ void Logging::publishWalBufferedOffset() {
 }
 
 void Logging::publishWalFlushReq() {
-  WalFlushReq current(mWalBuffered, GetCurrentGsn(),
-                      Worker::My().mActiveTx.mStartTs);
+  WalFlushReq current(mWalBuffered, GetCurrentGsn(), Worker::My().mActiveTx.mStartTs);
   mWalFlushReq.Set(current);
 }
 
 // Called by worker, so concurrent writes on the buffer
-void Logging::IterateCurrentTxWALs(
-    std::function<void(const WalEntry& entry)> callback) {
+void Logging::IterateCurrentTxWALs(std::function<void(const WalEntry& entry)> callback) {
   uint64_t cursor = mTxWalBegin;
   while (cursor != mWalBuffered) {
     const WalEntry& entry = *reinterpret_cast<WalEntry*>(mWalBuffer + cursor);

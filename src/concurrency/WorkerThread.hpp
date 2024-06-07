@@ -15,45 +15,45 @@ namespace leanstore::cr {
 
 class WorkerThread : public utils::UserThread {
 public:
-  /// The id of the worker thread.
+  //! The id of the worker thread.
   WORKERID mWorkerId;
 
-  /// The mutex to guard the job.
+  //! The mutex to guard the job.
   std::mutex mMutex;
 
-  /// The condition variable to notify the worker thread and job sender.
+  //! The condition variable to notify the worker thread and job sender.
   std::condition_variable mCv;
 
-  /// The job to be executed by the worker thread.
+  //! The job to be executed by the worker thread.
   std::function<void()> mJob = nullptr;
 
 public:
-  /// Constructor.
+  //! Constructor.
   WorkerThread(LeanStore* store, WORKERID workerId, int cpu)
       : utils::UserThread(store, "Worker" + std::to_string(workerId), cpu),
         mWorkerId(workerId),
         mJob(nullptr) {
   }
 
-  /// Destructor.
+  //! Destructor.
   ~WorkerThread() override {
     Stop();
   }
 
-  /// Stop the worker thread.
-  /// API for the job sender.
+  //! Stop the worker thread.
+  //! API for the job sender.
   void Stop() override;
 
-  /// Set a job to the worker thread and notify it to run.
-  /// API for the job sender.
+  //! Set a job to the worker thread and notify it to run.
+  //! API for the job sender.
   void SetJob(std::function<void()> job);
 
-  /// Wait until the job is done.
-  /// API for the job sender.
+  //! Wait until the job is done.
+  //! API for the job sender.
   void Wait();
 
 protected:
-  /// The main loop of the worker thread.
+  //! The main loop of the worker thread.
   void runImpl() override;
 };
 

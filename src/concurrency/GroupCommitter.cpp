@@ -27,11 +27,9 @@ void GroupCommitter::runImpl() {
   std::vector<uint64_t> numRfaTxs(mWorkers.size(), 0);
   std::vector<WalFlushReq> walFlushReqCopies(mWorkers.size());
 
-  // write WAL records from every worker thread to SSD.
   while (mKeepRunning) {
     // phase 1
-    collectWalRecords(minFlushedGSN, maxFlushedGSN, minFlushedTxId, numRfaTxs,
-                      walFlushReqCopies);
+    collectWalRecords(minFlushedGSN, maxFlushedGSN, minFlushedTxId, numRfaTxs, walFlushReqCopies);
 
     // phase 2
     if (!mAIo.IsEmpty()) {
@@ -39,19 +37,17 @@ void GroupCommitter::runImpl() {
     }
 
     // phase 3
-    determineCommitableTx(minFlushedGSN, maxFlushedGSN, minFlushedTxId,
-                          numRfaTxs, walFlushReqCopies);
+    determineCommitableTx(minFlushedGSN, maxFlushedGSN, minFlushedTxId, numRfaTxs,
+                          walFlushReqCopies);
   }
 }
 
-void GroupCommitter::collectWalRecords(
-    uint64_t& minFlushedGSN, uint64_t& maxFlushedGSN, TXID& minFlushedTxId,
-    std::vector<uint64_t>& numRfaTxs,
-    std::vector<WalFlushReq>& walFlushReqCopies) {
+void GroupCommitter::collectWalRecords(uint64_t& minFlushedGSN, uint64_t& maxFlushedGSN,
+                                       TXID& minFlushedTxId, std::vector<uint64_t>& numRfaTxs,
+                                       std::vector<WalFlushReq>& walFlushReqCopies) {
   leanstore::telemetry::MetricOnlyTimer timer;
   SCOPED_DEFER({
-    METRIC_HIST_OBSERVE(mStore->mMetricsManager, group_committer_prep_iocbs_us,
-                        timer.ElaspedUs());
+    METRIC_HIST_OBSERVE(mStore->mMetricsManager, group_committer_prep_iocbs_us, timer.ElaspedUs());
   });
 
   minFlushedGSN = std::numeric_limits<uint64_t>::max();
@@ -99,8 +95,7 @@ void GroupCommitter::collectWalRecords(
 void GroupCommitter::flushWalRecords() {
   leanstore::telemetry::MetricOnlyTimer timer;
   SCOPED_DEFER({
-    METRIC_HIST_OBSERVE(mStore->mMetricsManager, group_committer_write_iocbs_us,
-                        timer.ElaspedUs());
+    METRIC_HIST_OBSERVE(mStore->mMetricsManager, group_committer_write_iocbs_us, timer.ElaspedUs());
   });
 
   // submit all log writes using a single system call.
@@ -108,30 +103,28 @@ void GroupCommitter::flushWalRecords() {
     Log::Error("Failed to submit all IO, error={}", res.error().ToString());
   }
 
-  /// wait all to finish.
+  //! wait all to finish.
   timespec timeout = {1, 0}; // 1s
   if (auto res = mAIo.WaitAll(&timeout); !res) {
     Log::Error("Failed to wait all IO, error={}", res.error().ToString());
   }
 
-  /// sync the metadata in the end.
+  //! sync the metadata in the end.
   if (mStore->mStoreOption.mEnableWalFsync) {
     auto failed = fdatasync(mWalFd);
     if (failed) {
-      Log::Error("fdatasync failed, errno={}, error={}", errno,
-                 strerror(errno));
+      Log::Error("fdatasync failed, errno={}, error={}", errno, strerror(errno));
     }
   }
 }
 
-void GroupCommitter::determineCommitableTx(
-    uint64_t minFlushedGSN, uint64_t maxFlushedGSN, TXID minFlushedTxId,
-    const std::vector<uint64_t>& numRfaTxs,
-    const std::vector<WalFlushReq>& walFlushReqCopies) {
+void GroupCommitter::determineCommitableTx(uint64_t minFlushedGSN, uint64_t maxFlushedGSN,
+                                           TXID minFlushedTxId,
+                                           const std::vector<uint64_t>& numRfaTxs,
+                                           const std::vector<WalFlushReq>& walFlushReqCopies) {
   leanstore::telemetry::MetricOnlyTimer timer;
   SCOPED_DEFER({
-    METRIC_HIST_OBSERVE(mStore->mMetricsManager, group_committer_commit_txs_us,
-                        timer.ElaspedUs());
+    METRIC_HIST_OBSERVE(mStore->mMetricsManager, group_committer_commit_txs_us, timer.ElaspedUs());
   });
 
   for (WORKERID workerId = 0; workerId < mWorkers.size(); workerId++) {
@@ -156,12 +149,10 @@ void GroupCommitter::determineCommitableTx(
         LS_DLOG("Transaction with remote dependency committed"
                 ", workerId={}, startTs={}, commitTs={}, minFlushedGSN={}, "
                 "maxFlushedGSN={}, minFlushedTxId={}",
-                workerId, tx.mStartTs, tx.mCommitTs, minFlushedGSN,
-                maxFlushedGSN, minFlushedTxId);
+                workerId, tx.mStartTs, tx.mCommitTs, minFlushedGSN, maxFlushedGSN, minFlushedTxId);
       }
       if (i > 0) {
-        logging.mTxToCommit.erase(logging.mTxToCommit.begin(),
-                                  logging.mTxToCommit.begin() + i);
+        logging.mTxToCommit.erase(logging.mTxToCommit.begin(), logging.mTxToCommit.begin() + i);
       }
     }
 
@@ -177,8 +168,7 @@ void GroupCommitter::determineCommitableTx(
         LS_DLOG("Transaction without remote dependency committed"
                 ", workerId={}, startTs={}, commitTs={}, minFlushedGSN={}, "
                 "maxFlushedGSN={}, minFlushedTxId={}",
-                workerId, tx.mStartTs, tx.mCommitTs, minFlushedGSN,
-                maxFlushedGSN, minFlushedTxId);
+                workerId, tx.mStartTs, tx.mCommitTs, minFlushedGSN, maxFlushedGSN, minFlushedTxId);
       }
 
       if (i > 0) {
@@ -202,8 +192,8 @@ void GroupCommitter::determineCommitableTx(
   }
 
   if (minFlushedGSN < std::numeric_limits<uint64_t>::max()) {
-    LS_DLOG("Group commit finished, minFlushedGSN={}, maxFlushedGSN={}",
-            minFlushedGSN, maxFlushedGSN);
+    LS_DLOG("Group commit finished, minFlushedGSN={}, maxFlushedGSN={}", minFlushedGSN,
+            maxFlushedGSN);
     mGlobalMinFlushedGSN.store(minFlushedGSN, std::memory_order_release);
     mGlobalMaxFlushedGSN.store(maxFlushedGSN, std::memory_order_release);
   }
@@ -219,8 +209,7 @@ void GroupCommitter::append(uint8_t* buf, uint64_t lower, uint64_t upper) {
   mAIo.PrepareWrite(mWalFd, bufAligned, countAligned, offsetAligned);
   mWalSize += upper - lower;
 
-  METRIC_COUNTER_INC(mStore->mMetricsManager, group_committer_disk_write_total,
-                     countAligned);
+  METRIC_COUNTER_INC(mStore->mMetricsManager, group_committer_disk_write_total, countAligned);
 };
 
 } // namespace leanstore::cr

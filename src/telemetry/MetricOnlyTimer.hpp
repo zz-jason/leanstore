@@ -23,9 +23,8 @@ public:
     double elaspedUs{0};
     COUNTERS_BLOCK() {
       auto stoppedAt = std::chrono::steady_clock::now();
-      auto elaspedNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                           stoppedAt - mStartedAt)
-                           .count();
+      auto elaspedNs =
+          std::chrono::duration_cast<std::chrono::nanoseconds>(stoppedAt - mStartedAt).count();
       elaspedUs = elaspedNs / 1000.0;
     }
     return elaspedUs;

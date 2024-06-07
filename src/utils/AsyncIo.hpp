@@ -86,9 +86,9 @@ public:
 
     int ret = io_submit(mAioCtx, mNumReqs, &mIocbPtrs[0]);
     if (ret < 0) {
-      return std::unexpected(utils::Error::ErrorAio(
-          ret, std::format("io_submit({}, {}, {})", (void*)&mAioCtx, mNumReqs,
-                           (void*)&mIocbPtrs[0])));
+      return std::unexpected(
+          utils::Error::ErrorAio(ret, std::format("io_submit({}, {}, {})", (void*)&mAioCtx,
+                                                  mNumReqs, (void*)&mIocbPtrs[0])));
     }
 
     // return requests submitted
@@ -120,8 +120,7 @@ public:
     int flags = O_TRUNC | O_CREAT | O_RDWR | O_DIRECT;
     auto fd = open(file, flags, 0666);
     if (fd == -1) {
-      return std::unexpected(
-          utils::Error::FileOpen(file, errno, strerror(errno)));
+      return std::unexpected(utils::Error::FileOpen(file, errno, strerror(errno)));
     }
     return fd;
   }

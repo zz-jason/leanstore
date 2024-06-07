@@ -25,34 +25,33 @@ class ConcurrencyControl;
 
 class Worker {
 public:
-  /// The store it belongs to.
+  //! The store it belongs to.
   leanstore::LeanStore* mStore = nullptr;
 
-  /// The write-ahead logging component.
+  //! The write-ahead logging component.
   Logging mLogging;
 
   ConcurrencyControl mCc;
 
-  /// The ID of the current command in the current transaction.
+  //! The ID of the current command in the current transaction.
   COMMANDID mCommandId = 0;
 
-  /// The current running transaction.
+  //! The current running transaction.
   Transaction mActiveTx;
 
-  /// The ID of the current transaction. It's set by the current worker thread
-  /// and read by the garbage collection process to determine the lower
-  /// watermarks of the transactions.
+  //! The ID of the current transaction. It's set by the current worker thread
+  //! and read by the garbage collection process to determine the lower
+  //! watermarks of the transactions.
   std::atomic<TXID> mActiveTxId = 0;
 
-  /// ID of the current worker itself.
+  //! ID of the current worker itself.
   const uint64_t mWorkerId;
 
-  /// All the workers.
+  //! All the workers.
   std::vector<Worker*>& mAllWorkers;
 
 public:
-  Worker(uint64_t workerId, std::vector<Worker*>& allWorkers,
-         leanstore::LeanStore* store);
+  Worker(uint64_t workerId, std::vector<Worker*>& allWorkers, leanstore::LeanStore* store);
 
   ~Worker();
 
@@ -62,8 +61,7 @@ public:
   }
 
   void StartTx(TxMode mode = TxMode::kShortRunning,
-               IsolationLevel level = IsolationLevel::kSnapshotIsolation,
-               bool isReadOnly = false);
+               IsolationLevel level = IsolationLevel::kSnapshotIsolation, bool isReadOnly = false);
 
   void CommitTx();
 

@@ -31,8 +31,7 @@ inline void FreeList::PushFront(BufferFrame& bf) {
   mSize++;
 }
 
-inline void FreeList::PushFront(BufferFrame* head, BufferFrame* tail,
-                                uint64_t size) {
+inline void FreeList::PushFront(BufferFrame* head, BufferFrame* tail, uint64_t size) {
   JumpScoped<std::unique_lock<std::mutex>> guard(mMutex);
   tail->mHeader.mNextFreeBf = mHead;
   mHead = head;

@@ -103,8 +103,7 @@ public:
   //! Unlock the latch if it is locked.
   void Unlock();
 
-  static void GetOptimistic(HybridLatch& latch, LatchMode latchMode,
-                            std::function<void()> copier);
+  static void GetOptimistic(HybridLatch& latch, LatchMode latchMode, std::function<void()> copier);
 
   static void Get(HybridLatch& latch, std::function<void()> copier);
 
@@ -138,11 +137,9 @@ private:
   friend class leanstore::test::ScopedHybridGuardTest;
 };
 
-inline void ScopedHybridGuard::GetOptimistic(HybridLatch& latch,
-                                             LatchMode latchMode,
+inline void ScopedHybridGuard::GetOptimistic(HybridLatch& latch, LatchMode latchMode,
                                              std::function<void()> copier) {
-  LS_DCHECK(latchMode == LatchMode::kOptimisticOrJump ||
-            latchMode == LatchMode::kOptimisticSpin);
+  LS_DCHECK(latchMode == LatchMode::kOptimisticOrJump || latchMode == LatchMode::kOptimisticSpin);
   while (true) {
     JUMPMU_TRY() {
       auto guard = ScopedHybridGuard(latch, latchMode);
@@ -155,8 +152,7 @@ inline void ScopedHybridGuard::GetOptimistic(HybridLatch& latch,
   }
 }
 
-inline void ScopedHybridGuard::Get(HybridLatch& latch,
-                                   std::function<void()> copier) {
+inline void ScopedHybridGuard::Get(HybridLatch& latch, std::function<void()> copier) {
   while (true) {
     JUMPMU_TRY() {
       auto guard = ScopedHybridGuard(latch, LatchMode::kOptimisticOrJump);
@@ -237,8 +233,8 @@ inline void ScopedHybridGuard::lockOptimisticOrJump() {
   mVersionOnLock = mLatch->mVersion.load();
   if (HasExclusiveMark(mVersionOnLock)) {
     mEncounteredContention = true;
-    LS_DLOG("lockOptimisticOrJump() failed, target latch, latch={}, version={}",
-            (void*)&mLatch, mVersionOnLock);
+    LS_DLOG("lockOptimisticOrJump() failed, target latch, latch={}, version={}", (void*)&mLatch,
+            mVersionOnLock);
     jumpmu::Jump();
   }
 }
@@ -253,9 +249,9 @@ inline void ScopedHybridGuard::lockOptimisticSpin() {
 }
 
 inline void ScopedHybridGuard::unlockOptimisticOrJump() {
-  LS_DCHECK((mLatchMode == LatchMode::kOptimisticOrJump ||
-             mLatchMode == LatchMode::kOptimisticSpin) &&
-            mLatch != nullptr);
+  LS_DCHECK(
+      (mLatchMode == LatchMode::kOptimisticOrJump || mLatchMode == LatchMode::kOptimisticSpin) &&
+      mLatch != nullptr);
   jumpIfModifiedByOthers();
 }
 
@@ -281,14 +277,12 @@ inline void ScopedHybridGuard::unlockPessimisticShared() {
 }
 
 inline void ScopedHybridGuard::lockPessimisticExclusive() {
-  LS_DCHECK(mLatchMode == LatchMode::kPessimisticExclusive &&
-            mLatch != nullptr);
+  LS_DCHECK(mLatchMode == LatchMode::kPessimisticExclusive && mLatch != nullptr);
   mLatch->LockExclusively();
 }
 
 inline void ScopedHybridGuard::unlockPessimisticExclusive() {
-  LS_DCHECK(mLatchMode == LatchMode::kPessimisticExclusive &&
-            mLatch != nullptr);
+  LS_DCHECK(mLatchMode == LatchMode::kPessimisticExclusive && mLatch != nullptr);
   mLatch->UnlockExclusively();
 }
 

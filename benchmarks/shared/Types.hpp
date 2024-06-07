@@ -15,7 +15,8 @@ using Numeric = double;
 static constexpr Integer minUInteger = std::numeric_limits<UInteger>::min();
 static constexpr Integer minInteger = std::numeric_limits<Integer>::min();
 // -------------------------------------------------------------------------------------
-template <int maxLength> struct Varchar {
+template <int maxLength>
+struct Varchar {
   int16_t length;
   char data[maxLength] = {0}; // not '\0' terminated
 
@@ -27,7 +28,8 @@ template <int maxLength> struct Varchar {
     length = l;
     memcpy(data, str, l);
   }
-  template <int otherMaxLength> Varchar(const Varchar<otherMaxLength>& other) {
+  template <int otherMaxLength>
+  Varchar(const Varchar<otherMaxLength>& other) {
     assert(other.length <= maxLength);
     length = other.length;
     memcpy(data, other.data, length);
@@ -61,8 +63,7 @@ template <int maxLength> struct Varchar {
   }
 
   bool operator<(const Varchar<maxLength>& other) const {
-    int cmp = memcmp(data, other.data,
-                     (length < other.length) ? length : other.length);
+    int cmp = memcmp(data, other.data, (length < other.length) ? length : other.length);
     if (cmp)
       return cmp < 0;
     else
@@ -91,21 +92,20 @@ unsigned Fold(uint8_t* writer, const uint64_t& x) {
   return sizeof(x);
 }
 // -------------------------------------------------------------------------------------
-template <int len> unsigned Fold(uint8_t* writer, const Varchar<len>& x) {
+template <int len>
+unsigned Fold(uint8_t* writer, const Varchar<len>& x) {
   memcpy(writer, x.data, x.length);
   writer[x.length] = 0;
   return x.length + 1;
 }
 // -------------------------------------------------------------------------------------
 unsigned Unfold(const uint8_t* input, Integer& x) {
-  x = __builtin_bswap32(*reinterpret_cast<const uint32_t*>(input)) ^
-      (1ul << 31);
+  x = __builtin_bswap32(*reinterpret_cast<const uint32_t*>(input)) ^ (1ul << 31);
   return sizeof(x);
 }
 // -------------------------------------------------------------------------------------
 unsigned Unfold(const uint8_t* input, Timestamp& x) {
-  x = __builtin_bswap64(*reinterpret_cast<const uint64_t*>(input)) ^
-      (1ul << 63);
+  x = __builtin_bswap64(*reinterpret_cast<const uint64_t*>(input)) ^ (1ul << 63);
   return sizeof(x);
 }
 // -------------------------------------------------------------------------------------
@@ -119,7 +119,8 @@ unsigned Unfold(const uint8_t* input, uint64_t& x) {
   return sizeof(x);
 }
 // -------------------------------------------------------------------------------------
-template <int len> unsigned Unfold(const uint8_t* input, Varchar<len>& x) {
+template <int len>
+unsigned Unfold(const uint8_t* input, Varchar<len>& x) {
   int l = strlen(reinterpret_cast<const char*>(input));
   assert(l <= len);
   memcpy(x.data, input, l);

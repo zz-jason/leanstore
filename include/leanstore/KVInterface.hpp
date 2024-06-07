@@ -85,10 +85,10 @@ public:
   }
 };
 
-/// Memory layout:
-/// ---------------------------
-/// | N | UpdateSlotInfo 0..N |
-/// ---------------------------
+//! Memory layout:
+//! ---------------------------
+//! | N | UpdateSlotInfo 0..N |
+//! ---------------------------
 class UpdateDesc {
 public:
   uint8_t mNumSlots = 0;
@@ -145,15 +145,14 @@ class KVInterface {
 public:
   virtual OpCode Insert(Slice key, Slice val) = 0;
 
-  /// Update old value with a same sized new value.
-  /// NOTE: The value is updated via user provided callback.
+  //! Update old value with a same sized new value.
+  //! NOTE: The value is updated via user provided callback.
   virtual OpCode UpdatePartial(Slice key, MutValCallback updateCallBack,
                                UpdateDesc& updateDesc) = 0;
 
   virtual OpCode Remove(Slice key) = 0;
 
-  virtual OpCode RangeRemove(Slice startKey, Slice endKey,
-                             bool pageWise = true) = 0;
+  virtual OpCode RangeRemove(Slice startKey, Slice endKey, bool pageWise = true) = 0;
 
   virtual OpCode ScanAsc(Slice startKey, ScanCallback callback) = 0;
 

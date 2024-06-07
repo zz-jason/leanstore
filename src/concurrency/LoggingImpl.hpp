@@ -8,10 +8,8 @@
 namespace leanstore::cr {
 
 template <typename T, typename... Args>
-WalPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payloadSize,
-                                                     PID pageId, LID gsn,
-                                                     TREEID treeId,
-                                                     Args&&... args) {
+WalPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payloadSize, PID pageId, LID gsn,
+                                                     TREEID treeId, Args&&... args) {
   // write transaction start on demand
   auto prevLsn = mPrevLSN;
   if (!ActiveTx().mHasWrote) {
@@ -28,9 +26,9 @@ WalPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payloadSize,
   auto entrySize = sizeof(WalEntryComplex) + payloadSize;
   ReserveContiguousBuffer(entrySize);
 
-  mActiveWALEntryComplex = new (entryPtr)
-      WalEntryComplex(entryLSN, prevLsn, entrySize, Worker::My().mWorkerId,
-                      ActiveTx().mStartTs, gsn, pageId, treeId);
+  mActiveWALEntryComplex =
+      new (entryPtr) WalEntryComplex(entryLSN, prevLsn, entrySize, Worker::My().mWorkerId,
+                                     ActiveTx().mStartTs, gsn, pageId, treeId);
 
   auto* payloadPtr = mActiveWALEntryComplex->mPayload;
   auto walPayload = new (payloadPtr) T(std::forward<Args>(args)...);

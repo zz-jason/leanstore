@@ -11,7 +11,8 @@
 
 namespace leanstore::cr {
 
-template <typename T> class WalPayloadHandler {
+template <typename T>
+class WalPayloadHandler {
 public:
   // payload of the active WAL
   T* mWalPayload;
@@ -22,12 +23,10 @@ public:
 public:
   WalPayloadHandler() = default;
 
-  /// @brief Initialize a WalPayloadHandler
-  /// @param walPayload the WalPayload object, should already being initialized
-  /// @param size the total size of the WalEntry
-  WalPayloadHandler(T* walPayload, uint64_t size)
-      : mWalPayload(walPayload),
-        mTotalSize(size) {
+  //! @brief Initialize a WalPayloadHandler
+  //! @param walPayload the WalPayload object, should already being initialized
+  //! @param size the total size of the WalEntry
+  WalPayloadHandler(T* walPayload, uint64_t size) : mWalPayload(walPayload), mTotalSize(size) {
   }
 
 public:
@@ -42,7 +41,8 @@ public:
   void SubmitWal();
 };
 
-template <typename T> inline void WalPayloadHandler<T>::SubmitWal() {
+template <typename T>
+inline void WalPayloadHandler<T>::SubmitWal() {
   SCOPED_DEFER(DEBUG_BLOCK(){
       // rapidjson::Document walDoc(rapidjson::kObjectType);
       // auto* walEntry = cr::Worker::My().mLogging.mActiveWALEntryComplex;

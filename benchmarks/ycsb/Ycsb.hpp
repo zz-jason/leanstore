@@ -64,8 +64,7 @@ public:
   virtual void HandleCmdRun() = 0;
 
 protected:
-  void printTpsSummary(uint64_t reportPeriod, uint64_t runForSeconds,
-                       uint64_t numThreads,
+  void printTpsSummary(uint64_t reportPeriod, uint64_t runForSeconds, uint64_t numThreads,
                        std::vector<std::atomic<uint64_t>>& threadCommitted,
                        std::vector<std::atomic<uint64_t>>& threadAborted) {
     for (uint64_t i = 0; i < runForSeconds; i += reportPeriod) {
@@ -83,14 +82,14 @@ protected:
   }
 
 private:
-  void printTps(uint64_t numThreads, uint64_t timeElaspedSec,
-                uint64_t committed, uint64_t aborted, uint64_t reportPeriod) {
+  void printTps(uint64_t numThreads, uint64_t timeElaspedSec, uint64_t committed, uint64_t aborted,
+                uint64_t reportPeriod) {
     auto abortRate = (aborted) * 1.0 / (committed + aborted);
-    auto summary = std::format("[{} thds] [{}s] [tps={:.2f}] [committed={}] "
-                               "[conflicted={}] [conflict rate={:.2f}]",
-                               numThreads, timeElaspedSec,
-                               (committed + aborted) * 1.0 / reportPeriod,
-                               committed, aborted, abortRate);
+    auto summary =
+        std::format("[{} thds] [{}s] [tps={:.2f}] [committed={}] "
+                    "[conflicted={}] [conflict rate={:.2f}]",
+                    numThreads, timeElaspedSec, (committed + aborted) * 1.0 / reportPeriod,
+                    committed, aborted, abortRate);
     std::cout << summary << std::endl;
   }
 };
@@ -120,23 +119,19 @@ inline double CalculateTps(std::chrono::high_resolution_clock::time_point begin,
                            std::chrono::high_resolution_clock::time_point end,
                            uint64_t numOperations) {
   // calculate secondas elaspsed
-  auto sec = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin)
-                 .count() /
-             1000.0;
+  auto sec = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / 1000.0;
   return numOperations / sec;
 }
 
 inline void GenKey(uint64_t key, uint8_t* keyBuf) {
   auto keyStr = std::to_string(key);
-  auto prefixSize = FLAGS_ycsb_key_size - keyStr.size() > 0
-                        ? FLAGS_ycsb_key_size - keyStr.size()
-                        : 0;
+  auto prefixSize =
+      FLAGS_ycsb_key_size - keyStr.size() > 0 ? FLAGS_ycsb_key_size - keyStr.size() : 0;
   std::memset(keyBuf, 'k', prefixSize);
   std::memcpy(keyBuf + prefixSize, keyStr.data(), keyStr.size());
 }
 
-inline void GenYcsbKey(utils::ScrambledZipfGenerator& zipfRandom,
-                       uint8_t* keyBuf) {
+inline void GenYcsbKey(utils::ScrambledZipfGenerator& zipfRandom, uint8_t* keyBuf) {
   GenKey(zipfRandom.rand(), keyBuf);
 }
 

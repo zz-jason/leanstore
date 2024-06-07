@@ -14,9 +14,7 @@ MersenneTwister::MersenneTwister(uint64_t seed) : mMti(sNn + 1) {
 void MersenneTwister::init(uint64_t seed) {
   mMt[0] = seed;
   for (mMti = 1; mMti < sNn; mMti++)
-    mMt[mMti] =
-        (6364136223846793005ULL * (mMt[mMti - 1] ^ (mMt[mMti - 1] >> 62)) +
-         mMti);
+    mMt[mMti] = (6364136223846793005ULL * (mMt[mMti - 1] ^ (mMt[mMti - 1] >> 62)) + mMti);
 }
 
 uint64_t MersenneTwister::Rand() {

@@ -14,20 +14,20 @@
 
 namespace leanstore::storage {
 
-/// A batched asynchronous writer for buffer frames. It batches writes to the
-/// disk to reduce the number of syscalls.
-/// Typical usage:
+//! A batched asynchronous writer for buffer frames. It batches writes to the
+//! disk to reduce the number of syscalls.
+//! Typical usage:
 ///
-///  AsyncWriteBuffer writeBuffer(fd, pageSize, maxBatchSize);
-///  while (!IsFull()) {
-///    writeBuffer.Add(bf, pageId);
-///  }
-///  writeBuffer.SubmitAll();
-///  writeBuffer.WaitAll();
-///  writeBuffer.IterateFlushedBfs([](BufferFrame& flushedBf, uint64_t
-///  flushedGsn) {
-///    // do something with flushedBf
-///  }, numFlushedBfs);
+//!  AsyncWriteBuffer writeBuffer(fd, pageSize, maxBatchSize);
+//!  while (!IsFull()) {
+//!    writeBuffer.Add(bf, pageId);
+//!  }
+//!  writeBuffer.SubmitAll();
+//!  writeBuffer.WaitAll();
+//!  writeBuffer.IterateFlushedBfs([](BufferFrame& flushedBf, uint64_t
+//!  flushedGsn) {
+//!    // do something with flushedBf
+//!  }, numFlushedBfs);
 ///
 class AsyncWriteBuffer {
 private:
@@ -53,28 +53,27 @@ public:
 
   ~AsyncWriteBuffer();
 
-  /// Check if the write buffer is full
+  //! Check if the write buffer is full
   bool IsFull();
 
-  /// Add a buffer frame to the write buffer:
-  /// - record the buffer frame to write commands for later use
-  /// - copy the page content in buffer frame to the write buffer
-  /// - prepare the io request
+  //! Add a buffer frame to the write buffer:
+  //! - record the buffer frame to write commands for later use
+  //! - copy the page content in buffer frame to the write buffer
+  //! - prepare the io request
   void Add(const BufferFrame& bf);
 
-  /// Submit the write buffer to the AIO context to be written to the disk
+  //! Submit the write buffer to the AIO context to be written to the disk
   Result<uint64_t> SubmitAll();
 
-  /// Wait for the IO request to complete
+  //! Wait for the IO request to complete
   Result<uint64_t> WaitAll();
 
   uint64_t GetPendingRequests() {
     return mAIo.GetNumRequests();
   }
 
-  void IterateFlushedBfs(
-      std::function<void(BufferFrame& flushedBf, uint64_t flushedGsn)> callback,
-      uint64_t numFlushedBfs);
+  void IterateFlushedBfs(std::function<void(BufferFrame& flushedBf, uint64_t flushedGsn)> callback,
+                         uint64_t numFlushedBfs);
 
 private:
   void* copyToBuffer(const Page* page, size_t slot) {

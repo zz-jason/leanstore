@@ -47,8 +47,7 @@ public:
         .mMetricsPort = 8080,
     });
     if (!res) {
-      std::cerr << "Failed to open leanstore: " << res.error().ToString()
-                << std::endl;
+      std::cerr << "Failed to open leanstore: " << res.error().ToString() << std::endl;
       exit(res.error().Code());
     }
 
@@ -80,8 +79,7 @@ public:
     mStore->ExecSync(0, [&]() {
       auto res = mStore->CreateBasicKV(kTableName);
       if (!res) {
-        Log::Fatal("Failed to create table: name={}, error={}", kTableName,
-                   res.error().ToString());
+        Log::Fatal("Failed to create table: name={}, error={}", kTableName, res.error().ToString());
       }
       table = res.value();
     });
@@ -104,17 +102,13 @@ public:
 
     // record the start and end time, calculating throughput in the end
     auto start = std::chrono::high_resolution_clock::now();
-    std::cout << "Inserting " << FLAGS_ycsb_record_count << " values"
-              << std::endl;
+    std::cout << "Inserting " << FLAGS_ycsb_record_count << " values" << std::endl;
     SCOPED_DEFER({
       auto end = std::chrono::high_resolution_clock::now();
-      auto duration =
-          std::chrono::duration_cast<std::chrono::microseconds>(end - start)
-              .count();
-      auto summary = std::format(
-          "Done inserting, time elapsed={:.2f} seconds, throughput={:.2f} tps",
-          duration / 1000000.0,
-          CalculateTps(start, end, FLAGS_ycsb_record_count));
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+      auto summary =
+          std::format("Done inserting, time elapsed={:.2f} seconds, throughput={:.2f} tps",
+                      duration / 1000000.0, CalculateTps(start, end, FLAGS_ycsb_record_count));
       std::cout << summary << std::endl;
     });
 
@@ -135,11 +129,10 @@ public:
           if (mBenchTransactionKv) {
             cr::Worker::My().StartTx();
           }
-          auto opCode = table->Insert(Slice(key, FLAGS_ycsb_key_size),
-                                      Slice(val, FLAGS_ycsb_val_size));
+          auto opCode =
+              table->Insert(Slice(key, FLAGS_ycsb_key_size), Slice(val, FLAGS_ycsb_val_size));
           if (opCode != OpCode::kOK) {
-            Log::Fatal("Failed to insert, opCode={}",
-                       static_cast<uint8_t>(opCode));
+            Log::Fatal("Failed to insert, opCode={}", static_cast<uint8_t>(opCode));
           }
           if (mBenchTransactionKv) {
             cr::Worker::My().CommitTx();
@@ -155,13 +148,11 @@ public:
     auto* table = GetTable();
     auto workloadType = static_cast<Workload>(FLAGS_ycsb_workload[0] - 'a');
     auto workload = GetWorkloadSpec(workloadType);
-    auto zipfRandom = utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count,
-                                                    FLAGS_ycsb_zipf_factor);
+    auto zipfRandom =
+        utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count, FLAGS_ycsb_zipf_factor);
     atomic<bool> keepRunning = true;
-    std::vector<std::atomic<uint64_t>> threadCommitted(
-        mStore->mStoreOption.mWorkerThreads);
-    std::vector<std::atomic<uint64_t>> threadAborted(
-        mStore->mStoreOption.mWorkerThreads);
+    std::vector<std::atomic<uint64_t>> threadCommitted(mStore->mStoreOption.mWorkerThreads);
+    std::vector<std::atomic<uint64_t>> threadAborted(mStore->mStoreOption.mWorkerThreads);
     // init counters
     for (auto& c : threadCommitted) {
       c = 0;
@@ -170,8 +161,7 @@ public:
       a = 0;
     }
 
-    for (uint64_t workerId = 0; workerId < mStore->mStoreOption.mWorkerThreads;
-         workerId++) {
+    for (uint64_t workerId = 0; workerId < mStore->mStoreOption.mWorkerThreads; workerId++) {
       mStore->ExecAsync(workerId, [&]() {
         uint8_t key[FLAGS_ycsb_key_size];
         std::string valRead;
@@ -203,8 +193,7 @@ public:
                 GenYcsbKey(zipfRandom, key);
                 if (mBenchTransactionKv) {
                   cr::Worker::My().StartTx(TxMode::kShortRunning,
-                                           IsolationLevel::kSnapshotIsolation,
-                                           true);
+                                           IsolationLevel::kSnapshotIsolation, true);
                   table->Lookup(Slice(key, FLAGS_ycsb_key_size), copyValue);
                   cr::Worker::My().CommitTx();
                 } else {
@@ -216,19 +205,18 @@ public:
                 // generate val for update
                 if (mBenchTransactionKv) {
                   cr::Worker::My().StartTx();
-                  table->UpdatePartial(Slice(key, FLAGS_ycsb_key_size),
-                                       updateCallBack, *updateDesc);
+                  table->UpdatePartial(Slice(key, FLAGS_ycsb_key_size), updateCallBack,
+                                       *updateDesc);
                   cr::Worker::My().CommitTx();
                 } else {
-                  table->UpdatePartial(Slice(key, FLAGS_ycsb_key_size),
-                                       updateCallBack, *updateDesc);
+                  table->UpdatePartial(Slice(key, FLAGS_ycsb_key_size), updateCallBack,
+                                       *updateDesc);
                 }
               }
               break;
             }
             default: {
-              Log::Fatal("Unsupported workload type: {}",
-                         static_cast<uint8_t>(workloadType));
+              Log::Fatal("Unsupported workload type: {}", static_cast<uint8_t>(workloadType));
             }
             }
             threadCommitted[cr::Worker::My().mWorkerId]++;
@@ -248,9 +236,8 @@ public:
       a = 0;
     }
 
-    printTpsSummary(1, FLAGS_ycsb_run_for_seconds,
-                    mStore->mStoreOption.mWorkerThreads, threadCommitted,
-                    threadAborted);
+    printTpsSummary(1, FLAGS_ycsb_run_for_seconds, mStore->mStoreOption.mWorkerThreads,
+                    threadCommitted, threadAborted);
 
     // Shutdown threads
     keepRunning = false;

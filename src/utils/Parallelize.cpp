@@ -11,8 +11,7 @@ namespace leanstore::utils {
 
 void Parallelize::Range(
     uint64_t numThreads, uint64_t numJobs,
-    std::function<void(uint64_t threadId, uint64_t jobBegin, uint64_t jobEnd)>
-        jobHandler) {
+    std::function<void(uint64_t threadId, uint64_t jobBegin, uint64_t jobEnd)> jobHandler) {
   auto* store = tlsStore;
   std::vector<std::thread> threads;
   const uint64_t jobsPerThread = numJobs / numThreads;
@@ -40,8 +39,7 @@ void Parallelize::Range(
 }
 
 void Parallelize::ParallelRange(
-    uint64_t numJobs,
-    std::function<void(uint64_t jobBegin, uint64_t jobEnd)> jobHandler) {
+    uint64_t numJobs, std::function<void(uint64_t jobBegin, uint64_t jobEnd)> jobHandler) {
   auto* store = tlsStore;
   std::vector<std::thread> threads;
   uint64_t numThread = std::thread::hardware_concurrency();

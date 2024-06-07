@@ -2,7 +2,8 @@
 
 #include "shared/Types.hpp"
 
-template <typename KeyT, typename ValT> struct Relation {
+template <typename KeyT, typename ValT>
+struct Relation {
   static constexpr int id = 0;
   struct Key {
     static constexpr int id = 0;
@@ -10,12 +11,14 @@ template <typename KeyT, typename ValT> struct Relation {
   };
   ValT mValue;
   // -------------------------------------------------------------------------------------
-  template <class T> static unsigned foldKey(uint8_t* out, const T& key) {
+  template <class T>
+  static unsigned foldKey(uint8_t* out, const T& key) {
     unsigned pos = 0;
     pos += Fold(out + pos, key.mKey);
     return pos;
   }
-  template <class T> static unsigned unfoldKey(const uint8_t* in, T& key) {
+  template <class T>
+  static unsigned unfoldKey(const uint8_t* in, T& key) {
     unsigned pos = 0;
     pos += Unfold(in + pos, key.mKey);
     return pos;
@@ -25,7 +28,8 @@ template <typename KeyT, typename ValT> struct Relation {
   };
 };
 // -------------------------------------------------------------------------------------
-template <uint64_t size> struct BytesPayload {
+template <uint64_t size>
+struct BytesPayload {
   uint8_t value[size];
   BytesPayload() {
   }

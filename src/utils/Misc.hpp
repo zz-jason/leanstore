@@ -9,7 +9,8 @@
 
 namespace leanstore {
 
-template <typename T1, typename T2> T1 DownCast(T2 ptr) {
+template <typename T1, typename T2>
+T1 DownCast(T2 ptr) {
   LS_DCHECK(dynamic_cast<T1>(ptr) != nullptr);
   return static_cast<T1>(ptr);
 }
@@ -22,14 +23,11 @@ inline uint32_t GetBitsNeeded(uint64_t input) {
   return std::max(std::floor(std::log2(input)) + 1, 1.0);
 }
 
-inline double CalculateMTPS(
-    std::chrono::high_resolution_clock::time_point begin,
-    std::chrono::high_resolution_clock::time_point end, uint64_t factor) {
+inline double CalculateMTPS(std::chrono::high_resolution_clock::time_point begin,
+                            std::chrono::high_resolution_clock::time_point end, uint64_t factor) {
   double tps =
       ((factor * 1.0 /
-        (std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
-             .count() /
-         1000000.0)));
+        (std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() / 1000000.0)));
   return (tps / 1000000.0);
 }
 
@@ -100,8 +98,7 @@ inline uint64_t Fold(uint8_t* writer, const int32_t& x) {
 }
 
 inline uint64_t Unfold(const uint8_t* input, int32_t& x) {
-  x = __builtin_bswap32(*reinterpret_cast<const uint32_t*>(input)) ^
-      (1ul << 31);
+  x = __builtin_bswap32(*reinterpret_cast<const uint32_t*>(input)) ^ (1ul << 31);
   return sizeof(x);
 }
 
@@ -111,8 +108,7 @@ inline uint64_t Fold(uint8_t* writer, const int64_t& x) {
 }
 
 inline uint64_t Unfold(const uint8_t* input, int64_t& x) {
-  x = __builtin_bswap64(*reinterpret_cast<const uint64_t*>(input)) ^
-      (1ul << 63);
+  x = __builtin_bswap64(*reinterpret_cast<const uint64_t*>(input)) ^ (1ul << 63);
   return sizeof(x);
 }
 
@@ -131,7 +127,8 @@ inline std::string StringToHex(const std::string& input) {
   return ToHex((uint8_t*)input.data(), input.size());
 }
 
-template <typename T> std::unique_ptr<T[]> ScopedArray(size_t size) {
+template <typename T>
+std::unique_ptr<T[]> ScopedArray(size_t size) {
   return std::make_unique<T[]>(size);
 }
 
@@ -140,14 +137,14 @@ JumpScoped<std::unique_ptr<T[]>> JumpScopedArray(size_t size) {
   return JumpScoped<std::unique_ptr<T[]>>(ScopedArray<T>(size));
 }
 
-template <size_t Alignment = 512> class AlignedBuffer {
+template <size_t Alignment = 512>
+class AlignedBuffer {
 public:
   alignas(Alignment) uint8_t* mBuffer;
 
 public:
   AlignedBuffer(size_t size)
-      : mBuffer(
-            reinterpret_cast<uint8_t*>(std::aligned_alloc(Alignment, size))) {
+      : mBuffer(reinterpret_cast<uint8_t*>(std::aligned_alloc(Alignment, size))) {
   }
 
   ~AlignedBuffer() {
@@ -162,7 +159,8 @@ public:
     return mBuffer;
   }
 
-  template <typename T> T* CastTo() {
+  template <typename T>
+  T* CastTo() {
     return reinterpret_cast<T*>(mBuffer);
   }
 };

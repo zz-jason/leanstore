@@ -40,39 +40,35 @@ protected:
     // create the test directory
     auto ret = system(std::format("mkdir -p {}", mTestDir).c_str());
     EXPECT_EQ(ret, 0) << std::format(
-        "Failed to create test directory, testDir={}, errno={}, error={}",
-        mTestDir, errno, strerror(errno));
+        "Failed to create test directory, testDir={}, errno={}, error={}", mTestDir, errno,
+        strerror(errno));
   }
 
   void TearDown() override {
   }
 
   std::string getRandTestFile() {
-    return std::format("{}/{}", mTestDir,
-                       utils::RandomGenerator::RandAlphString(8));
+    return std::format("{}/{}", mTestDir, utils::RandomGenerator::RandAlphString(8));
   }
 
   int openFile(const std::string& fileName) {
     // open the file
     auto flag = O_TRUNC | O_CREAT | O_RDWR | O_DIRECT;
     int fd = open(fileName.c_str(), flag, 0666);
-    EXPECT_NE(fd, -1) << std::format(
-        "Failed to open file, fileName={}, errno={}, error={}", fileName, errno,
-        strerror(errno));
+    EXPECT_NE(fd, -1) << std::format("Failed to open file, fileName={}, errno={}, error={}",
+                                     fileName, errno, strerror(errno));
 
     return fd;
   }
 
   void closeFile(int fd) {
-    ASSERT_EQ(close(fd), 0)
-        << std::format("Failed to close file, fd={}, errno={}, error={}", fd,
-                       errno, strerror(errno));
+    ASSERT_EQ(close(fd), 0) << std::format("Failed to close file, fd={}, errno={}, error={}", fd,
+                                           errno, strerror(errno));
   }
 
   void removeFile(const std::string& fileName) {
-    ASSERT_EQ(remove(fileName.c_str()), 0)
-        << std::format("Failed to remove file, fileName={}, errno={}, error={}",
-                       fileName, errno, strerror(errno));
+    ASSERT_EQ(remove(fileName.c_str()), 0) << std::format(
+        "Failed to remove file, fileName={}, errno={}, error={}", fileName, errno, strerror(errno));
   }
 };
 
@@ -102,8 +98,7 @@ TEST_F(AsyncWriteBufferTest, Basic) {
 
   // submit the IO request
   auto result = testWriteBuffer.SubmitAll();
-  ASSERT_TRUE(result) << "Failed to submit IO request, error="
-                      << result.error().ToString();
+  ASSERT_TRUE(result) << "Failed to submit IO request, error=" << result.error().ToString();
   EXPECT_EQ(result.value(), testMaxBatchSize);
 
   // wait for the IO request to complete
@@ -115,9 +110,8 @@ TEST_F(AsyncWriteBufferTest, Basic) {
   // read the file content
   for (int i = 0; i < testMaxBatchSize; i++) {
     BufferFrameHolder bfHolder(testPageSize, i);
-    auto ret =
-        pread(testFd, reinterpret_cast<void*>(bfHolder.mBuffer.Get() + 512),
-              testPageSize, testPageSize * i);
+    auto ret = pread(testFd, reinterpret_cast<void*>(bfHolder.mBuffer.Get() + 512), testPageSize,
+                     testPageSize * i);
     EXPECT_EQ(ret, testPageSize);
     auto payload = *reinterpret_cast<int64_t*>(bfHolder.mBf->mPage.mPayload);
     EXPECT_EQ(payload, i);

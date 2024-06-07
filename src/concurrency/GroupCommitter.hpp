@@ -44,8 +44,7 @@ public:
   utils::AsyncIo mAIo;
 
 public:
-  GroupCommitter(leanstore::LeanStore* store, int32_t walFd,
-                 std::vector<Worker*>& workers, int cpu)
+  GroupCommitter(leanstore::LeanStore* store, int32_t walFd, std::vector<Worker*>& workers, int cpu)
       : UserThread(store, "GroupCommitter", cpu),
         mStore(store),
         mWalFd(walFd),
@@ -70,8 +69,8 @@ private:
   //! @param[out] minFlushedTxId the min flushed transaction ID
   //! @param[out] numRfaTxs number of transactions without dependency
   //! @param[out] walFlushReqCopies snapshot of the flush requests
-  void collectWalRecords(uint64_t& minFlushedGSN, uint64_t& maxFlushedGSN,
-                         TXID& minFlushedTxId, std::vector<uint64_t>& numRfaTxs,
+  void collectWalRecords(uint64_t& minFlushedGSN, uint64_t& maxFlushedGSN, TXID& minFlushedTxId,
+                         std::vector<uint64_t>& numRfaTxs,
                          std::vector<WalFlushReq>& walFlushReqCopies);
 
   //! Phase 2: write all the collected wal records to the wal file with libaio.
@@ -85,8 +84,7 @@ private:
   //! @param[in] minFlushedTxId the min flushed transaction ID
   //! @param[in] numRfaTxs number of transactions without dependency
   //! @param[in] walFlushReqCopies snapshot of the flush requests
-  void determineCommitableTx(uint64_t minFlushedGSN, uint64_t maxFlushedGSN,
-                             TXID minFlushedTxId,
+  void determineCommitableTx(uint64_t minFlushedGSN, uint64_t maxFlushedGSN, TXID minFlushedTxId,
                              const std::vector<uint64_t>& numRfaTxs,
                              const std::vector<WalFlushReq>& walFlushReqCopies);
 

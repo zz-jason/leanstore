@@ -20,32 +20,21 @@ void BMTable::open() {
   columns.emplace("key", [](Column& col) { col << 0; });
 
   columns.emplace("space_usage_gib", [&](Column& col) {
-    const double gib = bm.ConsumedPages() * 1.0 *
-                       utils::tlsStore->mStoreOption.mPageSize / 1024.0 /
+    const double gib = bm.ConsumedPages() * 1.0 * utils::tlsStore->mStoreOption.mPageSize / 1024.0 /
                        1024.0 / 1024.0;
     col << gib;
   });
 
   columns.emplace("space_usage_kib", [&](Column& col) {
-    const double kib = bm.ConsumedPages() * 1.0 *
-                       utils::tlsStore->mStoreOption.mPageSize / 1024.0;
+    const double kib = bm.ConsumedPages() * 1.0 * utils::tlsStore->mStoreOption.mPageSize / 1024.0;
     col << kib;
   });
 
-  columns.emplace("consumed_pages",
-                  [&](Column& col) { col << bm.ConsumedPages(); });
-  columns.emplace("p1_pct", [&](Column& col) {
-    col << (local_phase_1_ms * 100.0 / total);
-  });
-  columns.emplace("p2_pct", [&](Column& col) {
-    col << (local_phase_2_ms * 100.0 / total);
-  });
-  columns.emplace("p3_pct", [&](Column& col) {
-    col << (local_phase_3_ms * 100.0 / total);
-  });
-  columns.emplace("poll_pct", [&](Column& col) {
-    col << ((local_poll_ms * 100.0 / total));
-  });
+  columns.emplace("consumed_pages", [&](Column& col) { col << bm.ConsumedPages(); });
+  columns.emplace("p1_pct", [&](Column& col) { col << (local_phase_1_ms * 100.0 / total); });
+  columns.emplace("p2_pct", [&](Column& col) { col << (local_phase_2_ms * 100.0 / total); });
+  columns.emplace("p3_pct", [&](Column& col) { col << (local_phase_3_ms * 100.0 / total); });
+  columns.emplace("poll_pct", [&](Column& col) { col << ((local_poll_ms * 100.0 / total)); });
   columns.emplace("find_parent_pct", [&](Column& col) {
     auto res = Sum(PPCounters::sCounters, &PPCounters::mFindParentMS);
     col << (res * 100.0 / total);
@@ -54,18 +43,13 @@ void BMTable::open() {
     auto res = Sum(PPCounters::sCounters, &PPCounters::mIterateChildrenMS);
     col << (res * 100.0 / total);
   });
-  columns.emplace("pc1", [&](Column& col) {
-    col << Sum(PPCounters::sCounters, &PPCounters::phase_1_counter);
-  });
-  columns.emplace("pc2", [&](Column& col) {
-    col << Sum(PPCounters::sCounters, &PPCounters::phase_2_counter);
-  });
-  columns.emplace("pc3", [&](Column& col) {
-    col << Sum(PPCounters::sCounters, &PPCounters::phase_3_counter);
-  });
-  columns.emplace("free_pct", [&](Column& col) {
-    col << (local_total_free * 100.0 / bm.mNumBfs);
-  });
+  columns.emplace(
+      "pc1", [&](Column& col) { col << Sum(PPCounters::sCounters, &PPCounters::phase_1_counter); });
+  columns.emplace(
+      "pc2", [&](Column& col) { col << Sum(PPCounters::sCounters, &PPCounters::phase_2_counter); });
+  columns.emplace(
+      "pc3", [&](Column& col) { col << Sum(PPCounters::sCounters, &PPCounters::phase_3_counter); });
+  columns.emplace("free_pct", [&](Column& col) { col << (local_total_free * 100.0 / bm.mNumBfs); });
   columns.emplace("evicted_mib", [&](Column& col) {
     auto res = Sum(PPCounters::sCounters, &PPCounters::evicted_pages);
     col << (res * utils::tlsStore->mStoreOption.mPageSize / 1024.0 / 1024.0);
@@ -92,12 +76,10 @@ void BMTable::open() {
   });
 
   columns.emplace("allocate_ops", [&](Column& col) {
-    col << (Sum(WorkerCounters::sCounters,
-                &WorkerCounters::allocate_operations_counter));
+    col << (Sum(WorkerCounters::sCounters, &WorkerCounters::allocate_operations_counter));
   });
   columns.emplace("r_mib", [&](Column& col) {
-    auto res = Sum(WorkerCounters::sCounters,
-                   &WorkerCounters::read_operations_counter);
+    auto res = Sum(WorkerCounters::sCounters, &WorkerCounters::read_operations_counter);
     col << (res * utils::tlsStore->mStoreOption.mPageSize / 1024.0 / 1024.0);
   });
 }

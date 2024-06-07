@@ -6,20 +6,20 @@
 #include <assert.h>
 #include <signal.h>
 //--------------------------------------------------------------------------------------
-#define Generic_Exception(name)                                                \
-  struct name : public std::exception {                                        \
-    const std::string msg;                                                     \
-    explicit name() : msg(#name) {                                             \
-      printf("Throwing exception: %s\n", #name);                               \
-    }                                                                          \
-    explicit name(const std::string& msg) : msg(msg) {                         \
-      printf("Throwing exception: %s(%s)\n", #name, msg.c_str());              \
-    }                                                                          \
-    ~name() = default;                                                         \
-    virtual const char* what() const noexcept override {                       \
-      return msg.c_str();                                                      \
-    }                                                                          \
-  };                                                                           \
+#define Generic_Exception(name)                                                                    \
+  struct name : public std::exception {                                                            \
+    const std::string msg;                                                                         \
+    explicit name() : msg(#name) {                                                                 \
+      printf("Throwing exception: %s\n", #name);                                                   \
+    }                                                                                              \
+    explicit name(const std::string& msg) : msg(msg) {                                             \
+      printf("Throwing exception: %s(%s)\n", #name, msg.c_str());                                  \
+    }                                                                                              \
+    ~name() = default;                                                                             \
+    virtual const char* what() const noexcept override {                                           \
+      return msg.c_str();                                                                          \
+    }                                                                                              \
+  };                                                                                               \
 //--------------------------------------------------------------------------------------
 namespace leanstore {
 namespace ex {
@@ -30,16 +30,15 @@ Generic_Exception(TODO);
 } // namespace ex
 } // namespace leanstore
 // -------------------------------------------------------------------------------------
-#define UNREACHABLE()                                                          \
-  throw leanstore::ex::UnReachable(std::string(__FILE__) + ":" +               \
+#define UNREACHABLE()                                                                              \
+  throw leanstore::ex::UnReachable(std::string(__FILE__) + ":" +                                   \
                                    std::string(std::to_string(__LINE__)));
 // -------------------------------------------------------------------------------------
-#define always_check(e)                                                        \
-  (__builtin_expect(!(e), 0)                                                   \
-       ? throw leanstore::ex::EnsureFailed(                                    \
-             std::string(__func__) + " in " + std::string(__FILE__) + "@" +    \
-             std::to_string(__LINE__) + " msg: " + std::string(#e))            \
-       : (void)0)
+#define always_check(e)                                                                            \
+  (__builtin_expect(!(e), 0) ? throw leanstore::ex::EnsureFailed(                                  \
+                                   std::string(__func__) + " in " + std::string(__FILE__) + "@" +  \
+                                   std::to_string(__LINE__) + " msg: " + std::string(#e))          \
+                             : (void)0)
 
 #ifdef PARANOID
 #define PARANOID(e) always_check(e);
@@ -59,17 +58,16 @@ Generic_Exception(TODO);
 #define ENSURE(e) always_check(e)
 #endif
 
-#define TODOException()                                                        \
-  throw leanstore::ex::TODO(std::string(__FILE__) + ":" +                      \
-                            std::string(std::to_string(__LINE__)));
+#define TODOException()                                                                            \
+  throw leanstore::ex::TODO(std::string(__FILE__) + ":" + std::string(std::to_string(__LINE__)));
 
-#define explainIfNot(e)                                                        \
-  if (!(e)) {                                                                  \
-    raise(SIGTRAP);                                                            \
+#define explainIfNot(e)                                                                            \
+  if (!(e)) {                                                                                      \
+    raise(SIGTRAP);                                                                                \
   };
-#define RAISE_WHEN(e)                                                          \
-  if (e) {                                                                     \
-    raise(SIGTRAP);                                                            \
+#define RAISE_WHEN(e)                                                                              \
+  if (e) {                                                                                         \
+    raise(SIGTRAP);                                                                                \
   };
 // -------------------------------------------------------------------------------------
 #ifdef MACRO_CHECK_DEBUG
@@ -97,7 +95,8 @@ Generic_Exception(TODO);
 #define COUNTERS_BLOCK() if constexpr (false)
 #endif
 // -------------------------------------------------------------------------------------
-template <typename T> inline void DO_NOT_OPTIMIZE(const T& value) {
+template <typename T>
+inline void DO_NOT_OPTIMIZE(const T& value) {
 #if defined(__clang__)
   asm volatile("" : : "g"(value) : "memory");
 #else
@@ -105,8 +104,8 @@ template <typename T> inline void DO_NOT_OPTIMIZE(const T& value) {
 #endif
 }
 
-#define POSIX_CHECK(expr)                                                      \
-  if (!(expr)) {                                                               \
-    perror(#expr);                                                             \
-    raise(SIGTRAP);                                                            \
+#define POSIX_CHECK(expr)                                                                          \
+  if (!(expr)) {                                                                                   \
+    perror(#expr);                                                                                 \
+    raise(SIGTRAP);                                                                                \
   }

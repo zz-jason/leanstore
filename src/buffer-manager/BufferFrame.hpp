@@ -16,8 +16,8 @@
 
 namespace leanstore::storage {
 
-//! Used for contention based split. See more details in: "Contention and Space
-//! Management in B-Trees"
+//! Used for contention based split. See more details in: "Contention and Space Management in
+//! B-Trees"
 class ContentionStats {
 public:
   //! Represents the number of lock contentions encountered on the page.
@@ -81,8 +81,8 @@ public:
   //! Whether the containing page is being written back to disk.
   std::atomic<bool> mIsBeingWrittenBack = false;
 
-  //! Contention statistics about the BTreeNode in the containing page. Used for
-  //! contention-based node split for BTrees.
+  //! Contention statistics about the BTreeNode in the containing page. Used for contention-based
+  //! node split for BTrees.
   ContentionStats mContentionStats;
 
   //! CRC checksum of the containing page.
@@ -147,8 +147,7 @@ public:
 
 public:
   uint64_t CRC() {
-    return utils::CRC(mPayload,
-                      utils::tlsStore->mStoreOption.mPageSize - sizeof(Page));
+    return utils::CRC(mPayload, utils::tlsStore->mStoreOption.mPageSize - sizeof(Page));
   }
 };
 
@@ -206,8 +205,7 @@ public:
     mHeader.Reset();
   }
 
-  void ToJson(rapidjson::Value* resultObj,
-              rapidjson::Value::AllocatorType& allocator);
+  void ToJson(rapidjson::Value* resultObj, rapidjson::Value::AllocatorType& allocator);
 };
 
 // -----------------------------------------------------------------------------

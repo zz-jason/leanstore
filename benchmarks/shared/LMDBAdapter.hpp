@@ -42,7 +42,8 @@ struct LMDB {
   }
 };
 // -------------------------------------------------------------------------------------
-template <class Record> struct LMDBAdapter : public Adapter<Record> {
+template <class Record>
+struct LMDBAdapter : public Adapter<Record> {
   LMDB& map;
   std::string name;
   lmdb::dbi dbi;
@@ -82,8 +83,7 @@ template <class Record> struct LMDBAdapter : public Adapter<Record> {
     fn(record);
   }
   // -------------------------------------------------------------------------------------
-  void update1(const typename Record::Key& key,
-               const std::function<void(Record&)>& fn,
+  void update1(const typename Record::Key& key, const std::function<void(Record&)>& fn,
                leanstore::UpdateDesc&) final {
     Record r;
     lookup1(key, [&](const Record& rec) { r = rec; });
@@ -101,10 +101,9 @@ template <class Record> struct LMDBAdapter : public Adapter<Record> {
     return true;
   }
   // -------------------------------------------------------------------------------------
-  void scan(
-      const typename Record::Key& key,
-      const std::function<bool(const typename Record::Key&, const Record&)>& fn,
-      std::function<void()>) final {
+  void scan(const typename Record::Key& key,
+            const std::function<bool(const typename Record::Key&, const Record&)>& fn,
+            std::function<void()>) final {
     uint8_t folded_key[Record::maxFoldLength()];
     const uint32_t folded_key_len = Record::foldKey(folded_key, key);
     lmdb::val lmdb_key{folded_key, folded_key_len};
@@ -115,18 +114,16 @@ template <class Record> struct LMDBAdapter : public Adapter<Record> {
       bool cont;
       do {
         typename Record::Key s_key;
-        Record::unfoldKey(reinterpret_cast<const uint8_t*>(lmdb_key.data()),
-                          s_key);
+        Record::unfoldKey(reinterpret_cast<const uint8_t*>(lmdb_key.data()), s_key);
         Record& s_value = *reinterpret_cast<Record*>(lmdb_payload.data());
         cont = fn(s_key, s_value);
       } while (cont && cursor.get(lmdb_key, lmdb_payload, MDB_NEXT));
     }
   }
   // -------------------------------------------------------------------------------------
-  void ScanDesc(
-      const typename Record::Key& key,
-      const std::function<bool(const typename Record::Key&, const Record&)>& fn,
-      std::function<void()>) final {
+  void ScanDesc(const typename Record::Key& key,
+                const std::function<bool(const typename Record::Key&, const Record&)>& fn,
+                std::function<void()>) final {
     uint8_t folded_key[Record::maxFoldLength()];
     const uint32_t folded_key_len = Record::foldKey(folded_key, key);
     lmdb::val lmdb_key{folded_key, folded_key_len};
@@ -140,8 +137,8 @@ template <class Record> struct LMDBAdapter : public Adapter<Record> {
     }
     while (true) {
       std::basic_string_view<uint8_t> upper(folded_key, folded_key_len);
-      std::basic_string_view<uint8_t> current(
-          reinterpret_cast<uint8_t*>(lmdb_key.data()), lmdb_key.size());
+      std::basic_string_view<uint8_t> current(reinterpret_cast<uint8_t*>(lmdb_key.data()),
+                                              lmdb_key.size());
       if (current > upper) {
         if (cursor.get(lmdb_key, lmdb_payload, MDB_PREV)) {
           continue;
@@ -155,8 +152,7 @@ template <class Record> struct LMDBAdapter : public Adapter<Record> {
     bool cont;
     do {
       typename Record::Key s_key;
-      Record::unfoldKey(reinterpret_cast<const uint8_t*>(lmdb_key.data()),
-                        s_key);
+      Record::unfoldKey(reinterpret_cast<const uint8_t*>(lmdb_key.data()), s_key);
       Record& s_value = *reinterpret_cast<Record*>(lmdb_payload.data());
       cont = fn(s_key, s_value);
     } while (cont && cursor.get(lmdb_key, lmdb_payload, MDB_PREV));

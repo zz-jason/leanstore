@@ -58,8 +58,7 @@ private:
     res.set_content(serializer.Serialize(empty), kContentType);
   }
 
-  void handleHeap(const httplib::Request& req [[maybe_unused]],
-                  httplib::Response& res) {
+  void handleHeap(const httplib::Request& req [[maybe_unused]], httplib::Response& res) {
 #ifdef ENABLE_PROFILING
     // get the profiling time in seconds from the query
     auto secondsStr = req.get_param_value("seconds");
@@ -85,8 +84,7 @@ private:
 #endif
   }
 
-  void handleProfile(const httplib::Request& req [[maybe_unused]],
-                     httplib::Response& res) {
+  void handleProfile(const httplib::Request& req [[maybe_unused]], httplib::Response& res) {
 
 #ifdef ENABLE_PROFILING
     // get the profiling time in seconds from the query
@@ -112,8 +110,8 @@ private:
   }
 
   std::string createRandomFile() {
-    auto perfFile = std::format("/tmp/leanstore-{}.prof",
-                                utils::RandomGenerator::RandAlphString(8));
+    auto perfFile =
+        std::format("/tmp/leanstore-{}.prof", utils::RandomGenerator::RandAlphString(8));
     std::ofstream file(perfFile);
     file.close();
     return perfFile;
@@ -126,15 +124,15 @@ private:
     res.set_content(buffer.str(), kContentType);
   }
 
-  /// The http server
+  //! The http server
   httplib::Server mServer;
 
   int32_t mPort;
 
-  /// The mutex to protect mCollectable
+  //! The mutex to protect mCollectable
   std::mutex mCollectableMutex;
 
-  /// The Collectable to expose metrics
+  //! The Collectable to expose metrics
   std::shared_ptr<prometheus::Collectable> mCollectable;
 };
 

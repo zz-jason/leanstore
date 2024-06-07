@@ -40,8 +40,7 @@ namespace leanstore {
 
 Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption option) {
   if (option.mCreateFromScratch) {
-    std::cout << std::format("Clean store dir: {}", option.mStoreDir)
-              << std::endl;
+    std::cout << std::format("Clean store dir: {}", option.mStoreDir) << std::endl;
     std::filesystem::path dirPath = option.mStoreDir;
     std::filesystem::remove_all(dirPath);
     std::filesystem::create_directories(dirPath);
@@ -51,9 +50,7 @@ Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption option) {
   return std::make_unique<LeanStore>(std::move(option));
 }
 
-LeanStore::LeanStore(StoreOption option)
-    : mStoreOption(std::move(option)),
-      mMetricsManager(this) {
+LeanStore::LeanStore(StoreOption option) : mStoreOption(std::move(option)), mMetricsManager(this) {
   utils::tlsStore = this;
 
   Log::Info("LeanStore starting ...");
@@ -75,9 +72,8 @@ LeanStore::LeanStore(StoreOption option)
 
   // create global transaction worker and group committer
   //
-  // TODO(jian.z): Deserialize buffer manager before creating CRManager. We need
-  // to initialize nextPageId for each buffer partition before creating history
-  // tree in CRManager
+  // TODO(jian.z): Deserialize buffer manager before creating CRManager. We need to initialize
+  // nextPageId for each buffer partition before creating history tree in CRManager
   mCRManager = std::make_unique<cr::CRManager>(this);
 
   // recover from disk
@@ -108,8 +104,7 @@ void LeanStore::initPageAndWalFd() {
     if (mPageFd == -1) {
       Log::Fatal("Could not open file at: {}", dbFilePath);
     }
-    Log::Info("Init page fd succeed, pageFd={}, pageFile={}", mPageFd,
-              dbFilePath);
+    Log::Info("Init page fd succeed, pageFd={}, pageFile={}", mPageFd, dbFilePath);
 
     auto walFilePath = mStoreOption.GetWalFilePath();
     mWalFd = open(walFilePath.c_str(), flags, 0666);
@@ -131,8 +126,7 @@ void LeanStore::initPageAndWalFd() {
                "please create a new DB file and start a new instance from it",
                dbFilePath);
   }
-  Log::Info("Init page fd succeed, pageFd={}, pageFile={}", mPageFd,
-            dbFilePath);
+  Log::Info("Init page fd succeed, pageFd={}, pageFile={}", mPageFd, dbFilePath);
 
   auto walFilePath = mStoreOption.GetWalFilePath();
   mWalFd = open(walFilePath.c_str(), flags, 0666);
@@ -156,9 +150,8 @@ LeanStore::~LeanStore() {
     auto treeId = it.first;
     auto& [treePtr, treeName] = it.second;
     auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(treePtr.get());
-    Log::Info("btreeName={}, btreeId={}, btreeType={}, btreeHeight={}",
-              treeName, treeId, static_cast<uint8_t>(btree->mTreeType),
-              btree->mHeight.load());
+    Log::Info("btreeName={}, btreeId={}, btreeType={}, btreeHeight={}", treeName, treeId,
+              static_cast<uint8_t>(btree->mTreeType), btree->mHeight.load());
   }
 
   // Stop transaction workers and group committer
@@ -213,7 +206,6 @@ void LeanStore::ExecAsync(uint64_t workerId, std::function<void()> job) {
   mCRManager->mWorkerThreads[workerId]->SetJob(job);
 }
 
-/// Waits for the worker to complete.
 void LeanStore::Wait(WORKERID workerId) {
   mCRManager->mWorkerThreads[workerId]->Wait();
 }
@@ -375,8 +367,7 @@ bool LeanStore::deserializeMeta() {
 
     StringMap btreeMetaMap;
     auto& btreeMetaJsonObj = btreeJsonObj["serialized"];
-    for (auto it = btreeMetaJsonObj.MemberBegin();
-         it != btreeMetaJsonObj.MemberEnd(); ++it) {
+    for (auto it = btreeMetaJsonObj.MemberBegin(); it != btreeMetaJsonObj.MemberEnd(); ++it) {
       btreeMetaMap[it->name.GetString()] = it->value.GetString();
     }
 
@@ -395,8 +386,7 @@ bool LeanStore::deserializeMeta() {
       ExecSync(0, [&]() {
         auto graveyardName = std::format("_{}_graveyard", btreeName);
         auto res = storage::btree::BasicKV::Create(
-            this, graveyardName,
-            BTreeConfig{.mEnableWal = false, .mUseBulkInsert = false});
+            this, graveyardName, BTreeConfig{.mEnableWal = false, .mUseBulkInsert = false});
         if (!res) {
           Log::Error("Failed to create TransactionKV graveyard"
                      ", btreeVI={}, graveyardName={}, error={}",
@@ -410,8 +400,7 @@ bool LeanStore::deserializeMeta() {
       break;
     }
     default: {
-      Log::Fatal("deserializeMeta failed, unsupported btree type={}",
-                 btreeType);
+      Log::Fatal("deserializeMeta failed, unsupported btree type={}", btreeType);
     }
     }
     mTreeRegistry->Deserialize(btreeId, btreeMetaMap);
@@ -432,26 +421,23 @@ void LeanStore::deserializeFlags() {
 
   const rapidjson::Value& flagsJsonObj = doc[kMetaKeyFlags];
   StringMap serializedFlags;
-  for (auto it = flagsJsonObj.MemberBegin(); it != flagsJsonObj.MemberEnd();
-       ++it) {
+  for (auto it = flagsJsonObj.MemberBegin(); it != flagsJsonObj.MemberEnd(); ++it) {
     serializedFlags[it->name.GetString()] = it->value.GetString();
   }
 }
 
-Result<storage::btree::BasicKV*> LeanStore::CreateBasicKV(
-    const std::string& name, BTreeConfig config) {
+Result<storage::btree::BasicKV*> LeanStore::CreateBasicKV(const std::string& name,
+                                                          BTreeConfig config) {
   return storage::btree::BasicKV::Create(this, name, std::move(config));
 }
 
-void LeanStore::GetBasicKV(const std::string& name,
-                           storage::btree::BasicKV** btree) {
+void LeanStore::GetBasicKV(const std::string& name, storage::btree::BasicKV** btree) {
   *btree = dynamic_cast<storage::btree::BasicKV*>(mTreeRegistry->GetTree(name));
 }
 
 void LeanStore::DropBasicKV(const std::string& name) {
   LS_DCHECK(cr::Worker::My().IsTxStarted());
-  auto* btree =
-      dynamic_cast<btree::BTreeGeneric*>(mTreeRegistry->GetTree(name));
+  auto* btree = dynamic_cast<btree::BTreeGeneric*>(mTreeRegistry->GetTree(name));
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
   auto res = mTreeRegistry->UnregisterTree(name);
   if (!res) {
@@ -459,14 +445,13 @@ void LeanStore::DropBasicKV(const std::string& name) {
   }
 }
 
-Result<storage::btree::TransactionKV*> LeanStore::CreateTransactionKV(
-    const std::string& name, BTreeConfig config) {
+Result<storage::btree::TransactionKV*> LeanStore::CreateTransactionKV(const std::string& name,
+                                                                      BTreeConfig config) {
   // create btree for graveyard
   auto graveyardName = std::format("_{}_graveyard", name);
   btree::BasicKV* graveyard;
   if (auto res = storage::btree::BasicKV::Create(
-          this, graveyardName,
-          BTreeConfig{.mEnableWal = false, .mUseBulkInsert = false});
+          this, graveyardName, BTreeConfig{.mEnableWal = false, .mUseBulkInsert = false});
       !res) {
     Log::Error("Failed to create TransactionKV graveyard"
                ", btreeVI={}, graveyardName={}, error={}",
@@ -477,8 +462,7 @@ Result<storage::btree::TransactionKV*> LeanStore::CreateTransactionKV(
   }
 
   // create transaction btree
-  auto res = storage::btree::TransactionKV::Create(
-      this, name, std::move(config), graveyard);
+  auto res = storage::btree::TransactionKV::Create(this, name, std::move(config), graveyard);
   if (!res) {
     leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(
         *static_cast<leanstore::storage::btree::BTreeGeneric*>(graveyard));
@@ -492,32 +476,26 @@ Result<storage::btree::TransactionKV*> LeanStore::CreateTransactionKV(
   return res;
 }
 
-void LeanStore::GetTransactionKV(const std::string& name,
-                                 storage::btree::TransactionKV** btree) {
-  *btree = dynamic_cast<storage::btree::TransactionKV*>(
-      mTreeRegistry->GetTree(name));
+void LeanStore::GetTransactionKV(const std::string& name, storage::btree::TransactionKV** btree) {
+  *btree = dynamic_cast<storage::btree::TransactionKV*>(mTreeRegistry->GetTree(name));
 }
 
 void LeanStore::DropTransactionKV(const std::string& name) {
   LS_DCHECK(cr::Worker::My().IsTxStarted());
-  auto* btree =
-      DownCast<storage::btree::BTreeGeneric*>(mTreeRegistry->GetTree(name));
+  auto* btree = DownCast<storage::btree::BTreeGeneric*>(mTreeRegistry->GetTree(name));
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
   auto res = mTreeRegistry->UnregisterTree(name);
   if (!res) {
-    Log::Error("UnRegister TransactionKV failed, error={}",
-               res.error().ToString());
+    Log::Error("UnRegister TransactionKV failed, error={}", res.error().ToString());
   }
 
   auto graveyardName = "_" + name + "_graveyard";
-  btree = DownCast<storage::btree::BTreeGeneric*>(
-      mTreeRegistry->GetTree(graveyardName));
+  btree = DownCast<storage::btree::BTreeGeneric*>(mTreeRegistry->GetTree(graveyardName));
   LS_DCHECK(btree != nullptr, "graveyard not found");
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
   res = mTreeRegistry->UnregisterTree(graveyardName);
   if (!res) {
-    Log::Error("UnRegister TransactionKV graveyard failed, error={}",
-               res.error().ToString());
+    Log::Error("UnRegister TransactionKV graveyard failed, error={}", res.error().ToString());
   }
 }
 

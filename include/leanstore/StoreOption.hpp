@@ -117,7 +117,7 @@ public:
   //! 2: AVX512
   int64_t mBTreeHints = 1;
 
-  //! Whether to enable heads optimization in lowerBound search.
+  //! Whether to enable heads optimization in LowerBound search.
   bool mEnableHeadOptimization = true;
 
   //! Whether to enable optimistic scan. Jump to next leaf directly if the

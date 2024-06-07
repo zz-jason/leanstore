@@ -39,18 +39,15 @@ void PageEvictor::runImpl() {
 
 void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
   LS_DLOG("Phase1: PickBufferFramesToCool begins");
-  SCOPED_DEFER(LS_DLOG(
-      "Phase1: PickBufferFramesToCool ended, mEvictCandidateBfs.size={}",
-      mEvictCandidateBfs.size()));
+  SCOPED_DEFER(LS_DLOG("Phase1: PickBufferFramesToCool ended, mEvictCandidateBfs.size={}",
+                       mEvictCandidateBfs.size()));
 
   COUNTERS_BLOCK() {
     auto phase1Begin = std::chrono::high_resolution_clock::now();
     SCOPED_DEFER({
       auto phase1End = std::chrono::high_resolution_clock::now();
       PPCounters::MyCounters().mPhase1MS +=
-          (std::chrono::duration_cast<std::chrono::microseconds>(phase1End -
-                                                                 phase1Begin)
-               .count());
+          (std::chrono::duration_cast<std::chrono::microseconds>(phase1End - phase1Begin).count());
     });
   }
 
@@ -69,9 +66,8 @@ void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
         BMOptimisticGuard readGuard(coolCandidate->mHeader.mLatch);
         if (coolCandidate->ShouldRemainInMem()) {
           failedAttempts = failedAttempts + 1;
-          LS_DLOG(
-              "Cool candidate discarded, should remain in memory, pageId={}",
-              coolCandidate->mHeader.mPageId);
+          LS_DLOG("Cool candidate discarded, should remain in memory, pageId={}",
+                  coolCandidate->mHeader.mPageId);
           JUMPMU_CONTINUE;
         }
         readGuard.JumpIfModifiedByOthers();
@@ -112,8 +108,7 @@ void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
         }
 
         mStore->mTreeRegistry->IterateChildSwips(
-            coolCandidate->mPage.mBTreeId, *coolCandidate,
-            [&](Swip& childSwip) {
+            coolCandidate->mPage.mBTreeId, *coolCandidate, [&](Swip& childSwip) {
               // Ignore when it has a child in the cooling stage
               allChildrenEvicted = allChildrenEvicted && childSwip.IsEvicted();
               if (childSwip.IsHot()) {
@@ -124,8 +119,7 @@ void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
                 LS_DLOG("Cool candidate discarded, one of its child is hot, "
                         "pageId={}, hotChildPageId={}, the hot child is "
                         "picked as the next cool candidate",
-                        coolCandidate->mHeader.mPageId,
-                        childBf->mHeader.mPageId);
+                        coolCandidate->mHeader.mPageId, childBf->mHeader.mPageId);
                 return false;
               }
               readGuard.JumpIfModifiedByOthers();
@@ -135,15 +129,14 @@ void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
         COUNTERS_BLOCK() {
           iterateChildrenEnd = std::chrono::high_resolution_clock::now();
           PPCounters::MyCounters().mIterateChildrenMS +=
-              (std::chrono::duration_cast<std::chrono::microseconds>(
-                   iterateChildrenEnd - iterateChildrenBegin)
+              (std::chrono::duration_cast<std::chrono::microseconds>(iterateChildrenEnd -
+                                                                     iterateChildrenBegin)
                    .count());
         }
         if (!allChildrenEvicted || pickedAChild) {
           LS_DLOG("Cool candidate discarded, not all the children are "
                   "evicted, pageId={}, allChildrenEvicted={}, pickedAChild={}",
-                  coolCandidate->mHeader.mPageId, allChildrenEvicted,
-                  pickedAChild);
+                  coolCandidate->mHeader.mPageId, allChildrenEvicted, pickedAChild);
           failedAttempts = failedAttempts + 1;
           JUMPMU_CONTINUE;
         }
@@ -155,18 +148,15 @@ void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
         }
         TREEID btreeId = coolCandidate->mPage.mBTreeId;
         readGuard.JumpIfModifiedByOthers();
-        auto parentHandler =
-            mStore->mTreeRegistry->FindParent(btreeId, *coolCandidate);
+        auto parentHandler = mStore->mTreeRegistry->FindParent(btreeId, *coolCandidate);
 
-        LS_DCHECK(parentHandler.mParentGuard.mState ==
-                  GuardState::kOptimisticShared);
-        LS_DCHECK(parentHandler.mParentGuard.mLatch !=
-                  reinterpret_cast<HybridLatch*>(0x99));
+        LS_DCHECK(parentHandler.mParentGuard.mState == GuardState::kOptimisticShared);
+        LS_DCHECK(parentHandler.mParentGuard.mLatch != reinterpret_cast<HybridLatch*>(0x99));
         COUNTERS_BLOCK() {
           findParentEnd = std::chrono::high_resolution_clock::now();
           PPCounters::MyCounters().mFindParentMS +=
-              (std::chrono::duration_cast<std::chrono::microseconds>(
-                   findParentEnd - findParentBegin)
+              (std::chrono::duration_cast<std::chrono::microseconds>(findParentEnd -
+                                                                     findParentBegin)
                    .count());
         }
         readGuard.JumpIfModifiedByOthers();
@@ -186,8 +176,7 @@ void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
         {
           // writeGuard can only be acquired and released while the partition
           // mutex is locked
-          BMExclusiveUpgradeIfNeeded parentWriteGuard(
-              parentHandler.mParentGuard);
+          BMExclusiveUpgradeIfNeeded parentWriteGuard(parentHandler.mParentGuard);
           BMExclusiveGuard writeGuard(readGuard);
 
           LS_DCHECK(coolCandidate->mHeader.mPageId == pageId);
@@ -222,8 +211,7 @@ void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
 
 void PageEvictor::randomBufferFramesToCoolOrEvict() {
   mCoolCandidateBfs.clear();
-  for (auto i = 0u; i < mStore->mStoreOption.mBufferFrameRecycleBatchSize;
-       i++) {
+  for (auto i = 0u; i < mStore->mStoreOption.mBufferFrameRecycleBatchSize; i++) {
     auto* randomBf = &mStore->mBufferManager->RandomBufferFrame();
     DO_NOT_OPTIMIZE(randomBf->mHeader.mState);
     mCoolCandidateBfs.push_back(randomBf);
@@ -242,12 +230,10 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& targetPartition) {
       BMOptimisticGuard optimisticGuard(cooledBf->mHeader.mLatch);
       // Check if the BF got swizzled in or unswizzle another time in another
       // partition
-      if (cooledBf->mHeader.mState != State::kCool ||
-          cooledBf->mHeader.mIsBeingWrittenBack) {
+      if (cooledBf->mHeader.mState != State::kCool || cooledBf->mHeader.mIsBeingWrittenBack) {
         LS_DLOG("COOLed buffer frame discarded, pageId={}, IsCool={}, "
                 "isBeingWritternBack={}",
-                cooledBf->mHeader.mPageId,
-                cooledBf->mHeader.mState == State::kCool,
+                cooledBf->mHeader.mPageId, cooledBf->mHeader.mState == State::kCool,
                 cooledBf->mHeader.mIsBeingWrittenBack.load());
         JUMPMU_CONTINUE;
       }
@@ -257,8 +243,7 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& targetPartition) {
       // Prevent evicting a page that already has an IO Frame with (possibly)
       // threads working on it.
       Partition& partition = *mPartitions[partitionId];
-      JumpScoped<std::unique_lock<std::mutex>> ioGuard(
-          partition.mInflightIOMutex);
+      JumpScoped<std::unique_lock<std::mutex>> ioGuard(partition.mInflightIOMutex);
       if (partition.mInflightIOs.Lookup(cooledPageId)) {
         LS_DLOG("COOLed buffer frame discarded, already in IO stage, "
                 "pageId={}, partitionId={}",
@@ -286,8 +271,7 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& targetPartition) {
 
       BMExclusiveGuard exclusiveGuard(optimisticGuard);
       LS_DCHECK(!cooledBf->mHeader.mIsBeingWrittenBack);
-      cooledBf->mHeader.mIsBeingWrittenBack.store(true,
-                                                  std::memory_order_release);
+      cooledBf->mHeader.mIsBeingWrittenBack.store(true, std::memory_order_release);
 
       // performs crc check if necessary
       if (mStore->mStoreOption.mEnableBufferCrcCheck) {
@@ -298,8 +282,7 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& targetPartition) {
       mAsyncWriteBuffer.Add(*cooledBf);
       LS_DLOG("COOLed buffer frame is added to async write buffer, "
               "pageId={}, bufferSize={}",
-              cooledBf->mHeader.mPageId,
-              mAsyncWriteBuffer.GetPendingRequests());
+              cooledBf->mHeader.mPageId, mAsyncWriteBuffer.GetPendingRequests());
     }
     JUMPMU_CATCH() {
       LS_DLOG("COOLed buffer frame discarded, optimistic latch failed, "
@@ -324,8 +307,7 @@ void PageEvictor::FlushAndRecycleBufferFrames(Partition& targetPartition) {
 
   result = mAsyncWriteBuffer.WaitAll();
   if (!result) {
-    Log::Error("Failed to wait IO request to complete, error={}",
-               result.error().ToString());
+    Log::Error("Failed to wait IO request to complete, error={}", result.error().ToString());
     return;
   }
 
@@ -350,14 +332,13 @@ void PageEvictor::FlushAndRecycleBufferFrames(Partition& targetPartition) {
         }
         JUMPMU_CATCH() {
           writtenBf.mHeader.mCrc = 0;
-          writtenBf.mHeader.mIsBeingWrittenBack.store(
-              false, std::memory_order_release);
+          writtenBf.mHeader.mIsBeingWrittenBack.store(false, std::memory_order_release);
         }
 
         JUMPMU_TRY() {
           BMOptimisticGuard optimisticGuard(writtenBf.mHeader.mLatch);
-          if (writtenBf.mHeader.mState == State::kCool &&
-              !writtenBf.mHeader.mIsBeingWrittenBack && !writtenBf.IsDirty()) {
+          if (writtenBf.mHeader.mState == State::kCool && !writtenBf.mHeader.mIsBeingWrittenBack &&
+              !writtenBf.IsDirty()) {
             evictFlushedBf(writtenBf, optimisticGuard, targetPartition);
           }
         }
@@ -371,13 +352,11 @@ void PageEvictor::FlushAndRecycleBufferFrames(Partition& targetPartition) {
   }
 }
 
-void PageEvictor::evictFlushedBf(BufferFrame& cooledBf,
-                                 BMOptimisticGuard& optimisticGuard,
+void PageEvictor::evictFlushedBf(BufferFrame& cooledBf, BMOptimisticGuard& optimisticGuard,
                                  Partition& targetPartition) {
   TREEID btreeId = cooledBf.mPage.mBTreeId;
   optimisticGuard.JumpIfModifiedByOthers();
-  ParentSwipHandler parentHandler =
-      mStore->mTreeRegistry->FindParent(btreeId, cooledBf);
+  ParentSwipHandler parentHandler = mStore->mTreeRegistry->FindParent(btreeId, cooledBf);
 
   LS_DCHECK(parentHandler.mParentGuard.mState == GuardState::kOptimisticShared);
   BMExclusiveUpgradeIfNeeded parentWriteGuard(parentHandler.mParentGuard);
@@ -398,8 +377,7 @@ void PageEvictor::evictFlushedBf(BufferFrame& cooledBf,
   cooledBf.mHeader.mLatch.UnlockExclusively();
 
   mFreeBfList.PushFront(cooledBf);
-  if (mFreeBfList.Size() <=
-      std::min<uint64_t>(mStore->mStoreOption.mWorkerThreads, 128)) {
+  if (mFreeBfList.Size() <= std::min<uint64_t>(mStore->mStoreOption.mWorkerThreads, 128)) {
     mFreeBfList.PopTo(targetPartition);
   }
 

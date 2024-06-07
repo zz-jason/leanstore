@@ -32,8 +32,7 @@ TEST_F(MetricsManagerTest, Basic) {
 
   auto result = cli.Get("/metrics");
   ASSERT_TRUE(result) << "Error: " << result.error();
-  ASSERT_EQ(result->status, httplib::StatusCode::OK_200)
-      << "HTTP status: " << result->status;
+  ASSERT_EQ(result->status, httplib::StatusCode::OK_200) << "HTTP status: " << result->status;
   ASSERT_TRUE(result->body.contains("tx_abort_total"));
 }
 

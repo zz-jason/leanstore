@@ -22,7 +22,7 @@ namespace leanstore::utils {
 inline thread_local LeanStore* tlsStore = nullptr;
 inline thread_local std::string tlsThreadName = "";
 
-/// User thread with custom thread name.
+//! User thread with custom thread name.
 class UserThread {
 protected:
   LeanStore* mStore = nullptr;
@@ -41,9 +41,8 @@ public:
         mThreadName(name),
         mRunningCPU(runningCPU) {
     if (mThreadName.size() > 15) {
-      Log::Error(
-          "Thread name should be restricted to 15 characters, name={}, size={}",
-          name, name.size());
+      Log::Error("Thread name should be restricted to 15 characters, name={}, size={}", name,
+                 name.size());
     }
   }
 
@@ -52,7 +51,7 @@ public:
   }
 
 public:
-  /// Start executing the thread.
+  //! Start executing the thread.
   void Start() {
     if (mThread == nullptr) {
       mKeepRunning = true;
@@ -60,7 +59,7 @@ public:
     }
   }
 
-  /// Stop executing the thread.
+  //! Stop executing the thread.
   virtual void Stop() {
     mKeepRunning = false;
     if (mThread && mThread->joinable()) {
@@ -98,7 +97,7 @@ protected:
     runImpl();
   }
 
-  /// Custom thread loop
+  //! Custom thread loop
   virtual void runImpl() = 0;
 };
 

@@ -21,30 +21,26 @@ namespace leanstore::storage {
 
 class ParentSwipHandler {
 public:
-  /// @brief mParentGuard is the latch guard to the parent buffer frame. It
-  /// should already optimistically latched.
+  //! @brief mParentGuard is the latch guard to the parent buffer frame. It
+  //! should already optimistically latched.
   HybridGuard mParentGuard;
 
-  /// @brief mParentBf is the parent buffer frame.
+  //! @brief mParentBf is the parent buffer frame.
   BufferFrame* mParentBf;
 
-  /// @brief mChildSwip is the swip reference to the child who generated this
-  /// ParentSwipHandler.
+  //! @brief mChildSwip is the swip reference to the child who generated this
+  //! ParentSwipHandler.
   Swip& mChildSwip;
 
-  /// @brief mPosInParent is the slot id in the parent buffer frame.
+  //! @brief mPosInParent is the slot id in the parent buffer frame.
   uint32_t mPosInParent = std::numeric_limits<uint32_t>::max();
 
-  /// @brief mIsChildBfUpdated records whether the child buffer frame is updated
-  /// since this ParentSwipHandler was created.
+  //! @brief mIsChildBfUpdated records whether the child buffer frame is updated
+  //! since this ParentSwipHandler was created.
   bool mIsChildBfUpdated = false;
 };
 
-enum class SpaceCheckResult : uint8_t {
-  kNothing,
-  kPickAnotherBf,
-  kRestartSameBf
-};
+enum class SpaceCheckResult : uint8_t { kNothing, kPickAnotherBf, kRestartSameBf };
 
 using ChildSwipCallback = std::function<bool(Swip&)>;
 
@@ -99,21 +95,21 @@ using TreeIndexByName = std::unordered_map<std::string, TreeMap::iterator>;
 
 class TreeRegistry {
 public:
-  /// mMutex protects concurrent access to mTrees, mTreeIndexByName, and the
-  /// lifetime of a managed tree object, i.e. the tree should stay valid during
-  /// read/write access.
+  //! mMutex protects concurrent access to mTrees, mTreeIndexByName, and the
+  //! lifetime of a managed tree object, i.e. the tree should stay valid during
+  //! read/write access.
   std::shared_mutex mMutex;
 
-  /// mTrees records and manages the lifetime of all the trees whose content are
-  /// stored the buffer pool, for example BTrees.
+  //! mTrees records and manages the lifetime of all the trees whose content are
+  //! stored the buffer pool, for example BTrees.
   TreeMap mTrees;
 
-  /// mTreeIndexByName is a secondary index for mTrees, it allows to find a tree
-  /// by its name.
+  //! mTreeIndexByName is a secondary index for mTrees, it allows to find a tree
+  //! by its name.
   TreeIndexByName mTreeIndexByName;
 
-  /// Tree ID allocator, tree IDs are global unique. IDs of destoried tree are
-  /// not recycled.
+  //! Tree ID allocator, tree IDs are global unique. IDs of destoried tree are
+  //! not recycled.
   std::atomic<TREEID> mTreeIdAllocator = 0;
 
 public:
@@ -122,10 +118,9 @@ public:
     return allocatedTreeId;
   }
 
-  /// Creates a tree managed by buffer manager.
+  //! Creates a tree managed by buffer manager.
   inline std::tuple<BufferManagedTree*, TREEID> CreateTree(
-      const std::string& treeName,
-      std::function<std::unique_ptr<BufferManagedTree>()> ctor) {
+      const std::string& treeName, std::function<std::unique_ptr<BufferManagedTree>()> ctor) {
     std::unique_lock uniqueGuard(mMutex);
 
     // check uniqueness
@@ -138,8 +133,8 @@ public:
     auto tree = ctor();
 
     // register the tree
-    auto emplaceResult = mTrees.emplace(
-        std::make_pair(treeId, std::make_tuple(std::move(tree), treeName)));
+    auto emplaceResult =
+        mTrees.emplace(std::make_pair(treeId, std::make_tuple(std::move(tree), treeName)));
     mTreeIndexByName.emplace(std::make_pair(treeName, emplaceResult.first));
 
     auto it = emplaceResult.first;
@@ -149,8 +144,7 @@ public:
     return std::make_tuple(treePtr, treeId);
   }
 
-  inline bool RegisterTree(TREEID treeId,
-                           std::unique_ptr<BufferManagedTree> tree,
+  inline bool RegisterTree(TREEID treeId, std::unique_ptr<BufferManagedTree> tree,
                            const std::string& treeName) {
     SCOPED_DEFER(if (treeId > mTreeIdAllocator) { mTreeIdAllocator = treeId; });
     std::unique_lock uniqueGuard(mMutex);
@@ -158,14 +152,13 @@ public:
       return false;
     }
 
-    auto emplaceResult = mTrees.emplace(
-        std::make_pair(treeId, std::make_tuple(std::move(tree), treeName)));
+    auto emplaceResult =
+        mTrees.emplace(std::make_pair(treeId, std::make_tuple(std::move(tree), treeName)));
     mTreeIndexByName.emplace(std::make_pair(treeName, emplaceResult.first));
     return true;
   }
 
-  [[nodiscard]] inline Result<bool> UnregisterTree(
-      const std::string& treeName) {
+  [[nodiscard]] inline Result<bool> UnregisterTree(const std::string& treeName) {
     std::unique_lock uniqueGuard(mMutex);
     auto it = mTreeIndexByName.find(treeName);
     if (it != mTreeIndexByName.end()) {
@@ -174,8 +167,7 @@ public:
       mTrees.erase(treeIt);
       return true;
     }
-    return std::unexpected<utils::Error>(
-        utils::Error::General("TreeId not found"));
+    return std::unexpected<utils::Error>(utils::Error::General("TreeId not found"));
   }
 
   [[nodiscard]] inline Result<bool> UnRegisterTree(TREEID treeId) {
@@ -187,8 +179,7 @@ public:
       mTrees.erase(it);
       return true;
     }
-    return std::unexpected<utils::Error>(
-        utils::Error::General("TreeId not found"));
+    return std::unexpected<utils::Error>(utils::Error::General("TreeId not found"));
   }
 
   inline BufferManagedTree* GetTree(const std::string& treeName) {
@@ -206,8 +197,7 @@ public:
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
     if (it == mTrees.end()) {
-      Log::Fatal("BufferManagedTree not find, address={}, treeId={}",
-                 (void*)&bf, treeId);
+      Log::Fatal("BufferManagedTree not find, address={}, treeId={}", (void*)&bf, treeId);
     }
     auto& [tree, treeName] = it->second;
     tree->IterateChildSwips(bf, callback);
@@ -217,20 +207,17 @@ public:
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
     if (it == mTrees.end()) {
-      Log::Fatal("BufferManagedTree not find, address={}, treeId={}",
-                 (void*)&bf, treeId);
+      Log::Fatal("BufferManagedTree not find, address={}, treeId={}", (void*)&bf, treeId);
     }
     auto& [tree, treeName] = it->second;
     return tree->FindParent(bf);
   }
 
-  inline SpaceCheckResult CheckSpaceUtilization(TREEID treeId,
-                                                BufferFrame& bf) {
+  inline SpaceCheckResult CheckSpaceUtilization(TREEID treeId, BufferFrame& bf) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
     if (it == mTrees.end()) {
-      Log::Fatal("BufferManagedTree not find, address={}, treeId={}",
-                 (void*)&bf, treeId);
+      Log::Fatal("BufferManagedTree not find, address={}, treeId={}", (void*)&bf, treeId);
     }
     auto& [tree, treeName] = it->second;
     return tree->CheckSpaceUtilization(bf);
@@ -241,8 +228,7 @@ public:
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
     if (it == mTrees.end()) {
-      Log::Fatal("BufferManagedTree not find, address={}, treeId={}",
-                 (void*)&bf, treeId);
+      Log::Fatal("BufferManagedTree not find, address={}, treeId={}", (void*)&bf, treeId);
     }
     auto& [tree, treeName] = it->second;
     return tree->Checkpoint(bf, dest);
@@ -258,9 +244,8 @@ public:
     return tree->undo(walEntry, tts);
   }
 
-  inline void GarbageCollect(TREEID treeId, const uint8_t* versionData,
-                             WORKERID versionWorkerId, TXID versionTxId,
-                             bool calledBefore) {
+  inline void GarbageCollect(TREEID treeId, const uint8_t* versionData, WORKERID versionWorkerId,
+                             TXID versionTxId, bool calledBefore) {
     std::shared_lock sharedGuard(mMutex);
     auto it = mTrees.find(treeId);
     if (it == mTrees.end()) {
@@ -270,8 +255,7 @@ public:
       return;
     }
     auto& [tree, treeName] = it->second;
-    return tree->GarbageCollect(versionData, versionWorkerId, versionTxId,
-                                calledBefore);
+    return tree->GarbageCollect(versionData, versionWorkerId, versionTxId, calledBefore);
   }
 
   inline void unlock(TREEID treeId, const uint8_t* entry) {

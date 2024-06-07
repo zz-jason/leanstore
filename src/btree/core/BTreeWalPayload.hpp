@@ -22,28 +22,28 @@ class WalInitPage;
 class WalSplitRoot;
 class WalSplitNonRoot;
 
-#define DO_WITH_TYPES(ACTION, ...)                                             \
-  ACTION(kWalInsert, 1, "kWalInsert", __VA_ARGS__)                             \
-  ACTION(kWalTxInsert, 2, "kWalTxInsert", __VA_ARGS__)                         \
-  ACTION(kWalUpdate, 3, "kWalUpdate", __VA_ARGS__)                             \
-  ACTION(kWalTxUpdate, 4, "kWalTxUpdate", __VA_ARGS__)                         \
-  ACTION(kWalRemove, 5, "kWalRemove", __VA_ARGS__)                             \
-  ACTION(kWalTxRemove, 6, "kWalTxRemove", __VA_ARGS__)                         \
-  ACTION(kWalInitPage, 10, "kWalInitPage", __VA_ARGS__)                        \
-  ACTION(kWalSplitRoot, 11, "kWalSplitRoot", __VA_ARGS__)                      \
-  ACTION(kWalSplitNonRoot, 12, "kWalSplitNonRoot", __VA_ARGS__)                \
+#define DO_WITH_TYPES(ACTION, ...)                                                                 \
+  ACTION(kWalInsert, 1, "kWalInsert", __VA_ARGS__)                                                 \
+  ACTION(kWalTxInsert, 2, "kWalTxInsert", __VA_ARGS__)                                             \
+  ACTION(kWalUpdate, 3, "kWalUpdate", __VA_ARGS__)                                                 \
+  ACTION(kWalTxUpdate, 4, "kWalTxUpdate", __VA_ARGS__)                                             \
+  ACTION(kWalRemove, 5, "kWalRemove", __VA_ARGS__)                                                 \
+  ACTION(kWalTxRemove, 6, "kWalTxRemove", __VA_ARGS__)                                             \
+  ACTION(kWalInitPage, 10, "kWalInitPage", __VA_ARGS__)                                            \
+  ACTION(kWalSplitRoot, 11, "kWalSplitRoot", __VA_ARGS__)                                          \
+  ACTION(kWalSplitNonRoot, 12, "kWalSplitNonRoot", __VA_ARGS__)                                    \
   ACTION(kWalUndefined, 100, "kWalUndefined", __VA_ARGS__)
 
 #define DECR_TYPE(type, type_value, type_name, ...) type = type_value,
-#define TYPE_NAME(type, type_value, type_name, ...)                            \
-  case Type::type:                                                             \
+#define TYPE_NAME(type, type_value, type_name, ...)                                                \
+  case Type::type:                                                                                 \
     return type_name;
 
 class WalPayload {
 public:
   enum class Type : uint8_t { DO_WITH_TYPES(DECR_TYPE) };
 
-  /// Type of WalPayload
+  //! Type of WalPayload
   Type mType = Type::kWalUndefined;
 
   WalPayload() = default;
@@ -123,8 +123,7 @@ public:
 
   uint8_t mPayload[];
 
-  WalTxInsert(Slice key, Slice val, WORKERID prevWorkerId, TXID prevTxId,
-              COMMANDID prevCommandId)
+  WalTxInsert(Slice key, Slice val, WORKERID prevWorkerId, TXID prevTxId, COMMANDID prevCommandId)
       : WalPayload(Type::kWalTxInsert),
         mKeySize(key.size()),
         mValSize(val.size()),
@@ -174,9 +173,8 @@ public:
   // Stores key, UpdateDesc, and Delta in order
   uint8_t mPayload[];
 
-  WalTxUpdate(Slice key, UpdateDesc& updateDesc,
-              uint64_t sizeOfUpdateDescAndDelta, WORKERID prevWorkerId,
-              TXID prevTxId, COMMANDID xorCommandId)
+  WalTxUpdate(Slice key, UpdateDesc& updateDesc, uint64_t sizeOfUpdateDescAndDelta,
+              WORKERID prevWorkerId, TXID prevTxId, COMMANDID xorCommandId)
       : WalPayload(Type::kWalTxUpdate),
         mKeySize(key.size()),
         mUpdateDescSize(updateDesc.Size()),
@@ -247,8 +245,7 @@ public:
 
   uint8_t mPayload[];
 
-  WalTxRemove(Slice key, Slice val, WORKERID prevWorkerId, TXID prevTxId,
-              COMMANDID prevCommandId)
+  WalTxRemove(Slice key, Slice val, WORKERID prevWorkerId, TXID prevTxId, COMMANDID prevCommandId)
       : WalPayload(Type::kWalTxRemove),
         mKeySize(key.size()),
         mValSize(val.size()),
@@ -295,8 +292,7 @@ public:
 
   bool mSeparatorTruncated;
 
-  WalSplitRoot(PID newLeft, PID newRoot, PID metaNode,
-               const BTreeNode::SeparatorInfo& sepInfo)
+  WalSplitRoot(PID newLeft, PID newRoot, PID metaNode, const BTreeNode::SeparatorInfo& sepInfo)
       : WalPayload(Type::kWalSplitRoot),
         mNewLeft(newLeft),
         mNewRoot(newRoot),
@@ -322,8 +318,7 @@ public:
   WalSplitNonRoot() : WalPayload(Type::kWalSplitNonRoot) {
   }
 
-  WalSplitNonRoot(PID parent, PID newLeft,
-                  const BTreeNode::SeparatorInfo& sepInfo)
+  WalSplitNonRoot(PID parent, PID newLeft, const BTreeNode::SeparatorInfo& sepInfo)
       : WalPayload(Type::kWalSplitNonRoot),
         mParentPageId(parent),
         mNewLeft(newLeft),

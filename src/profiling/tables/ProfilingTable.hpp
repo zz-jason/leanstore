@@ -59,7 +59,8 @@ struct Column {
     return x;
   }
 
-  template <typename T> Column& operator<<(T x) {
+  template <typename T>
+  Column& operator<<(T x) {
     values.push_back(to_string(x));
     return *this;
   }

@@ -14,26 +14,22 @@ public:
   }
 
   Slice(const std::string& str)
-      : std::basic_string_view<uint8_t>(
-            reinterpret_cast<const uint8_t*>(str.data()), str.size()) {
+      : std::basic_string_view<uint8_t>(reinterpret_cast<const uint8_t*>(str.data()), str.size()) {
   }
 
   Slice(const std::string_view& str)
-      : std::basic_string_view<uint8_t>(
-            reinterpret_cast<const uint8_t*>(str.data()), str.size()) {
+      : std::basic_string_view<uint8_t>(reinterpret_cast<const uint8_t*>(str.data()), str.size()) {
   }
 
   Slice(const std::basic_string<uint8_t>& str)
       : std::basic_string_view<uint8_t>(str.data(), str.size()) {
   }
 
-  Slice(const uint8_t* data, size_t size)
-      : std::basic_string_view<uint8_t>(data, size) {
+  Slice(const uint8_t* data, size_t size) : std::basic_string_view<uint8_t>(data, size) {
   }
 
   Slice(const char* data)
-      : std::basic_string_view<uint8_t>(reinterpret_cast<const uint8_t*>(data),
-                                        std::strlen(data)) {
+      : std::basic_string_view<uint8_t>(reinterpret_cast<const uint8_t*>(data), std::strlen(data)) {
   }
 
   std::string ToString() const {

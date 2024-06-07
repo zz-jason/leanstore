@@ -18,21 +18,16 @@ void CRTable::open() {
   columns.emplace("wal_reserve_immediate", [&](Column& col) {
     col << (Sum(CRCounters::sCounters, &CRCounters::wal_reserve_immediate));
   });
-  columns.emplace("gct_phase_1_pct",
-                  [&](Column& col) { col << 100.0 * p1 / total; });
-  columns.emplace("gct_phase_2_pct",
-                  [&](Column& col) { col << 100.0 * p2 / total; });
-  columns.emplace("gct_write_pct",
-                  [&](Column& col) { col << 100.0 * write / total; });
+  columns.emplace("gct_phase_1_pct", [&](Column& col) { col << 100.0 * p1 / total; });
+  columns.emplace("gct_phase_2_pct", [&](Column& col) { col << 100.0 * p2 / total; });
+  columns.emplace("gct_write_pct", [&](Column& col) { col << 100.0 * write / total; });
   columns.emplace("gct_committed_tx", [&](Column& col) {
     col << Sum(CRCounters::sCounters, &CRCounters::gct_committed_tx);
   });
-  columns.emplace("gct_rounds", [&](Column& col) {
-    col << Sum(CRCounters::sCounters, &CRCounters::gct_rounds);
-  });
-  columns.emplace("tx", [](Column& col) {
-    col << Sum(WorkerCounters::sCounters, &WorkerCounters::tx);
-  });
+  columns.emplace("gct_rounds",
+                  [&](Column& col) { col << Sum(CRCounters::sCounters, &CRCounters::gct_rounds); });
+  columns.emplace("tx",
+                  [](Column& col) { col << Sum(WorkerCounters::sCounters, &WorkerCounters::tx); });
   columns.emplace("tx_abort", [](Column& col) {
     col << Sum(WorkerCounters::sCounters, &WorkerCounters::tx_abort);
   });
@@ -53,18 +48,16 @@ void CRTable::open() {
   });
 
   columns.emplace("wal_read_gib", [&](Column& col) {
-    col << (Sum(WorkerCounters::sCounters, &WorkerCounters::wal_read_bytes) *
-            1.0) /
-               1024.0 / 1024.0 / 1024.0;
+    col << (Sum(WorkerCounters::sCounters, &WorkerCounters::wal_read_bytes) * 1.0) / 1024.0 /
+               1024.0 / 1024.0;
   });
   columns.emplace("gct_write_gib", [&](Column& col) {
-    col << (Sum(CRCounters::sCounters, &CRCounters::gct_write_bytes) * 1.0) /
-               1024.0 / 1024.0 / 1024.0;
+    col << (Sum(CRCounters::sCounters, &CRCounters::gct_write_bytes) * 1.0) / 1024.0 / 1024.0 /
+               1024.0;
   });
   columns.emplace("wal_write_gib", [&](Column& col) {
-    col << (Sum(WorkerCounters::sCounters, &WorkerCounters::wal_write_bytes) *
-            1.0) /
-               1024.0 / 1024.0 / 1024.0;
+    col << (Sum(WorkerCounters::sCounters, &WorkerCounters::wal_write_bytes) * 1.0) / 1024.0 /
+               1024.0 / 1024.0;
   });
   columns.emplace("wal_miss_pct", [&](Column& col) { col << wal_miss_pct; });
   columns.emplace("wal_hit_pct", [&](Column& col) { col << wal_hit_pct; });
@@ -76,8 +69,7 @@ void CRTable::open() {
     col << Sum(CRCounters::sCounters, &CRCounters::cc_prepare_igc);
   });
   columns.emplace("cc_cross_workers_visibility_check", [&](Column& col) {
-    col << Sum(CRCounters::sCounters,
-               &CRCounters::cc_cross_workers_visibility_check);
+    col << Sum(CRCounters::sCounters, &CRCounters::cc_cross_workers_visibility_check);
   });
   columns.emplace("cc_versions_space_removed", [&](Column& col) {
     col << Sum(CRCounters::sCounters, &CRCounters::cc_versions_space_removed);
@@ -89,9 +81,8 @@ void CRTable::open() {
   columns.emplace("cc_ms_olap_tx", [&](Column& col) {
     col << Sum(CRCounters::sCounters, &CRCounters::cc_ms_olap_tx);
   });
-  columns.emplace("cc_ms_gc", [&](Column& col) {
-    col << Sum(CRCounters::sCounters, &CRCounters::cc_ms_gc);
-  });
+  columns.emplace("cc_ms_gc",
+                  [&](Column& col) { col << Sum(CRCounters::sCounters, &CRCounters::cc_ms_gc); });
   columns.emplace("cc_ms_gc_cm", [&](Column& col) {
     col << Sum(CRCounters::sCounters, &CRCounters::cc_ms_gc_cm);
   });

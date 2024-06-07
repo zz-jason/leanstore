@@ -73,9 +73,7 @@ public:
   /**
    * Constructor.
    */
-  error(const char* const origin, const int rc) noexcept
-      : runtime_error{origin},
-        _code{rc} {
+  error(const char* const origin, const int rc) noexcept : runtime_error{origin}, _code{rc} {
   }
 
   /**
@@ -97,8 +95,7 @@ public:
    */
   virtual const char* what() const noexcept {
     static thread_local char buffer[1024];
-    std::snprintf(buffer, sizeof(buffer), "%s: %s", origin(),
-                  ::mdb_strerror(code()));
+    std::snprintf(buffer, sizeof(buffer), "%s: %s", origin(), ::mdb_strerror(code()));
     return buffer;
   }
 };
@@ -241,12 +238,10 @@ namespace lmdb {
 
 namespace lmdb {
 inline static void env_create(MDB_env** env);
-inline static void env_open(MDB_env* env, const char* path, unsigned int flags,
-                            mode mode);
+inline static void env_open(MDB_env* env, const char* path, unsigned int flags, mode mode);
 #if MDB_VERSION_FULL >= MDB_VERINT(0, 9, 14)
 inline static void env_copy(MDB_env* env, const char* path, unsigned int flags);
-inline static void env_copy_fd(MDB_env* env, mdb_filehandle_t fd,
-                               unsigned int flags);
+inline static void env_copy_fd(MDB_env* env, mdb_filehandle_t fd, unsigned int flags);
 #else
 inline static void env_copy(MDB_env* env, const char* path);
 inline static void env_copy_fd(MDB_env* env, mdb_filehandle_t fd);
@@ -307,8 +302,7 @@ inline static void lmdb::env_open(MDB_env* const env, const char* const path,
  */
 inline static void lmdb::env_copy(MDB_env* const env,
 #if MDB_VERSION_FULL >= MDB_VERINT(0, 9, 14)
-                                  const char* const path,
-                                  const unsigned int flags = 0) {
+                                  const char* const path, const unsigned int flags = 0) {
   const int rc = ::mdb_env_copy2(env, path, flags);
 #else
                                   const char* const path) {
@@ -328,8 +322,7 @@ inline static void lmdb::env_copy(MDB_env* const env,
  */
 inline static void lmdb::env_copy_fd(MDB_env* const env,
 #if MDB_VERSION_FULL >= MDB_VERINT(0, 9, 14)
-                                     const mdb_filehandle_t fd,
-                                     const unsigned int flags = 0) {
+                                     const mdb_filehandle_t fd, const unsigned int flags = 0) {
   const int rc = ::mdb_env_copyfd2(env, fd, flags);
 #else
                                      const mdb_filehandle_t fd) {
@@ -389,8 +382,7 @@ inline static void lmdb::env_close(MDB_env* const env) noexcept {
  * @see
  * http://symas.com/mdb/doc/group__mdb.html#ga83f66cf02bfd42119451e9468dc58445
  */
-inline static void lmdb::env_set_flags(MDB_env* const env,
-                                       const unsigned int flags,
+inline static void lmdb::env_set_flags(MDB_env* const env, const unsigned int flags,
                                        const bool onoff = true) {
   const int rc = ::mdb_env_set_flags(env, flags, onoff ? 1 : 0);
   if (rc != MDB_SUCCESS) {
@@ -403,8 +395,7 @@ inline static void lmdb::env_set_flags(MDB_env* const env,
  * @see
  * http://symas.com/mdb/doc/group__mdb.html#ga2733aefc6f50beb49dd0c6eb19b067d9
  */
-inline static void lmdb::env_get_flags(MDB_env* const env,
-                                       unsigned int* const flags) {
+inline static void lmdb::env_get_flags(MDB_env* const env, unsigned int* const flags) {
   const int rc = ::mdb_env_get_flags(env, flags);
   if (rc != MDB_SUCCESS) {
     error::raise("mdb_env_get_flags", rc);
@@ -428,8 +419,7 @@ inline static void lmdb::env_get_path(MDB_env* const env, const char** path) {
  * @see
  * http://symas.com/mdb/doc/group__mdb.html#gaf1570e7c0e5a5d860fef1032cec7d5f2
  */
-inline static void lmdb::env_get_fd(MDB_env* const env,
-                                    mdb_filehandle_t* const fd) {
+inline static void lmdb::env_get_fd(MDB_env* const env, mdb_filehandle_t* const fd) {
   const int rc = ::mdb_env_get_fd(env, fd);
   if (rc != MDB_SUCCESS) {
     error::raise("mdb_env_get_fd", rc);
@@ -441,8 +431,7 @@ inline static void lmdb::env_get_fd(MDB_env* const env,
  * @see
  * http://symas.com/mdb/doc/group__mdb.html#gaa2506ec8dab3d969b0e609cd82e619e5
  */
-inline static void lmdb::env_set_mapsize(MDB_env* const env,
-                                         const std::size_t size) {
+inline static void lmdb::env_set_mapsize(MDB_env* const env, const std::size_t size) {
   const int rc = ::mdb_env_set_mapsize(env, size);
   if (rc != MDB_SUCCESS) {
     error::raise("mdb_env_set_mapsize", rc);
@@ -454,8 +443,7 @@ inline static void lmdb::env_set_mapsize(MDB_env* const env,
  * @see
  * http://symas.com/mdb/doc/group__mdb.html#gae687966c24b790630be2a41573fe40e2
  */
-inline static void lmdb::env_set_max_readers(MDB_env* const env,
-                                             const unsigned int count) {
+inline static void lmdb::env_set_max_readers(MDB_env* const env, const unsigned int count) {
   const int rc = ::mdb_env_set_maxreaders(env, count);
   if (rc != MDB_SUCCESS) {
     error::raise("mdb_env_set_maxreaders", rc);
@@ -467,8 +455,7 @@ inline static void lmdb::env_set_max_readers(MDB_env* const env,
  * @see
  * http://symas.com/mdb/doc/group__mdb.html#ga70e143cf11760d869f754c9c9956e6cc
  */
-inline static void lmdb::env_get_max_readers(MDB_env* const env,
-                                             unsigned int* const count) {
+inline static void lmdb::env_get_max_readers(MDB_env* const env, unsigned int* const count) {
   const int rc = ::mdb_env_get_maxreaders(env, count);
   if (rc != MDB_SUCCESS) {
     error::raise("mdb_env_get_maxreaders", rc);
@@ -480,8 +467,7 @@ inline static void lmdb::env_get_max_readers(MDB_env* const env,
  * @see
  * http://symas.com/mdb/doc/group__mdb.html#gaa2fc2f1f37cb1115e733b62cab2fcdbc
  */
-inline static void lmdb::env_set_max_dbs(MDB_env* const env,
-                                         const MDB_dbi count) {
+inline static void lmdb::env_set_max_dbs(MDB_env* const env, const MDB_dbi count) {
   const int rc = ::mdb_env_set_maxdbs(env, count);
   if (rc != MDB_SUCCESS) {
     error::raise("mdb_env_set_maxdbs", rc);
@@ -530,8 +516,7 @@ inline static void* lmdb::env_get_userctx(MDB_env* const env) {
 /* Procedural Interface: Transactions */
 
 namespace lmdb {
-inline static void txn_begin(MDB_env* env, MDB_txn* parent, unsigned int flags,
-                             MDB_txn** txn);
+inline static void txn_begin(MDB_env* env, MDB_txn* parent, unsigned int flags, MDB_txn** txn);
 inline static MDB_env* txn_env(MDB_txn* txn) noexcept;
 #ifdef LMDBXX_TXN_ID
 inline static std::size_t txn_id(MDB_txn* txn) noexcept;
@@ -616,25 +601,19 @@ inline static void lmdb::txn_renew(MDB_txn* const txn) {
 /* Procedural Interface: Databases */
 
 namespace lmdb {
-inline static void dbi_open(MDB_txn* txn, const char* name, unsigned int flags,
-                            MDB_dbi* dbi);
+inline static void dbi_open(MDB_txn* txn, const char* name, unsigned int flags, MDB_dbi* dbi);
 inline static void dbi_stat(MDB_txn* txn, MDB_dbi dbi, MDB_stat* stat);
 inline static void dbi_flags(MDB_txn* txn, MDB_dbi dbi, unsigned int* flags);
 inline static void dbi_close(MDB_env* env, MDB_dbi dbi) noexcept;
 inline static void dbi_drop(MDB_txn* txn, MDB_dbi dbi, bool del);
-inline static void dbi_set_compare(MDB_txn* txn, MDB_dbi dbi,
-                                   MDB_cmp_func* cmp);
-inline static void dbi_set_dupsort(MDB_txn* txn, MDB_dbi dbi,
-                                   MDB_cmp_func* cmp);
-inline static void dbi_set_relfunc(MDB_txn* txn, MDB_dbi dbi,
-                                   MDB_rel_func* rel);
+inline static void dbi_set_compare(MDB_txn* txn, MDB_dbi dbi, MDB_cmp_func* cmp);
+inline static void dbi_set_dupsort(MDB_txn* txn, MDB_dbi dbi, MDB_cmp_func* cmp);
+inline static void dbi_set_relfunc(MDB_txn* txn, MDB_dbi dbi, MDB_rel_func* rel);
 inline static void dbi_set_relctx(MDB_txn* txn, MDB_dbi dbi, void* ctx);
-inline static bool dbi_get(MDB_txn* txn, MDB_dbi dbi, const MDB_val* key,
-                           MDB_val* data);
-inline static bool dbi_put(MDB_txn* txn, MDB_dbi dbi, const MDB_val* key,
-                           MDB_val* data, unsigned int flags);
-inline static bool dbi_del(MDB_txn* txn, MDB_dbi dbi, const MDB_val* key,
-                           const MDB_val* data);
+inline static bool dbi_get(MDB_txn* txn, MDB_dbi dbi, const MDB_val* key, MDB_val* data);
+inline static bool dbi_put(MDB_txn* txn, MDB_dbi dbi, const MDB_val* key, MDB_val* data,
+                           unsigned int flags);
+inline static bool dbi_del(MDB_txn* txn, MDB_dbi dbi, const MDB_val* key, const MDB_val* data);
 // TODO: mdb_cmp()
 // TODO: mdb_dcmp()
 } // namespace lmdb
@@ -645,8 +624,7 @@ inline static bool dbi_del(MDB_txn* txn, MDB_dbi dbi, const MDB_val* key,
  * http://symas.com/mdb/doc/group__mdb.html#gac08cad5b096925642ca359a6d6f0562a
  */
 inline static void lmdb::dbi_open(MDB_txn* const txn, const char* const name,
-                                  const unsigned int flags,
-                                  MDB_dbi* const dbi) {
+                                  const unsigned int flags, MDB_dbi* const dbi) {
   const int rc = ::mdb_dbi_open(txn, name, flags, dbi);
   if (rc != MDB_SUCCESS) {
     error::raise("mdb_dbi_open", rc);
@@ -658,8 +636,7 @@ inline static void lmdb::dbi_open(MDB_txn* const txn, const char* const name,
  * @see
  * http://symas.com/mdb/doc/group__mdb.html#gae6c1069febe94299769dbdd032fadef6
  */
-inline static void lmdb::dbi_stat(MDB_txn* const txn, const MDB_dbi dbi,
-                                  MDB_stat* const result) {
+inline static void lmdb::dbi_stat(MDB_txn* const txn, const MDB_dbi dbi, MDB_stat* const result) {
   const int rc = ::mdb_stat(txn, dbi, result);
   if (rc != MDB_SUCCESS) {
     error::raise("mdb_stat", rc);
@@ -683,8 +660,7 @@ inline static void lmdb::dbi_flags(MDB_txn* const txn, const MDB_dbi dbi,
  * @see
  * http://symas.com/mdb/doc/group__mdb.html#ga52dd98d0c542378370cd6b712ff961b5
  */
-inline static void lmdb::dbi_close(MDB_env* const env,
-                                   const MDB_dbi dbi) noexcept {
+inline static void lmdb::dbi_close(MDB_env* const env, const MDB_dbi dbi) noexcept {
   ::mdb_dbi_close(env, dbi);
 }
 
@@ -692,8 +668,7 @@ inline static void lmdb::dbi_close(MDB_env* const env,
  * @see
  * http://symas.com/mdb/doc/group__mdb.html#gab966fab3840fc54a6571dfb32b00f2db
  */
-inline static void lmdb::dbi_drop(MDB_txn* const txn, const MDB_dbi dbi,
-                                  const bool del = false) {
+inline static void lmdb::dbi_drop(MDB_txn* const txn, const MDB_dbi dbi, const bool del = false) {
   const int rc = ::mdb_drop(txn, dbi, del ? 1 : 0);
   if (rc != MDB_SUCCESS) {
     error::raise("mdb_drop", rc);
@@ -744,8 +719,7 @@ inline static void lmdb::dbi_set_relfunc(MDB_txn* const txn, const MDB_dbi dbi,
  * @see
  * http://symas.com/mdb/doc/group__mdb.html#ga7c34246308cee01724a1839a8f5cc594
  */
-inline static void lmdb::dbi_set_relctx(MDB_txn* const txn, const MDB_dbi dbi,
-                                        void* const ctx) {
+inline static void lmdb::dbi_set_relctx(MDB_txn* const txn, const MDB_dbi dbi, void* const ctx) {
   const int rc = ::mdb_set_relctx(txn, dbi, ctx);
   if (rc != MDB_SUCCESS) {
     error::raise("mdb_set_relctx", rc);
@@ -758,8 +732,7 @@ inline static void lmdb::dbi_set_relctx(MDB_txn* const txn, const MDB_dbi dbi,
  * @see
  * http://symas.com/mdb/doc/group__mdb.html#ga8bf10cd91d3f3a83a34d04ce6b07992d
  */
-inline static bool lmdb::dbi_get(MDB_txn* const txn, const MDB_dbi dbi,
-                                 const MDB_val* const key,
+inline static bool lmdb::dbi_get(MDB_txn* const txn, const MDB_dbi dbi, const MDB_val* const key,
                                  MDB_val* const data) {
   const int rc = ::mdb_get(txn, dbi, const_cast<MDB_val*>(key), data);
   if (rc != MDB_SUCCESS && rc != MDB_NOTFOUND) {
@@ -774,9 +747,8 @@ inline static bool lmdb::dbi_get(MDB_txn* const txn, const MDB_dbi dbi,
  * @see
  * http://symas.com/mdb/doc/group__mdb.html#ga4fa8573d9236d54687c61827ebf8cac0
  */
-inline static bool lmdb::dbi_put(MDB_txn* const txn, const MDB_dbi dbi,
-                                 const MDB_val* const key, MDB_val* const data,
-                                 const unsigned int flags = 0) {
+inline static bool lmdb::dbi_put(MDB_txn* const txn, const MDB_dbi dbi, const MDB_val* const key,
+                                 MDB_val* const data, const unsigned int flags = 0) {
   const int rc = ::mdb_put(txn, dbi, const_cast<MDB_val*>(key), data, flags);
   if (rc != MDB_SUCCESS && rc != MDB_KEYEXIST) {
     error::raise("mdb_put", rc);
@@ -790,11 +762,9 @@ inline static bool lmdb::dbi_put(MDB_txn* const txn, const MDB_dbi dbi,
  * @see
  * http://symas.com/mdb/doc/group__mdb.html#gab8182f9360ea69ac0afd4a4eaab1ddb0
  */
-inline static bool lmdb::dbi_del(MDB_txn* const txn, const MDB_dbi dbi,
-                                 const MDB_val* const key,
+inline static bool lmdb::dbi_del(MDB_txn* const txn, const MDB_dbi dbi, const MDB_val* const key,
                                  const MDB_val* const data = nullptr) {
-  const int rc = ::mdb_del(txn, dbi, const_cast<MDB_val*>(key),
-                           const_cast<MDB_val*>(data));
+  const int rc = ::mdb_del(txn, dbi, const_cast<MDB_val*>(key), const_cast<MDB_val*>(data));
   if (rc != MDB_SUCCESS && rc != MDB_NOTFOUND) {
     error::raise("mdb_del", rc);
   }
@@ -810,10 +780,8 @@ inline static void cursor_close(MDB_cursor* cursor) noexcept;
 inline static void cursor_renew(MDB_txn* txn, MDB_cursor* cursor);
 inline static MDB_txn* cursor_txn(MDB_cursor* cursor) noexcept;
 inline static MDB_dbi cursor_dbi(MDB_cursor* cursor) noexcept;
-inline static bool cursor_get(MDB_cursor* cursor, MDB_val* key, MDB_val* data,
-                              MDB_cursor_op op);
-inline static void cursor_put(MDB_cursor* cursor, MDB_val* key, MDB_val* data,
-                              unsigned int flags);
+inline static bool cursor_get(MDB_cursor* cursor, MDB_val* key, MDB_val* data, MDB_cursor_op op);
+inline static void cursor_put(MDB_cursor* cursor, MDB_val* key, MDB_val* data, unsigned int flags);
 inline static void cursor_del(MDB_cursor* cursor, unsigned int flags);
 inline static void cursor_count(MDB_cursor* cursor, std::size_t& count);
 } // namespace lmdb
@@ -844,8 +812,7 @@ inline static void lmdb::cursor_close(MDB_cursor* const cursor) noexcept {
  * @see
  * http://symas.com/mdb/doc/group__mdb.html#gac8b57befb68793070c85ea813df481af
  */
-inline static void lmdb::cursor_renew(MDB_txn* const txn,
-                                      MDB_cursor* const cursor) {
+inline static void lmdb::cursor_renew(MDB_txn* const txn, MDB_cursor* const cursor) {
   const int rc = ::mdb_cursor_renew(txn, cursor);
   if (rc != MDB_SUCCESS) {
     error::raise("mdb_cursor_renew", rc);
@@ -873,9 +840,8 @@ inline static MDB_dbi lmdb::cursor_dbi(MDB_cursor* const cursor) noexcept {
  * @see
  * http://symas.com/mdb/doc/group__mdb.html#ga48df35fb102536b32dfbb801a47b4cb0
  */
-inline static bool lmdb::cursor_get(MDB_cursor* const cursor,
-                                    MDB_val* const key, MDB_val* const data,
-                                    const MDB_cursor_op op) {
+inline static bool lmdb::cursor_get(MDB_cursor* const cursor, MDB_val* const key,
+                                    MDB_val* const data, const MDB_cursor_op op) {
   const int rc = ::mdb_cursor_get(cursor, key, data, op);
   if (rc != MDB_SUCCESS && rc != MDB_NOTFOUND) {
     error::raise("mdb_cursor_get", rc);
@@ -888,9 +854,8 @@ inline static bool lmdb::cursor_get(MDB_cursor* const cursor,
  * @see
  * http://symas.com/mdb/doc/group__mdb.html#ga1f83ccb40011837ff37cc32be01ad91e
  */
-inline static void lmdb::cursor_put(MDB_cursor* const cursor,
-                                    MDB_val* const key, MDB_val* const data,
-                                    const unsigned int flags = 0) {
+inline static void lmdb::cursor_put(MDB_cursor* const cursor, MDB_val* const key,
+                                    MDB_val* const data, const unsigned int flags = 0) {
   const int rc = ::mdb_cursor_put(cursor, key, data, flags);
   if (rc != MDB_SUCCESS) {
     error::raise("mdb_cursor_put", rc);
@@ -902,8 +867,7 @@ inline static void lmdb::cursor_put(MDB_cursor* const cursor,
  * @see
  * http://symas.com/mdb/doc/group__mdb.html#ga26a52d3efcfd72e5bf6bd6960bf75f95
  */
-inline static void lmdb::cursor_del(MDB_cursor* const cursor,
-                                    const unsigned int flags = 0) {
+inline static void lmdb::cursor_del(MDB_cursor* const cursor, const unsigned int flags = 0) {
   const int rc = ::mdb_cursor_del(cursor, flags);
   if (rc != MDB_SUCCESS) {
     error::raise("mdb_cursor_del", rc);
@@ -915,8 +879,7 @@ inline static void lmdb::cursor_del(MDB_cursor* const cursor,
  * @see
  * http://symas.com/mdb/doc/group__mdb.html#ga4041fd1e1862c6b7d5f10590b86ffbe2
  */
-inline static void lmdb::cursor_count(MDB_cursor* const cursor,
-                                      std::size_t& count) {
+inline static void lmdb::cursor_count(MDB_cursor* const cursor, std::size_t& count) {
   const int rc = ::mdb_cursor_count(cursor, &count);
   if (rc != MDB_SUCCESS) {
     error::raise("mdb_cursor_count", rc);
@@ -1011,14 +974,16 @@ public:
   /**
    * Returns a pointer to the data.
    */
-  template <typename T> T* data() noexcept {
+  template <typename T>
+  T* data() noexcept {
     return reinterpret_cast<T*>(_val.mv_data);
   }
 
   /**
    * Returns a pointer to the data.
    */
-  template <typename T> const T* data() const noexcept {
+  template <typename T>
+  const T* data() const noexcept {
     return reinterpret_cast<T*>(_val.mv_data);
   }
 
@@ -1063,8 +1028,7 @@ public:
 
 #if !(defined(__COVERITY__) || defined(_MSC_VER))
 static_assert(std::is_pod<lmdb::val>::value, "lmdb::val must be a POD type");
-static_assert(sizeof(lmdb::val) == sizeof(MDB_val),
-              "sizeof(lmdb::val) != sizeof(MDB_val)");
+static_assert(sizeof(lmdb::val) == sizeof(MDB_val), "sizeof(lmdb::val) != sizeof(MDB_val)");
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1529,7 +1493,8 @@ public:
    * @param key
    * @throws lmdb::error on failure
    */
-  template <typename K> bool get(MDB_txn* const txn, const K& key) const {
+  template <typename K>
+  bool get(MDB_txn* const txn, const K& key) const {
     const lmdb::val k{&key, sizeof(K)};
     lmdb::val v{};
     return lmdb::dbi_get(txn, handle(), k, v);
@@ -1596,8 +1561,7 @@ public:
    * @throws lmdb::error on failure
    */
   template <typename K>
-  bool put(MDB_txn* const txn, const K& key,
-           const unsigned int flags = default_put_flags) {
+  bool put(MDB_txn* const txn, const K& key, const unsigned int flags = default_put_flags) {
     const lmdb::val k{&key, sizeof(K)};
     lmdb::val v{};
     return lmdb::dbi_put(txn, handle(), k, v, flags);
@@ -1671,7 +1635,8 @@ public:
    * @param key
    * @throws lmdb::error on failure
    */
-  template <typename K> bool del(MDB_txn* const txn, const K& key) {
+  template <typename K>
+  bool del(MDB_txn* const txn, const K& key) {
     const lmdb::val k{&key, sizeof(K)};
     return lmdb::dbi_del(txn, handle(), k);
   }

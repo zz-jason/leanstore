@@ -6,9 +6,7 @@ using namespace std;
 namespace leanstore {
 namespace utils {
 
-ZipfGenerator::ZipfGenerator(uint64_t exN, double theta)
-    : n(exN - 1),
-      theta(theta) {
+ZipfGenerator::ZipfGenerator(uint64_t exN, double theta) : n(exN - 1), theta(theta) {
   alpha = 1.0 / (1.0 - theta);
   zetan = zeta(n, theta);
   eta = (1.0 - std::pow(2.0 / n, 1.0 - theta)) / (1.0 - zeta(2, theta) / zetan);

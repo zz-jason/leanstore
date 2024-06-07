@@ -24,11 +24,10 @@ class ScopedHybridGuardTest : public ::testing::Test {
 protected:
   std::unique_ptr<LeanStore> mStore;
 
-  /// Create a leanstore instance for each test case
+  //! Create a leanstore instance for each test case
   ScopedHybridGuardTest() {
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
-    auto curTestName = std::string(curTest->test_case_name()) + "_" +
-                       std::string(curTest->name());
+    auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
     auto res = LeanStore::Open(StoreOption{
         .mCreateFromScratch = true,
         .mStoreDir = "/tmp/" + curTestName,
@@ -40,8 +39,7 @@ protected:
 
   ~ScopedHybridGuardTest() = default;
 
-  static storage::LatchMode getLatchMode(
-      const storage::ScopedHybridGuard& guard) {
+  static storage::LatchMode getLatchMode(const storage::ScopedHybridGuard& guard) {
     return guard.mLatchMode;
   }
 
@@ -74,8 +72,7 @@ TEST_F(ScopedHybridGuardTest, OptimisticSpinAfterExclusive) {
 
   mStore->ExecAsync(0, [&]() {
     // lock exclusively
-    storage::ScopedHybridGuard guard(latch,
-                                     storage::LatchMode::kPessimisticExclusive);
+    storage::ScopedHybridGuard guard(latch, storage::LatchMode::kPessimisticExclusive);
     EXPECT_EQ(getLatchMode(guard), storage::LatchMode::kPessimisticExclusive);
     EXPECT_EQ(getVersionOnLock(guard), 0);
     EXPECT_FALSE(isEncounteredContention(guard));
@@ -108,8 +105,7 @@ TEST_F(ScopedHybridGuardTest, OptimisticSpinAfterExclusive) {
         readStarted.store(true);
 
         // lock optimistically, spin until the latch is not locked
-        storage::ScopedHybridGuard guard(latch,
-                                         storage::LatchMode::kOptimisticSpin);
+        storage::ScopedHybridGuard guard(latch, storage::LatchMode::kOptimisticSpin);
         EXPECT_EQ(getLatchMode(guard), storage::LatchMode::kOptimisticSpin);
         EXPECT_EQ(getVersionOnLock(guard), 2);
         EXPECT_TRUE(isLocked(guard));
@@ -162,8 +158,7 @@ TEST_F(ScopedHybridGuardTest, OptimisticSpinBeforeExclusive) {
     }
 
     // lock exclusively
-    storage::ScopedHybridGuard guard(latch,
-                                     storage::LatchMode::kPessimisticExclusive);
+    storage::ScopedHybridGuard guard(latch, storage::LatchMode::kPessimisticExclusive);
     EXPECT_EQ(getLatchMode(guard), storage::LatchMode::kPessimisticExclusive);
     EXPECT_EQ(getVersionOnLock(guard), 0);
     EXPECT_FALSE(isEncounteredContention(guard));
@@ -189,8 +184,7 @@ TEST_F(ScopedHybridGuardTest, OptimisticSpinBeforeExclusive) {
     while (true) {
       JUMPMU_TRY() {
         // lock optimistically, spin until the latch is not locked
-        storage::ScopedHybridGuard guard(latch,
-                                         storage::LatchMode::kOptimisticSpin);
+        storage::ScopedHybridGuard guard(latch, storage::LatchMode::kOptimisticSpin);
         EXPECT_EQ(getLatchMode(guard), storage::LatchMode::kOptimisticSpin);
         if (jumped) {
           EXPECT_EQ(getVersionOnLock(guard), 2);
@@ -239,8 +233,7 @@ TEST_F(ScopedHybridGuardTest, MixedSharedMode) {
   // thread 0: pessimistic shared lock
   mStore->ExecAsync(0, [&]() {
     for (int i = 0; i < 1000; i++) {
-      auto guard = storage::ScopedHybridGuard(
-          latch, storage::LatchMode::kPessimisticShared);
+      auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kPessimisticShared);
       auto aCopy = a;
       auto bCopy = b;
       guard.Unlock();
@@ -254,8 +247,7 @@ TEST_F(ScopedHybridGuardTest, MixedSharedMode) {
       auto jumped(false);
       while (true) {
         JUMPMU_TRY() {
-          auto guard = storage::ScopedHybridGuard(
-              latch, storage::LatchMode::kOptimisticSpin);
+          auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kOptimisticSpin);
           auto aCopy = a;
           auto bCopy = b;
           guard.Unlock();
@@ -272,8 +264,7 @@ TEST_F(ScopedHybridGuardTest, MixedSharedMode) {
       jumped = false;
       while (true) {
         JUMPMU_TRY() {
-          auto guard = storage::ScopedHybridGuard(
-              latch, storage::LatchMode::kOptimisticOrJump);
+          auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kOptimisticOrJump);
           auto aCopy = a;
           auto bCopy = b;
           guard.Unlock();
@@ -302,8 +293,7 @@ TEST_F(ScopedHybridGuardTest, OptimisticBankTransfer) {
   mStore->ExecAsync(0, [&]() {
     for (int i = 0; i < 1000; i++) {
       {
-        auto guard = storage::ScopedHybridGuard(
-            latch, storage::LatchMode::kPessimisticExclusive);
+        auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kPessimisticExclusive);
         EXPECT_TRUE(isLocked(guard));
 
         // transfer random amount from a to b
@@ -313,8 +303,7 @@ TEST_F(ScopedHybridGuardTest, OptimisticBankTransfer) {
       }
 
       {
-        auto guard = storage::ScopedHybridGuard(
-            latch, storage::LatchMode::kPessimisticExclusive);
+        auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kPessimisticExclusive);
         EXPECT_TRUE(isLocked(guard));
 
         // transfer random amount from b to a
@@ -332,19 +321,18 @@ TEST_F(ScopedHybridGuardTest, OptimisticBankTransfer) {
 
     for (int i = 0; i < 1000; i++) {
       // lock optimistically, spin until the latch is not exclusively locked
-      storage::ScopedHybridGuard::GetOptimistic(
-          latch, storage::LatchMode::kOptimisticSpin, [&]() {
-            aCopy = a;
-            bCopy = b;
-          });
+      storage::ScopedHybridGuard::GetOptimistic(latch, storage::LatchMode::kOptimisticSpin, [&]() {
+        aCopy = a;
+        bCopy = b;
+      });
       EXPECT_EQ(aCopy + bCopy, 100);
 
       // lock optimistically, jump if the latch is exclusively locked
-      storage::ScopedHybridGuard::GetOptimistic(
-          latch, storage::LatchMode::kOptimisticOrJump, [&]() {
-            aCopy = a;
-            bCopy = b;
-          });
+      storage::ScopedHybridGuard::GetOptimistic(latch, storage::LatchMode::kOptimisticOrJump,
+                                                [&]() {
+                                                  aCopy = a;
+                                                  bCopy = b;
+                                                });
       EXPECT_EQ(aCopy + bCopy, 100);
     }
   });
@@ -362,8 +350,7 @@ TEST_F(ScopedHybridGuardTest, PessimisticBankTransfer) {
   mStore->ExecAsync(0, [&]() {
     for (int i = 0; i < 1000; i++) {
       {
-        auto guard = storage::ScopedHybridGuard(
-            latch, storage::LatchMode::kPessimisticExclusive);
+        auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kPessimisticExclusive);
         EXPECT_TRUE(isLocked(guard));
 
         // transfer random amount from a to b
@@ -373,8 +360,7 @@ TEST_F(ScopedHybridGuardTest, PessimisticBankTransfer) {
       }
 
       {
-        auto guard = storage::ScopedHybridGuard(
-            latch, storage::LatchMode::kPessimisticExclusive);
+        auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kPessimisticExclusive);
         EXPECT_TRUE(isLocked(guard));
 
         // transfer random amount from b to a
@@ -388,8 +374,7 @@ TEST_F(ScopedHybridGuardTest, PessimisticBankTransfer) {
   // thread 1: check if a + b is always 100, 1000 times
   mStore->ExecAsync(1, [&]() {
     for (int i = 0; i < 1000; i++) {
-      auto guard = storage::ScopedHybridGuard(
-          latch, storage::LatchMode::kPessimisticShared);
+      auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kPessimisticShared);
       auto aCopy = a;
       auto bCopy = b;
       guard.Unlock();
