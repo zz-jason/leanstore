@@ -34,7 +34,7 @@ namespace leanstore::storage::btree {
 // Missing points: FatTuple::remove, garbage leaves can escape from us
 class TransactionKV : public BasicKV {
 public:
-  /// Graveyard to store removed tuples for long-running transactions.
+  //! Graveyard to store removed tuples for long-running transactions.
   BasicKV* mGraveyard;
 
   TransactionKV() {
@@ -49,13 +49,11 @@ public:
 
   OpCode Insert(Slice key, Slice val) override;
 
-  OpCode UpdatePartial(Slice key, MutValCallback updateCallBack,
-                       UpdateDesc& updateDesc) override;
+  OpCode UpdatePartial(Slice key, MutValCallback updateCallBack, UpdateDesc& updateDesc) override;
 
   OpCode Remove(Slice key) override;
 
-  void Init(leanstore::LeanStore* store, TREEID treeId, BTreeConfig config,
-            BasicKV* graveyard);
+  void Init(leanstore::LeanStore* store, TREEID treeId, BTreeConfig config, BasicKV* graveyard);
 
   SpaceCheckResult CheckSpaceUtilization(BufferFrame& bf) override;
 
@@ -63,8 +61,8 @@ public:
   // operations during recovery
   void undo(const uint8_t* walEntryPtr, const uint64_t) override;
 
-  void GarbageCollect(const uint8_t* entryPtr, WORKERID versionWorkerId,
-                      TXID versionTxId, bool calledBefore) override;
+  void GarbageCollect(const uint8_t* entryPtr, WORKERID versionWorkerId, TXID versionTxId,
+                      bool calledBefore) override;
 
   void unlock(const uint8_t* walEntryPtr) override;
 
@@ -77,13 +75,11 @@ private:
   template <bool asc = true>
   OpCode scan4LongRunningTx(Slice key, ScanCallback callback);
 
-  inline static bool triggerPageWiseGarbageCollection(
-      GuardedBufferFrame<BTreeNode>& guardedNode) {
+  inline static bool triggerPageWiseGarbageCollection(GuardedBufferFrame<BTreeNode>& guardedNode) {
     return guardedNode->mHasGarbage;
   }
 
-  inline std::tuple<OpCode, uint16_t> getVisibleTuple(Slice payload,
-                                                      ValCallback callback) {
+  inline std::tuple<OpCode, uint16_t> getVisibleTuple(Slice payload, ValCallback callback) {
     std::tuple<OpCode, uint16_t> ret;
     while (true) {
       JUMPMU_TRY() {
@@ -100,8 +96,7 @@ private:
           JUMPMU_RETURN ret;
         }
         default: {
-          Log::Error("Unhandled tuple format: {}",
-                     TupleFormatUtil::ToString(tuple->mFormat));
+          Log::Error("Unhandled tuple format: {}", TupleFormatUtil::ToString(tuple->mFormat));
         }
         }
       }
@@ -110,8 +105,7 @@ private:
     }
   }
 
-  void insertAfterRemove(BTreePessimisticExclusiveIterator& xIter, Slice key,
-                         Slice val);
+  void insertAfterRemove(BTreePessimisticExclusiveIterator& xIter, Slice key, Slice val);
 
   void undoLastInsert(const WalTxInsert* walInsert);
 
@@ -120,15 +114,13 @@ private:
   void undoLastRemove(const WalTxRemove* walRemove);
 
 public:
-  static Result<TransactionKV*> Create(leanstore::LeanStore* store,
-                                       const std::string& treeName,
+  static Result<TransactionKV*> Create(leanstore::LeanStore* store, const std::string& treeName,
                                        BTreeConfig config, BasicKV* graveyard);
 
-  inline static void InsertToNode(GuardedBufferFrame<BTreeNode>& guardedNode,
-                                  Slice key, Slice val, WORKERID workerId,
-                                  TXID txStartTs, int32_t& slotId) {
+  inline static void InsertToNode(GuardedBufferFrame<BTreeNode>& guardedNode, Slice key, Slice val,
+                                  WORKERID workerId, TXID txStartTs, int32_t& slotId) {
     auto totalValSize = sizeof(ChainedTuple) + val.size();
-    slotId = guardedNode->insertDoNotCopyPayload(key, totalValSize, slotId);
+    slotId = guardedNode->InsertDoNotCopyPayload(key, totalValSize, slotId);
     auto* tupleAddr = guardedNode->ValData(slotId);
     new (tupleAddr) ChainedTuple(workerId, txStartTs, val);
   }
@@ -137,12 +129,11 @@ public:
     return cr::Worker::My().mStore->mStoreOption.mWorkerThreads;
   }
 
-  /// Updates the value stored in FatTuple. The former newest version value is
-  /// moved to the tail.
-  /// @return false to fallback to chained mode
-  static bool UpdateInFatTuple(BTreePessimisticExclusiveIterator& xIter,
-                               Slice key, MutValCallback updateCallBack,
-                               UpdateDesc& updateDesc);
+  //! Updates the value stored in FatTuple. The former newest version value is
+  //! moved to the tail.
+  //! @return false to fallback to chained mode
+  static bool UpdateInFatTuple(BTreePessimisticExclusiveIterator& xIter, Slice key,
+                               MutValCallback updateCallBack, UpdateDesc& updateDesc);
 };
 
 } // namespace leanstore::storage::btree

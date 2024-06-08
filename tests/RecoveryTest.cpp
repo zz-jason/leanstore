@@ -30,8 +30,7 @@ protected:
   RecoveryTest() {
     // Create a leanstore instance for the test case
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
-    auto curTestName = std::string(curTest->test_case_name()) + "_" +
-                       std::string(curTest->name());
+    auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
     auto res = LeanStore::Open(StoreOption{
         .mCreateFromScratch = true,
         .mStoreDir = "/tmp/" + curTestName,
@@ -77,12 +76,12 @@ TEST_F(RecoveryTest, SerializeAndDeserialize) {
   });
 
   Log::Info("Buffer Pool Before Shutdown:");
-  mStore->mBufferManager->DoWithBufferFrameIf(
-      [](BufferFrame& bf) { return !bf.IsFree(); },
-      [](BufferFrame& bf [[maybe_unused]]) {
-        Log::Info("pageId={}, treeId={}, isDirty={}", bf.mHeader.mPageId,
-                  bf.mPage.mBTreeId, bf.IsDirty());
-      });
+  mStore->mBufferManager->DoWithBufferFrameIf([](BufferFrame& bf) { return !bf.IsFree(); },
+                                              [](BufferFrame& bf [[maybe_unused]]) {
+                                                Log::Info("pageId={}, treeId={}, isDirty={}",
+                                                          bf.mHeader.mPageId, bf.mPage.mBTreeId,
+                                                          bf.IsDirty());
+                                              });
 
   mStore->ExecSync(0, [&]() {
     rapidjson::Document doc(rapidjson::kObjectType);
@@ -211,8 +210,7 @@ static std::string GenerateValue(int ordinalPrefix, size_t valSize) {
     return prefix.substr(0, valSize);
   }
 
-  return prefix +
-         utils::RandomGenerator::RandAlphString(valSize - prefix.size());
+  return prefix + utils::RandomGenerator::RandAlphString(valSize - prefix.size());
 }
 
 TEST_F(RecoveryTest, RecoverAfterUpdate) {
@@ -267,8 +265,7 @@ TEST_F(RecoveryTest, RecoverAfterUpdate) {
       for (auto j = 1u; j <= 3; j++) {
         val = GenerateValue(j, valSize);
         cr::Worker::My().StartTx();
-        EXPECT_EQ(btree->UpdatePartial(key, updateCallBack, *updateDesc),
-                  OpCode::kOK);
+        EXPECT_EQ(btree->UpdatePartial(key, updateCallBack, *updateDesc), OpCode::kOK);
         cr::Worker::My().CommitTx();
       }
     }

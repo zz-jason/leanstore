@@ -23,7 +23,8 @@ class BMTable;
 } // namespace leanstore::profiling
 
 namespace leanstore::storage {
-template <typename T> class GuardedBufferFrame;
+template <typename T>
+class GuardedBufferFrame;
 } // namespace leanstore::storage
 
 namespace leanstore::storage {

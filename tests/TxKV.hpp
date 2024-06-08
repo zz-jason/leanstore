@@ -57,8 +57,8 @@ public:
   virtual void AbortTx() = 0;
 
   // DDL operations
-  [[nodiscard]] virtual Result<TableRef*> CreateTable(
-      const std::string& tblName, bool implicitTx = false) = 0;
+  [[nodiscard]] virtual Result<TableRef*> CreateTable(const std::string& tblName,
+                                                      bool implicitTx = false) = 0;
 
   [[nodiscard]] virtual Result<void> DropTable(const std::string& tblName,
                                                bool implicitTx = false) = 0;
@@ -67,12 +67,10 @@ public:
   [[nodiscard]] virtual Result<void> Put(TableRef* tbl, Slice key, Slice val,
                                          bool implicitTx = false) = 0;
 
-  [[nodiscard]] virtual Result<uint64_t> Update(TableRef* tbl, Slice key,
-                                                Slice val,
+  [[nodiscard]] virtual Result<uint64_t> Update(TableRef* tbl, Slice key, Slice val,
                                                 bool implicitTx = false) = 0;
 
-  [[nodiscard]] virtual Result<uint64_t> Get(TableRef* tbl, Slice key,
-                                             std::string& val,
+  [[nodiscard]] virtual Result<uint64_t> Get(TableRef* tbl, Slice key, std::string& val,
                                              bool implicitTx = false) = 0;
 
   [[nodiscard]] virtual Result<uint64_t> Delete(TableRef* tbl, Slice key,
@@ -145,8 +143,7 @@ public:
   [[nodiscard]] Result<uint64_t> Update(TableRef* tbl, Slice key, Slice val,
                                         bool implicitTx = false) override;
 
-  [[nodiscard]] Result<uint64_t> Delete(TableRef* tbl, Slice key,
-                                        bool implicitTx = false) override;
+  [[nodiscard]] Result<uint64_t> Delete(TableRef* tbl, Slice key, bool implicitTx = false) override;
 };
 
 class LeanStoreMVCCTableRef : public TableRef {
@@ -157,8 +154,8 @@ public:
 //------------------------------------------------------------------------------
 // StoreFactory
 //------------------------------------------------------------------------------
-inline std::unique_ptr<Store> StoreFactory::NewLeanStoreMVCC(
-    const std::string& storeDir, uint32_t sessionLimit) {
+inline std::unique_ptr<Store> StoreFactory::NewLeanStoreMVCC(const std::string& storeDir,
+                                                             uint32_t sessionLimit) {
   return std::make_unique<LeanStoreMVCC>(storeDir, sessionLimit);
 }
 
@@ -187,23 +184,21 @@ inline void LeanStoreMVCCSession::SetTxMode(TxMode txMode) {
 }
 
 inline void LeanStoreMVCCSession::StartTx() {
-  mStore->mLeanStore->ExecSync(
-      mWorkerId, [&]() { cr::Worker::My().StartTx(mTxMode, mIsolationLevel); });
+  mStore->mLeanStore->ExecSync(mWorkerId,
+                               [&]() { cr::Worker::My().StartTx(mTxMode, mIsolationLevel); });
 }
 
 inline void LeanStoreMVCCSession::CommitTx() {
-  mStore->mLeanStore->ExecSync(mWorkerId,
-                               [&]() { cr::Worker::My().CommitTx(); });
+  mStore->mLeanStore->ExecSync(mWorkerId, [&]() { cr::Worker::My().CommitTx(); });
 }
 
 inline void LeanStoreMVCCSession::AbortTx() {
-  mStore->mLeanStore->ExecSync(mWorkerId,
-                               [&]() { cr::Worker::My().AbortTx(); });
+  mStore->mLeanStore->ExecSync(mWorkerId, [&]() { cr::Worker::My().AbortTx(); });
 }
 
 // DDL operations
-inline Result<TableRef*> LeanStoreMVCCSession::CreateTable(
-    const std::string& tblName, bool implicitTx [[maybe_unused]]) {
+inline Result<TableRef*> LeanStoreMVCCSession::CreateTable(const std::string& tblName,
+                                                           bool implicitTx [[maybe_unused]]) {
   storage::btree::TransactionKV* btree{nullptr};
   mStore->mLeanStore->ExecSync(mWorkerId, [&]() {
     auto res = mStore->mLeanStore->CreateTransactionKV(tblName);
@@ -217,8 +212,7 @@ inline Result<TableRef*> LeanStoreMVCCSession::CreateTable(
   return reinterpret_cast<TableRef*>(btree);
 }
 
-inline Result<void> LeanStoreMVCCSession::DropTable(const std::string& tblName,
-                                                    bool implicitTx) {
+inline Result<void> LeanStoreMVCCSession::DropTable(const std::string& tblName, bool implicitTx) {
   mStore->mLeanStore->ExecSync(mWorkerId, [&]() {
     if (implicitTx) {
       cr::Worker::My().StartTx(mTxMode, mIsolationLevel);
@@ -232,8 +226,8 @@ inline Result<void> LeanStoreMVCCSession::DropTable(const std::string& tblName,
 }
 
 // DML operations
-inline Result<void> LeanStoreMVCCSession::Put(TableRef* tbl, Slice key,
-                                              Slice val, bool implicitTx) {
+inline Result<void> LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
+                                              bool implicitTx) {
   auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
   OpCode res;
   mStore->mLeanStore->ExecSync(mWorkerId, [&]() {
@@ -252,14 +246,12 @@ inline Result<void> LeanStoreMVCCSession::Put(TableRef* tbl, Slice key,
                         Slice((const uint8_t*)val.data(), val.size()));
   });
   if (res != OpCode::kOK) {
-    return std::unexpected(
-        utils::Error::General("Put failed: " + ToString(res)));
+    return std::unexpected(utils::Error::General("Put failed: " + ToString(res)));
   }
   return {};
 }
 
-inline Result<uint64_t> LeanStoreMVCCSession::Get(TableRef* tbl, Slice key,
-                                                  std::string& val,
+inline Result<uint64_t> LeanStoreMVCCSession::Get(TableRef* tbl, Slice key, std::string& val,
                                                   bool implicitTx) {
   auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
   OpCode res;
@@ -280,8 +272,7 @@ inline Result<uint64_t> LeanStoreMVCCSession::Get(TableRef* tbl, Slice key,
       }
     });
 
-    res = btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
-                        copyValueOut);
+    res = btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copyValueOut);
   });
   if (res == OpCode::kOK) {
     return 1;
@@ -292,8 +283,7 @@ inline Result<uint64_t> LeanStoreMVCCSession::Get(TableRef* tbl, Slice key,
   return std::unexpected(utils::Error::General("Get failed: " + ToString(res)));
 }
 
-inline Result<uint64_t> LeanStoreMVCCSession::Update(TableRef* tbl, Slice key,
-                                                     Slice val,
+inline Result<uint64_t> LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
                                                      bool implicitTx) {
   auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
   OpCode res;
@@ -318,8 +308,8 @@ inline Result<uint64_t> LeanStoreMVCCSession::Update(TableRef* tbl, Slice key,
     updateDesc->mNumSlots = 1;
     updateDesc->mUpdateSlots[0].mOffset = 0;
     updateDesc->mUpdateSlots[0].mSize = val.size();
-    res = btree->UpdatePartial(Slice((const uint8_t*)key.data(), key.size()),
-                               updateCallBack, *updateDesc);
+    res = btree->UpdatePartial(Slice((const uint8_t*)key.data(), key.size()), updateCallBack,
+                               *updateDesc);
   });
   if (res == OpCode::kOK) {
     return 1;
@@ -327,12 +317,10 @@ inline Result<uint64_t> LeanStoreMVCCSession::Update(TableRef* tbl, Slice key,
   if (res == OpCode::kNotFound) {
     return 0;
   }
-  return std::unexpected(
-      utils::Error::General("Update failed: " + ToString(res)));
+  return std::unexpected(utils::Error::General("Update failed: " + ToString(res)));
 }
 
-inline Result<uint64_t> LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key,
-                                                     bool implicitTx) {
+inline Result<uint64_t> LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key, bool implicitTx) {
   auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
   OpCode res;
   mStore->mLeanStore->ExecSync(mWorkerId, [&]() {
@@ -355,8 +343,7 @@ inline Result<uint64_t> LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key,
   if (res == OpCode::kNotFound) {
     return 0;
   }
-  return std::unexpected(
-      utils::Error::General("Delete failed: " + ToString(res)));
+  return std::unexpected(utils::Error::General("Delete failed: " + ToString(res)));
 }
 
 } // namespace test

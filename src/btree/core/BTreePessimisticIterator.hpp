@@ -12,52 +12,51 @@
 using namespace leanstore::storage;
 
 namespace leanstore::storage::btree {
-using LeafCallback =
-    std::function<void(GuardedBufferFrame<BTreeNode>& guardedLeaf)>;
+using LeafCallback = std::function<void(GuardedBufferFrame<BTreeNode>& guardedLeaf)>;
 
 // Iterator
 class BTreePessimisticIterator : public BTreeIteratorInterface {
   friend class BTreeGeneric;
 
 public:
-  /// The working btree, all the seek operations are based on this tree.
+  //! The working btree, all the seek operations are based on this tree.
   BTreeGeneric& mBTree;
 
   const LatchMode mMode;
 
-  /// mFuncEnterLeaf is called when the target leaf node is found.
+  //! mFuncEnterLeaf is called when the target leaf node is found.
   LeafCallback mFuncEnterLeaf = nullptr;
 
-  /// mFuncExitLeaf is called when leaving the target leaf node.
+  //! mFuncExitLeaf is called when leaving the target leaf node.
   LeafCallback mFuncExitLeaf = nullptr;
 
-  /// mFuncCleanUp is called when both parent and leaf are unlatched and before
-  /// seeking for another key.
+  //! mFuncCleanUp is called when both parent and leaf are unlatched and before
+  //! seeking for another key.
   std::function<void()> mFuncCleanUp = nullptr;
 
-  /// The slot id of the current key in the leaf.
-  /// Reset after every leaf change.
+  //! The slot id of the current key in the leaf.
+  //! Reset after every leaf change.
   int32_t mSlotId = -1;
 
-  /// Indicates whether the prefix is copied in mBuffer
+  //! Indicates whether the prefix is copied in mBuffer
   bool mIsPrefixCopied = false;
 
-  /// The latched leaf node of the current key.
+  //! The latched leaf node of the current key.
   GuardedBufferFrame<BTreeNode> mGuardedLeaf;
 
-  /// The latched parent node of mGuardedLeaf.
+  //! The latched parent node of mGuardedLeaf.
   GuardedBufferFrame<BTreeNode> mGuardedParent;
 
-  /// The slot id in mGuardedParent of mGuardedLeaf.
+  //! The slot id in mGuardedParent of mGuardedLeaf.
   int32_t mLeafPosInParent = -1;
 
-  /// Used to buffer the key at mSlotId or lower/upper fence keys.
+  //! Used to buffer the key at mSlotId or lower/upper fence keys.
   std::basic_string<uint8_t> mBuffer;
 
-  /// The length of the lower or upper fence key.
+  //! The length of the lower or upper fence key.
   uint16_t mFenceSize = 0;
 
-  /// Tndicates whether the mFenceSize is for lower or upper fence key.
+  //! Tndicates whether the mFenceSize is for lower or upper fence key.
   bool mIsUsingUpperFence;
 
 protected:
@@ -67,32 +66,30 @@ protected:
     while (true) {
       mLeafPosInParent = -1;
       JUMPMU_TRY() {
-        mGuardedParent = GuardedBufferFrame<BTreeNode>(
-            mBTree.mStore->mBufferManager.get(), mBTree.mMetaNodeSwip);
+        mGuardedParent = GuardedBufferFrame<BTreeNode>(mBTree.mStore->mBufferManager.get(),
+                                                       mBTree.mMetaNodeSwip);
         guardedChild.unlock();
 
         // it's the root node right now.
-        guardedChild = GuardedBufferFrame<BTreeNode>(
-            mBTree.mStore->mBufferManager.get(), mGuardedParent,
-            mGuardedParent->mRightMostChildSwip);
+        guardedChild =
+            GuardedBufferFrame<BTreeNode>(mBTree.mStore->mBufferManager.get(), mGuardedParent,
+                                          mGuardedParent->mRightMostChildSwip);
 
         for (uint16_t level = 0; !guardedChild->mIsLeaf; level++) {
           COUNTERS_BLOCK() {
             WorkerCounters::MyCounters().dt_inner_page[mBTree.mTreeId]++;
           }
-          mLeafPosInParent = guardedChild->lowerBound<false>(key);
-          auto* childSwip =
-              guardedChild->ChildSwipIncludingRightMost(mLeafPosInParent);
+          mLeafPosInParent = guardedChild->LowerBound<false>(key);
+          auto* childSwip = guardedChild->ChildSwipIncludingRightMost(mLeafPosInParent);
           mGuardedParent = std::move(guardedChild);
           if (level == mBTree.mHeight - 1) {
-            guardedChild = GuardedBufferFrame<BTreeNode>(
-                mBTree.mStore->mBufferManager.get(), mGuardedParent, *childSwip,
-                mode);
+            guardedChild = GuardedBufferFrame<BTreeNode>(mBTree.mStore->mBufferManager.get(),
+                                                         mGuardedParent, *childSwip, mode);
           } else {
             // latch the middle node optimistically
-            guardedChild = GuardedBufferFrame<BTreeNode>(
-                mBTree.mStore->mBufferManager.get(), mGuardedParent, *childSwip,
-                LatchMode::kOptimisticSpin);
+            guardedChild =
+                GuardedBufferFrame<BTreeNode>(mBTree.mStore->mBufferManager.get(), mGuardedParent,
+                                              *childSwip, LatchMode::kOptimisticSpin);
           }
         }
 
@@ -123,8 +120,7 @@ protected:
     }
 
     // TODO: refactor when we get ride of serializability tests
-    if (mMode == LatchMode::kPessimisticShared ||
-        mMode == LatchMode::kPessimisticExclusive) {
+    if (mMode == LatchMode::kPessimisticShared || mMode == LatchMode::kPessimisticExclusive) {
       findLeafAndLatch(mGuardedLeaf, key, mMode);
     } else {
       Log::Fatal("Unsupported latch mode: {}", uint64_t(mMode));
@@ -132,8 +128,7 @@ protected:
   }
 
 public:
-  BTreePessimisticIterator(BTreeGeneric& tree,
-                           const LatchMode mode = LatchMode::kPessimisticShared)
+  BTreePessimisticIterator(BTreeGeneric& tree, const LatchMode mode = LatchMode::kPessimisticShared)
       : mBTree(tree),
         mMode(mode),
         mBuffer() {
@@ -156,7 +151,7 @@ public:
     if (mSlotId == -1) {
       return SeekExact(key) ? OpCode::kOK : OpCode::kNotFound;
     }
-    mSlotId = mGuardedLeaf->linearSearchWithBias<true>(key, mSlotId, higher);
+    mSlotId = mGuardedLeaf->LinearSearchWithBias<true>(key, mSlotId, higher);
     if (mSlotId == -1) {
       return SeekExact(key) ? OpCode::kOK : OpCode::kNotFound;
     }
@@ -167,15 +162,15 @@ public:
     if (mSlotId == -1 || !KeyInCurrentNode(key)) {
       gotoPage(key);
     }
-    mSlotId = mGuardedLeaf->lowerBound<true>(key);
+    mSlotId = mGuardedLeaf->LowerBound<true>(key);
     return mSlotId != -1;
   }
 
   virtual bool Seek(Slice key) override {
-    if (mSlotId == -1 || mGuardedLeaf->compareKeyWithBoundaries(key) != 0) {
+    if (mSlotId == -1 || mGuardedLeaf->CompareKeyWithBoundaries(key) != 0) {
       gotoPage(key);
     }
-    mSlotId = mGuardedLeaf->lowerBound<false>(key);
+    mSlotId = mGuardedLeaf->LowerBound<false>(key);
     if (mSlotId < mGuardedLeaf->mNumSeps) {
       return true;
     }
@@ -188,12 +183,12 @@ public:
   }
 
   virtual bool SeekForPrev(Slice key) override {
-    if (mSlotId == -1 || mGuardedLeaf->compareKeyWithBoundaries(key) != 0) {
+    if (mSlotId == -1 || mGuardedLeaf->CompareKeyWithBoundaries(key) != 0) {
       gotoPage(key);
     }
 
     bool isEqual = false;
-    mSlotId = mGuardedLeaf->lowerBound<false>(key, &isEqual);
+    mSlotId = mGuardedLeaf->LowerBound<false>(key, &isEqual);
     if (isEqual == true) {
       return true;
     }
@@ -238,16 +233,14 @@ public:
         mFuncCleanUp = nullptr;
       }
 
-      if (utils::tlsStore->mStoreOption.mEnableOptimisticScan &&
-          mLeafPosInParent != -1) {
+      if (utils::tlsStore->mStoreOption.mEnableOptimisticScan && mLeafPosInParent != -1) {
         JUMPMU_TRY() {
           if ((mLeafPosInParent + 1) <= mGuardedParent->mNumSeps) {
             int32_t nextLeafPos = mLeafPosInParent + 1;
-            auto* nextLeafSwip =
-                mGuardedParent->ChildSwipIncludingRightMost(nextLeafPos);
-            GuardedBufferFrame<BTreeNode> guardedNextLeaf(
-                mBTree.mStore->mBufferManager.get(), mGuardedParent,
-                *nextLeafSwip, LatchMode::kOptimisticOrJump);
+            auto* nextLeafSwip = mGuardedParent->ChildSwipIncludingRightMost(nextLeafPos);
+            GuardedBufferFrame<BTreeNode> guardedNextLeaf(mBTree.mStore->mBufferManager.get(),
+                                                          mGuardedParent, *nextLeafSwip,
+                                                          LatchMode::kOptimisticOrJump);
             if (mMode == LatchMode::kPessimisticExclusive) {
               guardedNextLeaf.TryToExclusiveMayJump();
             } else {
@@ -293,7 +286,7 @@ public:
         }
         continue;
       }
-      mSlotId = mGuardedLeaf->lowerBound<false>(assembedFence());
+      mSlotId = mGuardedLeaf->LowerBound<false>(assembedFence());
       if (mSlotId == mGuardedLeaf->mNumSeps) {
         continue;
       }
@@ -343,15 +336,14 @@ public:
         mFuncCleanUp = nullptr;
       }
 
-      if (utils::tlsStore->mStoreOption.mEnableOptimisticScan &&
-          mLeafPosInParent != -1) {
+      if (utils::tlsStore->mStoreOption.mEnableOptimisticScan && mLeafPosInParent != -1) {
         JUMPMU_TRY() {
           if ((mLeafPosInParent - 1) >= 0) {
             int32_t nextLeafPos = mLeafPosInParent - 1;
             auto* nextLeafSwip = mGuardedParent->ChildSwip(nextLeafPos);
-            GuardedBufferFrame<BTreeNode> guardedNextLeaf(
-                mBTree.mStore->mBufferManager.get(), mGuardedParent,
-                *nextLeafSwip, LatchMode::kOptimisticOrJump);
+            GuardedBufferFrame<BTreeNode> guardedNextLeaf(mBTree.mStore->mBufferManager.get(),
+                                                          mGuardedParent, *nextLeafSwip,
+                                                          LatchMode::kOptimisticOrJump);
             if (mMode == LatchMode::kPessimisticExclusive) {
               guardedNextLeaf.TryToExclusiveMayJump();
             } else {
@@ -390,7 +382,7 @@ public:
         continue;
       }
       bool isEqual = false;
-      mSlotId = mGuardedLeaf->lowerBound<false>(assembedFence(), &isEqual);
+      mSlotId = mGuardedLeaf->LowerBound<false>(assembedFence(), &isEqual);
       if (isEqual) {
         return true;
       }
@@ -404,23 +396,21 @@ public:
   }
 
   virtual void AssembleKey() {
-    if (auto fullKeySize = mGuardedLeaf->getFullKeyLen(mSlotId);
-        mBuffer.size() < fullKeySize) {
+    if (auto fullKeySize = mGuardedLeaf->GetFullKeyLen(mSlotId); mBuffer.size() < fullKeySize) {
       mBuffer.resize(fullKeySize, 0);
       mIsPrefixCopied = false;
     }
 
     if (!mIsPrefixCopied) {
-      mGuardedLeaf->copyPrefix(&mBuffer[0]);
+      mGuardedLeaf->CopyPrefix(&mBuffer[0]);
       mIsPrefixCopied = true;
     }
-    mGuardedLeaf->copyKeyWithoutPrefix(mSlotId,
-                                       &mBuffer[mGuardedLeaf->mPrefixSize]);
+    mGuardedLeaf->CopyKeyWithoutPrefix(mSlotId, &mBuffer[mGuardedLeaf->mPrefixSize]);
   }
 
   virtual Slice key() override {
-    LS_DCHECK(mBuffer.size() >= mGuardedLeaf->getFullKeyLen(mSlotId));
-    return Slice(&mBuffer[0], mGuardedLeaf->getFullKeyLen(mSlotId));
+    LS_DCHECK(mBuffer.size() >= mGuardedLeaf->GetFullKeyLen(mSlotId));
+    return Slice(&mBuffer[0], mGuardedLeaf->GetFullKeyLen(mSlotId));
   }
 
   virtual Slice KeyWithoutPrefix() override {
@@ -432,7 +422,7 @@ public:
   }
 
   virtual bool KeyInCurrentNode(Slice key) {
-    return mGuardedLeaf->compareKeyWithBoundaries(key) == 0;
+    return mGuardedLeaf->CompareKeyWithBoundaries(key) == 0;
   }
 
   bool IsLastOne() {

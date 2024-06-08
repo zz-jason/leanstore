@@ -34,8 +34,7 @@ protected:
   void SetUp() override {
     // Create a leanstore instance for the test case
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
-    auto curTestName = std::string(curTest->test_case_name()) + "_" +
-                       std::string(curTest->name());
+    auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
 
     auto res = LeanStore::Open(StoreOption{
         .mCreateFromScratch = true,
@@ -86,9 +85,7 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
   std::string res;
 
   std::string copiedVal;
-  auto copyValue = [&](Slice val) {
-    copiedVal = std::string((const char*)val.data(), val.size());
-  };
+  auto copyValue = [&](Slice val) { copiedVal = std::string((const char*)val.data(), val.size()); };
 
   // Insert 2 key-values as the test base.
   mStore->ExecSync(1, [&]() {
@@ -150,8 +147,7 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
 
   // now worker 2 can not get the old value
   mStore->ExecSync(2, [&]() {
-    cr::Worker::My().StartTx(TxMode::kLongRunning,
-                             IsolationLevel::kSnapshotIsolation);
+    cr::Worker::My().StartTx(TxMode::kLongRunning, IsolationLevel::kSnapshotIsolation);
     SCOPED_DEFER(cr::Worker::My().CommitTx());
 
     EXPECT_EQ(mKv->Lookup(key1, copyValue), OpCode::kNotFound);
@@ -165,9 +161,7 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
   std::string res;
 
   std::string copiedVal;
-  auto copyValue = [&](Slice val) {
-    copiedVal = std::string((const char*)val.data(), val.size());
-  };
+  auto copyValue = [&](Slice val) { copiedVal = std::string((const char*)val.data(), val.size()); };
 
   // Work 1, insert 2 key-values as the test base
   mStore->ExecSync(1, [&]() {
@@ -211,8 +205,7 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
     };
 
     for (size_t i = 0; i < 100; ++i) {
-      EXPECT_EQ(mKv->UpdatePartial(key1, updateCallBack, *updateDesc),
-                OpCode::kOK);
+      EXPECT_EQ(mKv->UpdatePartial(key1, updateCallBack, *updateDesc), OpCode::kOK);
     }
   });
 
@@ -313,9 +306,8 @@ TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
   });
 
   // get the old values in worker 2
-  mStore->ExecSync(2, [&]() {
-    EXPECT_EQ(mKv->ScanAsc(ToSlice(smallestKey), copyKeyVal), OpCode::kOK);
-  });
+  mStore->ExecSync(
+      2, [&]() { EXPECT_EQ(mKv->ScanAsc(ToSlice(smallestKey), copyKeyVal), OpCode::kOK); });
 
   // commit the transaction in worker 1, all the removed key-values should be
   // moved to graveyard

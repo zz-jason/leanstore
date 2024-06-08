@@ -11,8 +11,7 @@ public:
   uint64_t n;
   ZipfGenerator zipf_generator;
 
-  ScrambledZipfGenerator(uint64_t minInclusive, uint64_t maxExclusive,
-                         double theta)
+  ScrambledZipfGenerator(uint64_t minInclusive, uint64_t maxExclusive, double theta)
       : min(minInclusive),
         max(maxExclusive),
         n(max - min),

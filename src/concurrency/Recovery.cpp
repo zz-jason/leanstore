@@ -35,18 +35,15 @@ bool Recovery::Run() {
   }
 
   // print resulting active transaction table
-  Log::Info("[Recovery] active transaction table size: {}",
-            mActiveTxTable.size());
+  Log::Info("[Recovery] active transaction table size: {}", mActiveTxTable.size());
   for (auto it = mActiveTxTable.begin(); it != mActiveTxTable.end(); ++it) {
-    LS_DLOG("Active transaction table after analysis, txId={}, offset={}",
-            it->first, it->second);
+    LS_DLOG("Active transaction table after analysis, txId={}, offset={}", it->first, it->second);
   }
 
   // print dirty page table
   Log::Info("[Recovery] dirty page table size: {}", mDirtyPageTable.size());
   for (auto it = mDirtyPageTable.begin(); it != mDirtyPageTable.end(); ++it) {
-    LS_DLOG("Dirty page table after analysis, pageId: {}, offset: {}",
-            it->first, it->second);
+    LS_DLOG("Dirty page table after analysis, pageId: {}, offset: {}", it->first, it->second);
   }
 
   redo();
@@ -100,8 +97,7 @@ Result<void> Recovery::analysis() {
     }
     default: {
       Log::Fatal("Unrecognized WalEntry type: {}, offset={}, walFd={}",
-                 static_cast<uint8_t>(walEntry->mType), startOffset,
-                 mStore->mWalFd);
+                 static_cast<uint8_t>(walEntry->mType), startOffset, mStore->mWalFd);
     }
     }
   }
@@ -121,9 +117,8 @@ Result<void> Recovery::redo() {
     auto res = nextWalComplexToRedo(offset, complexEntry);
     if (!res) {
       // met error
-      Log::Error(
-          "[Recovery] failed to get next WalComplex, offset={}, error={}",
-          startOffset, res.error().ToString());
+      Log::Error("[Recovery] failed to get next WalComplex, offset={}, error={}", startOffset,
+                 res.error().ToString());
       return std::unexpected(res.error());
     }
 
@@ -192,8 +187,7 @@ Result<void> Recovery::redo() {
   return {};
 }
 
-Result<bool> Recovery::nextWalComplexToRedo(uint64_t& offset,
-                                            WalEntryComplex* complexEntry) {
+Result<bool> Recovery::nextWalComplexToRedo(uint64_t& offset, WalEntryComplex* complexEntry) {
   auto* buff = reinterpret_cast<uint8_t*>(complexEntry);
   while (offset < mWalSize) {
     // read a WalEntry
@@ -221,30 +215,24 @@ Result<bool> Recovery::nextWalComplexToRedo(uint64_t& offset,
   return false;
 }
 
-void Recovery::redoInsert(storage::BufferFrame& bf,
-                          WalEntryComplex* complexEntry) {
+void Recovery::redoInsert(storage::BufferFrame& bf, WalEntryComplex* complexEntry) {
   auto* walInsert = reinterpret_cast<WalInsert*>(complexEntry->mPayload);
   HybridGuard guard(&bf.mHeader.mLatch);
-  GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
-                                            std::move(guard), &bf);
+  GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(), std::move(guard), &bf);
 
   int32_t slotId = -1;
-  TransactionKV::InsertToNode(guardedNode, walInsert->GetKey(),
-                              walInsert->GetVal(), complexEntry->mWorkerId,
-                              complexEntry->mTxId, slotId);
+  TransactionKV::InsertToNode(guardedNode, walInsert->GetKey(), walInsert->GetVal(),
+                              complexEntry->mWorkerId, complexEntry->mTxId, slotId);
 }
 
-void Recovery::redoTxInsert(storage::BufferFrame& bf,
-                            WalEntryComplex* complexEntry) {
+void Recovery::redoTxInsert(storage::BufferFrame& bf, WalEntryComplex* complexEntry) {
   auto* walInsert = reinterpret_cast<WalTxInsert*>(complexEntry->mPayload);
   HybridGuard guard(&bf.mHeader.mLatch);
-  GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
-                                            std::move(guard), &bf);
+  GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(), std::move(guard), &bf);
 
   int32_t slotId = -1;
-  TransactionKV::InsertToNode(guardedNode, walInsert->GetKey(),
-                              walInsert->GetVal(), complexEntry->mWorkerId,
-                              complexEntry->mTxId, slotId);
+  TransactionKV::InsertToNode(guardedNode, walInsert->GetKey(), walInsert->GetVal(),
+                              complexEntry->mWorkerId, complexEntry->mTxId, slotId);
 }
 
 void Recovery::redoUpdate(storage::BufferFrame& bf [[maybe_unused]],
@@ -252,15 +240,13 @@ void Recovery::redoUpdate(storage::BufferFrame& bf [[maybe_unused]],
   Log::Fatal("Unsupported");
 }
 
-void Recovery::redoTxUpdate(storage::BufferFrame& bf,
-                            WalEntryComplex* complexEntry) {
+void Recovery::redoTxUpdate(storage::BufferFrame& bf, WalEntryComplex* complexEntry) {
   auto* wal = reinterpret_cast<WalTxUpdate*>(complexEntry->mPayload);
   HybridGuard guard(&bf.mHeader.mLatch);
-  GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
-                                            std::move(guard), &bf);
+  GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(), std::move(guard), &bf);
   auto* updateDesc = wal->GetUpdateDesc();
   auto key = wal->GetKey();
-  auto slotId = guardedNode->lowerBound<true>(key);
+  auto slotId = guardedNode->LowerBound<true>(key);
   LS_DCHECK(slotId != -1, "Key not found in WalTxUpdate");
 
   auto* mutRawVal = guardedNode->ValData(slotId);
@@ -290,14 +276,12 @@ void Recovery::redoRemove(storage::BufferFrame& bf [[maybe_unused]],
   Log::Fatal("Unsupported");
 }
 
-void Recovery::redoTxRemove(storage::BufferFrame& bf,
-                            WalEntryComplex* complexEntry) {
+void Recovery::redoTxRemove(storage::BufferFrame& bf, WalEntryComplex* complexEntry) {
   auto* wal = reinterpret_cast<WalTxRemove*>(complexEntry->mPayload);
   HybridGuard guard(&bf.mHeader.mLatch);
-  GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
-                                            std::move(guard), &bf);
+  GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(), std::move(guard), &bf);
   auto key = wal->RemovedKey();
-  auto slotId = guardedNode->lowerBound<true>(key);
+  auto slotId = guardedNode->LowerBound<true>(key);
   LS_DCHECK(slotId != -1, "Key not found, key={}", key.ToString());
 
   auto* mutRawVal = guardedNode->ValData(slotId);
@@ -307,7 +291,7 @@ void Recovery::redoTxRemove(storage::BufferFrame& bf,
 
   // remove the chained tuple
   if (guardedNode->ValSize(slotId) > sizeof(ChainedTuple)) {
-    guardedNode->shortenPayload(slotId, sizeof(ChainedTuple));
+    guardedNode->ShortenPayload(slotId, sizeof(ChainedTuple));
   }
   chainedTuple->mWorkerId = complexEntry->mWorkerId;
   chainedTuple->mTxId = complexEntry->mTxId;
@@ -315,59 +299,51 @@ void Recovery::redoTxRemove(storage::BufferFrame& bf,
   chainedTuple->mIsTombstone = true;
 }
 
-void Recovery::redoInitPage(storage::BufferFrame& bf,
-                            WalEntryComplex* complexEntry) {
+void Recovery::redoInitPage(storage::BufferFrame& bf, WalEntryComplex* complexEntry) {
   auto* walInitPage = reinterpret_cast<WalInitPage*>(complexEntry->mPayload);
   HybridGuard guard(&bf.mHeader.mLatch);
-  GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(),
-                                            std::move(guard), &bf);
-  auto xGuardedNode =
-      ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNode));
+  GuardedBufferFrame<BTreeNode> guardedNode(mStore->mBufferManager.get(), std::move(guard), &bf);
+  auto xGuardedNode = ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNode));
   xGuardedNode.InitPayload(walInitPage->mIsLeaf);
   bf.mPage.mBTreeId = complexEntry->mTreeId;
 }
 
-void Recovery::redoSplitRoot(storage::BufferFrame& bf,
-                             WalEntryComplex* complexEntry) {
+void Recovery::redoSplitRoot(storage::BufferFrame& bf, WalEntryComplex* complexEntry) {
   auto* wal = reinterpret_cast<WalSplitRoot*>(complexEntry->mPayload);
 
   // Resolve the old root
   auto oldRootGuard = HybridGuard(&bf.mHeader.mLatch);
-  auto guardedOldRoot = GuardedBufferFrame<BTreeNode>(
-      mStore->mBufferManager.get(), std::move(oldRootGuard), &bf);
-  auto xGuardedOldRoot =
-      ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedOldRoot));
+  auto guardedOldRoot =
+      GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(), std::move(oldRootGuard), &bf);
+  auto xGuardedOldRoot = ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedOldRoot));
 
   // Resolve the new left
   auto newLeftPageId = wal->mNewLeft;
   auto& newLeftBf = resolvePage(newLeftPageId);
   auto newLeftGuard = HybridGuard(&newLeftBf.mHeader.mLatch);
-  auto guardedNewLeft = GuardedBufferFrame<BTreeNode>(
-      mStore->mBufferManager.get(), std::move(newLeftGuard), &newLeftBf);
-  auto xGuardedNewLeft =
-      ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
+  auto guardedNewLeft = GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(),
+                                                      std::move(newLeftGuard), &newLeftBf);
+  auto xGuardedNewLeft = ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
 
   // Resolve the new root
   auto newRootPageId = wal->mNewRoot;
   auto& newRootBf = resolvePage(newRootPageId);
   auto newRootGuard = HybridGuard(&newRootBf.mHeader.mLatch);
-  auto guardedNewRoot = GuardedBufferFrame<BTreeNode>(
-      mStore->mBufferManager.get(), std::move(newRootGuard), &newRootBf);
-  auto xGuardedNewRoot =
-      ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewRoot));
+  auto guardedNewRoot = GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(),
+                                                      std::move(newRootGuard), &newRootBf);
+  auto xGuardedNewRoot = ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewRoot));
 
   // Resolve the meta node
   auto metaPageId = wal->mMetaNode;
   auto& metaBf = resolvePage(metaPageId);
   auto metaGuard = HybridGuard(&metaBf.mHeader.mLatch);
-  auto guardedMeta = GuardedBufferFrame<BTreeNode>(
-      mStore->mBufferManager.get(), std::move(metaGuard), &metaBf);
-  auto xGuardedMeta =
-      ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedMeta));
+  auto guardedMeta =
+      GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(), std::move(metaGuard), &metaBf);
+  auto xGuardedMeta = ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedMeta));
 
   // Resolve sepInfo
-  auto sepInfo = BTreeNode::SeparatorInfo(wal->mSeparatorSize, wal->mSplitSlot,
-                                          wal->mSeparatorTruncated);
+  auto sepInfo =
+      BTreeNode::SeparatorInfo(wal->mSeparatorSize, wal->mSplitSlot, wal->mSeparatorTruncated);
 
   // move half of the old root to the new left,
   // insert separator key into new root,
@@ -377,46 +353,41 @@ void Recovery::redoSplitRoot(storage::BufferFrame& bf,
   xGuardedMeta->mRightMostChildSwip = xGuardedNewRoot.bf();
 }
 
-void Recovery::redoSplitNonRoot(storage::BufferFrame& bf,
-                                WalEntryComplex* complexEntry) {
+void Recovery::redoSplitNonRoot(storage::BufferFrame& bf, WalEntryComplex* complexEntry) {
   auto* wal = reinterpret_cast<WalSplitNonRoot*>(complexEntry->mPayload);
 
   // Resolve the old root
   auto childGuard = HybridGuard(&bf.mHeader.mLatch);
-  auto guardedChild = GuardedBufferFrame<BTreeNode>(
-      mStore->mBufferManager.get(), std::move(childGuard), &bf);
-  auto xGuardedChild =
-      ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedChild));
+  auto guardedChild =
+      GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(), std::move(childGuard), &bf);
+  auto xGuardedChild = ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedChild));
 
   // Resolve the new left
   auto newLeftPageId = wal->mNewLeft;
   auto& newLeftBf = resolvePage(newLeftPageId);
   auto newLeftGuard = HybridGuard(&newLeftBf.mHeader.mLatch);
-  auto guardedNewLeft = GuardedBufferFrame<BTreeNode>(
-      mStore->mBufferManager.get(), std::move(newLeftGuard), &newLeftBf);
-  auto xGuardedNewLeft =
-      ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
+  auto guardedNewLeft = GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(),
+                                                      std::move(newLeftGuard), &newLeftBf);
+  auto xGuardedNewLeft = ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
 
   // Resolve the parent node
   auto parentPageId = wal->mParentPageId;
   auto& parentBf = resolvePage(parentPageId);
   auto parentGuard = HybridGuard(&parentBf.mHeader.mLatch);
-  auto guardedParent = GuardedBufferFrame<BTreeNode>(
-      mStore->mBufferManager.get(), std::move(parentGuard), &parentBf);
-  auto xGuardedParent =
-      ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedParent));
+  auto guardedParent = GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(),
+                                                     std::move(parentGuard), &parentBf);
+  auto xGuardedParent = ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedParent));
 
   // Resolve sepInfo
-  auto sepInfo = BTreeNode::SeparatorInfo(wal->mSeparatorSize, wal->mSplitSlot,
-                                          wal->mSeparatorTruncated);
+  auto sepInfo =
+      BTreeNode::SeparatorInfo(wal->mSeparatorSize, wal->mSplitSlot, wal->mSeparatorTruncated);
 
-  const uint16_t spaceNeededForSeparator =
-      guardedParent->spaceNeeded(sepInfo.mSize, sizeof(Swip));
+  const uint16_t spaceNeededForSeparator = guardedParent->SpaceNeeded(sepInfo.mSize, sizeof(Swip));
   xGuardedParent->RequestSpaceFor(spaceNeededForSeparator);
   xGuardedChild->Split(xGuardedParent, xGuardedNewLeft, sepInfo);
 }
 
-/// Read a WalEntry from the WAL file
+//! Read a WalEntry from the WAL file
 Result<void> Recovery::readWalEntry(uint64_t& offset, uint8_t* dest) {
   // read the WalEntry
   auto walEntrySize = sizeof(WalEntry);
@@ -427,8 +398,7 @@ Result<void> Recovery::readWalEntry(uint64_t& offset, uint8_t* dest) {
   switch (reinterpret_cast<WalEntry*>(dest)->mType) {
   case leanstore::cr::WalEntry::Type::kTxAbort: {
     auto left = sizeof(WalTxAbort) - walEntrySize;
-    auto res =
-        readFromWalFile(offset + walEntrySize, left, dest + walEntrySize);
+    auto res = readFromWalFile(offset + walEntrySize, left, dest + walEntrySize);
     if (!res) {
       return std::unexpected(res.error());
     }
@@ -437,8 +407,7 @@ Result<void> Recovery::readWalEntry(uint64_t& offset, uint8_t* dest) {
   }
   case leanstore::cr::WalEntry::Type::kTxFinish: {
     auto left = sizeof(WalTxFinish) - walEntrySize;
-    auto res =
-        readFromWalFile(offset + walEntrySize, left, dest + walEntrySize);
+    auto res = readFromWalFile(offset + walEntrySize, left, dest + walEntrySize);
     if (!res) {
       return std::unexpected(res.error());
     }
@@ -447,8 +416,7 @@ Result<void> Recovery::readWalEntry(uint64_t& offset, uint8_t* dest) {
   }
   case leanstore::cr::WalEntry::Type::kCarriageReturn: {
     auto left = sizeof(WalCarriageReturn) - walEntrySize;
-    auto res =
-        readFromWalFile(offset + walEntrySize, left, dest + walEntrySize);
+    auto res = readFromWalFile(offset + walEntrySize, left, dest + walEntrySize);
     if (!res) {
       return std::unexpected(res.error());
     }
@@ -458,17 +426,14 @@ Result<void> Recovery::readWalEntry(uint64_t& offset, uint8_t* dest) {
   case leanstore::cr::WalEntry::Type::kComplex: {
     // read the body of WalEntryComplex
     auto left = sizeof(WalEntryComplex) - walEntrySize;
-    auto res =
-        readFromWalFile(offset + walEntrySize, left, dest + walEntrySize);
+    auto res = readFromWalFile(offset + walEntrySize, left, dest + walEntrySize);
     if (!res) {
       return std::unexpected(res.error());
     }
 
     // read the payload of WalEntryComplex
-    left = reinterpret_cast<WalEntryComplex*>(dest)->mSize -
-           sizeof(WalEntryComplex);
-    res = readFromWalFile(offset + sizeof(WalEntryComplex), left,
-                          dest + sizeof(WalEntryComplex));
+    left = reinterpret_cast<WalEntryComplex*>(dest)->mSize - sizeof(WalEntryComplex);
+    res = readFromWalFile(offset + sizeof(WalEntryComplex), left, dest + sizeof(WalEntryComplex));
     if (!res) {
       return std::unexpected(res.error());
     }
@@ -495,24 +460,20 @@ storage::BufferFrame& Recovery::resolvePage(PID pageId) {
 }
 
 // TODO(zz-jason): refactor with aio
-Result<void> Recovery::readFromWalFile(int64_t offset, size_t nbytes,
-                                       void* destination) {
+Result<void> Recovery::readFromWalFile(int64_t offset, size_t nbytes, void* destination) {
   auto fileName = mStore->mStoreOption.GetWalFilePath();
   FILE* fp = fopen(fileName.c_str(), "rb");
   if (fp == nullptr) {
-    return std::unexpected(
-        utils::Error::FileOpen(fileName, errno, strerror(errno)));
+    return std::unexpected(utils::Error::FileOpen(fileName, errno, strerror(errno)));
   }
   SCOPED_DEFER(fclose(fp));
 
   if (fseek(fp, offset, SEEK_SET) != 0) {
-    return std::unexpected(
-        utils::Error::FileSeek(fileName, errno, strerror(errno)));
+    return std::unexpected(utils::Error::FileSeek(fileName, errno, strerror(errno)));
   }
 
   if (fread(destination, 1, nbytes, fp) != nbytes) {
-    return std::unexpected(
-        utils::Error::FileRead(fileName, errno, strerror(errno)));
+    return std::unexpected(utils::Error::FileRead(fileName, errno, strerror(errno)));
   }
 
   return {};

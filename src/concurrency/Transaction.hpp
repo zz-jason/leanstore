@@ -34,33 +34,33 @@ struct TxStatUtil {
 
 class Transaction {
 public:
-  /// The state of the current transaction.
+  //! The state of the current transaction.
   TxState mState = TxState::kIdle;
 
-  /// mStartTs is the start timestamp of the transaction. Also used as
-  /// teansaction ID.
+  //! mStartTs is the start timestamp of the transaction. Also used as
+  //! teansaction ID.
   TXID mStartTs = 0;
 
-  /// mCommitTs is the commit timestamp of the transaction.
+  //! mCommitTs is the commit timestamp of the transaction.
   TXID mCommitTs = 0;
 
-  /// mMaxObservedGSN is the maximum observed global sequence number during
-  /// transaction processing. It's used to determine whether a transaction can
-  /// be committed.
+  //! mMaxObservedGSN is the maximum observed global sequence number during
+  //! transaction processing. It's used to determine whether a transaction can
+  //! be committed.
   LID mMaxObservedGSN = 0;
 
-  /// mTxMode is the mode of the current transaction.
+  //! mTxMode is the mode of the current transaction.
   TxMode mTxMode = TxMode::kShortRunning;
 
-  /// mTxIsolationLevel is the isolation level for the current transaction.
+  //! mTxIsolationLevel is the isolation level for the current transaction.
   IsolationLevel mTxIsolationLevel = IsolationLevel::kSnapshotIsolation;
 
-  /// Whether the transaction has any data writes. Transaction writes can be
-  /// detected once it generates a WAL entry.
+  //! Whether the transaction has any data writes. Transaction writes can be
+  //! detected once it generates a WAL entry.
   bool mHasWrote = false;
 
-  /// Whether the transaction is durable. A durable transaction can be committed
-  /// or aborted only after all the WAL entries are flushed to disk.
+  //! Whether the transaction is durable. A durable transaction can be committed
+  //! or aborted only after all the WAL entries are flushed to disk.
   bool mIsDurable = true;
 
   bool mWalExceedBuffer = false;

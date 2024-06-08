@@ -20,10 +20,10 @@ enum class GuardState : uint8_t {
   kMoved = 4,
 };
 
-/// Like std::unique_lock, std::shared_lock, std::lock_guard, this HybridGuard
-/// is used together with HybridLatch to provide various lock mode.
+//! Like std::unique_lock, std::shared_lock, std::lock_guard, this HybridGuard
+//! is used together with HybridLatch to provide various lock mode.
 ///
-/// TODO(jian.z): should we unlock the guard when it's destroied?
+//! TODO(jian.z): should we unlock the guard when it's destroied?
 class HybridGuard {
 public:
   HybridLatch* mLatch = nullptr;
@@ -35,10 +35,7 @@ public:
   bool mEncounteredContention = false;
 
 public:
-  HybridGuard(HybridLatch* latch)
-      : mLatch(latch),
-        mState(GuardState::kUninitialized),
-        mVersion(0) {
+  HybridGuard(HybridLatch* latch) : mLatch(latch), mState(GuardState::kUninitialized), mVersion(0) {
   }
 
   // Manually construct a guard from a snapshot. Use with caution!
@@ -74,10 +71,8 @@ public:
 
 public:
   void JumpIfModifiedByOthers() {
-    LS_DCHECK(mState == GuardState::kOptimisticShared ||
-              mVersion == mLatch->mVersion.load());
-    if (mState == GuardState::kOptimisticShared &&
-        mVersion != mLatch->mVersion.load()) {
+    LS_DCHECK(mState == GuardState::kOptimisticShared || mVersion == mLatch->mVersion.load());
+    if (mState == GuardState::kOptimisticShared && mVersion != mLatch->mVersion.load()) {
       LS_DLOG("JumpIfModifiedByOthers, mVersion(expected)={}, "
               "mLatch->mVersion(actual)={}",
               mVersion, mLatch->mVersion.load());
@@ -99,8 +94,7 @@ public:
       break;
     }
     }
-    LS_DCHECK(mState == GuardState::kMoved ||
-              mState == GuardState::kUninitialized ||
+    LS_DCHECK(mState == GuardState::kMoved || mState == GuardState::kUninitialized ||
               mState == GuardState::kOptimisticShared);
   }
 
@@ -125,8 +119,7 @@ public:
   }
 
   inline void ToOptimisticOrShared() {
-    if (mState == GuardState::kOptimisticShared ||
-        mState == GuardState::kPessimisticShared) {
+    if (mState == GuardState::kOptimisticShared || mState == GuardState::kPessimisticShared) {
       return;
     }
     LS_DCHECK(mState == GuardState::kUninitialized || mLatch != nullptr);
@@ -173,8 +166,7 @@ public:
   }
 
   inline void ToSharedMayJump() {
-    LS_DCHECK(mState == GuardState::kOptimisticShared ||
-              mState == GuardState::kPessimisticShared);
+    LS_DCHECK(mState == GuardState::kOptimisticShared || mState == GuardState::kPessimisticShared);
     if (mState == GuardState::kPessimisticShared) {
       return;
     }

@@ -9,18 +9,18 @@ namespace leanstore {
 namespace utils {
 
 #ifdef DEBUG
-#define LS_DEBUG_EXECUTE(store, name, action)                                  \
-  if (store != nullptr && store->mDebugFlagsRegistry.IsExists(name)) {         \
-    action;                                                                    \
+#define LS_DEBUG_EXECUTE(store, name, action)                                                      \
+  if (store != nullptr && store->mDebugFlagsRegistry.IsExists(name)) {                             \
+    action;                                                                                        \
   }
-#define LS_DEBUG_ENABLE(store, name)                                           \
-  if (store != nullptr) {                                                      \
-    store->mDebugFlagsRegistry.Insert(name);                                   \
+#define LS_DEBUG_ENABLE(store, name)                                                               \
+  if (store != nullptr) {                                                                          \
+    store->mDebugFlagsRegistry.Insert(name);                                                       \
   }
 
-#define LS_DEBUG_DISABLE(store, name)                                          \
-  if (store != nullptr) {                                                      \
-    store->mDebugFlagsRegistry.Erase(name);                                    \
+#define LS_DEBUG_DISABLE(store, name)                                                              \
+  if (store != nullptr) {                                                                          \
+    store->mDebugFlagsRegistry.Erase(name);                                                        \
   }
 #else
 #define LS_DEBUG_EXECUTE(store, name, action)

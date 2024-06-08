@@ -17,16 +17,13 @@ using namespace leanstore::storage;
 
 namespace leanstore::storage::btree {
 
-Result<BasicKV*> BasicKV::Create(leanstore::LeanStore* store,
-                                 const std::string& treeName,
+Result<BasicKV*> BasicKV::Create(leanstore::LeanStore* store, const std::string& treeName,
                                  BTreeConfig config) {
   auto [treePtr, treeId] = store->mTreeRegistry->CreateTree(treeName, [&]() {
-    return std::unique_ptr<BufferManagedTree>(
-        static_cast<BufferManagedTree*>(new BasicKV()));
+    return std::unique_ptr<BufferManagedTree>(static_cast<BufferManagedTree*>(new BasicKV()));
   });
   if (treePtr == nullptr) {
-    return std::unexpected<utils::Error>(
-        utils::Error::General("Tree name has been taken"));
+    return std::unexpected<utils::Error>(utils::Error::General("Tree name has been taken"));
   }
   auto* tree = DownCast<BasicKV*>(treePtr);
   tree->Init(store, treeId, std::move(config));
@@ -38,7 +35,7 @@ OpCode BasicKV::Lookup(Slice key, ValCallback valCallback) {
     JUMPMU_TRY() {
       GuardedBufferFrame<BTreeNode> guardedLeaf;
       FindLeafCanJump(key, guardedLeaf, LatchMode::kPessimisticShared);
-      auto slotId = guardedLeaf->lowerBound<true>(key);
+      auto slotId = guardedLeaf->LowerBound<true>(key);
       if (slotId != -1) {
         valCallback(guardedLeaf->Value(slotId));
         guardedLeaf.JumpIfModifiedByOthers();
@@ -67,7 +64,7 @@ bool BasicKV::IsRangeEmpty(Slice startKey, Slice endKey) {
 
       if ((guardedLeaf->mUpperFence.mOffset == 0 || endKey <= upperFence) &&
           guardedLeaf->mNumSeps == 0) {
-        int32_t pos = guardedLeaf->lowerBound<false>(startKey);
+        int32_t pos = guardedLeaf->LowerBound<false>(startKey);
         if (pos == guardedLeaf->mNumSeps) {
           guardedLeaf.JumpIfModifiedByOthers();
           JUMPMU_RETURN true;
@@ -143,14 +140,14 @@ OpCode BasicKV::Insert(Slice key, Slice val) {
     auto ret = xIter.InsertKV(key, val);
 
     if (ret == OpCode::kDuplicated) {
-      Log::Info("Insert duplicated, workerId={}, key={}, treeId={}",
-                cr::Worker::My().mWorkerId, key.ToString(), mTreeId);
+      Log::Info("Insert duplicated, workerId={}, key={}, treeId={}", cr::Worker::My().mWorkerId,
+                key.ToString(), mTreeId);
       JUMPMU_RETURN OpCode::kDuplicated;
     }
 
     if (ret != OpCode::kOK) {
-      Log::Info("Insert failed, workerId={}, key={}, ret={}",
-                cr::Worker::My().mWorkerId, key.ToString(), ToString(ret));
+      Log::Info("Insert failed, workerId={}, key={}, ret={}", cr::Worker::My().mWorkerId,
+                key.ToString(), ToString(ret));
       JUMPMU_RETURN ret;
     }
 
@@ -171,7 +168,7 @@ OpCode BasicKV::PrefixLookup(Slice key, PrefixLookupCallback callback) {
       FindLeafCanJump(key, guardedLeaf);
 
       bool isEqual = false;
-      int16_t cur = guardedLeaf->lowerBound<false>(key, &isEqual);
+      int16_t cur = guardedLeaf->LowerBound<false>(key, &isEqual);
       if (isEqual) {
         callback(key, guardedLeaf->Value(cur));
         guardedLeaf.JumpIfModifiedByOthers();
@@ -179,13 +176,12 @@ OpCode BasicKV::PrefixLookup(Slice key, PrefixLookupCallback callback) {
       }
 
       if (cur < guardedLeaf->mNumSeps) {
-        auto fullKeySize = guardedLeaf->getFullKeyLen(cur);
+        auto fullKeySize = guardedLeaf->GetFullKeyLen(cur);
         auto fullKeyBuf = utils::JumpScopedArray<uint8_t>(fullKeySize);
-        guardedLeaf->copyFullKey(cur, fullKeyBuf->get());
+        guardedLeaf->CopyFullKey(cur, fullKeyBuf->get());
         guardedLeaf.JumpIfModifiedByOthers();
 
-        callback(Slice(fullKeyBuf->get(), fullKeySize),
-                 guardedLeaf->Value(cur));
+        callback(Slice(fullKeyBuf->get(), fullKeySize), guardedLeaf->Value(cur));
         guardedLeaf.JumpIfModifiedByOthers();
 
         JUMPMU_RETURN OpCode::kOK;
@@ -213,7 +209,7 @@ OpCode BasicKV::PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
       FindLeafCanJump(key, guardedLeaf);
 
       bool isEqual = false;
-      int16_t cur = guardedLeaf->lowerBound<false>(key, &isEqual);
+      int16_t cur = guardedLeaf->LowerBound<false>(key, &isEqual);
       if (isEqual == true) {
         callback(key, guardedLeaf->Value(cur));
         guardedLeaf.JumpIfModifiedByOthers();
@@ -222,13 +218,12 @@ OpCode BasicKV::PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
 
       if (cur > 0) {
         cur -= 1;
-        auto fullKeySize = guardedLeaf->getFullKeyLen(cur);
+        auto fullKeySize = guardedLeaf->GetFullKeyLen(cur);
         auto fullKeyBuf = utils::JumpScopedArray<uint8_t>(fullKeySize);
-        guardedLeaf->copyFullKey(cur, fullKeyBuf->get());
+        guardedLeaf->CopyFullKey(cur, fullKeyBuf->get());
         guardedLeaf.JumpIfModifiedByOthers();
 
-        callback(Slice(fullKeyBuf->get(), fullKeySize),
-                 guardedLeaf->Value(cur));
+        callback(Slice(fullKeyBuf->get(), fullKeySize), guardedLeaf->Value(cur));
         guardedLeaf.JumpIfModifiedByOthers();
 
         JUMPMU_RETURN OpCode::kOK;
@@ -249,8 +244,7 @@ OpCode BasicKV::PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
   return OpCode::kOther;
 }
 
-OpCode BasicKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
-                              UpdateDesc& updateDesc) {
+OpCode BasicKV::UpdatePartial(Slice key, MutValCallback updateCallBack, UpdateDesc& updateDesc) {
   JUMPMU_TRY() {
     auto xIter = GetExclusiveIterator();
     if (!xIter.SeekExact(key)) {
@@ -260,8 +254,8 @@ OpCode BasicKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
     if (mConfig.mEnableWal) {
       LS_DCHECK(updateDesc.mNumSlots > 0);
       auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
-      auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WalUpdate>(
-          key.length() + sizeOfDescAndDelta);
+      auto walHandler =
+          xIter.mGuardedLeaf.ReserveWALPayload<WalUpdate>(key.length() + sizeOfDescAndDelta);
       walHandler->mType = WalPayload::Type::kWalUpdate;
       walHandler->mKeySize = key.length();
       walHandler->mDeltaLength = sizeOfDescAndDelta;
@@ -303,8 +297,8 @@ OpCode BasicKV::Remove(Slice key) {
 
     Slice value = xIter.value();
     if (mConfig.mEnableWal) {
-      auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WalRemove>(
-          key.size() + value.size(), key, value);
+      auto walHandler =
+          xIter.mGuardedLeaf.ReserveWALPayload<WalRemove>(key.size() + value.size(), key, value);
       walHandler.SubmitWal();
     }
     auto ret = xIter.RemoveCurrent();
@@ -322,8 +316,7 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
   JUMPMU_TRY() {
     auto xIter = GetExclusiveIterator();
     xIter.SetExitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
-      if (guardedLeaf->FreeSpaceAfterCompaction() >=
-          BTreeNode::UnderFullSize()) {
+      if (guardedLeaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
         xIter.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
           JUMPMU_TRY() {
             this->TryMergeMayJump(*toMerge);
@@ -365,22 +358,21 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
       }
 
       // page start key
-      auto firstKeySize = guardedLeaf->getFullKeyLen(0);
+      auto firstKeySize = guardedLeaf->GetFullKeyLen(0);
       auto firstKey = utils::JumpScopedArray<uint8_t>(firstKeySize);
-      guardedLeaf->copyFullKey(0, firstKey->get());
+      guardedLeaf->CopyFullKey(0, firstKey->get());
       Slice pageStartKey(firstKey->get(), firstKeySize);
 
       // page end key
-      auto lastKeySize = guardedLeaf->getFullKeyLen(guardedLeaf->mNumSeps - 1);
+      auto lastKeySize = guardedLeaf->GetFullKeyLen(guardedLeaf->mNumSeps - 1);
       auto lastKey = utils::JumpScopedArray<uint8_t>(lastKeySize);
-      guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, lastKey->get());
+      guardedLeaf->CopyFullKey(guardedLeaf->mNumSeps - 1, lastKey->get());
       Slice pageEndKey(lastKey->get(), lastKeySize);
 
       if (pageStartKey >= startKey && pageEndKey <= endKey) {
         // Purge the whole page
         COUNTERS_BLOCK() {
-          WorkerCounters::MyCounters().dt_range_removed[mTreeId] +=
-              guardedLeaf->mNumSeps;
+          WorkerCounters::MyCounters().dt_range_removed[mTreeId] += guardedLeaf->mNumSeps;
         }
         guardedLeaf->Reset();
         didPurgeFullPage = true;

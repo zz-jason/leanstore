@@ -26,8 +26,7 @@ protected:
   // create a leanstore instance for current test case
   MvccTest() {
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
-    auto curTestName = std::string(curTest->test_case_name()) + "_" +
-                       std::string(curTest->name());
+    auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
     auto res = LeanStore::Open(StoreOption{
         .mCreateFromScratch = true,
         .mStoreDir = "/tmp/" + curTestName,
@@ -88,8 +87,7 @@ TEST_F(MvccTest, LookupWhileInsert) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
     cr::Worker::My().StartTx();
-    EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key0.data(), key0.size()),
-                             copyValueOut),
+    EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key0.data(), key0.size()), copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val0);
     cr::Worker::My().CommitTx();
@@ -102,8 +100,7 @@ TEST_F(MvccTest, LookupWhileInsert) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
 
-    EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key1.data(), key1.size()),
-                             copyValueOut),
+    EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key1.data(), key1.size()), copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val1);
     cr::Worker::My().CommitTx();
@@ -116,8 +113,7 @@ TEST_F(MvccTest, LookupWhileInsert) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
     cr::Worker::My().StartTx();
-    EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key1.data(), key1.size()),
-                             copyValueOut),
+    EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key1.data(), key1.size()), copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val1);
     cr::Worker::My().CommitTx();
@@ -173,8 +169,7 @@ TEST_F(MvccTest, InsertConflict) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
 
-    EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key1.data(), key1.size()),
-                             copyValueOut),
+    EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key1.data(), key1.size()), copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val1);
     cr::Worker::My().CommitTx();
@@ -187,8 +182,7 @@ TEST_F(MvccTest, InsertConflict) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
     cr::Worker::My().StartTx();
-    EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key1.data(), key1.size()),
-                             copyValueOut),
+    EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key1.data(), key1.size()), copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val1);
     cr::Worker::My().CommitTx();

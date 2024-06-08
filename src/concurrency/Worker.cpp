@@ -22,8 +22,7 @@ namespace leanstore::cr {
 thread_local std::unique_ptr<Worker> Worker::sTlsWorker = nullptr;
 thread_local Worker* Worker::sTlsWorkerRaw = nullptr;
 
-Worker::Worker(uint64_t workerId, std::vector<Worker*>& allWorkers,
-               leanstore::LeanStore* store)
+Worker::Worker(uint64_t workerId, std::vector<Worker*>& allWorkers, leanstore::LeanStore* store)
     : mStore(store),
       mCc(store, allWorkers.size()),
       mActiveTxId(0),
@@ -33,8 +32,7 @@ Worker::Worker(uint64_t workerId, std::vector<Worker*>& allWorkers,
 
   // init wal buffer
   mLogging.mWalBufferSize = mStore->mStoreOption.mWalBufferSize;
-  mLogging.mWalBuffer =
-      (uint8_t*)(std::aligned_alloc(512, mLogging.mWalBufferSize));
+  mLogging.mWalBuffer = (uint8_t*)(std::aligned_alloc(512, mLogging.mWalBufferSize));
   std::memset(mLogging.mWalBuffer, 0, mLogging.mWalBufferSize);
 
   mCc.mLcbCacheVal = std::make_unique<uint64_t[]>(mAllWorkers.size());
@@ -48,18 +46,15 @@ Worker::~Worker() {
 
 void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   Transaction prevTx [[maybe_unused]] = mActiveTx;
-  LS_DCHECK(
-      prevTx.mState != TxState::kStarted,
-      "Previous transaction not ended, workerId={}, startTs={}, txState={}",
-      mWorkerId, prevTx.mStartTs, TxStatUtil::ToString(prevTx.mState));
+  LS_DCHECK(prevTx.mState != TxState::kStarted,
+            "Previous transaction not ended, workerId={}, startTs={}, txState={}", mWorkerId,
+            prevTx.mStartTs, TxStatUtil::ToString(prevTx.mState));
   SCOPED_DEFER({
-    LS_DLOG(
-        "Start transaction, workerId={}, startTs={}, txReadSnapshot(GSN)={}, "
-        "workerGSN={}, globalMinFlushedGSN={}, globalMaxFlushedGSN={}",
-        mWorkerId, mActiveTx.mStartTs, mLogging.mTxReadSnapshot,
-        mLogging.GetCurrentGsn(),
-        mStore->mCRManager->mGroupCommitter->mGlobalMinFlushedGSN.load(),
-        mStore->mCRManager->mGroupCommitter->mGlobalMaxFlushedGSN.load());
+    LS_DLOG("Start transaction, workerId={}, startTs={}, txReadSnapshot(GSN)={}, "
+            "workerGSN={}, globalMinFlushedGSN={}, globalMaxFlushedGSN={}",
+            mWorkerId, mActiveTx.mStartTs, mLogging.mTxReadSnapshot, mLogging.GetCurrentGsn(),
+            mStore->mCRManager->mGroupCommitter->mGlobalMinFlushedGSN.load(),
+            mStore->mCRManager->mGroupCommitter->mGlobalMaxFlushedGSN.load());
   });
 
   mActiveTx.Start(mode, level);
@@ -71,8 +66,7 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   // Sync GSN clock with the global max flushed (observed) GSN, so that the
   // global min flushed GSN can be advanced, transactions with remote dependency
   // can be committed in time.
-  const auto maxFlushedGsn =
-      mStore->mCRManager->mGroupCommitter->mGlobalMaxFlushedGSN.load();
+  const auto maxFlushedGsn = mStore->mCRManager->mGroupCommitter->mGlobalMaxFlushedGSN.load();
   if (maxFlushedGsn > mLogging.GetCurrentGsn()) {
     mLogging.SetCurrentGsn(maxFlushedGsn);
   }
@@ -81,8 +75,7 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   mLogging.mTxWalBegin = mLogging.mWalBuffered;
 
   // For remote dependency validation
-  mLogging.mTxReadSnapshot =
-      mStore->mCRManager->mGroupCommitter->mGlobalMinFlushedGSN.load();
+  mLogging.mTxReadSnapshot = mStore->mCRManager->mGroupCommitter->mGlobalMinFlushedGSN.load();
   mLogging.mHasRemoteDependency = false;
 
   // For now, we only support SI and SSI
@@ -155,8 +148,7 @@ void Worker::CommitTx() {
     mLogging.mTxToCommit.push_back(mActiveTx);
     LS_DLOG("Puting transaction with remote dependency to mTxToCommit"
             ", workerId={}, startTs={}, commitTs={}, maxObservedGSN={}",
-            mWorkerId, mActiveTx.mStartTs, mActiveTx.mCommitTs,
-            mActiveTx.mMaxObservedGSN);
+            mWorkerId, mActiveTx.mStartTs, mActiveTx.mCommitTs, mActiveTx.mMaxObservedGSN);
   } else {
     // for group commit
     std::unique_lock<std::mutex> g(mLogging.mRfaTxToCommitMutex);
@@ -164,8 +156,7 @@ void Worker::CommitTx() {
     mLogging.mRfaTxToCommit.push_back(mActiveTx);
     LS_DLOG("Puting transaction (RFA) to mRfaTxToCommit, workerId={}, "
             "startTs={}, commitTs={}, maxObservedGSN={}",
-            mWorkerId, mActiveTx.mStartTs, mActiveTx.mCommitTs,
-            mActiveTx.mMaxObservedGSN);
+            mWorkerId, mActiveTx.mStartTs, mActiveTx.mCommitTs, mActiveTx.mMaxObservedGSN);
   }
 
   // Cleanup versions in history tree
@@ -176,8 +167,7 @@ void Worker::CommitTx() {
   while (!mLogging.SafeToCommit(mActiveTx.mCommitTs)) {
   }
 
-  METRIC_HIST_OBSERVE(mStore->mMetricsManager, tx_commit_wal_wait_us,
-                      timer.ElaspedUs());
+  METRIC_HIST_OBSERVE(mStore->mMetricsManager, tx_commit_wal_wait_us, timer.ElaspedUs());
 }
 
 //! TODO(jian.z): revert changes made in-place on the btree
@@ -197,8 +187,7 @@ void Worker::AbortTx() {
     mActiveTxId.store(0, std::memory_order_release);
     Log::Info("Transaction aborted, workerId={}, startTs={}, commitTs={}, "
               "maxObservedGSN={}",
-              mWorkerId, mActiveTx.mStartTs, mActiveTx.mCommitTs,
-              mActiveTx.mMaxObservedGSN);
+              mWorkerId, mActiveTx.mStartTs, mActiveTx.mCommitTs, mActiveTx.mMaxObservedGSN);
   });
 
   if (!(mActiveTx.mState == TxState::kStarted && mActiveTx.mIsDurable)) {
@@ -206,8 +195,7 @@ void Worker::AbortTx() {
   }
 
   // TODO(jian.z): support reading from WAL file once
-  LS_DCHECK(!mActiveTx.mWalExceedBuffer,
-            "Aborting from WAL file is not supported yet");
+  LS_DCHECK(!mActiveTx.mWalExceedBuffer, "Aborting from WAL file is not supported yet");
   std::vector<const WalEntry*> entries;
   mLogging.IterateCurrentTxWALs([&](const WalEntry& entry) {
     if (entry.mType == WalEntry::Type::kComplex) {
@@ -218,14 +206,12 @@ void Worker::AbortTx() {
   const uint64_t txId = mActiveTx.mStartTs;
   std::for_each(entries.rbegin(), entries.rend(), [&](const WalEntry* entry) {
     const auto& complexEntry = *reinterpret_cast<const WalEntryComplex*>(entry);
-    mStore->mTreeRegistry->undo(complexEntry.mTreeId, complexEntry.mPayload,
-                                txId);
+    mStore->mTreeRegistry->undo(complexEntry.mTreeId, complexEntry.mPayload, txId);
   });
 
   mCc.mHistoryStorage.PurgeVersions(
       mActiveTx.mStartTs, mActiveTx.mStartTs,
-      [&](const TXID, const TREEID, const uint8_t*, uint64_t, const bool) {},
-      0);
+      [&](const TXID, const TREEID, const uint8_t*, uint64_t, const bool) {}, 0);
 
   if (mActiveTx.mHasWrote && mActiveTx.mIsDurable) {
     // TODO: write compensation wal records between abort and finish

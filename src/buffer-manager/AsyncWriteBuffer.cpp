@@ -8,8 +8,7 @@
 
 namespace leanstore::storage {
 
-AsyncWriteBuffer::AsyncWriteBuffer(int fd, uint64_t pageSize,
-                                   uint64_t maxBatchSize)
+AsyncWriteBuffer::AsyncWriteBuffer(int fd, uint64_t pageSize, uint64_t maxBatchSize)
     : mFd(fd),
       mPageSize(pageSize),
       mAIo(maxBatchSize),
@@ -25,8 +24,7 @@ bool AsyncWriteBuffer::IsFull() {
 }
 
 void AsyncWriteBuffer::Add(const BufferFrame& bf) {
-  LS_DCHECK(uint64_t(&bf) % 512 == 0,
-            "BufferFrame is not aligned to 512 bytes");
+  LS_DCHECK(uint64_t(&bf) % 512 == 0, "BufferFrame is not aligned to 512 bytes");
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().dt_page_writes[bf.mPage.mBTreeId]++;
   }
@@ -50,9 +48,8 @@ Result<uint64_t> AsyncWriteBuffer::WaitAll() {
   return mAIo.WaitAll();
 }
 
-void AsyncWriteBuffer::IterateFlushedBfs(
-    std::function<void(BufferFrame&, uint64_t)> callback,
-    uint64_t numFlushedBfs) {
+void AsyncWriteBuffer::IterateFlushedBfs(std::function<void(BufferFrame&, uint64_t)> callback,
+                                         uint64_t numFlushedBfs) {
   for (uint64_t i = 0; i < numFlushedBfs; i++) {
     const auto slot = (reinterpret_cast<uint64_t>(mAIo.GetIoEvent(i)->data) -
                        reinterpret_cast<uint64_t>(mWriteBuffer.Get())) /

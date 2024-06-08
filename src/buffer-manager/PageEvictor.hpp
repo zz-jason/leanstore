@@ -71,9 +71,8 @@ public:
   FreeBfList mFreeBfList;                       // output of phase 3
 
 public:
-  PageEvictor(leanstore::LeanStore* store, const std::string& threadName,
-              uint64_t runningCPU, uint64_t numBfs, uint8_t* bfs,
-              uint64_t numPartitions, uint64_t partitionMask,
+  PageEvictor(leanstore::LeanStore* store, const std::string& threadName, uint64_t runningCPU,
+              uint64_t numBfs, uint8_t* bfs, uint64_t numPartitions, uint64_t partitionMask,
               std::vector<std::unique_ptr<Partition>>& partitions)
       : utils::UserThread(store, threadName, runningCPU),
         mStore(store),
@@ -88,10 +87,8 @@ public:
         mAsyncWriteBuffer(store->mPageFd, store->mStoreOption.mPageSize,
                           mStore->mStoreOption.mBufferWriteBatchSize),
         mFreeBfList() {
-    mCoolCandidateBfs.reserve(
-        mStore->mStoreOption.mBufferFrameRecycleBatchSize);
-    mEvictCandidateBfs.reserve(
-        mStore->mStoreOption.mBufferFrameRecycleBatchSize);
+    mCoolCandidateBfs.reserve(mStore->mStoreOption.mBufferFrameRecycleBatchSize);
+    mEvictCandidateBfs.reserve(mStore->mStoreOption.mBufferFrameRecycleBatchSize);
   }
 
   // no copy and assign

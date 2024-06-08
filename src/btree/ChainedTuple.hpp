@@ -11,9 +11,9 @@
 
 namespace leanstore::storage::btree {
 
-/// History versions of chained tuple are stored in the history tree of the
-/// current worker thread.
-/// Chained: only scheduled gc.
+//! History versions of chained tuple are stored in the history tree of the
+//! current worker thread.
+//! Chained: only scheduled gc.
 class __attribute__((packed)) ChainedTuple : public Tuple {
 public:
   uint16_t mTotalUpdates = 0;
@@ -26,10 +26,10 @@ public:
   uint8_t mPayload[];
 
 public:
-  /// Construct a ChainedTuple, copy the value to its payload
+  //! Construct a ChainedTuple, copy the value to its payload
   ///
-  /// NOTE: Payload space should be allocated in advance. This constructor is
-  /// usually called by a placmenet new operator.
+  //! NOTE: Payload space should be allocated in advance. This constructor is
+  //! usually called by a placmenet new operator.
   ChainedTuple(WORKERID workerId, TXID txId, Slice val)
       : Tuple(TupleFormat::kChained, workerId, txId),
         mIsTombstone(false) {
@@ -42,12 +42,12 @@ public:
     std::memcpy(mPayload, val.data(), val.size());
   }
 
-  /// Construct a ChainedTuple from an existing FatTuple, the new ChainedTuple
-  /// may share the same space with the input FatTuple, so std::memmove is
-  /// used to handle the overlap bytes.
+  //! Construct a ChainedTuple from an existing FatTuple, the new ChainedTuple
+  //! may share the same space with the input FatTuple, so std::memmove is
+  //! used to handle the overlap bytes.
   ///
-  /// NOTE: This constructor is usually called by a placmenet new operator on
-  /// the address of the FatTuple
+  //! NOTE: This constructor is usually called by a placmenet new operator on
+  //! the address of the FatTuple
   ChainedTuple(FatTuple& oldFatTuple)
       : Tuple(TupleFormat::kChained, oldFatTuple.mWorkerId, oldFatTuple.mTxId,
               oldFatTuple.mCommandId),
@@ -60,16 +60,13 @@ public:
     return Slice(mPayload, size);
   }
 
-  std::tuple<OpCode, uint16_t> GetVisibleTuple(Slice payload,
-                                               ValCallback callback) const;
+  std::tuple<OpCode, uint16_t> GetVisibleTuple(Slice payload, ValCallback callback) const;
 
   void UpdateStats() {
     if (cr::Worker::My().mCc.VisibleForAll(mTxId) ||
         mOldestTx !=
             static_cast<uint16_t>(
-                cr::Worker::My()
-                    .mStore->mCRManager->mGlobalWmkInfo.mOldestActiveTx &
-                0xFFFF)) {
+                cr::Worker::My().mStore->mCRManager->mGlobalWmkInfo.mOldestActiveTx & 0xFFFF)) {
       mOldestTx = 0;
       mTotalUpdates = 0;
       return;
@@ -80,18 +77,15 @@ public:
   bool ShouldConvertToFatTuple() {
     bool commandValid = mCommandId != kInvalidCommandid;
     bool hasLongRunningOLAP =
-        cr::Worker::My()
-            .mStore->mCRManager->mGlobalWmkInfo.HasActiveLongRunningTx();
-    bool frequentlyUpdated =
-        mTotalUpdates > cr::Worker::My().mStore->mStoreOption.mWorkerThreads;
-    bool recentUpdatedByOthers = mWorkerId != cr::Worker::My().mWorkerId ||
-                                 mTxId != cr::ActiveTx().mStartTs;
-    return commandValid && hasLongRunningOLAP && recentUpdatedByOthers &&
-           frequentlyUpdated;
+        cr::Worker::My().mStore->mCRManager->mGlobalWmkInfo.HasActiveLongRunningTx();
+    bool frequentlyUpdated = mTotalUpdates > cr::Worker::My().mStore->mStoreOption.mWorkerThreads;
+    bool recentUpdatedByOthers =
+        mWorkerId != cr::Worker::My().mWorkerId || mTxId != cr::ActiveTx().mStartTs;
+    return commandValid && hasLongRunningOLAP && recentUpdatedByOthers && frequentlyUpdated;
   }
 
-  void Update(BTreePessimisticExclusiveIterator& xIter, Slice key,
-              MutValCallback updateCallBack, UpdateDesc& updateDesc);
+  void Update(BTreePessimisticExclusiveIterator& xIter, Slice key, MutValCallback updateCallBack,
+              UpdateDesc& updateDesc);
 
 public:
   inline static const ChainedTuple* From(const uint8_t* buffer) {
@@ -103,8 +97,8 @@ public:
   }
 };
 
-inline std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(
-    Slice payload, ValCallback callback) const {
+inline std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(Slice payload,
+                                                                  ValCallback callback) const {
   if (cr::Worker::My().mCc.VisibleForMe(mWorkerId, mTxId)) {
     if (mIsTombstone) {
       return {OpCode::kNotFound, 1};
@@ -174,8 +168,8 @@ inline std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(
       Log::Error("Not found in the version tree, workerId={}, startTs={}, "
                  "versionsRead={}, newerWorkerId={}, newerTxId={}, "
                  "newerCommandId={}",
-                 cr::Worker::My().mWorkerId, cr::ActiveTx().mStartTs,
-                 versionsRead, newerWorkerId, newerTxId, newerCommandId);
+                 cr::Worker::My().mWorkerId, cr::ActiveTx().mStartTs, versionsRead, newerWorkerId,
+                 newerTxId, newerCommandId);
       return {OpCode::kNotFound, versionsRead};
     }
 
@@ -188,18 +182,16 @@ inline std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(
   return {OpCode::kNotFound, versionsRead};
 }
 
-inline void ChainedTuple::Update(BTreePessimisticExclusiveIterator& xIter,
-                                 Slice key, MutValCallback updateCallBack,
-                                 UpdateDesc& updateDesc) {
+inline void ChainedTuple::Update(BTreePessimisticExclusiveIterator& xIter, Slice key,
+                                 MutValCallback updateCallBack, UpdateDesc& updateDesc) {
   auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
   auto versionSize = sizeOfDescAndDelta + sizeof(UpdateVersion);
 
   // Move the newest tuple to the history version tree.
   auto treeId = xIter.mBTree.mTreeId;
-  auto currCommandId = cr::Worker::My().mCc.PutVersion(
-      treeId, false, versionSize, [&](uint8_t* versionBuf) {
-        auto& updateVersion =
-            *new (versionBuf) UpdateVersion(mWorkerId, mTxId, mCommandId, true);
+  auto currCommandId =
+      cr::Worker::My().mCc.PutVersion(treeId, false, versionSize, [&](uint8_t* versionBuf) {
+        auto& updateVersion = *new (versionBuf) UpdateVersion(mWorkerId, mTxId, mCommandId, true);
         std::memcpy(updateVersion.mPayload, &updateDesc, updateDesc.Size());
         auto* dest = updateVersion.mPayload + updateDesc.Size();
         BasicKV::CopyToBuffer(updateDesc, mPayload, dest);
@@ -231,8 +223,8 @@ inline void ChainedTuple::Update(BTreePessimisticExclusiveIterator& xIter,
   auto prevTxId = mTxId;
   auto prevCommandId = mCommandId;
   auto walHandler = xIter.mGuardedLeaf.ReserveWALPayload<WalTxUpdate>(
-      key.size() + sizeOfDescAndDelta, key, updateDesc, sizeOfDescAndDelta,
-      prevWorkerId, prevTxId, prevCommandId ^ currCommandId);
+      key.size() + sizeOfDescAndDelta, key, updateDesc, sizeOfDescAndDelta, prevWorkerId, prevTxId,
+      prevCommandId ^ currCommandId);
   auto* walBuf = walHandler->GetDeltaPtr();
 
   // 1. copy old value to wal buffer

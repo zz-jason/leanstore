@@ -11,42 +11,39 @@
 
 #include <utility>
 
-namespace leanstore {
-namespace storage {
+namespace leanstore::storage {
 
-template <typename T> class ExclusiveGuardedBufferFrame;
-template <typename T> class SharedGuardedBufferFrame;
+template <typename T>
+class ExclusiveGuardedBufferFrame;
+template <typename T>
+class SharedGuardedBufferFrame;
 
-/// A lock guarded buffer frame
-template <typename T> class GuardedBufferFrame {
+//! A lock guarded buffer frame
+template <typename T>
+class GuardedBufferFrame {
 public:
-  /// The buffer manager who manages the guarded buffer frame. Used to reclaim
-  /// the buffer frame, buffer manager must be set when keep alive is false.
+  //! The buffer manager who manages the guarded buffer frame. Used to reclaim
+  //! the buffer frame, buffer manager must be set when keep alive is false.
   BufferManager* mBufferManager = nullptr;
 
-  /// The guarded buffer frame. Latch mode is determined by mGuard.
+  //! The guarded buffer frame. Latch mode is determined by mGuard.
   BufferFrame* mBf = nullptr;
 
-  /// The latch guard of this buffer frame
+  //! The latch guard of this buffer frame
   HybridGuard mGuard;
 
   bool mKeepAlive = true;
 
 public:
-  /// Construct an empty GuardedBufferFrame, nothing to guard.
-  GuardedBufferFrame()
-      : mBufferManager(nullptr),
-        mBf(nullptr),
-        mGuard(nullptr),
-        mKeepAlive(true) {
+  //! Construct an empty GuardedBufferFrame, nothing to guard.
+  GuardedBufferFrame() : mBufferManager(nullptr), mBf(nullptr), mGuard(nullptr), mKeepAlive(true) {
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
-  /// Construct a GuardedBufferFrame from an existing latch guard.
-  /// @param hybridGuard the latch guard of the buffer frame
-  /// @param bf the latch guarded buffer frame
-  GuardedBufferFrame(BufferManager* bufferManager, HybridGuard&& hybridGuard,
-                     BufferFrame* bf)
+  //! Construct a GuardedBufferFrame from an existing latch guard.
+  //! @param hybridGuard the latch guard of the buffer frame
+  //! @param bf the latch guarded buffer frame
+  GuardedBufferFrame(BufferManager* bufferManager, HybridGuard&& hybridGuard, BufferFrame* bf)
       : mBufferManager(bufferManager),
         mBf(bf),
         mGuard(std::move(hybridGuard)),
@@ -57,8 +54,7 @@ public:
   GuardedBufferFrame(GuardedBufferFrame& other) = delete;  // Copy constructor
   GuardedBufferFrame(GuardedBufferFrame&& other) = delete; // Move constructor
 
-  GuardedBufferFrame(BufferManager* bufferManager, BufferFrame* bf,
-                     bool keepAlive = true)
+  GuardedBufferFrame(BufferManager* bufferManager, BufferFrame* bf, bool keepAlive = true)
       : mBufferManager(bufferManager),
         mBf(bf),
         mGuard(mBf->mHeader.mLatch, GuardState::kUninitialized),
@@ -67,7 +63,7 @@ public:
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
-  /// Guard a single page, usually used for latching the meta node of a BTree.
+  //! Guard a single page, usually used for latching the meta node of a BTree.
   GuardedBufferFrame(BufferManager* bufferManager, Swip& hotSwip,
                      const LatchMode latchMode = LatchMode::kOptimisticSpin)
       : mBufferManager(bufferManager),
@@ -79,16 +75,15 @@ public:
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
-  /// Guard the childSwip when holding the guarded parent, usually used for lock
-  /// coupling which locks the parent firstly then lock the child.
-  /// @param guardedParent The guarded parent node, which protects everyting in
-  /// the parent node, including childSwip.
-  /// @param childSwip The swip to the child node. The child page is loaded to
-  /// memory if it is evicted.
+  //! Guard the childSwip when holding the guarded parent, usually used for lock
+  //! coupling which locks the parent firstly then lock the child.
+  //! @param guardedParent The guarded parent node, which protects everyting in
+  //! the parent node, including childSwip.
+  //! @param childSwip The swip to the child node. The child page is loaded to
+  //! memory if it is evicted.
   template <typename T2>
-  GuardedBufferFrame(BufferManager* bufferManager,
-                     GuardedBufferFrame<T2>& guardedParent, Swip& childSwip,
-                     const LatchMode latchMode = LatchMode::kOptimisticSpin)
+  GuardedBufferFrame(BufferManager* bufferManager, GuardedBufferFrame<T2>& guardedParent,
+                     Swip& childSwip, const LatchMode latchMode = LatchMode::kOptimisticSpin)
       : mBufferManager(bufferManager),
         mBf(bufferManager->ResolveSwipMayJump(guardedParent.mGuard, childSwip)),
         mGuard(&mBf->mHeader.mLatch),
@@ -100,14 +95,14 @@ public:
     guardedParent.JumpIfModifiedByOthers();
   }
 
-  /// Downgrade from an exclusive guard
+  //! Downgrade from an exclusive guard
   GuardedBufferFrame(ExclusiveGuardedBufferFrame<T>&&) = delete;
   GuardedBufferFrame& operator=(ExclusiveGuardedBufferFrame<T>&&) {
     mGuard.Unlock();
     return *this;
   }
 
-  /// Downgrade from a shared guard
+  //! Downgrade from a shared guard
   GuardedBufferFrame(SharedGuardedBufferFrame<T>&&) = delete;
   GuardedBufferFrame& operator=(SharedGuardedBufferFrame<T>&&) {
     mGuard.Unlock();
@@ -126,10 +121,10 @@ public:
     JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP()
   }
 
-  /// Assignment operator
+  //! Assignment operator
   constexpr GuardedBufferFrame& operator=(GuardedBufferFrame& other) = delete;
 
-  /// Move assignment
+  //! Move assignment
   template <typename T2>
   constexpr GuardedBufferFrame& operator=(GuardedBufferFrame<T2>&& other) {
     mBufferManager = other.mBufferManager;
@@ -143,8 +138,8 @@ public:
   inline void SyncGSNBeforeWrite() {
     LS_DCHECK(mBf != nullptr);
     LS_DCHECK(mBf->mPage.mGSN <= cr::Worker::My().mLogging.GetCurrentGsn(),
-              "Page GSN should <= worker GSN, pageGSN={}, workerGSN={}",
-              mBf->mPage.mGSN, cr::Worker::My().mLogging.GetCurrentGsn());
+              "Page GSN should <= worker GSN, pageGSN={}, workerGSN={}", mBf->mPage.mGSN,
+              cr::Worker::My().mLogging.GetCurrentGsn());
 
     // update last writer worker
     mBf->mHeader.mLastWriterWorker = cr::Worker::My().mWorkerId;
@@ -168,8 +163,7 @@ public:
       cr::Worker::My().mLogging.mHasRemoteDependency = true;
       LS_DLOG("Detected remote dependency, workerId={}, "
               "txReadSnapshot(GSN)={}, pageLastWriterWorker={}, pageGSN={}",
-              cr::Worker::My().mWorkerId,
-              cr::Worker::My().mLogging.mTxReadSnapshot,
+              cr::Worker::My().mWorkerId, cr::Worker::My().mLogging.mTxReadSnapshot,
               mBf->mHeader.mLastWriterWorker, mBf->mPage.mGSN);
     }
 
@@ -181,18 +175,15 @@ public:
   }
 
   template <typename WT, typename... Args>
-  inline cr::WalPayloadHandler<WT> ReserveWALPayload(uint64_t walSize,
-                                                     Args&&... args) {
+  inline cr::WalPayloadHandler<WT> ReserveWALPayload(uint64_t walSize, Args&&... args) {
     LS_DCHECK(cr::ActiveTx().mIsDurable);
     LS_DCHECK(mGuard.mState == GuardState::kPessimisticExclusive);
 
     const auto pageId = mBf->mHeader.mPageId;
     const auto treeId = mBf->mPage.mBTreeId;
     walSize = ((walSize - 1) / 8 + 1) * 8;
-    auto handler =
-        cr::Worker::My().mLogging.ReserveWALEntryComplex<WT, Args...>(
-            sizeof(WT) + walSize, pageId, mBf->mPage.mGSN, treeId,
-            std::forward<Args>(args)...);
+    auto handler = cr::Worker::My().mLogging.ReserveWALEntryComplex<WT, Args...>(
+        sizeof(WT) + walSize, pageId, mBf->mPage.mGSN, treeId, std::forward<Args>(args)...);
 
     SyncGSNBeforeWrite();
     return handler;
@@ -280,35 +271,32 @@ protected:
       break;
     }
     default: {
-      LS_DCHECK(false, "Unhandled LatchMode: {}",
-                std::to_string(static_cast<uint64_t>(latchMode)));
+      LS_DCHECK(false, "Unhandled LatchMode: {}", std::to_string(static_cast<uint64_t>(latchMode)));
     }
     }
   }
 };
 
-template <typename PayloadType> class ExclusiveGuardedBufferFrame {
+template <typename PayloadType>
+class ExclusiveGuardedBufferFrame {
 private:
   GuardedBufferFrame<PayloadType>& mRefGuard;
 
 public:
   // I: Upgrade
-  ExclusiveGuardedBufferFrame(GuardedBufferFrame<PayloadType>&& guardedBf)
-      : mRefGuard(guardedBf) {
+  ExclusiveGuardedBufferFrame(GuardedBufferFrame<PayloadType>&& guardedBf) : mRefGuard(guardedBf) {
     mRefGuard.mGuard.ToExclusiveMayJump();
   }
 
   template <typename WT, typename... Args>
-  cr::WalPayloadHandler<WT> ReserveWALPayload(uint64_t payloadSize,
-                                              Args&&... args) {
-    return mRefGuard.template ReserveWALPayload<WT>(
-        payloadSize, std::forward<Args>(args)...);
+  cr::WalPayloadHandler<WT> ReserveWALPayload(uint64_t payloadSize, Args&&... args) {
+    return mRefGuard.template ReserveWALPayload<WT>(payloadSize, std::forward<Args>(args)...);
   }
 
   template <typename WT, typename... Args>
   void WriteWal(uint64_t payloadSize, Args&&... args) {
-    auto walPayloadHandler = mRefGuard.template ReserveWALPayload<WT>(
-        payloadSize, std::forward<Args>(args)...);
+    auto walPayloadHandler =
+        mRefGuard.template ReserveWALPayload<WT>(payloadSize, std::forward<Args>(args)...);
     walPayloadHandler.SubmitWal();
   }
 
@@ -321,19 +309,18 @@ public:
   }
 
   ~ExclusiveGuardedBufferFrame() {
-    if (!mRefGuard.mKeepAlive &&
-        mRefGuard.mGuard.mState == GuardState::kPessimisticExclusive) {
+    if (!mRefGuard.mKeepAlive && mRefGuard.mGuard.mState == GuardState::kPessimisticExclusive) {
       mRefGuard.Reclaim();
     } else {
       mRefGuard.unlock();
     }
   }
 
-  /// Initialize the payload data structure (i.e. BTreeNode), usually used when
-  /// the buffer frame is used to serve a new page.
-  template <typename... Args> void InitPayload(Args&&... args) {
-    new (mRefGuard.mBf->mPage.mPayload)
-        PayloadType(std::forward<Args>(args)...);
+  //! Initialize the payload data structure (i.e. BTreeNode), usually used when
+  //! the buffer frame is used to serve a new page.
+  template <typename... Args>
+  void InitPayload(Args&&... args) {
+    new (mRefGuard.mBf->mPage.mPayload) PayloadType(std::forward<Args>(args)...);
   }
 
   inline uint8_t* GetPagePayloadPtr() {
@@ -361,14 +348,14 @@ public:
   }
 };
 
-/// Shared lock guarded buffer frame.
-/// TODO(jian.z): Seems it hasen't been used in the codebase, can we remove it?
-template <typename T> class SharedGuardedBufferFrame {
+//! Shared lock guarded buffer frame.
+//! TODO(jian.z): Seems it hasen't been used in the codebase, can we remove it?
+template <typename T>
+class SharedGuardedBufferFrame {
 public:
   GuardedBufferFrame<T>& mRefGuard;
 
-  SharedGuardedBufferFrame(GuardedBufferFrame<T>&& guardedBf)
-      : mRefGuard(guardedBf) {
+  SharedGuardedBufferFrame(GuardedBufferFrame<T>&& guardedBf) : mRefGuard(guardedBf) {
     mRefGuard.ToSharedMayJump();
   }
 
@@ -376,24 +363,23 @@ public:
     mRefGuard.unlock();
   }
 
-  inline T& ref() {
+  T& ref() {
     return *reinterpret_cast<T*>(mRefGuard.mBf->mPage.mPayload);
   }
 
-  inline T* ptr() {
+  T* ptr() {
     return reinterpret_cast<T*>(mRefGuard.mBf->mPage.mPayload);
   }
 
-  inline Swip swip() {
+  Swip swip() {
     return Swip(mRefGuard.mBf);
   }
 
   // NOLINTEND
 
-  inline T* operator->() {
+  T* operator->() {
     return reinterpret_cast<T*>(mRefGuard.mBf->mPage.mPayload);
   }
 };
 
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage

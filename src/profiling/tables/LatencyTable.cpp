@@ -31,14 +31,11 @@ void LatencyTable::next() {
     for (uint64_t i = 0; i < CRCounters::latency_tx_capacity; i++) {
       columns.at("key") << tls->mWorkerId.load();
       columns.at("i") << i;
-      columns.at("cc_ms_precommit_latency")
-          << tls->cc_ms_precommit_latency[i].load();
+      columns.at("cc_ms_precommit_latency") << tls->cc_ms_precommit_latency[i].load();
       columns.at("cc_ms_commit_latency") << tls->cc_ms_commit_latency[i].load();
       columns.at("cc_flushes_counter") << tls->cc_flushes_counter[i].load();
-      columns.at("cc_rfa_ms_precommit_latency")
-          << tls->cc_rfa_ms_precommit_latency[i].load();
-      columns.at("cc_rfa_ms_commit_latency")
-          << tls->cc_rfa_ms_commit_latency[i].load();
+      columns.at("cc_rfa_ms_precommit_latency") << tls->cc_rfa_ms_precommit_latency[i].load();
+      columns.at("cc_rfa_ms_commit_latency") << tls->cc_rfa_ms_commit_latency[i].load();
     }
   });
 }

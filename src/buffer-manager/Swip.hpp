@@ -8,16 +8,19 @@ namespace leanstore::storage {
 
 class BufferFrame;
 
-//! Swip represents either the page id or the pointer to the buffer frame
-//! which contains the page. It can be the following 3 stats:
-//! 1. hot. the swip represents the memory pointer to a buffer frame. the 2 most
-//!    significant bits are both 0s.
-//! 2. cool. the swip represents the memory pointer to a buffer frame. but the
-//!    2nd most most significant bits is 1 which marks the pointer as "cool".
-//! 3. evicted. the swip represents a page id. the most most significant bit is
-//!    1 which marks the swip as "EVICTED".
+//! Swip represents either the page id or the pointer to the buffer frame which contains the page.
+//! It can be the following 3 stats:
+//! - EVICTED: page id, the most most significant bit is 1 which marks the swip as "EVICTED".
+//! - COOL: buffer frame pointer, the 2nd most most significant bit is 1 which marks it as "COOL".
+//! - HOT: buffer frame pointer, the 2nd most most significant bit is 0 which marks it as "HOT".
+//!
+//! i.e.
+//! - 1xxxxxxxxxxxx EVICTED, page id
+//! - 01xxxxxxxxxxx COOL, buffer frame pointer
+//! - 00xxxxxxxxxxx HOT, buffer frame pointer
 class Swip {
 public:
+  //! The actual data
   union {
     uint64_t mPageId;
     BufferFrame* mBf;
@@ -47,8 +50,7 @@ public:
     return mPageId & sEvictedBit;
   }
 
-  //! Indicates whether this swip points to nothing: no evicted bit, no cool
-  //! bit, the memory pointer is nullptr
+  //! Whether this swip points to nothing, the memory pointer is nullptr
   bool IsEmpty() {
     return mPageId == 0;
   }
@@ -58,7 +60,7 @@ public:
     return mPageId & sEvictedMask;
   }
 
-  //! return the underlying buffer frame from a hot buffer frame.
+  //! Return the underlying buffer frame from a hot buffer frame.
   BufferFrame& AsBufferFrame() {
     LS_DCHECK(IsHot());
     return *mBf;
@@ -91,10 +93,6 @@ public:
   }
 
 private:
-  // 1xxxxxxxxxxxx evicted
-  // 01xxxxxxxxxxx cool
-  // 00xxxxxxxxxxx hot
-
   static const uint64_t sEvictedBit = uint64_t(1) << 63;
   static const uint64_t sEvictedMask = ~(uint64_t(1) << 63);
   static const uint64_t sCoolBit = uint64_t(1) << 62;

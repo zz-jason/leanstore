@@ -18,9 +18,8 @@ using namespace leanstore::storage::btree;
 
 namespace leanstore::cr {
 
-void HistoryStorage::PutVersion(TXID txId, COMMANDID commandId, TREEID treeId,
-                                bool isRemove, uint64_t versionSize,
-                                std::function<void(uint8_t*)> insertCallBack,
+void HistoryStorage::PutVersion(TXID txId, COMMANDID commandId, TREEID treeId, bool isRemove,
+                                uint64_t versionSize, std::function<void(uint8_t*)> insertCallBack,
                                 bool sameThread) {
   // Compose the key to be inserted
   auto* btree = isRemove ? mRemoveIndex : mUpdateIndex;
@@ -39,15 +38,13 @@ void HistoryStorage::PutVersion(TXID txId, COMMANDID commandId, TREEID treeId,
   if (session != nullptr && session->mRightmostBf != nullptr) {
     JUMPMU_TRY() {
       BTreePessimisticExclusiveIterator xIter(
-          *static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)),
-          session->mRightmostBf, session->mRightmostVersion);
-      if (xIter.HasEnoughSpaceFor(key.size(), versionSize) &&
-          xIter.KeyInCurrentNode(key)) {
+          *static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)), session->mRightmostBf,
+          session->mRightmostVersion);
+      if (xIter.HasEnoughSpaceFor(key.size(), versionSize) && xIter.KeyInCurrentNode(key)) {
 
         if (session->mLastTxId == txId) {
           // Only need to keep one version for each txId?
-          xIter.mGuardedLeaf->insertDoNotCopyPayload(key, versionSize,
-                                                     session->mRightmostPos);
+          xIter.mGuardedLeaf->InsertDoNotCopyPayload(key, versionSize, session->mRightmostPos);
           xIter.mSlotId = session->mRightmostPos;
         } else {
           xIter.InsertToCurrentNode(key, versionSize);
@@ -103,9 +100,9 @@ void HistoryStorage::PutVersion(TXID txId, COMMANDID commandId, TREEID treeId,
   }
 }
 
-bool HistoryStorage::GetVersion(
-    TXID newerTxId, COMMANDID newerCommandId, const bool isRemoveCommand,
-    std::function<void(const uint8_t*, uint64_t)> cb) {
+bool HistoryStorage::GetVersion(TXID newerTxId, COMMANDID newerCommandId,
+                                const bool isRemoveCommand,
+                                std::function<void(const uint8_t*, uint64_t)> cb) {
   volatile BasicKV* btree = (isRemoveCommand) ? mRemoveIndex : mUpdateIndex;
   const uint64_t keySize = sizeof(newerTxId) + sizeof(newerCommandId);
   uint8_t keyBuffer[keySize];
@@ -151,8 +148,7 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
   restartrem: {
     auto xIter = btree->GetExclusiveIterator();
     xIter.SetExitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
-      if (guardedLeaf->FreeSpaceAfterCompaction() >=
-          BTreeNode::UnderFullSize()) {
+      if (guardedLeaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
         xIter.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
           JUMPMU_TRY() {
             btree->TryMergeMayJump(*toMerge);
@@ -171,8 +167,7 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
         break;
       }
 
-      auto& versionContainer =
-          *reinterpret_cast<VersionMeta*>(xIter.MutableVal().Data());
+      auto& versionContainer = *reinterpret_cast<VersionMeta*>(xIter.MutableVal().Data());
       const TREEID treeId = versionContainer.mTreeId;
       const bool calledBefore = versionContainer.mCalledBefore;
       versionContainer.mCalledBefore = true;
@@ -217,9 +212,9 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
       // lock successfull, check whether the page can be purged
       auto* leafNode = reinterpret_cast<BTreeNode*>(bf->mPage.mPayload);
       if (leafNode->mLowerFence.mLength == 0 && leafNode->mNumSeps > 0) {
-        auto lastKeySize = leafNode->getFullKeyLen(leafNode->mNumSeps - 1);
+        auto lastKeySize = leafNode->GetFullKeyLen(leafNode->mNumSeps - 1);
         uint8_t lastKey[lastKeySize];
-        leafNode->copyFullKey(leafNode->mNumSeps - 1, lastKey);
+        leafNode->CopyFullKey(leafNode->mNumSeps - 1, lastKey);
 
         // optimistic unlock, jump if invalid
         bfGuard.Unlock();
@@ -240,50 +235,46 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
     JUMPMU_TRY() {
       auto xIter = btree->GetExclusiveIterator();
       // check whether the page can be merged when exit a leaf
-      xIter.SetExitLeafCallback(
-          [&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
-            if (guardedLeaf->FreeSpaceAfterCompaction() >=
-                BTreeNode::UnderFullSize()) {
-              xIter.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
-                JUMPMU_TRY() {
-                  btree->TryMergeMayJump(*toMerge);
-                }
-                JUMPMU_CATCH() {
-                }
-              });
+      xIter.SetExitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
+        if (guardedLeaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
+          xIter.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
+            JUMPMU_TRY() {
+              btree->TryMergeMayJump(*toMerge);
+            }
+            JUMPMU_CATCH() {
             }
           });
+        }
+      });
 
       bool isFullPagePurged = false;
       // check whether the whole page can be purged when enter a leaf
-      xIter.SetEnterLeafCallback(
-          [&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
-            if (guardedLeaf->mNumSeps == 0) {
-              return;
-            }
+      xIter.SetEnterLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
+        if (guardedLeaf->mNumSeps == 0) {
+          return;
+        }
 
-            // get the transaction id in the first key
-            auto firstKeySize = guardedLeaf->getFullKeyLen(0);
-            uint8_t firstKey[firstKeySize];
-            guardedLeaf->copyFullKey(0, firstKey);
-            TXID txIdInFirstKey;
-            utils::Unfold(firstKey, txIdInFirstKey);
+        // get the transaction id in the first key
+        auto firstKeySize = guardedLeaf->GetFullKeyLen(0);
+        uint8_t firstKey[firstKeySize];
+        guardedLeaf->CopyFullKey(0, firstKey);
+        TXID txIdInFirstKey;
+        utils::Unfold(firstKey, txIdInFirstKey);
 
-            // get the transaction id in the last key
-            auto lastKeySize =
-                guardedLeaf->getFullKeyLen(guardedLeaf->mNumSeps - 1);
-            uint8_t lastKey[lastKeySize];
-            guardedLeaf->copyFullKey(guardedLeaf->mNumSeps - 1, lastKey);
-            TXID txIdInLastKey;
-            utils::Unfold(lastKey, txIdInLastKey);
+        // get the transaction id in the last key
+        auto lastKeySize = guardedLeaf->GetFullKeyLen(guardedLeaf->mNumSeps - 1);
+        uint8_t lastKey[lastKeySize];
+        guardedLeaf->CopyFullKey(guardedLeaf->mNumSeps - 1, lastKey);
+        TXID txIdInLastKey;
+        utils::Unfold(lastKey, txIdInLastKey);
 
-            // purge the whole page if it is in the range
-            if (fromTxId <= txIdInFirstKey && txIdInLastKey <= toTxId) {
-              versionsRemoved += guardedLeaf->mNumSeps;
-              guardedLeaf->Reset();
-              isFullPagePurged = true;
-            }
-          });
+        // purge the whole page if it is in the range
+        if (fromTxId <= txIdInFirstKey && txIdInLastKey <= toTxId) {
+          versionsRemoved += guardedLeaf->mNumSeps;
+          guardedLeaf->Reset();
+          isFullPagePurged = true;
+        }
+      });
 
       xIter.Seek(key);
       if (isFullPagePurged) {
@@ -303,8 +294,8 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
   }
 }
 
-void HistoryStorage::VisitRemovedVersions(
-    TXID fromTxId, TXID toTxId, RemoveVersionCallback onRemoveVersion) {
+void HistoryStorage::VisitRemovedVersions(TXID fromTxId, TXID toTxId,
+                                          RemoveVersionCallback onRemoveVersion) {
   auto* removeTree = mRemoveIndex;
   auto keySize = sizeof(toTxId);
   uint8_t keyBuffer[utils::tlsStore->mStoreOption.mPageSize];
@@ -330,10 +321,9 @@ void HistoryStorage::VisitRemovedVersions(
       auto& versionContainer = *VersionMeta::From(xIter.MutableVal().Data());
       const TREEID treeId = versionContainer.mTreeId;
       const bool calledBefore = versionContainer.mCalledBefore;
-      LS_DCHECK(
-          calledBefore == false,
-          "Each remove version should be visited only once, treeId={}, txId={}",
-          treeId, curTxId);
+      LS_DCHECK(calledBefore == false,
+                "Each remove version should be visited only once, treeId={}, txId={}", treeId,
+                curTxId);
 
       versionContainer.mCalledBefore = true;
 

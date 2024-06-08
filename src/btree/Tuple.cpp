@@ -17,7 +17,8 @@ using OpCode = leanstore::OpCode;
 
 namespace std {
 
-template <> class hash<leanstore::UpdateSlotInfo> {
+template <>
+class hash<leanstore::UpdateSlotInfo> {
 public:
   size_t operator()(const leanstore::UpdateSlotInfo& slot) const {
     size_t result = (slot.mSize << 16) | slot.mOffset;
@@ -52,8 +53,7 @@ bool Tuple::ToFat(BTreePessimisticExclusiveIterator& xIter) {
   auto tmpBuf = utils::JumpScopedArray<uint8_t>(tmpBufSize);
   uint32_t payloadSize = tmpBufSize - sizeof(FatTuple);
   uint32_t valSize = mutRawVal.Size() - sizeof(ChainedTuple);
-  auto* fatTuple =
-      new (tmpBuf->get()) FatTuple(payloadSize, valSize, chainedTuple);
+  auto* fatTuple = new (tmpBuf->get()) FatTuple(payloadSize, valSize, chainedTuple);
 
   auto newerWorkerId = chainedTuple.mWorkerId;
   auto newerTxId = chainedTuple.mTxId;
@@ -70,8 +70,7 @@ bool Tuple::ToFat(BTreePessimisticExclusiveIterator& xIter) {
     }
 
     if (!cr::Worker::My().mCc.GetVersion(
-            newerWorkerId, newerTxId, newerCommandId,
-            [&](const uint8_t* version, uint64_t) {
+            newerWorkerId, newerTxId, newerCommandId, [&](const uint8_t* version, uint64_t) {
               numDeltasToReplace++;
               const auto& chainedDelta = *UpdateVersion::From(version);
               LS_DCHECK(chainedDelta.mType == VersionType::kUpdate);
@@ -90,10 +89,9 @@ bool Tuple::ToFat(BTreePessimisticExclusiveIterator& xIter) {
               }
 
               // Add a FatTupleDelta
-              fatTuple->NewDelta(deltaSize, chainedDelta.mWorkerId,
-                                 chainedDelta.mTxId, chainedDelta.mCommandId,
-                                 reinterpret_cast<const uint8_t*>(&updateDesc),
-                                 sizeOfDescAndDelta);
+              fatTuple->NewDelta(deltaSize, chainedDelta.mWorkerId, chainedDelta.mTxId,
+                                 chainedDelta.mCommandId,
+                                 reinterpret_cast<const uint8_t*>(&updateDesc), sizeOfDescAndDelta);
               newerWorkerId = chainedDelta.mWorkerId;
               newerTxId = chainedDelta.mTxId;
               newerCommandId = chainedDelta.mCommandId;
@@ -148,8 +146,7 @@ bool Tuple::ToFat(BTreePessimisticExclusiveIterator& xIter) {
 // FatTuple
 // -----------------------------------------------------------------------------
 
-FatTuple::FatTuple(uint32_t payloadSize, uint32_t valSize,
-                   const ChainedTuple& chainedTuple)
+FatTuple::FatTuple(uint32_t payloadSize, uint32_t valSize, const ChainedTuple& chainedTuple)
     : Tuple(TupleFormat::kFat, chainedTuple.mWorkerId, chainedTuple.mTxId),
       mValSize(valSize),
       mPayloadCapacity(payloadSize),
@@ -185,10 +182,8 @@ void FatTuple::GarbageCollection() {
   }
   utils::Timer timer(CRCounters::MyCounters().cc_ms_gc);
 
-  auto appendDelta = [](FatTuple& fatTuple, uint8_t* delta,
-                        uint16_t deltaSize) {
-    assert(fatTuple.mPayloadCapacity >=
-           (fatTuple.mPayloadSize + deltaSize + sizeof(uint16_t)));
+  auto appendDelta = [](FatTuple& fatTuple, uint8_t* delta, uint16_t deltaSize) {
+    assert(fatTuple.mPayloadCapacity >= (fatTuple.mPayloadSize + deltaSize + sizeof(uint16_t)));
     const uint16_t i = fatTuple.mNumDeltas++;
     fatTuple.mPayloadSize += deltaSize + sizeof(uint16_t);
     fatTuple.mDataOffset -= deltaSize;
@@ -214,11 +209,9 @@ void FatTuple::GarbageCollection() {
   }
 
   const TXID local_oldest_oltp =
-      cr::Worker::My()
-          .mStore->mCRManager->mGlobalWmkInfo.mOldestActiveShortTx.load();
+      cr::Worker::My().mStore->mCRManager->mGlobalWmkInfo.mOldestActiveShortTx.load();
   const TXID local_newest_olap =
-      cr::Worker::My()
-          .mStore->mCRManager->mGlobalWmkInfo.mNewestActiveLongTx.load();
+      cr::Worker::My().mStore->mCRManager->mGlobalWmkInfo.mNewestActiveLongTx.load();
   if (deltasVisibleForAll == 0 && local_newest_olap > local_oldest_oltp) {
     return; // Nothing to do here
   }
@@ -273,14 +266,12 @@ void FatTuple::GarbageCollection() {
   if (deltas_to_merge_counter <= 0) {
     for (uint32_t i = deltasVisibleForAll; i < mNumDeltas; i++) {
       auto& delta = getDelta(i);
-      appendDelta(newFatTuple, reinterpret_cast<uint8_t*>(&delta),
-                  delta.TotalSize());
+      appendDelta(newFatTuple, reinterpret_cast<uint8_t*>(&delta), delta.TotalSize());
     }
   } else {
     for (int32_t i = deltasVisibleForAll; i < zone_begin; i++) {
       auto& delta = getDelta(i);
-      appendDelta(newFatTuple, reinterpret_cast<uint8_t*>(&delta),
-                  delta.TotalSize());
+      appendDelta(newFatTuple, reinterpret_cast<uint8_t*>(&delta), delta.TotalSize());
     }
 
     // TODO: Optimize
@@ -291,13 +282,13 @@ void FatTuple::GarbageCollection() {
       auto& updateDesc = deltaId.GetUpdateDesc();
       auto* deltaPtr = deltaId.GetDeltaPtr();
       for (int16_t i = 0; i < updateDesc.mNumSlots; i++) {
-        diffSlotsMap[updateDesc.mUpdateSlots[i]] = std::basic_string<uint8_t>(
-            deltaPtr, updateDesc.mUpdateSlots[i].mSize);
+        diffSlotsMap[updateDesc.mUpdateSlots[i]] =
+            std::basic_string<uint8_t>(deltaPtr, updateDesc.mUpdateSlots[i].mSize);
         deltaPtr += updateDesc.mUpdateSlots[i].mSize;
       }
     }
-    uint32_t totalNewDeltaSize = sizeof(FatTupleDelta) + sizeof(UpdateDesc) +
-                                 (sizeof(UpdateSlotInfo) * diffSlotsMap.size());
+    uint32_t totalNewDeltaSize =
+        sizeof(FatTupleDelta) + sizeof(UpdateDesc) + (sizeof(UpdateSlotInfo) * diffSlotsMap.size());
     for (auto& slot_itr : diffSlotsMap) {
       totalNewDeltaSize += slot_itr.second.size();
     }
@@ -309,15 +300,13 @@ void FatTuple::GarbageCollection() {
     uint32_t s_i = 0;
     for (auto& slot_itr : diffSlotsMap) {
       updateDesc.mUpdateSlots[s_i++] = slot_itr.first;
-      std::memcpy(mergeDeltaPtr, slot_itr.second.c_str(),
-                  slot_itr.second.size());
+      std::memcpy(mergeDeltaPtr, slot_itr.second.c_str(), slot_itr.second.size());
       mergeDeltaPtr += slot_itr.second.size();
     }
 
     for (uint32_t i = zone_end; i < mNumDeltas; i++) {
       auto& delta = getDelta(i);
-      appendDelta(newFatTuple, reinterpret_cast<uint8_t*>(&delta),
-                  delta.TotalSize());
+      appendDelta(newFatTuple, reinterpret_cast<uint8_t*>(&delta), delta.TotalSize());
     }
   }
 
@@ -336,16 +325,14 @@ void FatTuple::GarbageCollection() {
 // NOLINTEND
 
 bool FatTuple::HasSpaceFor(const UpdateDesc& updateDesc) {
-  const uint32_t spaceNeeded =
+  const uint32_t SpaceNeeded =
       updateDesc.SizeWithDelta() + sizeof(uint16_t) + sizeof(FatTupleDelta);
-  return (mDataOffset - (mValSize + (mNumDeltas * sizeof(uint16_t)))) >=
-         spaceNeeded;
+  return (mDataOffset - (mValSize + (mNumDeltas * sizeof(uint16_t)))) >= SpaceNeeded;
 }
 
 template <typename... Args>
 FatTupleDelta& FatTuple::NewDelta(uint32_t totalDeltaSize, Args&&... args) {
-  LS_DCHECK((mPayloadCapacity - mPayloadSize) >=
-            (totalDeltaSize + sizeof(uint16_t)));
+  LS_DCHECK((mPayloadCapacity - mPayloadSize) >= (totalDeltaSize + sizeof(uint16_t)));
   mPayloadSize += totalDeltaSize + sizeof(uint16_t);
   mDataOffset -= totalDeltaSize;
   const uint32_t deltaId = mNumDeltas++;
@@ -355,8 +342,7 @@ FatTupleDelta& FatTuple::NewDelta(uint32_t totalDeltaSize, Args&&... args) {
 
 // Caller should take care of WAL
 void FatTuple::Append(UpdateDesc& updateDesc) {
-  const uint32_t totalDeltaSize =
-      updateDesc.SizeWithDelta() + sizeof(FatTupleDelta);
+  const uint32_t totalDeltaSize = updateDesc.SizeWithDelta() + sizeof(FatTupleDelta);
   auto& newDelta = NewDelta(totalDeltaSize);
   newDelta.mWorkerId = this->mWorkerId;
   newDelta.mTxId = this->mTxId;
@@ -366,8 +352,7 @@ void FatTuple::Append(UpdateDesc& updateDesc) {
   BasicKV::CopyToBuffer(updateDesc, this->GetValPtr(), deltaPtr);
 }
 
-std::tuple<OpCode, uint16_t> FatTuple::GetVisibleTuple(
-    ValCallback valCallback) const {
+std::tuple<OpCode, uint16_t> FatTuple::GetVisibleTuple(ValCallback valCallback) const {
 
   // Latest version is visible
   if (cr::Worker::My().mCc.VisibleForMe(mWorkerId, mTxId)) {
@@ -411,10 +396,8 @@ void FatTuple::resize(const uint32_t newSize) {
   newFatTuple.mPayloadSize += mValSize;
   newFatTuple.mValSize = mValSize;
   std::memcpy(newFatTuple.mPayload, mPayload, mValSize); // Copy value
-  auto appendDelta = [](FatTuple& fatTuple, uint8_t* delta,
-                        uint16_t deltaSize) {
-    LS_DCHECK(fatTuple.mPayloadCapacity >=
-              (fatTuple.mPayloadSize + deltaSize + sizeof(uint16_t)));
+  auto appendDelta = [](FatTuple& fatTuple, uint8_t* delta, uint16_t deltaSize) {
+    LS_DCHECK(fatTuple.mPayloadCapacity >= (fatTuple.mPayloadSize + deltaSize + sizeof(uint16_t)));
     const uint16_t i = fatTuple.mNumDeltas++;
     fatTuple.mPayloadSize += deltaSize + sizeof(uint16_t);
     fatTuple.mDataOffset -= deltaSize;
@@ -422,8 +405,7 @@ void FatTuple::resize(const uint32_t newSize) {
     std::memcpy(fatTuple.mPayload + fatTuple.mDataOffset, delta, deltaSize);
   };
   for (uint64_t i = 0; i < mNumDeltas; i++) {
-    appendDelta(newFatTuple, reinterpret_cast<uint8_t*>(&getDelta(i)),
-                getDelta(i).TotalSize());
+    appendDelta(newFatTuple, reinterpret_cast<uint8_t*>(&getDelta(i)), getDelta(i).TotalSize());
   }
   std::memcpy(this, tmpPage->get(), tmpPageSize);
   LS_DCHECK(mPayloadCapacity >= mPayloadSize);
@@ -442,9 +424,7 @@ void FatTuple::ConvertToChained(TREEID treeId) {
         .mCc.Other(prevWorkerId)
         .mHistoryStorage.PutVersion(
             prevTxId, prevCommandId, treeId, false, versionSize,
-            [&](uint8_t* versionBuf) {
-              new (versionBuf) UpdateVersion(delta, sizeOfDescAndDelta);
-            },
+            [&](uint8_t* versionBuf) { new (versionBuf) UpdateVersion(delta, sizeOfDescAndDelta); },
             false);
     prevWorkerId = delta.mWorkerId;
     prevTxId = delta.mTxId;

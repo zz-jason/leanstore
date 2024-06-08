@@ -24,8 +24,7 @@ protected:
   void SetUp() override {
     // Create a leanstore instance for the test case
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
-    auto curTestName = std::string(curTest->test_case_name()) + "_" +
-                       std::string(curTest->name());
+    auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
 
     auto res = LeanStore::Open(StoreOption{
         .mCreateFromScratch = true,
@@ -111,8 +110,7 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
     };
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, expectedVal] = kvToTest[i];
-      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
-                              copyValueOut),
+      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copyValueOut),
                 OpCode::kOK);
       EXPECT_EQ(copiedValue, expectedVal);
     }
@@ -128,8 +126,7 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
     };
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, expectedVal] = kvToTest[i];
-      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()),
-                              copyValueOut),
+      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copyValueOut),
                 OpCode::kOK);
       EXPECT_EQ(copiedValue, expectedVal);
     }

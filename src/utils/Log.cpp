@@ -51,8 +51,7 @@ void Log::Init(const StoreOption& option) {
     break;
   }
   default: {
-    std::cerr << std::format("unsupported log level: {}",
-                             static_cast<uint8_t>(option.mLogLevel));
+    std::cerr << std::format("unsupported log level: {}", static_cast<uint8_t>(option.mLogLevel));
     std::abort();
   }
   }

@@ -28,8 +28,7 @@ struct CRCounters {
   std::atomic<uint64_t> cc_snapshot_restart = 0;
 
   // Time
-  std::atomic<uint64_t> cc_ms_snapshotting =
-      0; // Everything related to commit log
+  std::atomic<uint64_t> cc_ms_snapshotting = 0; // Everything related to commit log
   std::atomic<uint64_t> cc_ms_gc = 0;
   std::atomic<uint64_t> cc_ms_gc_graveyard = 0;
   std::atomic<uint64_t> cc_ms_gc_history_tree = 0;

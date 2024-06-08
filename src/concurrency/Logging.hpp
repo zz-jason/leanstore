@@ -37,45 +37,45 @@ struct WalFlushReq {
   }
 };
 
-template <typename T> class WalPayloadHandler;
+template <typename T>
+class WalPayloadHandler;
 
 //! Helps to transaction concurrenct control and write-ahead logging.
 class Logging {
 public:
   LID mPrevLSN;
 
-  //! The active complex WalEntry for the current transaction, usually used for
-  //! insert, update, delete, or btree related operations.
+  //! The active complex WalEntry for the current transaction, usually used for insert, update,
+  //! delete, or btree related operations.
   //!
-  //! NOTE: Either mActiveWALEntrySimple or mActiveWALEntryComplex is effective
-  //! during transaction processing.
+  //! NOTE: Either mActiveWALEntrySimple or mActiveWALEntryComplex is effective during transaction
+  //! processing.
   WalEntryComplex* mActiveWALEntryComplex;
 
   //! Protects mTxToCommit
   std::mutex mTxToCommitMutex;
 
-  //! The queue for each worker thread to store pending-to-commit transactions
-  //! which have remote dependencies.
+  //! The queue for each worker thread to store pending-to-commit transactions which have remote
+  //! dependencies.
   std::vector<Transaction> mTxToCommit;
 
   //! Protects mTxToCommit
   std::mutex mRfaTxToCommitMutex;
 
-  //! The queue for each worker thread to store pending-to-commit transactions
-  //! which doesn't have any remote dependencies.
+  //! The queue for each worker thread to store pending-to-commit transactions which doesn't have
+  //! any remote dependencies.
   std::vector<Transaction> mRfaTxToCommit;
 
-  //! Represents the maximum commit timestamp in the worker. Transactions in the
-  //! worker are committed if their commit timestamps are smaller than it.
+  //! Represents the maximum commit timestamp in the worker. Transactions in the worker are
+  //! committed if their commit timestamps are smaller than it.
   //!
   //! Updated by group committer
   std::atomic<TXID> mSignaledCommitTs = 0;
 
   storage::OptimisticGuarded<WalFlushReq> mWalFlushReq;
 
-  //! The ring buffer of the current worker thread. All the wal entries of the
-  //! current worker are writtern to this ring buffer firstly, then flushed to
-  //! disk by the group commit thread.
+  //! The ring buffer of the current worker thread. All the wal entries of the current worker are
+  //! writtern to this ring buffer firstly, then flushed to disk by the group commit thread.
   alignas(512) uint8_t* mWalBuffer;
 
   //! The size of the wal ring buffer.
@@ -90,18 +90,17 @@ public:
   //! The written offset of the wal ring buffer.
   uint64_t mWalBuffered = 0;
 
-  //! Represents the flushed offset in the wal ring buffer.  The wal ring buffer
-  //! is firstly written by the worker thread then flushed to disk file by the
-  //! group commit thread.
+  //! Represents the flushed offset in the wal ring buffer.  The wal ring buffer is firstly written
+  //! by the worker thread then flushed to disk file by the group commit thread.
   std::atomic<uint64_t> mWalFlushed = 0;
 
-  //! The global min flushed GSN when transaction started. Pages whose GSN
-  //! larger than this value might be modified by other transactions running at
-  //! the same time, which cause the remote transaction dependency.
+  //! The global min flushed GSN when transaction started. Pages whose GSN larger than this value
+  //! might be modified by other transactions running at the same time, which cause the remote
+  //! transaction dependency.
   uint64_t mTxReadSnapshot;
 
-  //! Whether the active transaction has accessed data written by other worker
-  //! transactions, i.e. dependens on the transactions on other workers.
+  //! Whether the active transaction has accessed data written by other worker transactions, i.e.
+  //! dependens on the transactions on other workers.
   bool mHasRemoteDependency = false;
 
   //! The first WAL record of the current active transaction.
@@ -119,17 +118,15 @@ public:
   void ReserveContiguousBuffer(uint32_t requestedSize);
 
   //! Iterate over current TX entries
-  void IterateCurrentTxWALs(
-      std::function<void(const WalEntry& entry)> callback);
+  void IterateCurrentTxWALs(std::function<void(const WalEntry& entry)> callback);
 
   void WriteWalTxAbort();
   void WriteWalTxFinish();
   void WriteWalCarriageReturn();
 
   template <typename T, typename... Args>
-  WalPayloadHandler<T> ReserveWALEntryComplex(uint64_t payloadSize, PID pageId,
-                                              LID gsn, TREEID treeId,
-                                              Args&&... args);
+  WalPayloadHandler<T> ReserveWALEntryComplex(uint64_t payloadSize, PID pageId, LID gsn,
+                                              TREEID treeId, Args&&... args);
 
   //! Submits wal record to group committer when it is ready to flush to disk.
   //! @param totalSize size of the wal record to be flush.

@@ -105,8 +105,7 @@ public:
   const uint64_t mPageIdDistance;
 
 public:
-  Partition(uint64_t firstPageId, uint64_t pageIdDistance,
-            uint64_t freeBfsLimit)
+  Partition(uint64_t firstPageId, uint64_t pageIdDistance, uint64_t freeBfsLimit)
       : mInflightIOs(utils::GetBitsNeeded(freeBfsLimit)),
         mFreeBfsLimit(freeBfsLimit),
         mNextPageId(firstPageId),

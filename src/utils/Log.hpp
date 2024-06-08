@@ -35,8 +35,7 @@ public:
   static void Fatal(const std::string& msg);
 
   template <typename... Args>
-  static void DebugCheck(bool condition, std::format_string<Args...> fmt,
-                         Args&&... args) {
+  static void DebugCheck(bool condition, std::format_string<Args...> fmt, Args&&... args) {
     DebugCheck(condition, std::format(fmt, std::forward<Args>(args)...));
   }
 

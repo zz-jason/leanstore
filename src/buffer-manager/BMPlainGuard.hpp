@@ -11,12 +11,15 @@ namespace storage {
 // instead.
 class BMOptimisticGuard;
 class BMExclusiveGuard;
-template <typename T> class GuardedBufferFrame;
+template <typename T>
+class GuardedBufferFrame;
 
 class BMOptimisticGuard {
   friend class BMExclusiveGuard;
-  template <typename T> friend class GuardedBufferFrame;
-  template <typename T> friend class ExclusiveGuardedBufferFrame;
+  template <typename T>
+  friend class GuardedBufferFrame;
+  template <typename T>
+  friend class ExclusiveGuardedBufferFrame;
 
 public:
   HybridGuard mGuard;
@@ -28,8 +31,7 @@ public:
   BMOptimisticGuard() = delete;
   BMOptimisticGuard(BMOptimisticGuard& other) = delete; // copy constructor
   // move constructor
-  BMOptimisticGuard(BMOptimisticGuard&& other)
-      : mGuard(std::move(other.mGuard)) {
+  BMOptimisticGuard(BMOptimisticGuard&& other) : mGuard(std::move(other.mGuard)) {
   }
   BMOptimisticGuard& operator=(BMOptimisticGuard& other) = delete;
   BMOptimisticGuard& operator=(BMOptimisticGuard&& other) {
@@ -47,8 +49,7 @@ private:
   BMOptimisticGuard& mOptimisticGuard; // our basis
 
 public:
-  BMExclusiveGuard(BMOptimisticGuard& optimisiticGuard)
-      : mOptimisticGuard(optimisiticGuard) {
+  BMExclusiveGuard(BMOptimisticGuard& optimisiticGuard) : mOptimisticGuard(optimisiticGuard) {
     mOptimisticGuard.mGuard.TryToExclusiveMayJump();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
@@ -90,8 +91,7 @@ private:
   BMOptimisticGuard& mOptimisticGuard; // our basis
 
 public:
-  BMSharedGuard(BMOptimisticGuard& optimisiticGuard)
-      : mOptimisticGuard(optimisiticGuard) {
+  BMSharedGuard(BMOptimisticGuard& optimisiticGuard) : mOptimisticGuard(optimisiticGuard) {
     mOptimisticGuard.mGuard.TryToSharedMayJump();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }

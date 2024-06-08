@@ -40,7 +40,8 @@ inline void PushBackDesctructor(void* obj, void (*dtor)(void*)) {
 
 } // namespace jumpmu
 
-template <typename T> class JumpScoped {
+template <typename T>
+class JumpScoped {
 public:
   T mObj;
 
@@ -57,65 +58,50 @@ public:
     return reinterpret_cast<T*>(&mObj);
   }
 
-  /// @brief DestructBeforeJump destructs the object, releases all the resources
-  /// hold by it before longjump.
-  /// @param jmuwObj
+  //! Destructs the object, releases all the resources before longjump.
   static void DestructBeforeJump(void* jmuwObj) {
     reinterpret_cast<JumpScoped<T>*>(jmuwObj)->~JumpScoped<T>();
   }
 };
 
-/// JUMPMU_TRY sets a jump point and saves the execution context before jump
-/// @note !!! DO NOT DO ANYTHING BETWEEN setjmp and if !!!
-#define JUMPMU_TRY()                                                           \
-  jumpmu::tlsJumpPointNumStackObjs[jumpmu::tlsNumJumpPoints] =                 \
-      jumpmu::tlsNumStackObjs;                                                 \
+//! Set a jump point, save the execution context before jump
+#define JUMPMU_TRY()                                                                               \
+  jumpmu::tlsJumpPointNumStackObjs[jumpmu::tlsNumJumpPoints] = jumpmu::tlsNumStackObjs;            \
   if (setjmp(jumpmu::tlsJumpPoints[jumpmu::tlsNumJumpPoints++]) == 0) {
 
-/// JUMPMU_CATCH supplements normal execution path which is to remove the last
-/// jump point set by JUMPMU_TRY, adds the execution path once jump happens
-#define JUMPMU_CATCH()                                                         \
-  LS_DLOG("Jump point {} caught", jumpmu::tlsNumJumpPoints - 1);               \
-  jumpmu::tlsNumJumpPoints--;                                                  \
-  }                                                                            \
+//! Remove the last jump point, add the execution path once jump happens
+#define JUMPMU_CATCH()                                                                             \
+  jumpmu::tlsNumJumpPoints--;                                                                      \
+  }                                                                                                \
   else
 
-/// JUMPMU_RETURN removes the last jump point and finish the function execution
-#define JUMPMU_RETURN                                                          \
-  LS_DLOG("Jump point {} returned", jumpmu::tlsNumJumpPoints - 1);             \
-  jumpmu::tlsNumJumpPoints--;                                                  \
+//! Remove the last jump point, finish the function execution
+#define JUMPMU_RETURN                                                                              \
+  jumpmu::tlsNumJumpPoints--;                                                                      \
   return
 
-/// JUMPMU_BREAK removes the last jump point and breaks the current loop
-#define JUMPMU_BREAK                                                           \
-  LS_DLOG("Jump point {} breaked", jumpmu::tlsNumJumpPoints - 1);              \
-  jumpmu::tlsNumJumpPoints--;                                                  \
+//! Remove the last jump point, break the current loop
+#define JUMPMU_BREAK                                                                               \
+  jumpmu::tlsNumJumpPoints--;                                                                      \
   break
 
-/// JUMPMU_CONTINUE removes the last jump point and continues the current loop
-#define JUMPMU_CONTINUE                                                        \
-  LS_DLOG("Jump point {} continued", jumpmu::tlsNumJumpPoints - 1);            \
-  jumpmu::tlsNumJumpPoints--;                                                  \
+//! Remove the last jump point, continue the current loop
+#define JUMPMU_CONTINUE                                                                            \
+  jumpmu::tlsNumJumpPoints--;                                                                      \
   continue
 
-/// JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP defines a class function to destruct
-/// the object. It's usually used together with
-/// JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP() and
-/// JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP()
-#define JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP(T)                                \
-  static void DestructBeforeJump(void* obj) {                                  \
-    reinterpret_cast<T*>(obj)->~T();                                           \
+//! Define a class function to destruct the object. Usually used together with
+//! JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP() and JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP()
+#define JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP(T)                                                    \
+  static void DestructBeforeJump(void* obj) {                                                      \
+    reinterpret_cast<T*>(obj)->~T();                                                               \
   }
 
-/// JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP pushes the desctructor to be called
-/// before jump to the thread local stack.
-///
-/// JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP should be put in every constructor.
-#define JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP()                              \
+//! Pushe the desctructor to be called before jump to the thread local stack. Should be put in
+//! every constructor.
+#define JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP()                                                  \
   jumpmu::PushBackDesctructor(this, &DestructBeforeJump);
 
-/// JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP pops the desctructor to be called
-/// before jump from the thread local stack.
-///
-/// JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP should be put in the desctructor.
+//! Pop the desctructor to be called before jump from the thread local stack. Should be put in the
+//! desctructor.
 #define JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP() jumpmu::PopBackDestructor();
