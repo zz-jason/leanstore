@@ -1,6 +1,6 @@
-#include "JumpMU.hpp"
+#include "leanstore/utils/JumpMU.hpp"
 
-#include "utils/Log.hpp"
+#include "leanstore/utils/Log.hpp"
 
 namespace jumpmu {
 

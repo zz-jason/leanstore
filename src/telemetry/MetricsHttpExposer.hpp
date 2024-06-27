@@ -1,7 +1,7 @@
 #pragma once
 
-#include "utils/RandomGenerator.hpp"
-#include "utils/UserThread.hpp"
+#include "leanstore/utils/RandomGenerator.hpp"
+#include "leanstore/utils/UserThread.hpp"
 
 #ifdef ENABLE_PROFILING
 #include <gperftools/heap-profiler.h>

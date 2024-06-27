@@ -1,6 +1,6 @@
-#include "PPCounters.hpp"
+#include "leanstore/profiling/counters/PPCounters.hpp"
 
-#include "utils/EnumerableThreadLocal.hpp"
+#include "leanstore/utils/EnumerableThreadLocal.hpp"
 
 namespace leanstore {
 

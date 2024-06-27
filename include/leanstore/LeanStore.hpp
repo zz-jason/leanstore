@@ -2,17 +2,23 @@
 
 #include "leanstore/StoreOption.hpp"
 #include "leanstore/Units.hpp"
-#include "telemetry/MetricsManager.hpp"
-#include "utils/DebugFlags.hpp"
-#include "utils/Result.hpp"
-
-#include <rapidjson/document.h>
+#include "leanstore/utils/DebugFlags.hpp"
+#include "leanstore/utils/Result.hpp"
 
 #include <atomic>
 #include <cstdint>
 #include <expected>
+#include <functional>
 #include <memory>
 
+//! forward declarations
+namespace leanstore::telemetry {
+
+class MetricsManager;
+
+} // namespace leanstore::telemetry
+
+//! forward declarations
 namespace leanstore::storage::btree {
 
 class BTreeGeneric;
@@ -22,6 +28,7 @@ class TransactionKV;
 
 } // namespace leanstore::storage::btree
 
+//! forward declarations
 namespace leanstore::storage {
 
 class TreeRegistry;
@@ -29,6 +36,7 @@ class BufferManager;
 
 } // namespace leanstore::storage
 
+//! forward declarations
 namespace leanstore::cr {
 
 class CRManager;
@@ -65,7 +73,7 @@ public:
   std::atomic<uint64_t> mTimestampOracle = 1;
 
   //! The metrics manager
-  telemetry::MetricsManager mMetricsManager;
+  std::unique_ptr<leanstore::telemetry::MetricsManager> mMetricsManager;
 
 #ifdef DEBUG
   utils::DebugFlagsRegistry mDebugFlagsRegistry;
@@ -124,7 +132,7 @@ private:
   void serializeMeta(bool allPagesUpToDate);
 
   //! serializeFlags serializes all the persisted flags to the provided json.
-  void serializeFlags(rapidjson::Document& d);
+  void serializeFlags(uint8_t* dest);
 
   //! deserializeMeta deserializes all the metadata except for the flags.
   bool deserializeMeta();

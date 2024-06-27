@@ -97,10 +97,10 @@ add_subdirectory(tests)
 # ---------------------------------------------------------------------------
 
 file(GLOB_RECURSE ALL_SOURCE_FILES
-  "src/*.cpp" "src/*.hpp",
-  "include/*.hpp",
-  "tests/*.cpp", "tests/*.hpp"
-  "benchmarks/*.cpp", "benchmarks/*.hpp")
+  "src/*.cpp" "src/*.hpp"
+  "include/*.hpp"
+  "tests/*.cpp" "tests/*.hpp"
+  "benchmarks/*.cpp" "benchmarks/*.hpp")
 
 # check-format
 add_custom_target(check-format

@@ -1,4 +1,4 @@
-#include "buffer-manager/Partition.hpp"
+#include "leanstore/buffer-manager/Partition.hpp"
 
 #include <cstring>
 

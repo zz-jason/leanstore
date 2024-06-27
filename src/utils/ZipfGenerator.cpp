@@ -1,6 +1,6 @@
-#include "ZipfGenerator.hpp"
+#include "leanstore/utils/ZipfGenerator.hpp"
 
-#include "RandomGenerator.hpp"
+#include "leanstore/utils/RandomGenerator.hpp"
 
 using namespace std;
 namespace leanstore {

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "utils/Log.hpp"
-#include "utils/ScrambledZipfGenerator.hpp"
+#include "leanstore/utils/Log.hpp"
+#include "leanstore/utils/ScrambledZipfGenerator.hpp"
 
 #include <gflags/gflags.h>
 #include <gflags/gflags_declare.h>

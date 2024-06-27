@@ -1,11 +1,12 @@
-#include "concurrency/Logging.hpp"
+#include "leanstore/concurrency/Logging.hpp"
 
-#include "concurrency/WalEntry.hpp"
-#include "concurrency/Worker.hpp"
 #include "leanstore/Exceptions.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
-#include "utils/Defer.hpp"
-#include "utils/Log.hpp"
+#include "leanstore/concurrency/WalEntry.hpp"
+#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/profiling/counters/WorkerCounters.hpp"
+#include "leanstore/utils/Log.hpp"
+#include "utils/ToJson.hpp"
+#include "utils/ToJsonImpl.hpp"
 
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
@@ -60,7 +61,7 @@ void Logging::WriteWalTxAbort() {
   publishWalFlushReq();
 
   LS_DLOG("WriteWalTxAbort, workerId={}, startTs={}, curGSN={}, walJson={}", Worker::My().mWorkerId,
-          Worker::My().mActiveTx.mStartTs, GetCurrentGsn(), WalEntry::ToJsonString(entry));
+          Worker::My().mActiveTx.mStartTs, GetCurrentGsn(), utils::ToJsonString(entry));
 }
 
 void Logging::WriteWalTxFinish() {
@@ -79,7 +80,7 @@ void Logging::WriteWalTxFinish() {
 
   LS_DLOG("WriteWalTxFinish, workerId={}, startTs={}, curGSN={}, walJson={}",
           Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs, GetCurrentGsn(),
-          WalEntry::ToJsonString(entry));
+          utils::ToJsonString(entry));
 }
 
 void Logging::WriteWalCarriageReturn() {
@@ -102,7 +103,7 @@ void Logging::SubmitWALEntryComplex(uint64_t totalSize) {
   }
   LS_DLOG("SubmitWal, workerId={}, startTs={}, curGSN={}, walJson={}", Worker::My().mWorkerId,
           Worker::My().mActiveTx.mStartTs, GetCurrentGsn(),
-          WalEntry::ToJsonString(mActiveWALEntryComplex));
+          utils::ToJsonString(mActiveWALEntryComplex));
 }
 
 void Logging::publishWalBufferedOffset() {

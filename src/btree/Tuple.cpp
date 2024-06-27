@@ -1,13 +1,13 @@
-#include "Tuple.hpp"
+#include "leanstore/btree/Tuple.hpp"
 
-#include "TransactionKV.hpp"
-#include "btree/BasicKV.hpp"
-#include "btree/ChainedTuple.hpp"
-#include "btree/core/BTreeNode.hpp"
-#include "concurrency/CRManager.hpp"
-#include "concurrency/Worker.hpp"
-#include "utils/Log.hpp"
-#include "utils/Misc.hpp"
+#include "leanstore/btree/BasicKV.hpp"
+#include "leanstore/btree/ChainedTuple.hpp"
+#include "leanstore/btree/TransactionKV.hpp"
+#include "leanstore/btree/core/BTreeNode.hpp"
+#include "leanstore/concurrency/CRManager.hpp"
+#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/utils/Log.hpp"
+#include "leanstore/utils/Misc.hpp"
 
 #include <unordered_map>
 

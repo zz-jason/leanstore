@@ -1,6 +1,6 @@
-#include "WorkerCounters.hpp"
+#include "leanstore/profiling/counters/WorkerCounters.hpp"
 
-#include "utils/EnumerableThreadLocal.hpp"
+#include "leanstore/utils/EnumerableThreadLocal.hpp"
 
 namespace leanstore {
 

@@ -1,10 +1,12 @@
 #include "btree/core/BTreeWalPayload.hpp"
 
-#include "btree/core/BTreeNode.hpp"
 #include "leanstore/KVInterface.hpp"
+#include "leanstore/btree/core/BTreeNode.hpp"
 
 #include <gtest/gtest.h>
 #include <rapidjson/document.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 
 #include <memory>
 

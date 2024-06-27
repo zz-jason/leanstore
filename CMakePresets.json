@@ -2,56 +2,68 @@
     "version": 3,
     "configurePresets": [
         {
-            "name": "debug",
-            "binaryDir": "${sourceDir}/build/debug",
+            "name": "base",
+            "hidden": true,
             "cacheVariables": {
                 "CMAKE_C_COMPILER": "gcc-13",
                 "CMAKE_CXX_COMPILER": "g++-13",
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "BUILD_SHARED_LIBS": "ON"
+            }
+        },
+        {
+            "name": "base_debug",
+            "inherits": "base",
+            "hidden": true,
+            "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "ENABLE_PROFILING": "ON",
+                "ENABLE_PROFILING": "ON"
+            }
+        },
+        {
+            "name": "base_release",
+            "inherits": "base",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "COUNTERS_LEVEL": "none",
+                "ENABLE_PROFILING": "ON"
+            }
+        },
+        {
+            "name": "debug",
+            "inherits": "base_debug",
+            "binaryDir": "${sourceDir}/build/debug",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "dist/debug",
                 "ENABLE_COVERAGE": "ON"
             }
         },
         {
             "name": "debug_tsan",
+            "inherits": "base_debug",
             "binaryDir": "${sourceDir}/build/debug_tsan",
             "cacheVariables": {
-                "CMAKE_C_COMPILER": "gcc-13",
-                "CMAKE_CXX_COMPILER": "g++-13",
-                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "CMAKE_BUILD_TYPE": "Debug",
-                "ENABLE_COVERAGE": "ON",
+                "CMAKE_INSTALL_PREFIX": "dist/debug_tsan",
                 "ENABLE_TSAN": "ON"
             }
         },
         {
             "name": "release",
+            "inherits": "base_release",
             "binaryDir": "${sourceDir}/build/release",
             "cacheVariables": {
-                "CMAKE_C_COMPILER": "gcc-13",
-                "CMAKE_CXX_COMPILER": "g++-13",
-                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "CMAKE_BUILD_TYPE": "Release",
-                "COUNTERS_LEVEL": "none",
-                "ENABLE_PROFILING": "ON"
+                "CMAKE_INSTALL_PREFIX": "dist/release"
             }
         },
         {
             "name": "performance",
+            "inherits": "base_release",
             "binaryDir": "${sourceDir}/build/performance",
             "cacheVariables": {
-                "CMAKE_C_COMPILER": "gcc-13",
-                "CMAKE_CXX_COMPILER": "g++-13",
-                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "ENABLE_ROCKSDB": "ON",
-                "CMAKE_BUILD_TYPE": "Release",
-                "COUNTERS_LEVEL": "none",
-                "ENABLE_PROFILING": "ON"
+                "CMAKE_INSTALL_PREFIX": "dist/performance",
+                "ENABLE_ROCKSDB": "ON"
             }
         }
     ]

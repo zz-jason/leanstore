@@ -1,12 +1,12 @@
-#include "concurrency/CRManager.hpp"
+#include "leanstore/concurrency/CRManager.hpp"
 
-#include "btree/BasicKV.hpp"
-#include "concurrency/GroupCommitter.hpp"
-#include "concurrency/HistoryStorage.hpp"
-#include "concurrency/Worker.hpp"
-#include "concurrency/WorkerThread.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "utils/Log.hpp"
+#include "leanstore/btree/BasicKV.hpp"
+#include "leanstore/concurrency/GroupCommitter.hpp"
+#include "leanstore/concurrency/HistoryStorage.hpp"
+#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/concurrency/WorkerThread.hpp"
+#include "leanstore/utils/Log.hpp"
 
 #include <memory>
 #include <vector>

@@ -1,18 +1,22 @@
-#include "BTreeGeneric.hpp"
+#include "leanstore/btree/core/BTreeGeneric.hpp"
 
-#include "btree/core/BTreeNode.hpp"
-#include "btree/core/BTreePessimisticExclusiveIterator.hpp"
-#include "btree/core/BTreePessimisticSharedIterator.hpp"
 #include "btree/core/BTreeWalPayload.hpp"
-#include "buffer-manager/BufferFrame.hpp"
-#include "buffer-manager/BufferManager.hpp"
-#include "buffer-manager/GuardedBufferFrame.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
-#include "utils/Defer.hpp"
-#include "utils/Log.hpp"
-#include "utils/Misc.hpp"
+#include "leanstore/btree/core/BTreeNode.hpp"
+#include "leanstore/btree/core/BTreePessimisticExclusiveIterator.hpp"
+#include "leanstore/btree/core/BTreePessimisticSharedIterator.hpp"
+#include "leanstore/buffer-manager/BufferFrame.hpp"
+#include "leanstore/buffer-manager/BufferManager.hpp"
+#include "leanstore/buffer-manager/GuardedBufferFrame.hpp"
+#include "leanstore/profiling/counters/WorkerCounters.hpp"
+#include "leanstore/utils/Defer.hpp"
+#include "leanstore/utils/Log.hpp"
+#include "leanstore/utils/Misc.hpp"
+#include "utils/ToJson.hpp"
+#include "utils/ToJsonImpl.hpp"
+
+#include <iostream>
 
 using namespace leanstore::storage;
 
@@ -632,5 +636,72 @@ void BTreeGeneric::Deserialize(StringMap map) {
             mMetaNodeSwip.AsBufferFrame().mHeader.mPageId, mTreeId,
             mMetaNodeSwip.AsBufferFrame().mPage.mBTreeId);
 }
+
+// void BTreeGeneric::ToJson(BTreeGeneric& btree, rapidjson::Document* resultDoc) {
+//   LS_DCHECK(resultDoc->IsObject());
+//   auto& allocator = resultDoc->GetAllocator();
+//
+//   // meta node
+//   GuardedBufferFrame<BTreeNode> guardedMetaNode(btree.mStore->mBufferManager.get(),
+//                                                 btree.mMetaNodeSwip);
+//   rapidjson::Value metaJson(rapidjson::kObjectType);
+//   utils::ToJson(guardedMetaNode.mBf, &metaJson, &allocator);
+//   resultDoc->AddMember("metaNode", metaJson, allocator);
+//
+//   // root node
+//   GuardedBufferFrame<BTreeNode> guardedRootNode(btree.mStore->mBufferManager.get(),
+//   guardedMetaNode,
+//                                                 guardedMetaNode->mRightMostChildSwip);
+//   rapidjson::Value rootJson(rapidjson::kObjectType);
+//   toJsonRecursive(btree, guardedRootNode, &rootJson, allocator);
+//   resultDoc->AddMember("rootNode", rootJson, allocator);
+// }
+//
+// void BTreeGeneric::toJsonRecursive(BTreeGeneric& btree, GuardedBufferFrame<BTreeNode>&
+// guardedNode,
+//                                    rapidjson::Value* resultObj,
+//                                    rapidjson::Value::AllocatorType& allocator) {
+//
+//   LS_DCHECK(resultObj->IsObject());
+//   // buffer frame header
+//   utils::ToJson(guardedNode.mBf, resultObj, &allocator);
+//
+//   // btree node
+//   {
+//     rapidjson::Value nodeObj(rapidjson::kObjectType);
+//     utils::ToJson(guardedNode.ptr(), &nodeObj, &allocator);
+//     resultObj->AddMember("pagePayload(btreeNode)", nodeObj, allocator);
+//   }
+//
+//   if (guardedNode->mIsLeaf) {
+//     return;
+//   }
+//
+//   rapidjson::Value childrenJson(rapidjson::kArrayType);
+//   for (auto i = 0u; i < guardedNode->mNumSeps; ++i) {
+//     auto* childSwip = guardedNode->ChildSwip(i);
+//     GuardedBufferFrame<BTreeNode> guardedChild(btree.mStore->mBufferManager.get(), guardedNode,
+//                                                *childSwip);
+//
+//     rapidjson::Value childObj(rapidjson::kObjectType);
+//     toJsonRecursive(btree, guardedChild, &childObj, allocator);
+//     guardedChild.unlock();
+//
+//     childrenJson.PushBack(childObj, allocator);
+//   }
+//
+//   if (guardedNode->mRightMostChildSwip != nullptr) {
+//     GuardedBufferFrame<BTreeNode> guardedChild(btree.mStore->mBufferManager.get(), guardedNode,
+//                                                guardedNode->mRightMostChildSwip);
+//     rapidjson::Value childObj(rapidjson::kObjectType);
+//     toJsonRecursive(btree, guardedChild, &childObj, allocator);
+//     guardedChild.unlock();
+//
+//     childrenJson.PushBack(childObj, allocator);
+//   }
+//
+//   // children
+//   resultObj->AddMember("mChildren", childrenJson, allocator);
+// }
 
 } // namespace leanstore::storage::btree

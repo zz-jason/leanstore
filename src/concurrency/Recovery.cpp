@@ -1,14 +1,14 @@
-#include "concurrency/Recovery.hpp"
+#include "leanstore/concurrency/Recovery.hpp"
 
-#include "btree/TransactionKV.hpp"
-#include "btree/core/BTreeNode.hpp"
 #include "btree/core/BTreeWalPayload.hpp"
-#include "buffer-manager/GuardedBufferFrame.hpp"
-#include "concurrency/WalEntry.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "sync/HybridGuard.hpp"
-#include "utils/Defer.hpp"
-#include "utils/Log.hpp"
+#include "leanstore/btree/TransactionKV.hpp"
+#include "leanstore/btree/core/BTreeNode.hpp"
+#include "leanstore/buffer-manager/GuardedBufferFrame.hpp"
+#include "leanstore/concurrency/WalEntry.hpp"
+#include "leanstore/sync/HybridGuard.hpp"
+#include "leanstore/utils/Defer.hpp"
+#include "leanstore/utils/Log.hpp"
 
 #include <cstdint>
 #include <expected>

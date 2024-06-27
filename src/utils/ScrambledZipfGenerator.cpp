@@ -1,6 +1,6 @@
-#include "ScrambledZipfGenerator.hpp"
+#include "leanstore/utils/ScrambledZipfGenerator.hpp"
 
-#include "FNVHash.hpp"
+#include "leanstore/utils/FNVHash.hpp"
 
 namespace leanstore::utils {
 

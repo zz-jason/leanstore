@@ -1,4 +1,7 @@
-#include "concurrency/WalEntry.hpp"
+#include "leanstore/concurrency/WalEntry.hpp"
+
+#include "utils/ToJson.hpp"
+#include "utils/ToJsonImpl.hpp"
 
 #include <gtest/gtest.h>
 #include <rapidjson/document.h>
@@ -19,7 +22,7 @@ TEST_F(WalEntryTest, ToJsonString) {
   // WalTxAbort
   {
     auto wal = WalTxAbort(0);
-    auto walStr = WalEntry::ToJsonString(&wal);
+    auto walStr = utils::ToJsonString(&wal);
     EXPECT_TRUE(walStr.contains("kTxAbort"));
     EXPECT_TRUE(walStr.contains(kType));
     EXPECT_TRUE(walStr.contains(kTxId));
@@ -28,7 +31,7 @@ TEST_F(WalEntryTest, ToJsonString) {
   // WalTxFinish
   {
     auto wal = WalTxFinish(0);
-    auto walStr = WalEntry::ToJsonString(&wal);
+    auto walStr = utils::ToJsonString(&wal);
     EXPECT_TRUE(walStr.contains("kTxFinish"));
     EXPECT_TRUE(walStr.contains(kType));
     EXPECT_TRUE(walStr.contains(kTxId));
@@ -37,7 +40,7 @@ TEST_F(WalEntryTest, ToJsonString) {
   // WalCarriageReturn
   {
     auto wal = WalCarriageReturn(0);
-    auto walStr = WalEntry::ToJsonString(&wal);
+    auto walStr = utils::ToJsonString(&wal);
     EXPECT_TRUE(walStr.contains("kCarriageReturn"));
     EXPECT_TRUE(walStr.contains(kType));
   }
@@ -45,7 +48,7 @@ TEST_F(WalEntryTest, ToJsonString) {
   // WalEntryComplex
   {
     auto wal = WalEntryComplex(0, 0, 0, 0, 0, 0, 0, 0);
-    auto walStr = WalEntry::ToJsonString(&wal);
+    auto walStr = utils::ToJsonString(&wal);
     EXPECT_TRUE(walStr.contains("kComplex"));
     EXPECT_TRUE(walStr.contains(kType));
     EXPECT_TRUE(walStr.contains(kTxId));

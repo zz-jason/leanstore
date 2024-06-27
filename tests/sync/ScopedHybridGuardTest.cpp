@@ -1,12 +1,12 @@
-#include "sync/ScopedHybridGuard.hpp"
+#include "leanstore/sync/ScopedHybridGuard.hpp"
 
-#include "buffer-manager/BufferManager.hpp"
-#include "concurrency/CRManager.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/StoreOption.hpp"
-#include "sync/HybridLatch.hpp"
-#include "utils/JumpMU.hpp"
-#include "utils/RandomGenerator.hpp"
+#include "leanstore/buffer-manager/BufferManager.hpp"
+#include "leanstore/concurrency/CRManager.hpp"
+#include "leanstore/sync/HybridLatch.hpp"
+#include "leanstore/utils/JumpMU.hpp"
+#include "leanstore/utils/RandomGenerator.hpp"
 
 #include <gtest/gtest.h>
 #include <rapidjson/document.h>

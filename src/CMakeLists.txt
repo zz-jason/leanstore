@@ -4,11 +4,15 @@
 file(GLOB_RECURSE LEANSTORE_SRC **.cpp **/**.cpp **.cc **/**.cc **.hpp **/**.hpp **.h **/**.h)
 
 
-# ---------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Set build target and dependencies for the lib
-# ---------------------------------------------------------------------------
-
-add_library(leanstore STATIC ${LEANSTORE_SRC})
+# ------------------------------------------------------------------------------
+option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
+if(BUILD_SHARED_LIBS)
+  add_library(leanstore SHARED ${LEANSTORE_SRC})
+else()
+  add_library(leanstore STATIC ${LEANSTORE_SRC})
+endif()
 
 # dependencies
 set(leanstore_deps
@@ -43,10 +47,6 @@ endif(ENABLE_PROFILING)
 # include dirs
 target_include_directories(leanstore PUBLIC ${CMAKE_SOURCE_DIR}/include)
 target_include_directories(leanstore PRIVATE ${CMAKE_CURRENT_LIST_DIR})
-
-# export header files for lib consumers
-set(LEANSTORE_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR})
-set_property(TARGET leanstore APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${LEANSTORE_INCLUDE_DIR})
 
 # Get the include directories for the target.
 get_target_property(LIBA_INCLUDES leanstore INCLUDE_DIRECTORIES)
@@ -90,3 +90,25 @@ elseif(CHECKS_LEVEL STREQUAL "benchmark")
   target_compile_definitions(leanstore PUBLIC MACRO_CHECK_BENCHMARK)
 endif()
 
+# ------------------------------------------------------------------------------
+# export header files for lib consumers
+# ------------------------------------------------------------------------------
+set(LEANSTORE_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR})
+set_property(TARGET leanstore APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${LEANSTORE_INCLUDE_DIR})
+
+# ------------------------------------------------------------------------------
+# install rule
+# ------------------------------------------------------------------------------
+include(GNUInstallDirs)
+install(TARGETS leanstore
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(DIRECTORY
+  ${CMAKE_SOURCE_DIR}/include/leanstore
+  DESTINATION include)
+
+# ------------------------------------------------------------------------------
+# export pkg-config files for lib consumers
+# ------------------------------------------------------------------------------
+configure_file(leanstore.pc.in leanstore.pc @ONLY)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/leanstore.pc DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/pkgconfig)

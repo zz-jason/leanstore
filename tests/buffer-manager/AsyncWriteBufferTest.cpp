@@ -1,11 +1,11 @@
-#include "buffer-manager/AsyncWriteBuffer.hpp"
+#include "leanstore/buffer-manager/AsyncWriteBuffer.hpp"
 
-#include "buffer-manager/BufferFrame.hpp"
-#include "buffer-manager/Swip.hpp"
-#include "utils/Defer.hpp"
-#include "utils/Log.hpp"
-#include "utils/Misc.hpp"
-#include "utils/RandomGenerator.hpp"
+#include "leanstore/buffer-manager/BufferFrame.hpp"
+#include "leanstore/buffer-manager/Swip.hpp"
+#include "leanstore/utils/Defer.hpp"
+#include "leanstore/utils/Log.hpp"
+#include "leanstore/utils/Misc.hpp"
+#include "leanstore/utils/RandomGenerator.hpp"
 
 #include <gtest/gtest.h>
 

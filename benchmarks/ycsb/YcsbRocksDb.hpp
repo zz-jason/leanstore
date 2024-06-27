@@ -1,9 +1,9 @@
 #include "Ycsb.hpp"
-#include "utils/Defer.hpp"
-#include "utils/Log.hpp"
-#include "utils/Parallelize.hpp"
-#include "utils/RandomGenerator.hpp"
-#include "utils/ScrambledZipfGenerator.hpp"
+#include "leanstore/utils/Defer.hpp"
+#include "leanstore/utils/Log.hpp"
+#include "leanstore/utils/Parallelize.hpp"
+#include "leanstore/utils/RandomGenerator.hpp"
+#include "leanstore/utils/ScrambledZipfGenerator.hpp"
 
 #include <gperftools/heap-profiler.h>
 #include <gperftools/profiler.h>

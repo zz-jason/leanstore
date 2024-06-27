@@ -2,7 +2,7 @@
 
 #include "Adapter.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "utils/Log.hpp"
+#include "leanstore/utils/Log.hpp"
 
 #include <functional>
 
