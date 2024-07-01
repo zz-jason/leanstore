@@ -1,7 +1,7 @@
 
 #include "btree/core/BTreeWalPayload.hpp"
 
-#include "utils/Log.hpp"
+#include "leanstore/utils/Log.hpp"
 
 #include <rapidjson/document.h>
 #include <rapidjson/rapidjson.h>

@@ -1,7 +1,7 @@
-#include "CPUTable.hpp"
+#include "leanstore/profiling/tables/CPUTable.hpp"
 
 #include "leanstore/PerfEvent.hpp"
-#include "profiling/counters/CPUCounters.hpp"
+#include "leanstore/profiling/counters/CPUCounters.hpp"
 
 namespace leanstore {
 namespace profiling {

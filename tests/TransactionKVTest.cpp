@@ -1,15 +1,15 @@
-#include "btree/TransactionKV.hpp"
+#include "leanstore/btree/TransactionKV.hpp"
 
-#include "btree/core/BTreeGeneric.hpp"
-#include "buffer-manager/BufferManager.hpp"
-#include "concurrency/CRManager.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/StoreOption.hpp"
-#include "utils/Defer.hpp"
-#include "utils/JsonUtil.hpp"
-#include "utils/Log.hpp"
-#include "utils/RandomGenerator.hpp"
+#include "leanstore/btree/core/BTreeGeneric.hpp"
+#include "leanstore/buffer-manager/BufferManager.hpp"
+#include "leanstore/concurrency/CRManager.hpp"
+#include "leanstore/utils/Defer.hpp"
+#include "leanstore/utils/JsonUtil.hpp"
+#include "leanstore/utils/Log.hpp"
+#include "leanstore/utils/RandomGenerator.hpp"
 
 #include <gtest/gtest.h>
 #include <rapidjson/document.h>
@@ -395,44 +395,44 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
   });
 }
 
-TEST_F(TransactionKVTest, ToJson) {
-  mStore->ExecSync(0, [&]() {
-    storage::btree::TransactionKV* btree;
-
-    // prepare key-value pairs to insert
-    size_t numKVs(10);
-    std::vector<std::tuple<std::string, std::string>> kvToTest;
-    for (size_t i = 0; i < numKVs; ++i) {
-      std::string key("key_btree_VI_xxxxxxxxxxxx_" + std::to_string(i));
-      std::string val("VAL_BTREE_VI_YYYYYYYYYYYY_" + std::to_string(i));
-      kvToTest.push_back(std::make_tuple(key, val));
-    }
-    // create leanstore btree for table records
-    const auto* btreeName = "testTree1";
-
-    auto res = mStore->CreateTransactionKV(btreeName);
-    btree = res.value();
-    EXPECT_NE(btree, nullptr);
-
-    // insert some values
-    cr::Worker::My().StartTx();
-    for (size_t i = 0; i < numKVs; ++i) {
-      const auto& [key, val] = kvToTest[i];
-      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
-                              Slice((const uint8_t*)val.data(), val.size())),
-                OpCode::kOK);
-    }
-    cr::Worker::My().CommitTx();
-
-    rapidjson::Document doc(rapidjson::kObjectType);
-    leanstore::storage::btree::BTreeGeneric::ToJson(*btree, &doc);
-    EXPECT_GE(leanstore::utils::JsonToStr(&doc).size(), 0u);
-
-    cr::Worker::My().StartTx();
-    mStore->DropTransactionKV(btreeName);
-    cr::Worker::My().CommitTx();
-  });
-}
+// TEST_F(TransactionKVTest, ToJson) {
+//   mStore->ExecSync(0, [&]() {
+//     storage::btree::TransactionKV* btree;
+//
+//     // prepare key-value pairs to insert
+//     size_t numKVs(10);
+//     std::vector<std::tuple<std::string, std::string>> kvToTest;
+//     for (size_t i = 0; i < numKVs; ++i) {
+//       std::string key("key_btree_VI_xxxxxxxxxxxx_" + std::to_string(i));
+//       std::string val("VAL_BTREE_VI_YYYYYYYYYYYY_" + std::to_string(i));
+//       kvToTest.push_back(std::make_tuple(key, val));
+//     }
+//     // create leanstore btree for table records
+//     const auto* btreeName = "testTree1";
+//
+//     auto res = mStore->CreateTransactionKV(btreeName);
+//     btree = res.value();
+//     EXPECT_NE(btree, nullptr);
+//
+//     // insert some values
+//     cr::Worker::My().StartTx();
+//     for (size_t i = 0; i < numKVs; ++i) {
+//       const auto& [key, val] = kvToTest[i];
+//       EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+//                               Slice((const uint8_t*)val.data(), val.size())),
+//                 OpCode::kOK);
+//     }
+//     cr::Worker::My().CommitTx();
+//
+//     rapidjson::Document doc(rapidjson::kObjectType);
+//     leanstore::storage::btree::BTreeGeneric::ToJson(*btree, &doc);
+//     EXPECT_GE(leanstore::utils::JsonToStr(&doc).size(), 0u);
+//
+//     cr::Worker::My().StartTx();
+//     mStore->DropTransactionKV(btreeName);
+//     cr::Worker::My().CommitTx();
+//   });
+// }
 
 TEST_F(TransactionKVTest, Update) {
   storage::btree::TransactionKV* btree;

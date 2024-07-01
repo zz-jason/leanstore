@@ -1,11 +1,11 @@
-#include "buffer-manager/PageEvictor.hpp"
+#include "leanstore/buffer-manager/PageEvictor.hpp"
 
-#include "buffer-manager/BufferManager.hpp"
-#include "buffer-manager/TreeRegistry.hpp"
-#include "profiling/counters/CPUCounters.hpp"
-#include "profiling/counters/PPCounters.hpp"
-#include "utils/Defer.hpp"
-#include "utils/Log.hpp"
+#include "leanstore/buffer-manager/BufferManager.hpp"
+#include "leanstore/buffer-manager/TreeRegistry.hpp"
+#include "leanstore/profiling/counters/CPUCounters.hpp"
+#include "leanstore/profiling/counters/PPCounters.hpp"
+#include "leanstore/utils/Defer.hpp"
+#include "leanstore/utils/Log.hpp"
 
 #include <mutex>
 

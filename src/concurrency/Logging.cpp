@@ -1,11 +1,11 @@
-#include "concurrency/Logging.hpp"
+#include "leanstore/concurrency/Logging.hpp"
 
-#include "concurrency/WalEntry.hpp"
-#include "concurrency/Worker.hpp"
 #include "leanstore/Exceptions.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
-#include "utils/Defer.hpp"
-#include "utils/Log.hpp"
+#include "leanstore/concurrency/WalEntry.hpp"
+#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/profiling/counters/WorkerCounters.hpp"
+#include "leanstore/utils/Log.hpp"
+#include "utils/ToJson.hpp"
 
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
@@ -53,14 +53,14 @@ void Logging::WriteWalTxAbort() {
   // Initialize a WalTxAbort
   auto* data = mWalBuffer + mWalBuffered;
   std::memset(data, 0, size);
-  auto* entry = new (data) WalTxAbort(size);
+  auto* entry [[maybe_unused]] = new (data) WalTxAbort(size);
 
   // Submit the WalTxAbort to group committer
   mWalBuffered += size;
   publishWalFlushReq();
 
   LS_DLOG("WriteWalTxAbort, workerId={}, startTs={}, curGSN={}, walJson={}", Worker::My().mWorkerId,
-          Worker::My().mActiveTx.mStartTs, GetCurrentGsn(), WalEntry::ToJsonString(entry));
+          Worker::My().mActiveTx.mStartTs, GetCurrentGsn(), utils::ToJsonString(entry));
 }
 
 void Logging::WriteWalTxFinish() {
@@ -71,7 +71,7 @@ void Logging::WriteWalTxFinish() {
   // Initialize a WalTxFinish
   auto* data = mWalBuffer + mWalBuffered;
   std::memset(data, 0, size);
-  auto* entry = new (data) WalTxFinish(Worker::My().mActiveTx.mStartTs);
+  auto* entry [[maybe_unused]] = new (data) WalTxFinish(Worker::My().mActiveTx.mStartTs);
 
   // Submit the WalTxAbort to group committer
   mWalBuffered += size;
@@ -79,7 +79,7 @@ void Logging::WriteWalTxFinish() {
 
   LS_DLOG("WriteWalTxFinish, workerId={}, startTs={}, curGSN={}, walJson={}",
           Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs, GetCurrentGsn(),
-          WalEntry::ToJsonString(entry));
+          utils::ToJsonString(entry));
 }
 
 void Logging::WriteWalCarriageReturn() {
@@ -102,7 +102,7 @@ void Logging::SubmitWALEntryComplex(uint64_t totalSize) {
   }
   LS_DLOG("SubmitWal, workerId={}, startTs={}, curGSN={}, walJson={}", Worker::My().mWorkerId,
           Worker::My().mActiveTx.mStartTs, GetCurrentGsn(),
-          WalEntry::ToJsonString(mActiveWALEntryComplex));
+          utils::ToJsonString(mActiveWALEntryComplex));
 }
 
 void Logging::publishWalBufferedOffset() {

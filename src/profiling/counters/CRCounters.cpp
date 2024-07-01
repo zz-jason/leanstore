@@ -1,4 +1,4 @@
-#include "CRCounters.hpp"
+#include "leanstore/profiling/counters/CRCounters.hpp"
 
 namespace leanstore {
 

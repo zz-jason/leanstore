@@ -1,9 +1,9 @@
-#include "concurrency/GroupCommitter.hpp"
+#include "leanstore/concurrency/GroupCommitter.hpp"
 
-#include "concurrency/CRManager.hpp"
-#include "concurrency/Worker.hpp"
-#include "profiling/counters/CPUCounters.hpp"
-#include "telemetry/MetricOnlyTimer.hpp"
+#include "leanstore/concurrency/CRManager.hpp"
+#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/profiling/counters/CPUCounters.hpp"
+#include "leanstore/telemetry/MetricOnlyTimer.hpp"
 #include "telemetry/MetricsManager.hpp"
 
 #include <algorithm>

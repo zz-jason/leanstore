@@ -1,5 +1,5 @@
 #include "TxKV.hpp"
-#include "utils/RandomGenerator.hpp"
+#include "leanstore/utils/RandomGenerator.hpp"
 
 #include <gtest/gtest.h>
 

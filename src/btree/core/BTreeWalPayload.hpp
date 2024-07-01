@@ -1,9 +1,9 @@
 #pragma once
 
-#include "btree/core/BTreeNode.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/Units.hpp"
-#include "utils/Log.hpp"
+#include "leanstore/btree/core/BTreeNode.hpp"
+#include "leanstore/utils/Log.hpp"
 
 #include <rapidjson/document.h>
 

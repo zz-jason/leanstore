@@ -1,8 +1,8 @@
-#include "CPUCounters.hpp"
+#include "leanstore/profiling/counters/CPUCounters.hpp"
 
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/PerfEvent.hpp"
-#include "utils/UserThread.hpp"
+#include "leanstore/utils/UserThread.hpp"
 
 namespace leanstore {
 

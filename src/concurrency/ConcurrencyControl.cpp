@@ -1,15 +1,15 @@
-#include "concurrency/ConcurrencyControl.hpp"
+#include "leanstore/concurrency/ConcurrencyControl.hpp"
 
-#include "buffer-manager/TreeRegistry.hpp"
-#include "concurrency/CRManager.hpp"
-#include "concurrency/Worker.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "leanstore/Units.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
-#include "utils/Defer.hpp"
-#include "utils/Log.hpp"
-#include "utils/Misc.hpp"
-#include "utils/RandomGenerator.hpp"
+#include "leanstore/buffer-manager/TreeRegistry.hpp"
+#include "leanstore/concurrency/CRManager.hpp"
+#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/profiling/counters/WorkerCounters.hpp"
+#include "leanstore/utils/Defer.hpp"
+#include "leanstore/utils/Log.hpp"
+#include "leanstore/utils/Misc.hpp"
+#include "leanstore/utils/RandomGenerator.hpp"
 
 #include <atomic>
 #include <mutex>

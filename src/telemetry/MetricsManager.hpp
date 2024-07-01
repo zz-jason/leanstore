@@ -1,8 +1,8 @@
 #pragma once
 
 #include "leanstore/Exceptions.hpp"
+#include "leanstore/utils/UserThread.hpp"
 #include "telemetry/MetricsHttpExposer.hpp"
-#include "utils/UserThread.hpp"
 
 #include <prometheus/counter.h>
 #include <prometheus/exposer.h>
@@ -60,10 +60,10 @@ const std::vector<double> kBoundariesUs{
   ACTION(group_committer_commit_txs_us, kBoundariesUs, "", __VA_ARGS__)
 
 //! Macro to update a counter metric
-#define METRIC_COUNTER_INC(metricsMgr, metricName, value) metricsMgr.inc_##metricName(value);
+#define METRIC_COUNTER_INC(metricsMgr, metricName, value) metricsMgr->inc_##metricName(value);
 
 //! Macro to update a histogram metric
-#define METRIC_HIST_OBSERVE(metricsMgr, metricName, value) metricsMgr.observe_##metricName(value);
+#define METRIC_HIST_OBSERVE(metricsMgr, metricName, value) metricsMgr->observe_##metricName(value);
 
 // -----------------------------------------------------------------------------
 // Macros not exported for counters

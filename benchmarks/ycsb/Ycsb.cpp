@@ -2,8 +2,8 @@
 
 #include "YcsbLeanStore.hpp"
 #include "YcsbRocksDb.hpp"
-#include "utils/Defer.hpp"
-#include "utils/Log.hpp"
+#include "leanstore/utils/Defer.hpp"
+#include "leanstore/utils/Log.hpp"
 
 #include <gflags/gflags.h>
 

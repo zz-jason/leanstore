@@ -1,23 +1,23 @@
-#include "TransactionKV.hpp"
+#include "leanstore/btree/TransactionKV.hpp"
 
-#include "btree/BasicKV.hpp"
-#include "btree/ChainedTuple.hpp"
-#include "btree/Tuple.hpp"
-#include "btree/core/BTreeGeneric.hpp"
-#include "btree/core/BTreePessimisticSharedIterator.hpp"
 #include "btree/core/BTreeWalPayload.hpp"
-#include "concurrency/Worker.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
-#include "sync/HybridGuard.hpp"
-#include "telemetry/MetricOnlyTimer.hpp"
+#include "leanstore/btree/BasicKV.hpp"
+#include "leanstore/btree/ChainedTuple.hpp"
+#include "leanstore/btree/Tuple.hpp"
+#include "leanstore/btree/core/BTreeGeneric.hpp"
+#include "leanstore/btree/core/BTreePessimisticSharedIterator.hpp"
+#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/sync/HybridGuard.hpp"
+#include "leanstore/telemetry/MetricOnlyTimer.hpp"
+#include "leanstore/utils/Defer.hpp"
+#include "leanstore/utils/Error.hpp"
+#include "leanstore/utils/Log.hpp"
+#include "leanstore/utils/Misc.hpp"
+#include "leanstore/utils/Result.hpp"
 #include "telemetry/MetricsManager.hpp"
-#include "utils/Defer.hpp"
-#include "utils/Error.hpp"
-#include "utils/Log.hpp"
-#include "utils/Misc.hpp"
-#include "utils/Result.hpp"
 
 #include <cstring>
 #include <format>
@@ -266,6 +266,32 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
     TransactionKV::InsertToNode(xIter.mGuardedLeaf, key, val, cr::Worker::My().mWorkerId,
                                 cr::ActiveTx().mStartTs, xIter.mSlotId);
     return OpCode::kOK;
+  }
+}
+
+std::tuple<OpCode, uint16_t> TransactionKV::getVisibleTuple(Slice payload, ValCallback callback) {
+  std::tuple<OpCode, uint16_t> ret;
+  while (true) {
+    JUMPMU_TRY() {
+      const auto* const tuple = Tuple::From(payload.data());
+      switch (tuple->mFormat) {
+      case TupleFormat::kChained: {
+        const auto* const chainedTuple = ChainedTuple::From(payload.data());
+        ret = chainedTuple->GetVisibleTuple(payload, callback);
+        JUMPMU_RETURN ret;
+      }
+      case TupleFormat::kFat: {
+        const auto* const fatTuple = FatTuple::From(payload.data());
+        ret = fatTuple->GetVisibleTuple(callback);
+        JUMPMU_RETURN ret;
+      }
+      default: {
+        Log::Error("Unhandled tuple format: {}", TupleFormatUtil::ToString(tuple->mFormat));
+      }
+      }
+    }
+    JUMPMU_CATCH() {
+    }
   }
 }
 

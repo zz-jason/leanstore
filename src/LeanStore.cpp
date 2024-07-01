@@ -1,17 +1,18 @@
 #include "leanstore/LeanStore.hpp"
 
-#include "btree/BasicKV.hpp"
-#include "btree/TransactionKV.hpp"
-#include "btree/core/BTreeGeneric.hpp"
-#include "buffer-manager/BufferManager.hpp"
-#include "concurrency/CRManager.hpp"
 #include "leanstore/StoreOption.hpp"
-#include "profiling/tables/BMTable.hpp"
-#include "utils/Defer.hpp"
-#include "utils/Log.hpp"
-#include "utils/Misc.hpp"
-#include "utils/Result.hpp"
-#include "utils/UserThread.hpp"
+#include "leanstore/btree/BasicKV.hpp"
+#include "leanstore/btree/TransactionKV.hpp"
+#include "leanstore/btree/core/BTreeGeneric.hpp"
+#include "leanstore/buffer-manager/BufferManager.hpp"
+#include "leanstore/concurrency/CRManager.hpp"
+#include "leanstore/profiling/tables/BMTable.hpp"
+#include "leanstore/utils/Defer.hpp"
+#include "leanstore/utils/Log.hpp"
+#include "leanstore/utils/Misc.hpp"
+#include "leanstore/utils/Result.hpp"
+#include "leanstore/utils/UserThread.hpp"
+#include "telemetry/MetricsManager.hpp"
 
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
@@ -50,7 +51,9 @@ Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption option) {
   return std::make_unique<LeanStore>(std::move(option));
 }
 
-LeanStore::LeanStore(StoreOption option) : mStoreOption(std::move(option)), mMetricsManager(this) {
+LeanStore::LeanStore(StoreOption option)
+    : mStoreOption(std::move(option)),
+      mMetricsManager(nullptr) {
   utils::tlsStore = this;
 
   Log::Info("LeanStore starting ...");
@@ -58,7 +61,8 @@ LeanStore::LeanStore(StoreOption option) : mStoreOption(std::move(option)), mMet
 
   // Expose the metrics
   if (mStoreOption.mEnableMetrics) {
-    mMetricsManager.Expose();
+    mMetricsManager = std::make_unique<leanstore::telemetry::MetricsManager>(this);
+    mMetricsManager->Expose();
   }
 
   initPageAndWalFd();
@@ -140,7 +144,13 @@ void LeanStore::initPageAndWalFd() {
 
 LeanStore::~LeanStore() {
   Log::Info("LeanStore stopping ...");
-  SCOPED_DEFER({ Log::Info("LeanStore stopped"); });
+  SCOPED_DEFER({
+    // stop metrics manager in the last
+    if (mStoreOption.mEnableMetrics) {
+      mMetricsManager = nullptr;
+    }
+    Log::Info("LeanStore stopped");
+  });
 
   // wait all concurrent jobs to finsh
   WaitAll();
@@ -150,7 +160,7 @@ LeanStore::~LeanStore() {
     auto treeId = it.first;
     auto& [treePtr, treeName] = it.second;
     auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(treePtr.get());
-    Log::Info("btreeName={}, btreeId={}, btreeType={}, btreeHeight={}", treeName, treeId,
+    Log::Info("leanstore/btreeName={}, btreeId={}, btreeType={}, btreeHeight={}", treeName, treeId,
               static_cast<uint8_t>(btree->mTreeType), btree->mHeight.load());
   }
 
@@ -218,7 +228,7 @@ void LeanStore::WaitAll() {
 
 constexpr char kMetaKeyCrManager[] = "cr_manager";
 constexpr char kMetaKeyBufferManager[] = "buffer_manager";
-constexpr char kMetaKeyBTrees[] = "btrees";
+constexpr char kMetaKeyBTrees[] = "leanstore/btrees";
 constexpr char kMetaKeyFlags[] = "flags";
 
 void LeanStore::serializeMeta(bool allPagesUpToDate) {
@@ -303,7 +313,7 @@ void LeanStore::serializeMeta(bool allPagesUpToDate) {
   }
 
   // flags
-  serializeFlags(doc);
+  serializeFlags(reinterpret_cast<uint8_t*>(&doc));
 
   rapidjson::StringBuffer sb;
   rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(sb);
@@ -311,7 +321,8 @@ void LeanStore::serializeMeta(bool allPagesUpToDate) {
   metaFile << sb.GetString();
 }
 
-void LeanStore::serializeFlags(rapidjson::Document& doc) {
+void LeanStore::serializeFlags(uint8_t* dest) {
+  rapidjson::Document& doc = *reinterpret_cast<rapidjson::Document*>(dest);
   Log::Info("serializeFlags started");
   SCOPED_DEFER(Log::Info("serializeFlags ended"));
 

@@ -1,7 +1,7 @@
-#include "Misc.hpp"
+#include "leanstore/utils/Misc.hpp"
 
 #include "leanstore/LeanStore.hpp"
-#include "utils/UserThread.hpp"
+#include "leanstore/utils/UserThread.hpp"
 
 #include <crc32c/crc32c.h>
 

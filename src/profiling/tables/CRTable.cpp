@@ -1,7 +1,7 @@
-#include "CRTable.hpp"
+#include "leanstore/profiling/tables/CRTable.hpp"
 
-#include "profiling/counters/CRCounters.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
+#include "leanstore/profiling/counters/CRCounters.hpp"
+#include "leanstore/profiling/counters/WorkerCounters.hpp"
 
 namespace leanstore {
 namespace profiling {

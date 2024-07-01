@@ -1,9 +1,8 @@
-#include "BTreeNode.hpp"
+#include "leanstore/btree/core/BTreeNode.hpp"
 
-#include "buffer-manager/GuardedBufferFrame.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
-#include "utils/JsonUtil.hpp"
-#include "utils/Log.hpp"
+#include "leanstore/buffer-manager/GuardedBufferFrame.hpp"
+#include "leanstore/profiling/counters/WorkerCounters.hpp"
+#include "leanstore/utils/Log.hpp"
 
 #include <algorithm>
 
@@ -447,62 +446,6 @@ void BTreeNode::Reset() {
   mSpaceUsed = mUpperFence.mLength + mLowerFence.mLength;
   mDataOffset = BTreeNode::Size() - mSpaceUsed;
   mNumSeps = 0;
-}
-
-using leanstore::utils::AddMemberToJson;
-
-void BTreeNode::ToJson(rapidjson::Value* resultObj, rapidjson::Value::AllocatorType& allocator) {
-  LS_DCHECK(resultObj->IsObject());
-
-  auto lowerFence = GetLowerFence();
-  if (lowerFence.size() == 0) {
-    AddMemberToJson(resultObj, allocator, "mLowerFence", "-inf");
-  } else {
-    AddMemberToJson(resultObj, allocator, "mLowerFence", lowerFence);
-  }
-
-  auto upperFence = GetUpperFence();
-  if (upperFence.size() == 0) {
-    AddMemberToJson(resultObj, allocator, "mUpperFence", "+inf");
-  } else {
-    AddMemberToJson(resultObj, allocator, "mUpperFence", upperFence);
-  }
-
-  AddMemberToJson(resultObj, allocator, "mNumSeps", mNumSeps);
-  AddMemberToJson(resultObj, allocator, "mIsLeaf", mIsLeaf);
-  AddMemberToJson(resultObj, allocator, "mSpaceUsed", mSpaceUsed);
-  AddMemberToJson(resultObj, allocator, "mDataOffset", mDataOffset);
-  AddMemberToJson(resultObj, allocator, "mPrefixSize", mPrefixSize);
-
-  // hints
-  {
-    rapidjson::Value memberArray(rapidjson::kArrayType);
-    for (auto i = 0; i < sHintCount; ++i) {
-      rapidjson::Value hintJson;
-      hintJson.SetUint64(mHint[i]);
-      memberArray.PushBack(hintJson, allocator);
-    }
-    resultObj->AddMember("mHints", memberArray, allocator);
-  }
-
-  AddMemberToJson(resultObj, allocator, "mHasGarbage", mHasGarbage);
-
-  // slots
-  {
-    rapidjson::Value memberArray(rapidjson::kArrayType);
-    for (auto i = 0; i < mNumSeps; ++i) {
-      rapidjson::Value arrayElement(rapidjson::kObjectType);
-      AddMemberToJson(&arrayElement, allocator, "mOffset", static_cast<uint64_t>(mSlot[i].mOffset));
-      AddMemberToJson(&arrayElement, allocator, "mKeyLen",
-                      static_cast<uint64_t>(mSlot[i].mKeySizeWithoutPrefix));
-      AddMemberToJson(&arrayElement, allocator, "mKey", KeyWithoutPrefix(i));
-      AddMemberToJson(&arrayElement, allocator, "mPayloadLen",
-                      static_cast<uint64_t>(mSlot[i].mValSize));
-      AddMemberToJson(&arrayElement, allocator, "mHead", static_cast<uint64_t>(mSlot[i].mHead));
-      memberArray.PushBack(arrayElement, allocator);
-    }
-    resultObj->AddMember("mSlots", memberArray, allocator);
-  }
 }
 
 int32_t BTreeNode::CmpKeys(Slice lhs, Slice rhs) {

@@ -1,10 +1,10 @@
-#include "BMTable.hpp"
+#include "leanstore/profiling/tables/BMTable.hpp"
 
-#include "buffer-manager/BufferManager.hpp"
-#include "profiling/counters/PPCounters.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
-#include "utils/EnumerableThreadLocal.hpp"
-#include "utils/UserThread.hpp"
+#include "leanstore/buffer-manager/BufferManager.hpp"
+#include "leanstore/profiling/counters/PPCounters.hpp"
+#include "leanstore/profiling/counters/WorkerCounters.hpp"
+#include "leanstore/utils/EnumerableThreadLocal.hpp"
+#include "leanstore/utils/UserThread.hpp"
 
 namespace leanstore {
 namespace profiling {

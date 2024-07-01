@@ -1,17 +1,17 @@
-#include "btree/BasicKV.hpp"
-#include "btree/TransactionKV.hpp"
-#include "btree/core/BTreeGeneric.hpp"
-#include "buffer-manager/BufferFrame.hpp"
-#include "buffer-manager/BufferManager.hpp"
-#include "concurrency/CRManager.hpp"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/StoreOption.hpp"
-#include "utils/DebugFlags.hpp"
-#include "utils/Defer.hpp"
-#include "utils/JsonUtil.hpp"
-#include "utils/Log.hpp"
-#include "utils/RandomGenerator.hpp"
+#include "leanstore/btree/BasicKV.hpp"
+#include "leanstore/btree/TransactionKV.hpp"
+#include "leanstore/btree/core/BTreeGeneric.hpp"
+#include "leanstore/buffer-manager/BufferFrame.hpp"
+#include "leanstore/buffer-manager/BufferManager.hpp"
+#include "leanstore/concurrency/CRManager.hpp"
+#include "leanstore/utils/DebugFlags.hpp"
+#include "leanstore/utils/Defer.hpp"
+#include "leanstore/utils/JsonUtil.hpp"
+#include "leanstore/utils/Log.hpp"
+#include "leanstore/utils/RandomGenerator.hpp"
 
 #include <gtest/gtest.h>
 
@@ -82,13 +82,6 @@ TEST_F(RecoveryTest, SerializeAndDeserialize) {
                                                           bf.mHeader.mPageId, bf.mPage.mBTreeId,
                                                           bf.IsDirty());
                                               });
-
-  mStore->ExecSync(0, [&]() {
-    rapidjson::Document doc(rapidjson::kObjectType);
-    leanstore::storage::btree::BTreeGeneric::ToJson(*btree, &doc);
-    Log::Info("BTree before destroy:\n{}", leanstore::utils::JsonToStr(&doc));
-  });
-
   // meta file should be serialized during destructor.
   auto storeOption = mStore->mStoreOption;
   mStore.reset(nullptr);
@@ -158,10 +151,6 @@ TEST_F(RecoveryTest, RecoverAfterInsert) {
       EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
     }
     cr::Worker::My().CommitTx();
-
-    rapidjson::Document doc(rapidjson::kObjectType);
-    leanstore::storage::btree::BTreeGeneric::ToJson(*btree, &doc);
-    Log::Info("BTree before destroy:\n{}", leanstore::utils::JsonToStr(&doc));
   });
 
   // skip dumpping buffer frames on exit
@@ -179,13 +168,6 @@ TEST_F(RecoveryTest, RecoverAfterInsert) {
   mStore = std::move(res.value());
   mStore->GetTransactionKV(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
-  mStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
-    SCOPED_DEFER(cr::Worker::My().CommitTx());
-    rapidjson::Document doc(rapidjson::kObjectType);
-    BTreeGeneric::ToJson(*static_cast<BTreeGeneric*>(btree), &doc);
-    Log::Info("TransactionKV after recovery: {}", utils::JsonToStr(&doc));
-  });
 
   // lookup the restored btree
   mStore->ExecSync(0, [&]() {
@@ -269,10 +251,6 @@ TEST_F(RecoveryTest, RecoverAfterUpdate) {
         cr::Worker::My().CommitTx();
       }
     }
-
-    rapidjson::Document doc(rapidjson::kObjectType);
-    leanstore::storage::btree::BTreeGeneric::ToJson(*btree, &doc);
-    LS_DLOG("BTree before destroy:\n{}", leanstore::utils::JsonToStr(&doc));
   });
 
   // skip dumpping buffer frames on exit
@@ -290,13 +268,6 @@ TEST_F(RecoveryTest, RecoverAfterUpdate) {
   mStore = std::move(res.value());
   mStore->GetTransactionKV(btreeName, &btree);
   EXPECT_NE(btree, nullptr);
-  mStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
-    SCOPED_DEFER(cr::Worker::My().CommitTx());
-    rapidjson::Document doc(rapidjson::kObjectType);
-    BTreeGeneric::ToJson(*static_cast<BTreeGeneric*>(btree), &doc);
-    LS_DLOG("TransactionKV after recovery: {}", utils::JsonToStr(&doc));
-  });
 
   // lookup the restored btree
   mStore->ExecSync(0, [&]() {
@@ -352,10 +323,6 @@ TEST_F(RecoveryTest, RecoverAfterRemove) {
       EXPECT_EQ(btree->Remove(key), OpCode::kOK);
       cr::Worker::My().CommitTx();
     }
-
-    rapidjson::Document doc(rapidjson::kObjectType);
-    leanstore::storage::btree::BTreeGeneric::ToJson(*btree, &doc);
-    LS_DLOG("BTree before destroy:\n{}", leanstore::utils::JsonToStr(&doc));
   });
 
   // skip dumpping buffer frames on exit

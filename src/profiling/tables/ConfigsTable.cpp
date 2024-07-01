@@ -1,7 +1,7 @@
-#include "ConfigsTable.hpp"
+#include "leanstore/profiling/tables/ConfigsTable.hpp"
 
 #include "leanstore/LeanStore.hpp"
-#include "utils/UserThread.hpp"
+#include "leanstore/utils/UserThread.hpp"
 
 namespace leanstore {
 namespace profiling {

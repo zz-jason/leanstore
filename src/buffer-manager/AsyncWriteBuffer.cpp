@@ -1,10 +1,10 @@
-#include "buffer-manager/AsyncWriteBuffer.hpp"
+#include "leanstore/buffer-manager/AsyncWriteBuffer.hpp"
 
-#include "buffer-manager/BufferFrame.hpp"
 #include "leanstore/Exceptions.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
-#include "utils/Log.hpp"
-#include "utils/Result.hpp"
+#include "leanstore/buffer-manager/BufferFrame.hpp"
+#include "leanstore/profiling/counters/WorkerCounters.hpp"
+#include "leanstore/utils/Log.hpp"
+#include "leanstore/utils/Result.hpp"
 
 namespace leanstore::storage {
 

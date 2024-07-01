@@ -1,6 +1,6 @@
-#include "utils/Log.hpp"
+#include "leanstore/utils/Log.hpp"
 
-#include "utils/Defer.hpp"
+#include "leanstore/utils/Defer.hpp"
 
 #include <spdlog/common.h>
 #include <spdlog/sinks/basic_file_sink.h>

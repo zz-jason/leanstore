@@ -28,6 +28,8 @@ QualifierOrder: ['inline', 'static', 'const', 'volatile', 'type']
 IncludeCategories:
   - Regex:           '^".*.hpp'
     Priority:        2
+  - Regex:           '^<leanstore/*'
+    Priority:        2
   - Regex:           '^("|<)(benchmark)/'
     Priority:        3
   - Regex:           '^("|<)(gtest|gmock|gflags|spdlog|glog|rapidjson|tabulate|rocksdb|gperftools|crc32c|prometheus)/'

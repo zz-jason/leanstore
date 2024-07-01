@@ -1,7 +1,7 @@
-#include "DTTable.hpp"
+#include "leanstore/profiling/tables/DTTable.hpp"
 
-#include "buffer-manager/TreeRegistry.hpp"
-#include "profiling/counters/WorkerCounters.hpp"
+#include "leanstore/buffer-manager/TreeRegistry.hpp"
+#include "leanstore/profiling/counters/WorkerCounters.hpp"
 
 namespace leanstore {
 namespace profiling {
