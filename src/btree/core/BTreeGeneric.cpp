@@ -14,7 +14,6 @@
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/Misc.hpp"
 #include "utils/ToJson.hpp"
-#include "utils/ToJsonImpl.hpp"
 
 #include <iostream>
 

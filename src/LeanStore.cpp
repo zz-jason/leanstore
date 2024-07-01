@@ -53,7 +53,7 @@ Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption option) {
 
 LeanStore::LeanStore(StoreOption option)
     : mStoreOption(std::move(option)),
-      mMetricsManager(std::make_unique<leanstore::telemetry::MetricsManager>(this)) {
+      mMetricsManager(nullptr) {
   utils::tlsStore = this;
 
   Log::Info("LeanStore starting ...");
@@ -61,6 +61,7 @@ LeanStore::LeanStore(StoreOption option)
 
   // Expose the metrics
   if (mStoreOption.mEnableMetrics) {
+    mMetricsManager = std::make_unique<leanstore::telemetry::MetricsManager>(this);
     mMetricsManager->Expose();
   }
 
@@ -143,10 +144,13 @@ void LeanStore::initPageAndWalFd() {
 
 LeanStore::~LeanStore() {
   Log::Info("LeanStore stopping ...");
-  SCOPED_DEFER({ Log::Info("LeanStore stopped"); });
-
-  // stop metrics manager
-  mMetricsManager = nullptr;
+  SCOPED_DEFER({
+    // stop metrics manager in the last
+    if (mStoreOption.mEnableMetrics) {
+      mMetricsManager = nullptr;
+    }
+    Log::Info("LeanStore stopped");
+  });
 
   // wait all concurrent jobs to finsh
   WaitAll();

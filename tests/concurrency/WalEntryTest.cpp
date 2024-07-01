@@ -1,7 +1,6 @@
 #include "leanstore/concurrency/WalEntry.hpp"
 
 #include "utils/ToJson.hpp"
-#include "utils/ToJsonImpl.hpp"
 
 #include <gtest/gtest.h>
 #include <rapidjson/document.h>

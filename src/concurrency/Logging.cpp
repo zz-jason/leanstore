@@ -6,7 +6,6 @@
 #include "leanstore/profiling/counters/WorkerCounters.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "utils/ToJson.hpp"
-#include "utils/ToJsonImpl.hpp"
 
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
@@ -54,7 +53,7 @@ void Logging::WriteWalTxAbort() {
   // Initialize a WalTxAbort
   auto* data = mWalBuffer + mWalBuffered;
   std::memset(data, 0, size);
-  auto* entry = new (data) WalTxAbort(size);
+  auto* entry [[maybe_unused]] = new (data) WalTxAbort(size);
 
   // Submit the WalTxAbort to group committer
   mWalBuffered += size;
@@ -72,7 +71,7 @@ void Logging::WriteWalTxFinish() {
   // Initialize a WalTxFinish
   auto* data = mWalBuffer + mWalBuffered;
   std::memset(data, 0, size);
-  auto* entry = new (data) WalTxFinish(Worker::My().mActiveTx.mStartTs);
+  auto* entry [[maybe_unused]] = new (data) WalTxFinish(Worker::My().mActiveTx.mStartTs);
 
   // Submit the WalTxAbort to group committer
   mWalBuffered += size;

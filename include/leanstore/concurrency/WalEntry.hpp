@@ -48,9 +48,6 @@ public:
 
   //! Returns the size of the WalEntry, including all the payloads.
   static size_t Size(const WalEntry* entry);
-
-  //! Convert the WalEntry to a JSON string.
-  static std::string ToJsonString(const WalEntry* entry);
 };
 
 // maybe it can also be removed, we can use the first compensation log to
