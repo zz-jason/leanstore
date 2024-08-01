@@ -78,7 +78,8 @@ find_package(benchmark CONFIG REQUIRED)
 find_package(Crc32c CONFIG REQUIRED)
 find_package(prometheus-cpp CONFIG REQUIRED)
 find_package(httplib CONFIG REQUIRED)
-
+find_package(PkgConfig)
+pkg_check_modules(libunwind REQUIRED IMPORTED_TARGET GLOBAL libunwind)
 
 # ------------------------------------------------------------------------------
 # Project build targets

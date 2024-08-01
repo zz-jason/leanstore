@@ -24,6 +24,7 @@ set(leanstore_deps
   httplib::httplib
   prometheus-cpp::core
   prometheus-cpp::pull
+  PkgConfig::libunwind
 )
 target_link_libraries(leanstore PUBLIC ${leanstore_deps})
 
