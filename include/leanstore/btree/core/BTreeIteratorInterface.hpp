@@ -10,6 +10,8 @@ namespace btree {
 
 class BTreeIteratorInterface {
 public:
+  virtual ~BTreeIteratorInterface() = default;
+
   virtual bool Seek(Slice key) = 0;
   virtual bool SeekForPrev(Slice key) = 0;
   virtual bool SeekExact(Slice key) = 0;

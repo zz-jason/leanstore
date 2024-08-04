@@ -35,6 +35,8 @@ public:
   bool mEncounteredContention = false;
 
 public:
+  HybridGuard() = default;
+
   HybridGuard(HybridLatch* latch) : mLatch(latch), mState(GuardState::kUninitialized), mVersion(0) {
   }
 

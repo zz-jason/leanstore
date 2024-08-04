@@ -32,6 +32,10 @@ public:
       : std::basic_string_view<uint8_t>(reinterpret_cast<const uint8_t*>(data), std::strlen(data)) {
   }
 
+  Slice(const char* data, size_t size)
+      : std::basic_string_view<uint8_t>(reinterpret_cast<const uint8_t*>(data), size) {
+  }
+
   std::string ToString() const {
     return std::string(reinterpret_cast<const char*>(data()), size());
   }
