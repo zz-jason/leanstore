@@ -1,6 +1,6 @@
 [![CI][9]][10]
-[![CircleCI][1]][2]
 [![codecov][3]][4]
+[![Join Slack][11]][12]
 
 # LeanStore
 
@@ -14,8 +14,9 @@ to keep all data in memory.
 
 ## Getting started
 
-It's recommanded to develop the project inside a docker container, which can be
-built from this [Dockerfile][5]:
+[vcpkg][13] is used to manage third-party libraries, please install it before
+building the project. It's highly recommanded to develop the project inside a
+docker container, which can be built from this [Dockerfile][5]:
 
 ```sh
 cmake --preset debug
@@ -28,6 +29,8 @@ ctest --test-dir build/debug
 Contributions are welcomed and greatly appreciated! See [CONTRIBUTING.md][6] for
 setting up development environment and contributing.
 
+You can also join the [slack workspace][12] to discuss any questions or ideas.
+
 ## License
 
 LeanStore is under the [MIT License][7].
@@ -36,8 +39,6 @@ LeanStore is under the [MIT License][7].
 
 Thanks for the LeanStore authors and the [leanstore/leanstore][8] project.
 
-[1]: https://dl.circleci.com/status-badge/img/circleci/MkFUq3aTNH5S7gLVEtwrGF/XCiiFNumkGdcD65tKp4EEy/tree/main.svg?style=shield&circle-token=28e7f69f9698ab8b805730e038065a9f54c29668
-[2]: https://dl.circleci.com/status-badge/redirect/circleci/MkFUq3aTNH5S7gLVEtwrGF/XCiiFNumkGdcD65tKp4EEy/tree/main
 [3]: https://codecov.io/github/zz-jason/leanstore/graph/badge.svg?token=MBS1H361JJ
 [4]: https://codecov.io/github/zz-jason/leanstore
 [5]: ./docker/Dockerfile
@@ -46,3 +47,6 @@ Thanks for the LeanStore authors and the [leanstore/leanstore][8] project.
 [8]: http://github.com/leanstore/leanstore
 [9]: https://github.com/zz-jason/leanstore/actions/workflows/ci.yml/badge.svg
 [10]: https://github.com/zz-jason/leanstore/actions/workflows/ci.yml
+[11]: https://img.shields.io/badge/Join-Slack-blue.svg?logo=slack
+[12]: https://join.slack.com/t/leanstoreworkspace/shared_invite/zt-2o69igywh-yTheoWxjYnD5j3bAFN34Qg
+[13]: https://github.com/microsoft/vcpkg
