@@ -29,7 +29,7 @@ protected:
     BufferFrameHolder(size_t pageSize, PID pageId)
         : mBuffer(512 + pageSize),
           mBf(new(mBuffer.Get()) BufferFrame()) {
-      mBf->mHeader.mPageId = pageId;
+      mBf->Init(pageId);
     }
   };
 
@@ -106,6 +106,11 @@ TEST_F(AsyncWriteBufferTest, Basic) {
   auto doneRequests = result.value();
   EXPECT_EQ(doneRequests, testMaxBatchSize);
   EXPECT_EQ(testWriteBuffer.GetPendingRequests(), 0);
+
+   // check the flushed content
+  testWriteBuffer.IterateFlushedBfs([]([[maybe_unused]]BufferFrame& flushedBf, uint64_t flushedGsn){
+    EXPECT_EQ(flushedGsn, 0);
+  }, testMaxBatchSize);
 
   // read the file content
   for (int i = 0; i < testMaxBatchSize; i++) {
