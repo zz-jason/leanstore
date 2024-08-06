@@ -13,7 +13,7 @@
 #include <cstdint>
 #include <cstring>
 #include <format>
-
+#include <vector>
 #include <fcntl.h>
 
 namespace leanstore::storage::test {
@@ -83,14 +83,13 @@ TEST_F(AsyncWriteBufferTest, Basic) {
   auto testPageSize = 512;
   auto testMaxBatchSize = 8;
   AsyncWriteBuffer testWriteBuffer(testFd, testPageSize, testMaxBatchSize);
-
+  std::vector<std::unique_ptr<BufferFrameHolder>> bfHolders;
   for (int i = 0; i < testMaxBatchSize; i++) {
+    bfHolders.push_back(std::make_unique<BufferFrameHolder>(testPageSize, i));
     EXPECT_FALSE(testWriteBuffer.IsFull());
-    BufferFrameHolder bfHolder(testPageSize, i);
-
     // set the payload to the pageId
-    *reinterpret_cast<int64_t*>(bfHolder.mBf->mPage.mPayload) = i;
-    testWriteBuffer.Add(*bfHolder.mBf);
+    *reinterpret_cast<int64_t*>(bfHolders[i]->mBf->mPage.mPayload) = i;
+    testWriteBuffer.Add(*bfHolders[i]->mBf);
   }
 
   // now the write buffer should be full
@@ -108,7 +107,9 @@ TEST_F(AsyncWriteBufferTest, Basic) {
   EXPECT_EQ(testWriteBuffer.GetPendingRequests(), 0);
 
    // check the flushed content
-  testWriteBuffer.IterateFlushedBfs([]([[maybe_unused]]BufferFrame& flushedBf, uint64_t flushedGsn){
+  testWriteBuffer.IterateFlushedBfs([](BufferFrame& flushedBf, uint64_t flushedGsn){
+    EXPECT_FALSE(flushedBf.IsDirty());
+    EXPECT_FALSE(flushedBf.IsFree());
     EXPECT_EQ(flushedGsn, 0);
   }, testMaxBatchSize);
 
