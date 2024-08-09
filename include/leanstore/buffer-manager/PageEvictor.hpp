@@ -124,7 +124,7 @@ public:
 
   //! Find cool candidates and cool them
   //!   - hot and all the children are evicted: cool it
-  //!   - hot but one of the chidren is cool: choose the child and restart
+  //!   - hot but one of the children is cool: choose the child and restart
   //!   - cool: evict it
   void PrepareAsyncWriteBuffer(Partition& targetPartition);
 

@@ -77,7 +77,7 @@ public:
 
   //! Guard the childSwip when holding the guarded parent, usually used for lock
   //! coupling which locks the parent firstly then lock the child.
-  //! @param guardedParent The guarded parent node, which protects everyting in
+  //! @param guardedParent The guarded parent node, which protects everything in
   //! the parent node, including childSwip.
   //! @param childSwip The swip to the child node. The child page is loaded to
   //! memory if it is evicted.
@@ -349,7 +349,7 @@ public:
 };
 
 //! Shared lock guarded buffer frame.
-//! TODO(jian.z): Seems it hasen't been used in the codebase, can we remove it?
+//! TODO(jian.z): Seems it hasn't been used in the codebase, can we remove it?
 template <typename T>
 class SharedGuardedBufferFrame {
 public:

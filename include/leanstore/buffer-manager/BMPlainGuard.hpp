@@ -49,7 +49,7 @@ private:
   BMOptimisticGuard& mOptimisticGuard; // our basis
 
 public:
-  BMExclusiveGuard(BMOptimisticGuard& optimisiticGuard) : mOptimisticGuard(optimisiticGuard) {
+  BMExclusiveGuard(BMOptimisticGuard& optimisticGuard) : mOptimisticGuard(optimisticGuard) {
     mOptimisticGuard.mGuard.TryToExclusiveMayJump();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
@@ -91,7 +91,7 @@ private:
   BMOptimisticGuard& mOptimisticGuard; // our basis
 
 public:
-  BMSharedGuard(BMOptimisticGuard& optimisiticGuard) : mOptimisticGuard(optimisiticGuard) {
+  BMSharedGuard(BMOptimisticGuard& optimisticGuard) : mOptimisticGuard(optimisticGuard) {
     mOptimisticGuard.mGuard.TryToSharedMayJump();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
