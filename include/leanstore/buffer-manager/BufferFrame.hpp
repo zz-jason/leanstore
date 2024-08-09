@@ -53,7 +53,7 @@ public:
   //! The state of the buffer frame.
   State mState = State::kFree;
 
-  //! Latch of the buffer frame. The optismitic version in the latch is nerer
+  //! Latch of the buffer frame. The optimistic version in the latch is never
   //! decreased.
   HybridLatch mLatch = 0;
 
@@ -137,7 +137,7 @@ public:
   TREEID mBTreeId = std::numeric_limits<TREEID>::max();
 
   //! Used for debug, page id is stored in it when evicted to disk.
-  uint64_t mMagicDebuging;
+  uint64_t mMagicDebugging;
 
   //! The data stored in this page. The btree node content is stored here.
   uint8_t mPayload[];

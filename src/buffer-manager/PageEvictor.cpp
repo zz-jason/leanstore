@@ -96,7 +96,7 @@ void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
           PPCounters::MyCounters().touched_bfs_counter++;
         }
 
-        // Iterate all the child pages to check wherher all the children are
+        // Iterate all the child pages to check whether all the children are
         // evicted, otherwise pick the fist met unevicted child as the next
         // cool page candidate.
         bool allChildrenEvicted(true);
@@ -202,7 +202,7 @@ void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
       JUMPMU_CATCH() {
         LS_DLOG("Cool candidate discarded, optimistic latch failed, "
                 "someone has modified the buffer frame during cool "
-                "validateion, pageId={}",
+                "validation, pageId={}",
                 coolCandidate->mHeader.mPageId);
       }
     }
@@ -232,7 +232,7 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& targetPartition) {
       // partition
       if (cooledBf->mHeader.mState != State::kCool || cooledBf->mHeader.mIsBeingWrittenBack) {
         LS_DLOG("COOLed buffer frame discarded, pageId={}, IsCool={}, "
-                "isBeingWritternBack={}",
+                "isBeingWrittenBack={}",
                 cooledBf->mHeader.mPageId, cooledBf->mHeader.mState == State::kCool,
                 cooledBf->mHeader.mIsBeingWrittenBack.load());
         JUMPMU_CONTINUE;
@@ -261,8 +261,8 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& targetPartition) {
       }
 
       // Async write dirty pages back. They should keep in memory and stay in
-      // cooling stage until all the contents are writtern back to the
-      // underluing disk.
+      // cooling stage until all the contents are written back to the
+      // underlying disk.
       if (mAsyncWriteBuffer.IsFull()) {
         LS_DLOG("Async write buffer is full, bufferSize={}",
                 mAsyncWriteBuffer.GetPendingRequests());
@@ -286,7 +286,7 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& targetPartition) {
     }
     JUMPMU_CATCH() {
       LS_DLOG("COOLed buffer frame discarded, optimistic latch failed, "
-              "someone has modified the buffer frame during cool validateion, "
+              "someone has modified the buffer frame during cool validation, "
               "pageId={}",
               cooledBf->mHeader.mPageId);
     }

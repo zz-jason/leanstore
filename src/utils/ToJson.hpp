@@ -222,8 +222,8 @@ inline void ToJson(leanstore::storage::BufferFrame* obj, rapidjson::Value* doc,
   }
   {
     rapidjson::Value member;
-    member.SetUint64(obj->mPage.mMagicDebuging);
-    pageMetaObj.AddMember("mMagicDebuging", member, *allocator);
+    member.SetUint64(obj->mPage.mMagicDebugging);
+    pageMetaObj.AddMember("mMagicDebugging", member, *allocator);
   }
   doc->AddMember("pageWithoutPayload", pageMetaObj, *allocator);
 }

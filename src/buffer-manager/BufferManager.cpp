@@ -42,7 +42,7 @@ BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
   const uint64_t totalMemSize = bfSize * (mNumBfs + mNumSaftyBfs);
 
   // Init buffer pool with zero-initialized buffer frames. Use mmap with flags
-  // MAP_PRIVATE and MAP_ANONYMOUS, no underlying file desciptor to allocate
+  // MAP_PRIVATE and MAP_ANONYMOUS, no underlying file descriptor to allocate
   // totalmemSize buffer pool with zero-initialized contents.
   void* underlyingBuf =
       mmap(NULL, totalMemSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
