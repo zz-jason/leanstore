@@ -28,8 +28,7 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
                 "COUNTERS_LEVEL": "none",
-                "ENABLE_PROFILING": "OFF",
-                "BUILD_SHARED_LIBS": "OFF"
+                "ENABLE_PROFILING": "OFF"
             }
         },
         {

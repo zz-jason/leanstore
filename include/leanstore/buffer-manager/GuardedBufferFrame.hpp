@@ -22,8 +22,8 @@ class SharedGuardedBufferFrame;
 template <typename T>
 class GuardedBufferFrame {
 public:
-  //! The buffer manager who manages the guarded buffer frame. Used to reclaim
-  //! the buffer frame, buffer manager must be set when keep alive is false.
+  //! The buffer manager who manages the guarded buffer frame. Used to reclaim the buffer frame,
+  //! buffer manager must be set when keep alive is false.
   BufferManager* mBufferManager = nullptr;
 
   //! The guarded buffer frame. Latch mode is determined by mGuard.
@@ -32,6 +32,8 @@ public:
   //! The latch guard of this buffer frame
   HybridGuard mGuard;
 
+  //! Whether to keep the buffer frame alive after the guard is released. If false, the buffer frame
+  //! will be reclaimed by the buffer manager.
   bool mKeepAlive = true;
 
 public:
@@ -51,8 +53,13 @@ public:
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
-  GuardedBufferFrame(GuardedBufferFrame& other) = delete;  // Copy constructor
-  GuardedBufferFrame(GuardedBufferFrame&& other) = delete; // Move constructor
+  GuardedBufferFrame(GuardedBufferFrame& other) = delete; // Copy constructor
+
+  GuardedBufferFrame(GuardedBufferFrame&& other) {
+    // call the move assignment
+    *this = std::move(other);
+    JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
+  }
 
   GuardedBufferFrame(BufferManager* bufferManager, BufferFrame* bf, bool keepAlive = true)
       : mBufferManager(bufferManager),

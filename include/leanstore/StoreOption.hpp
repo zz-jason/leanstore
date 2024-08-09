@@ -36,7 +36,7 @@ public:
   // ---------------------------------------------------------------------------
 
   //! The number of worker threads.
-  uint32_t mWorkerThreads = 4;
+  uint64_t mWorkerThreads = 4;
 
   //! The WAL buffer size for each worker (bytes).
   uint64_t mWalBufferSize = 10 * 1024 * 1024;

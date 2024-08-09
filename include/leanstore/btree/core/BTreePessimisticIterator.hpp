@@ -22,6 +22,7 @@ public:
   //! The working btree, all the seek operations are based on this tree.
   BTreeGeneric& mBTree;
 
+  //! The latch mode on the leaf node.
   const LatchMode mMode;
 
   //! mFuncEnterLeaf is called when the target leaf node is found.
@@ -134,6 +135,25 @@ public:
         mBuffer() {
   }
 
+  //! move constructor
+  BTreePessimisticIterator(BTreePessimisticIterator&& other)
+      : mBTree(other.mBTree),
+        mMode(other.mMode),
+        mFuncEnterLeaf(std::move(other.mFuncEnterLeaf)),
+        mFuncExitLeaf(std::move(other.mFuncExitLeaf)),
+        mFuncCleanUp(std::move(other.mFuncCleanUp)),
+        mSlotId(other.mSlotId),
+        mIsPrefixCopied(other.mIsPrefixCopied),
+        mGuardedLeaf(std::move(other.mGuardedLeaf)),
+        mGuardedParent(std::move(other.mGuardedParent)),
+        mLeafPosInParent(other.mLeafPosInParent),
+        mBuffer(std::move(other.mBuffer)),
+        mFenceSize(other.mFenceSize),
+        mIsUsingUpperFence(other.mIsUsingUpperFence) {
+    other.mSlotId = -1;
+    other.mLeafPosInParent = -1;
+  }
+
   void SetEnterLeafCallback(LeafCallback cb) {
     mFuncEnterLeaf = cb;
   }
@@ -198,6 +218,25 @@ public:
     }
 
     mSlotId -= 1;
+    return true;
+  }
+
+  bool HasNext() {
+    // iterator is not initialized, return false
+    if (mSlotId == -1) {
+      return false;
+    }
+
+    // If we are not at the end of the leaf, return true
+    if (mSlotId < mGuardedLeaf->mNumSeps - 1) {
+      return true;
+    }
+
+    // No more keys in the BTree, return false
+    if (mGuardedLeaf->mUpperFence.mLength == 0) {
+      return false;
+    }
+
     return true;
   }
 

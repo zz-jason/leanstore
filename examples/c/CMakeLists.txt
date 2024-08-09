@@ -3,12 +3,10 @@
 # ------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.10)
-project(leanstore-examples
-  VERSION 0.1.0
-  DESCRIPTION "Examples for using the leanstore library")
+project(leanstore-examples C)
 
-# Set gcc standard to c++23
-set(CMAKE_CXX_STANDARD 23)
+# Set gcc standard to c11
+set(CMAKE_C_STANDARD 11)
 
 # Set the leanstore include directory
 option(LEANSTORE_INCLUDE_DIR "Path to the leanstore include directory" "")
@@ -20,6 +18,6 @@ message(STATUS "LEANSTORE_LIBRARY_DIR: ${LEANSTORE_LIBRARY_DIR}")
 link_directories(${LEANSTORE_LIBRARY_DIR})
 
 # Rules to build BasicKvExample
-add_executable(BasicKvExample BasicKvExample.cpp)
+add_executable(BasicKvExample BasicKvExample.c)
 target_link_libraries(BasicKvExample leanstore)
 target_include_directories(BasicKvExample PUBLIC ${LEANSTORE_INCLUDE_DIR})
