@@ -4,8 +4,8 @@
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/btree/core/BTreeGeneric.hpp"
-#include "leanstore/btree/core/BTreePessimisticExclusiveIterator.hpp"
-#include "leanstore/btree/core/BTreePessimisticSharedIterator.hpp"
+#include "leanstore/btree/core/PessimisticExclusiveIterator.hpp"
+#include "leanstore/btree/core/PessimisticSharedIterator.hpp"
 #include "leanstore/sync/HybridLatch.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/Misc.hpp"
@@ -91,10 +91,10 @@ OpCode BasicKV::ScanAsc(Slice startKey, ScanCallback callback) {
 
   JUMPMU_TRY() {
     auto iter = GetIterator();
-    for (bool succeed = iter.Seek(startKey); succeed; succeed = iter.Next()) {
+    for (bool succeed = iter.SeekForNext(startKey); succeed; succeed = iter.Next()) {
       iter.AssembleKey();
-      auto key = iter.key();
-      auto value = iter.value();
+      auto key = iter.Key();
+      auto value = iter.Val();
       if (!callback(key, value)) {
         break;
       }
@@ -118,8 +118,8 @@ OpCode BasicKV::ScanDesc(Slice scanKey, ScanCallback callback) {
     }
     while (true) {
       iter.AssembleKey();
-      auto key = iter.key();
-      auto value = iter.value();
+      auto key = iter.Key();
+      auto value = iter.Val();
       if (!callback(key, value)) {
         JUMPMU_RETURN OpCode::kOK;
       }
@@ -295,7 +295,7 @@ OpCode BasicKV::Remove(Slice key) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
 
-    Slice value = xIter.value();
+    Slice value = xIter.Val();
     if (mConfig.mEnableWal) {
       auto walHandler =
           xIter.mGuardedLeaf.ReserveWALPayload<WalRemove>(key.size() + value.size(), key, value);
@@ -329,12 +329,12 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
 
     ENSURE(mConfig.mEnableWal == false);
     if (!pageWise) {
-      if (!xIter.Seek(startKey)) {
+      if (!xIter.SeekForNext(startKey)) {
         JUMPMU_RETURN OpCode::kNotFound;
       }
       while (true) {
         xIter.AssembleKey();
-        auto currentKey = xIter.key();
+        auto currentKey = xIter.Key();
         if (currentKey >= startKey && currentKey <= endKey) {
           COUNTERS_BLOCK() {
             WorkerCounters::MyCounters().dt_range_removed[mTreeId]++;
@@ -380,7 +380,7 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
     });
 
     while (true) {
-      xIter.Seek(startKey);
+      xIter.SeekForNext(startKey);
       if (didPurgeFullPage) {
         didPurgeFullPage = false;
         continue;

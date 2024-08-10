@@ -3,10 +3,9 @@
 #include "leanstore/buffer-manager/TreeRegistry.hpp"
 #include "leanstore/profiling/counters/WorkerCounters.hpp"
 
-namespace leanstore {
-namespace profiling {
+namespace leanstore::profiling {
 
-DTTable::DTTable(BufferManager& bm) : bm(bm) {
+DTTable::DTTable(leanstore::storage::BufferManager& bm) : bm(bm) {
 }
 
 std::string DTTable::getName() {
@@ -231,5 +230,4 @@ void DTTable::next() {
   }
 }
 
-} // namespace profiling
-} // namespace leanstore
+} // namespace leanstore::profiling

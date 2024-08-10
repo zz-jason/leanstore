@@ -2,4 +2,5 @@
 .cache
 build
 Testing
+dist
 vcpkg_installed

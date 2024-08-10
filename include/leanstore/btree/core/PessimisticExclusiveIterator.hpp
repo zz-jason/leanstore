@@ -1,23 +1,21 @@
 #pragma once
 
-#include "BTreePessimisticIterator.hpp"
 #include "leanstore/KVInterface.hpp"
+#include "leanstore/btree/core/PessimisticIterator.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/RandomGenerator.hpp"
 #include "leanstore/utils/UserThread.hpp"
 
-using namespace leanstore::storage;
-
 namespace leanstore::storage::btree {
 
-class BTreePessimisticExclusiveIterator : public BTreePessimisticIterator {
+class PessimisticExclusiveIterator : public PessimisticIterator {
 public:
-  BTreePessimisticExclusiveIterator(BTreeGeneric& tree)
-      : BTreePessimisticIterator(tree, LatchMode::kPessimisticExclusive) {
+  PessimisticExclusiveIterator(BTreeGeneric& tree)
+      : PessimisticIterator(tree, LatchMode::kPessimisticExclusive) {
   }
 
-  BTreePessimisticExclusiveIterator(BTreeGeneric& tree, BufferFrame* bf, const uint64_t bfVersion)
-      : BTreePessimisticIterator(tree, LatchMode::kPessimisticExclusive) {
+  PessimisticExclusiveIterator(BTreeGeneric& tree, BufferFrame* bf, const uint64_t bfVersion)
+      : PessimisticIterator(tree, LatchMode::kPessimisticExclusive) {
     HybridGuard optimisticGuard(bf->mHeader.mLatch, bfVersion);
     optimisticGuard.JumpIfModifiedByOthers();
     mGuardedLeaf = GuardedBufferFrame<BTreeNode>(tree.mStore->mBufferManager.get(),
@@ -35,9 +33,8 @@ public:
   }
 
   virtual OpCode SeekToInsert(Slice key) {
-    if (mSlotId == -1 || !KeyInCurrentNode(key)) {
-      gotoPage(key);
-    }
+    seekForTargetPageOnDemand(key);
+
     bool isEqual = false;
     mSlotId = mGuardedLeaf->LowerBound<false>(key, &isEqual);
     if (isEqual) {
@@ -117,7 +114,7 @@ public:
         return false;
       }
       AssembleKey();
-      Slice key = this->key();
+      Slice key = this->Key();
       SplitForKey(key);
       auto succeed [[maybe_unused]] = SeekExact(key);
       LS_DCHECK(succeed);

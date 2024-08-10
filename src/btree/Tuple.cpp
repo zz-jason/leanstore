@@ -40,7 +40,7 @@ static uint64_t MaxFatTupleLength() {
   return BTreeNode::Size() - 1000;
 }
 
-bool Tuple::ToFat(BTreePessimisticExclusiveIterator& xIter) {
+bool Tuple::ToFat(PessimisticExclusiveIterator& xIter) {
   utils::Timer timer(CRCounters::MyCounters().cc_ms_fat_tuple_conversion);
 
   // Process the chain tuple
@@ -126,12 +126,12 @@ bool Tuple::ToFat(BTreePessimisticExclusiveIterator& xIter) {
   // Finalize the new FatTuple
   // TODO: corner cases, more careful about space usage
   const uint16_t fatTupleSize = sizeof(FatTuple) + fatTuple->mPayloadCapacity;
-  if (xIter.value().size() < fatTupleSize) {
+  if (xIter.Val().size() < fatTupleSize) {
     auto succeed = xIter.ExtendPayload(fatTupleSize);
     if (!succeed) {
       Log::Fatal("Failed to extend current value buffer to fit the FatTuple, "
                  "fatTupleSize={}, current value buffer size={}",
-                 fatTupleSize, xIter.value().size());
+                 fatTupleSize, xIter.Val().size());
     }
   } else {
     xIter.ShortenWithoutCompaction(fatTupleSize);

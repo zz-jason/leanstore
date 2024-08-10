@@ -8,7 +8,7 @@
 #include "leanstore/btree/ChainedTuple.hpp"
 #include "leanstore/btree/Tuple.hpp"
 #include "leanstore/btree/core/BTreeGeneric.hpp"
-#include "leanstore/btree/core/BTreePessimisticSharedIterator.hpp"
+#include "leanstore/btree/core/PessimisticSharedIterator.hpp"
 #include "leanstore/concurrency/Worker.hpp"
 #include "leanstore/sync/HybridGuard.hpp"
 #include "leanstore/telemetry/MetricOnlyTimer.hpp"
@@ -86,7 +86,7 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
     if (!gIter.SeekExact(key)) {
       return OpCode::kNotFound;
     }
-    auto [ret, versionsRead] = getVisibleTuple(gIter.value(), valCallback);
+    auto [ret, versionsRead] = getVisibleTuple(gIter.Val(), valCallback);
     METRIC_COUNTER_INC(mStore->mMetricsManager, tx_version_read_total, versionsRead);
     return ret;
   };
@@ -109,7 +109,7 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
     return cr::ActiveTx().IsLongRunning() ? lookupInGraveyard() : OpCode::kNotFound;
   }
 
-  auto [ret, versionsRead] = getVisibleTuple(iter.value(), valCallback);
+  auto [ret, versionsRead] = getVisibleTuple(iter.Val(), valCallback);
   METRIC_COUNTER_INC(mStore->mMetricsManager, tx_version_read_total, versionsRead);
   if (cr::ActiveTx().IsLongRunning() && ret == OpCode::kNotFound) {
     ret = lookupInGraveyard();
@@ -295,8 +295,7 @@ std::tuple<OpCode, uint16_t> TransactionKV::getVisibleTuple(Slice payload, ValCa
   }
 }
 
-void TransactionKV::insertAfterRemove(BTreePessimisticExclusiveIterator& xIter, Slice key,
-                                      Slice val) {
+void TransactionKV::insertAfterRemove(PessimisticExclusiveIterator& xIter, Slice key, Slice val) {
   auto mutRawVal = xIter.MutableVal();
   auto* chainedTuple = ChainedTuple::From(mutRawVal.Data());
   auto lastWorkerId = chainedTuple->mWorkerId;
@@ -399,7 +398,7 @@ OpCode TransactionKV::Remove(Slice key) {
 
     // 1. move current (key, value) pair to the version storage
     DanglingPointer danglingPointer(xIter);
-    auto valSize = xIter.value().size() - sizeof(ChainedTuple);
+    auto valSize = xIter.Val().size() - sizeof(ChainedTuple);
     auto val = chainedTuple.GetValue(valSize);
     auto versionSize = sizeof(RemoveVersion) + val.size() + key.size();
     auto commandId =
@@ -576,7 +575,7 @@ void TransactionKV::undoLastRemove(const WalTxRemove* walRemove) {
 
       // resize the current slot to store the removed tuple
       auto chainedTupleSize = walRemove->mValSize + sizeof(ChainedTuple);
-      auto curRawVal = xIter.value();
+      auto curRawVal = xIter.Val();
       if (curRawVal.size() < chainedTupleSize) {
         auto succeed [[maybe_unused]] = xIter.ExtendPayload(chainedTupleSize);
         LS_DCHECK(succeed,
@@ -602,7 +601,7 @@ void TransactionKV::undoLastRemove(const WalTxRemove* walRemove) {
   }
 }
 
-bool TransactionKV::UpdateInFatTuple(BTreePessimisticExclusiveIterator& xIter, Slice key,
+bool TransactionKV::UpdateInFatTuple(PessimisticExclusiveIterator& xIter, Slice key,
                                      MutValCallback updateCallBack, UpdateDesc& updateDesc) {
   utils::Timer timer(CRCounters::MyCounters().cc_ms_fat_tuple);
   while (true) {
@@ -617,7 +616,7 @@ bool TransactionKV::UpdateInFatTuple(BTreePessimisticExclusiveIterator& xIter, S
 
       // Not enough space to store the fat tuple, convert to chained
       auto chainedTupleSize = fatTuple->mValSize + sizeof(ChainedTuple);
-      LS_DCHECK(chainedTupleSize < xIter.value().length());
+      LS_DCHECK(chainedTupleSize < xIter.Val().length());
       fatTuple->ConvertToChained(xIter.mBTree.mTreeId);
       xIter.ShortenWithoutCompaction(chainedTupleSize);
       return false;
@@ -711,9 +710,9 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData, WORKERID versionW
             versionWorkerId, versionTxId);
     LS_DCHECK(version.mDanglingPointer.mBf != nullptr);
     JUMPMU_TRY() {
-      BTreePessimisticExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this),
-                                              version.mDanglingPointer.mBf,
-                                              version.mDanglingPointer.mLatchVersionShouldBe);
+      PessimisticExclusiveIterator xIter(*static_cast<BTreeGeneric*>(this),
+                                         version.mDanglingPointer.mBf,
+                                         version.mDanglingPointer.mLatchVersionShouldBe);
       auto& node = xIter.mGuardedLeaf;
       auto& chainedTuple [[maybe_unused]] =
           *ChainedTuple::From(node->ValData(version.mDanglingPointer.mHeadSlot));
@@ -802,13 +801,13 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData, WORKERID versionW
                 versionWorkerId, versionTxId, removedKey.ToString());
         // insert the removed key value to graveyard
         auto graveyardXIter = mGraveyard->GetExclusiveIterator();
-        auto gRet = graveyardXIter.InsertKV(removedKey, xIter.value());
+        auto gRet = graveyardXIter.InsertKV(removedKey, xIter.Val());
         if (gRet != OpCode::kOK) {
           Log::Fatal("Failed to insert the removedKey to graveyard, ret={}, "
                      "versionWorkerId={}, versionTxId={}, removedKey={}, "
                      "removedVal={}",
                      ToString(gRet), versionWorkerId, versionTxId, removedKey.ToString(),
-                     xIter.value().ToString());
+                     xIter.Val().ToString());
         }
 
         // remove the tombsone from main tree
@@ -895,11 +894,11 @@ OpCode TransactionKV::scan4ShortRunningTx(Slice key, ScanCallback callback) {
   JUMPMU_TRY() {
     auto iter = GetIterator();
 
-    bool succeed = asc ? iter.Seek(key) : iter.SeekForPrev(key);
+    bool succeed = asc ? iter.SeekForNext(key) : iter.SeekForPrev(key);
     while (succeed) {
       iter.AssembleKey();
-      Slice scannedKey = iter.key();
-      auto [opCode, versionsRead] = getVisibleTuple(iter.value(), [&](Slice scannedVal) {
+      Slice scannedKey = iter.Key();
+      auto [opCode, versionsRead] = getVisibleTuple(iter.Val(), [&](Slice scannedVal) {
         COUNTERS_BLOCK() {
           WorkerCounters::MyCounters().dt_scan_callback[mTreeId] += cr::ActiveTx().IsLongRunning();
         }
@@ -949,7 +948,7 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
     Slice graveyardLowerBound, graveyardUpperBound;
     graveyardLowerBound = key;
 
-    if (!iter.Seek(key)) {
+    if (!iter.SeekForNext(key)) {
       JUMPMU_RETURN OpCode::kOK;
     }
     oRet = OpCode::kOK;
@@ -964,13 +963,13 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
         gRet = OpCode::kOther;
         return;
       }
-      if (!gIter.Seek(graveyardLowerBound)) {
+      if (!gIter.SeekForNext(graveyardLowerBound)) {
         gRet = OpCode::kNotFound;
         return;
       }
 
       gIter.AssembleKey();
-      if (gIter.key() > graveyardUpperBound) {
+      if (gIter.Key() > graveyardUpperBound) {
         gRet = OpCode::kOther;
         gIter.Reset();
         return;
@@ -981,11 +980,11 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
 
     gRange();
     auto takeFromOltp = [&]() {
-      getVisibleTuple(iter.value(), [&](Slice value) {
+      getVisibleTuple(iter.Val(), [&](Slice value) {
         COUNTERS_BLOCK() {
           WorkerCounters::MyCounters().dt_scan_callback[mTreeId] += cr::ActiveTx().IsLongRunning();
         }
-        keepScanning = callback(iter.key(), value);
+        keepScanning = callback(iter.Key(), value);
       });
       if (!keepScanning) {
         return false;
@@ -1016,8 +1015,8 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
         }
       } else if (gRet == OpCode::kOK && oRet != OpCode::kOK) {
         gIter.AssembleKey();
-        Slice gKey = gIter.key();
-        getVisibleTuple(gIter.value(), [&](Slice value) {
+        Slice gKey = gIter.Key();
+        getVisibleTuple(gIter.Val(), [&](Slice value) {
           COUNTERS_BLOCK() {
             WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
                 cr::ActiveTx().IsLongRunning();
@@ -1031,14 +1030,14 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
       } else if (gRet == OpCode::kOK && oRet == OpCode::kOK) {
         iter.AssembleKey();
         gIter.AssembleKey();
-        Slice gKey = gIter.key();
-        Slice oltpKey = iter.key();
+        Slice gKey = gIter.Key();
+        Slice oltpKey = iter.Key();
         if (oltpKey <= gKey) {
           if (!takeFromOltp()) {
             JUMPMU_RETURN OpCode::kOK;
           }
         } else {
-          getVisibleTuple(gIter.value(), [&](Slice value) {
+          getVisibleTuple(gIter.Val(), [&](Slice value) {
             COUNTERS_BLOCK() {
               WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
                   cr::ActiveTx().IsLongRunning();

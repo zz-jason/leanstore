@@ -237,7 +237,7 @@ void LeanStore::serializeMeta(bool allPagesUpToDate) {
 
   // serialize data structure instances
   std::ofstream metaFile;
-  metaFile.open(mStoreOption.GetMetaFilePath(), ios::trunc);
+  metaFile.open(mStoreOption.GetMetaFilePath(), std::ios::trunc);
 
   rapidjson::Document doc;
   auto& allocator = doc.GetAllocator();
@@ -448,7 +448,8 @@ void LeanStore::GetBasicKV(const std::string& name, storage::btree::BasicKV** bt
 
 void LeanStore::DropBasicKV(const std::string& name) {
   LS_DCHECK(cr::Worker::My().IsTxStarted());
-  auto* btree = dynamic_cast<btree::BTreeGeneric*>(mTreeRegistry->GetTree(name));
+  auto* btree =
+      dynamic_cast<leanstore::storage::btree::BTreeGeneric*>(mTreeRegistry->GetTree(name));
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
   auto res = mTreeRegistry->UnregisterTree(name);
   if (!res) {
@@ -460,7 +461,7 @@ Result<storage::btree::TransactionKV*> LeanStore::CreateTransactionKV(const std:
                                                                       BTreeConfig config) {
   // create btree for graveyard
   auto graveyardName = std::format("_{}_graveyard", name);
-  btree::BasicKV* graveyard;
+  leanstore::storage::btree::BasicKV* graveyard;
   if (auto res = storage::btree::BasicKV::Create(
           this, graveyardName, BTreeConfig{.mEnableWal = false, .mUseBulkInsert = false});
       !res) {

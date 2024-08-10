@@ -176,11 +176,11 @@ struct RocksDBAdapter : public Adapter<Record> {
         Fold(folded_key, Record::id) + Record::foldKey(folded_key + sizeof(SEP), key);
     // -------------------------------------------------------------------------------------
     rocksdb::Iterator* it = map.db->NewIterator(map.ro);
-    for (it->Seek(RSlice(folded_key, folded_key_len));
-         it->Valid() && getId(it->key()) == Record::id; it->Next()) {
+    for (it->SeekForNext(RSlice(folded_key, folded_key_len));
+         it->Valid() && getId(it->Key()) == Record::id; it->Next()) {
       typename Record::Key s_key;
-      Record::unfoldKey(reinterpret_cast<const uint8_t*>(it->key().data() + sizeof(SEP)), s_key);
-      const Record& s_value = *reinterpret_cast<const Record*>(it->value().data());
+      Record::unfoldKey(reinterpret_cast<const uint8_t*>(it->Key().data() + sizeof(SEP)), s_key);
+      const Record& s_value = *reinterpret_cast<const Record*>(it->Val().data());
       if (!fn(s_key, s_value))
         break;
     }
@@ -197,10 +197,10 @@ struct RocksDBAdapter : public Adapter<Record> {
     // -------------------------------------------------------------------------------------
     rocksdb::Iterator* it = map.db->NewIterator(map.ro);
     for (it->SeekForPrev(RSlice(folded_key, folded_key_len));
-         it->Valid() && getId(it->key()) == Record::id; it->Prev()) {
+         it->Valid() && getId(it->Key()) == Record::id; it->Prev()) {
       typename Record::Key s_key;
-      Record::unfoldKey(reinterpret_cast<const uint8_t*>(it->key().data() + sizeof(SEP)), s_key);
-      const Record& s_value = *reinterpret_cast<const Record*>(it->value().data());
+      Record::unfoldKey(reinterpret_cast<const uint8_t*>(it->Key().data() + sizeof(SEP)), s_key);
+      const Record& s_value = *reinterpret_cast<const Record*>(it->Val().data());
       if (!fn(s_key, s_value))
         break;
     }

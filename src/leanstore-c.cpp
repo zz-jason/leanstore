@@ -4,8 +4,9 @@
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Slice.hpp"
 #include "leanstore/btree/BasicKV.hpp"
-#include "leanstore/btree/core/BTreePessimisticSharedIterator.hpp"
+#include "leanstore/btree/core/PessimisticSharedIterator.hpp"
 
+#include <cstdint>
 #include <iostream>
 #include <memory>
 #include <utility>
@@ -180,14 +181,14 @@ uint64_t BasicKvNumEntries(BasicKvHandle* handle, uint64_t workerId) {
 //------------------------------------------------------------------------------
 
 struct BasicKvIterHandle {
-  BasicKvIterHandle(leanstore::storage::btree::BTreePessimisticSharedIterator iter,
+  BasicKvIterHandle(leanstore::storage::btree::PessimisticSharedIterator iter,
                     leanstore::LeanStore* store)
       : mIterator(std::move(iter)),
         mStore(store) {
   }
 
   //! The actual iterator
-  leanstore::storage::btree::BTreePessimisticSharedIterator mIterator;
+  leanstore::storage::btree::PessimisticSharedIterator mIterator;
 
   //! The leanstore
   leanstore::LeanStore* mStore;
@@ -205,29 +206,22 @@ void DestroyBasicKvIter(BasicKvIterHandle* handle) {
   }
 }
 
-uint8_t BasicKvIterSeek(BasicKvIterHandle* handle, uint64_t workerId, StringSlice key) {
+//------------------------------------------------------------------------------
+// Interfaces for ascending iteration
+//------------------------------------------------------------------------------
+
+uint8_t BasicKvIterSeekForFirst(BasicKvIterHandle* handle, uint64_t workerId) {
   uint8_t succeed{false};
-  handle->mStore->ExecSync(workerId, [&]() {
-    succeed = handle->mIterator.Seek(leanstore::Slice(key.mData, key.mSize));
-  });
+  handle->mStore->ExecSync(workerId, [&]() { succeed = handle->mIterator.SeekForFirst(); });
   return succeed;
 }
 
-uint8_t BasicKvIterSeekToFirstKey(BasicKvIterHandle* handle, uint64_t workerId) {
-  StringSlice smallestKey{reinterpret_cast<char*>(0), 0};
-  return BasicKvIterSeek(handle, workerId, smallestKey);
-}
-
-static void AbortOnNotSupported(const char* apiName) {
-  std::cerr << apiName << " is unsupported" << std::endl;
-  std::abort();
-}
-
-uint8_t BasicKvIterSeekToLastKey(BasicKvIterHandle* handle [[maybe_unused]],
-                                 uint64_t workerId [[maybe_unused]]) {
-  // TODO: abort on not supported
-  AbortOnNotSupported("BasicKvIterSeekToLastKey");
-  return false;
+uint8_t BasicKvIterSeekForNext(BasicKvIterHandle* handle, uint64_t workerId, StringSlice key) {
+  uint8_t succeed{false};
+  handle->mStore->ExecSync(workerId, [&]() {
+    succeed = handle->mIterator.SeekForNext(leanstore::Slice(key.mData, key.mSize));
+  });
+  return succeed;
 }
 
 uint8_t BasicKvIterHasNext(BasicKvIterHandle* handle, uint64_t workerId) {
@@ -237,30 +231,52 @@ uint8_t BasicKvIterHasNext(BasicKvIterHandle* handle, uint64_t workerId) {
 }
 
 uint8_t BasicKvIterNext(BasicKvIterHandle* handle, uint64_t workerId) {
-  uint8_t hasNext{false};
-  handle->mStore->ExecSync(workerId, [&]() { hasNext = handle->mIterator.Next(); });
-  return hasNext;
+  uint8_t succeed{false};
+  handle->mStore->ExecSync(workerId, [&]() { succeed = handle->mIterator.Next(); });
+  return succeed;
 }
 
-uint8_t BasicKvIterHasPrev(BasicKvIterHandle* handle [[maybe_unused]],
-                           uint64_t workerId [[maybe_unused]]) {
-  AbortOnNotSupported("BasicKvIterHasPrev");
-  return false;
+//------------------------------------------------------------------------------
+// Interfaces for descending iteration
+//------------------------------------------------------------------------------
+
+uint8_t BasicKvIterSeekForLast(BasicKvIterHandle* handle, uint64_t workerId) {
+  uint8_t succeed{false};
+  handle->mStore->ExecSync(workerId, [&]() { succeed = handle->mIterator.SeekForLast(); });
+  return succeed;
 }
 
-uint8_t BasicKvIterPrev(BasicKvIterHandle* handle [[maybe_unused]],
-                        uint64_t workerId [[maybe_unused]]) {
-  AbortOnNotSupported("BasicKvIterPrev");
-  return false;
+uint8_t BasicKvIterSeekForPrev(BasicKvIterHandle* handle, uint64_t workerId, StringSlice key) {
+  uint8_t succeed{false};
+  handle->mStore->ExecSync(workerId, [&]() {
+    succeed = handle->mIterator.SeekForPrev(leanstore::Slice(key.mData, key.mSize));
+  });
+  return succeed;
 }
+
+uint8_t BasicKvIterHasPrev(BasicKvIterHandle* handle, uint64_t workerId) {
+  uint8_t hasPrev{false};
+  handle->mStore->ExecSync(workerId, [&]() { hasPrev = handle->mIterator.HasPrev(); });
+  return hasPrev;
+}
+
+uint8_t BasicKvIterPrev(BasicKvIterHandle* handle, uint64_t workerId) {
+  uint8_t succeed{false};
+  handle->mStore->ExecSync(workerId, [&]() { succeed = handle->mIterator.Prev(); });
+  return succeed;
+}
+
+//------------------------------------------------------------------------------
+// Interfaces for accessing the current iterator position
+//------------------------------------------------------------------------------
 
 StringSlice BasicKvIterKey(BasicKvIterHandle* handle) {
   handle->mIterator.AssembleKey();
-  auto keySlice = handle->mIterator.key();
+  auto keySlice = handle->mIterator.Key();
   return {reinterpret_cast<const char*>(keySlice.data()), keySlice.size()};
 }
 
 StringSlice BasicKvIterVal(BasicKvIterHandle* handle) {
-  auto valSlice = handle->mIterator.value();
+  auto valSlice = handle->mIterator.Val();
   return {reinterpret_cast<const char*>(valSlice.data()), valSlice.size()};
 }

@@ -3,7 +3,7 @@
 #include "Tuple.hpp"
 #include "leanstore/Units.hpp"
 #include "leanstore/btree/BasicKV.hpp"
-#include "leanstore/btree/core/BTreePessimisticExclusiveIterator.hpp"
+#include "leanstore/btree/core/PessimisticExclusiveIterator.hpp"
 #include "leanstore/concurrency/CRManager.hpp"
 #include "leanstore/concurrency/Worker.hpp"
 
@@ -82,7 +82,7 @@ public:
     return commandValid && hasLongRunningOLAP && recentUpdatedByOthers && frequentlyUpdated;
   }
 
-  void Update(BTreePessimisticExclusiveIterator& xIter, Slice key, MutValCallback updateCallBack,
+  void Update(PessimisticExclusiveIterator& xIter, Slice key, MutValCallback updateCallBack,
               UpdateDesc& updateDesc);
 
 public:

@@ -1,11 +1,8 @@
 #pragma once
+
 #include "ProfilingTable.hpp"
-#include "leanstore/buffer-manager/BufferManager.hpp"
 
-namespace leanstore {
-namespace profiling {
-
-using namespace storage;
+namespace leanstore::profiling {
 
 class LatencyTable : public ProfilingTable {
 public:
@@ -14,5 +11,4 @@ public:
   virtual void next() override;
 };
 
-} // namespace profiling
-} // namespace leanstore
+} // namespace leanstore::profiling

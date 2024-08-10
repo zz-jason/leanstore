@@ -76,12 +76,12 @@ TEST_F(RecoveryTest, SerializeAndDeserialize) {
   });
 
   Log::Info("Buffer Pool Before Shutdown:");
-  mStore->mBufferManager->DoWithBufferFrameIf([](BufferFrame& bf) { return !bf.IsFree(); },
-                                              [](BufferFrame& bf [[maybe_unused]]) {
-                                                Log::Info("pageId={}, treeId={}, isDirty={}",
-                                                          bf.mHeader.mPageId, bf.mPage.mBTreeId,
-                                                          bf.IsDirty());
-                                              });
+  mStore->mBufferManager->DoWithBufferFrameIf(
+      [](leanstore::storage::BufferFrame& bf) { return !bf.IsFree(); },
+      [](leanstore::storage::BufferFrame& bf [[maybe_unused]]) {
+        Log::Info("pageId={}, treeId={}, isDirty={}", bf.mHeader.mPageId, bf.mPage.mBTreeId,
+                  bf.IsDirty());
+      });
   // meta file should be serialized during destructor.
   auto storeOption = mStore->mStoreOption;
   mStore.reset(nullptr);
