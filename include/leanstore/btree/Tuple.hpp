@@ -1,7 +1,7 @@
 #pragma once
 
 #include "leanstore/Units.hpp"
-#include "leanstore/btree/core/BTreePessimisticExclusiveIterator.hpp"
+#include "leanstore/btree/core/PessimisticExclusiveIterator.hpp"
 #include "leanstore/utils/Log.hpp"
 
 namespace leanstore::storage::btree {
@@ -111,7 +111,7 @@ public:
     return reinterpret_cast<const Tuple*>(buffer);
   }
 
-  static bool ToFat(BTreePessimisticExclusiveIterator& iterator);
+  static bool ToFat(PessimisticExclusiveIterator& iterator);
 };
 
 // -----------------------------------------------------------------------------
@@ -302,7 +302,7 @@ struct __attribute__((packed)) DanglingPointer {
 public:
   DanglingPointer() = default;
 
-  DanglingPointer(const BTreePessimisticExclusiveIterator& xIter)
+  DanglingPointer(const PessimisticExclusiveIterator& xIter)
       : mBf(xIter.mGuardedLeaf.mBf),
         mLatchVersionShouldBe(xIter.mGuardedLeaf.mGuard.mVersion),
         mHeadSlot(xIter.mSlotId) {

@@ -7,9 +7,6 @@
 
 #include <cstring>
 
-using namespace std;
-using namespace leanstore::storage;
-
 namespace leanstore::storage::btree {
 
 class BTreeNode;
@@ -511,7 +508,7 @@ int16_t BTreeNode::LowerBound(Slice key, bool* isEqual) {
       return -1;
     }
   } else if (mPrefixSize != 0) {
-    Slice keyPrefix(key.data(), min<uint16_t>(key.size(), mPrefixSize));
+    Slice keyPrefix(key.data(), std::min<uint16_t>(key.size(), mPrefixSize));
     Slice lowerFencePrefix(GetLowerFenceKey(), mPrefixSize);
     int cmpPrefix = CmpKeys(keyPrefix, lowerFencePrefix);
     if (cmpPrefix < 0) {

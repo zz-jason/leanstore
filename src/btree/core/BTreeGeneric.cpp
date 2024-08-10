@@ -4,8 +4,8 @@
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "leanstore/btree/core/BTreeNode.hpp"
-#include "leanstore/btree/core/BTreePessimisticExclusiveIterator.hpp"
-#include "leanstore/btree/core/BTreePessimisticSharedIterator.hpp"
+#include "leanstore/btree/core/PessimisticExclusiveIterator.hpp"
+#include "leanstore/btree/core/PessimisticSharedIterator.hpp"
 #include "leanstore/buffer-manager/BufferFrame.hpp"
 #include "leanstore/buffer-manager/BufferManager.hpp"
 #include "leanstore/buffer-manager/GuardedBufferFrame.hpp"
@@ -52,12 +52,12 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId, BTreeConfig
   }
 }
 
-BTreePessimisticSharedIterator BTreeGeneric::GetIterator() {
-  return BTreePessimisticSharedIterator(*this);
+PessimisticSharedIterator BTreeGeneric::GetIterator() {
+  return PessimisticSharedIterator(*this);
 }
 
-BTreePessimisticExclusiveIterator BTreeGeneric::GetExclusiveIterator() {
-  return BTreePessimisticExclusiveIterator(*this);
+PessimisticExclusiveIterator BTreeGeneric::GetExclusiveIterator() {
+  return PessimisticExclusiveIterator(*this);
 }
 
 void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, int16_t favoredSplitPos) {
@@ -593,10 +593,10 @@ void BTreeGeneric::PrintInfo(uint64_t totalSize) {
   GuardedBufferFrame<BTreeNode> guardedRoot(mStore->mBufferManager.get(), guardedMeta,
                                             guardedMeta->mRightMostChildSwip);
   uint64_t numAllPages = CountAllPages();
-  cout << "nodes:" << numAllPages << ", innerNodes:" << CountInnerPages()
-       << ", space:" << (numAllPages * BTreeNode::Size()) / (float)totalSize
-       << ", height:" << mHeight << ", rootCnt:" << guardedRoot->mNumSeps
-       << ", freeSpaceAfterCompaction:" << FreeSpaceAfterCompaction() << endl;
+  std::cout << "nodes:" << numAllPages << ", innerNodes:" << CountInnerPages()
+            << ", space:" << (numAllPages * BTreeNode::Size()) / (float)totalSize
+            << ", height:" << mHeight << ", rootCnt:" << guardedRoot->mNumSeps
+            << ", freeSpaceAfterCompaction:" << FreeSpaceAfterCompaction() << std::endl;
 }
 
 StringMap BTreeGeneric::Serialize() {

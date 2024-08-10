@@ -13,19 +13,17 @@
 #include <atomic>
 #include <limits>
 
-using namespace leanstore::storage;
-
 namespace leanstore::storage::btree {
 
 enum class BTreeType : uint8_t { kGeneric = 0, kBasicKV = 1, kTransactionKV = 2 };
 
-class BTreePessimisticSharedIterator;
-class BTreePessimisticExclusiveIterator;
+class PessimisticSharedIterator;
+class PessimisticExclusiveIterator;
 using BTreeNodeCallback = std::function<int64_t(BTreeNode&)>;
 
 class BTreeGeneric : public leanstore::storage::BufferManagedTree {
 public:
-  friend class BTreePessimisticIterator;
+  friend class PessimisticIterator;
 
   enum class XMergeReturnCode : uint8_t { kNothing, kFullMerge, kPartialMerge };
 
@@ -51,9 +49,9 @@ public:
 public:
   void Init(leanstore::LeanStore* store, TREEID treeId, BTreeConfig config);
 
-  BTreePessimisticSharedIterator GetIterator();
+  PessimisticSharedIterator GetIterator();
 
-  BTreePessimisticExclusiveIterator GetExclusiveIterator();
+  PessimisticExclusiveIterator GetExclusiveIterator();
 
   //! Try to merge the current node with its left or right sibling, reclaim the merged left or right
   //! sibling if successful.

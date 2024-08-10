@@ -3,8 +3,8 @@
 #include "leanstore/Units.hpp"
 #include "leanstore/btree/BasicKV.hpp"
 #include "leanstore/btree/core/BTreeNode.hpp"
-#include "leanstore/btree/core/BTreePessimisticExclusiveIterator.hpp"
-#include "leanstore/btree/core/BTreePessimisticSharedIterator.hpp"
+#include "leanstore/btree/core/PessimisticExclusiveIterator.hpp"
+#include "leanstore/btree/core/PessimisticSharedIterator.hpp"
 #include "leanstore/profiling/counters/CRCounters.hpp"
 #include "leanstore/sync/HybridLatch.hpp"
 #include "leanstore/sync/ScopedHybridGuard.hpp"
@@ -37,9 +37,8 @@ void HistoryStorage::PutVersion(TXID txId, COMMANDID commandId, TREEID treeId, b
   }
   if (session != nullptr && session->mRightmostBf != nullptr) {
     JUMPMU_TRY() {
-      BTreePessimisticExclusiveIterator xIter(
-          *static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)), session->mRightmostBf,
-          session->mRightmostVersion);
+      PessimisticExclusiveIterator xIter(*static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)),
+                                         session->mRightmostBf, session->mRightmostVersion);
       if (xIter.HasEnoughSpaceFor(key.size(), versionSize) && xIter.KeyInCurrentNode(key)) {
 
         if (session->mLastTxId == txId) {
@@ -116,7 +115,7 @@ bool HistoryStorage::GetVersion(TXID newerTxId, COMMANDID newerCommandId,
     if (!iter.SeekExact(key)) {
       JUMPMU_RETURN false;
     }
-    Slice payload = iter.value();
+    Slice payload = iter.Val();
     const auto& versionContainer = *VersionMeta::From(payload.data());
     cb(versionContainer.mPayload, payload.length() - sizeof(VersionMeta));
     JUMPMU_RETURN true;
@@ -147,7 +146,7 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
   JUMPMU_TRY() {
   restartrem: {
     auto xIter = btree->GetExclusiveIterator();
-    xIter.SetExitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
+    xIter.SetExitLeafCallback([&](leanstore::storage::GuardedBufferFrame<BTreeNode>& guardedLeaf) {
       if (guardedLeaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
         xIter.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
           JUMPMU_TRY() {
@@ -158,11 +157,11 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
         });
       }
     });
-    while (xIter.Seek(key)) {
+    while (xIter.SeekForNext(key)) {
       // finished if we are out of the transaction range
       xIter.AssembleKey();
       TXID curTxId;
-      utils::Unfold(xIter.key().data(), curTxId);
+      utils::Unfold(xIter.Key().data(), curTxId);
       if (curTxId < fromTxId || curTxId > toTxId) {
         break;
       }
@@ -173,12 +172,12 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
       versionContainer.mCalledBefore = true;
 
       // set the next key to be seeked
-      keySize = xIter.key().size();
-      std::memcpy(keyBuffer, xIter.key().data(), keySize);
+      keySize = xIter.Key().size();
+      std::memcpy(keyBuffer, xIter.Key().data(), keySize);
       key = Slice(keyBuffer, keySize + 1);
 
       // get the remove version
-      payloadSize = xIter.value().size() - sizeof(VersionMeta);
+      payloadSize = xIter.Val().size() - sizeof(VersionMeta);
       std::memcpy(payload, versionContainer.mPayload, payloadSize);
 
       // remove the version from history
@@ -204,10 +203,10 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
   volatile bool shouldTry = true;
   if (fromTxId == 0 && session->mLeftMostBf != nullptr) {
     JUMPMU_TRY() {
-      BufferFrame* bf = session->mLeftMostBf;
+      leanstore::storage::BufferFrame* bf = session->mLeftMostBf;
 
       // optimistic lock, jump if invalid
-      ScopedHybridGuard bfGuard(bf->mHeader.mLatch, session->mLeftMostVersion);
+      leanstore::storage::ScopedHybridGuard bfGuard(bf->mHeader.mLatch, session->mLeftMostVersion);
 
       // lock successfull, check whether the page can be purged
       auto* leafNode = reinterpret_cast<BTreeNode*>(bf->mPage.mPayload);
@@ -235,48 +234,50 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
     JUMPMU_TRY() {
       auto xIter = btree->GetExclusiveIterator();
       // check whether the page can be merged when exit a leaf
-      xIter.SetExitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
-        if (guardedLeaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
-          xIter.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
-            JUMPMU_TRY() {
-              btree->TryMergeMayJump(*toMerge);
-            }
-            JUMPMU_CATCH() {
+      xIter.SetExitLeafCallback(
+          [&](leanstore::storage::GuardedBufferFrame<BTreeNode>& guardedLeaf) {
+            if (guardedLeaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
+              xIter.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
+                JUMPMU_TRY() {
+                  btree->TryMergeMayJump(*toMerge);
+                }
+                JUMPMU_CATCH() {
+                }
+              });
             }
           });
-        }
-      });
 
       bool isFullPagePurged = false;
       // check whether the whole page can be purged when enter a leaf
-      xIter.SetEnterLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
-        if (guardedLeaf->mNumSeps == 0) {
-          return;
-        }
+      xIter.SetEnterLeafCallback(
+          [&](leanstore::storage::GuardedBufferFrame<BTreeNode>& guardedLeaf) {
+            if (guardedLeaf->mNumSeps == 0) {
+              return;
+            }
 
-        // get the transaction id in the first key
-        auto firstKeySize = guardedLeaf->GetFullKeyLen(0);
-        uint8_t firstKey[firstKeySize];
-        guardedLeaf->CopyFullKey(0, firstKey);
-        TXID txIdInFirstKey;
-        utils::Unfold(firstKey, txIdInFirstKey);
+            // get the transaction id in the first key
+            auto firstKeySize = guardedLeaf->GetFullKeyLen(0);
+            uint8_t firstKey[firstKeySize];
+            guardedLeaf->CopyFullKey(0, firstKey);
+            TXID txIdInFirstKey;
+            utils::Unfold(firstKey, txIdInFirstKey);
 
-        // get the transaction id in the last key
-        auto lastKeySize = guardedLeaf->GetFullKeyLen(guardedLeaf->mNumSeps - 1);
-        uint8_t lastKey[lastKeySize];
-        guardedLeaf->CopyFullKey(guardedLeaf->mNumSeps - 1, lastKey);
-        TXID txIdInLastKey;
-        utils::Unfold(lastKey, txIdInLastKey);
+            // get the transaction id in the last key
+            auto lastKeySize = guardedLeaf->GetFullKeyLen(guardedLeaf->mNumSeps - 1);
+            uint8_t lastKey[lastKeySize];
+            guardedLeaf->CopyFullKey(guardedLeaf->mNumSeps - 1, lastKey);
+            TXID txIdInLastKey;
+            utils::Unfold(lastKey, txIdInLastKey);
 
-        // purge the whole page if it is in the range
-        if (fromTxId <= txIdInFirstKey && txIdInLastKey <= toTxId) {
-          versionsRemoved += guardedLeaf->mNumSeps;
-          guardedLeaf->Reset();
-          isFullPagePurged = true;
-        }
-      });
+            // purge the whole page if it is in the range
+            if (fromTxId <= txIdInFirstKey && txIdInLastKey <= toTxId) {
+              versionsRemoved += guardedLeaf->mNumSeps;
+              guardedLeaf->Reset();
+              isFullPagePurged = true;
+            }
+          });
 
-      xIter.Seek(key);
+      xIter.SeekForNext(key);
       if (isFullPagePurged) {
         isFullPagePurged = false;
         JUMPMU_CONTINUE;
@@ -309,11 +310,11 @@ void HistoryStorage::VisitRemovedVersions(TXID fromTxId, TXID toTxId,
   JUMPMU_TRY() {
   restart: {
     auto xIter = removeTree->GetExclusiveIterator();
-    while (xIter.Seek(key)) {
+    while (xIter.SeekForNext(key)) {
       // skip versions out of the transaction range
       xIter.AssembleKey();
       TXID curTxId;
-      utils::Unfold(xIter.key().data(), curTxId);
+      utils::Unfold(xIter.Key().data(), curTxId);
       if (curTxId < fromTxId || curTxId > toTxId) {
         break;
       }
@@ -328,12 +329,12 @@ void HistoryStorage::VisitRemovedVersions(TXID fromTxId, TXID toTxId,
       versionContainer.mCalledBefore = true;
 
       // set the next key to be seeked
-      keySize = xIter.key().length();
-      std::memcpy(keyBuffer, xIter.key().data(), keySize);
+      keySize = xIter.Key().length();
+      std::memcpy(keyBuffer, xIter.Key().data(), keySize);
       key = Slice(keyBuffer, keySize + 1);
 
       // get the remove version
-      payloadSize = xIter.value().length() - sizeof(VersionMeta);
+      payloadSize = xIter.Val().length() - sizeof(VersionMeta);
       std::memcpy(payload, versionContainer.mPayload, payloadSize);
 
       xIter.Reset();

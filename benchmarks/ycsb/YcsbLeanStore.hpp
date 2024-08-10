@@ -62,7 +62,7 @@ public:
   KVInterface* CreateTable() {
     // create table with transaction kv
     if (mBenchTransactionKv) {
-      btree::TransactionKV* table;
+      leanstore::storage::btree::TransactionKV* table;
       mStore->ExecSync(0, [&]() {
         auto res = mStore->CreateTransactionKV(kTableName);
         if (!res) {
@@ -75,7 +75,7 @@ public:
     }
 
     // create table with basic kv
-    btree::BasicKV* table;
+    leanstore::storage::btree::BasicKV* table;
     mStore->ExecSync(0, [&]() {
       auto res = mStore->CreateBasicKV(kTableName);
       if (!res) {
@@ -88,11 +88,11 @@ public:
 
   KVInterface* GetTable() {
     if (mBenchTransactionKv) {
-      btree::TransactionKV* table;
+      leanstore::storage::btree::TransactionKV* table;
       mStore->GetTransactionKV(kTableName, &table);
       return table;
     }
-    btree::BasicKV* table;
+    leanstore::storage::btree::BasicKV* table;
     mStore->GetBasicKV(kTableName, &table);
     return table;
   }
@@ -150,7 +150,7 @@ public:
     auto workload = GetWorkloadSpec(workloadType);
     auto zipfRandom =
         utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count, FLAGS_ycsb_zipf_factor);
-    atomic<bool> keepRunning = true;
+    std::atomic<bool> keepRunning = true;
     std::vector<std::atomic<uint64_t>> threadCommitted(mStore->mStoreOption.mWorkerThreads);
     std::vector<std::atomic<uint64_t>> threadAborted(mStore->mStoreOption.mWorkerThreads);
     // init counters

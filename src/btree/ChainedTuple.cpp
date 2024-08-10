@@ -90,7 +90,7 @@ std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(Slice payload,
   return {OpCode::kNotFound, versionsRead};
 }
 
-void ChainedTuple::Update(BTreePessimisticExclusiveIterator& xIter, Slice key,
+void ChainedTuple::Update(PessimisticExclusiveIterator& xIter, Slice key,
                           MutValCallback updateCallBack, UpdateDesc& updateDesc) {
   auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
   auto versionSize = sizeOfDescAndDelta + sizeof(UpdateVersion);

@@ -1,12 +1,9 @@
 #pragma once
 
 #include "ProfilingTable.hpp"
-#include "leanstore/buffer-manager/BufferManager.hpp"
 
-namespace leanstore {
-namespace profiling {
+namespace leanstore::profiling {
 
-using namespace storage;
 class CPUTable : public ProfilingTable {
 public:
   std::unordered_map<std::string, double> workers_agg_events, pp_agg_events, ww_agg_events;
@@ -15,5 +12,4 @@ public:
   virtual void next() override;
 };
 
-} // namespace profiling
-} // namespace leanstore
+} // namespace leanstore::profiling

@@ -298,7 +298,7 @@ void BTreeNode::SetFences(Slice lowerKey, Slice upperKey) {
             *GetLowerFenceKey() <= *GetUpperFenceKey());
 
   // prefix compression
-  for (mPrefixSize = 0; (mPrefixSize < min(lowerKey.size(), upperKey.size())) &&
+  for (mPrefixSize = 0; (mPrefixSize < std::min(lowerKey.size(), upperKey.size())) &&
                         (lowerKey[mPrefixSize] == upperKey[mPrefixSize]);
        mPrefixSize++)
     ;
@@ -314,7 +314,7 @@ uint16_t BTreeNode::CommonPrefix(uint16_t slotA, uint16_t slotB) {
   // TODO: the folowing two checks work only in single threaded
   //   assert(aPos < mNumSeps);
   //   assert(bPos < mNumSeps);
-  uint32_t limit = min(mSlot[slotA].mKeySizeWithoutPrefix, mSlot[slotB].mKeySizeWithoutPrefix);
+  uint32_t limit = std::min(mSlot[slotA].mKeySizeWithoutPrefix, mSlot[slotB].mKeySizeWithoutPrefix);
   uint8_t *a = KeyDataWithoutPrefix(slotA), *b = KeyDataWithoutPrefix(slotB);
   uint32_t i;
   for (i = 0; i < limit; i++)
@@ -449,7 +449,7 @@ void BTreeNode::Reset() {
 }
 
 int32_t BTreeNode::CmpKeys(Slice lhs, Slice rhs) {
-  auto minLength = min(lhs.size(), rhs.size());
+  auto minLength = std::min(lhs.size(), rhs.size());
   if (minLength < 4) {
     for (size_t i = 0; i < minLength; ++i) {
       if (lhs[i] != rhs[i]) {

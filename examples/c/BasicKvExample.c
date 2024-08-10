@@ -10,8 +10,8 @@ int main() {
   BasicKvHandle* kvHandle = CreateBasicKV(storeHandle, 0, "testTree1");
 
   StringSlice keySlice;
-  keySlice.mData="Hello";
-  keySlice.mSize=strlen(keySlice.mData);
+  keySlice.mData = "Hello";
+  keySlice.mSize = strlen(keySlice.mData);
 
   StringSlice valSlice;
   valSlice.mData = "World";
@@ -43,8 +43,8 @@ int main() {
   // insert more key-values
   {
     StringSlice keySlice2;
-    keySlice2.mData="Hello2";
-    keySlice2.mSize=strlen(keySlice2.mData);
+    keySlice2.mData = "Hello2";
+    keySlice2.mSize = strlen(keySlice2.mData);
 
     StringSlice valSlice2;
     valSlice2.mData = "World2";
@@ -56,7 +56,7 @@ int main() {
     }
   }
 
-  // iterate over the keys
+  // assending iteration
   {
     BasicKvIterHandle* iterHandle = CreateBasicKvIter(kvHandle);
     if (iterHandle == NULL) {
@@ -64,7 +64,7 @@ int main() {
       return -1;
     }
 
-    uint8_t succeed = BasicKvIterBegin(iterHandle, 0);
+    uint8_t succeed = BasicKvIterSeekForFirst(iterHandle, 0);
     while (succeed) {
       StringSlice key = BasicKvIterKey(iterHandle);
       StringSlice val = BasicKvIterVal(iterHandle);
@@ -72,6 +72,30 @@ int main() {
 
       succeed = BasicKvIterNext(iterHandle, 0);
     }
+
+    // destroy the iterator
+    DestroyBasicKvIter(iterHandle);
+  }
+
+  // descending iteration
+  {
+    BasicKvIterHandle* iterHandle = CreateBasicKvIter(kvHandle);
+    if (iterHandle == NULL) {
+      printf("create iterator failed\n");
+      return -1;
+    }
+
+    uint8_t succeed = BasicKvIterSeekForLast(iterHandle, 0);
+    while (succeed) {
+      StringSlice key = BasicKvIterKey(iterHandle);
+      StringSlice val = BasicKvIterVal(iterHandle);
+      printf("%.*s, %.*s\n", (int)key.mSize, key.mData, (int)val.mSize, val.mData);
+
+      succeed = BasicKvIterPrev(iterHandle, 0);
+    }
+
+    // destroy the iterator
+    DestroyBasicKvIter(iterHandle);
   }
 
   // cleanup the basic kv handle

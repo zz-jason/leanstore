@@ -3,8 +3,6 @@
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/btree/core/BTreeGeneric.hpp"
 
-using namespace leanstore::storage;
-
 namespace leanstore {
 
 class LeanStore;

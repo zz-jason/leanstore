@@ -3,6 +3,8 @@
 #include "leanstore/PerfEvent.hpp"
 #include "leanstore/profiling/counters/CPUCounters.hpp"
 
+#include <cmath>
+
 namespace leanstore {
 namespace profiling {
 // -------------------------------------------------------------------------------------
