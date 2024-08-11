@@ -51,8 +51,7 @@ public:
     SCOPED_DEFER({
       auto end = std::chrono::high_resolution_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-      std::cout << "Done inserting"
-                << ", time elapsed: " << duration / 1000000.0 << " seconds"
+      std::cout << "Done inserting" << ", time elapsed: " << duration / 1000000.0 << " seconds"
                 << ", throughput: " << CalculateTps(start, end, FLAGS_ycsb_record_count) << " tps"
                 << std::endl;
     });

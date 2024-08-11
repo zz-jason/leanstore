@@ -24,18 +24,20 @@ jobs:
         sudo apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu;
         sudo apt install -y curl zip unzip tar pkg-config;
         sudo apt install -y autoconf libtool;
-        sudo ln -sf /usr/bin/cpp-13        /usr/bin/cpp;
-        sudo ln -sf /usr/bin/g++-13        /usr/bin/g++;
-        sudo ln -sf /usr/bin/gcc-13        /usr/bin/gcc;
-        sudo ln -sf /usr/bin/gcc-ar-13     /usr/bin/gcc-ar;
-        sudo ln -sf /usr/bin/gcc-nm-13     /usr/bin/gcc-nm;
-        sudo ln -sf /usr/bin/gcc-ranlib-13 /usr/bin/gcc-ranlib;
-        sudo ln -sf /usr/bin/gcov-13       /usr/bin/gcov;
-        sudo ln -sf /usr/bin/gcov-dump-13  /usr/bin/gcov-dump;
-        sudo ln -sf /usr/bin/gcov-tool-13  /usr/bin/gcov-tool;
-        sudo ln -sf /usr/bin/lto-dump-13   /usr/bin/lto-dump;
-        sudo ln -sf /usr/bin/g++-13        /usr/bin/c++;
-        sudo ln -sf /usr/bin/gcc-13        /usr/bin/cc;
+        sudo apt install -y clang-format-18;
+        sudo ln -sf /usr/bin/cpp-13          /usr/bin/cpp;
+        sudo ln -sf /usr/bin/g++-13          /usr/bin/g++;
+        sudo ln -sf /usr/bin/gcc-13          /usr/bin/gcc;
+        sudo ln -sf /usr/bin/gcc-ar-13       /usr/bin/gcc-ar;
+        sudo ln -sf /usr/bin/gcc-nm-13       /usr/bin/gcc-nm;
+        sudo ln -sf /usr/bin/gcc-ranlib-13   /usr/bin/gcc-ranlib;
+        sudo ln -sf /usr/bin/gcov-13         /usr/bin/gcov;
+        sudo ln -sf /usr/bin/gcov-dump-13    /usr/bin/gcov-dump;
+        sudo ln -sf /usr/bin/gcov-tool-13    /usr/bin/gcov-tool;
+        sudo ln -sf /usr/bin/lto-dump-13     /usr/bin/lto-dump;
+        sudo ln -sf /usr/bin/g++-13          /usr/bin/c++;
+        sudo ln -sf /usr/bin/gcc-13          /usr/bin/cc;
+        sudo ln -sf /usr/bin/clang-format-18 /usr/bin/clang-format;
         pip3 install gcovr==6.0 --break-system-packages;
         sudo git clone https://github.com/Microsoft/vcpkg.git /opt/vcpkg;
         echo 'export VCPKG_ROOT=/opt/vcpkg' >> ~/.bashrc;
@@ -53,6 +55,9 @@ jobs:
 
     - name: Cppcheck
       run: cppcheck --project=build/debug_tsan/compile_commands.json -i tests --error-exitcode=1
+
+    - name: Check clang-format
+      run: cmake --build build/debug_tsan --target=check-format || echo "please fix code format via 'cmake --build build/debug_tsan --target=format'"
 
     - name: Build project
       run: cmake --build build/debug_tsan -j `nproc`

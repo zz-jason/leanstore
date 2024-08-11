@@ -1,32 +1,34 @@
-#include "leanstore/buffer-manager/AsyncWriteBuffer.hpp"
+#include "leanstore/buffer-manager/PageEvictor.hpp"
 
+#include "leanstore/buffer-manager/AsyncWriteBuffer.hpp"
 #include "leanstore/buffer-manager/BufferFrame.hpp"
+#include "leanstore/buffer-manager/BufferManager.hpp"
 #include "leanstore/buffer-manager/Swip.hpp"
 #include "leanstore/utils/Defer.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/Misc.hpp"
 #include "leanstore/utils/RandomGenerator.hpp"
-#include "leanstore/buffer-manager/PageEvictor.hpp"
-#include "leanstore/buffer-manager/BufferManager.hpp"
-#include <iostream>
+
 #include <gtest/gtest.h>
 
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <format>
+#include <iostream>
 
 #include <fcntl.h>
 
 namespace leanstore::storage::test {
 class PageEvictorTest : public ::testing::Test {
-    protected:
+protected:
   std::unique_ptr<LeanStore> mStore;
 
   PageEvictorTest() = default;
 
   ~PageEvictorTest() = default;
-    void SetUp() override {
+
+  void SetUp() override {
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
     const int pageSize = 4096;
@@ -41,11 +43,10 @@ class PageEvictorTest : public ::testing::Test {
         .mFreePct = 20,
         .mEnableBulkInsert = false,
         .mEnableEagerGc = false,
-        
+
     });
     ASSERT_TRUE(res);
     mStore = std::move(res.value());
-    
   }
 };
 
