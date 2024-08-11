@@ -9,6 +9,7 @@ int main() {
       CreateLeanStore(1, "/tmp/leanstore/examples/BasicKvExample", 2, 0, 1);
   BasicKvHandle* kvHandle = CreateBasicKV(storeHandle, 0, "testTree1");
 
+  // key-value pair 1
   StringSlice keySlice;
   keySlice.mData = "Hello";
   keySlice.mSize = strlen(keySlice.mData);
@@ -17,42 +18,44 @@ int main() {
   valSlice.mData = "World";
   valSlice.mSize = strlen(valSlice.mData);
 
+  // key-value pair 2
+  StringSlice keySlice2;
+  keySlice2.mData = "Hello2";
+  keySlice2.mSize = strlen(keySlice2.mData);
+
+  StringSlice valSlice2;
+  valSlice2.mData = "World2";
+  valSlice2.mSize = strlen(valSlice2.mData);
+
   {
     // insert a key value
-    LeanStoreError error = BasicKvInsert(kvHandle, 0, keySlice, valSlice);
-    if (error != kOk) {
-      printf("insert value failed: %d\n", error);
-      return error;
+    if (!BasicKvInsert(kvHandle, 0, keySlice, valSlice)) {
+      printf("insert value failed, key=%.*s, val=%.*s\n", (int)keySlice.mSize, keySlice.mData,
+             (int)valSlice.mSize, valSlice.mData);
+      return -1;
     }
   }
 
   // lookup a key
   {
-    String valStr = CreateString(NULL, 0);
-    LeanStoreError error = BasicKvLookup(kvHandle, 1, keySlice, &valStr);
-    if (error != 0) {
-      printf("lookup value failed: %d\n", error);
-      return error;
+    String* valStr = BasicKvLookup(kvHandle, 1, keySlice);
+    if (valStr == NULL) {
+      printf("lookup value failed, value may not exist, key=%.*s\n", (int)keySlice.mSize,
+             keySlice.mData);
+      return -1;
     }
-    printf("%.*s, %.*s\n", (int)keySlice.mSize, keySlice.mData, (int)valStr.mSize, valStr.mData);
+    printf("%.*s, %.*s\n", (int)keySlice.mSize, keySlice.mData, (int)valStr->mSize, valStr->mData);
 
     // cleanup the value string
-    DestroyString(&valStr);
+    DestroyString(valStr);
   }
 
   // insert more key-values
   {
-    StringSlice keySlice2;
-    keySlice2.mData = "Hello2";
-    keySlice2.mSize = strlen(keySlice2.mData);
-
-    StringSlice valSlice2;
-    valSlice2.mData = "World2";
-    valSlice2.mSize = strlen(valSlice2.mData);
-    LeanStoreError error = BasicKvInsert(kvHandle, 0, keySlice2, valSlice2);
-    if (error != kOk) {
-      printf("insert value failed: %d\n", error);
-      return error;
+    if (!BasicKvInsert(kvHandle, 0, keySlice2, valSlice2)) {
+      printf("insert value failed, key=%.*s, val=%.*s\n", (int)keySlice2.mSize, keySlice2.mData,
+             (int)valSlice2.mSize, valSlice2.mData);
+      return -1;
     }
   }
 
@@ -96,6 +99,19 @@ int main() {
 
     // destroy the iterator
     DestroyBasicKvIter(iterHandle);
+  }
+
+  // remove key-values
+  {
+    if (!BasicKvRemove(kvHandle, 0, keySlice)) {
+      printf("remove value failed, key=%.*s\n", (int)keySlice.mSize, keySlice.mData);
+      return -1;
+    }
+
+    if (!BasicKvRemove(kvHandle, 0, keySlice2)) {
+      printf("remove value failed, key=%.*s\n", (int)keySlice2.mSize, keySlice2.mData);
+      return -1;
+    }
   }
 
   // cleanup the basic kv handle

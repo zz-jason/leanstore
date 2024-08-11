@@ -18,38 +18,35 @@
 // String API
 //------------------------------------------------------------------------------
 
-String CreateString(const char* data, uint64_t size) {
-  String str;
+String* CreateString(const char* data, uint64_t size) {
+  String* str = new String();
 
   if (data == nullptr || size == 0) {
-    str.mData = nullptr;
-    str.mSize = 0;
+    str->mData = nullptr;
+    str->mSize = 0;
     return str;
   }
 
-  // allocate memory
-  str.mData = static_cast<char*>(malloc(size));
-  if (str.mData == nullptr) {
-    str.mSize = 0;
-    return str;
-  }
-
-  // copy data
-  memcpy(str.mData, data, size);
-  str.mSize = size;
+  // allocate memory, copy data
+  str->mSize = size;
+  str->mData = new char[size];
+  memcpy(str->mData, data, size);
 
   return str;
 }
 
 void DestroyString(String* str) {
   if (str != nullptr) {
-    if (str->mData == nullptr) {
-      return;
+    if (str->mData != nullptr) {
+      // release memory
+      delete[] str->mData;
     }
 
-    free(str->mData);
     str->mData = nullptr;
     str->mSize = 0;
+
+    // release the string object
+    delete str;
   }
 }
 
@@ -82,24 +79,6 @@ LeanStoreHandle* CreateLeanStore(int8_t createFromScratch, const char* storeDir,
 
 void DestroyLeanStore(LeanStoreHandle* handle) {
   delete handle;
-}
-
-static LeanStoreError ToLeanStoreError(leanstore::OpCode opCode) {
-  switch (opCode) {
-  case leanstore::OpCode::kOK:
-    return kOk;
-  case leanstore::OpCode::kNotFound:
-    return kKeyNotFound;
-  case leanstore::OpCode::kDuplicated:
-    return kKeyDuplicated;
-  case leanstore::OpCode::kAbortTx:
-    return kTransactionConflict;
-  case leanstore::OpCode::kSpaceNotEnough:
-    return kSpaceNotEnough;
-  case leanstore::OpCode::kOther:
-  default:
-    return kUnknownError;
-  }
 }
 
 //------------------------------------------------------------------------------
@@ -140,34 +119,34 @@ void DestroyBasicKV(BasicKvHandle* handle) {
   }
 }
 
-LeanStoreError BasicKvInsert(BasicKvHandle* handle, uint64_t workerId, StringSlice key,
-                             StringSlice val) {
-  leanstore::OpCode opCode{leanstore::OpCode::kOK};
+uint8_t BasicKvInsert(BasicKvHandle* handle, uint64_t workerId, StringSlice key, StringSlice val) {
+  uint8_t succeed{false};
   handle->mStore->ExecSync(workerId, [&]() {
-    opCode = handle->mBtree->Insert(leanstore::Slice(key.mData, key.mSize),
-                                    leanstore::Slice(val.mData, val.mSize));
+    auto opCode = handle->mBtree->Insert(leanstore::Slice(key.mData, key.mSize),
+                                         leanstore::Slice(val.mData, val.mSize));
+    succeed = (opCode == leanstore::OpCode::kOK);
   });
-  return ToLeanStoreError(opCode);
+  return succeed;
 }
 
-LeanStoreError BasicKvLookup(BasicKvHandle* handle, uint64_t workerId, StringSlice key,
-                             String* val) {
-  leanstore::OpCode opCode{leanstore::OpCode::kOK};
+String* BasicKvLookup(BasicKvHandle* handle, uint64_t workerId, StringSlice key) {
+  String* val{nullptr};
   handle->mStore->ExecSync(workerId, [&]() {
     auto copyValueOut = [&](leanstore::Slice valSlice) {
-      DestroyString(val); // release old content
-      *val = CreateString(reinterpret_cast<const char*>(valSlice.data()), valSlice.size());
+      val = CreateString(reinterpret_cast<const char*>(valSlice.data()), valSlice.size());
     };
-    opCode = handle->mBtree->Lookup(leanstore::Slice(key.mData, key.mSize), copyValueOut);
+    handle->mBtree->Lookup(leanstore::Slice(key.mData, key.mSize), copyValueOut);
   });
-  return ToLeanStoreError(opCode);
+  return val;
 }
 
-LeanStoreError BasicKvRemove(BasicKvHandle* handle, uint64_t workerId, StringSlice key) {
-  leanstore::OpCode opCode{leanstore::OpCode::kOK};
-  handle->mStore->ExecSync(
-      workerId, [&]() { opCode = handle->mBtree->Remove(leanstore::Slice(key.mData, key.mSize)); });
-  return ToLeanStoreError(opCode);
+uint8_t BasicKvRemove(BasicKvHandle* handle, uint64_t workerId, StringSlice key) {
+  uint8_t succeed{false};
+  handle->mStore->ExecSync(workerId, [&]() {
+    auto opCode = handle->mBtree->Remove(leanstore::Slice(key.mData, key.mSize));
+    succeed = (opCode == leanstore::OpCode::kOK);
+  });
+  return succeed;
 }
 
 uint64_t BasicKvNumEntries(BasicKvHandle* handle, uint64_t workerId) {
