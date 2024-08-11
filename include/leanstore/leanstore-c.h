@@ -20,8 +20,11 @@ typedef struct String {
   uint64_t mSize;
 } String;
 
-//! Creates a new string with the given bytes buffer
-String CreateString(const char* data, uint64_t size);
+//! Creates a new string, copying the data from the given buffer to the new string
+//! @param data the data buffer
+//! @param size the size of the data buffer
+//! @return the new string, which should be destroyed by the caller with DestroyString()
+String* CreateString(const char* data, uint64_t size);
 
 //! Destroys a string
 void DestroyString(String* str);
@@ -53,26 +56,6 @@ LeanStoreHandle* CreateLeanStore(int8_t createFromScratch, const char* storeDir,
 //! Deinit and destroy a leanstore instance
 void DestroyLeanStore(LeanStoreHandle* handle);
 
-//! LeanStore error codes
-typedef enum LeanStoreError {
-  //! No error
-  kOk = 0,
-
-  //! Unknown error
-  kUnknownError = 1001,
-
-  //! Key already exists
-  kKeyDuplicated = 2000,
-
-  //! Key not found
-  kKeyNotFound = 2001,
-
-  kTransactionConflict = 3000,
-
-  //! Space not enough
-  kSpaceNotEnough = 4000,
-} LeanStoreError;
-
 //------------------------------------------------------------------------------
 // BasicKV API
 //------------------------------------------------------------------------------
@@ -80,27 +63,28 @@ typedef enum LeanStoreError {
 typedef struct BasicKvHandle BasicKvHandle;
 
 //! Create a basic key-value store in a leanstore instance at workerId
-//! The handle should be destroyed by the caller
+//! @return the basic key-value store handle, or nullptr if the creation fails. The handle should be
+//!         destroyed by the caller with DestroyBasicKV()
 BasicKvHandle* CreateBasicKV(LeanStoreHandle* handle, uint64_t workerId, const char* btreeName);
 
 //! Destroy the basic key-value store handle
 void DestroyBasicKV(BasicKvHandle* handle);
 
 //! Insert a key-value pair into a basic key-value store at workerId
-LeanStoreError BasicKvInsert(BasicKvHandle* handle, uint64_t workerId, StringSlice key,
-                             StringSlice val);
+//! @return true if the insert is successful, false otherwise
+uint8_t BasicKvInsert(BasicKvHandle* handle, uint64_t workerId, StringSlice key, StringSlice val);
 
 //! Lookup a key in a basic key-value store at workerId
-//! NOTE:
-//!   1. The old content hold by val will be released and overwritten by the new content
-//!   2. The caller should destroy the val after use
-LeanStoreError BasicKvLookup(BasicKvHandle* handle, uint64_t workerId, StringSlice key,
-                             String* val);
+//! NOTE: The caller should destroy the val after use via DestroyString()
+//! @return the value if the key exists, nullptr otherwise
+String* BasicKvLookup(BasicKvHandle* handle, uint64_t workerId, StringSlice key);
 
 //! Remove a key in a basic key-value store at workerId
-LeanStoreError BasicKvRemove(BasicKvHandle* handle, uint64_t workerId, StringSlice key);
+//! @return true if the key is found and removed, false otherwise
+uint8_t BasicKvRemove(BasicKvHandle* handle, uint64_t workerId, StringSlice key);
 
 //! Get the size of a basic key-value store at workerId
+//! @return the number of entries in the basic key-value store
 uint64_t BasicKvNumEntries(BasicKvHandle* handle, uint64_t workerId);
 
 //------------------------------------------------------------------------------
@@ -112,6 +96,8 @@ uint64_t BasicKvNumEntries(BasicKvHandle* handle, uint64_t workerId);
 typedef struct BasicKvIterHandle BasicKvIterHandle;
 
 //! Create an iterator for a basic key-value store at workerId
+//! @return the iterator handle, or nullptr if the creation fails. The handle should be destroyed by
+//!         the caller with DestroyBasicKvIter()
 BasicKvIterHandle* CreateBasicKvIter(const BasicKvHandle* handle);
 
 //! Destroy an iterator for a basic key-value store at workerId
