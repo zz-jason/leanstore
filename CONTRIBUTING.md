@@ -31,6 +31,16 @@ To run unittests in the debug mode:
 ctest --test-dir build/debug
 ```
 
+To check and fix code formatting wich `clang-format-18`:
+
+```sh
+# check format
+cmake --build build/debug --target=check-format
+
+# fix format
+cmake --build build/debug --target=format
+```
+
 To run simple ycsb benchmarks:
 
 ```sh

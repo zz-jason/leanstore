@@ -42,7 +42,7 @@ CRManager::CRManager(leanstore::LeanStore* store) : mStore(store), mGroupCommitt
   // create history storage for each worker
   // History tree should be created after worker thread and group committer are
   // started.
-  if(storeOption.mWorkerThreads > 0){
+  if (storeOption.mWorkerThreads > 0) {
     mWorkerThreads[0]->SetJob([&]() { setupHistoryStorage4EachWorker(); });
     mWorkerThreads[0]->Wait();
   }

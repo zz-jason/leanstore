@@ -225,12 +225,9 @@ struct PerfEvent {
     }
 
     // derived metrics
-    headerOut << ","
-              << "IPC";
-    headerOut << ","
-              << "CPU";
-    headerOut << ","
-              << "GHz";
+    headerOut << "," << "IPC";
+    headerOut << "," << "CPU";
+    headerOut << "," << "GHz";
   }
   // -------------------------------------------------------------------------------------
   void printCSVData(std::ostream& dataOut, uint64_t normalizationConstant) {

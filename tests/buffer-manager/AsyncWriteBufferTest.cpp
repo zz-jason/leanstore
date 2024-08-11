@@ -14,6 +14,7 @@
 #include <cstring>
 #include <format>
 #include <vector>
+
 #include <fcntl.h>
 
 namespace leanstore::storage::test {
@@ -106,12 +107,14 @@ TEST_F(AsyncWriteBufferTest, Basic) {
   EXPECT_EQ(doneRequests, testMaxBatchSize);
   EXPECT_EQ(testWriteBuffer.GetPendingRequests(), 0);
 
-   // check the flushed content
-  testWriteBuffer.IterateFlushedBfs([](BufferFrame& flushedBf, uint64_t flushedGsn){
-    EXPECT_FALSE(flushedBf.IsDirty());
-    EXPECT_FALSE(flushedBf.IsFree());
-    EXPECT_EQ(flushedGsn, 0);
-  }, testMaxBatchSize);
+  // check the flushed content
+  testWriteBuffer.IterateFlushedBfs(
+      [](BufferFrame& flushedBf, uint64_t flushedGsn) {
+        EXPECT_FALSE(flushedBf.IsDirty());
+        EXPECT_FALSE(flushedBf.IsFree());
+        EXPECT_EQ(flushedGsn, 0);
+      },
+      testMaxBatchSize);
 
   // read the file content
   for (int i = 0; i < testMaxBatchSize; i++) {
