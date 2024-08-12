@@ -33,7 +33,7 @@ public:
   }
 
   virtual OpCode SeekToInsert(Slice key) {
-    seekForTargetPageOnDemand(key);
+    seekToTargetPageOnDemand(key);
 
     bool isEqual = false;
     mSlotId = mGuardedLeaf->LowerBound<false>(key, &isEqual);
@@ -116,8 +116,8 @@ public:
       AssembleKey();
       Slice key = this->Key();
       SplitForKey(key);
-      auto succeed [[maybe_unused]] = SeekExact(key);
-      LS_DCHECK(succeed);
+      SeekToEqual(key);
+      LS_DCHECK(Valid());
     }
     LS_DCHECK(mSlotId != -1);
     mGuardedLeaf->ExtendPayload(mSlotId, targetSize);

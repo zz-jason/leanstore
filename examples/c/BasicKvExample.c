@@ -67,13 +67,11 @@ int main() {
       return -1;
     }
 
-    uint8_t succeed = BasicKvIterSeekForFirst(iterHandle, 0);
-    while (succeed) {
+    for (BasicKvIterSeekToFirst(iterHandle, 0); BasicKvIterValid(iterHandle);
+         BasicKvIterNext(iterHandle, 0)) {
       StringSlice key = BasicKvIterKey(iterHandle);
       StringSlice val = BasicKvIterVal(iterHandle);
       printf("%.*s, %.*s\n", (int)key.mSize, key.mData, (int)val.mSize, val.mData);
-
-      succeed = BasicKvIterNext(iterHandle, 0);
     }
 
     // destroy the iterator
@@ -88,13 +86,11 @@ int main() {
       return -1;
     }
 
-    uint8_t succeed = BasicKvIterSeekForLast(iterHandle, 0);
-    while (succeed) {
+    for (BasicKvIterSeekToLast(iterHandle, 0); BasicKvIterValid(iterHandle);
+         BasicKvIterPrev(iterHandle, 0)) {
       StringSlice key = BasicKvIterKey(iterHandle);
       StringSlice val = BasicKvIterVal(iterHandle);
       printf("%.*s, %.*s\n", (int)key.mSize, key.mData, (int)val.mSize, val.mData);
-
-      succeed = BasicKvIterPrev(iterHandle, 0);
     }
 
     // destroy the iterator

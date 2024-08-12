@@ -29,21 +29,21 @@ public:
   const LatchMode mMode;
 
   //! mFuncEnterLeaf is called when the target leaf node is found.
-  LeafCallback mFuncEnterLeaf = nullptr;
+  LeafCallback mFuncEnterLeaf;
 
   //! mFuncExitLeaf is called when leaving the target leaf node.
-  LeafCallback mFuncExitLeaf = nullptr;
+  LeafCallback mFuncExitLeaf;
 
   //! mFuncCleanUp is called when both parent and leaf are unlatched and before
   //! seeking for another key.
-  std::function<void()> mFuncCleanUp = nullptr;
+  std::function<void()> mFuncCleanUp;
 
   //! The slot id of the current key in the leaf.
   //! Reset after every leaf change.
-  int32_t mSlotId = -1;
+  int32_t mSlotId;
 
   //! Indicates whether the prefix is copied in mBuffer, reset to false after every leaf change.
-  bool mIsPrefixCopied = false;
+  bool mIsPrefixCopied;
 
   //! The latched leaf node of the current key.
   GuardedBufferFrame<BTreeNode> mGuardedLeaf;
@@ -52,13 +52,13 @@ public:
   GuardedBufferFrame<BTreeNode> mGuardedParent;
 
   //! The slot id in mGuardedParent of mGuardedLeaf.
-  int32_t mLeafPosInParent = -1;
+  int32_t mLeafPosInParent;
 
   //! Used to buffer the key at mSlotId or lower/upper fence keys.
   std::basic_string<uint8_t> mBuffer;
 
   //! The length of the lower or upper fence key.
-  uint16_t mFenceSize = 0;
+  uint16_t mFenceSize;
 
   //! Tndicates whether the mFenceSize is for lower or upper fence key.
   bool mIsUsingUpperFence;
@@ -67,7 +67,17 @@ public:
   PessimisticIterator(BTreeGeneric& tree, const LatchMode mode = LatchMode::kPessimisticShared)
       : mBTree(tree),
         mMode(mode),
-        mBuffer() {
+        mFuncEnterLeaf(nullptr),
+        mFuncExitLeaf(nullptr),
+        mFuncCleanUp(nullptr),
+        mSlotId(-1),
+        mIsPrefixCopied(false),
+        mGuardedLeaf(),
+        mGuardedParent(),
+        mLeafPosInParent(-1),
+        mBuffer(),
+        mFenceSize(0),
+        mIsUsingUpperFence(false) {
   }
 
   //! move constructor
@@ -85,43 +95,35 @@ public:
         mBuffer(std::move(other.mBuffer)),
         mFenceSize(other.mFenceSize),
         mIsUsingUpperFence(other.mIsUsingUpperFence) {
-    other.mSlotId = -1;
+    other.SetToInvalid();
     other.mLeafPosInParent = -1;
   }
 
-  //! Seek for the exact key in the tree
-  //! @return true if the key is found, false otherwise
-  bool SeekExact(Slice key) override {
-    seekForTargetPageOnDemand(key);
-
+  //! Seek to the position of the key which = the given key
+  void SeekToEqual(Slice key) override {
+    seekToTargetPageOnDemand(key);
     mSlotId = mGuardedLeaf->LowerBound<true>(key);
-    return mSlotId != -1;
   }
 
-  //! Seek for the first key in the tree
-  //! @return true if the key is found, false otherwise
-  bool SeekForFirst() override {
-    seekForTargetPage([](GuardedBufferFrame<BTreeNode>&) { return 0; });
+  //! Seek to the position of the first key
+  void SeekToFirst() override {
+    seekToTargetPage([](GuardedBufferFrame<BTreeNode>&) { return 0; });
     if (mGuardedLeaf->mNumSeps == 0) {
-      mSlotId = -1;
-      return false;
+      SetToInvalid();
     }
-
     mSlotId = 0;
-    return true;
   }
 
-  //! Seek for the first key in the tree which >= the given key
-  //! @return true if the key is found, false otherwise
-  bool SeekForNext(Slice key) override {
-    seekForTargetPageOnDemand(key);
+  //! Seek to the position of the first key which >= the given key
+  void SeekToFirstGreaterEqual(Slice key) override {
+    seekToTargetPageOnDemand(key);
 
     mSlotId = mGuardedLeaf->LowerBound<false>(key);
     if (mSlotId < mGuardedLeaf->mNumSeps) {
-      return true;
+      return;
     }
 
-    return Next();
+    Next();
   }
 
   //! Whether a next key exists in the tree
@@ -145,40 +147,36 @@ public:
     return true;
   }
 
-  //! Seek for the next key in the tree
-  //! @return true if the next key exists, false otherwise
-  bool Next() override;
+  //! Iterate to the next key in the tree
+  void Next() override;
 
-  //! Seek for the last key in the tree
-  //! @return true if the key is found, false otherwise
-  bool SeekForLast() override {
-    seekForTargetPage([](GuardedBufferFrame<BTreeNode>& parent) { return parent->mNumSeps; });
+  //! Seek to the position of the last key
+  void SeekToLast() override {
+    seekToTargetPage([](GuardedBufferFrame<BTreeNode>& parent) { return parent->mNumSeps; });
     if (mGuardedLeaf->mNumSeps == 0) {
-      mSlotId = -1;
-      return false;
+      SetToInvalid();
+      return;
     }
 
     mSlotId = mGuardedLeaf->mNumSeps - 1;
-    return true;
   }
 
-  //! Seek for the last key in the tree which <= the given key
-  //! @return true if the key is found, false otherwise
-  bool SeekForPrev(Slice key) override {
-    seekForTargetPageOnDemand(key);
+  //! Seek to the position of the last key which <= the given key
+  void SeekToLastLessEqual(Slice key) override {
+    seekToTargetPageOnDemand(key);
 
     bool isEqual = false;
     mSlotId = mGuardedLeaf->LowerBound<false>(key, &isEqual);
     if (isEqual == true) {
-      return true;
+      return;
     }
 
     if (mSlotId == 0) {
       return Prev();
     }
 
-    mSlotId -= 1;
-    return true;
+    mSlotId--;
+    return;
   }
 
   //! Whether a previous key exists in the tree
@@ -202,9 +200,18 @@ public:
     return true;
   }
 
-  //! Seek for the previous key in the tree
-  //! @return true if the previous key exists, false otherwise
-  bool Prev() override;
+  //! Iterate to the previous key in the tree
+  void Prev() override;
+
+  //! Whether the iterator is valid
+  //! @return true if the iterator is pointing to a valid key-value pair, false otherwise
+  bool Valid() override {
+    return mSlotId != -1;
+  }
+
+  void SetToInvalid() {
+    mSlotId = -1;
+  }
 
   //! Get the key of the current iterator position, the key is read-only
   //! NOTE: AssembleKey() should be called before calling this function to make sure the key is
@@ -233,13 +240,17 @@ public:
 
   //! Experimental API
   OpCode SeekExactWithHint(Slice key, bool higher = true) {
-    if (mSlotId == -1) {
-      return SeekExact(key) ? OpCode::kOK : OpCode::kNotFound;
+    if (!Valid()) {
+      SeekToEqual(key);
+      return Valid() ? OpCode::kOK : OpCode::kNotFound;
     }
+
     mSlotId = mGuardedLeaf->LinearSearchWithBias<true>(key, mSlotId, higher);
-    if (mSlotId == -1) {
-      return SeekExact(key) ? OpCode::kOK : OpCode::kNotFound;
+    if (!Valid()) {
+      SeekToEqual(key);
+      return Valid() ? OpCode::kOK : OpCode::kNotFound;
     }
+
     return OpCode::kOK;
   }
 
@@ -272,24 +283,24 @@ public:
 
   void Reset() {
     mGuardedLeaf.unlock();
-    mSlotId = -1;
+    SetToInvalid();
     mLeafPosInParent = -1;
     mIsPrefixCopied = false;
   }
 
 protected:
-  //! Seek for the target page of the BTree on demand
-  void seekForTargetPageOnDemand(Slice key) {
-    if (mSlotId == -1 || !KeyInCurrentNode(key)) {
-      seekForTargetPage([&key](GuardedBufferFrame<BTreeNode>& guardedNode) {
+  //! Seek to the target page of the BTree on demand
+  void seekToTargetPageOnDemand(Slice key) {
+    if (!Valid() || !KeyInCurrentNode(key)) {
+      seekToTargetPage([&key](GuardedBufferFrame<BTreeNode>& guardedNode) {
         return guardedNode->LowerBound<false>(key);
       });
     }
   }
 
-  //! Seek for the target page of the BTree
+  //! Seek to the target page of the BTree
   //! @param childPosGetter a function to get the child position in the parent node
-  void seekForTargetPage(std::function<int32_t(GuardedBufferFrame<BTreeNode>&)> childPosGetter);
+  void seekToTargetPage(std::function<int32_t(GuardedBufferFrame<BTreeNode>&)> childPosGetter);
 
   void assembleUpperFence() {
     mFenceSize = mGuardedLeaf->mUpperFence.mLength + 1;
@@ -308,9 +319,12 @@ protected:
   }
 };
 
-inline bool PessimisticIterator::Next() {
+inline void PessimisticIterator::Next() {
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().dt_next_tuple[mBTree.mTreeId]++;
+  }
+  if (!Valid()) {
+    return;
   }
   while (true) {
     ENSURE(mGuardedLeaf.mGuard.mState != GuardState::kOptimisticShared);
@@ -318,12 +332,13 @@ inline bool PessimisticIterator::Next() {
     // If we are not at the end of the leaf, return the next key in the leaf.
     if ((mSlotId + 1) < mGuardedLeaf->mNumSeps) {
       mSlotId += 1;
-      return true;
+      return;
     }
 
     // No more keys in the BTree, return false
     if (mGuardedLeaf->mUpperFence.mLength == 0) {
-      return false;
+      SetToInvalid();
+      return;
     }
 
     assembleUpperFence();
@@ -370,7 +385,7 @@ inline bool PessimisticIterator::Next() {
           COUNTERS_BLOCK() {
             WorkerCounters::MyCounters().dt_next_tuple_opt[mBTree.mTreeId]++;
           }
-          JUMPMU_RETURN true;
+          JUMPMU_RETURN;
         }
       }
       JUMPMU_CATCH() {
@@ -379,7 +394,7 @@ inline bool PessimisticIterator::Next() {
 
     mGuardedParent.unlock();
     Slice fenceKey = assembedFence();
-    seekForTargetPage([&fenceKey](GuardedBufferFrame<BTreeNode>& guardedNode) {
+    seekToTargetPage([&fenceKey](GuardedBufferFrame<BTreeNode>& guardedNode) {
       return guardedNode->LowerBound<false>(fenceKey);
     });
 
@@ -400,11 +415,11 @@ inline bool PessimisticIterator::Next() {
     if (mSlotId == mGuardedLeaf->mNumSeps) {
       continue;
     }
-    return true;
+    return;
   }
 }
 
-inline bool PessimisticIterator::Prev() {
+inline void PessimisticIterator::Prev() {
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().dt_prev_tuple[mBTree.mTreeId]++;
   }
@@ -415,15 +430,16 @@ inline bool PessimisticIterator::Prev() {
     // in the leaf.
     if (mSlotId > 0) {
       mSlotId -= 1;
-      return true;
+      return;
     }
 
     // No more keys in the BTree, return false
     if (mGuardedLeaf->mLowerFence.mLength == 0) {
-      return false;
+      SetToInvalid();
+      return;
     }
 
-    // Seek for the previous leaf
+    // Construct the previous key (upper bound)
     mFenceSize = mGuardedLeaf->mLowerFence.mLength;
     mIsUsingUpperFence = false;
     if (mBuffer.size() < mFenceSize) {
@@ -475,7 +491,7 @@ inline bool PessimisticIterator::Prev() {
           COUNTERS_BLOCK() {
             WorkerCounters::MyCounters().dt_prev_tuple_opt[mBTree.mTreeId]++;
           }
-          JUMPMU_RETURN true;
+          JUMPMU_RETURN;
         }
       }
       JUMPMU_CATCH() {
@@ -484,7 +500,7 @@ inline bool PessimisticIterator::Prev() {
 
     // Construct the next key (lower bound)
     Slice fenceKey = assembedFence();
-    seekForTargetPage([&fenceKey](GuardedBufferFrame<BTreeNode>& guardedNode) {
+    seekToTargetPage([&fenceKey](GuardedBufferFrame<BTreeNode>& guardedNode) {
       return guardedNode->LowerBound<false>(fenceKey);
     });
 
@@ -497,7 +513,7 @@ inline bool PessimisticIterator::Prev() {
     bool isEqual = false;
     mSlotId = mGuardedLeaf->LowerBound<false>(assembedFence(), &isEqual);
     if (isEqual) {
-      return true;
+      return;
     }
 
     if (mSlotId > 0) {
@@ -508,7 +524,7 @@ inline bool PessimisticIterator::Prev() {
   }
 }
 
-inline void PessimisticIterator::seekForTargetPage(
+inline void PessimisticIterator::seekToTargetPage(
     std::function<int32_t(GuardedBufferFrame<BTreeNode>&)> childPosGetter) {
   if (mMode != LatchMode::kPessimisticShared && mMode != LatchMode::kPessimisticExclusive) {
     Log::Fatal("Unsupported latch mode: {}", uint64_t(mMode));

@@ -28,7 +28,7 @@ QualifierOrder: ['inline', 'static', 'const', 'volatile', 'type']
 IncludeCategories:
   - Regex:           '^".*.hpp'
     Priority:        2
-  - Regex:           '^<leanstore/*'
+  - Regex:           '^("|<)leanstore/*'
     Priority:        2
   - Regex:           '^("|<)(benchmark)/'
     Priority:        3

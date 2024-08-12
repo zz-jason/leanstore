@@ -189,18 +189,15 @@ void DestroyBasicKvIter(BasicKvIterHandle* handle) {
 // Interfaces for ascending iteration
 //------------------------------------------------------------------------------
 
-uint8_t BasicKvIterSeekForFirst(BasicKvIterHandle* handle, uint64_t workerId) {
-  uint8_t succeed{false};
-  handle->mStore->ExecSync(workerId, [&]() { succeed = handle->mIterator.SeekForFirst(); });
-  return succeed;
+void BasicKvIterSeekToFirst(BasicKvIterHandle* handle, uint64_t workerId) {
+  handle->mStore->ExecSync(workerId, [&]() { handle->mIterator.SeekToFirst(); });
 }
 
-uint8_t BasicKvIterSeekForNext(BasicKvIterHandle* handle, uint64_t workerId, StringSlice key) {
-  uint8_t succeed{false};
+void BasicKvIterSeekToFirstGreaterEqual(BasicKvIterHandle* handle, uint64_t workerId,
+                                        StringSlice key) {
   handle->mStore->ExecSync(workerId, [&]() {
-    succeed = handle->mIterator.SeekForNext(leanstore::Slice(key.mData, key.mSize));
+    handle->mIterator.SeekToFirstGreaterEqual(leanstore::Slice(key.mData, key.mSize));
   });
-  return succeed;
 }
 
 uint8_t BasicKvIterHasNext(BasicKvIterHandle* handle, uint64_t workerId) {
@@ -209,28 +206,22 @@ uint8_t BasicKvIterHasNext(BasicKvIterHandle* handle, uint64_t workerId) {
   return hasNext;
 }
 
-uint8_t BasicKvIterNext(BasicKvIterHandle* handle, uint64_t workerId) {
-  uint8_t succeed{false};
-  handle->mStore->ExecSync(workerId, [&]() { succeed = handle->mIterator.Next(); });
-  return succeed;
+void BasicKvIterNext(BasicKvIterHandle* handle, uint64_t workerId) {
+  handle->mStore->ExecSync(workerId, [&]() { handle->mIterator.Next(); });
 }
 
 //------------------------------------------------------------------------------
 // Interfaces for descending iteration
 //------------------------------------------------------------------------------
 
-uint8_t BasicKvIterSeekForLast(BasicKvIterHandle* handle, uint64_t workerId) {
-  uint8_t succeed{false};
-  handle->mStore->ExecSync(workerId, [&]() { succeed = handle->mIterator.SeekForLast(); });
-  return succeed;
+void BasicKvIterSeekToLast(BasicKvIterHandle* handle, uint64_t workerId) {
+  handle->mStore->ExecSync(workerId, [&]() { handle->mIterator.SeekToLast(); });
 }
 
-uint8_t BasicKvIterSeekForPrev(BasicKvIterHandle* handle, uint64_t workerId, StringSlice key) {
-  uint8_t succeed{false};
+void BasicKvIterSeekToLastLessEqual(BasicKvIterHandle* handle, uint64_t workerId, StringSlice key) {
   handle->mStore->ExecSync(workerId, [&]() {
-    succeed = handle->mIterator.SeekForPrev(leanstore::Slice(key.mData, key.mSize));
+    handle->mIterator.SeekToLastLessEqual(leanstore::Slice(key.mData, key.mSize));
   });
-  return succeed;
 }
 
 uint8_t BasicKvIterHasPrev(BasicKvIterHandle* handle, uint64_t workerId) {
@@ -239,15 +230,18 @@ uint8_t BasicKvIterHasPrev(BasicKvIterHandle* handle, uint64_t workerId) {
   return hasPrev;
 }
 
-uint8_t BasicKvIterPrev(BasicKvIterHandle* handle, uint64_t workerId) {
-  uint8_t succeed{false};
-  handle->mStore->ExecSync(workerId, [&]() { succeed = handle->mIterator.Prev(); });
-  return succeed;
+void BasicKvIterPrev(BasicKvIterHandle* handle, uint64_t workerId) {
+  handle->mStore->ExecSync(workerId, [&]() { handle->mIterator.Prev(); });
 }
 
 //------------------------------------------------------------------------------
 // Interfaces for accessing the current iterator position
 //------------------------------------------------------------------------------
+
+//! Whether the iterator is valid
+uint8_t BasicKvIterValid(BasicKvIterHandle* handle) {
+  return handle->mIterator.Valid();
+}
 
 StringSlice BasicKvIterKey(BasicKvIterHandle* handle) {
   handle->mIterator.AssembleKey();

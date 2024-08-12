@@ -15,53 +15,50 @@ public:
   // Interfaces for exact key seeking
   //------------------------------------------------------------------------------------------------
 
-  //! Seek for the exact key in the tree
-  //! @return true if the key is found, false otherwise
-  virtual bool SeekExact(Slice key) = 0;
+  //! Seek to the position of the key which = the given key
+  virtual void SeekToEqual(Slice key) = 0;
 
   //------------------------------------------------------------------------------------------------
   // Interfaces for ascending iteration
   //------------------------------------------------------------------------------------------------
 
-  //! Seek for the first key in the tree
-  //! @return true if the key is found, false otherwise
-  virtual bool SeekForFirst() = 0;
+  //! Seek to the position of the first key
+  virtual void SeekToFirst() = 0;
 
-  //! Seek for the first key in the tree which >= the given key
-  //! @return true if the key is found, false otherwise
-  virtual bool SeekForNext(Slice key) = 0;
+  //! Seek to the position of the first key which >= the given key
+  virtual void SeekToFirstGreaterEqual(Slice key) = 0;
 
   //! Whether a next key exists in the tree
   //! @return true if the next key exists, false otherwise
   virtual bool HasNext() = 0;
 
   //! Iterate to the next key in the tree
-  //! @return true if the next key exists, false otherwise
-  virtual bool Next() = 0;
+  virtual void Next() = 0;
 
   //------------------------------------------------------------------------------------------------
   // Interfaces for descending iteration
   //------------------------------------------------------------------------------------------------
 
-  //! Seek for the last key in the tree
-  //! @return true if the key is found, false otherwise
-  virtual bool SeekForLast() = 0;
+  //! Seek to the position of the last key
+  virtual void SeekToLast() = 0;
 
-  //! Seek for the last key in the tree which <= the given key
-  //! @return true if the key is found, false otherwise
-  virtual bool SeekForPrev(Slice key) = 0;
+  //! Seek to the position of the last key which <= the given key
+  virtual void SeekToLastLessEqual(Slice key) = 0;
 
   //! Whether a previous key exists in the tree
   //! @return true if the previous key exists, false otherwise
   virtual bool HasPrev() = 0;
 
   //! Iterate to the previous key in the tree
-  //! @return true if the previous key exists, false otherwise
-  virtual bool Prev() = 0;
+  virtual void Prev() = 0;
 
   //------------------------------------------------------------------------------------------------
   // Interfaces for accessing the current iterator position
   //------------------------------------------------------------------------------------------------
+
+  //! Whether the iterator is valid
+  //! @return true if the iterator is pointing to a valid key-value pair, false otherwise
+  virtual bool Valid() = 0;
 
   //! Get the key of the current iterator position, the key is read-only
   virtual Slice Key() = 0;
