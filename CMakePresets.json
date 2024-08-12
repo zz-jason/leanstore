@@ -46,7 +46,8 @@
             "binaryDir": "${sourceDir}/build/debug_tsan",
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "dist/debug_tsan",
-                "ENABLE_TSAN": "ON"
+                "ENABLE_TSAN": "ON",
+                "ENABLE_COVERAGE": "ON"
             }
         },
         {
