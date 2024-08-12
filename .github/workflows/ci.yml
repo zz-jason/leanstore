@@ -77,7 +77,10 @@ jobs:
         verbose: true
 
     - name: Upload coverage reports to Codecov 2nd chance
-      run: |
-        curl -Os https://uploader.codecov.io/latest/linux/codecov
-        chmod +x codecov
-        ./codecov -t ${CODECOV_TOKEN}
+      uses: codecov/codecov-action@v4
+      with:
+        fail_ci_if_error: true
+        files: coverage.xml
+        verbose: true
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
