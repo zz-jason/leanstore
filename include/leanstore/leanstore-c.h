@@ -107,45 +107,43 @@ void DestroyBasicKvIter(BasicKvIterHandle* handle);
 // Interfaces for ascending iteration
 //------------------------------------------------------------------------------
 
-//! Seek for the first key of the basic key-value store at workerId
-//! @return true if the begin key exists, false otherwise
-uint8_t BasicKvIterSeekForFirst(BasicKvIterHandle* handle, uint64_t workerId);
+//! Seek to the first key of the basic key-value store at workerId
+void BasicKvIterSeekToFirst(BasicKvIterHandle* handle, uint64_t workerId);
 
-//! Seek for the first key that >= the given key
-//! @return true if the key is found, false otherwise
-uint8_t BasicKvIterSeekForNext(BasicKvIterHandle* handle, uint64_t workerId, StringSlice key);
+//! Seek to the first key that >= the given key
+void BasicKvIterSeekToFirstGreaterEqual(BasicKvIterHandle* handle, uint64_t workerId,
+                                        StringSlice key);
 
 //! Whether the iterator has a next key in a basic key-value store at workerId
 //! @return true if the next key exists, false otherwise
 uint8_t BasicKvIterHasNext(BasicKvIterHandle* handle, uint64_t workerId);
 
 //! Iterate to the next key in a basic key-value store at workerId
-//! @return true if the next key exists, false otherwise
-uint8_t BasicKvIterNext(BasicKvIterHandle* handle, uint64_t workerId);
+void BasicKvIterNext(BasicKvIterHandle* handle, uint64_t workerId);
 
 //------------------------------------------------------------------------------
 // Interfaces for descending iteration
 //------------------------------------------------------------------------------
 
-//! Seek for the last key of the basic key-value store at workerId
-//! @return true if the end key exists, false otherwise
-uint8_t BasicKvIterSeekForLast(BasicKvIterHandle* handle, uint64_t workerId);
+//! Seek to the last key of the basic key-value store at workerId
+void BasicKvIterSeekToLast(BasicKvIterHandle* handle, uint64_t workerId);
 
-//! Seek for the last key that <= the given key
-//! @return true if the key is found, false otherwise
-uint8_t BasicKvIterSeekForPrev(BasicKvIterHandle* handle, uint64_t workerId, StringSlice key);
+//! Seek to the last key that <= the given key
+void BasicKvIterSeekToLastLessEqual(BasicKvIterHandle* handle, uint64_t workerId, StringSlice key);
 
 //! Whether the iterator has a previous key in a basic key-value store at workerId
 //! @return true if the previous key exists, false otherwise
 uint8_t BasicKvIterHasPrev(BasicKvIterHandle* handle, uint64_t workerId);
 
 //! Iterate to the previous key in a basic key-value store at workerId
-//! @return true if the previous key exists, false otherwise
-uint8_t BasicKvIterPrev(BasicKvIterHandle* handle, uint64_t workerId);
+void BasicKvIterPrev(BasicKvIterHandle* handle, uint64_t workerId);
 
 //------------------------------------------------------------------------------
 // Interfaces for accessing the current iterator position
 //------------------------------------------------------------------------------
+
+//! Whether the iterator is valid
+uint8_t BasicKvIterValid(BasicKvIterHandle* handle);
 
 //! Get the key of the current iterator position in a basic key-value store at workerId
 //! @return the read-only key slice

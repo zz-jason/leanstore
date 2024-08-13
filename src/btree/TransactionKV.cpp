@@ -83,7 +83,7 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
             cr::Worker::My().mActiveTx.mStartTs);
   auto lookupInGraveyard = [&]() {
     auto gIter = mGraveyard->GetIterator();
-    if (!gIter.SeekExact(key)) {
+    if (gIter.SeekToEqual(key); !gIter.Valid()) {
       return OpCode::kNotFound;
     }
     auto [ret, versionsRead] = getVisibleTuple(gIter.Val(), valCallback);
@@ -103,7 +103,7 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
 
   // lookup pessimistically
   auto iter = GetIterator();
-  if (!iter.SeekExact(key)) {
+  if (iter.SeekToEqual(key); !iter.Valid()) {
     // In a lookup-after-remove(other worker) scenario, the tuple may be garbage
     // collected and moved to the graveyard, check the graveyard for the key.
     return cr::ActiveTx().IsLongRunning() ? lookupInGraveyard() : OpCode::kNotFound;
@@ -127,7 +127,7 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
   LS_DCHECK(cr::Worker::My().IsTxStarted());
   JUMPMU_TRY() {
     auto xIter = GetExclusiveIterator();
-    if (!xIter.SeekExact(key)) {
+    if (xIter.SeekToEqual(key); !xIter.Valid()) {
       // Conflict detected, the tuple to be updated by the long-running
       // transaction is removed by newer transactions, abort it.
       if (cr::ActiveTx().IsLongRunning() && mGraveyard->Lookup(key, [&](Slice) {}) == OpCode::kOK) {
@@ -355,7 +355,7 @@ OpCode TransactionKV::Remove(Slice key) {
   LS_DCHECK(cr::Worker::My().IsTxStarted());
   JUMPMU_TRY() {
     auto xIter = GetExclusiveIterator();
-    if (!xIter.SeekExact(key)) {
+    if (xIter.SeekToEqual(key); !xIter.Valid()) {
       // Conflict detected, the tuple to be removed by the long-running transaction is removed by
       // newer transactions, abort it.
       if (cr::ActiveTx().IsLongRunning() && mGraveyard->Lookup(key, [&](Slice) {}) == OpCode::kOK) {
@@ -473,8 +473,8 @@ void TransactionKV::undoLastInsert(const WalTxInsert* walInsert) {
   while (true) {
     JUMPMU_TRY() {
       auto xIter = GetExclusiveIterator();
-      auto succeed [[maybe_unused]] = xIter.SeekExact(key);
-      LS_DCHECK(succeed,
+      xIter.SeekToEqual(key);
+      LS_DCHECK(xIter.Valid(),
                 "Cannot find the inserted key in btree, workerId={}, "
                 "startTs={}, key={}",
                 cr::Worker::My().mWorkerId, cr::Worker::My().mActiveTx.mStartTs, key.ToString());
@@ -521,8 +521,8 @@ void TransactionKV::undoLastUpdate(const WalTxUpdate* walUpdate) {
   while (true) {
     JUMPMU_TRY() {
       auto xIter = GetExclusiveIterator();
-      auto succeed [[maybe_unused]] = xIter.SeekExact(key);
-      LS_DCHECK(succeed,
+      xIter.SeekToEqual(key);
+      LS_DCHECK(xIter.Valid(),
                 "Cannot find the updated key in btree, workerId={}, "
                 "startTs={}, key={}",
                 cr::Worker::My().mWorkerId, cr::Worker::My().mActiveTx.mStartTs, key.ToString());
@@ -566,8 +566,8 @@ void TransactionKV::undoLastRemove(const WalTxRemove* walRemove) {
   while (true) {
     JUMPMU_TRY() {
       auto xIter = GetExclusiveIterator();
-      auto succeed [[maybe_unused]] = xIter.SeekExact(removedKey);
-      LS_DCHECK(succeed,
+      xIter.SeekToEqual(removedKey);
+      LS_DCHECK(xIter.Valid(),
                 "Cannot find the tombstone of removed key, workerId={}, "
                 "startTs={}, removedKey={}",
                 cr::Worker::My().mWorkerId, cr::Worker::My().mActiveTx.mStartTs,
@@ -739,7 +739,7 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData, WORKERID versionW
             versionWorkerId, versionTxId, removedKey.ToString());
     JUMPMU_TRY() {
       auto xIter = mGraveyard->GetExclusiveIterator();
-      if (xIter.SeekExact(removedKey)) {
+      if (xIter.SeekToEqual(removedKey); xIter.Valid()) {
         auto ret [[maybe_unused]] = xIter.RemoveCurrent();
         LS_DCHECK(ret == OpCode::kOK,
                   "Failed to delete the removedKey from graveyard, ret={}, "
@@ -762,7 +762,7 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData, WORKERID versionW
   // TODO(jian.z): handle corner cases in insert-after-remove scenario
   JUMPMU_TRY() {
     auto xIter = GetExclusiveIterator();
-    if (!xIter.SeekExact(removedKey)) {
+    if (xIter.SeekToEqual(removedKey); !xIter.Valid()) {
       Log::Fatal("Cannot find the removedKey in TransactionKV, should not "
                  "happen, versionWorkerId={}, versionTxId={}, removedKey={}",
                  versionWorkerId, versionTxId, removedKey.ToString());
@@ -868,8 +868,8 @@ void TransactionKV::unlock(const uint8_t* walEntryPtr) {
 
   JUMPMU_TRY() {
     auto xIter = GetExclusiveIterator();
-    auto succeed [[maybe_unused]] = xIter.SeekExact(key);
-    LS_DCHECK(succeed, "Cannot find the key in btree, workerId={}, startTs={}, key={}",
+    xIter.SeekToEqual(key);
+    LS_DCHECK(xIter.Valid(), "Cannot find the key in btree, workerId={}, startTs={}, key={}",
               cr::Worker::My().mWorkerId, cr::Worker::My().mActiveTx.mStartTs, key.ToString());
     auto& tuple = *Tuple::From(xIter.MutableVal().Data());
     ENSURE(tuple.mFormat == TupleFormat::kChained);
@@ -893,9 +893,13 @@ OpCode TransactionKV::scan4ShortRunningTx(Slice key, ScanCallback callback) {
   bool keepScanning = true;
   JUMPMU_TRY() {
     auto iter = GetIterator();
+    if (asc) {
+      iter.SeekToFirstGreaterEqual(key);
+    } else {
+      iter.SeekToLastLessEqual(key);
+    }
 
-    bool succeed = asc ? iter.SeekForNext(key) : iter.SeekForPrev(key);
-    while (succeed) {
+    while (iter.Valid()) {
       iter.AssembleKey();
       Slice scannedKey = iter.Key();
       auto [opCode, versionsRead] = getVisibleTuple(iter.Val(), [&](Slice scannedVal) {
@@ -916,7 +920,11 @@ OpCode TransactionKV::scan4ShortRunningTx(Slice key, ScanCallback callback) {
         JUMPMU_RETURN OpCode::kOK;
       }
 
-      succeed = asc ? iter.Next() : iter.Prev();
+      if (asc) {
+        iter.Next();
+      } else {
+        iter.Prev();
+      }
     }
     JUMPMU_RETURN OpCode::kOK;
   }
@@ -948,7 +956,7 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
     Slice graveyardLowerBound, graveyardUpperBound;
     graveyardLowerBound = key;
 
-    if (!iter.SeekForNext(key)) {
+    if (iter.SeekToFirstGreaterEqual(key); !iter.Valid()) {
       JUMPMU_RETURN OpCode::kOK;
     }
     oRet = OpCode::kOK;
@@ -963,7 +971,7 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
         gRet = OpCode::kOther;
         return;
       }
-      if (!gIter.SeekForNext(graveyardLowerBound)) {
+      if (gIter.SeekToFirstGreaterEqual(graveyardLowerBound); !gIter.Valid()) {
         gRet = OpCode::kNotFound;
         return;
       }
@@ -993,7 +1001,8 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
       if (isLastOne) {
         gIter.Reset();
       }
-      oRet = iter.Next() ? OpCode::kOK : OpCode::kNotFound;
+      iter.Next();
+      oRet = iter.Valid() ? OpCode::kOK : OpCode::kNotFound;
       if (isLastOne) {
         if (iter.mBuffer.size() < iter.mFenceSize + 1u) {
           std::basic_string<uint8_t> newBuffer(iter.mBuffer.size() + 1, 0);
@@ -1026,7 +1035,8 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
         if (!keepScanning) {
           JUMPMU_RETURN OpCode::kOK;
         }
-        gRet = gIter.Next() ? OpCode::kOK : OpCode::kNotFound;
+        gIter.Next();
+        gRet = gIter.Valid() ? OpCode::kOK : OpCode::kNotFound;
       } else if (gRet == OpCode::kOK && oRet == OpCode::kOK) {
         iter.AssembleKey();
         gIter.AssembleKey();
@@ -1047,7 +1057,8 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
           if (!keepScanning) {
             JUMPMU_RETURN OpCode::kOK;
           }
-          gRet = gIter.Next() ? OpCode::kOK : OpCode::kNotFound;
+          gIter.Next();
+          gRet = gIter.Valid() ? OpCode::kOK : OpCode::kNotFound;
         }
       } else {
         JUMPMU_RETURN OpCode::kOK;

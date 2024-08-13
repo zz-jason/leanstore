@@ -91,7 +91,7 @@ OpCode BasicKV::ScanAsc(Slice startKey, ScanCallback callback) {
 
   JUMPMU_TRY() {
     auto iter = GetIterator();
-    for (bool succeed = iter.SeekForNext(startKey); succeed; succeed = iter.Next()) {
+    for (iter.SeekToFirstGreaterEqual(startKey); iter.Valid(); iter.Next()) {
       iter.AssembleKey();
       auto key = iter.Key();
       auto value = iter.Val();
@@ -113,7 +113,7 @@ OpCode BasicKV::ScanDesc(Slice scanKey, ScanCallback callback) {
   }
   JUMPMU_TRY() {
     auto iter = GetIterator();
-    if (!iter.SeekForPrev(scanKey)) {
+    if (iter.SeekToLastLessEqual(scanKey); !iter.Valid()) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
     while (true) {
@@ -123,7 +123,7 @@ OpCode BasicKV::ScanDesc(Slice scanKey, ScanCallback callback) {
       if (!callback(key, value)) {
         JUMPMU_RETURN OpCode::kOK;
       }
-      if (!iter.Prev()) {
+      if (iter.Prev(); !iter.Valid()) {
         JUMPMU_RETURN OpCode::kNotFound;
       }
     }
@@ -247,7 +247,7 @@ OpCode BasicKV::PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
 OpCode BasicKV::UpdatePartial(Slice key, MutValCallback updateCallBack, UpdateDesc& updateDesc) {
   JUMPMU_TRY() {
     auto xIter = GetExclusiveIterator();
-    if (!xIter.SeekExact(key)) {
+    if (xIter.SeekToEqual(key); !xIter.Valid()) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
     auto currentVal = xIter.MutableVal();
@@ -291,7 +291,7 @@ OpCode BasicKV::UpdatePartial(Slice key, MutValCallback updateCallBack, UpdateDe
 OpCode BasicKV::Remove(Slice key) {
   JUMPMU_TRY() {
     auto xIter = GetExclusiveIterator();
-    if (!xIter.SeekExact(key)) {
+    if (xIter.SeekToEqual(key); !xIter.Valid()) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
 
@@ -329,7 +329,8 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
 
     ENSURE(mConfig.mEnableWal == false);
     if (!pageWise) {
-      if (!xIter.SeekForNext(startKey)) {
+      xIter.SeekToFirstGreaterEqual(startKey);
+      if (!xIter.Valid()) {
         JUMPMU_RETURN OpCode::kNotFound;
       }
       while (true) {
@@ -342,7 +343,8 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
           auto ret = xIter.RemoveCurrent();
           ENSURE(ret == OpCode::kOK);
           if (xIter.mSlotId == xIter.mGuardedLeaf->mNumSeps) {
-            ret = xIter.Next() ? OpCode::kOK : OpCode::kNotFound;
+            xIter.Next();
+            ret = xIter.Valid() ? OpCode::kOK : OpCode::kNotFound;
           }
         } else {
           break;
@@ -380,7 +382,7 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
     });
 
     while (true) {
-      xIter.SeekForNext(startKey);
+      xIter.SeekToFirstGreaterEqual(startKey);
       if (didPurgeFullPage) {
         didPurgeFullPage = false;
         continue;

@@ -112,7 +112,7 @@ bool HistoryStorage::GetVersion(TXID newerTxId, COMMANDID newerCommandId,
   Slice key(keyBuffer, keySize);
   JUMPMU_TRY() {
     auto iter = const_cast<BasicKV*>(btree)->GetIterator();
-    if (!iter.SeekExact(key)) {
+    if (iter.SeekToEqual(key); !iter.Valid()) {
       JUMPMU_RETURN false;
     }
     Slice payload = iter.Val();
@@ -157,7 +157,7 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
         });
       }
     });
-    while (xIter.SeekForNext(key)) {
+    for (xIter.SeekToFirstGreaterEqual(key); xIter.Valid(); xIter.SeekToFirstGreaterEqual(key)) {
       // finished if we are out of the transaction range
       xIter.AssembleKey();
       TXID curTxId;
@@ -277,7 +277,7 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
             }
           });
 
-      xIter.SeekForNext(key);
+      xIter.SeekToFirstGreaterEqual(key);
       if (isFullPagePurged) {
         isFullPagePurged = false;
         JUMPMU_CONTINUE;
@@ -310,7 +310,7 @@ void HistoryStorage::VisitRemovedVersions(TXID fromTxId, TXID toTxId,
   JUMPMU_TRY() {
   restart: {
     auto xIter = removeTree->GetExclusiveIterator();
-    while (xIter.SeekForNext(key)) {
+    for (xIter.SeekToFirstGreaterEqual(key); xIter.Valid(); xIter.SeekToFirstGreaterEqual(key)) {
       // skip versions out of the transaction range
       xIter.AssembleKey();
       TXID curTxId;
