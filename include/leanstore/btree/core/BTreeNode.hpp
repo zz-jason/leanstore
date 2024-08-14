@@ -17,13 +17,13 @@ public:
   static const uint16_t sHintCount = 16;
 
   struct SeparatorInfo {
-    //! The full length of the seperator key.
+    //! The full length of the separator key.
     uint16_t mSize;
 
-    //! The slot id of the seperator key.
+    //! The slot id of the separator key.
     uint16_t mSlotId;
 
-    //! Indicates whether the seperator key is truncated.
+    //! Indicates whether the separator key is truncated.
     bool mTrunc;
 
     SeparatorInfo(uint16_t size = 0, uint16_t slotId = 0, bool trunc = false)
@@ -120,9 +120,9 @@ public:
 
 class BTreeNode : public BTreeNodeHeader {
 public:
-  //! The slot inside a btree node. Slot records the metada for the key-value position inside a
+  //! The slot inside a btree node. Slot records the metadata for the key-value position inside a
   //! page. Common prefix among all keys are removed in a btree node. Slot key-value layout:
-  //!  | key wihtout prefix | value |
+  //!  | key without prefix | value |
   struct __attribute__((packed)) Slot {
 
     //! Data offset of the slot, also the offset of the slot key

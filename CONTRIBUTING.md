@@ -2,10 +2,10 @@
 
 ### Setup VS Code and Docker development environment
 
-LeanStore requires libaio, c++23. It's recommanded to develop the project inside
+LeanStore requires libaio, c++23. It's recommended to develop the project inside
 a docker container for convenience, which can be built from this [Dockerfile][0].
 
-For VS Code, it's recommanded to install the ["C/C++ Extension Pack"][1] and
+For VS Code, it's recommended to install the ["C/C++ Extension Pack"][1] and
 ["clangd"][2] plugins.
 
 ### Get the code, build and run
@@ -31,7 +31,7 @@ To run unittests in the debug mode:
 ctest --test-dir build/debug
 ```
 
-To check and fix code formatting wich `clang-format-18`:
+To check and fix code formatting with `clang-format-18`:
 
 ```sh
 # check format
