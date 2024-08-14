@@ -57,7 +57,7 @@ jobs:
       run: cppcheck --project=build/debug_tsan/compile_commands.json -i tests --error-exitcode=1
 
     - name: Check clang-format
-      run: cmake --build build/debug_tsan --target=check-format || echo "please fix code format via 'cmake --build build/debug_tsan --target=format'"
+      run: cmake --build build/debug_tsan --target=check-format 
 
     - name: Build project
       run: cmake --build build/debug_tsan -j `nproc`

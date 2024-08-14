@@ -110,6 +110,7 @@ public:
     seekToTargetPage([](GuardedBufferFrame<BTreeNode>&) { return 0; });
     if (mGuardedLeaf->mNumSeps == 0) {
       SetToInvalid();
+      return;
     }
     mSlotId = 0;
   }
@@ -130,7 +131,7 @@ public:
   //! @return true if the next key exists, false otherwise
   bool HasNext() override {
     // iterator is not initialized, return false
-    if (mSlotId == -1) {
+    if (!Valid()) {
       return false;
     }
 
@@ -183,7 +184,7 @@ public:
   //! @return true if the previous key exists, false otherwise
   bool HasPrev() override {
     // iterator is not initialized, return false
-    if (mSlotId == -1) {
+    if (!Valid()) {
       return false;
     }
 

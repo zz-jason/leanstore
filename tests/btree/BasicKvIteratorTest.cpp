@@ -65,17 +65,64 @@ TEST_F(BasicKvIteratorTest, BasicKvHandle) {
   EXPECT_EQ(numEntriesRemained, numEntries - numEntriesToRemove);
 }
 
+TEST_F(BasicKvIteratorTest, BasicKvAssendingIterationEmpty) {
+  // create iterator handle
+  BasicKvIterHandle* iterHandle = CreateBasicKvIter(mKvHandle);
+  ASSERT_NE(iterHandle, nullptr);
+
+  // next without seek
+  {
+    BasicKvIterNext(iterHandle, 0);
+    EXPECT_FALSE(BasicKvIterValid(iterHandle));
+    EXPECT_FALSE(BasicKvIterHasNext(iterHandle, 0));
+  }
+
+  // iterate ascending
+  {
+    BasicKvIterSeekToFirst(iterHandle, 0);
+    EXPECT_FALSE(BasicKvIterValid(iterHandle));
+    EXPECT_FALSE(BasicKvIterHasNext(iterHandle, 0));
+
+    BasicKvIterNext(iterHandle, 0);
+    EXPECT_FALSE(BasicKvIterValid(iterHandle));
+    EXPECT_FALSE(BasicKvIterHasNext(iterHandle, 0));
+  }
+
+  // seek to first greater equal
+  {
+    BasicKvIterSeekToFirstGreaterEqual(iterHandle, 0, {"hello", 5});
+    EXPECT_FALSE(BasicKvIterValid(iterHandle));
+
+    BasicKvIterNext(iterHandle, 0);
+    EXPECT_FALSE(BasicKvIterValid(iterHandle));
+    EXPECT_FALSE(BasicKvIterHasNext(iterHandle, 0));
+  }
+
+  // destroy the iterator
+  DestroyBasicKvIter(iterHandle);
+}
+
 TEST_F(BasicKvIteratorTest, BasicKvAssendingIteration) {
   // prepare 130 key-value pairs for insert
   const int numEntries = 130;
   std::vector<std::string> keys(numEntries);
   std::vector<std::string> vals(numEntries);
+  std::string smallestKey{""};
+  std::string biggestKey{""};
   for (int i = 0; i < numEntries; i++) {
     keys[i] = std::to_string(i);
     vals[i] = std::to_string(i * 2);
+    for (int i = 0; i < numEntries; i++) {
+      keys[i] = std::to_string(i);
+      vals[i] = std::to_string(i * 2);
+      if (i == 0 || keys[i] < smallestKey) {
+        smallestKey = keys[i];
+      }
+      if (i == 0 || keys[i] > biggestKey) {
+        biggestKey = keys[i];
+      }
+    }
   }
-
-  // insert
   for (auto i = 0; i < numEntries; i++) {
     auto succeed = BasicKvInsert(mKvHandle, 0, {keys[i].data(), keys[i].size()},
                                  {vals[i].data(), vals[i].size()});
@@ -86,38 +133,133 @@ TEST_F(BasicKvIteratorTest, BasicKvAssendingIteration) {
   BasicKvIterHandle* iterHandle = CreateBasicKvIter(mKvHandle);
   ASSERT_NE(iterHandle, nullptr);
 
-  // iterate ascending
-  uint64_t numEntriesIterated = 0;
-  for (BasicKvIterSeekToFirst(iterHandle, 0); BasicKvIterValid(iterHandle);
-       BasicKvIterNext(iterHandle, 0)) {
-    StringSlice key = BasicKvIterKey(iterHandle);
-    StringSlice val = BasicKvIterVal(iterHandle);
-    int keyInt = std::stoi(std::string(key.mData, key.mSize));
-    int valInt = std::stoi(std::string(val.mData, val.mSize));
-    EXPECT_EQ(keyInt * 2, valInt);
+  // next without seek
+  {
+    BasicKvIterNext(iterHandle, 0);
+    EXPECT_FALSE(BasicKvIterValid(iterHandle));
+    EXPECT_FALSE(BasicKvIterHasNext(iterHandle, 0));
+  }
 
-    numEntriesIterated++;
-    if (numEntriesIterated < numEntries) {
-      EXPECT_TRUE(BasicKvIterHasNext(iterHandle, 0));
-    } else {
-      EXPECT_FALSE(BasicKvIterHasNext(iterHandle, 0));
+  // iterate ascending
+  {
+    uint64_t numEntriesIterated = 0;
+    for (BasicKvIterSeekToFirst(iterHandle, 0); BasicKvIterValid(iterHandle);
+         BasicKvIterNext(iterHandle, 0)) {
+      StringSlice key = BasicKvIterKey(iterHandle);
+      StringSlice val = BasicKvIterVal(iterHandle);
+      int keyInt = std::stoi(std::string(key.mData, key.mSize));
+      int valInt = std::stoi(std::string(val.mData, val.mSize));
+      EXPECT_EQ(keyInt * 2, valInt);
+
+      numEntriesIterated++;
+      if (numEntriesIterated < numEntries) {
+        EXPECT_TRUE(BasicKvIterHasNext(iterHandle, 0));
+      } else {
+        EXPECT_FALSE(BasicKvIterHasNext(iterHandle, 0));
+      }
     }
+
+    // iterate one more time to check if the iterator is still valid
+    BasicKvIterNext(iterHandle, 0);
+    EXPECT_FALSE(BasicKvIterValid(iterHandle));
+    EXPECT_FALSE(BasicKvIterHasNext(iterHandle, 0));
   }
 
   // iterate ascending with seek to first greater equal
-  for (auto i = 0; i < numEntries; i++) {
-    BasicKvIterSeekToFirstGreaterEqual(iterHandle, 0, {keys[i].data(), keys[i].size()});
-    ASSERT_TRUE(BasicKvIterValid(iterHandle));
+  {
+    for (auto i = 0; i < numEntries; i++) {
+      BasicKvIterSeekToFirstGreaterEqual(iterHandle, 0, {keys[i].data(), keys[i].size()});
+      ASSERT_TRUE(BasicKvIterValid(iterHandle));
+      StringSlice key = BasicKvIterKey(iterHandle);
+      StringSlice val = BasicKvIterVal(iterHandle);
 
-    StringSlice key = BasicKvIterKey(iterHandle);
-    StringSlice val = BasicKvIterVal(iterHandle);
-    int keyInt = std::stoi(std::string(key.mData, key.mSize));
-    int valInt = std::stoi(std::string(val.mData, val.mSize));
-    EXPECT_EQ(keyInt * 2, valInt);
+      if (std::string{key.mData, key.mSize} == biggestKey) {
+        EXPECT_FALSE(BasicKvIterHasNext(iterHandle, 0));
+      } else {
+        EXPECT_TRUE(BasicKvIterHasNext(iterHandle, 0));
+      }
+
+      int keyInt = std::stoi(std::string(key.mData, key.mSize));
+      int valInt = std::stoi(std::string(val.mData, val.mSize));
+      EXPECT_EQ(keyInt * 2, valInt);
+    }
   }
 
   // destroy the iterator
   DestroyBasicKvIter(iterHandle);
+}
+
+TEST_F(BasicKvIteratorTest, BasicKvDescendingIteration) {
+  // prepare 130 key-value pairs for insert
+  const int numEntries = 130;
+  std::vector<std::string> keys(numEntries);
+  std::vector<std::string> vals(numEntries);
+  std::string smallestKey{""};
+  std::string biggestKey{""};
+  for (int i = 0; i < numEntries; i++) {
+    keys[i] = std::to_string(i);
+    vals[i] = std::to_string(i * 2);
+    if (i == 0 || keys[i] < smallestKey) {
+      smallestKey = keys[i];
+    }
+    if (i == 0 || keys[i] > biggestKey) {
+      biggestKey = keys[i];
+    }
+  }
+  for (auto i = 0; i < numEntries; i++) {
+    auto succeed = BasicKvInsert(mKvHandle, 0, {keys[i].data(), keys[i].size()},
+                                 {vals[i].data(), vals[i].size()});
+    ASSERT_TRUE(succeed);
+  }
+
+  // create iterator handle
+  BasicKvIterHandle* iterHandle = CreateBasicKvIter(mKvHandle);
+  ASSERT_NE(iterHandle, nullptr);
+
+  // iterate descending
+  {
+    uint64_t numEntriesIterated = 0;
+    for (BasicKvIterSeekToLast(iterHandle, 0); BasicKvIterValid(iterHandle);
+         BasicKvIterPrev(iterHandle, 0)) {
+      StringSlice key = BasicKvIterKey(iterHandle);
+      StringSlice val = BasicKvIterVal(iterHandle);
+      int keyInt = std::stoi(std::string(key.mData, key.mSize));
+      int valInt = std::stoi(std::string(val.mData, val.mSize));
+      EXPECT_EQ(keyInt * 2, valInt);
+
+      numEntriesIterated++;
+      if (numEntriesIterated < numEntries) {
+        EXPECT_TRUE(BasicKvIterHasPrev(iterHandle, 0));
+      } else {
+        EXPECT_FALSE(BasicKvIterHasPrev(iterHandle, 0));
+      }
+    }
+
+    // iterate one more time to check if the iterator is still valid
+    BasicKvIterPrev(iterHandle, 0);
+    EXPECT_FALSE(BasicKvIterValid(iterHandle));
+    EXPECT_FALSE(BasicKvIterHasPrev(iterHandle, 0));
+  }
+
+  // iterate descending with seek to last less equal
+  {
+    for (auto i = 0; i < numEntries; i++) {
+      BasicKvIterSeekToLastLessEqual(iterHandle, 0, {keys[i].data(), keys[i].size()});
+      ASSERT_TRUE(BasicKvIterValid(iterHandle));
+      StringSlice key = BasicKvIterKey(iterHandle);
+      StringSlice val = BasicKvIterVal(iterHandle);
+
+      if (std::string{key.mData, key.mSize} == biggestKey) {
+        EXPECT_FALSE(BasicKvIterHasNext(iterHandle, 0));
+      } else {
+        EXPECT_TRUE(BasicKvIterHasNext(iterHandle, 0));
+      }
+
+      int keyInt = std::stoi(std::string(key.mData, key.mSize));
+      int valInt = std::stoi(std::string(val.mData, val.mSize));
+      EXPECT_EQ(keyInt * 2, valInt);
+    }
+  }
 }
 
 } // namespace leanstore::test
