@@ -35,7 +35,7 @@ public:
 
   virtual OpCode PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) override;
 
-  virtual OpCode RangeRemove(Slice staryKey, Slice endKey, bool pageUsed) override;
+  virtual OpCode RangeRemove(Slice startKey, Slice endKey, bool pageUsed) override;
 
   virtual uint64_t CountEntries() override;
 

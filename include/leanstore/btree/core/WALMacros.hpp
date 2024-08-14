@@ -100,11 +100,16 @@
   entrySize1(Type, A1) + entrySize1(Type, A2) + entrySize1(Type, A3) + entrySize1(Type, A4)
 
 #define WALUpdate1(Type, A1)                                                                       \
-  {beforeWrapper1(Type, A1), afterWrapper1(Type, A1), entrySize1(Type, A1)}
+  { beforeWrapper1(Type, A1), afterWrapper1(Type, A1), entrySize1(Type, A1) }
 #define WALUpdate2(Type, A1, A2)                                                                   \
-  {beforeWrapper2(Type, A1, A2), afterWrapper2(Type, A1, A2), entrySize2(Type, A1, A2)}
+  { beforeWrapper2(Type, A1, A2), afterWrapper2(Type, A1, A2), entrySize2(Type, A1, A2) }
 #define WALUpdate3(Type, A1, A2, A3)                                                               \
-  {beforeWrapper3(Type, A1, A2, A3), afterWrapper3(Type, A1, A2, A3), entrySize3(Type, A1, A2, A3)}
+  {                                                                                                \
+    beforeWrapper3(Type, A1, A2, A3), afterWrapper3(Type, A1, A2, A3),                             \
+        entrySize3(Type, A1, A2, A3)                                                               \
+  }
 #define WALUpdate4(Type, A1, A2, A3, A4)                                                           \
-  {beforeWrapper4(Type, A1, A2, A3, A4), afterWrapper4(Type, A1, A2, A3, A4),                      \
-   entrySize4(Type, A1, A2, A3, A4)}
+  {                                                                                                \
+    beforeWrapper4(Type, A1, A2, A3, A4), afterWrapper4(Type, A1, A2, A3, A4),                     \
+        entrySize4(Type, A1, A2, A3, A4)                                                           \
+  }

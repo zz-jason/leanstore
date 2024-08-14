@@ -164,7 +164,7 @@ public:
   //! block. Therefore, we jump whenever we encounter a latched node on our way Moreover, we jump if
   //! any page on the path is already evicted or of the bf could not be found Pre: bfToFind is not
   //! exclusively latched
-  //! @tparam jumpIfEvicted
+  //! @param jumpIfEvicted
   //! @param btree the target tree which the parent is on
   //! @param bfToFind the target node to find parent for
   template <bool jumpIfEvicted = true>

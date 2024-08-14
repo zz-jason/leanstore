@@ -15,7 +15,7 @@ to keep all data in memory.
 ## Getting started
 
 [vcpkg][13] is used to manage third-party libraries, please install it before
-building the project. It's highly recommanded to develop the project inside a
+building the project. It's highly recommended to develop the project inside a
 docker container, which can be built from this [Dockerfile][5]:
 
 ```sh

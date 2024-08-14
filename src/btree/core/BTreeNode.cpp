@@ -311,7 +311,7 @@ uint16_t BTreeNode::CommonPrefix(uint16_t slotA, uint16_t slotB) {
     return 0;
   }
 
-  // TODO: the folowing two checks work only in single threaded
+  // TODO: the following two checks work only in single threaded
   //   assert(aPos < mNumSeps);
   //   assert(bPos < mNumSeps);
   uint32_t limit = std::min(mSlot[slotA].mKeySizeWithoutPrefix, mSlot[slotB].mKeySizeWithoutPrefix);
