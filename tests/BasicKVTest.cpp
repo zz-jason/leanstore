@@ -133,4 +133,65 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
   });
 }
 
+TEST_F(BasicKVTest, BasicKVInsertDuplicatedKey) {
+  storage::btree::BasicKV* btree;
+  // prepare key-value pairs to insert
+  size_t numKVs(10);
+  std::vector<std::tuple<std::string, std::string>> kvToTest;
+  for (size_t i = 0; i < numKVs; ++i) {
+    std::string key("key_btree_LL_xxxxxxxxxxxx_" + std::to_string(i));
+    std::string val("VAL_BTREE_LL_YYYYYYYYYYYY_" + std::to_string(i));
+    kvToTest.push_back(std::make_tuple(key, val));
+  }
+  // create leanstore btree for table records
+  const auto* btreeName = "testTree1";
+
+  mStore->ExecSync(0, [&]() {
+    auto res = mStore->CreateBasicKV(btreeName);
+    EXPECT_TRUE(res);
+    EXPECT_NE(res.value(), nullptr);
+
+    btree = res.value();
+    cr::Worker::My().StartTx();
+    for (size_t i = 0; i < numKVs; ++i) {
+      const auto& [key, val] = kvToTest[i];
+      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                              Slice((const uint8_t*)val.data(), val.size())),
+                OpCode::kOK);
+    }
+    std::string copiedValue;
+    auto copyValueOut = [&](Slice val) {
+      copiedValue = std::string((const char*)val.data(), val.size());
+    };
+    // query the keys
+    for (size_t i = 0; i < numKVs; ++i) {
+      const auto& [key, expectedVal] = kvToTest[i];
+      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copyValueOut),
+                OpCode::kOK);
+      EXPECT_EQ(copiedValue, expectedVal);
+    }
+    // it will failed when insert duplicated keys
+    for (size_t i = 0; i < numKVs; ++i) {
+      const auto& [key, val] = kvToTest[i];
+      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                              Slice((const uint8_t*)val.data(), val.size())),
+                OpCode::kDuplicated);
+    }
+    cr::Worker::My().CommitTx();
+  });
+
+  // insert duplicated keys in another worker
+  mStore->ExecSync(1, [&]() {
+    cr::Worker::My().StartTx();
+    SCOPED_DEFER(cr::Worker::My().CommitTx());
+    // duplicated keys will failed
+    for (size_t i = 0; i < numKVs; ++i) {
+      const auto& [key, val] = kvToTest[i];
+      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
+                              Slice((const uint8_t*)val.data(), val.size())),
+                OpCode::kDuplicated);
+    }
+  });
+}
+
 } // namespace leanstore::test
