@@ -36,7 +36,7 @@
             "inherits": "base_debug",
             "binaryDir": "${sourceDir}/build/debug",
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "dist/debug",
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/debug",
                 "ENABLE_COVERAGE": "ON"
             }
         },
@@ -45,7 +45,7 @@
             "inherits": "base_debug",
             "binaryDir": "${sourceDir}/build/debug_tsan",
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "dist/debug_tsan",
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/debug_tsan",
                 "ENABLE_TSAN": "ON",
                 "ENABLE_COVERAGE": "ON"
             }
@@ -55,7 +55,7 @@
             "inherits": "base_release",
             "binaryDir": "${sourceDir}/build/release",
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "dist/release"
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/release"
             }
         },
         {
@@ -63,7 +63,7 @@
             "inherits": "base_release",
             "binaryDir": "${sourceDir}/build/performance",
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "dist/performance",
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/performance",
                 "ENABLE_ROCKSDB": "ON"
             }
         }
