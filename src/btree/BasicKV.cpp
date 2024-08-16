@@ -91,7 +91,10 @@ OpCode BasicKV::ScanAsc(Slice startKey, ScanCallback callback) {
 
   JUMPMU_TRY() {
     auto iter = GetIterator();
-    for (iter.SeekToFirstGreaterEqual(startKey); iter.Valid(); iter.Next()) {
+    if (iter.SeekToFirstGreaterEqual(startKey); !iter.Valid()) {
+      JUMPMU_RETURN OpCode::kNotFound;
+    }
+    for (; iter.Valid(); iter.Next()) {
       iter.AssembleKey();
       auto key = iter.Key();
       auto value = iter.Val();
@@ -99,6 +102,7 @@ OpCode BasicKV::ScanAsc(Slice startKey, ScanCallback callback) {
         break;
       }
     }
+
     JUMPMU_RETURN OpCode::kOK;
   }
   JUMPMU_CATCH() {
@@ -116,17 +120,16 @@ OpCode BasicKV::ScanDesc(Slice scanKey, ScanCallback callback) {
     if (iter.SeekToLastLessEqual(scanKey); !iter.Valid()) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
-    while (true) {
+    for (; iter.Valid(); iter.Prev()) {
       iter.AssembleKey();
       auto key = iter.Key();
       auto value = iter.Val();
       if (!callback(key, value)) {
-        JUMPMU_RETURN OpCode::kOK;
-      }
-      if (iter.Prev(); !iter.Valid()) {
-        JUMPMU_RETURN OpCode::kNotFound;
+        break;
       }
     }
+
+    JUMPMU_RETURN OpCode::kOK;
   }
   JUMPMU_CATCH() {
   }

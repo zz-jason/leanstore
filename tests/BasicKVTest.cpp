@@ -193,5 +193,96 @@ TEST_F(BasicKVTest, BasicKVInsertDuplicatedKey) {
     }
   });
 }
+TEST_F(BasicKVTest, BasicKVScanAscAndScanDesc) {
+  storage::btree::BasicKV* btree;
+  // prepare key-value pairs to insert
+  size_t numKVs(10);
+  std::vector<std::tuple<std::string, std::string>> kvToTest;
+  const auto keySize = sizeof(size_t);
+  uint8_t keyBuffer[keySize];
+  for (size_t i = 0; i < numKVs; ++i) {
+    utils::Fold(keyBuffer, i);
+    std::string key("key_btree_LL_xxxxxxxxxxxx_" +
+                    std::string(reinterpret_cast<char*>(keyBuffer), keySize));
+    std::string val("VAL_BTREE_LL_YYYYYYYYYYYY_" +
+                    std::string(reinterpret_cast<char*>(keyBuffer), keySize));
+    kvToTest.push_back(std::make_tuple(key, val));
+  }
 
+  // create leanstore btree for table records
+  auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
+  auto btreeName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
+
+  mStore->ExecSync(0, [&]() {
+    auto res = mStore->CreateBasicKV(btreeName);
+    EXPECT_TRUE(res);
+    EXPECT_NE(res.value(), nullptr);
+
+    btree = res.value();
+    for (size_t i = 0; i < numKVs; ++i) {
+      const auto& [key, val] = kvToTest[i];
+      EXPECT_EQ(btree->Insert(Slice(key), Slice(val)), OpCode::kOK);
+    }
+
+    std::vector<std::tuple<std::string, std::string>> copiedKeyValue;
+    auto copyKeyAndValueOut = [&](Slice key, Slice val) {
+      copiedKeyValue.emplace_back(key.ToString(), val.ToString());
+      return true;
+    };
+
+    size_t startIndex = 5;
+    auto startKey = Slice(std::get<0>(kvToTest[startIndex]));
+    auto callbackReturnFalse = [&]([[maybe_unused]] Slice key, [[maybe_unused]] Slice val) {
+      return false;
+    };
+
+    // ScanAsc
+    {
+      // no bigger than largestLexicographicalOrderKey in ScanAsc should return OpCode::kNotFound
+      Slice largestLexicographicalOrderKey("zzzzzzz");
+      EXPECT_EQ(btree->ScanAsc(largestLexicographicalOrderKey, copyKeyAndValueOut),
+                OpCode::kNotFound);
+      EXPECT_EQ(btree->ScanAsc(largestLexicographicalOrderKey, callbackReturnFalse),
+                OpCode::kNotFound);
+
+      // callback return false should terminate scan
+      EXPECT_EQ(btree->ScanAsc(startKey, callbackReturnFalse), OpCode::kOK);
+
+      // query on ScanAsc
+      EXPECT_EQ(btree->ScanAsc(startKey, copyKeyAndValueOut), OpCode::kOK);
+      EXPECT_EQ(copiedKeyValue.size(), 5);
+      for (size_t i = startIndex, j = 0; i < numKVs && j < copiedKeyValue.size(); i++, j++) {
+        const auto& [key, expectedVal] = kvToTest[i];
+        const auto& [copiedKey, copiedValue] = copiedKeyValue[j];
+        EXPECT_EQ(copiedKey, key);
+        EXPECT_EQ(copiedValue, expectedVal);
+      }
+    }
+
+    // ScanDesc
+    {
+      // no smaller than key in ScanDesc should return OpCode::kNotFound
+      Slice smallestLexicographicalOrderKey("aaaaaaaa");
+      EXPECT_EQ(btree->ScanDesc(smallestLexicographicalOrderKey, copyKeyAndValueOut),
+                OpCode::kNotFound);
+      EXPECT_EQ(btree->ScanDesc(smallestLexicographicalOrderKey, callbackReturnFalse),
+                OpCode::kNotFound);
+
+      // callback return false should terminate scan
+      EXPECT_EQ(btree->ScanDesc(startKey, callbackReturnFalse), OpCode::kOK);
+
+      // query on ScanDesc
+      copiedKeyValue.clear();
+      EXPECT_EQ(btree->ScanDesc(startKey, copyKeyAndValueOut), OpCode::kOK);
+      EXPECT_EQ(copiedKeyValue.size(), 6);
+      for (int i = startIndex, j = 0; i >= 0 && j < static_cast<int>(copiedKeyValue.size());
+           i--, j++) {
+        const auto& [key, expectedVal] = kvToTest[i];
+        const auto& [copiedKey, copiedValue] = copiedKeyValue[j];
+        EXPECT_EQ(copiedKey, key);
+        EXPECT_EQ(copiedValue, expectedVal);
+      }
+    }
+  });
+}
 } // namespace leanstore::test
