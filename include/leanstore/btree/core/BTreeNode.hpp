@@ -456,7 +456,7 @@ public:
   }
 
   static uint16_t Size() {
-    return static_cast<uint16_t>(utils::tlsStore->mStoreOption.mPageSize - sizeof(Page));
+    return static_cast<uint16_t>(utils::tlsStore->mStoreOption->mPageSize - sizeof(Page));
   }
 
   static uint16_t UnderFullSize() {
@@ -528,7 +528,7 @@ int16_t BTreeNode::LowerBound(Slice key, bool* isEqual) {
   SearchHint(keyHead, lower, upper);
   while (lower < upper) {
     bool foundEqual(false);
-    if (utils::tlsStore->mStoreOption.mEnableHeadOptimization) {
+    if (utils::tlsStore->mStoreOption->mEnableHeadOptimization) {
       foundEqual = shrinkSearchRangeWithHead(lower, upper, key, keyHead);
     } else {
       foundEqual = shrinkSearchRange(lower, upper, key);

@@ -211,7 +211,7 @@ void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
 
 void PageEvictor::randomBufferFramesToCoolOrEvict() {
   mCoolCandidateBfs.clear();
-  for (auto i = 0u; i < mStore->mStoreOption.mBufferFrameRecycleBatchSize; i++) {
+  for (auto i = 0u; i < mStore->mStoreOption->mBufferFrameRecycleBatchSize; i++) {
     auto* randomBf = &mStore->mBufferManager->RandomBufferFrame();
     DO_NOT_OPTIMIZE(randomBf->mHeader.mState);
     mCoolCandidateBfs.push_back(randomBf);
@@ -274,7 +274,7 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& targetPartition) {
       cooledBf->mHeader.mIsBeingWrittenBack.store(true, std::memory_order_release);
 
       // performs crc check if necessary
-      if (mStore->mStoreOption.mEnableBufferCrcCheck) {
+      if (mStore->mStoreOption->mEnableBufferCrcCheck) {
         cooledBf->mHeader.mCrc = cooledBf->mPage.CRC();
       }
 
@@ -362,7 +362,7 @@ void PageEvictor::evictFlushedBf(BufferFrame& cooledBf, BMOptimisticGuard& optim
   BMExclusiveUpgradeIfNeeded parentWriteGuard(parentHandler.mParentGuard);
   optimisticGuard.mGuard.ToExclusiveMayJump();
 
-  if (mStore->mStoreOption.mEnableBufferCrcCheck && cooledBf.mHeader.mCrc) {
+  if (mStore->mStoreOption->mEnableBufferCrcCheck && cooledBf.mHeader.mCrc) {
     LS_DCHECK(cooledBf.mPage.CRC() == cooledBf.mHeader.mCrc);
   }
   LS_DCHECK(!cooledBf.IsDirty());
@@ -377,7 +377,7 @@ void PageEvictor::evictFlushedBf(BufferFrame& cooledBf, BMOptimisticGuard& optim
   cooledBf.mHeader.mLatch.UnlockExclusively();
 
   mFreeBfList.PushFront(cooledBf);
-  if (mFreeBfList.Size() <= std::min<uint64_t>(mStore->mStoreOption.mWorkerThreads, 128)) {
+  if (mFreeBfList.Size() <= std::min<uint64_t>(mStore->mStoreOption->mWorkerThreads, 128)) {
     mFreeBfList.PopTo(targetPartition);
   }
 

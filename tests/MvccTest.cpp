@@ -1,5 +1,5 @@
+#include "leanstore-c/StoreOption.h"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/StoreOption.hpp"
 #include "leanstore/btree/BasicKV.hpp"
 #include "leanstore/btree/TransactionKV.hpp"
 #include "leanstore/buffer-manager/BufferManager.hpp"
@@ -27,11 +27,11 @@ protected:
   MvccTest() {
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
-    auto res = LeanStore::Open(StoreOption{
-        .mCreateFromScratch = true,
-        .mStoreDir = "/tmp/" + curTestName,
-        .mWorkerThreads = 3,
-    });
+    auto storeDirStr = "/tmp/" + curTestName;
+    StoreOption* option = CreateStoreOption(storeDirStr.c_str());
+    option->mCreateFromScratch = true;
+    option->mWorkerThreads = 3;
+    auto res = LeanStore::Open(option);
     mStore = std::move(res.value());
   }
 

@@ -1,6 +1,9 @@
 #ifndef LEANSTORE_C_H
 #define LEANSTORE_C_H
 
+#include "leanstore-c/StoreOption.h"
+
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -49,9 +52,7 @@ typedef struct StringSlice {
 typedef struct LeanStoreHandle LeanStoreHandle;
 
 //! Create and init a leanstore instance
-LeanStoreHandle* CreateLeanStore(int8_t createFromScratch, const char* storeDir,
-                                 uint64_t workerThreads, int8_t enableBulkInsert,
-                                 int8_t enableEagerGc);
+LeanStoreHandle* CreateLeanStore(StoreOption* option);
 
 //! Deinit and destroy a leanstore instance
 void DestroyLeanStore(LeanStoreHandle* handle);
@@ -72,7 +73,7 @@ void DestroyBasicKV(BasicKvHandle* handle);
 
 //! Insert a key-value pair into a basic key-value store at workerId
 //! @return true if the insert is successful, false otherwise
-uint8_t BasicKvInsert(BasicKvHandle* handle, uint64_t workerId, StringSlice key, StringSlice val);
+bool BasicKvInsert(BasicKvHandle* handle, uint64_t workerId, StringSlice key, StringSlice val);
 
 //! Lookup a key in a basic key-value store at workerId
 //! NOTE: The caller should destroy the val after use via DestroyString()
@@ -81,7 +82,7 @@ String* BasicKvLookup(BasicKvHandle* handle, uint64_t workerId, StringSlice key)
 
 //! Remove a key in a basic key-value store at workerId
 //! @return true if the key is found and removed, false otherwise
-uint8_t BasicKvRemove(BasicKvHandle* handle, uint64_t workerId, StringSlice key);
+bool BasicKvRemove(BasicKvHandle* handle, uint64_t workerId, StringSlice key);
 
 //! Get the size of a basic key-value store at workerId
 //! @return the number of entries in the basic key-value store
@@ -116,7 +117,7 @@ void BasicKvIterSeekToFirstGreaterEqual(BasicKvIterHandle* handle, uint64_t work
 
 //! Whether the iterator has a next key in a basic key-value store at workerId
 //! @return true if the next key exists, false otherwise
-uint8_t BasicKvIterHasNext(BasicKvIterHandle* handle, uint64_t workerId);
+bool BasicKvIterHasNext(BasicKvIterHandle* handle, uint64_t workerId);
 
 //! Iterate to the next key in a basic key-value store at workerId
 void BasicKvIterNext(BasicKvIterHandle* handle, uint64_t workerId);
@@ -133,7 +134,7 @@ void BasicKvIterSeekToLastLessEqual(BasicKvIterHandle* handle, uint64_t workerId
 
 //! Whether the iterator has a previous key in a basic key-value store at workerId
 //! @return true if the previous key exists, false otherwise
-uint8_t BasicKvIterHasPrev(BasicKvIterHandle* handle, uint64_t workerId);
+bool BasicKvIterHasPrev(BasicKvIterHandle* handle, uint64_t workerId);
 
 //! Iterate to the previous key in a basic key-value store at workerId
 void BasicKvIterPrev(BasicKvIterHandle* handle, uint64_t workerId);
@@ -143,7 +144,7 @@ void BasicKvIterPrev(BasicKvIterHandle* handle, uint64_t workerId);
 //------------------------------------------------------------------------------
 
 //! Whether the iterator is valid
-uint8_t BasicKvIterValid(BasicKvIterHandle* handle);
+bool BasicKvIterValid(BasicKvIterHandle* handle);
 
 //! Get the key of the current iterator position in a basic key-value store at workerId
 //! @return the read-only key slice

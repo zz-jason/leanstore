@@ -1,13 +1,24 @@
+#include "leanstore-c/StoreOption.h"
+#include "leanstore-c/leanstore-c.h"
+
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "leanstore/leanstore-c.h"
-
 int main() {
-  LeanStoreHandle* storeHandle =
-      CreateLeanStore(1, "/tmp/leanstore/examples/BasicKvExample", 2, 0, 1);
+  struct StoreOption* option = CreateStoreOption("/tmp/leanstore/examples/BasicKvExample");
+  option->mCreateFromScratch = 1;
+  option->mWorkerThreads = 2;
+  option->mEnableBulkInsert = 0;
+  option->mEnableEagerGc = 1;
+  LeanStoreHandle* storeHandle = CreateLeanStore(option);
   BasicKvHandle* kvHandle = CreateBasicKV(storeHandle, 0, "testTree1");
+  if (kvHandle == NULL) {
+    DestroyStoreOption(option);
+    printf("create basic kv failed\n");
+    return -1;
+  }
 
   // key-value pair 1
   StringSlice keySlice;

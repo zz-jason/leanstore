@@ -58,7 +58,7 @@ Result<void> Recovery::analysis() {
   SCOPED_DEFER(Log::Info("[Recovery] analysis phase ends"))
 
   // asume that each WalEntry is smaller than the page size
-  utils::AlignedBuffer<512> alignedBuffer(mStore->mStoreOption.mPageSize);
+  utils::AlignedBuffer<512> alignedBuffer(mStore->mStoreOption->mPageSize);
   uint8_t* walEntryPtr = alignedBuffer.Get();
   for (auto offset = mWalStartOffset; offset < mWalSize;) {
     auto startOffset = offset;
@@ -109,7 +109,7 @@ Result<void> Recovery::redo() {
   SCOPED_DEFER(Log::Info("[Recovery] redo phase ends"))
 
   // asume that each WalEntry is smaller than the page size
-  utils::AlignedBuffer<512> alignedBuffer(mStore->mStoreOption.mPageSize);
+  utils::AlignedBuffer<512> alignedBuffer(mStore->mStoreOption->mPageSize);
   auto* complexEntry = reinterpret_cast<WalEntryComplex*>(alignedBuffer.Get());
 
   for (auto offset = mWalStartOffset; offset < mWalSize;) {
@@ -461,7 +461,7 @@ storage::BufferFrame& Recovery::resolvePage(PID pageId) {
 
 // TODO(zz-jason): refactor with aio
 Result<void> Recovery::readFromWalFile(int64_t offset, size_t nbytes, void* destination) {
-  auto fileName = mStore->mStoreOption.GetWalFilePath();
+  auto fileName = mStore->GetWalFilePath();
   FILE* fp = fopen(fileName.c_str(), "rb");
   if (fp == nullptr) {
     return std::unexpected(utils::Error::FileOpen(fileName, errno, strerror(errno)));

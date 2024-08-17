@@ -144,7 +144,7 @@ public:
 
 public:
   uint64_t CRC() {
-    return utils::CRC(mPayload, utils::tlsStore->mStoreOption.mPageSize - sizeof(Page));
+    return utils::CRC(mPayload, utils::tlsStore->mStoreOption->mPageSize - sizeof(Page));
   }
 };
 

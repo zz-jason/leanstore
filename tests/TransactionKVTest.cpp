@@ -1,13 +1,11 @@
 #include "leanstore/btree/TransactionKV.hpp"
 
+#include "leanstore-c/StoreOption.h"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/StoreOption.hpp"
-#include "leanstore/btree/core/BTreeGeneric.hpp"
 #include "leanstore/buffer-manager/BufferManager.hpp"
 #include "leanstore/concurrency/CRManager.hpp"
 #include "leanstore/utils/Defer.hpp"
-#include "leanstore/utils/JsonUtil.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/RandomGenerator.hpp"
 
@@ -33,12 +31,11 @@ protected:
   TransactionKVTest() {
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
-    auto res = LeanStore::Open(StoreOption{
-        .mCreateFromScratch = true,
-        .mStoreDir = "/tmp/" + curTestName,
-        .mWorkerThreads = 3,
-        .mEnableEagerGc = true,
-    });
+    auto* option = CreateStoreOption(("/tmp/" + curTestName).c_str());
+    option->mCreateFromScratch = true;
+    option->mWorkerThreads = 3;
+    option->mEnableEagerGc = true;
+    auto res = LeanStore::Open(option);
     mStore = std::move(res.value());
   }
 

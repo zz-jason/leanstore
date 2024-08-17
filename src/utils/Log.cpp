@@ -12,14 +12,16 @@
 
 namespace leanstore {
 
-void Log::Init(const StoreOption& option) {
+void Log::Init(const StoreOption* option) {
   if (sInited) {
     return;
   }
 
   std::unique_lock writeLock(sInitMutex);
 
-  auto logger = spdlog::basic_logger_mt("basic_logger", option.GetLogPath());
+  auto logPath = std::string(option->mStoreDir) + "/db.log";
+  auto logger = spdlog::basic_logger_mt("basic_logger", logPath.c_str());
+
   SCOPED_DEFER({
     spdlog::set_default_logger(logger);
     spdlog::flush_every(std::chrono::seconds(3));
@@ -33,7 +35,7 @@ void Log::Init(const StoreOption& option) {
   logger->flush_on(spdlog::level::info);
 
   // set log level
-  switch (option.mLogLevel) {
+  switch (option->mLogLevel) {
   case LogLevel::kDebug: {
     logger->set_level(spdlog::level::debug);
     break;
@@ -51,7 +53,7 @@ void Log::Init(const StoreOption& option) {
     break;
   }
   default: {
-    std::cerr << std::format("unsupported log level: {}", static_cast<uint8_t>(option.mLogLevel));
+    std::cerr << std::format("unsupported log level: {}", static_cast<uint8_t>(option->mLogLevel));
     std::abort();
   }
   }

@@ -1,5 +1,5 @@
+#include "leanstore-c/StoreOption.h"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/StoreOption.hpp"
 #include "leanstore/btree/BasicKV.hpp"
 #include "leanstore/btree/TransactionKV.hpp"
 #include "leanstore/buffer-manager/BufferManager.hpp"
@@ -21,11 +21,11 @@ static void BenchUpdateInsert(benchmark::State& state) {
   std::filesystem::path dirPath = "/tmp/InsertUpdateBench";
   std::filesystem::remove_all(dirPath);
   std::filesystem::create_directories(dirPath);
-  auto sLeanStore = std::make_unique<leanstore::LeanStore>(StoreOption{
-      .mCreateFromScratch = true,
-      .mStoreDir = "/tmp/InsertUpdateBench",
-      .mWorkerThreads = 4,
-  });
+
+  StoreOption* option = CreateStoreOption("/tmp/InsertUpdateBench");
+  option->mCreateFromScratch = true;
+  option->mWorkerThreads = 4;
+  auto sLeanStore = std::make_unique<leanstore::LeanStore>(option);
 
   storage::btree::TransactionKV* btree;
 

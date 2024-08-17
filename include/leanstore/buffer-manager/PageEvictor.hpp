@@ -84,11 +84,11 @@ public:
         mFD(store->mPageFd),
         mCoolCandidateBfs(),
         mEvictCandidateBfs(),
-        mAsyncWriteBuffer(store->mPageFd, store->mStoreOption.mPageSize,
-                          mStore->mStoreOption.mBufferWriteBatchSize),
+        mAsyncWriteBuffer(store->mPageFd, store->mStoreOption->mPageSize,
+                          mStore->mStoreOption->mBufferWriteBatchSize),
         mFreeBfList() {
-    mCoolCandidateBfs.reserve(mStore->mStoreOption.mBufferFrameRecycleBatchSize);
-    mEvictCandidateBfs.reserve(mStore->mStoreOption.mBufferFrameRecycleBatchSize);
+    mCoolCandidateBfs.reserve(mStore->mStoreOption->mBufferFrameRecycleBatchSize);
+    mEvictCandidateBfs.reserve(mStore->mStoreOption->mBufferFrameRecycleBatchSize);
   }
 
   // no copy and assign

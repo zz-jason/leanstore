@@ -356,7 +356,7 @@ inline void PessimisticIterator::Next() {
       mFuncCleanUp = nullptr;
     }
 
-    if (utils::tlsStore->mStoreOption.mEnableOptimisticScan && mLeafPosInParent != -1) {
+    if (utils::tlsStore->mStoreOption->mEnableOptimisticScan && mLeafPosInParent != -1) {
       JUMPMU_TRY() {
         if ((mLeafPosInParent + 1) <= mGuardedParent->mNumSeps) {
           int32_t nextLeafPos = mLeafPosInParent + 1;
@@ -463,7 +463,7 @@ inline void PessimisticIterator::Prev() {
       mFuncCleanUp = nullptr;
     }
 
-    if (utils::tlsStore->mStoreOption.mEnableOptimisticScan && mLeafPosInParent != -1) {
+    if (utils::tlsStore->mStoreOption->mEnableOptimisticScan && mLeafPosInParent != -1) {
       JUMPMU_TRY() {
         if ((mLeafPosInParent - 1) >= 0) {
           int32_t nextLeafPos = mLeafPosInParent - 1;

@@ -20,13 +20,13 @@ void BMTable::open() {
   columns.emplace("key", [](Column& col) { col << 0; });
 
   columns.emplace("space_usage_gib", [&](Column& col) {
-    const double gib = bm.ConsumedPages() * 1.0 * utils::tlsStore->mStoreOption.mPageSize / 1024.0 /
-                       1024.0 / 1024.0;
+    const double gib = bm.ConsumedPages() * 1.0 * utils::tlsStore->mStoreOption->mPageSize /
+                       1024.0 / 1024.0 / 1024.0;
     col << gib;
   });
 
   columns.emplace("space_usage_kib", [&](Column& col) {
-    const double kib = bm.ConsumedPages() * 1.0 * utils::tlsStore->mStoreOption.mPageSize / 1024.0;
+    const double kib = bm.ConsumedPages() * 1.0 * utils::tlsStore->mStoreOption->mPageSize / 1024.0;
     col << kib;
   });
 
@@ -52,7 +52,7 @@ void BMTable::open() {
   columns.emplace("free_pct", [&](Column& col) { col << (local_total_free * 100.0 / bm.mNumBfs); });
   columns.emplace("evicted_mib", [&](Column& col) {
     auto res = Sum(PPCounters::sCounters, &PPCounters::evicted_pages);
-    col << (res * utils::tlsStore->mStoreOption.mPageSize / 1024.0 / 1024.0);
+    col << (res * utils::tlsStore->mStoreOption->mPageSize / 1024.0 / 1024.0);
   });
   columns.emplace("rounds", [&](Column& col) {
     col << (Sum(PPCounters::sCounters, &PPCounters::pp_thread_rounds));
@@ -72,7 +72,7 @@ void BMTable::open() {
   });
   columns.emplace("w_mib", [&](Column& col) {
     auto res = Sum(PPCounters::sCounters, &PPCounters::flushed_pages_counter);
-    col << (res * utils::tlsStore->mStoreOption.mPageSize / 1024.0 / 1024.0);
+    col << (res * utils::tlsStore->mStoreOption->mPageSize / 1024.0 / 1024.0);
   });
 
   columns.emplace("allocate_ops", [&](Column& col) {
@@ -80,7 +80,7 @@ void BMTable::open() {
   });
   columns.emplace("r_mib", [&](Column& col) {
     auto res = Sum(WorkerCounters::sCounters, &WorkerCounters::read_operations_counter);
-    col << (res * utils::tlsStore->mStoreOption.mPageSize / 1024.0 / 1024.0);
+    col << (res * utils::tlsStore->mStoreOption->mPageSize / 1024.0 / 1024.0);
   });
 }
 

@@ -22,7 +22,7 @@ void BTreeNode::UpdateHint(uint16_t slotId) {
 
 void BTreeNode::SearchHint(HeadType keyHead, uint16_t& lowerOut, uint16_t& upperOut) {
   if (mNumSeps > sHintCount * 2) {
-    if (utils::tlsStore->mStoreOption.mBTreeHints == 2) {
+    if (utils::tlsStore->mStoreOption->mBTreeHints == 2) {
 #ifdef __AVX512F__
       const uint16_t dist = mNumSeps / (sHintCount + 1);
       uint16_t pos, pos2;
@@ -45,7 +45,7 @@ void BTreeNode::SearchHint(HeadType keyHead, uint16_t& lowerOut, uint16_t& upper
 #else
       Log::Error("Search hint with AVX512 failed: __AVX512F__ not found");
 #endif
-    } else if (utils::tlsStore->mStoreOption.mBTreeHints == 1) {
+    } else if (utils::tlsStore->mStoreOption->mBTreeHints == 1) {
       const uint16_t dist = mNumSeps / (sHintCount + 1);
       uint16_t pos, pos2;
 

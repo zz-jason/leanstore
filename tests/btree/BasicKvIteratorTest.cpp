@@ -1,4 +1,5 @@
-#include "leanstore/leanstore-c.h"
+#include "leanstore-c/StoreOption.h"
+#include "leanstore-c/leanstore-c.h"
 
 #include <gtest/gtest.h>
 
@@ -14,7 +15,12 @@ protected:
   BasicKvHandle* mKvHandle;
 
   void SetUp() override {
-    mStoreHandle = CreateLeanStore(1, "/tmp/leanstore/examples/BasicKvExample", 2, 0, 1);
+    StoreOption* option = CreateStoreOption("/tmp/leanstore/examples/BasicKvExample");
+    option->mCreateFromScratch = true;
+    option->mWorkerThreads = 2;
+    option->mEnableBulkInsert = false;
+    option->mEnableEagerGc = true;
+    mStoreHandle = CreateLeanStore(option);
     ASSERT_NE(mStoreHandle, nullptr);
 
     mKvHandle = CreateBasicKV(mStoreHandle, 0, "testTree1");

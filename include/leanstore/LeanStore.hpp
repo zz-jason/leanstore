@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore/StoreOption.hpp"
+#include "leanstore-c/StoreOption.h"
 #include "leanstore/Units.hpp"
 #include "leanstore/utils/DebugFlags.hpp"
 #include "leanstore/utils/Result.hpp"
@@ -10,6 +10,7 @@
 #include <expected>
 #include <functional>
 #include <memory>
+#include <string>
 
 //! forward declarations
 namespace leanstore::telemetry {
@@ -47,10 +48,13 @@ namespace leanstore {
 
 class LeanStore {
 public:
-  static Result<std::unique_ptr<LeanStore>> Open(StoreOption option = StoreOption{});
+  //! Opens a LeanStore instance with the provided options.
+  //! NOTE: The option is created by LeanStore user, its ownership is transferred to the LeanStore
+  //!       instance after the call, it will be destroyed when the LeanStore instance is destroyed.
+  static Result<std::unique_ptr<LeanStore>> Open(StoreOption* option);
 
   //! The storage option for leanstore
-  StoreOption mStoreOption;
+  const StoreOption* mStoreOption;
 
   //! The file descriptor for pages
   int32_t mPageFd;
@@ -79,14 +83,18 @@ public:
   utils::DebugFlagsRegistry mDebugFlagsRegistry;
 #endif
 
-  LeanStore(StoreOption option = StoreOption{});
+  //! The LeanStore constructor
+  //! NOTE: The option is created by LeanStore user, its ownership is transferred to the LeanStore
+  //!       instance after the call, it will be destroyed when the LeanStore instance is destroyed.
+  LeanStore(StoreOption* option);
 
+  //! The LeanStore destructor
   ~LeanStore();
 
   //! Create a BasicKV
-  Result<storage::btree::BasicKV*> CreateBasicKV(const std::string& name,
-                                                 BTreeConfig config = BTreeConfig{
-                                                     .mEnableWal = true, .mUseBulkInsert = false});
+  Result<leanstore::storage::btree::BasicKV*> CreateBasicKV(
+      const std::string& name,
+      BTreeConfig config = BTreeConfig{.mEnableWal = true, .mUseBulkInsert = false});
 
   //! Get a registered BasicKV
   void GetBasicKV(const std::string& name, storage::btree::BasicKV** btree);
@@ -95,7 +103,7 @@ public:
   void DropBasicKV(const std::string& name);
 
   //! Register a TransactionKV
-  Result<storage::btree::TransactionKV*> CreateTransactionKV(
+  Result<leanstore::storage::btree::TransactionKV*> CreateTransactionKV(
       const std::string& name,
       BTreeConfig config = BTreeConfig{.mEnableWal = true, .mUseBulkInsert = false});
 
@@ -125,6 +133,18 @@ public:
 
   //! Waits for all Workers to complete.
   void WaitAll();
+
+  std::string GetMetaFilePath() const {
+    return std::string(mStoreOption->mStoreDir) + "/db.meta.json";
+  }
+
+  std::string GetDbFilePath() const {
+    return std::string(mStoreOption->mStoreDir) + "/db.pages";
+  }
+
+  std::string GetWalFilePath() const {
+    return std::string(mStoreOption->mStoreDir) + "/db.wal";
+  }
 
 private:
   //! serializeMeta serializes all the metadata about concurrent resources,

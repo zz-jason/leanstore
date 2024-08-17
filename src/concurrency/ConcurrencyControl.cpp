@@ -171,7 +171,7 @@ bool ConcurrencyControl::VisibleForAll(TXID txId) {
 // fix, it should be enough if we purge in small batches
 void ConcurrencyControl::GarbageCollection() {
   utils::Timer timer(CRCounters::MyCounters().cc_ms_gc);
-  if (!mStore->mStoreOption.mEnableGc) {
+  if (!mStore->mStoreOption->mEnableGc) {
     return;
   }
 
@@ -202,7 +202,7 @@ void ConcurrencyControl::GarbageCollection() {
   }
 
   // move tombstones to graveyard
-  if (mStore->mStoreOption.mEnableLongRunningTx && mLocalWmkOfAllTx < mLocalWmkOfShortTx &&
+  if (mStore->mStoreOption->mEnableLongRunningTx && mLocalWmkOfAllTx < mLocalWmkOfShortTx &&
       mCleanedWmkOfShortTx <= mLocalWmkOfShortTx) {
     utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_graveyard);
     LS_DLOG("Garbage collect graveyard, workerId={}, fromTxId={}, "
@@ -240,13 +240,13 @@ ConcurrencyControl& ConcurrencyControl::Other(WORKERID otherWorkerId) {
 // Called by the worker thread that is committing a transaction before garbage
 // collection.
 void ConcurrencyControl::updateGlobalTxWatermarks() {
-  if (!mStore->mStoreOption.mEnableGc) {
+  if (!mStore->mStoreOption->mEnableGc) {
     LS_DLOG("Skip updating global watermarks, GC is disabled");
     return;
   }
 
   utils::Timer timer(CRCounters::MyCounters().cc_ms_refresh_global_state);
-  auto meetGcProbability = mStore->mStoreOption.mEnableEagerGc ||
+  auto meetGcProbability = mStore->mStoreOption->mEnableEagerGc ||
                            utils::RandomGenerator::RandU64(0, Worker::My().mAllWorkers.size()) == 0;
   auto performGc = meetGcProbability && mStore->mCRManager->mGlobalWmkInfo.mGlobalMutex.try_lock();
   if (!performGc) {
@@ -292,7 +292,7 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
   mStore->mCRManager->mGlobalWmkInfo.UpdateActiveTxInfo(oldestTxId, oldestShortTxId,
                                                         newestLongTxId);
 
-  if (!mStore->mStoreOption.mEnableLongRunningTx &&
+  if (!mStore->mStoreOption->mEnableLongRunningTx &&
       mStore->mCRManager->mGlobalWmkInfo.mOldestActiveTx !=
           mStore->mCRManager->mGlobalWmkInfo.mOldestActiveShortTx) {
     Log::Fatal("Oldest transaction id should be equal to the oldest "
@@ -386,7 +386,7 @@ void ConcurrencyControl::updateLocalWatermarks() {
     }
   }
 
-  LS_DCHECK(!mStore->mStoreOption.mEnableLongRunningTx || mLocalWmkOfAllTx <= mLocalWmkOfShortTx,
+  LS_DCHECK(!mStore->mStoreOption->mEnableLongRunningTx || mLocalWmkOfAllTx <= mLocalWmkOfShortTx,
             "Lower watermark of all transactions should be no higher than the lower "
             "watermark of short-running transactions, workerId={}, "
             "mLocalWmkOfAllTx={}, mLocalWmkOfShortTx={}",

@@ -31,7 +31,7 @@ Worker::Worker(uint64_t workerId, std::vector<Worker*>& allWorkers, leanstore::L
   CRCounters::MyCounters().mWorkerId = workerId;
 
   // init wal buffer
-  mLogging.mWalBufferSize = mStore->mStoreOption.mWalBufferSize;
+  mLogging.mWalBufferSize = mStore->mStoreOption->mWalBufferSize;
   mLogging.mWalBuffer = (uint8_t*)(std::aligned_alloc(512, mLogging.mWalBufferSize));
   std::memset(mLogging.mWalBuffer, 0, mLogging.mWalBufferSize);
 
@@ -95,7 +95,7 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
     mActiveTx.mStartTs = mStore->AllocTs();
   }
   auto curTxId = mActiveTx.mStartTs;
-  if (mStore->mStoreOption.mEnableLongRunningTx && mActiveTx.IsLongRunning()) {
+  if (mStore->mStoreOption->mEnableLongRunningTx && mActiveTx.IsLongRunning()) {
     // Mark as long-running transaction
     curTxId |= kLongRunningBit;
   }

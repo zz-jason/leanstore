@@ -1,7 +1,7 @@
 #include "Ycsb.hpp"
+#include "leanstore-c/StoreOption.h"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/StoreOption.hpp"
 #include "leanstore/btree/BasicKV.hpp"
 #include "leanstore/btree/TransactionKV.hpp"
 #include "leanstore/concurrency/CRManager.hpp"
@@ -38,16 +38,18 @@ private:
 public:
   YcsbLeanStore(bool benchTransactionKv, bool createFromScratch)
       : mBenchTransactionKv(benchTransactionKv) {
-    auto res = LeanStore::Open(StoreOption{
-        .mCreateFromScratch = createFromScratch,
-        .mStoreDir = FLAGS_ycsb_data_dir + "/leanstore",
-        .mWorkerThreads = FLAGS_ycsb_threads,
-        .mBufferPoolSize = FLAGS_ycsb_mem_kb * 1024,
-        .mEnableMetrics = true,
-        .mMetricsPort = 8080,
-    });
+    auto dataDirStr = FLAGS_ycsb_data_dir + std::string("/leanstore");
+    StoreOption* option = CreateStoreOption(dataDirStr.c_str());
+    option->mCreateFromScratch = createFromScratch;
+    option->mWorkerThreads = FLAGS_ycsb_threads;
+    option->mBufferPoolSize = FLAGS_ycsb_mem_kb * 1024;
+    option->mEnableMetrics = true;
+    option->mMetricsPort = 8080;
+
+    auto res = LeanStore::Open(option);
     if (!res) {
       std::cerr << "Failed to open leanstore: " << res.error().ToString() << std::endl;
+      DestroyStoreOption(option);
       exit(res.error().Code());
     }
 
@@ -112,7 +114,7 @@ public:
       std::cout << summary << std::endl;
     });
 
-    auto numWorkers = mStore->mStoreOption.mWorkerThreads;
+    auto numWorkers = mStore->mStoreOption->mWorkerThreads;
     auto avg = FLAGS_ycsb_record_count / numWorkers;
     auto rem = FLAGS_ycsb_record_count % numWorkers;
     for (auto workerId = 0u, begin = 0u; workerId < numWorkers;) {
@@ -151,8 +153,8 @@ public:
     auto zipfRandom =
         utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count, FLAGS_ycsb_zipf_factor);
     std::atomic<bool> keepRunning = true;
-    std::vector<std::atomic<uint64_t>> threadCommitted(mStore->mStoreOption.mWorkerThreads);
-    std::vector<std::atomic<uint64_t>> threadAborted(mStore->mStoreOption.mWorkerThreads);
+    std::vector<std::atomic<uint64_t>> threadCommitted(mStore->mStoreOption->mWorkerThreads);
+    std::vector<std::atomic<uint64_t>> threadAborted(mStore->mStoreOption->mWorkerThreads);
     // init counters
     for (auto& c : threadCommitted) {
       c = 0;
@@ -161,7 +163,7 @@ public:
       a = 0;
     }
 
-    for (uint64_t workerId = 0; workerId < mStore->mStoreOption.mWorkerThreads; workerId++) {
+    for (uint64_t workerId = 0; workerId < mStore->mStoreOption->mWorkerThreads; workerId++) {
       mStore->ExecAsync(workerId, [&]() {
         uint8_t key[FLAGS_ycsb_key_size];
         std::string valRead;
@@ -236,7 +238,7 @@ public:
       a = 0;
     }
 
-    printTpsSummary(1, FLAGS_ycsb_run_for_seconds, mStore->mStoreOption.mWorkerThreads,
+    printTpsSummary(1, FLAGS_ycsb_run_for_seconds, mStore->mStoreOption->mWorkerThreads,
                     threadCommitted, threadAborted);
 
     // Shutdown threads

@@ -1,8 +1,8 @@
 #pragma once
 
+#include "leanstore-c/StoreOption.h"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/StoreOption.hpp"
 #include "leanstore/Units.hpp"
 #include "leanstore/btree/TransactionKV.hpp"
 #include "leanstore/concurrency/CRManager.hpp"
@@ -89,11 +89,9 @@ public:
 
 public:
   LeanStoreMVCC(const std::string& storeDir, uint32_t sessionLimit) {
-    auto res = LeanStore::Open(StoreOption{
-        .mCreateFromScratch = true,
-        .mStoreDir = storeDir,
-        .mWorkerThreads = sessionLimit,
-    });
+    StoreOption* option = CreateStoreOption(storeDir.c_str());
+    option->mWorkerThreads = sessionLimit;
+    auto res = LeanStore::Open(option);
     mLeanStore = std::move(res.value());
   }
 

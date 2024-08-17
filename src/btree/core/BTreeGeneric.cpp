@@ -438,7 +438,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(GuardedBufferFrame<BTreeNode
     return XMergeReturnCode::kNothing;
   }
 
-  int64_t maxMergePages = mStore->mStoreOption.mXMergeK;
+  int64_t maxMergePages = mStore->mStoreOption->mXMergeK;
   GuardedBufferFrame<BTreeNode> guardedNodes[maxMergePages];
   bool fullyMerged[maxMergePages];
 

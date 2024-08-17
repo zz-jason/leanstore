@@ -1,6 +1,6 @@
+#include "leanstore-c/StoreOption.h"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/StoreOption.hpp"
 #include "leanstore/btree/BasicKV.hpp"
 #include "leanstore/btree/TransactionKV.hpp"
 #include "leanstore/buffer-manager/BufferManager.hpp"
@@ -35,13 +35,14 @@ protected:
     // Create a leanstore instance for the test case
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
+    auto storeDirStr = std::string("/tmp/") + curTestName;
 
-    auto res = LeanStore::Open(StoreOption{
-        .mCreateFromScratch = true,
-        .mStoreDir = "/tmp/" + curTestName,
-        .mWorkerThreads = 3,
-        .mEnableEagerGc = true,
-    });
+    StoreOption* option = CreateStoreOption(storeDirStr.c_str());
+    option->mCreateFromScratch = true;
+    option->mWorkerThreads = 3;
+    option->mEnableEagerGc = true;
+
+    auto res = LeanStore::Open(option);
     ASSERT_TRUE(res);
     mStore = std::move(res.value());
 

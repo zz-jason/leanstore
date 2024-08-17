@@ -1,7 +1,7 @@
 #include "leanstore/btree/BasicKV.hpp"
 
+#include "leanstore-c/StoreOption.h"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/StoreOption.hpp"
 #include "leanstore/btree/TransactionKV.hpp"
 #include "leanstore/buffer-manager/BufferManager.hpp"
 #include "leanstore/concurrency/CRManager.hpp"
@@ -23,18 +23,19 @@ protected:
 
   void SetUp() override {
     // Create a leanstore instance for the test case
-    auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
-    auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
-
-    auto res = LeanStore::Open(StoreOption{
-        .mCreateFromScratch = true,
-        .mStoreDir = "/tmp/" + curTestName,
-        .mWorkerThreads = 2,
-        .mEnableBulkInsert = false,
-        .mEnableEagerGc = true,
-    });
+    StoreOption* option = CreateStoreOption(getTestDataDir().c_str());
+    option->mWorkerThreads = 2;
+    option->mEnableEagerGc = true;
+    auto res = LeanStore::Open(option);
     ASSERT_TRUE(res);
+
     mStore = std::move(res.value());
+  }
+
+private:
+  std::string getTestDataDir() {
+    auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
+    return std::string("/tmp/leanstore/") + curTest->test_case_name() + "_" + curTest->name();
   }
 };
 

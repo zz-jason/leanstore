@@ -1,23 +1,10 @@
 #include "leanstore/buffer-manager/PageEvictor.hpp"
 
-#include "leanstore/buffer-manager/AsyncWriteBuffer.hpp"
-#include "leanstore/buffer-manager/BufferFrame.hpp"
 #include "leanstore/buffer-manager/BufferManager.hpp"
-#include "leanstore/buffer-manager/Swip.hpp"
-#include "leanstore/utils/Defer.hpp"
-#include "leanstore/utils/Log.hpp"
-#include "leanstore/utils/Misc.hpp"
-#include "leanstore/utils/RandomGenerator.hpp"
 
 #include <gtest/gtest.h>
 
-#include <cstddef>
-#include <cstdint>
 #include <cstring>
-#include <format>
-#include <iostream>
-
-#include <fcntl.h>
 
 namespace leanstore::storage::test {
 class PageEvictorTest : public ::testing::Test {
@@ -33,18 +20,17 @@ protected:
     auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
     const int pageSize = 4096;
     const int pageHeaderSize = 512;
-    auto res = LeanStore::Open(StoreOption{
-        .mCreateFromScratch = true,
-        .mStoreDir = "/tmp/" + curTestName,
-        .mLogLevel = LogLevel::kDebug,
-        .mWorkerThreads = 2,
-        .mNumPartitions = 1,
-        .mBufferPoolSize = 70 * (pageHeaderSize + pageSize),
-        .mFreePct = 20,
-        .mEnableBulkInsert = false,
-        .mEnableEagerGc = false,
-
-    });
+    auto storeDirStr = "/tmp/" + curTestName;
+    auto* option = CreateStoreOption(storeDirStr.c_str());
+    option->mCreateFromScratch = true;
+    option->mLogLevel = LogLevel::kDebug;
+    option->mWorkerThreads = 2;
+    option->mNumPartitions = 1;
+    option->mBufferPoolSize = 70 * (pageHeaderSize + pageSize);
+    option->mFreePct = 20;
+    option->mEnableBulkInsert = false;
+    option->mEnableEagerGc = false;
+    auto res = LeanStore::Open(option);
     ASSERT_TRUE(res);
     mStore = std::move(res.value());
   }

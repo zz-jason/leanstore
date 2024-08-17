@@ -58,7 +58,7 @@ protected:
 };
 
 inline void WorkerThread::runImpl() {
-  if (utils::tlsStore->mStoreOption.mEnableCpuCounters) {
+  if (utils::tlsStore->mStoreOption->mEnableCpuCounters) {
     CPUCounters::registerThread(mThreadName, false);
   }
 
