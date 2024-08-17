@@ -14,11 +14,11 @@
 namespace leanstore::cr {
 
 CRManager::CRManager(leanstore::LeanStore* store) : mStore(store), mGroupCommitter(nullptr) {
-  auto& storeOption = store->mStoreOption;
+  auto* storeOption = store->mStoreOption;
   // start all worker threads
-  mWorkers.resize(storeOption.mWorkerThreads);
-  mWorkerThreads.reserve(storeOption.mWorkerThreads);
-  for (uint64_t workerId = 0; workerId < storeOption.mWorkerThreads; workerId++) {
+  mWorkers.resize(storeOption->mWorkerThreads);
+  mWorkerThreads.reserve(storeOption->mWorkerThreads);
+  for (uint64_t workerId = 0; workerId < storeOption->mWorkerThreads; workerId++) {
     auto workerThread = std::make_unique<WorkerThread>(store, workerId, workerId);
     workerThread->Start();
 
@@ -33,8 +33,8 @@ CRManager::CRManager(leanstore::LeanStore* store) : mStore(store), mGroupCommitt
   }
 
   // start group commit thread
-  if (mStore->mStoreOption.mEnableWal) {
-    const int cpu = storeOption.mWorkerThreads;
+  if (mStore->mStoreOption->mEnableWal) {
+    const int cpu = storeOption->mWorkerThreads;
     mGroupCommitter = std::make_unique<GroupCommitter>(mStore, mStore->mWalFd, mWorkers, cpu);
     mGroupCommitter->Start();
   }
@@ -42,7 +42,7 @@ CRManager::CRManager(leanstore::LeanStore* store) : mStore(store), mGroupCommitt
   // create history storage for each worker
   // History tree should be created after worker thread and group committer are
   // started.
-  if (storeOption.mWorkerThreads > 0) {
+  if (storeOption->mWorkerThreads > 0) {
     mWorkerThreads[0]->SetJob([&]() { setupHistoryStorage4EachWorker(); });
     mWorkerThreads[0]->Wait();
   }
@@ -62,7 +62,7 @@ CRManager::~CRManager() {
 }
 
 void CRManager::setupHistoryStorage4EachWorker() {
-  for (uint64_t i = 0; i < mStore->mStoreOption.mWorkerThreads; i++) {
+  for (uint64_t i = 0; i < mStore->mStoreOption->mWorkerThreads; i++) {
     // setup update tree
     std::string updateBtreeName = std::format("_history_tree_{}_updates", i);
     auto res = storage::btree::BasicKV::Create(

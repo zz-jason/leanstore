@@ -130,14 +130,14 @@ public:
 
   //! Updates contention statistics after each slot modification on the page.
   virtual void UpdateContentionStats() {
-    if (!utils::tlsStore->mStoreOption.mEnableContentionSplit) {
+    if (!utils::tlsStore->mStoreOption->mEnableContentionSplit) {
       return;
     }
     const uint64_t randomNumber = utils::RandomGenerator::RandU64();
 
     // haven't met the contention stats update probability
     if ((randomNumber &
-         ((1ull << utils::tlsStore->mStoreOption.mContentionSplitSampleProbability) - 1)) != 0) {
+         ((1ull << utils::tlsStore->mStoreOption->mContentionSplitSampleProbability) - 1)) != 0) {
       return;
     }
     auto& contentionStats = mGuardedLeaf.mBf->mHeader.mContentionStats;
@@ -148,14 +148,14 @@ public:
             mGuardedLeaf.mBf->mHeader.mPageId, mSlotId, mGuardedLeaf.EncounteredContention());
 
     // haven't met the contention split validation probability
-    if ((randomNumber & ((1ull << utils::tlsStore->mStoreOption.mContentionSplitProbility) - 1)) !=
+    if ((randomNumber & ((1ull << utils::tlsStore->mStoreOption->mContentionSplitProbility) - 1)) !=
         0) {
       return;
     }
     auto contentionPct = contentionStats.ContentionPercentage();
     contentionStats.Reset();
     if (lastUpdatedSlot != mSlotId &&
-        contentionPct >= utils::tlsStore->mStoreOption.mContentionSplitThresholdPct &&
+        contentionPct >= utils::tlsStore->mStoreOption->mContentionSplitThresholdPct &&
         mGuardedLeaf->mNumSeps > 2) {
       int16_t splitSlot = std::min<int16_t>(lastUpdatedSlot, mSlotId);
       mGuardedLeaf.unlock();

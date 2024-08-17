@@ -1,6 +1,6 @@
 #include "leanstore/LeanStore.hpp"
 
-#include "leanstore/StoreOption.hpp"
+#include "leanstore-c/StoreOption.h"
 #include "leanstore/btree/BasicKV.hpp"
 #include "leanstore/btree/TransactionKV.hpp"
 #include "leanstore/btree/core/BTreeGeneric.hpp"
@@ -8,6 +8,7 @@
 #include "leanstore/concurrency/CRManager.hpp"
 #include "leanstore/profiling/tables/BMTable.hpp"
 #include "leanstore/utils/Defer.hpp"
+#include "leanstore/utils/Error.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/Misc.hpp"
 #include "leanstore/utils/Result.hpp"
@@ -39,28 +40,30 @@
 
 namespace leanstore {
 
-Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption option) {
-  if (option.mCreateFromScratch) {
-    std::cout << std::format("Clean store dir: {}", option.mStoreDir) << std::endl;
-    std::filesystem::path dirPath = option.mStoreDir;
+Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption* option) {
+  if (option == nullptr) {
+    return std::unexpected(leanstore::utils::Error::General("StoreOption should not be null"));
+  }
+
+  if (option->mCreateFromScratch) {
+    std::cout << std::format("Clean store dir: {}", option->mStoreDir) << std::endl;
+    std::filesystem::path dirPath = option->mStoreDir;
     std::filesystem::remove_all(dirPath);
     std::filesystem::create_directories(dirPath);
   }
 
   Log::Init(option);
-  return std::make_unique<LeanStore>(std::move(option));
+  return std::make_unique<LeanStore>(option);
 }
 
-LeanStore::LeanStore(StoreOption option)
-    : mStoreOption(std::move(option)),
-      mMetricsManager(nullptr) {
+LeanStore::LeanStore(StoreOption* option) : mStoreOption(option), mMetricsManager(nullptr) {
   utils::tlsStore = this;
 
   Log::Info("LeanStore starting ...");
   SCOPED_DEFER(Log::Info("LeanStore started"));
 
   // Expose the metrics
-  if (mStoreOption.mEnableMetrics) {
+  if (mStoreOption->mEnableMetrics) {
     mMetricsManager = std::make_unique<leanstore::telemetry::MetricsManager>(this);
     mMetricsManager->Expose();
   }
@@ -81,7 +84,7 @@ LeanStore::LeanStore(StoreOption option)
   mCRManager = std::make_unique<cr::CRManager>(this);
 
   // recover from disk
-  if (!mStoreOption.mCreateFromScratch) {
+  if (!mStoreOption->mCreateFromScratch) {
     auto allPagesUpToDate = deserializeMeta();
     if (!allPagesUpToDate) {
       Log::Info("Not all pages up-to-date, recover from disk");
@@ -100,17 +103,17 @@ void LeanStore::initPageAndWalFd() {
   });
 
   // Create a new instance on the specified DB file
-  if (mStoreOption.mCreateFromScratch) {
+  if (mStoreOption->mCreateFromScratch) {
     Log::Info("Create new page and wal files");
     int flags = O_TRUNC | O_CREAT | O_RDWR | O_DIRECT;
-    auto dbFilePath = mStoreOption.GetDbFilePath();
+    auto dbFilePath = GetDbFilePath();
     mPageFd = open(dbFilePath.c_str(), flags, 0666);
     if (mPageFd == -1) {
       Log::Fatal("Could not open file at: {}", dbFilePath);
     }
     Log::Info("Init page fd succeed, pageFd={}, pageFile={}", mPageFd, dbFilePath);
 
-    auto walFilePath = mStoreOption.GetWalFilePath();
+    auto walFilePath = GetWalFilePath();
     mWalFd = open(walFilePath.c_str(), flags, 0666);
     if (mWalFd == -1) {
       Log::Fatal("Could not open file at: {}", walFilePath);
@@ -123,7 +126,7 @@ void LeanStore::initPageAndWalFd() {
   deserializeFlags();
   Log::Info("Reopen existing page and wal files");
   int flags = O_RDWR | O_DIRECT;
-  auto dbFilePath = mStoreOption.GetDbFilePath();
+  auto dbFilePath = GetDbFilePath();
   mPageFd = open(dbFilePath.c_str(), flags, 0666);
   if (mPageFd == -1) {
     Log::Fatal("Recover failed, could not open file at: {}. The data is lost, "
@@ -132,7 +135,7 @@ void LeanStore::initPageAndWalFd() {
   }
   Log::Info("Init page fd succeed, pageFd={}, pageFile={}", mPageFd, dbFilePath);
 
-  auto walFilePath = mStoreOption.GetWalFilePath();
+  auto walFilePath = GetWalFilePath();
   mWalFd = open(walFilePath.c_str(), flags, 0666);
   if (mWalFd == -1) {
     Log::Fatal("Recover failed, could not open file at: {}. The data is lost, "
@@ -146,9 +149,10 @@ LeanStore::~LeanStore() {
   Log::Info("LeanStore stopping ...");
   SCOPED_DEFER({
     // stop metrics manager in the last
-    if (mStoreOption.mEnableMetrics) {
+    if (mStoreOption->mEnableMetrics) {
       mMetricsManager = nullptr;
     }
+    DestroyStoreOption(mStoreOption);
     Log::Info("LeanStore stopped");
   });
 
@@ -194,7 +198,7 @@ LeanStore::~LeanStore() {
   }
 
   {
-    auto walFilePath = mStoreOption.GetWalFilePath();
+    auto walFilePath = GetWalFilePath();
     struct stat st;
     if (stat(walFilePath.c_str(), &st) == 0) {
       LS_DLOG("The size of {} is {} bytes", walFilePath, st.st_size);
@@ -221,7 +225,7 @@ void LeanStore::Wait(WORKERID workerId) {
 }
 
 void LeanStore::WaitAll() {
-  for (uint32_t i = 0; i < mStoreOption.mWorkerThreads; i++) {
+  for (auto i = 0u; i < mStoreOption->mWorkerThreads; i++) {
     mCRManager->mWorkerThreads[i]->Wait();
   }
 }
@@ -237,7 +241,7 @@ void LeanStore::serializeMeta(bool allPagesUpToDate) {
 
   // serialize data structure instances
   std::ofstream metaFile;
-  metaFile.open(mStoreOption.GetMetaFilePath(), std::ios::trunc);
+  metaFile.open(GetMetaFilePath(), std::ios::trunc);
 
   rapidjson::Document doc;
   auto& allocator = doc.GetAllocator();
@@ -337,7 +341,7 @@ bool LeanStore::deserializeMeta() {
   SCOPED_DEFER(Log::Info("deserializeMeta ended"));
 
   std::ifstream metaFile;
-  metaFile.open(mStoreOption.GetMetaFilePath());
+  metaFile.open(GetMetaFilePath());
   rapidjson::IStreamWrapper isw(metaFile);
   rapidjson::Document doc;
   doc.ParseStream(isw);
@@ -425,7 +429,7 @@ void LeanStore::deserializeFlags() {
   SCOPED_DEFER(Log::Info("deserializeFlags ended"));
 
   std::ifstream jsonFile;
-  jsonFile.open(mStoreOption.GetMetaFilePath());
+  jsonFile.open(GetMetaFilePath());
   rapidjson::IStreamWrapper isw(jsonFile);
   rapidjson::Document doc;
   doc.ParseStream(isw);

@@ -11,7 +11,7 @@ uint64_t CPUCounters::id = 0;
 std::unordered_map<uint64_t, CPUCounters> CPUCounters::threads;
 
 uint64_t CPUCounters::registerThread(std::string name, bool perfInherit) {
-  if (!utils::tlsStore->mStoreOption.mEnablePerfEvents) {
+  if (!utils::tlsStore->mStoreOption->mEnablePerfEvents) {
     return 0;
   }
 

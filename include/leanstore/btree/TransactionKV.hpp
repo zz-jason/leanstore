@@ -109,7 +109,7 @@ public:
   }
 
   inline static uint64_t ConvertToFatTupleThreshold() {
-    return cr::Worker::My().mStore->mStoreOption.mWorkerThreads;
+    return cr::Worker::My().mStore->mStoreOption->mWorkerThreads;
   }
 
   //! Updates the value stored in FatTuple. The former newest version value is

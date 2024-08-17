@@ -1,5 +1,6 @@
-#include "leanstore/leanstore-c.h"
+#include "leanstore-c/leanstore-c.h"
 
+#include "leanstore-c/StoreOption.h"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Slice.hpp"
@@ -29,8 +30,9 @@ String* CreateString(const char* data, uint64_t size) {
 
   // allocate memory, copy data
   str->mSize = size;
-  str->mData = new char[size];
+  str->mData = new char[size + 1];
   memcpy(str->mData, data, size);
+  str->mData[size] = '\0';
 
   return str;
 }
@@ -58,16 +60,8 @@ struct LeanStoreHandle {
   std::unique_ptr<leanstore::LeanStore> mStore;
 };
 
-LeanStoreHandle* CreateLeanStore(int8_t createFromScratch, const char* storeDir,
-                                 uint64_t workerThreads, int8_t enableBulkInsert,
-                                 int8_t enableEagerGc) {
-  auto res = leanstore::LeanStore::Open(leanstore::StoreOption{
-      .mCreateFromScratch = static_cast<bool>(createFromScratch),
-      .mStoreDir = storeDir,
-      .mWorkerThreads = workerThreads,
-      .mEnableBulkInsert = static_cast<bool>(enableBulkInsert),
-      .mEnableEagerGc = static_cast<bool>(enableEagerGc),
-  });
+LeanStoreHandle* CreateLeanStore(StoreOption* option) {
+  auto res = leanstore::LeanStore::Open(option);
   if (!res) {
     std::cerr << "open store failed: " << res.error().ToString() << std::endl;
     return nullptr;
@@ -119,8 +113,8 @@ void DestroyBasicKV(BasicKvHandle* handle) {
   }
 }
 
-uint8_t BasicKvInsert(BasicKvHandle* handle, uint64_t workerId, StringSlice key, StringSlice val) {
-  uint8_t succeed{false};
+bool BasicKvInsert(BasicKvHandle* handle, uint64_t workerId, StringSlice key, StringSlice val) {
+  bool succeed{false};
   handle->mStore->ExecSync(workerId, [&]() {
     auto opCode = handle->mBtree->Insert(leanstore::Slice(key.mData, key.mSize),
                                          leanstore::Slice(val.mData, val.mSize));
@@ -140,8 +134,8 @@ String* BasicKvLookup(BasicKvHandle* handle, uint64_t workerId, StringSlice key)
   return val;
 }
 
-uint8_t BasicKvRemove(BasicKvHandle* handle, uint64_t workerId, StringSlice key) {
-  uint8_t succeed{false};
+bool BasicKvRemove(BasicKvHandle* handle, uint64_t workerId, StringSlice key) {
+  bool succeed{false};
   handle->mStore->ExecSync(workerId, [&]() {
     auto opCode = handle->mBtree->Remove(leanstore::Slice(key.mData, key.mSize));
     succeed = (opCode == leanstore::OpCode::kOK);
@@ -200,8 +194,8 @@ void BasicKvIterSeekToFirstGreaterEqual(BasicKvIterHandle* handle, uint64_t work
   });
 }
 
-uint8_t BasicKvIterHasNext(BasicKvIterHandle* handle, uint64_t workerId) {
-  uint8_t hasNext{false};
+bool BasicKvIterHasNext(BasicKvIterHandle* handle, uint64_t workerId) {
+  bool hasNext{false};
   handle->mStore->ExecSync(workerId, [&]() { hasNext = handle->mIterator.HasNext(); });
   return hasNext;
 }
@@ -224,8 +218,8 @@ void BasicKvIterSeekToLastLessEqual(BasicKvIterHandle* handle, uint64_t workerId
   });
 }
 
-uint8_t BasicKvIterHasPrev(BasicKvIterHandle* handle, uint64_t workerId) {
-  uint8_t hasPrev{false};
+bool BasicKvIterHasPrev(BasicKvIterHandle* handle, uint64_t workerId) {
+  bool hasPrev{false};
   handle->mStore->ExecSync(workerId, [&]() { hasPrev = handle->mIterator.HasPrev(); });
   return hasPrev;
 }
@@ -239,7 +233,7 @@ void BasicKvIterPrev(BasicKvIterHandle* handle, uint64_t workerId) {
 //------------------------------------------------------------------------------
 
 //! Whether the iterator is valid
-uint8_t BasicKvIterValid(BasicKvIterHandle* handle) {
+bool BasicKvIterValid(BasicKvIterHandle* handle) {
   return handle->mIterator.Valid();
 }
 

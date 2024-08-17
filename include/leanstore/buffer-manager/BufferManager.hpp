@@ -93,7 +93,7 @@ public:
   //! Randomly pick a buffer frame.
   BufferFrame& RandomBufferFrame() {
     auto bfId = utils::RandomGenerator::Rand<uint64_t>(0, mNumBfs);
-    auto* bfAddr = &mBufferPool[bfId * mStore->mStoreOption.mBufferFrameSize];
+    auto* bfAddr = &mBufferPool[bfId * mStore->mStoreOption->mBufferFrameSize];
     return *reinterpret_cast<BufferFrame*>(bfAddr);
   }
 
@@ -155,7 +155,7 @@ public:
 private:
   Result<void> writePage(PID pageId, void* buffer) {
     utils::AsyncIo aio(1);
-    const auto pageSize = mStore->mStoreOption.mPageSize;
+    const auto pageSize = mStore->mStoreOption->mPageSize;
     DEBUG_BLOCK() {
       auto* page [[maybe_unused]] = reinterpret_cast<Page*>(buffer);
       LS_DLOG("page write, pageId={}, btreeId={}", pageId, page->mBTreeId);

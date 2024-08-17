@@ -1,3 +1,4 @@
+#include <leanstore-c/StoreOption.h>
 #include <leanstore/LeanStore.hpp>
 #include <leanstore/btree/BasicKV.hpp>
 #include <leanstore/concurrency/Worker.hpp>
@@ -6,18 +7,19 @@
 #include <memory>
 
 using leanstore::LeanStore;
-using leanstore::StoreOption;
 
 int main() {
+  // create store option
+  StoreOption* option = CreateStoreOption("/tmp/leanstore/examples/BasicKvExample");
+  option->mCreateFromScratch = true;
+  option->mWorkerThreads = 2;
+  option->mEnableBulkInsert = false;
+  option->mEnableEagerGc = true;
+
   // create store
-  auto res = LeanStore::Open(StoreOption{
-      .mCreateFromScratch = true,
-      .mStoreDir = "/tmp/leanstore/examples/BasicKvExample",
-      .mWorkerThreads = 2,
-      .mEnableBulkInsert = false,
-      .mEnableEagerGc = true,
-  });
+  auto res = LeanStore::Open(option);
   if (!res) {
+    DestroyStoreOption(option);
     std::cerr << "open store failed: " << res.error().ToString() << std::endl;
     return 1;
   }

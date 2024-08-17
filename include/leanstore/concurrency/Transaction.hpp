@@ -83,7 +83,7 @@ public:
     mTxMode = mode;
     mTxIsolationLevel = level;
     mHasWrote = false;
-    mIsDurable = utils::tlsStore->mStoreOption.mEnableWal;
+    mIsDurable = utils::tlsStore->mStoreOption->mEnableWal;
     mWalExceedBuffer = false;
   }
 

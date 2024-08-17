@@ -12,13 +12,13 @@ uint32_t CRC(const uint8_t* src, uint64_t size) {
 }
 
 Timer::Timer(std::atomic<uint64_t>& timeCounterUS) : mTimeCounterUS(timeCounterUS) {
-  if (tlsStore->mStoreOption.mEnableTimeMeasure) {
+  if (tlsStore->mStoreOption->mEnableTimeMeasure) {
     mStartTimePoint = std::chrono::high_resolution_clock::now();
   }
 }
 
 Timer::~Timer() {
-  if (tlsStore->mStoreOption.mEnableTimeMeasure) {
+  if (tlsStore->mStoreOption->mEnableTimeMeasure) {
     auto endTimePoint = std::chrono::high_resolution_clock::now();
     const uint64_t duration =
         std::chrono::duration_cast<std::chrono::microseconds>(endTimePoint - mStartTimePoint)

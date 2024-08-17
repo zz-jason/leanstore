@@ -241,7 +241,7 @@ inline void BTreeGeneric::IterateChildSwips(BufferFrame& bf, std::function<bool(
 }
 
 inline SpaceCheckResult BTreeGeneric::CheckSpaceUtilization(BufferFrame& bf) {
-  if (!mStore->mStoreOption.mEnableXMerge) {
+  if (!mStore->mStoreOption->mEnableXMerge) {
     return SpaceCheckResult::kNothing;
   }
 
@@ -262,7 +262,7 @@ inline SpaceCheckResult BTreeGeneric::CheckSpaceUtilization(BufferFrame& bf) {
 }
 
 inline void BTreeGeneric::Checkpoint(BufferFrame& bf, void* dest) {
-  std::memcpy(dest, &bf.mPage, mStore->mStoreOption.mPageSize);
+  std::memcpy(dest, &bf.mPage, mStore->mStoreOption->mPageSize);
   auto* destPage = reinterpret_cast<Page*>(dest);
   auto* destNode = reinterpret_cast<BTreeNode*>(destPage->mPayload);
 

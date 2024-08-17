@@ -1,7 +1,7 @@
 #include "leanstore/sync/OptimisticGuarded.hpp"
 
+#include "leanstore-c/StoreOption.h"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/StoreOption.hpp"
 #include "leanstore/buffer-manager/BufferManager.hpp"
 #include "leanstore/concurrency/CRManager.hpp"
 
@@ -26,12 +26,11 @@ protected:
   void SetUp() override {
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
-    auto res = LeanStore::Open(StoreOption{
-        .mCreateFromScratch = true,
-        .mStoreDir = "/tmp/" + curTestName,
-        .mWorkerThreads = 2,
-    });
-
+    auto storeDirStr = "/tmp/" + curTestName;
+    auto* option = CreateStoreOption(storeDirStr.c_str());
+    option->mCreateFromScratch = true;
+    option->mWorkerThreads = 2;
+    auto res = LeanStore::Open(option);
     ASSERT_TRUE(res);
     mStore = std::move(res.value());
   }

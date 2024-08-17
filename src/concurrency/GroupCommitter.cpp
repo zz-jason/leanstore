@@ -78,7 +78,7 @@ void GroupCommitter::collectWalRecords(uint64_t& minFlushedGSN, uint64_t& maxFlu
     // prepare IOCBs on demand
     const uint64_t buffered = reqCopy.mWalBuffered;
     const uint64_t flushed = logging.mWalFlushed;
-    const uint64_t bufferEnd = mStore->mStoreOption.mWalBufferSize;
+    const uint64_t bufferEnd = mStore->mStoreOption->mWalBufferSize;
     if (buffered > flushed) {
       append(logging.mWalBuffer, flushed, buffered);
     } else if (buffered < flushed) {
@@ -87,7 +87,7 @@ void GroupCommitter::collectWalRecords(uint64_t& minFlushedGSN, uint64_t& maxFlu
     }
   }
 
-  if (!mAIo.IsEmpty() && mStore->mStoreOption.mEnableWalFsync) {
+  if (!mAIo.IsEmpty() && mStore->mStoreOption->mEnableWalFsync) {
     mAIo.PrepareFsync(mWalFd);
   }
 }
@@ -110,7 +110,7 @@ void GroupCommitter::flushWalRecords() {
   }
 
   //! sync the metadata in the end.
-  if (mStore->mStoreOption.mEnableWalFsync) {
+  if (mStore->mStoreOption->mEnableWalFsync) {
     auto failed = fdatasync(mWalFd);
     if (failed) {
       Log::Error("fdatasync failed, errno={}, error={}", errno, strerror(errno));

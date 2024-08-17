@@ -36,8 +36,8 @@
 namespace leanstore::storage {
 
 BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
-  auto bpSize = mStore->mStoreOption.mBufferPoolSize;
-  auto bfSize = mStore->mStoreOption.mBufferFrameSize;
+  auto bpSize = mStore->mStoreOption->mBufferPoolSize;
+  auto bfSize = mStore->mStoreOption->mBufferFrameSize;
   mNumBfs = bpSize / bfSize;
   const uint64_t totalMemSize = bfSize * (mNumBfs + mNumSaftyBfs);
 
@@ -48,7 +48,7 @@ BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
       mmap(NULL, totalMemSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (underlyingBuf == MAP_FAILED) {
     Log::Fatal("Failed to allocate memory for the buffer pool, bufferPoolSize={}, totalMemSize={}",
-               mStore->mStoreOption.mBufferPoolSize, totalMemSize);
+               mStore->mStoreOption->mBufferPoolSize, totalMemSize);
   }
 
   mBufferPool = reinterpret_cast<uint8_t*>(underlyingBuf);
@@ -56,10 +56,10 @@ BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
   madvise(mBufferPool, totalMemSize, MADV_DONTFORK);
 
   // Initialize mPartitions
-  mNumPartitions = mStore->mStoreOption.mNumPartitions;
+  mNumPartitions = mStore->mStoreOption->mNumPartitions;
   mPartitionsMask = mNumPartitions - 1;
   const uint64_t freeBfsLimitPerPartition =
-      std::ceil((mStore->mStoreOption.mFreePct * 1.0 * mNumBfs / 100.0) / mNumPartitions);
+      std::ceil((mStore->mStoreOption->mFreePct * 1.0 * mNumBfs / 100.0) / mNumPartitions);
   for (uint64_t i = 0; i < mNumPartitions; i++) {
     mPartitions.push_back(std::make_unique<Partition>(i, mNumPartitions, freeBfsLimitPerPartition));
   }
@@ -71,7 +71,7 @@ BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
     uint64_t partitionId = 0;
     for (uint64_t i = begin; i < end; i++) {
       auto& partition = GetPartition(partitionId);
-      auto* bfAddr = &mBufferPool[i * mStore->mStoreOption.mBufferFrameSize];
+      auto* bfAddr = &mBufferPool[i * mStore->mStoreOption->mBufferFrameSize];
       partition.mFreeBfList.PushFront(*new (bfAddr) BufferFrame());
       partitionId = (partitionId + 1) % mNumPartitions;
     }
@@ -79,7 +79,7 @@ BufferManager::BufferManager(leanstore::LeanStore* store) : mStore(store) {
 }
 
 void BufferManager::StartPageEvictors() {
-  auto numBufferProviders = mStore->mStoreOption.mNumBufferProviders;
+  auto numBufferProviders = mStore->mStoreOption->mNumBufferProviders;
   // make it optional for pure in-memory experiments
   if (numBufferProviders <= 0) {
     return;
@@ -93,7 +93,7 @@ void BufferManager::StartPageEvictors() {
       threadName += std::to_string(i);
     }
 
-    auto runningCPU = mStore->mStoreOption.mWorkerThreads + mStore->mStoreOption.mEnableWal + i;
+    auto runningCPU = mStore->mStoreOption->mWorkerThreads + mStore->mStoreOption->mEnableWal + i;
     mPageEvictors.push_back(std::make_unique<PageEvictor>(mStore, threadName, runningCPU, mNumBfs,
                                                           mBufferPool, mNumPartitions,
                                                           mPartitionsMask, mPartitions));
@@ -141,11 +141,11 @@ Result<void> BufferManager::CheckpointAllBufferFrames() {
   StopPageEvictors();
 
   utils::Parallelize::ParallelRange(mNumBfs, [&](uint64_t begin, uint64_t end) {
-    const auto bufferFrameSize = mStore->mStoreOption.mBufferFrameSize;
-    const auto pageSize = mStore->mStoreOption.mPageSize;
+    const auto bufferFrameSize = mStore->mStoreOption->mBufferFrameSize;
+    const auto pageSize = mStore->mStoreOption->mPageSize;
 
     // the underlying batch for aio
-    const auto batchCapacity = mStore->mStoreOption.mBufferWriteBatchSize;
+    const auto batchCapacity = mStore->mStoreOption->mBufferWriteBatchSize;
     // const auto batchCapacity = 1;
     alignas(512) uint8_t buffer[pageSize * batchCapacity];
     auto batchSize = 0u;
@@ -184,7 +184,7 @@ Result<void> BufferManager::CheckpointAllBufferFrames() {
 }
 
 Result<void> BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
-  alignas(512) uint8_t buffer[mStore->mStoreOption.mPageSize];
+  alignas(512) uint8_t buffer[mStore->mStoreOption->mPageSize];
   bf.mHeader.mLatch.LockExclusively();
   if (!bf.IsFree()) {
     mStore->mTreeRegistry->Checkpoint(bf.mPage.mBTreeId, bf, buffer);
@@ -217,7 +217,7 @@ uint64_t BufferManager::ConsumedPages() {
 BufferFrame& BufferManager::AllocNewPageMayJump(TREEID treeId) {
   Partition& partition = RandomPartition();
   BufferFrame& freeBf = partition.mFreeBfList.PopFrontMayJump();
-  memset((void*)&freeBf, 0, mStore->mStoreOption.mBufferFrameSize);
+  memset((void*)&freeBf, 0, mStore->mStoreOption->mBufferFrameSize);
   new (&freeBf) BufferFrame();
   freeBf.Init(partition.NextPageId());
 
@@ -233,7 +233,7 @@ BufferFrame& BufferManager::AllocNewPageMayJump(TREEID treeId) {
 
 void BufferManager::ReclaimPage(BufferFrame& bf) {
   Partition& partition = GetPartition(bf.mHeader.mPageId);
-  if (mStore->mStoreOption.mEnableReclaimPageIds) {
+  if (mStore->mStoreOption->mEnableReclaimPageIds) {
     partition.ReclaimPageId(bf.mHeader.mPageId);
   }
 
@@ -311,7 +311,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard, Swip& swi
     bf.mHeader.mFlushedGsn = bf.mPage.mGSN;
     bf.mHeader.mState = State::kLoaded;
     bf.mHeader.mPageId = pageId;
-    if (mStore->mStoreOption.mEnableBufferCrcCheck) {
+    if (mStore->mStoreOption->mEnableBufferCrcCheck) {
       bf.mHeader.mCrc = bf.mPage.CRC();
     }
 
@@ -407,26 +407,26 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard, Swip& swi
 
 void BufferManager::ReadPageSync(PID pageId, void* pageBuffer) {
   LS_DCHECK(uint64_t(pageBuffer) % 512 == 0);
-  int64_t bytesLeft = mStore->mStoreOption.mPageSize;
+  int64_t bytesLeft = mStore->mStoreOption->mPageSize;
   while (bytesLeft > 0) {
-    auto totalRead = mStore->mStoreOption.mPageSize - bytesLeft;
-    auto curOffset = pageId * mStore->mStoreOption.mPageSize + totalRead;
+    auto totalRead = mStore->mStoreOption->mPageSize - bytesLeft;
+    auto curOffset = pageId * mStore->mStoreOption->mPageSize + totalRead;
     auto* curBuffer = reinterpret_cast<uint8_t*>(pageBuffer) + totalRead;
     auto bytesRead = pread(mStore->mPageFd, curBuffer, bytesLeft, curOffset);
 
     // read error, return a zero-initialized pageBuffer frame
     if (bytesRead <= 0) {
-      memset(pageBuffer, 0, mStore->mStoreOption.mPageSize);
+      memset(pageBuffer, 0, mStore->mStoreOption->mPageSize);
       auto* page = new (pageBuffer) BufferFrame();
       page->Init(pageId);
       if (bytesRead == 0) {
         Log::Warn("Read empty page, pageId={}, fd={}, bytesRead={}, bytesLeft={}, file={}", pageId,
-                  mStore->mPageFd, bytesRead, bytesLeft, mStore->mStoreOption.GetDbFilePath());
+                  mStore->mPageFd, bytesRead, bytesLeft, mStore->GetDbFilePath());
       } else {
         Log::Error("Failed to read page, errno={}, error={}, pageId={}, fd={}, bytesRead={}, "
                    "bytesLeft={}, file={}",
                    errno, strerror(errno), pageId, mStore->mPageFd, bytesRead, bytesLeft,
-                   mStore->mStoreOption.GetDbFilePath());
+                   mStore->GetDbFilePath());
       }
       return;
     }
@@ -479,7 +479,7 @@ void BufferManager::StopPageEvictors() {
 
 BufferManager::~BufferManager() {
   StopPageEvictors();
-  uint64_t totalMemSize = mStore->mStoreOption.mBufferFrameSize * (mNumBfs + mNumSaftyBfs);
+  uint64_t totalMemSize = mStore->mStoreOption->mBufferFrameSize * (mNumBfs + mNumSaftyBfs);
   munmap(mBufferPool, totalMemSize);
 }
 
@@ -489,7 +489,7 @@ void BufferManager::DoWithBufferFrameIf(std::function<bool(BufferFrame& bf)> con
     LS_DCHECK(condition != nullptr);
     LS_DCHECK(action != nullptr);
     for (uint64_t i = begin; i < end; i++) {
-      auto* bfAddr = &mBufferPool[i * mStore->mStoreOption.mBufferFrameSize];
+      auto* bfAddr = &mBufferPool[i * mStore->mStoreOption->mBufferFrameSize];
       auto& bf = *reinterpret_cast<BufferFrame*>(bfAddr);
       bf.mHeader.mLatch.LockExclusively();
       if (condition(bf)) {

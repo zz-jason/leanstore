@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore/StoreOption.hpp"
+#include "leanstore-c/StoreOption.h"
 
 #include <format>
 #include <mutex>
@@ -20,7 +20,7 @@ public:
   inline static bool sInited = false;
   inline static std::mutex sInitMutex;
 
-  static void Init(const StoreOption& option);
+  static void Init(const StoreOption* option);
 
   static void DebugCheck(bool condition, const std::string& msg = "");
 

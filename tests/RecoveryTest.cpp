@@ -1,15 +1,13 @@
+#include "leanstore-c/StoreOption.h"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
-#include "leanstore/StoreOption.hpp"
 #include "leanstore/btree/BasicKV.hpp"
 #include "leanstore/btree/TransactionKV.hpp"
-#include "leanstore/btree/core/BTreeGeneric.hpp"
 #include "leanstore/buffer-manager/BufferFrame.hpp"
 #include "leanstore/buffer-manager/BufferManager.hpp"
 #include "leanstore/concurrency/CRManager.hpp"
 #include "leanstore/utils/DebugFlags.hpp"
 #include "leanstore/utils/Defer.hpp"
-#include "leanstore/utils/JsonUtil.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/RandomGenerator.hpp"
 
@@ -18,6 +16,8 @@
 #include <cstddef>
 #include <format>
 #include <string>
+
+#include <sys/socket.h>
 
 using namespace leanstore::storage::btree;
 
@@ -31,12 +31,12 @@ protected:
     // Create a leanstore instance for the test case
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
-    auto res = LeanStore::Open(StoreOption{
-        .mCreateFromScratch = true,
-        .mStoreDir = "/tmp/" + curTestName,
-        .mWorkerThreads = 2,
-        .mEnableEagerGc = true,
-    });
+    auto storeDirStr = "/tmp/" + curTestName;
+    auto* option = CreateStoreOption(storeDirStr.c_str());
+    option->mCreateFromScratch = true;
+    option->mWorkerThreads = 2;
+    option->mEnableEagerGc = true;
+    auto res = LeanStore::Open(option);
     mStore = std::move(res.value());
   }
 
@@ -83,12 +83,12 @@ TEST_F(RecoveryTest, SerializeAndDeserialize) {
                   bf.IsDirty());
       });
   // meta file should be serialized during destructor.
-  auto storeOption = mStore->mStoreOption;
+  auto* storeOption = CreateStoreOptionFrom(mStore->mStoreOption);
+  storeOption->mCreateFromScratch = false;
   mStore.reset(nullptr);
 
   // recreate the store, it's expected that all the meta and pages are rebult.
-  storeOption.mCreateFromScratch = false;
-  auto res = LeanStore::Open(std::move(storeOption));
+  auto res = LeanStore::Open(storeOption);
   EXPECT_TRUE(res);
 
   mStore = std::move(res.value());
@@ -156,13 +156,13 @@ TEST_F(RecoveryTest, RecoverAfterInsert) {
   // skip dumpping buffer frames on exit
   LS_DEBUG_ENABLE(mStore, "skip_CheckpointAllBufferFrames");
   SCOPED_DEFER({ LS_DEBUG_DISABLE(mStore, "skip_CheckpointAllBufferFrames"); });
-  auto storeOption = mStore->mStoreOption;
+  auto* storeOption = CreateStoreOptionFrom(mStore->mStoreOption);
+  storeOption->mCreateFromScratch = false;
   mStore.reset(nullptr);
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
-  storeOption.mCreateFromScratch = false;
-  auto res = LeanStore::Open(std::move(storeOption));
+  auto res = LeanStore::Open(storeOption);
   EXPECT_TRUE(res);
 
   mStore = std::move(res.value());
@@ -256,13 +256,13 @@ TEST_F(RecoveryTest, RecoverAfterUpdate) {
   // skip dumpping buffer frames on exit
   LS_DEBUG_ENABLE(mStore, "skip_CheckpointAllBufferFrames");
   SCOPED_DEFER(LS_DEBUG_DISABLE(mStore, "skip_CheckpointAllBufferFrames"));
-  auto storeOption = mStore->mStoreOption;
+  auto* storeOption = CreateStoreOptionFrom(mStore->mStoreOption);
+  storeOption->mCreateFromScratch = false;
   mStore.reset(nullptr);
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
-  storeOption.mCreateFromScratch = false;
-  auto res = LeanStore::Open(std::move(storeOption));
+  auto res = LeanStore::Open(storeOption);
   EXPECT_TRUE(res);
 
   mStore = std::move(res.value());
@@ -328,12 +328,12 @@ TEST_F(RecoveryTest, RecoverAfterRemove) {
   // skip dumpping buffer frames on exit
   LS_DEBUG_ENABLE(mStore, "skip_CheckpointAllBufferFrames");
   SCOPED_DEFER(LS_DEBUG_DISABLE(mStore, "skip_CheckpointAllBufferFrames"));
-  auto storeOption = mStore->mStoreOption;
+  auto* storeOption = CreateStoreOptionFrom(mStore->mStoreOption);
   mStore.reset(nullptr);
 
   // recreate the store, it's expected that all the meta and pages are rebult
   // based on the WAL entries
-  storeOption.mCreateFromScratch = false;
+  storeOption->mCreateFromScratch = false;
   auto res = LeanStore::Open(std::move(storeOption));
   EXPECT_TRUE(res);
 

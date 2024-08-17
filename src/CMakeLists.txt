@@ -106,6 +106,7 @@ install(TARGETS leanstore
   PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(DIRECTORY
   ${CMAKE_SOURCE_DIR}/include/leanstore
+  ${CMAKE_SOURCE_DIR}/include/leanstore-c
   DESTINATION include)
 
 # ------------------------------------------------------------------------------
