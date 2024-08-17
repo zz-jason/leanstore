@@ -156,9 +156,6 @@ LeanStore::~LeanStore() {
     Log::Info("LeanStore stopped");
   });
 
-  // wait all concurrent jobs to finsh
-  WaitAll();
-
   // print trees
   for (auto& it : mTreeRegistry->mTrees) {
     auto treeId = it.first;

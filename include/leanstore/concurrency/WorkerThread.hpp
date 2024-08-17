@@ -13,10 +13,19 @@
 
 namespace leanstore::cr {
 
+//! WorkerThread contains the context of a worker thread. There can be multiple job senders, and
+//! each job sender can send a job to the worker thread. The worker thread state is represented by a
+//! pair of (jobSet, jobDone), a typical state transition is:
+//!
+//!    (!jobSet, !jobDone): a new job sender is wake up, set a new job, notify the worker thread
+//! -> ( jobSet, !jobDone): the worker thread is wake up, execute the job, set job done, notify the
+//!                         original job sender
+//! -> ( jobSet,  jobDone): the original job sender is wake up, clear the job, notify other
+//!                         job senders.
 class WorkerThread : public utils::UserThread {
 public:
   //! The id of the worker thread.
-  WORKERID mWorkerId;
+  const WORKERID mWorkerId;
 
   //! The mutex to guard the job.
   std::mutex mMutex;
@@ -25,14 +34,18 @@ public:
   std::condition_variable mCv;
 
   //! The job to be executed by the worker thread.
-  std::function<void()> mJob = nullptr;
+  std::function<void()> mJob;
+
+  //! Whether the current job is done.
+  bool mJobDone;
 
 public:
   //! Constructor.
   WorkerThread(LeanStore* store, WORKERID workerId, int cpu)
       : utils::UserThread(store, "Worker" + std::to_string(workerId), cpu),
         mWorkerId(workerId),
-        mJob(nullptr) {
+        mJob(nullptr),
+        mJobDone(false) {
   }
 
   //! Destructor.
@@ -68,7 +81,7 @@ inline void WorkerThread::runImpl() {
   while (mKeepRunning) {
     // wait until there is a job
     std::unique_lock guard(mMutex);
-    mCv.wait(guard, [&]() { return !mKeepRunning || mJob != nullptr; });
+    mCv.wait(guard, [&]() { return !mKeepRunning || (mJob != nullptr && !mJobDone); });
 
     // check thread status
     if (!mKeepRunning) {
@@ -78,11 +91,11 @@ inline void WorkerThread::runImpl() {
     // execute the job
     mJob();
 
-    // clear the executed job
-    mJob = nullptr;
+    // Set job done, change the worker state to (jobSet, jobDone), notify the job sender
+    mJobDone = true;
 
-    // notify the job sender
-    mCv.notify_one();
+    guard.unlock();
+    mCv.notify_all();
   }
 };
 
@@ -92,7 +105,7 @@ inline void WorkerThread::Stop() {
   }
 
   mKeepRunning = false;
-  mCv.notify_one();
+  mCv.notify_all();
   if (mThread && mThread->joinable()) {
     mThread->join();
   }
@@ -102,19 +115,25 @@ inline void WorkerThread::Stop() {
 inline void WorkerThread::SetJob(std::function<void()> job) {
   // wait the previous job to finish
   std::unique_lock guard(mMutex);
-  mCv.wait(guard, [&]() { return mJob == nullptr; });
+  mCv.wait(guard, [&]() { return mJob == nullptr && !mJobDone; });
 
-  // set a new job
+  // set a new job, change the worker state to (jobSet, jobNotDone), notify the worker thread
   mJob = job;
 
-  // notify the worker thread to run
   guard.unlock();
-  mCv.notify_one();
+  mCv.notify_all();
 }
 
 inline void WorkerThread::Wait() {
   std::unique_lock guard(mMutex);
-  mCv.wait(guard, [&]() { return mJob == nullptr; });
+  mCv.wait(guard, [&]() { return mJob != nullptr && mJobDone; });
+
+  // reset the job, change the worker state to (jobNotSet, jobDone), notify other job senders
+  mJob = nullptr;
+  mJobDone = false;
+
+  guard.unlock();
+  mCv.notify_all();
 }
 
 } // namespace leanstore::cr

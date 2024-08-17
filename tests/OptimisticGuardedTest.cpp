@@ -59,9 +59,6 @@ TEST_F(OptimisticGuardedTest, Set) {
       }
     }
   });
-
-  // Wait for all jobs to finish
-  mStore->WaitAll();
 }
 
 TEST_F(OptimisticGuardedTest, UpdateAttribute) {
@@ -87,9 +84,6 @@ TEST_F(OptimisticGuardedTest, UpdateAttribute) {
       }
     }
   });
-
-  // Wait for all jobs to finish
-  mStore->WaitAll();
 }
 
 } // namespace leanstore::test
