@@ -31,6 +31,7 @@
 #include <memory>
 
 #include <linux/fs.h>
+#include <resolv.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <sys/resource.h>
@@ -81,7 +82,7 @@ LeanStore::LeanStore(StoreOption* option) : mStoreOption(option), mMetricsManage
   //
   // TODO(jian.z): Deserialize buffer manager before creating CRManager. We need to initialize
   // nextPageId for each buffer partition before creating history tree in CRManager
-  mCRManager = std::make_unique<cr::CRManager>(this);
+  mCRManager = new cr::CRManager(this);
 
   // recover from disk
   if (!mStoreOption->mCreateFromScratch) {
@@ -178,7 +179,10 @@ LeanStore::~LeanStore() {
   mBufferManager->SyncAllPageWrites();
 
   // destroy and Stop all foreground workers
-  mCRManager = nullptr;
+  if (mCRManager != nullptr) {
+    delete mCRManager;
+    mCRManager = nullptr;
+  }
 
   // destroy buffer manager (buffer frame providers)
   mBufferManager->StopPageEvictors();
@@ -209,12 +213,12 @@ LeanStore::~LeanStore() {
 }
 
 void LeanStore::ExecSync(uint64_t workerId, std::function<void()> job) {
-  mCRManager->mWorkerThreads[workerId]->SetJob(job);
+  mCRManager->mWorkerThreads[workerId]->SetJob(std::move(job));
   mCRManager->mWorkerThreads[workerId]->Wait();
 }
 
 void LeanStore::ExecAsync(uint64_t workerId, std::function<void()> job) {
-  mCRManager->mWorkerThreads[workerId]->SetJob(job);
+  mCRManager->mWorkerThreads[workerId]->SetJob(std::move(job));
 }
 
 void LeanStore::Wait(WORKERID workerId) {

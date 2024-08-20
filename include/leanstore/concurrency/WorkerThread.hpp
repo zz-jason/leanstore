@@ -118,7 +118,7 @@ inline void WorkerThread::SetJob(std::function<void()> job) {
   mCv.wait(guard, [&]() { return mJob == nullptr && !mJobDone; });
 
   // set a new job, change the worker state to (jobSet, jobNotDone), notify the worker thread
-  mJob = job;
+  mJob = std::move(job);
 
   guard.unlock();
   mCv.notify_all();

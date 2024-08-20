@@ -69,7 +69,8 @@ public:
   std::unique_ptr<storage::BufferManager> mBufferManager;
 
   //! The concurrent resource manager
-  std::unique_ptr<cr::CRManager> mCRManager;
+  //! NOTE: Ownerd by LeanStore instance, should be destroyed together with it
+  cr::CRManager* mCRManager;
 
   //! The global timestamp oracle, used to generate start and commit timestamps
   //! for all transactions in the store. Start from a positive number, 0

@@ -129,7 +129,7 @@ String* BasicKvLookup(BasicKvHandle* handle, uint64_t workerId, StringSlice key)
     auto copyValueOut = [&](leanstore::Slice valSlice) {
       val = CreateString(reinterpret_cast<const char*>(valSlice.data()), valSlice.size());
     };
-    handle->mBtree->Lookup(leanstore::Slice(key.mData, key.mSize), copyValueOut);
+    handle->mBtree->Lookup(leanstore::Slice(key.mData, key.mSize), std::move(copyValueOut));
   });
   return val;
 }
