@@ -3,7 +3,6 @@
 #include "Types.hpp"
 // -------------------------------------------------------------------------------------
 #include "leanstore/KVInterface.hpp"
-#include "leanstore/btree/core/WALMacros.hpp"
 #include "leanstore/utils/JumpMU.hpp"
 
 #include "rocksdb/db.h"

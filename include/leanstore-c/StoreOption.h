@@ -36,7 +36,7 @@ typedef struct StoreOption {
   LogLevel mLogLevel;
 
   // ---------------------------------------------------------------------------
-  // Worker thread related options
+  // WorkerContext thread related options
   // ---------------------------------------------------------------------------
 
   //! The number of worker threads.

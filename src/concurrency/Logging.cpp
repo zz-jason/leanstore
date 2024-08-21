@@ -2,7 +2,7 @@
 
 #include "leanstore/Exceptions.hpp"
 #include "leanstore/concurrency/WalEntry.hpp"
-#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/concurrency/WorkerContext.hpp"
 #include "leanstore/profiling/counters/WorkerCounters.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "utils/ToJson.hpp"
@@ -59,8 +59,9 @@ void Logging::WriteWalTxAbort() {
   mWalBuffered += size;
   publishWalFlushReq();
 
-  LS_DLOG("WriteWalTxAbort, workerId={}, startTs={}, curGSN={}, walJson={}", Worker::My().mWorkerId,
-          Worker::My().mActiveTx.mStartTs, GetCurrentGsn(), utils::ToJsonString(entry));
+  LS_DLOG("WriteWalTxAbort, workerId={}, startTs={}, curGSN={}, walJson={}",
+          WorkerContext::My().mWorkerId, WorkerContext::My().mActiveTx.mStartTs, GetCurrentGsn(),
+          utils::ToJsonString(entry));
 }
 
 void Logging::WriteWalTxFinish() {
@@ -71,14 +72,14 @@ void Logging::WriteWalTxFinish() {
   // Initialize a WalTxFinish
   auto* data = mWalBuffer + mWalBuffered;
   std::memset(data, 0, size);
-  auto* entry [[maybe_unused]] = new (data) WalTxFinish(Worker::My().mActiveTx.mStartTs);
+  auto* entry [[maybe_unused]] = new (data) WalTxFinish(WorkerContext::My().mActiveTx.mStartTs);
 
   // Submit the WalTxAbort to group committer
   mWalBuffered += size;
   publishWalFlushReq();
 
   LS_DLOG("WriteWalTxFinish, workerId={}, startTs={}, curGSN={}, walJson={}",
-          Worker::My().mWorkerId, Worker::My().mActiveTx.mStartTs, GetCurrentGsn(),
+          WorkerContext::My().mWorkerId, WorkerContext::My().mActiveTx.mStartTs, GetCurrentGsn(),
           utils::ToJsonString(entry));
 }
 
@@ -100,8 +101,8 @@ void Logging::SubmitWALEntryComplex(uint64_t totalSize) {
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().wal_write_bytes += totalSize;
   }
-  LS_DLOG("SubmitWal, workerId={}, startTs={}, curGSN={}, walJson={}", Worker::My().mWorkerId,
-          Worker::My().mActiveTx.mStartTs, GetCurrentGsn(),
+  LS_DLOG("SubmitWal, workerId={}, startTs={}, curGSN={}, walJson={}",
+          WorkerContext::My().mWorkerId, WorkerContext::My().mActiveTx.mStartTs, GetCurrentGsn(),
           utils::ToJsonString(mActiveWALEntryComplex));
 }
 
@@ -110,7 +111,7 @@ void Logging::publishWalBufferedOffset() {
 }
 
 void Logging::publishWalFlushReq() {
-  WalFlushReq current(mWalBuffered, GetCurrentGsn(), Worker::My().mActiveTx.mStartTs);
+  WalFlushReq current(mWalBuffered, GetCurrentGsn(), WorkerContext::My().mActiveTx.mStartTs);
   mWalFlushReq.Set(current);
 }
 

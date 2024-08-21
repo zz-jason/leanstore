@@ -21,6 +21,9 @@ typedef struct String {
 
   //! The size of the data
   uint64_t mSize;
+
+  //! The capacity of the data
+  uint64_t mCapacity;
 } String;
 
 //! Creates a new string, copying the data from the given buffer to the new string
@@ -76,9 +79,8 @@ void DestroyBasicKV(BasicKvHandle* handle);
 bool BasicKvInsert(BasicKvHandle* handle, uint64_t workerId, StringSlice key, StringSlice val);
 
 //! Lookup a key in a basic key-value store at workerId
-//! NOTE: The caller should destroy the val after use via DestroyString()
-//! @return the value if the key exists, nullptr otherwise
-String* BasicKvLookup(BasicKvHandle* handle, uint64_t workerId, StringSlice key);
+//! @return whether the value exists, The input val is untouched if the key is not found
+bool BasicKvLookup(BasicKvHandle* handle, uint64_t workerId, StringSlice key, String** val);
 
 //! Remove a key in a basic key-value store at workerId
 //! @return true if the key is found and removed, false otherwise
@@ -153,6 +155,16 @@ StringSlice BasicKvIterKey(BasicKvIterHandle* handle);
 //! Get the value of the current iterator position in a basic key-value store at workerId
 //! @return the read-only value slice
 StringSlice BasicKvIterVal(BasicKvIterHandle* handle);
+
+//------------------------------------------------------------------------------
+// Interfaces for metrics
+//------------------------------------------------------------------------------
+
+//! Start the global http metrics exposer
+void StartMetricsHttpExposer(int32_t port);
+
+//! Stop the global http metrics exposer
+void StopMetricsHttpExposer();
 
 #ifdef __cplusplus
 }

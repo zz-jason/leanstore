@@ -24,6 +24,8 @@ class MetricsHttpExposer : public utils::UserThread {
 public:
   MetricsHttpExposer(LeanStore* store);
 
+  MetricsHttpExposer(LeanStore* store, int32_t port);
+
   ~MetricsHttpExposer() override {
     mServer.stop();
   }
@@ -127,6 +129,7 @@ private:
   //! The http server
   httplib::Server mServer;
 
+  //! The port to expose metrics
   int32_t mPort;
 
   //! The mutex to protect mCollectable

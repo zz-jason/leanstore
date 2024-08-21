@@ -4,7 +4,7 @@
 #include "leanstore/buffer-manager/BufferManager.hpp"
 #include "leanstore/concurrency/LoggingImpl.hpp"
 #include "leanstore/concurrency/WalPayloadHandler.hpp"
-#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/concurrency/WorkerContext.hpp"
 #include "leanstore/sync/HybridGuard.hpp"
 #include "leanstore/sync/HybridLatch.hpp"
 #include "leanstore/utils/Log.hpp"
@@ -144,40 +144,40 @@ public:
 public:
   inline void SyncGSNBeforeWrite() {
     LS_DCHECK(mBf != nullptr);
-    LS_DCHECK(mBf->mPage.mGSN <= cr::Worker::My().mLogging.GetCurrentGsn(),
+    LS_DCHECK(mBf->mPage.mGSN <= cr::WorkerContext::My().mLogging.GetCurrentGsn(),
               "Page GSN should <= worker GSN, pageGSN={}, workerGSN={}", mBf->mPage.mGSN,
-              cr::Worker::My().mLogging.GetCurrentGsn());
+              cr::WorkerContext::My().mLogging.GetCurrentGsn());
 
     // update last writer worker
-    mBf->mHeader.mLastWriterWorker = cr::Worker::My().mWorkerId;
+    mBf->mHeader.mLastWriterWorker = cr::WorkerContext::My().mWorkerId;
 
     // increase GSN
-    const auto workerGSN = cr::Worker::My().mLogging.GetCurrentGsn();
+    const auto workerGSN = cr::WorkerContext::My().mLogging.GetCurrentGsn();
     mBf->mPage.mGSN = workerGSN + 1;
-    cr::Worker::My().mLogging.SetCurrentGsn(workerGSN + 1);
+    cr::WorkerContext::My().mLogging.SetCurrentGsn(workerGSN + 1);
   }
 
   // TODO: don't sync on temporary table pages like history trees
   inline void SyncGSNBeforeRead() {
     // skip if not running inside a worker
-    if (!cr::Worker::InWorker()) {
+    if (!cr::WorkerContext::InWorker()) {
       return;
     }
 
-    if (!cr::Worker::My().mLogging.mHasRemoteDependency &&
-        mBf->mPage.mGSN > cr::Worker::My().mLogging.mTxReadSnapshot &&
-        mBf->mHeader.mLastWriterWorker != cr::Worker::My().mWorkerId) {
-      cr::Worker::My().mLogging.mHasRemoteDependency = true;
+    if (!cr::WorkerContext::My().mLogging.mHasRemoteDependency &&
+        mBf->mPage.mGSN > cr::WorkerContext::My().mLogging.mTxReadSnapshot &&
+        mBf->mHeader.mLastWriterWorker != cr::WorkerContext::My().mWorkerId) {
+      cr::WorkerContext::My().mLogging.mHasRemoteDependency = true;
       LS_DLOG("Detected remote dependency, workerId={}, "
               "txReadSnapshot(GSN)={}, pageLastWriterWorker={}, pageGSN={}",
-              cr::Worker::My().mWorkerId, cr::Worker::My().mLogging.mTxReadSnapshot,
+              cr::WorkerContext::My().mWorkerId, cr::WorkerContext::My().mLogging.mTxReadSnapshot,
               mBf->mHeader.mLastWriterWorker, mBf->mPage.mGSN);
     }
 
-    const auto workerGSN = cr::Worker::My().mLogging.GetCurrentGsn();
+    const auto workerGSN = cr::WorkerContext::My().mLogging.GetCurrentGsn();
     const auto pageGSN = mBf->mPage.mGSN;
     if (workerGSN < pageGSN) {
-      cr::Worker::My().mLogging.SetCurrentGsn(pageGSN);
+      cr::WorkerContext::My().mLogging.SetCurrentGsn(pageGSN);
     }
   }
 
@@ -189,7 +189,7 @@ public:
     const auto pageId = mBf->mHeader.mPageId;
     const auto treeId = mBf->mPage.mBTreeId;
     walSize = ((walSize - 1) / 8 + 1) * 8;
-    auto handler = cr::Worker::My().mLogging.ReserveWALEntryComplex<WT, Args...>(
+    auto handler = cr::WorkerContext::My().mLogging.ReserveWALEntryComplex<WT, Args...>(
         sizeof(WT) + walSize, pageId, mBf->mPage.mGSN, treeId, std::forward<Args>(args)...);
 
     SyncGSNBeforeWrite();

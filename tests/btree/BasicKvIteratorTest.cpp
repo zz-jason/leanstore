@@ -52,11 +52,11 @@ TEST_F(BasicKvIteratorTest, BasicKvHandle) {
 
   // lookup
   for (auto i = 0; i < numEntries; i++) {
-    String* valStr = BasicKvLookup(mKvHandle, 1, {keys[i].data(), keys[i].size()});
-    ASSERT_NE(valStr, nullptr);
-    EXPECT_EQ(valStr->mSize, vals[i].size());
-    EXPECT_EQ(memcmp(valStr->mData, vals[i].data(), valStr->mSize), 0);
-    DestroyString(valStr);
+    String* val = CreateString(nullptr, 0);
+    bool found = BasicKvLookup(mKvHandle, 1, {keys[i].data(), keys[i].size()}, &val);
+    ASSERT_TRUE(found);
+    EXPECT_EQ(val->mSize, vals[i].size());
+    EXPECT_EQ(memcmp(val->mData, vals[i].data(), val->mSize), 0);
   }
 
   // remove 50 key-value pairs

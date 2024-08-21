@@ -9,7 +9,7 @@
 #include "leanstore/btree/Tuple.hpp"
 #include "leanstore/btree/core/BTreeGeneric.hpp"
 #include "leanstore/btree/core/PessimisticSharedIterator.hpp"
-#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/concurrency/WorkerContext.hpp"
 #include "leanstore/sync/HybridGuard.hpp"
 #include "leanstore/telemetry/MetricOnlyTimer.hpp"
 #include "leanstore/utils/Defer.hpp"
@@ -78,9 +78,9 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
     METRIC_COUNTER_INC(mStore->mMetricsManager, tx_kv_lookup_total, 1);
     METRIC_HIST_OBSERVE(mStore->mMetricsManager, tx_kv_lookup_us, timer.ElaspedUs());
   });
-  LS_DCHECK(cr::Worker::My().IsTxStarted(),
-            "Worker is not in a transaction, workerId={}, startTs={}", cr::Worker::My().mWorkerId,
-            cr::Worker::My().mActiveTx.mStartTs);
+  LS_DCHECK(cr::WorkerContext::My().IsTxStarted(),
+            "WorkerContext is not in a transaction, workerId={}, startTs={}",
+            cr::WorkerContext::My().mWorkerId, cr::WorkerContext::My().mActiveTx.mStartTs);
   auto lookupInGraveyard = [&]() {
     auto gIter = mGraveyard->GetIterator();
     if (gIter.SeekToEqual(key); !gIter.Valid()) {
@@ -124,7 +124,7 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
     METRIC_COUNTER_INC(mStore->mMetricsManager, tx_kv_update_total, 1);
     METRIC_HIST_OBSERVE(mStore->mMetricsManager, tx_kv_update_us, timer.ElaspedUs());
   });
-  LS_DCHECK(cr::Worker::My().IsTxStarted());
+  LS_DCHECK(cr::WorkerContext::My().IsTxStarted());
   JUMPMU_TRY() {
     auto xIter = GetExclusiveIterator();
     if (xIter.SeekToEqual(key); !xIter.Valid()) {
@@ -142,7 +142,7 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
     while (true) {
       auto mutRawVal = xIter.MutableVal();
       auto& tuple = *Tuple::From(mutRawVal.Data());
-      auto visibleForMe = cr::Worker::My().mCc.VisibleForMe(tuple.mWorkerId, tuple.mTxId);
+      auto visibleForMe = cr::WorkerContext::My().mCc.VisibleForMe(tuple.mWorkerId, tuple.mTxId);
       if (tuple.IsWriteLocked() || !visibleForMe) {
         // conflict detected, the tuple is write locked by other worker or not
         // visible for me
@@ -203,7 +203,7 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
 }
 
 OpCode TransactionKV::Insert(Slice key, Slice val) {
-  LS_DCHECK(cr::Worker::My().IsTxStarted());
+  LS_DCHECK(cr::WorkerContext::My().IsTxStarted());
   uint16_t payloadSize = val.size() + sizeof(ChainedTuple);
 
   while (true) {
@@ -219,11 +219,11 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
       LS_DCHECK(!chainedTuple->mWriteLocked,
                 "Duplicate tuple should not be write locked, workerId={}, startTs={}, key={}, "
                 "tupleLastWriter={}, tupleLastStartTs={}, tupleWriteLocked={}",
-                cr::Worker::My().mWorkerId, cr::Worker::My().mActiveTx.mStartTs, key.ToString(),
-                lastWorkerId, lastTxId, isWriteLocked);
+                cr::WorkerContext::My().mWorkerId, cr::WorkerContext::My().mActiveTx.mStartTs,
+                key.ToString(), lastWorkerId, lastTxId, isWriteLocked);
 
       auto visibleForMe =
-          cr::Worker::My().mCc.VisibleForMe(chainedTuple->mWorkerId, chainedTuple->mTxId);
+          cr::WorkerContext::My().mCc.VisibleForMe(chainedTuple->mWorkerId, chainedTuple->mTxId);
 
       if (chainedTuple->mIsTombstone && visibleForMe) {
         insertAfterRemove(xIter, key, val);
@@ -239,8 +239,8 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
         Log::Info("Insert conflicted, current transaction should be aborted, workerId={}, "
                   "startTs={}, key={}, tupleLastWriter={}, tupleLastTxId={}, "
                   "tupleIsWriteLocked={}, tupleIsRemoved={}, tupleVisibleForMe={}",
-                  cr::Worker::My().mWorkerId, cr::Worker::My().mActiveTx.mStartTs, ToString(key),
-                  lastWorkerId, lastTxId, isWriteLocked, isTombsone, visibleForMe);
+                  cr::WorkerContext::My().mWorkerId, cr::WorkerContext::My().mActiveTx.mStartTs,
+                  ToString(key), lastWorkerId, lastTxId, isWriteLocked, isTombsone, visibleForMe);
         return OpCode::kAbortTx;
       }
 
@@ -248,8 +248,8 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
       auto isTombsone = chainedTuple->mIsTombstone;
       Log::Info("Insert duplicated, workerId={}, startTs={}, key={}, tupleLastWriter={}, "
                 "tupleLastTxId={}, tupleIsWriteLocked={}, tupleIsRemoved={}, tupleVisibleForMe={}",
-                cr::Worker::My().mWorkerId, cr::Worker::My().mActiveTx.mStartTs, key.ToString(),
-                lastWorkerId, lastTxId, isWriteLocked, isTombsone, visibleForMe);
+                cr::WorkerContext::My().mWorkerId, cr::WorkerContext::My().mActiveTx.mStartTs,
+                key.ToString(), lastWorkerId, lastTxId, isWriteLocked, isTombsone, visibleForMe);
       return OpCode::kDuplicated;
     }
 
@@ -263,7 +263,7 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
                                              kInvalidCommandid);
 
     // insert
-    TransactionKV::InsertToNode(xIter.mGuardedLeaf, key, val, cr::Worker::My().mWorkerId,
+    TransactionKV::InsertToNode(xIter.mGuardedLeaf, key, val, cr::WorkerContext::My().mWorkerId,
                                 cr::ActiveTx().mStartTs, xIter.mSlotId);
     return OpCode::kOK;
   }
@@ -306,13 +306,13 @@ void TransactionKV::insertAfterRemove(PessimisticExclusiveIterator& xIter, Slice
             "Tuple should be removed before insert, workerId={}, "
             "startTs={}, key={}, tupleLastWriter={}, "
             "tupleLastStartTs={}, tupleWriteLocked={}",
-            cr::Worker::My().mWorkerId, cr::Worker::My().mActiveTx.mStartTs, key.ToString(),
-            lastWorkerId, lastTxId, isWriteLocked);
+            cr::WorkerContext::My().mWorkerId, cr::WorkerContext::My().mActiveTx.mStartTs,
+            key.ToString(), lastWorkerId, lastTxId, isWriteLocked);
 
   // create an insert version
   auto versionSize = sizeof(InsertVersion) + val.size() + key.size();
   auto commandId =
-      cr::Worker::My().mCc.PutVersion(mTreeId, false, versionSize, [&](uint8_t* versionBuf) {
+      cr::WorkerContext::My().mCc.PutVersion(mTreeId, false, versionSize, [&](uint8_t* versionBuf) {
         new (versionBuf) InsertVersion(lastWorkerId, lastTxId, lastCommandId, key, val);
       });
 
@@ -335,8 +335,8 @@ void TransactionKV::insertAfterRemove(PessimisticExclusiveIterator& xIter, Slice
               "Failed to extend btree node slot to store the expanded "
               "chained tuple, workerId={}, startTs={}, key={}, "
               "curRawValSize={}, chainedTupleSize={}",
-              cr::Worker::My().mWorkerId, cr::Worker::My().mActiveTx.mStartTs, key.ToString(),
-              mutRawVal.Size(), chainedTupleSize);
+              cr::WorkerContext::My().mWorkerId, cr::WorkerContext::My().mActiveTx.mStartTs,
+              key.ToString(), mutRawVal.Size(), chainedTupleSize);
 
   } else if (mutRawVal.Size() > chainedTupleSize) {
     xIter.ShortenWithoutCompaction(chainedTupleSize);
@@ -345,14 +345,14 @@ void TransactionKV::insertAfterRemove(PessimisticExclusiveIterator& xIter, Slice
   // get the new value place and recreate a new chained tuple there
   auto newMutRawVal = xIter.MutableVal();
   auto* newChainedTuple = new (newMutRawVal.Data())
-      ChainedTuple(cr::Worker::My().mWorkerId, cr::ActiveTx().mStartTs, commandId, val);
+      ChainedTuple(cr::WorkerContext::My().mWorkerId, cr::ActiveTx().mStartTs, commandId, val);
   newChainedTuple->mTotalUpdates = totalUpdatesCopy;
   newChainedTuple->mOldestTx = oldestTxCopy;
   newChainedTuple->UpdateStats();
 }
 
 OpCode TransactionKV::Remove(Slice key) {
-  LS_DCHECK(cr::Worker::My().IsTxStarted());
+  LS_DCHECK(cr::WorkerContext::My().IsTxStarted());
   JUMPMU_TRY() {
     auto xIter = GetExclusiveIterator();
     if (xIter.SeekToEqual(key); !xIter.Valid()) {
@@ -378,11 +378,12 @@ OpCode TransactionKV::Remove(Slice key) {
     auto lastWorkerId = chainedTuple.mWorkerId;
     auto lastTxId = chainedTuple.mTxId;
     if (chainedTuple.IsWriteLocked() ||
-        !cr::Worker::My().mCc.VisibleForMe(lastWorkerId, lastTxId)) {
+        !cr::WorkerContext::My().mCc.VisibleForMe(lastWorkerId, lastTxId)) {
       Log::Info("Remove conflicted, current transaction should be aborted, workerId={}, "
                 "startTs={}, key={}, tupleLastWriter={}, tupleLastStartTs={}, tupleVisibleForMe={}",
-                cr::Worker::My().mWorkerId, cr::Worker::My().mActiveTx.mStartTs, key.ToString(),
-                lastWorkerId, lastTxId, cr::Worker::My().mCc.VisibleForMe(lastWorkerId, lastTxId));
+                cr::WorkerContext::My().mWorkerId, cr::WorkerContext::My().mActiveTx.mStartTs,
+                key.ToString(), lastWorkerId, lastTxId,
+                cr::WorkerContext::My().mCc.VisibleForMe(lastWorkerId, lastTxId));
       JUMPMU_RETURN OpCode::kAbortTx;
     }
 
@@ -401,8 +402,8 @@ OpCode TransactionKV::Remove(Slice key) {
     auto valSize = xIter.Val().size() - sizeof(ChainedTuple);
     auto val = chainedTuple.GetValue(valSize);
     auto versionSize = sizeof(RemoveVersion) + val.size() + key.size();
-    auto commandId =
-        cr::Worker::My().mCc.PutVersion(mTreeId, true, versionSize, [&](uint8_t* versionBuf) {
+    auto commandId = cr::WorkerContext::My().mCc.PutVersion(
+        mTreeId, true, versionSize, [&](uint8_t* versionBuf) {
           new (versionBuf) RemoveVersion(chainedTuple.mWorkerId, chainedTuple.mTxId,
                                          chainedTuple.mCommandId, key, val, danglingPointer);
         });
@@ -419,7 +420,7 @@ OpCode TransactionKV::Remove(Slice key) {
       xIter.ShortenWithoutCompaction(sizeof(ChainedTuple));
     }
     chainedTuple.mIsTombstone = true;
-    chainedTuple.mWorkerId = cr::Worker::My().mWorkerId;
+    chainedTuple.mWorkerId = cr::WorkerContext::My().mWorkerId;
     chainedTuple.mTxId = cr::ActiveTx().mStartTs;
     chainedTuple.mCommandId = commandId;
 
@@ -433,7 +434,7 @@ OpCode TransactionKV::Remove(Slice key) {
 }
 
 OpCode TransactionKV::ScanDesc(Slice startKey, ScanCallback callback) {
-  LS_DCHECK(cr::Worker::My().IsTxStarted());
+  LS_DCHECK(cr::WorkerContext::My().IsTxStarted());
   if (cr::ActiveTx().IsLongRunning()) {
     TODOException();
     return OpCode::kAbortTx;
@@ -442,7 +443,7 @@ OpCode TransactionKV::ScanDesc(Slice startKey, ScanCallback callback) {
 }
 
 OpCode TransactionKV::ScanAsc(Slice startKey, ScanCallback callback) {
-  LS_DCHECK(cr::Worker::My().IsTxStarted());
+  LS_DCHECK(cr::WorkerContext::My().IsTxStarted());
   if (cr::ActiveTx().IsLongRunning()) {
     return scan4LongRunningTx(startKey, callback);
   }
@@ -477,7 +478,8 @@ void TransactionKV::undoLastInsert(const WalTxInsert* walInsert) {
       LS_DCHECK(xIter.Valid(),
                 "Cannot find the inserted key in btree, workerId={}, "
                 "startTs={}, key={}",
-                cr::Worker::My().mWorkerId, cr::Worker::My().mActiveTx.mStartTs, key.ToString());
+                cr::WorkerContext::My().mWorkerId, cr::WorkerContext::My().mActiveTx.mStartTs,
+                key.ToString());
       // TODO(jian.z): write compensation wal entry
       if (walInsert->mPrevCommandId != kInvalidCommandid) {
         // only remove the inserted value and mark the chained tuple as
@@ -501,7 +503,7 @@ void TransactionKV::undoLastInsert(const WalTxInsert* walInsert) {
         if (ret != OpCode::kOK) {
           Log::Error("Undo last insert failed, failed to remove current key, "
                      "workerId={}, startTs={}, key={}, ret={}",
-                     cr::Worker::My().mWorkerId, cr::Worker::My().mActiveTx.mStartTs,
+                     cr::WorkerContext::My().mWorkerId, cr::WorkerContext::My().mActiveTx.mStartTs,
                      key.ToString(), ToString(ret));
         }
       }
@@ -510,8 +512,8 @@ void TransactionKV::undoLastInsert(const WalTxInsert* walInsert) {
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
-      Log::Warn("Undo insert failed, workerId={}, startTs={}", cr::Worker::My().mWorkerId,
-                cr::Worker::My().mActiveTx.mStartTs);
+      Log::Warn("Undo insert failed, workerId={}, startTs={}", cr::WorkerContext::My().mWorkerId,
+                cr::WorkerContext::My().mActiveTx.mStartTs);
     }
   }
 }
@@ -525,12 +527,14 @@ void TransactionKV::undoLastUpdate(const WalTxUpdate* walUpdate) {
       LS_DCHECK(xIter.Valid(),
                 "Cannot find the updated key in btree, workerId={}, "
                 "startTs={}, key={}",
-                cr::Worker::My().mWorkerId, cr::Worker::My().mActiveTx.mStartTs, key.ToString());
+                cr::WorkerContext::My().mWorkerId, cr::WorkerContext::My().mActiveTx.mStartTs,
+                key.ToString());
 
       auto mutRawVal = xIter.MutableVal();
       auto& tuple = *Tuple::From(mutRawVal.Data());
       LS_DCHECK(!tuple.IsWriteLocked(), "Tuple is write locked, workerId={}, startTs={}, key={}",
-                cr::Worker::My().mWorkerId, cr::Worker::My().mActiveTx.mStartTs, key.ToString());
+                cr::WorkerContext::My().mWorkerId, cr::WorkerContext::My().mActiveTx.mStartTs,
+                key.ToString());
       if (tuple.mFormat == TupleFormat::kFat) {
         FatTuple::From(mutRawVal.Data())->UndoLastUpdate();
       } else {
@@ -555,8 +559,8 @@ void TransactionKV::undoLastUpdate(const WalTxUpdate* walUpdate) {
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
-      Log::Warn("Undo update failed, workerId={}, startTs={}", cr::Worker::My().mWorkerId,
-                cr::Worker::My().mActiveTx.mStartTs);
+      Log::Warn("Undo update failed, workerId={}, startTs={}", cr::WorkerContext::My().mWorkerId,
+                cr::WorkerContext::My().mActiveTx.mStartTs);
     }
   }
 }
@@ -570,7 +574,7 @@ void TransactionKV::undoLastRemove(const WalTxRemove* walRemove) {
       LS_DCHECK(xIter.Valid(),
                 "Cannot find the tombstone of removed key, workerId={}, "
                 "startTs={}, removedKey={}",
-                cr::Worker::My().mWorkerId, cr::Worker::My().mActiveTx.mStartTs,
+                cr::WorkerContext::My().mWorkerId, cr::WorkerContext::My().mActiveTx.mStartTs,
                 removedKey.ToString());
 
       // resize the current slot to store the removed tuple
@@ -582,7 +586,7 @@ void TransactionKV::undoLastRemove(const WalTxRemove* walRemove) {
                   "Failed to extend btree node slot to store the "
                   "recovered chained tuple, workerId={}, startTs={}, "
                   "removedKey={}, curRawValSize={}, chainedTupleSize={}",
-                  cr::Worker::My().mWorkerId, cr::Worker::My().mActiveTx.mStartTs,
+                  cr::WorkerContext::My().mWorkerId, cr::WorkerContext::My().mActiveTx.mStartTs,
                   removedKey.ToString(), curRawVal.size(), chainedTupleSize);
       } else if (curRawVal.size() > chainedTupleSize) {
         xIter.ShortenWithoutCompaction(chainedTupleSize);
@@ -595,8 +599,8 @@ void TransactionKV::undoLastRemove(const WalTxRemove* walRemove) {
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
-      Log::Warn("Undo remove failed, workerId={}, startTs={}", cr::Worker::My().mWorkerId,
-                cr::Worker::My().mActiveTx.mStartTs);
+      Log::Warn("Undo remove failed, workerId={}, startTs={}", cr::WorkerContext::My().mWorkerId,
+                cr::WorkerContext::My().mActiveTx.mStartTs);
     }
   }
 }
@@ -624,9 +628,9 @@ bool TransactionKV::UpdateInFatTuple(PessimisticExclusiveIterator& xIter, Slice 
 
     auto performUpdate = [&]() {
       fatTuple->Append(updateDesc);
-      fatTuple->mWorkerId = cr::Worker::My().mWorkerId;
+      fatTuple->mWorkerId = cr::WorkerContext::My().mWorkerId;
       fatTuple->mTxId = cr::ActiveTx().mStartTs;
-      fatTuple->mCommandId = cr::Worker::My().mCommandId++;
+      fatTuple->mCommandId = cr::WorkerContext::My().mCommandId++;
       updateCallBack(fatTuple->GetMutableValue());
       LS_DCHECK(fatTuple->mPayloadCapacity >= fatTuple->mPayloadSize);
     };
@@ -704,7 +708,7 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData, WORKERID versionW
   const auto& version = *RemoveVersion::From(versionData);
 
   // Delete tombstones caused by transactions below mCc.mLocalWmkOfAllTx.
-  if (versionTxId <= cr::Worker::My().mCc.mLocalWmkOfAllTx) {
+  if (versionTxId <= cr::WorkerContext::My().mCc.mLocalWmkOfAllTx) {
     LS_DLOG("Delete tombstones caused by transactions below "
             "mCc.mLocalWmkOfAllTx, versionWorkerId={}, versionTxId={}",
             versionWorkerId, versionTxId);
@@ -789,13 +793,13 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData, WORKERID versionW
     if (chainedTuple.mWorkerId == versionWorkerId && chainedTuple.mTxId == versionTxId &&
         chainedTuple.mIsTombstone) {
 
-      LS_DCHECK(chainedTuple.mTxId > cr::Worker::My().mCc.mLocalWmkOfAllTx,
+      LS_DCHECK(chainedTuple.mTxId > cr::WorkerContext::My().mCc.mLocalWmkOfAllTx,
                 "The removedKey is under mCc.mLocalWmkOfAllTx, should "
                 "not happen, mCc.mLocalWmkOfAllTx={}, "
                 "versionWorkerId={}, versionTxId={}, removedKey={}",
-                cr::Worker::My().mCc.mLocalWmkOfAllTx, versionWorkerId, versionTxId,
+                cr::WorkerContext::My().mCc.mLocalWmkOfAllTx, versionWorkerId, versionTxId,
                 removedKey.ToString());
-      if (chainedTuple.mTxId <= cr::Worker::My().mCc.mLocalWmkOfShortTx) {
+      if (chainedTuple.mTxId <= cr::WorkerContext::My().mCc.mLocalWmkOfShortTx) {
         LS_DLOG("Move the removedKey to graveyard, versionWorkerId={}, "
                 "versionTxId={}, removedKey={}",
                 versionWorkerId, versionTxId, removedKey.ToString());
@@ -824,7 +828,7 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData, WORKERID versionW
         Log::Fatal("Meet a remove version upper than mCc.mLocalWmkOfShortTx, "
                    "should not happen, mCc.mLocalWmkOfShortTx={}, "
                    "versionWorkerId={}, versionTxId={}, removedKey={}",
-                   cr::Worker::My().mCc.mLocalWmkOfShortTx, versionWorkerId, versionTxId,
+                   cr::WorkerContext::My().mCc.mLocalWmkOfShortTx, versionWorkerId, versionTxId,
                    removedKey.ToString());
       }
     } else {
@@ -870,7 +874,8 @@ void TransactionKV::unlock(const uint8_t* walEntryPtr) {
     auto xIter = GetExclusiveIterator();
     xIter.SeekToEqual(key);
     LS_DCHECK(xIter.Valid(), "Cannot find the key in btree, workerId={}, startTs={}, key={}",
-              cr::Worker::My().mWorkerId, cr::Worker::My().mActiveTx.mStartTs, key.ToString());
+              cr::WorkerContext::My().mWorkerId, cr::WorkerContext::My().mActiveTx.mStartTs,
+              key.ToString());
     auto& tuple = *Tuple::From(xIter.MutableVal().Data());
     ENSURE(tuple.mFormat == TupleFormat::kChained);
   }

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "leanstore/Units.hpp"
-#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/concurrency/WorkerContext.hpp"
 #include "leanstore/concurrency/WorkerThread.hpp"
 
 #include <memory>
@@ -26,7 +26,7 @@ public:
   std::vector<std::unique_ptr<WorkerThread>> mWorkerThreads;
 
   //! All the thread-local worker references
-  std::vector<Worker*> mWorkers;
+  std::vector<WorkerContext*> mWorkerCtxs;
 
   WaterMarkInfo mGlobalWmkInfo;
 

@@ -50,8 +50,8 @@ protected:
 
   void TearDown() override {
     mStore->ExecSync(1, [&]() {
-      cr::Worker::My().StartTx();
-      SCOPED_DEFER(cr::Worker::My().CommitTx());
+      cr::WorkerContext::My().StartTx();
+      SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
       mStore->DropTransactionKV(mTreeName);
     });
   }
@@ -62,10 +62,10 @@ TEST_F(MvccTest, LookupWhileInsert) {
   auto key0 = RandomGenerator::RandAlphString(42);
   auto val0 = RandomGenerator::RandAlphString(151);
   mStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
+    cr::WorkerContext::My().StartTx();
     auto res = mBTree->Insert(Slice((const uint8_t*)key0.data(), key0.size()),
                               Slice((const uint8_t*)val0.data(), val0.size()));
-    cr::Worker::My().CommitTx();
+    cr::WorkerContext::My().CommitTx();
     EXPECT_EQ(res, OpCode::kOK);
   });
 
@@ -73,7 +73,7 @@ TEST_F(MvccTest, LookupWhileInsert) {
   auto key1 = RandomGenerator::RandAlphString(17);
   auto val1 = RandomGenerator::RandAlphString(131);
   mStore->ExecSync(1, [&]() {
-    cr::Worker::My().StartTx();
+    cr::WorkerContext::My().StartTx();
     auto res = mBTree->Insert(Slice((const uint8_t*)key1.data(), key1.size()),
                               Slice((const uint8_t*)val1.data(), val1.size()));
     EXPECT_EQ(res, OpCode::kOK);
@@ -86,11 +86,11 @@ TEST_F(MvccTest, LookupWhileInsert) {
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
-    cr::Worker::My().StartTx();
+    cr::WorkerContext::My().StartTx();
     EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key0.data(), key0.size()), copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val0);
-    cr::Worker::My().CommitTx();
+    cr::WorkerContext::My().CommitTx();
   });
 
   // commit the transaction
@@ -103,7 +103,7 @@ TEST_F(MvccTest, LookupWhileInsert) {
     EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key1.data(), key1.size()), copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val1);
-    cr::Worker::My().CommitTx();
+    cr::WorkerContext::My().CommitTx();
   });
 
   // now we can see the latest record
@@ -112,11 +112,11 @@ TEST_F(MvccTest, LookupWhileInsert) {
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
-    cr::Worker::My().StartTx();
+    cr::WorkerContext::My().StartTx();
     EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key1.data(), key1.size()), copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val1);
-    cr::Worker::My().CommitTx();
+    cr::WorkerContext::My().CommitTx();
   });
 }
 
@@ -125,10 +125,10 @@ TEST_F(MvccTest, InsertConflict) {
   auto key0 = RandomGenerator::RandAlphString(42);
   auto val0 = RandomGenerator::RandAlphString(151);
   mStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
+    cr::WorkerContext::My().StartTx();
     auto res = mBTree->Insert(Slice((const uint8_t*)key0.data(), key0.size()),
                               Slice((const uint8_t*)val0.data(), val0.size()));
-    cr::Worker::My().CommitTx();
+    cr::WorkerContext::My().CommitTx();
     EXPECT_EQ(res, OpCode::kOK);
   });
 
@@ -136,7 +136,7 @@ TEST_F(MvccTest, InsertConflict) {
   auto key1 = key0 + "a";
   auto val1 = val0;
   mStore->ExecSync(1, [&]() {
-    cr::Worker::My().StartTx();
+    cr::WorkerContext::My().StartTx();
     auto res = mBTree->Insert(Slice((const uint8_t*)key1.data(), key1.size()),
                               Slice((const uint8_t*)val1.data(), val1.size()));
     EXPECT_EQ(res, OpCode::kOK);
@@ -144,22 +144,22 @@ TEST_F(MvccTest, InsertConflict) {
 
   // start another transaction to insert the same key
   mStore->ExecSync(2, [&]() {
-    cr::Worker::My().StartTx();
+    cr::WorkerContext::My().StartTx();
     auto res = mBTree->Insert(Slice((const uint8_t*)key1.data(), key1.size()),
                               Slice((const uint8_t*)val1.data(), val1.size()));
     EXPECT_EQ(res, OpCode::kAbortTx);
-    cr::Worker::My().AbortTx();
+    cr::WorkerContext::My().AbortTx();
   });
 
   // start another transaction to insert a smaller key
   auto key2 = std::string(key0.data(), key0.size() - 1);
   auto val2 = val0;
   mStore->ExecSync(2, [&]() {
-    cr::Worker::My().StartTx();
+    cr::WorkerContext::My().StartTx();
     auto res = mBTree->Insert(Slice((const uint8_t*)key1.data(), key1.size()),
                               Slice((const uint8_t*)val1.data(), val1.size()));
     EXPECT_EQ(res, OpCode::kAbortTx);
-    cr::Worker::My().AbortTx();
+    cr::WorkerContext::My().AbortTx();
   });
 
   // commit the transaction
@@ -172,7 +172,7 @@ TEST_F(MvccTest, InsertConflict) {
     EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key1.data(), key1.size()), copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val1);
-    cr::Worker::My().CommitTx();
+    cr::WorkerContext::My().CommitTx();
   });
 
   // now we can see the latest record
@@ -181,11 +181,11 @@ TEST_F(MvccTest, InsertConflict) {
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
     };
-    cr::Worker::My().StartTx();
+    cr::WorkerContext::My().StartTx();
     EXPECT_EQ(mBTree->Lookup(Slice((const uint8_t*)key1.data(), key1.size()), copyValueOut),
               OpCode::kOK);
     EXPECT_EQ(copiedValue, val1);
-    cr::Worker::My().CommitTx();
+    cr::WorkerContext::My().CommitTx();
   });
 }
 

@@ -13,6 +13,7 @@
 #include "leanstore/utils/Misc.hpp"
 #include "leanstore/utils/Result.hpp"
 #include "leanstore/utils/UserThread.hpp"
+#include "telemetry/MetricsHttpExposer.hpp"
 #include "telemetry/MetricsManager.hpp"
 
 #include <rapidjson/document.h>
@@ -57,7 +58,10 @@ Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption* option) {
   return std::make_unique<LeanStore>(option);
 }
 
-LeanStore::LeanStore(StoreOption* option) : mStoreOption(option), mMetricsManager(nullptr) {
+LeanStore::LeanStore(StoreOption* option)
+    : mStoreOption(option),
+      mMetricsManager(nullptr),
+      mMetricsExposer(nullptr) {
   utils::tlsStore = this;
 
   Log::Info("LeanStore starting ...");
@@ -65,8 +69,12 @@ LeanStore::LeanStore(StoreOption* option) : mStoreOption(option), mMetricsManage
 
   // Expose the metrics
   if (mStoreOption->mEnableMetrics) {
-    mMetricsManager = std::make_unique<leanstore::telemetry::MetricsManager>(this);
-    mMetricsManager->Expose();
+    mMetricsManager = std::make_unique<leanstore::telemetry::MetricsManager>();
+
+    //! Expose the metrics via HTTP
+    mMetricsExposer = std::make_unique<leanstore::telemetry::MetricsHttpExposer>(this);
+    mMetricsExposer->SetCollectable(mMetricsManager->GetRegistry());
+    mMetricsExposer->Start();
   }
 
   initPageAndWalFd();
@@ -152,6 +160,7 @@ LeanStore::~LeanStore() {
     // stop metrics manager in the last
     if (mStoreOption->mEnableMetrics) {
       mMetricsManager = nullptr;
+      mMetricsExposer = nullptr;
     }
     DestroyStoreOption(mStoreOption);
     Log::Info("LeanStore stopped");
@@ -452,7 +461,7 @@ void LeanStore::GetBasicKV(const std::string& name, storage::btree::BasicKV** bt
 }
 
 void LeanStore::DropBasicKV(const std::string& name) {
-  LS_DCHECK(cr::Worker::My().IsTxStarted());
+  LS_DCHECK(cr::WorkerContext::My().IsTxStarted());
   auto* btree =
       dynamic_cast<leanstore::storage::btree::BTreeGeneric*>(mTreeRegistry->GetTree(name));
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
@@ -498,7 +507,7 @@ void LeanStore::GetTransactionKV(const std::string& name, storage::btree::Transa
 }
 
 void LeanStore::DropTransactionKV(const std::string& name) {
-  LS_DCHECK(cr::Worker::My().IsTxStarted());
+  LS_DCHECK(cr::WorkerContext::My().IsTxStarted());
   auto* btree = DownCast<storage::btree::BTreeGeneric*>(mTreeRegistry->GetTree(name));
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
   auto res = mTreeRegistry->UnregisterTree(name);

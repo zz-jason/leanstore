@@ -67,8 +67,8 @@ TEST_F(RecoveryTest, SerializeAndDeserialize) {
 
   // insert some values
   mStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
-    SCOPED_DEFER(cr::Worker::My().CommitTx());
+    cr::WorkerContext::My().StartTx();
+    SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
@@ -97,8 +97,8 @@ TEST_F(RecoveryTest, SerializeAndDeserialize) {
 
   // lookup the restored btree
   mStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
-    SCOPED_DEFER(cr::Worker::My().CommitTx());
+    cr::WorkerContext::My().StartTx();
+    SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
@@ -112,8 +112,8 @@ TEST_F(RecoveryTest, SerializeAndDeserialize) {
   });
 
   mStore->ExecSync(1, [&]() {
-    cr::Worker::My().StartTx();
-    SCOPED_DEFER(cr::Worker::My().CommitTx());
+    cr::WorkerContext::My().StartTx();
+    SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
     mStore->DropTransactionKV(btreeName);
   });
 
@@ -145,12 +145,12 @@ TEST_F(RecoveryTest, RecoverAfterInsert) {
     EXPECT_NE(btree, nullptr);
 
     // insert some values
-    cr::Worker::My().StartTx();
+    cr::WorkerContext::My().StartTx();
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
       EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
     }
-    cr::Worker::My().CommitTx();
+    cr::WorkerContext::My().CommitTx();
   });
 
   // skip dumpping buffer frames on exit
@@ -171,8 +171,8 @@ TEST_F(RecoveryTest, RecoverAfterInsert) {
 
   // lookup the restored btree
   mStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
-    SCOPED_DEFER(cr::Worker::My().CommitTx());
+    cr::WorkerContext::My().StartTx();
+    SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());
@@ -232,9 +232,9 @@ TEST_F(RecoveryTest, RecoverAfterUpdate) {
     // insert some values
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
-      cr::Worker::My().StartTx();
+      cr::WorkerContext::My().StartTx();
       EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
-      cr::Worker::My().CommitTx();
+      cr::WorkerContext::My().CommitTx();
     }
 
     // update all the values
@@ -246,9 +246,9 @@ TEST_F(RecoveryTest, RecoverAfterUpdate) {
       // update each key 3 times
       for (auto j = 1u; j <= 3; j++) {
         val = GenerateValue(j, valSize);
-        cr::Worker::My().StartTx();
+        cr::WorkerContext::My().StartTx();
         EXPECT_EQ(btree->UpdatePartial(key, updateCallBack, *updateDesc), OpCode::kOK);
-        cr::Worker::My().CommitTx();
+        cr::WorkerContext::My().CommitTx();
       }
     }
   });
@@ -271,8 +271,8 @@ TEST_F(RecoveryTest, RecoverAfterUpdate) {
 
   // lookup the restored btree
   mStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
-    SCOPED_DEFER(cr::Worker::My().CommitTx());
+    cr::WorkerContext::My().StartTx();
+    SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) { copiedValue = val.ToString(); };
     for (size_t i = 0; i < numKVs; ++i) {
@@ -311,17 +311,17 @@ TEST_F(RecoveryTest, RecoverAfterRemove) {
     // insert some values
     for (size_t i = 0; i < numKVs; ++i) {
       const auto& [key, val] = kvToTest[i];
-      cr::Worker::My().StartTx();
+      cr::WorkerContext::My().StartTx();
       EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
-      cr::Worker::My().CommitTx();
+      cr::WorkerContext::My().CommitTx();
     }
 
     // remove all the values
     for (size_t i = 0; i < numKVs; ++i) {
       auto& [key, val] = kvToTest[i];
-      cr::Worker::My().StartTx();
+      cr::WorkerContext::My().StartTx();
       EXPECT_EQ(btree->Remove(key), OpCode::kOK);
-      cr::Worker::My().CommitTx();
+      cr::WorkerContext::My().CommitTx();
     }
   });
 
@@ -343,8 +343,8 @@ TEST_F(RecoveryTest, RecoverAfterRemove) {
 
   // lookup the restored btree
   mStore->ExecSync(0, [&]() {
-    cr::Worker::My().StartTx();
-    SCOPED_DEFER(cr::Worker::My().CommitTx());
+    cr::WorkerContext::My().StartTx();
+    SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
     std::string copiedValue;
     auto copyValueOut = [&](Slice val) {
       copiedValue = std::string((const char*)val.data(), val.size());

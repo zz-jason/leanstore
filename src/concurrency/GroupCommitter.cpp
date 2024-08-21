@@ -1,7 +1,7 @@
 #include "leanstore/concurrency/GroupCommitter.hpp"
 
 #include "leanstore/concurrency/CRManager.hpp"
-#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/concurrency/WorkerContext.hpp"
 #include "leanstore/profiling/counters/CPUCounters.hpp"
 #include "leanstore/telemetry/MetricOnlyTimer.hpp"
 #include "telemetry/MetricsManager.hpp"
@@ -24,8 +24,8 @@ void GroupCommitter::runImpl() {
   uint64_t minFlushedGSN = std::numeric_limits<uint64_t>::max();
   uint64_t maxFlushedGSN = 0;
   TXID minFlushedTxId = std::numeric_limits<TXID>::max();
-  std::vector<uint64_t> numRfaTxs(mWorkers.size(), 0);
-  std::vector<WalFlushReq> walFlushReqCopies(mWorkers.size());
+  std::vector<uint64_t> numRfaTxs(mWorkerCtxs.size(), 0);
+  std::vector<WalFlushReq> walFlushReqCopies(mWorkerCtxs.size());
 
   while (mKeepRunning) {
     // phase 1
@@ -54,8 +54,8 @@ void GroupCommitter::collectWalRecords(uint64_t& minFlushedGSN, uint64_t& maxFlu
   maxFlushedGSN = 0;
   minFlushedTxId = std::numeric_limits<TXID>::max();
 
-  for (uint32_t workerId = 0; workerId < mWorkers.size(); workerId++) {
-    auto& logging = mWorkers[workerId]->mLogging;
+  for (uint32_t workerId = 0; workerId < mWorkerCtxs.size(); workerId++) {
+    auto& logging = mWorkerCtxs[workerId]->mLogging;
     // collect logging info
     std::unique_lock<std::mutex> guard(logging.mRfaTxToCommitMutex);
     numRfaTxs[workerId] = logging.mRfaTxToCommit.size();
@@ -127,8 +127,8 @@ void GroupCommitter::determineCommitableTx(uint64_t minFlushedGSN, uint64_t maxF
     METRIC_HIST_OBSERVE(mStore->mMetricsManager, group_committer_commit_txs_us, timer.ElaspedUs());
   });
 
-  for (WORKERID workerId = 0; workerId < mWorkers.size(); workerId++) {
-    auto& logging = mWorkers[workerId]->mLogging;
+  for (WORKERID workerId = 0; workerId < mWorkerCtxs.size(); workerId++) {
+    auto& logging = mWorkerCtxs[workerId]->mLogging;
     const auto& reqCopy = walFlushReqCopies[workerId];
 
     // update the flushed commit TS info

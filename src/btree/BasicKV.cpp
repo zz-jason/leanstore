@@ -30,7 +30,27 @@ Result<BasicKV*> BasicKV::Create(leanstore::LeanStore* store, const std::string&
   return tree;
 }
 
-OpCode BasicKV::Lookup(Slice key, ValCallback valCallback) {
+OpCode BasicKV::lookupOptimistic(Slice key, ValCallback valCallback) {
+  JUMPMU_TRY() {
+    GuardedBufferFrame<BTreeNode> guardedLeaf;
+    FindLeafCanJump(key, guardedLeaf, LatchMode::kOptimisticOrJump);
+    auto slotId = guardedLeaf->LowerBound<true>(key);
+    if (slotId != -1) {
+      valCallback(guardedLeaf->Value(slotId));
+      guardedLeaf.JumpIfModifiedByOthers();
+      JUMPMU_RETURN OpCode::kOK;
+    }
+
+    guardedLeaf.JumpIfModifiedByOthers();
+    JUMPMU_RETURN OpCode::kNotFound;
+  }
+  JUMPMU_CATCH() {
+    WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
+    return OpCode::kOther;
+  }
+}
+
+OpCode BasicKV::lookupPessimistic(Slice key, ValCallback valCallback) {
   while (true) {
     JUMPMU_TRY() {
       GuardedBufferFrame<BTreeNode> guardedLeaf;
@@ -38,19 +58,22 @@ OpCode BasicKV::Lookup(Slice key, ValCallback valCallback) {
       auto slotId = guardedLeaf->LowerBound<true>(key);
       if (slotId != -1) {
         valCallback(guardedLeaf->Value(slotId));
-        guardedLeaf.JumpIfModifiedByOthers();
         JUMPMU_RETURN OpCode::kOK;
       }
 
-      guardedLeaf.JumpIfModifiedByOthers();
       JUMPMU_RETURN OpCode::kNotFound;
     }
     JUMPMU_CATCH() {
       WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
     }
   }
-  UNREACHABLE();
-  return OpCode::kOther;
+}
+
+OpCode BasicKV::Lookup(Slice key, ValCallback valCallback) {
+  if (auto ret = lookupOptimistic(key, valCallback); ret != OpCode::kOther) {
+    return ret;
+  }
+  return lookupPessimistic(std::move(key), std::move(valCallback));
 }
 
 bool BasicKV::IsRangeEmpty(Slice startKey, Slice endKey) {
@@ -143,13 +166,13 @@ OpCode BasicKV::Insert(Slice key, Slice val) {
     auto ret = xIter.InsertKV(key, val);
 
     if (ret == OpCode::kDuplicated) {
-      Log::Info("Insert duplicated, workerId={}, key={}, treeId={}", cr::Worker::My().mWorkerId,
-                key.ToString(), mTreeId);
+      Log::Info("Insert duplicated, workerId={}, key={}, treeId={}",
+                cr::WorkerContext::My().mWorkerId, key.ToString(), mTreeId);
       JUMPMU_RETURN OpCode::kDuplicated;
     }
 
     if (ret != OpCode::kOK) {
-      Log::Info("Insert failed, workerId={}, key={}, ret={}", cr::Worker::My().mWorkerId,
+      Log::Info("Insert failed, workerId={}, key={}, ret={}", cr::WorkerContext::My().mWorkerId,
                 key.ToString(), ToString(ret));
       JUMPMU_RETURN ret;
     }

@@ -15,6 +15,7 @@ AllowShortFunctionsOnASingleLine: None
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
 EmptyLineBeforeAccessModifier: Always
+Cpp11BracedListStyle: true
 
 # constructor initializers
 PackConstructorInitializers: CurrentLine

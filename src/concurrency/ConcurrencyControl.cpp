@@ -4,7 +4,7 @@
 #include "leanstore/Units.hpp"
 #include "leanstore/buffer-manager/TreeRegistry.hpp"
 #include "leanstore/concurrency/CRManager.hpp"
-#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/concurrency/WorkerContext.hpp"
 #include "leanstore/profiling/counters/WorkerCounters.hpp"
 #include "leanstore/utils/Defer.hpp"
 #include "leanstore/utils/Log.hpp"
@@ -27,8 +27,8 @@ void CommitTree::AppendCommitLog(TXID startTs, TXID commitTs) {
   utils::Timer timer(CRCounters::MyCounters().cc_ms_committing);
   std::unique_lock xGuard(mMutex);
   mCommitLog.push_back({commitTs, startTs});
-  LS_DLOG("Commit log appended, workerId={}, startTs={}, commitTs={}", Worker::My().mWorkerId,
-          startTs, commitTs);
+  LS_DLOG("Commit log appended, workerId={}, startTs={}, commitTs={}",
+          WorkerContext::My().mWorkerId, startTs, commitTs);
 }
 
 void CommitTree::CompactCommitLog() {
@@ -44,9 +44,9 @@ void CommitTree::CompactCommitLog() {
   // workers can see the latest commitTs of this worker.
   set.insert(mCommitLog[mCommitLog.size() - 1]);
 
-  const WORKERID myWorkerId = Worker::My().mWorkerId;
-  auto allWorkers = Worker::My().mAllWorkers;
-  for (WORKERID i = 0; i < Worker::My().mAllWorkers.size(); i++) {
+  const WORKERID myWorkerId = WorkerContext::My().mWorkerId;
+  auto allWorkers = WorkerContext::My().mAllWorkers;
+  for (WORKERID i = 0; i < WorkerContext::My().mAllWorkers.size(); i++) {
     if (i == myWorkerId) {
       continue;
     }
@@ -58,7 +58,7 @@ void CommitTree::CompactCommitLog() {
       continue;
     }
 
-    activeTxId &= Worker::kCleanBitsMask;
+    activeTxId &= WorkerContext::kCleanBitsMask;
     if (auto result = lcbNoLatch(activeTxId); result) {
       set.insert(*result);
     }
@@ -72,8 +72,8 @@ void CommitTree::CompactCommitLog() {
   }
 
   DEBUG_BLOCK() {
-    LS_DLOG("Commit log cleaned up, workerId={}, mCommitLog.size()={}", Worker::My().mWorkerId,
-            mCommitLog.size());
+    LS_DLOG("Commit log cleaned up, workerId={}, mCommitLog.size()={}",
+            WorkerContext::My().mWorkerId, mCommitLog.size());
   }
 }
 
@@ -104,7 +104,7 @@ std::optional<std::pair<TXID, TXID>> CommitTree::lcbNoLatch(TXID startTs) {
 COMMANDID ConcurrencyControl::PutVersion(TREEID treeId, bool isRemoveCommand, uint64_t versionSize,
                                          std::function<void(uint8_t*)> putCallBack) {
   utils::Timer timer(CRCounters::MyCounters().cc_ms_history_tree_insert);
-  auto& curWorker = Worker::My();
+  auto& curWorker = WorkerContext::My();
   auto commandId = curWorker.mCommandId++;
   if (isRemoveCommand) {
     commandId |= kRemoveCommandMark;
@@ -116,7 +116,7 @@ COMMANDID ConcurrencyControl::PutVersion(TREEID treeId, bool isRemoveCommand, ui
 
 bool ConcurrencyControl::VisibleForMe(WORKERID workerId, TXID txId) {
   // visible if writtern by me
-  if (Worker::My().mWorkerId == workerId) {
+  if (WorkerContext::My().mWorkerId == workerId) {
     return true;
   }
 
@@ -124,7 +124,7 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, TXID txId) {
   case IsolationLevel::kSnapshotIsolation:
   case IsolationLevel::kSerializable: {
     // mGlobalWmkOfAllTx is copied from global watermark info at the beginning of each transaction.
-    // Global watermarks are occassionally updated by Worker::updateGlobalTxWatermarks, it's
+    // Global watermarks are occassionally updated by WorkerContext::updateGlobalTxWatermarks, it's
     // possible that mGlobalWmkOfAllTx is not the latest value, but it is always safe to use it as
     // the lower bound of the visibility check.
     if (txId < mGlobalWmkOfAllTx) {
@@ -182,12 +182,12 @@ void ConcurrencyControl::GarbageCollection() {
   if (mCleanedWmkOfShortTx <= mLocalWmkOfAllTx) {
     utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_history_tree);
     LS_DLOG("Garbage collect history tree, workerId={}, fromTxId={}, toTxId(mLocalWmkOfAllTx)={}",
-            Worker::My().mWorkerId, 0, mLocalWmkOfAllTx);
+            WorkerContext::My().mWorkerId, 0, mLocalWmkOfAllTx);
     mHistoryStorage.PurgeVersions(
         0, mLocalWmkOfAllTx,
         [&](const TXID versionTxId, const TREEID treeId, const uint8_t* versionData,
             uint64_t versionSize [[maybe_unused]], const bool calledBefore) {
-          mStore->mTreeRegistry->GarbageCollect(treeId, versionData, Worker::My().mWorkerId,
+          mStore->mTreeRegistry->GarbageCollect(treeId, versionData, WorkerContext::My().mWorkerId,
                                                 versionTxId, calledBefore);
           COUNTERS_BLOCK() {
             WorkerCounters::MyCounters().cc_gc_long_tx_executed[treeId]++;
@@ -198,7 +198,7 @@ void ConcurrencyControl::GarbageCollection() {
   } else {
     LS_DLOG("Skip garbage collect history tree, workerId={}, "
             "mCleanedWmkOfShortTx={}, mLocalWmkOfAllTx={}",
-            Worker::My().mWorkerId, mCleanedWmkOfShortTx, mLocalWmkOfAllTx);
+            WorkerContext::My().mWorkerId, mCleanedWmkOfShortTx, mLocalWmkOfAllTx);
   }
 
   // move tombstones to graveyard
@@ -207,12 +207,12 @@ void ConcurrencyControl::GarbageCollection() {
     utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_graveyard);
     LS_DLOG("Garbage collect graveyard, workerId={}, fromTxId={}, "
             "toTxId(mLocalWmkOfShortTx)={}",
-            Worker::My().mWorkerId, mCleanedWmkOfShortTx, mLocalWmkOfShortTx);
+            WorkerContext::My().mWorkerId, mCleanedWmkOfShortTx, mLocalWmkOfShortTx);
     mHistoryStorage.VisitRemovedVersions(
         mCleanedWmkOfShortTx, mLocalWmkOfShortTx,
         [&](const TXID versionTxId, const TREEID treeId, const uint8_t* versionData, uint64_t,
             const bool calledBefore) {
-          mStore->mTreeRegistry->GarbageCollect(treeId, versionData, Worker::My().mWorkerId,
+          mStore->mTreeRegistry->GarbageCollect(treeId, versionData, WorkerContext::My().mWorkerId,
                                                 versionTxId, calledBefore);
           COUNTERS_BLOCK() {
             WorkerCounters::MyCounters().cc_todo_oltp_executed[treeId]++;
@@ -222,12 +222,12 @@ void ConcurrencyControl::GarbageCollection() {
   } else {
     LS_DLOG("Skip garbage collect graveyard, workerId={}, "
             "mCleanedWmkOfShortTx={}, mLocalWmkOfShortTx={}",
-            Worker::My().mWorkerId, mCleanedWmkOfShortTx, mLocalWmkOfShortTx);
+            WorkerContext::My().mWorkerId, mCleanedWmkOfShortTx, mLocalWmkOfShortTx);
   }
 }
 
 ConcurrencyControl& ConcurrencyControl::Other(WORKERID otherWorkerId) {
-  return Worker::My().mAllWorkers[otherWorkerId]->mCc;
+  return WorkerContext::My().mAllWorkers[otherWorkerId]->mCc;
 }
 
 // It calculates and updates the global oldest running transaction id and the
@@ -246,8 +246,9 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
   }
 
   utils::Timer timer(CRCounters::MyCounters().cc_ms_refresh_global_state);
-  auto meetGcProbability = mStore->mStoreOption->mEnableEagerGc ||
-                           utils::RandomGenerator::RandU64(0, Worker::My().mAllWorkers.size()) == 0;
+  auto meetGcProbability =
+      mStore->mStoreOption->mEnableEagerGc ||
+      utils::RandomGenerator::RandU64(0, WorkerContext::My().mAllWorkers.size()) == 0;
   auto performGc = meetGcProbability && mStore->mCRManager->mGlobalWmkInfo.mGlobalMutex.try_lock();
   if (!performGc) {
     LS_DLOG("Skip updating global watermarks, meetGcProbability={}, performGc={}",
@@ -266,20 +267,20 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
   TXID oldestTxId = std::numeric_limits<TXID>::max();
   TXID newestLongTxId = std::numeric_limits<TXID>::min();
   TXID oldestShortTxId = std::numeric_limits<TXID>::max();
-  auto allWorkers = Worker::My().mAllWorkers;
-  for (WORKERID i = 0; i < Worker::My().mAllWorkers.size(); i++) {
+  auto allWorkers = WorkerContext::My().mAllWorkers;
+  for (WORKERID i = 0; i < WorkerContext::My().mAllWorkers.size(); i++) {
     auto activeTxId = allWorkers[i]->mActiveTxId.load();
     // Skip transactions not running.
     if (activeTxId == 0) {
       continue;
     }
     // Skip transactions running in read-committed mode.
-    if (activeTxId & Worker::kRcBit) {
+    if (activeTxId & WorkerContext::kRcBit) {
       continue;
     }
 
-    bool isLongRunningTx = activeTxId & Worker::kLongRunningBit;
-    activeTxId &= Worker::kCleanBitsMask;
+    bool isLongRunningTx = activeTxId & WorkerContext::kLongRunningBit;
+    activeTxId &= WorkerContext::kCleanBitsMask;
     oldestTxId = std::min(activeTxId, oldestTxId);
     if (isLongRunningTx) {
       newestLongTxId = std::max(activeTxId, newestLongTxId);
@@ -303,7 +304,7 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
   // Update global lower watermarks based on the three transaction ids
   TXID globalWmkOfAllTx = std::numeric_limits<TXID>::max();
   TXID globalWmkOfShortTx = std::numeric_limits<TXID>::max();
-  for (WORKERID i = 0; i < Worker::My().mAllWorkers.size(); i++) {
+  for (WORKERID i = 0; i < WorkerContext::My().mAllWorkers.size(); i++) {
     ConcurrencyControl& mCc = Other(i);
     if (mCc.mUpdatedLatestCommitTs == mCc.mLatestCommitTs) {
       LS_DLOG("Skip updating watermarks for worker {}, no transaction "
@@ -368,7 +369,7 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
 void ConcurrencyControl::updateLocalWatermarks() {
   SCOPED_DEFER(LS_DLOG("Local watermarks updated, workerId={}, "
                        "mLocalWmkOfAllTx={}, mLocalWmkOfShortTx={}",
-                       Worker::My().mWorkerId, mLocalWmkOfAllTx, mLocalWmkOfShortTx));
+                       WorkerContext::My().mWorkerId, mLocalWmkOfAllTx, mLocalWmkOfShortTx));
   while (true) {
     uint64_t version = mWmkVersion.load();
 
@@ -390,7 +391,7 @@ void ConcurrencyControl::updateLocalWatermarks() {
             "Lower watermark of all transactions should be no higher than the lower "
             "watermark of short-running transactions, workerId={}, "
             "mLocalWmkOfAllTx={}, mLocalWmkOfShortTx={}",
-            Worker::My().mWorkerId, mLocalWmkOfAllTx, mLocalWmkOfShortTx);
+            WorkerContext::My().mWorkerId, mLocalWmkOfAllTx, mLocalWmkOfShortTx);
 }
 
 } // namespace leanstore::cr

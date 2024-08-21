@@ -50,7 +50,7 @@ struct LeanStoreAdapter : Adapter<Record> {
       return cb(typed_key, record);
     });
     if (ret == leanstore::OpCode::kAbortTx) {
-      cr::Worker::My().AbortTx();
+      cr::WorkerContext::My().AbortTx();
     }
   }
 
@@ -61,7 +61,7 @@ struct LeanStoreAdapter : Adapter<Record> {
         btree->Insert(Slice(foldedKey, foldedKeySize), Slice((uint8_t*)(&record), sizeof(Record)));
     LS_DCHECK(res == leanstore::OpCode::kOK || res == leanstore::OpCode::kAbortTx);
     if (res == leanstore::OpCode::kAbortTx) {
-      cr::Worker::My().AbortTx();
+      cr::WorkerContext::My().AbortTx();
     }
   }
 
@@ -74,7 +74,7 @@ struct LeanStoreAdapter : Adapter<Record> {
       cb(record);
     });
     if (res == leanstore::OpCode::kAbortTx) {
-      cr::Worker::My().AbortTx();
+      cr::WorkerContext::My().AbortTx();
     }
     LS_DCHECK(res == leanstore::OpCode::kOK);
   }
@@ -94,7 +94,7 @@ struct LeanStoreAdapter : Adapter<Record> {
         updateDesc);
     LS_DCHECK(res != leanstore::OpCode::kNotFound);
     if (res == leanstore::OpCode::kAbortTx) {
-      cr::Worker::My().AbortTx();
+      cr::WorkerContext::My().AbortTx();
     }
   }
 
@@ -103,7 +103,7 @@ struct LeanStoreAdapter : Adapter<Record> {
     uint16_t foldedKeySize = Record::foldKey(foldedKey, key);
     const auto res = btree->Remove(Slice(foldedKey, foldedKeySize));
     if (res == leanstore::OpCode::kAbortTx) {
-      cr::Worker::My().AbortTx();
+      cr::WorkerContext::My().AbortTx();
     }
     return (res == leanstore::OpCode::kOK);
   }
@@ -124,7 +124,7 @@ struct LeanStoreAdapter : Adapter<Record> {
       return cb(typed_key, record);
     });
     if (ret == leanstore::OpCode::kAbortTx) {
-      cr::Worker::My().AbortTx();
+      cr::WorkerContext::My().AbortTx();
     }
   }
 
@@ -139,7 +139,7 @@ struct LeanStoreAdapter : Adapter<Record> {
           local_f = (record).*f;
         });
     if (res == leanstore::OpCode::kAbortTx) {
-      cr::Worker::My().AbortTx();
+      cr::WorkerContext::My().AbortTx();
     }
     LS_DCHECK(res == OpCode::kOK);
     return local_f;

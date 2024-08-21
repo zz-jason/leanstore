@@ -3,7 +3,6 @@
 #include "Types.hpp"
 #include "leanstore/Exceptions.hpp"
 #include "leanstore/KVInterface.hpp"
-#include "leanstore/btree/core/WALMacros.hpp"
 
 #include <cassert>
 #include <cstdint>

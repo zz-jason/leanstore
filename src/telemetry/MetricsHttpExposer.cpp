@@ -5,8 +5,12 @@
 namespace leanstore::telemetry {
 
 MetricsHttpExposer::MetricsHttpExposer(LeanStore* store)
+    : leanstore::telemetry::MetricsHttpExposer(store, store->mStoreOption->mMetricsPort) {
+}
+
+MetricsHttpExposer::MetricsHttpExposer(LeanStore* store, int32_t port)
     : UserThread(store, "MetricsExposer"),
-      mPort(mStore->mStoreOption->mMetricsPort) {
+      mPort(port) {
   mServer.new_task_queue = [] { return new httplib::ThreadPool(1); };
   mServer.Get("/metrics", [&](const httplib::Request& req, httplib::Response& res) {
     handleMetrics(req, res);

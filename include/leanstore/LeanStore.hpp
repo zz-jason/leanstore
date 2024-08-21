@@ -16,6 +16,7 @@
 namespace leanstore::telemetry {
 
 class MetricsManager;
+class MetricsHttpExposer;
 
 } // namespace leanstore::telemetry
 
@@ -79,6 +80,9 @@ public:
 
   //! The metrics manager
   std::unique_ptr<leanstore::telemetry::MetricsManager> mMetricsManager;
+
+  //! The http metrics exposer
+  std::unique_ptr<leanstore::telemetry::MetricsHttpExposer> mMetricsExposer;
 
 #ifdef DEBUG
   utils::DebugFlagsRegistry mDebugFlagsRegistry;

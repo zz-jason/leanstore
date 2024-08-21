@@ -49,16 +49,16 @@ int main() {
 
   // lookup a key
   {
-    String* valStr = BasicKvLookup(kvHandle, 1, keySlice);
-    if (valStr == NULL) {
+    String* val = CreateString(nullptr, 0);
+    bool found = BasicKvLookup(kvHandle, 1, keySlice, &val);
+    if (!found) {
       printf("lookup value failed, value may not exist, key=%.*s\n", (int)keySlice.mSize,
              keySlice.mData);
+      DestroyString(val);
       return -1;
     }
-    printf("%.*s, %.*s\n", (int)keySlice.mSize, keySlice.mData, (int)valStr->mSize, valStr->mData);
-
-    // cleanup the value string
-    DestroyString(valStr);
+    printf("%.*s, %.*s\n", (int)keySlice.mSize, keySlice.mData, (int)val->mSize, val->mData);
+    DestroyString(val);
   }
 
   // insert more key-values

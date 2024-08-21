@@ -1,4 +1,4 @@
-#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/concurrency/WorkerContext.hpp"
 
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/buffer-manager/TreeRegistry.hpp"
@@ -19,10 +19,11 @@
 
 namespace leanstore::cr {
 
-thread_local std::unique_ptr<Worker> Worker::sTlsWorker = nullptr;
-thread_local Worker* Worker::sTlsWorkerRaw = nullptr;
+thread_local std::unique_ptr<WorkerContext> WorkerContext::sTlsWorkerCtx = nullptr;
+thread_local WorkerContext* WorkerContext::sTlsWorkerCtxRaw = nullptr;
 
-Worker::Worker(uint64_t workerId, std::vector<Worker*>& allWorkers, leanstore::LeanStore* store)
+WorkerContext::WorkerContext(uint64_t workerId, std::vector<WorkerContext*>& allWorkers,
+                             leanstore::LeanStore* store)
     : mStore(store),
       mCc(store, allWorkers.size()),
       mActiveTxId(0),
@@ -39,12 +40,12 @@ Worker::Worker(uint64_t workerId, std::vector<Worker*>& allWorkers, leanstore::L
   mCc.mLcbCacheKey = std::make_unique<uint64_t[]>(mAllWorkers.size());
 }
 
-Worker::~Worker() {
+WorkerContext::~WorkerContext() {
   free(mLogging.mWalBuffer);
   mLogging.mWalBuffer = nullptr;
 }
 
-void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
+void WorkerContext::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   Transaction prevTx [[maybe_unused]] = mActiveTx;
   LS_DCHECK(prevTx.mState != TxState::kStarted,
             "Previous transaction not ended, workerId={}, startTs={}, txState={}", mWorkerId,
@@ -108,7 +109,7 @@ void Worker::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) {
   mCc.mCommitTree.CompactCommitLog();
 }
 
-void Worker::CommitTx() {
+void WorkerContext::CommitTx() {
   SCOPED_DEFER(mActiveTx.mState = TxState::kCommitted);
 
   if (!mActiveTx.mIsDurable) {
@@ -180,7 +181,7 @@ void Worker::CommitTx() {
 //!    transaction
 //!
 //! It may share the same code with the recovery process?
-void Worker::AbortTx() {
+void WorkerContext::AbortTx() {
   SCOPED_DEFER({
     mActiveTx.mState = TxState::kAborted;
     METRIC_COUNTER_INC(mStore->mMetricsManager, tx_abort_total, 1);

@@ -2,7 +2,7 @@
 #include "leanstore/concurrency/Logging.hpp"
 #include "leanstore/concurrency/WalEntry.hpp"
 #include "leanstore/concurrency/WalPayloadHandler.hpp"
-#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/concurrency/WorkerContext.hpp"
 #include "leanstore/utils/Defer.hpp"
 
 namespace leanstore::cr {
@@ -27,7 +27,7 @@ WalPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payloadSize, PID p
   ReserveContiguousBuffer(entrySize);
 
   mActiveWALEntryComplex =
-      new (entryPtr) WalEntryComplex(entryLSN, prevLsn, entrySize, Worker::My().mWorkerId,
+      new (entryPtr) WalEntryComplex(entryLSN, prevLsn, entrySize, WorkerContext::My().mWorkerId,
                                      ActiveTx().mStartTs, gsn, pageId, treeId);
 
   auto* payloadPtr = mActiveWALEntryComplex->mPayload;
