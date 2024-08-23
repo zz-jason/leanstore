@@ -11,7 +11,7 @@ static const StoreOption kDefaultStoreOption = {
     // log related options
     .mLogLevel = LogLevel::kInfo,
 
-    // WorkerContext thread related options
+    // Worker thread related options
     .mWorkerThreads = 4,
     .mWalBufferSize = 10 * 1024 * 1024,
 
