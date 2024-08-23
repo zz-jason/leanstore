@@ -14,7 +14,7 @@
 
 namespace leanstore::cr {
 
-class Worker;
+class WorkerContext;
 class WalFlushReq;
 
 class GroupCommitter : public leanstore::utils::UserThread {
@@ -38,20 +38,21 @@ public:
   std::atomic<uint64_t> mGlobalMaxFlushedGSN;
 
   //! All the workers.
-  std::vector<Worker*>& mWorkers;
+  std::vector<WorkerContext*>& mWorkerCtxs;
 
   //! The libaio wrapper.
   utils::AsyncIo mAIo;
 
 public:
-  GroupCommitter(leanstore::LeanStore* store, int32_t walFd, std::vector<Worker*>& workers, int cpu)
+  GroupCommitter(leanstore::LeanStore* store, int32_t walFd, std::vector<WorkerContext*>& workers,
+                 int cpu)
       : UserThread(store, "GroupCommitter", cpu),
         mStore(store),
         mWalFd(walFd),
         mWalSize(0),
         mGlobalMinFlushedGSN(0),
         mGlobalMaxFlushedGSN(0),
-        mWorkers(workers),
+        mWorkerCtxs(workers),
         mAIo(workers.size() * 2 + 2) {
   }
 

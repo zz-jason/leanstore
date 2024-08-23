@@ -1,8 +1,6 @@
 #pragma once
 
 #include "leanstore/Exceptions.hpp"
-#include "leanstore/utils/UserThread.hpp"
-#include "telemetry/MetricsHttpExposer.hpp"
 
 #include <prometheus/counter.h>
 #include <prometheus/exposer.h>
@@ -118,34 +116,36 @@ const std::vector<double> kBoundariesUs{
 //! LeanStore. It's expected to be a singleton inside a LeanStore instance.
 class MetricsManager {
 public:
-  MetricsManager(LeanStore* store) : mExposer(store) {
-    // create a metrics registry
+  //! The constructor of the MetricsManager.
+  MetricsManager() {
     mRegistry = std::make_shared<prometheus::Registry>();
 
     METRIC_COUNTER_LIST(INIT_METRIC_COUNTER);
     METRIC_HIST_LIST(INIT_METRIC_HIST);
-
-    mExposer.SetCollectable(mRegistry);
-  }
-
-  void Expose() {
-    mExposer.Start();
   }
 
   METRIC_COUNTER_LIST(DEFINE_METRIC_FUNC_COUNTER_INC);
   METRIC_HIST_LIST(DEFINE_METRIC_FUNC_HIST_OBSERVE);
 
+  //! Get the metrics registry
+  std::shared_ptr<prometheus::Registry> GetRegistry() {
+    return mRegistry;
+  }
+
 private:
+  //! Create a counter family
   prometheus::Family<prometheus::Counter>* createCounterFamily(const std::string& metricName,
                                                                const std::string& help) {
     return &prometheus::BuildCounter().Name(metricName).Help(help).Register(*mRegistry);
   }
 
+  //! Create a histogram family
   prometheus::Family<prometheus::Histogram>* createHistogramFamily(const std::string& metricName,
                                                                    const std::string& help) {
     return &prometheus::BuildHistogram().Name(metricName).Help(help).Register(*mRegistry);
   }
 
+  //! Create linear buckets
   static prometheus::Histogram::BucketBoundaries createLinearBuckets(double start, double end,
                                                                      double step) {
     auto bucketBoundaries = prometheus::Histogram::BucketBoundaries{};
@@ -155,9 +155,8 @@ private:
     return bucketBoundaries;
   }
 
+  //! The registry for all the metrics
   std::shared_ptr<prometheus::Registry> mRegistry;
-
-  MetricsHttpExposer mExposer;
 
   METRIC_COUNTER_LIST(DECLARE_METRIC_COUNTER);
   METRIC_HIST_LIST(DECLARE_METRIC_HIST);

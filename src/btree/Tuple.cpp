@@ -5,7 +5,7 @@
 #include "leanstore/btree/TransactionKV.hpp"
 #include "leanstore/btree/core/BTreeNode.hpp"
 #include "leanstore/concurrency/CRManager.hpp"
-#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/concurrency/WorkerContext.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/Misc.hpp"
 
@@ -63,13 +63,13 @@ bool Tuple::ToFat(PessimisticExclusiveIterator& xIter) {
   bool abortConversion = false;
   uint16_t numDeltasToReplace = 0;
   while (!abortConversion) {
-    if (cr::Worker::My().mCc.VisibleForAll(newerTxId)) {
+    if (cr::WorkerContext::My().mCc.VisibleForAll(newerTxId)) {
       // No need to convert versions that are visible for all to the FatTuple,
       // these old version can be GCed. Pruning versions space might get delayed
       break;
     }
 
-    if (!cr::Worker::My().mCc.GetVersion(
+    if (!cr::WorkerContext::My().mCc.GetVersion(
             newerWorkerId, newerTxId, newerCommandId, [&](const uint8_t* version, uint64_t) {
               numDeltasToReplace++;
               const auto& chainedDelta = *UpdateVersion::From(version);
@@ -192,7 +192,7 @@ void FatTuple::GarbageCollection() {
   };
 
   // Delete for all visible deltas, atm using cheap visibility check
-  if (cr::Worker::My().mCc.VisibleForAll(mTxId)) {
+  if (cr::WorkerContext::My().mCc.VisibleForAll(mTxId)) {
     mNumDeltas = 0;
     mDataOffset = mPayloadCapacity;
     mPayloadSize = mValSize;
@@ -202,16 +202,16 @@ void FatTuple::GarbageCollection() {
   uint16_t deltasVisibleForAll = 0;
   for (int32_t i = mNumDeltas - 1; i >= 1; i--) {
     auto& delta = getDelta(i);
-    if (cr::Worker::My().mCc.VisibleForAll(delta.mTxId)) {
+    if (cr::WorkerContext::My().mCc.VisibleForAll(delta.mTxId)) {
       deltasVisibleForAll = i - 1;
       break;
     }
   }
 
   const TXID local_oldest_oltp =
-      cr::Worker::My().mStore->mCRManager->mGlobalWmkInfo.mOldestActiveShortTx.load();
+      cr::WorkerContext::My().mStore->mCRManager->mGlobalWmkInfo.mOldestActiveShortTx.load();
   const TXID local_newest_olap =
-      cr::Worker::My().mStore->mCRManager->mGlobalWmkInfo.mNewestActiveLongTx.load();
+      cr::WorkerContext::My().mStore->mCRManager->mGlobalWmkInfo.mNewestActiveLongTx.load();
   if (deltasVisibleForAll == 0 && local_newest_olap > local_oldest_oltp) {
     return; // Nothing to do here
   }
@@ -355,7 +355,7 @@ void FatTuple::Append(UpdateDesc& updateDesc) {
 std::tuple<OpCode, uint16_t> FatTuple::GetVisibleTuple(ValCallback valCallback) const {
 
   // Latest version is visible
-  if (cr::Worker::My().mCc.VisibleForMe(mWorkerId, mTxId)) {
+  if (cr::WorkerContext::My().mCc.VisibleForMe(mWorkerId, mTxId)) {
     valCallback(GetValue());
     return {OpCode::kOK, 1};
   }
@@ -372,7 +372,7 @@ std::tuple<OpCode, uint16_t> FatTuple::GetVisibleTuple(ValCallback valCallback) 
       const auto& updateDesc = delta.GetUpdateDesc();
       auto* xorData = delta.GetDeltaPtr();
       BasicKV::CopyToValue(updateDesc, xorData, copiedVal->get());
-      if (cr::Worker::My().mCc.VisibleForMe(delta.mWorkerId, delta.mTxId)) {
+      if (cr::WorkerContext::My().mCc.VisibleForMe(delta.mWorkerId, delta.mTxId)) {
         valCallback(Slice(copiedVal->get(), mValSize));
         return {OpCode::kOK, numVisitedVersions};
       }
@@ -420,7 +420,7 @@ void FatTuple::ConvertToChained(TREEID treeId) {
     auto& updateDesc = delta.GetUpdateDesc();
     auto sizeOfDescAndDelta = updateDesc.SizeWithDelta();
     auto versionSize = sizeOfDescAndDelta + sizeof(UpdateVersion);
-    cr::Worker::My()
+    cr::WorkerContext::My()
         .mCc.Other(prevWorkerId)
         .mHistoryStorage.PutVersion(
             prevTxId, prevCommandId, treeId, false, versionSize,

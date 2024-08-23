@@ -5,7 +5,7 @@
 #include "leanstore/btree/BasicKV.hpp"
 #include "leanstore/btree/TransactionKV.hpp"
 #include "leanstore/concurrency/CRManager.hpp"
-#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/concurrency/WorkerContext.hpp"
 #include "leanstore/utils/Defer.hpp"
 #include "leanstore/utils/JumpMU.hpp"
 #include "leanstore/utils/Log.hpp"
@@ -129,7 +129,7 @@ public:
           utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
 
           if (mBenchTransactionKv) {
-            cr::Worker::My().StartTx();
+            cr::WorkerContext::My().StartTx();
           }
           auto opCode =
               table->Insert(Slice(key, FLAGS_ycsb_key_size), Slice(val, FLAGS_ycsb_val_size));
@@ -137,7 +137,7 @@ public:
             Log::Fatal("Failed to insert, opCode={}", static_cast<uint8_t>(opCode));
           }
           if (mBenchTransactionKv) {
-            cr::Worker::My().CommitTx();
+            cr::WorkerContext::My().CommitTx();
           }
         }
       });
@@ -194,10 +194,10 @@ public:
                 // generate key for read
                 GenYcsbKey(zipfRandom, key);
                 if (mBenchTransactionKv) {
-                  cr::Worker::My().StartTx(TxMode::kShortRunning,
-                                           IsolationLevel::kSnapshotIsolation, true);
+                  cr::WorkerContext::My().StartTx(TxMode::kShortRunning,
+                                                  IsolationLevel::kSnapshotIsolation, true);
                   table->Lookup(Slice(key, FLAGS_ycsb_key_size), copyValue);
-                  cr::Worker::My().CommitTx();
+                  cr::WorkerContext::My().CommitTx();
                 } else {
                   table->Lookup(Slice(key, FLAGS_ycsb_key_size), copyValue);
                 }
@@ -206,10 +206,10 @@ public:
                 GenYcsbKey(zipfRandom, key);
                 // generate val for update
                 if (mBenchTransactionKv) {
-                  cr::Worker::My().StartTx();
+                  cr::WorkerContext::My().StartTx();
                   table->UpdatePartial(Slice(key, FLAGS_ycsb_key_size), updateCallBack,
                                        *updateDesc);
-                  cr::Worker::My().CommitTx();
+                  cr::WorkerContext::My().CommitTx();
                 } else {
                   table->UpdatePartial(Slice(key, FLAGS_ycsb_key_size), updateCallBack,
                                        *updateDesc);
@@ -221,10 +221,10 @@ public:
               Log::Fatal("Unsupported workload type: {}", static_cast<uint8_t>(workloadType));
             }
             }
-            threadCommitted[cr::Worker::My().mWorkerId]++;
+            threadCommitted[cr::WorkerContext::My().mWorkerId]++;
           }
           JUMPMU_CATCH() {
-            threadAborted[cr::Worker::My().mWorkerId]++;
+            threadAborted[cr::WorkerContext::My().mWorkerId]++;
           }
         }
       });

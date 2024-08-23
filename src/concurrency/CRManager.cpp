@@ -4,7 +4,7 @@
 #include "leanstore/btree/BasicKV.hpp"
 #include "leanstore/concurrency/GroupCommitter.hpp"
 #include "leanstore/concurrency/HistoryStorage.hpp"
-#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/concurrency/WorkerContext.hpp"
 #include "leanstore/concurrency/WorkerThread.hpp"
 #include "leanstore/utils/Log.hpp"
 
@@ -16,7 +16,7 @@ namespace leanstore::cr {
 CRManager::CRManager(leanstore::LeanStore* store) : mStore(store), mGroupCommitter(nullptr) {
   auto* storeOption = store->mStoreOption;
   // start all worker threads
-  mWorkers.resize(storeOption->mWorkerThreads);
+  mWorkerCtxs.resize(storeOption->mWorkerThreads);
   mWorkerThreads.reserve(storeOption->mWorkerThreads);
   for (uint64_t workerId = 0; workerId < storeOption->mWorkerThreads; workerId++) {
     auto workerThread = std::make_unique<WorkerThread>(store, workerId, workerId);
@@ -24,9 +24,9 @@ CRManager::CRManager(leanstore::LeanStore* store) : mStore(store), mGroupCommitt
 
     // create thread-local transaction executor on each worker thread
     workerThread->SetJob([&]() {
-      Worker::sTlsWorker = std::make_unique<Worker>(workerId, mWorkers, mStore);
-      Worker::sTlsWorkerRaw = Worker::sTlsWorker.get();
-      mWorkers[workerId] = Worker::sTlsWorker.get();
+      WorkerContext::sTlsWorkerCtx = std::make_unique<WorkerContext>(workerId, mWorkerCtxs, mStore);
+      WorkerContext::sTlsWorkerCtxRaw = WorkerContext::sTlsWorkerCtx.get();
+      mWorkerCtxs[workerId] = WorkerContext::sTlsWorkerCtx.get();
     });
     workerThread->Wait();
     mWorkerThreads.emplace_back(std::move(workerThread));
@@ -35,7 +35,7 @@ CRManager::CRManager(leanstore::LeanStore* store) : mStore(store), mGroupCommitt
   // start group commit thread
   if (mStore->mStoreOption->mEnableWal) {
     const int cpu = storeOption->mWorkerThreads;
-    mGroupCommitter = std::make_unique<GroupCommitter>(mStore, mStore->mWalFd, mWorkers, cpu);
+    mGroupCommitter = std::make_unique<GroupCommitter>(mStore, mStore->mWalFd, mWorkerCtxs, cpu);
     mGroupCommitter->Start();
   }
 
@@ -82,8 +82,8 @@ void CRManager::setupHistoryStorage4EachWorker() {
                  removeBtreeName, res.error().ToString());
     }
     auto* removeIndex = res.value();
-    mWorkers[i]->mCc.mHistoryStorage.SetUpdateIndex(updateIndex);
-    mWorkers[i]->mCc.mHistoryStorage.SetRemoveIndex(removeIndex);
+    mWorkerCtxs[i]->mCc.mHistoryStorage.SetUpdateIndex(updateIndex);
+    mWorkerCtxs[i]->mCc.mHistoryStorage.SetRemoveIndex(removeIndex);
   }
 }
 

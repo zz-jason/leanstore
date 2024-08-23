@@ -7,7 +7,7 @@ namespace leanstore::storage::btree {
 
 std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(Slice payload,
                                                            ValCallback callback) const {
-  if (cr::Worker::My().mCc.VisibleForMe(mWorkerId, mTxId)) {
+  if (cr::WorkerContext::My().mCc.VisibleForMe(mWorkerId, mTxId)) {
     if (mIsTombstone) {
       return {OpCode::kNotFound, 1};
     }
@@ -32,7 +32,7 @@ std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(Slice payload,
 
   uint16_t versionsRead = 1;
   while (true) {
-    bool found = cr::Worker::My().mCc.GetVersion(
+    bool found = cr::WorkerContext::My().mCc.GetVersion(
         newerWorkerId, newerTxId, newerCommandId,
         [&](const uint8_t* versionBuf, uint64_t versionSize) {
           auto& version = *reinterpret_cast<const Version*>(versionBuf);
@@ -76,12 +76,12 @@ std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(Slice payload,
       Log::Error("Not found in the version tree, workerId={}, startTs={}, "
                  "versionsRead={}, newerWorkerId={}, newerTxId={}, "
                  "newerCommandId={}",
-                 cr::Worker::My().mWorkerId, cr::ActiveTx().mStartTs, versionsRead, newerWorkerId,
-                 newerTxId, newerCommandId);
+                 cr::WorkerContext::My().mWorkerId, cr::ActiveTx().mStartTs, versionsRead,
+                 newerWorkerId, newerTxId, newerCommandId);
       return {OpCode::kNotFound, versionsRead};
     }
 
-    if (cr::Worker::My().mCc.VisibleForMe(newerWorkerId, newerTxId)) {
+    if (cr::WorkerContext::My().mCc.VisibleForMe(newerWorkerId, newerTxId)) {
       callback(Slice(valueBuf.get(), valueSize));
       return {OpCode::kOK, versionsRead};
     }
@@ -98,7 +98,7 @@ void ChainedTuple::Update(PessimisticExclusiveIterator& xIter, Slice key,
   // Move the newest tuple to the history version tree.
   auto treeId = xIter.mBTree.mTreeId;
   auto currCommandId =
-      cr::Worker::My().mCc.PutVersion(treeId, false, versionSize, [&](uint8_t* versionBuf) {
+      cr::WorkerContext::My().mCc.PutVersion(treeId, false, versionSize, [&](uint8_t* versionBuf) {
         auto& updateVersion = *new (versionBuf) UpdateVersion(mWorkerId, mTxId, mCommandId, true);
         std::memcpy(updateVersion.mPayload, &updateDesc, updateDesc.Size());
         auto* dest = updateVersion.mPayload + updateDesc.Size();
@@ -109,7 +109,7 @@ void ChainedTuple::Update(PessimisticExclusiveIterator& xIter, Slice key,
     auto mutRawVal = xIter.MutableVal();
     auto userValSize = mutRawVal.Size() - sizeof(ChainedTuple);
     updateCallBack(MutableSlice(mPayload, userValSize));
-    mWorkerId = cr::Worker::My().mWorkerId;
+    mWorkerId = cr::WorkerContext::My().mWorkerId;
     mTxId = cr::ActiveTx().mStartTs;
     mCommandId = currCommandId;
   };

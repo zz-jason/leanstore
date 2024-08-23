@@ -2,7 +2,9 @@
 
 #include "leanstore/Slice.hpp"
 
+#include <cstdint>
 #include <functional>
+#include <string>
 
 namespace leanstore {
 

@@ -9,7 +9,8 @@
                 "CMAKE_CXX_COMPILER": "g++-13",
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "BUILD_SHARED_LIBS": "ON"
+                "BUILD_SHARED_LIBS": "ON",
+                "ENABLE_PROFILING": "ON"
             }
         },
         {
@@ -17,8 +18,7 @@
             "inherits": "base",
             "hidden": true,
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug",
-                "ENABLE_PROFILING": "ON"
+                "CMAKE_BUILD_TYPE": "Debug"
             }
         },
         {
@@ -27,8 +27,7 @@
             "hidden": true,
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "COUNTERS_LEVEL": "none",
-                "ENABLE_PROFILING": "OFF"
+                "COUNTERS_LEVEL": "none"
             }
         },
         {

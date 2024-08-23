@@ -8,7 +8,7 @@
 #include "leanstore/btree/core/BTreeGeneric.hpp"
 #include "leanstore/btree/core/PessimisticExclusiveIterator.hpp"
 #include "leanstore/buffer-manager/GuardedBufferFrame.hpp"
-#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/concurrency/WorkerContext.hpp"
 #include "leanstore/utils/Result.hpp"
 
 #include <expected>
@@ -109,7 +109,7 @@ public:
   }
 
   inline static uint64_t ConvertToFatTupleThreshold() {
-    return cr::Worker::My().mStore->mStoreOption->mWorkerThreads;
+    return cr::WorkerContext::My().mStore->mStoreOption->mWorkerThreads;
   }
 
   //! Updates the value stored in FatTuple. The former newest version value is

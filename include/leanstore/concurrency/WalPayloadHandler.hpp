@@ -1,7 +1,7 @@
 #pragma once
 
 #include "leanstore/concurrency/GroupCommitter.hpp"
-#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/concurrency/WorkerContext.hpp"
 
 namespace leanstore::cr {
 
@@ -37,7 +37,7 @@ public:
 
 template <typename T>
 inline void WalPayloadHandler<T>::SubmitWal() {
-  cr::Worker::My().mLogging.SubmitWALEntryComplex(mTotalSize);
+  cr::WorkerContext::My().mLogging.SubmitWALEntryComplex(mTotalSize);
 }
 
 } // namespace leanstore::cr

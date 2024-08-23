@@ -6,10 +6,14 @@
 #include "leanstore/Slice.hpp"
 #include "leanstore/btree/BasicKV.hpp"
 #include "leanstore/btree/core/PessimisticSharedIterator.hpp"
+#include "telemetry/MetricsHttpExposer.hpp"
 
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <memory>
+#include <mutex>
+#include <type_traits>
 #include <utility>
 
 #include <stdint.h>
@@ -25,11 +29,13 @@ String* CreateString(const char* data, uint64_t size) {
   if (data == nullptr || size == 0) {
     str->mData = nullptr;
     str->mSize = 0;
+    str->mCapacity = 0;
     return str;
   }
 
   // allocate memory, copy data
   str->mSize = size;
+  str->mCapacity = size + 1;
   str->mData = new char[size + 1];
   memcpy(str->mData, data, size);
   str->mData[size] = '\0';
@@ -46,6 +52,7 @@ void DestroyString(String* str) {
 
     str->mData = nullptr;
     str->mSize = 0;
+    str->mCapacity = 0;
 
     // release the string object
     delete str;
@@ -123,15 +130,32 @@ bool BasicKvInsert(BasicKvHandle* handle, uint64_t workerId, StringSlice key, St
   return succeed;
 }
 
-String* BasicKvLookup(BasicKvHandle* handle, uint64_t workerId, StringSlice key) {
-  String* val{nullptr};
+bool BasicKvLookup(BasicKvHandle* handle, uint64_t workerId, StringSlice key, String** val) {
+  bool found = false;
   handle->mStore->ExecSync(workerId, [&]() {
+    // copy value out to a thread-local buffer to reduce memory allocation
     auto copyValueOut = [&](leanstore::Slice valSlice) {
-      val = CreateString(reinterpret_cast<const char*>(valSlice.data()), valSlice.size());
+      // set the found flag
+      found = true;
+
+      // create a new string if the value is out of the buffer size
+      if ((**val).mCapacity < valSlice.size() + 1) {
+        DestroyString(*val);
+        *val = CreateString(reinterpret_cast<const char*>(valSlice.data()), valSlice.size());
+        return;
+      }
+
+      // copy data to the buffer
+      (**val).mSize = valSlice.size();
+      memcpy((**val).mData, valSlice.data(), valSlice.size());
+      (**val).mData[valSlice.size()] = '\0';
     };
-    handle->mBtree->Lookup(leanstore::Slice(key.mData, key.mSize), copyValueOut);
+
+    // lookup the key
+    handle->mBtree->Lookup(leanstore::Slice(key.mData, key.mSize), std::move(copyValueOut));
   });
-  return val;
+
+  return found;
 }
 
 bool BasicKvRemove(BasicKvHandle* handle, uint64_t workerId, StringSlice key) {
@@ -246,4 +270,25 @@ StringSlice BasicKvIterKey(BasicKvIterHandle* handle) {
 StringSlice BasicKvIterVal(BasicKvIterHandle* handle) {
   auto valSlice = handle->mIterator.Val();
   return {reinterpret_cast<const char*>(valSlice.data()), valSlice.size()};
+}
+
+//------------------------------------------------------------------------------
+// Interfaces for metrics
+//------------------------------------------------------------------------------
+
+static leanstore::telemetry::MetricsHttpExposer* sGlobalMetricsHttpExposer = nullptr;
+static std::mutex sGlobalMetricsHttpExposerMutex;
+
+void StartMetricsHttpExposer(int32_t port) {
+  std::unique_lock guard{sGlobalMetricsHttpExposerMutex};
+  sGlobalMetricsHttpExposer = new leanstore::telemetry::MetricsHttpExposer(nullptr, port);
+  sGlobalMetricsHttpExposer->Start();
+}
+
+void StopMetricsHttpExposer() {
+  std::unique_lock guard{sGlobalMetricsHttpExposerMutex};
+  if (sGlobalMetricsHttpExposer != nullptr) {
+    delete sGlobalMetricsHttpExposer;
+    sGlobalMetricsHttpExposer = nullptr;
+  }
 }

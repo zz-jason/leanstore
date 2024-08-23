@@ -182,16 +182,16 @@ inline void LeanStoreMVCCSession::SetTxMode(TxMode txMode) {
 }
 
 inline void LeanStoreMVCCSession::StartTx() {
-  mStore->mLeanStore->ExecSync(mWorkerId,
-                               [&]() { cr::Worker::My().StartTx(mTxMode, mIsolationLevel); });
+  mStore->mLeanStore->ExecSync(
+      mWorkerId, [&]() { cr::WorkerContext::My().StartTx(mTxMode, mIsolationLevel); });
 }
 
 inline void LeanStoreMVCCSession::CommitTx() {
-  mStore->mLeanStore->ExecSync(mWorkerId, [&]() { cr::Worker::My().CommitTx(); });
+  mStore->mLeanStore->ExecSync(mWorkerId, [&]() { cr::WorkerContext::My().CommitTx(); });
 }
 
 inline void LeanStoreMVCCSession::AbortTx() {
-  mStore->mLeanStore->ExecSync(mWorkerId, [&]() { cr::Worker::My().AbortTx(); });
+  mStore->mLeanStore->ExecSync(mWorkerId, [&]() { cr::WorkerContext::My().AbortTx(); });
 }
 
 // DDL operations
@@ -213,11 +213,11 @@ inline Result<TableRef*> LeanStoreMVCCSession::CreateTable(const std::string& tb
 inline Result<void> LeanStoreMVCCSession::DropTable(const std::string& tblName, bool implicitTx) {
   mStore->mLeanStore->ExecSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::My().StartTx(mTxMode, mIsolationLevel);
+      cr::WorkerContext::My().StartTx(mTxMode, mIsolationLevel);
     }
     mStore->mLeanStore->DropTransactionKV(tblName);
     if (implicitTx) {
-      cr::Worker::My().CommitTx();
+      cr::WorkerContext::My().CommitTx();
     }
   });
   return {};
@@ -230,13 +230,13 @@ inline Result<void> LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice va
   OpCode res;
   mStore->mLeanStore->ExecSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::My().StartTx(mTxMode, mIsolationLevel);
+      cr::WorkerContext::My().StartTx(mTxMode, mIsolationLevel);
     }
     SCOPED_DEFER(if (implicitTx) {
       if (res == OpCode::kOK) {
-        cr::Worker::My().CommitTx();
+        cr::WorkerContext::My().CommitTx();
       } else {
-        cr::Worker::My().AbortTx();
+        cr::WorkerContext::My().AbortTx();
       }
     });
 
@@ -260,13 +260,13 @@ inline Result<uint64_t> LeanStoreMVCCSession::Get(TableRef* tbl, Slice key, std:
 
   mStore->mLeanStore->ExecSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::My().StartTx(mTxMode, mIsolationLevel);
+      cr::WorkerContext::My().StartTx(mTxMode, mIsolationLevel);
     }
     SCOPED_DEFER(if (implicitTx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
-        cr::Worker::My().CommitTx();
+        cr::WorkerContext::My().CommitTx();
       } else {
-        cr::Worker::My().AbortTx();
+        cr::WorkerContext::My().AbortTx();
       }
     });
 
@@ -290,13 +290,13 @@ inline Result<uint64_t> LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, S
   };
   mStore->mLeanStore->ExecSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::My().StartTx(mTxMode, mIsolationLevel);
+      cr::WorkerContext::My().StartTx(mTxMode, mIsolationLevel);
     }
     SCOPED_DEFER(if (implicitTx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
-        cr::Worker::My().CommitTx();
+        cr::WorkerContext::My().CommitTx();
       } else {
-        cr::Worker::My().AbortTx();
+        cr::WorkerContext::My().AbortTx();
       }
     });
 
@@ -323,13 +323,13 @@ inline Result<uint64_t> LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key, b
   OpCode res;
   mStore->mLeanStore->ExecSync(mWorkerId, [&]() {
     if (implicitTx) {
-      cr::Worker::My().StartTx(mTxMode, mIsolationLevel);
+      cr::WorkerContext::My().StartTx(mTxMode, mIsolationLevel);
     }
     SCOPED_DEFER(if (implicitTx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
-        cr::Worker::My().CommitTx();
+        cr::WorkerContext::My().CommitTx();
       } else {
-        cr::Worker::My().AbortTx();
+        cr::WorkerContext::My().AbortTx();
       }
     });
 

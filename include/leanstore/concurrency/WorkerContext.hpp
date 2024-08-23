@@ -20,7 +20,7 @@ namespace leanstore::cr {
 class Logging;
 class ConcurrencyControl;
 
-class Worker {
+class WorkerContext {
 public:
   //! The store it belongs to.
   leanstore::LeanStore* mStore = nullptr;
@@ -28,6 +28,7 @@ public:
   //! The write-ahead logging component.
   Logging mLogging;
 
+  //! The concurrent control component.
   ConcurrencyControl mCc;
 
   //! The ID of the current command in the current transaction.
@@ -36,21 +37,21 @@ public:
   //! The current running transaction.
   Transaction mActiveTx;
 
-  //! The ID of the current transaction. It's set by the current worker thread
-  //! and read by the garbage collection process to determine the lower
-  //! watermarks of the transactions.
+  //! The ID of the current transaction. It's set by the current worker thread and read by the
+  //! garbage collection process to determine the lower watermarks of the transactions.
   std::atomic<TXID> mActiveTxId = 0;
 
   //! ID of the current worker itself.
   const uint64_t mWorkerId;
 
   //! All the workers.
-  std::vector<Worker*>& mAllWorkers;
+  std::vector<WorkerContext*>& mAllWorkers;
 
 public:
-  Worker(uint64_t workerId, std::vector<Worker*>& allWorkers, leanstore::LeanStore* store);
+  WorkerContext(uint64_t workerId, std::vector<WorkerContext*>& allWorkers,
+                leanstore::LeanStore* store);
 
-  ~Worker();
+  ~WorkerContext();
 
 public:
   bool IsTxStarted() {
@@ -65,26 +66,29 @@ public:
   void AbortTx();
 
 public:
-  static thread_local std::unique_ptr<Worker> sTlsWorker;
-  static thread_local Worker* sTlsWorkerRaw;
+  //! Thread-local storage for WorkerContext.
+  static thread_local std::unique_ptr<WorkerContext> sTlsWorkerCtx;
+
+  //! Raw pointer to sTlsWorkerCtx to avoid the overhead of std::unique_ptr.
+  static thread_local WorkerContext* sTlsWorkerCtxRaw;
 
   static constexpr uint64_t kRcBit = (1ull << 63);
   static constexpr uint64_t kLongRunningBit = (1ull << 62);
   static constexpr uint64_t kCleanBitsMask = ~(kRcBit | kLongRunningBit);
 
 public:
-  static Worker& My() {
-    return *Worker::sTlsWorkerRaw;
+  static WorkerContext& My() {
+    return *WorkerContext::sTlsWorkerCtxRaw;
   }
 
   static bool InWorker() {
-    return Worker::sTlsWorkerRaw != nullptr;
+    return WorkerContext::sTlsWorkerCtxRaw != nullptr;
   }
 };
 
 // Shortcuts
 inline Transaction& ActiveTx() {
-  return cr::Worker::My().mActiveTx;
+  return cr::WorkerContext::My().mActiveTx;
 }
 
 } // namespace leanstore::cr

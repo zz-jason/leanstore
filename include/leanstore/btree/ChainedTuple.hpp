@@ -5,7 +5,7 @@
 #include "leanstore/btree/BasicKV.hpp"
 #include "leanstore/btree/core/PessimisticExclusiveIterator.hpp"
 #include "leanstore/concurrency/CRManager.hpp"
-#include "leanstore/concurrency/Worker.hpp"
+#include "leanstore/concurrency/WorkerContext.hpp"
 
 namespace leanstore::storage::btree {
 
@@ -61,10 +61,11 @@ public:
   std::tuple<OpCode, uint16_t> GetVisibleTuple(Slice payload, ValCallback callback) const;
 
   void UpdateStats() {
-    if (cr::Worker::My().mCc.VisibleForAll(mTxId) ||
+    if (cr::WorkerContext::My().mCc.VisibleForAll(mTxId) ||
         mOldestTx !=
             static_cast<uint16_t>(
-                cr::Worker::My().mStore->mCRManager->mGlobalWmkInfo.mOldestActiveTx & 0xFFFF)) {
+                cr::WorkerContext::My().mStore->mCRManager->mGlobalWmkInfo.mOldestActiveTx &
+                0xFFFF)) {
       mOldestTx = 0;
       mTotalUpdates = 0;
       return;
@@ -75,10 +76,11 @@ public:
   bool ShouldConvertToFatTuple() {
     bool commandValid = mCommandId != kInvalidCommandid;
     bool hasLongRunningOLAP =
-        cr::Worker::My().mStore->mCRManager->mGlobalWmkInfo.HasActiveLongRunningTx();
-    bool frequentlyUpdated = mTotalUpdates > cr::Worker::My().mStore->mStoreOption->mWorkerThreads;
+        cr::WorkerContext::My().mStore->mCRManager->mGlobalWmkInfo.HasActiveLongRunningTx();
+    bool frequentlyUpdated =
+        mTotalUpdates > cr::WorkerContext::My().mStore->mStoreOption->mWorkerThreads;
     bool recentUpdatedByOthers =
-        mWorkerId != cr::Worker::My().mWorkerId || mTxId != cr::ActiveTx().mStartTs;
+        mWorkerId != cr::WorkerContext::My().mWorkerId || mTxId != cr::ActiveTx().mStartTs;
     return commandValid && hasLongRunningOLAP && recentUpdatedByOthers && frequentlyUpdated;
   }
 

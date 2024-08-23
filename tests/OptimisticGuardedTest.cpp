@@ -39,14 +39,14 @@ protected:
 TEST_F(OptimisticGuardedTest, Set) {
   storage::OptimisticGuarded<TestPayload> guardedVal({0, 100});
 
-  // Worker 0, set the guardedVal 100 times
+  // WorkerContext 0, set the guardedVal 100 times
   mStore->ExecSync(0, [&]() {
     for (int64_t i = 0; i < 100; i++) {
       guardedVal.Set(TestPayload{i, 100 - i});
     }
   });
 
-  // Worker 1, read the guardedVal 200 times
+  // WorkerContext 1, read the guardedVal 200 times
   mStore->ExecSync(1, [&]() {
     TestPayload copiedVal;
     auto version = guardedVal.Get(copiedVal);
@@ -64,14 +64,14 @@ TEST_F(OptimisticGuardedTest, Set) {
 TEST_F(OptimisticGuardedTest, UpdateAttribute) {
   storage::OptimisticGuarded<TestPayload> guardedVal({0, 100});
 
-  // Worker 0, update the guardedVal 100 times
+  // WorkerContext 0, update the guardedVal 100 times
   mStore->ExecSync(0, [&]() {
     for (int64_t i = 0; i < 100; i++) {
       guardedVal.UpdateAttribute(&TestPayload::mA, i);
     }
   });
 
-  // Worker 1, read the guardedVal 200 times
+  // WorkerContext 1, read the guardedVal 200 times
   mStore->ExecSync(1, [&]() {
     TestPayload copiedVal;
     auto version = guardedVal.Get(copiedVal);

@@ -5,6 +5,8 @@
 
 #include <assert.h>
 #include <signal.h>
+#include <stdio.h>
+
 //--------------------------------------------------------------------------------------
 #define Generic_Exception(name)                                                                    \
   struct name : public std::exception {                                                            \

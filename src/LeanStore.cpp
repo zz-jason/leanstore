@@ -13,6 +13,7 @@
 #include "leanstore/utils/Misc.hpp"
 #include "leanstore/utils/Result.hpp"
 #include "leanstore/utils/UserThread.hpp"
+#include "telemetry/MetricsHttpExposer.hpp"
 #include "telemetry/MetricsManager.hpp"
 
 #include <rapidjson/document.h>
@@ -31,6 +32,7 @@
 #include <memory>
 
 #include <linux/fs.h>
+#include <resolv.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <sys/resource.h>
@@ -56,7 +58,10 @@ Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption* option) {
   return std::make_unique<LeanStore>(option);
 }
 
-LeanStore::LeanStore(StoreOption* option) : mStoreOption(option), mMetricsManager(nullptr) {
+LeanStore::LeanStore(StoreOption* option)
+    : mStoreOption(option),
+      mMetricsManager(nullptr),
+      mMetricsExposer(nullptr) {
   utils::tlsStore = this;
 
   Log::Info("LeanStore starting ...");
@@ -64,8 +69,12 @@ LeanStore::LeanStore(StoreOption* option) : mStoreOption(option), mMetricsManage
 
   // Expose the metrics
   if (mStoreOption->mEnableMetrics) {
-    mMetricsManager = std::make_unique<leanstore::telemetry::MetricsManager>(this);
-    mMetricsManager->Expose();
+    mMetricsManager = std::make_unique<leanstore::telemetry::MetricsManager>();
+
+    //! Expose the metrics via HTTP
+    mMetricsExposer = std::make_unique<leanstore::telemetry::MetricsHttpExposer>(this);
+    mMetricsExposer->SetCollectable(mMetricsManager->GetRegistry());
+    mMetricsExposer->Start();
   }
 
   initPageAndWalFd();
@@ -81,7 +90,7 @@ LeanStore::LeanStore(StoreOption* option) : mStoreOption(option), mMetricsManage
   //
   // TODO(jian.z): Deserialize buffer manager before creating CRManager. We need to initialize
   // nextPageId for each buffer partition before creating history tree in CRManager
-  mCRManager = std::make_unique<cr::CRManager>(this);
+  mCRManager = new cr::CRManager(this);
 
   // recover from disk
   if (!mStoreOption->mCreateFromScratch) {
@@ -151,6 +160,7 @@ LeanStore::~LeanStore() {
     // stop metrics manager in the last
     if (mStoreOption->mEnableMetrics) {
       mMetricsManager = nullptr;
+      mMetricsExposer = nullptr;
     }
     DestroyStoreOption(mStoreOption);
     Log::Info("LeanStore stopped");
@@ -178,7 +188,10 @@ LeanStore::~LeanStore() {
   mBufferManager->SyncAllPageWrites();
 
   // destroy and Stop all foreground workers
-  mCRManager = nullptr;
+  if (mCRManager != nullptr) {
+    delete mCRManager;
+    mCRManager = nullptr;
+  }
 
   // destroy buffer manager (buffer frame providers)
   mBufferManager->StopPageEvictors();
@@ -209,12 +222,12 @@ LeanStore::~LeanStore() {
 }
 
 void LeanStore::ExecSync(uint64_t workerId, std::function<void()> job) {
-  mCRManager->mWorkerThreads[workerId]->SetJob(job);
+  mCRManager->mWorkerThreads[workerId]->SetJob(std::move(job));
   mCRManager->mWorkerThreads[workerId]->Wait();
 }
 
 void LeanStore::ExecAsync(uint64_t workerId, std::function<void()> job) {
-  mCRManager->mWorkerThreads[workerId]->SetJob(job);
+  mCRManager->mWorkerThreads[workerId]->SetJob(std::move(job));
 }
 
 void LeanStore::Wait(WORKERID workerId) {
@@ -448,7 +461,7 @@ void LeanStore::GetBasicKV(const std::string& name, storage::btree::BasicKV** bt
 }
 
 void LeanStore::DropBasicKV(const std::string& name) {
-  LS_DCHECK(cr::Worker::My().IsTxStarted());
+  LS_DCHECK(cr::WorkerContext::My().IsTxStarted());
   auto* btree =
       dynamic_cast<leanstore::storage::btree::BTreeGeneric*>(mTreeRegistry->GetTree(name));
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
@@ -494,7 +507,7 @@ void LeanStore::GetTransactionKV(const std::string& name, storage::btree::Transa
 }
 
 void LeanStore::DropTransactionKV(const std::string& name) {
-  LS_DCHECK(cr::Worker::My().IsTxStarted());
+  LS_DCHECK(cr::WorkerContext::My().IsTxStarted());
   auto* btree = DownCast<storage::btree::BTreeGeneric*>(mTreeRegistry->GetTree(name));
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
   auto res = mTreeRegistry->UnregisterTree(name);
