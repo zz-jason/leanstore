@@ -17,6 +17,9 @@ namespace leanstore::cr {
 class WorkerContext;
 class WalFlushReq;
 
+//! The group committer thread is responsible for committing transactions in batches. It collects
+//! wal records from all the worker threads, writes them to the wal file with libaio, and determines
+//! the commitable transactions based on the min flushed GSN and min flushed transaction ID.
 class GroupCommitter : public leanstore::utils::UserThread {
 public:
   leanstore::LeanStore* mStore;
@@ -27,14 +30,13 @@ public:
   //! Start file offset of the next WalEntry.
   uint64_t mWalSize;
 
-  //! The minimum flushed GSN among all worker threads. Transactions whose max
-  //! observed GSN not larger than it can be committed safely.
+  //! The minimum flushed GSN among all worker threads. Transactions whose max observed GSN not
+  //! larger than it can be committed safely.
   std::atomic<uint64_t> mGlobalMinFlushedGSN;
 
-  //! The maximum flushed GSN among all worker threads in each group commit
-  //! round. It is updated by the group commit thread and used to update the GCN
-  //! counter of the current worker thread to prevent GSN from skewing and
-  //! undermining RFA.
+  //! The maximum flushed GSN among all worker threads in each group commit round. It is updated by
+  //! the group commit thread and used to update the GCN counter of the current worker thread to
+  //! prevent GSN from skewing and undermining RFA.
   std::atomic<uint64_t> mGlobalMaxFlushedGSN;
 
   //! All the workers.
@@ -62,8 +64,8 @@ protected:
   virtual void runImpl() override;
 
 private:
-  //! Phase 1: collect wal records from all the worker threads. Collected
-  //! wal records are written to libaio IOCBs.
+  //! Phase 1: collect wal records from all the worker threads. Collected wal records are written to
+  //! libaio IOCBs.
   //!
   //! @param[out] minFlushedGSN the min flushed GSN among all the wal records
   //! @param[out] maxFlushedGSN the max flushed GSN among all the wal records
@@ -77,8 +79,7 @@ private:
   //! Phase 2: write all the collected wal records to the wal file with libaio.
   void flushWalRecords();
 
-  //! Phase 3: determine the commitable transactions based on minFlushedGSN
-  //! and minFlushedTxId.
+  //! Phase 3: determine the commitable transactions based on minFlushedGSN and minFlushedTxId.
   //!
   //! @param[in] minFlushedGSN the min flushed GSN among all the wal records
   //! @param[in] maxFlushedGSN the max flushed GSN among all the wal records

@@ -15,7 +15,8 @@
 #include "leanstore/utils/Misc.hpp"
 #include "utils/ToJson.hpp"
 
-#include <iostream>
+#include <cstdint>
+#include <format>
 
 using namespace leanstore::storage;
 
@@ -66,19 +67,17 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, int16_t favoredSplitPos
       mStore->mBufferManager.get(), std::move(parentHandler.mParentGuard), parentHandler.mParentBf);
   auto guardedChild = GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(), guardedParent,
                                                     parentHandler.mChildSwip);
-  if (guardedChild->mNumSeps <= 1) {
-    Log::Warn("Split failed, not enough separators in node, "
-              "toSplit.mHeader.mPageId={}, favoredSplitPos={}, "
-              "guardedChild->mNumSeps={}",
-              toSplit.mHeader.mPageId, favoredSplitPos, guardedChild->mNumSeps);
+  if (guardedChild->mNumSlots <= 1) {
+    Log::Warn("Split failed, slots too less: pageId={}, favoredSplitPos={}, numSlots={}",
+              toSplit.mHeader.mPageId, favoredSplitPos, guardedChild->mNumSlots);
     return;
   }
 
   // init the separator info
   BTreeNode::SeparatorInfo sepInfo;
-  if (favoredSplitPos < 0 || favoredSplitPos >= guardedChild->mNumSeps - 1) {
+  if (favoredSplitPos < 0 || favoredSplitPos >= guardedChild->mNumSlots - 1) {
     if (mConfig.mUseBulkInsert) {
-      favoredSplitPos = guardedChild->mNumSeps - 2;
+      favoredSplitPos = guardedChild->mNumSlots - 2;
       sepInfo = BTreeNode::SeparatorInfo{guardedChild->GetFullKeyLen(favoredSplitPos),
                                          static_cast<uint16_t>(favoredSplitPos), false};
     } else {
@@ -231,13 +230,13 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
     return false;
   }
 
-  if (guardedParent->mNumSeps <= 1) {
+  if (guardedParent->mNumSlots <= 1) {
     return false;
   }
 
-  LS_DCHECK(posInParent <= guardedParent->mNumSeps,
+  LS_DCHECK(posInParent <= guardedParent->mNumSlots,
             "Invalid position in parent, posInParent={}, childSizeOfParent={}", posInParent,
-            guardedParent->mNumSeps);
+            guardedParent->mNumSlots);
   guardedParent.JumpIfModifiedByOthers();
   guardedChild.JumpIfModifiedByOthers();
 
@@ -274,7 +273,7 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
     return true;
   };
   auto mergeAndReclaimRight = [&]() {
-    auto& rightSwip = ((posInParent + 1) == guardedParent->mNumSeps)
+    auto& rightSwip = ((posInParent + 1) == guardedParent->mNumSlots)
                           ? guardedParent->mRightMostChildSwip
                           : *guardedParent->ChildSwip(posInParent + 1);
     if (!swizzleSibling && rightSwip.IsEvicted()) {
@@ -325,7 +324,7 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
   if (posInParent > 0) {
     succeed = mergeAndReclaimLeft();
   }
-  if (!succeed && posInParent < guardedParent->mNumSeps) {
+  if (!succeed && posInParent < guardedParent->mNumSlots) {
     succeed = mergeAndReclaimRight();
   }
 
@@ -363,24 +362,24 @@ int16_t BTreeGeneric::mergeLeftIntoRight(ExclusiveGuardedBufferFrame<BTreeNode>&
   // Do a partial merge
   // Remove a key at a time from the merge and check if now it fits
   int16_t tillSlotId = -1;
-  for (int16_t i = 0; i < xGuardedLeft->mNumSeps; i++) {
+  for (int16_t i = 0; i < xGuardedLeft->mNumSlots; i++) {
     spaceUpperBound -=
-        sizeof(BTreeNode::Slot) + xGuardedLeft->KeySizeWithoutPrefix(i) + xGuardedLeft->ValSize(i);
-    if (spaceUpperBound + (xGuardedLeft->GetFullKeyLen(i) - xGuardedRight->mLowerFence.mLength) <
+        sizeof(BTreeNodeSlot) + xGuardedLeft->KeySizeWithoutPrefix(i) + xGuardedLeft->ValSize(i);
+    if (spaceUpperBound + (xGuardedLeft->GetFullKeyLen(i) - xGuardedRight->mLowerFence.mSize) <
         BTreeNode::Size() * 1.0) {
       tillSlotId = i + 1;
       break;
     }
   }
-  if (!(tillSlotId != -1 && tillSlotId < (xGuardedLeft->mNumSeps - 1))) {
+  if (!(tillSlotId != -1 && tillSlotId < (xGuardedLeft->mNumSlots - 1))) {
     return 0; // false
   }
 
   assert((spaceUpperBound + (xGuardedLeft->GetFullKeyLen(tillSlotId - 1) -
-                             xGuardedRight->mLowerFence.mLength)) < BTreeNode::Size() * 1.0);
+                             xGuardedRight->mLowerFence.mSize)) < BTreeNode::Size() * 1.0);
   assert(tillSlotId > 0);
 
-  uint16_t copyFromCount = xGuardedLeft->mNumSeps - tillSlotId;
+  uint16_t copyFromCount = xGuardedLeft->mNumSlots - tillSlotId;
 
   uint16_t newLeftUpperFenceSize = xGuardedLeft->GetFullKeyLen(tillSlotId - 1);
   ENSURE(newLeftUpperFenceSize > 0);
@@ -394,35 +393,34 @@ int16_t BTreeGeneric::mergeLeftIntoRight(ExclusiveGuardedBufferFrame<BTreeNode>&
 
   auto nodeBuf = utils::JumpScopedArray<uint8_t>(BTreeNode::Size());
   {
-    auto* tmp = BTreeNode::Init(nodeBuf->get(), true);
-
-    tmp->SetFences(Slice(newLeftUpperFence, newLeftUpperFenceSize), xGuardedRight->GetUpperFence());
+    Slice newLowerFence{newLeftUpperFence, newLeftUpperFenceSize};
+    Slice newUpperFence{xGuardedRight->GetUpperFence()};
+    auto* tmp = BTreeNode::New(nodeBuf->get(), true, newLowerFence, newUpperFence);
 
     xGuardedLeft->CopyKeyValueRange(tmp, 0, tillSlotId, copyFromCount);
-    xGuardedRight->CopyKeyValueRange(tmp, copyFromCount, 0, xGuardedRight->mNumSeps);
+    xGuardedRight->CopyKeyValueRange(tmp, copyFromCount, 0, xGuardedRight->mNumSlots);
     memcpy(xGuardedRight.GetPagePayloadPtr(), tmp, BTreeNode::Size());
     xGuardedRight->MakeHint();
 
     // Nothing to do for the right node's separator
-    assert(xGuardedRight->CompareKeyWithBoundaries(
-               Slice(newLeftUpperFence, newLeftUpperFenceSize)) == 1);
+    assert(xGuardedRight->CompareKeyWithBoundaries(newLowerFence) == 1);
   }
-  {
-    auto* tmp = BTreeNode::Init(nodeBuf->get(), true);
 
-    tmp->SetFences(xGuardedLeft->GetLowerFence(), Slice(newLeftUpperFence, newLeftUpperFenceSize));
-    // -------------------------------------------------------------------------------------
-    xGuardedLeft->CopyKeyValueRange(tmp, 0, 0, xGuardedLeft->mNumSeps - copyFromCount);
+  {
+    Slice newLowerFence{xGuardedLeft->GetLowerFence()};
+    Slice newUpperFence{newLeftUpperFence, newLeftUpperFenceSize};
+    auto* tmp = BTreeNode::New(nodeBuf->get(), true, newLowerFence, newUpperFence);
+
+    xGuardedLeft->CopyKeyValueRange(tmp, 0, 0, xGuardedLeft->mNumSlots - copyFromCount);
     memcpy(xGuardedLeft.GetPagePayloadPtr(), tmp, BTreeNode::Size());
     xGuardedLeft->MakeHint();
-    // -------------------------------------------------------------------------------------
-    assert(xGuardedLeft->CompareKeyWithBoundaries(
-               Slice(newLeftUpperFence, newLeftUpperFenceSize)) == 0);
-    // -------------------------------------------------------------------------------------
+
+    assert(xGuardedLeft->CompareKeyWithBoundaries(newUpperFence) == 0);
+
     xGuardedParent->RemoveSlot(lhsSlotId);
-    ENSURE(xGuardedParent->PrepareInsert(xGuardedLeft->mUpperFence.mLength, sizeof(Swip)));
+    ENSURE(xGuardedParent->PrepareInsert(xGuardedLeft->mUpperFence.mSize, sizeof(Swip)));
     auto swip = xGuardedLeft.swip();
-    Slice key(xGuardedLeft->GetUpperFenceKey(), xGuardedLeft->mUpperFence.mLength);
+    Slice key = xGuardedLeft->GetUpperFence();
     Slice val(reinterpret_cast<uint8_t*>(&swip), sizeof(Swip));
     xGuardedParent->Insert(key, val);
   }
@@ -450,13 +448,13 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(GuardedBufferFrame<BTreeNode
   fullyMerged[0] = false;
   double totalFillFactor = guardedNodes[0]->FillFactorAfterCompaction();
 
-  // Handle upper swip instead of avoiding guardedParent->mNumSeps -1 swip
+  // Handle upper swip instead of avoiding guardedParent->mNumSlots -1 swip
   if (isMetaNode(guardedParent) || !guardedNodes[0]->mIsLeaf) {
     guardedChild = std::move(guardedNodes[0]);
     return XMergeReturnCode::kNothing;
   }
   for (maxRight = pos + 1;
-       (maxRight - pos) < maxMergePages && (maxRight + 1) < guardedParent->mNumSeps; maxRight++) {
+       (maxRight - pos) < maxMergePages && (maxRight + 1) < guardedParent->mNumSlots; maxRight++) {
     if (!guardedParent->ChildSwip(maxRight)->IsHot()) {
       guardedChild = std::move(guardedNodes[0]);
       return XMergeReturnCode::kNothing;
@@ -549,7 +547,7 @@ int64_t BTreeGeneric::iterateAllPagesRecursive(GuardedBufferFrame<BTreeNode>& gu
     return leaf(guardedNode.ref());
   }
   int64_t res = inner(guardedNode.ref());
-  for (uint16_t i = 0; i < guardedNode->mNumSeps; i++) {
+  for (uint16_t i = 0; i < guardedNode->mNumSlots; i++) {
     auto* childSwip = guardedNode->ChildSwip(i);
     auto guardedChild =
         GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(), guardedNode, *childSwip);
@@ -566,37 +564,17 @@ int64_t BTreeGeneric::iterateAllPagesRecursive(GuardedBufferFrame<BTreeNode>& gu
   return res;
 }
 
-uint64_t BTreeGeneric::GetHeight() {
-  return mHeight.load();
-}
-
-uint64_t BTreeGeneric::CountEntries() {
-  return iterateAllPages([](BTreeNode&) { return 0; },
-                         [](BTreeNode& node) { return node.mNumSeps; });
-}
-
-uint64_t BTreeGeneric::CountAllPages() {
-  return iterateAllPages([](BTreeNode&) { return 1; }, [](BTreeNode&) { return 1; });
-}
-
-uint64_t BTreeGeneric::CountInnerPages() {
-  return iterateAllPages([](BTreeNode&) { return 1; }, [](BTreeNode&) { return 0; });
-}
-
-uint32_t BTreeGeneric::FreeSpaceAfterCompaction() {
-  return iterateAllPages([](BTreeNode& inner) { return inner.FreeSpaceAfterCompaction(); },
-                         [](BTreeNode& leaf) { return leaf.FreeSpaceAfterCompaction(); });
-}
-
-void BTreeGeneric::PrintInfo(uint64_t totalSize) {
+std::string BTreeGeneric::Summary() {
   GuardedBufferFrame<BTreeNode> guardedMeta(mStore->mBufferManager.get(), mMetaNodeSwip);
   GuardedBufferFrame<BTreeNode> guardedRoot(mStore->mBufferManager.get(), guardedMeta,
                                             guardedMeta->mRightMostChildSwip);
   uint64_t numAllPages = CountAllPages();
-  std::cout << "nodes:" << numAllPages << ", innerNodes:" << CountInnerPages()
-            << ", space:" << (numAllPages * BTreeNode::Size()) / (float)totalSize
-            << ", height:" << mHeight << ", rootCnt:" << guardedRoot->mNumSeps
-            << ", freeSpaceAfterCompaction:" << FreeSpaceAfterCompaction() << std::endl;
+  return std::format("entries={}, nodes={}, innerNodes={}, spacePct={:.2f}, height={}"
+                     ", rootSlots={}, freeSpaceAfterCompaction={}",
+                     CountEntries(), numAllPages, CountInnerPages(),
+                     (numAllPages * BTreeNode::Size()) /
+                         (double)mStore->mStoreOption->mBufferPoolSize,
+                     GetHeight(), guardedRoot->mNumSlots, FreeSpaceAfterCompaction());
 }
 
 StringMap BTreeGeneric::Serialize() {
@@ -608,7 +586,7 @@ StringMap BTreeGeneric::Serialize() {
     Log::Fatal("Failed to checkpoint meta node: {}", res.error().ToString());
   }
   return {{kTreeId, std::to_string(mTreeId)},
-          {kHeight, std::to_string(mHeight.load())},
+          {kHeight, std::to_string(GetHeight())},
           {kMetaPageId, std::to_string(metaPageId)}};
 }
 
@@ -677,7 +655,7 @@ void BTreeGeneric::Deserialize(StringMap map) {
 //   }
 //
 //   rapidjson::Value childrenJson(rapidjson::kArrayType);
-//   for (auto i = 0u; i < guardedNode->mNumSeps; ++i) {
+//   for (auto i = 0u; i < guardedNode->mNumSlots; ++i) {
 //     auto* childSwip = guardedNode->ChildSwip(i);
 //     GuardedBufferFrame<BTreeNode> guardedChild(btree.mStore->mBufferManager.get(), guardedNode,
 //                                                *childSwip);

@@ -110,7 +110,7 @@ public:
     }
     LS_DCHECK(mSlotId != -1 && targetSize > mGuardedLeaf->ValSize(mSlotId));
     while (!mGuardedLeaf->CanExtendPayload(mSlotId, targetSize)) {
-      if (mGuardedLeaf->mNumSeps == 1) {
+      if (mGuardedLeaf->mNumSlots == 1) {
         return false;
       }
       AssembleKey();
@@ -156,7 +156,7 @@ public:
     contentionStats.Reset();
     if (lastUpdatedSlot != mSlotId &&
         contentionPct >= utils::tlsStore->mStoreOption->mContentionSplitThresholdPct &&
-        mGuardedLeaf->mNumSeps > 2) {
+        mGuardedLeaf->mNumSlots > 2) {
       int16_t splitSlot = std::min<int16_t>(lastUpdatedSlot, mSlotId);
       mGuardedLeaf.unlock();
 
@@ -186,7 +186,7 @@ public:
   }
 
   virtual OpCode RemoveCurrent() {
-    if (!(mGuardedLeaf.mBf != nullptr && mSlotId >= 0 && mSlotId < mGuardedLeaf->mNumSeps)) {
+    if (!(mGuardedLeaf.mBf != nullptr && mSlotId >= 0 && mSlotId < mGuardedLeaf->mNumSlots)) {
       LS_DCHECK(false, "RemoveCurrent failed, pageId={}, slotId={}",
                 mGuardedLeaf.mBf->mHeader.mPageId, mSlotId);
       return OpCode::kOther;

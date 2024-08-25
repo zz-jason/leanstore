@@ -248,7 +248,7 @@ inline void ToJson(leanstore::storage::btree::BTreeNode* obj, rapidjson::Value* 
     AddMemberToJson(doc, *allocator, "mUpperFence", upperFence);
   }
 
-  AddMemberToJson(doc, *allocator, "mNumSeps", obj->mNumSeps);
+  AddMemberToJson(doc, *allocator, "mNumSlots", obj->mNumSlots);
   AddMemberToJson(doc, *allocator, "mIsLeaf", obj->mIsLeaf);
   AddMemberToJson(doc, *allocator, "mSpaceUsed", obj->mSpaceUsed);
   AddMemberToJson(doc, *allocator, "mDataOffset", obj->mDataOffset);
@@ -270,7 +270,7 @@ inline void ToJson(leanstore::storage::btree::BTreeNode* obj, rapidjson::Value* 
   // slots
   {
     rapidjson::Value memberArray(rapidjson::kArrayType);
-    for (auto i = 0; i < obj->mNumSeps; ++i) {
+    for (auto i = 0; i < obj->mNumSlots; ++i) {
       rapidjson::Value arrayElement(rapidjson::kObjectType);
       AddMemberToJson(&arrayElement, *allocator, "mOffset",
                       static_cast<uint64_t>(obj->mSlot[i].mOffset));

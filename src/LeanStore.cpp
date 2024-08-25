@@ -172,7 +172,7 @@ LeanStore::~LeanStore() {
     auto& [treePtr, treeName] = it.second;
     auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(treePtr.get());
     Log::Info("leanstore/btreeName={}, btreeId={}, btreeType={}, btreeHeight={}", treeName, treeId,
-              static_cast<uint8_t>(btree->mTreeType), btree->mHeight.load());
+              static_cast<uint8_t>(btree->mTreeType), btree->GetHeight());
   }
 
   // Stop transaction workers and group committer

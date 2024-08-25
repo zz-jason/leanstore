@@ -108,7 +108,7 @@ public:
   //! Seek to the position of the first key
   void SeekToFirst() override {
     seekToTargetPage([](GuardedBufferFrame<BTreeNode>&) { return 0; });
-    if (mGuardedLeaf->mNumSeps == 0) {
+    if (mGuardedLeaf->mNumSlots == 0) {
       SetToInvalid();
       return;
     }
@@ -120,7 +120,7 @@ public:
     seekToTargetPageOnDemand(key);
 
     mSlotId = mGuardedLeaf->LowerBound<false>(key);
-    if (mSlotId < mGuardedLeaf->mNumSeps) {
+    if (mSlotId < mGuardedLeaf->mNumSlots) {
       return;
     }
 
@@ -136,12 +136,12 @@ public:
     }
 
     // If we are not at the end of the leaf, return true
-    if (mSlotId < mGuardedLeaf->mNumSeps - 1) {
+    if (mSlotId < mGuardedLeaf->mNumSlots - 1) {
       return true;
     }
 
     // No more keys in the BTree, return false
-    if (mGuardedLeaf->mUpperFence.mLength == 0) {
+    if (mGuardedLeaf->mUpperFence.IsInfinity()) {
       return false;
     }
 
@@ -153,13 +153,13 @@ public:
 
   //! Seek to the position of the last key
   void SeekToLast() override {
-    seekToTargetPage([](GuardedBufferFrame<BTreeNode>& parent) { return parent->mNumSeps; });
-    if (mGuardedLeaf->mNumSeps == 0) {
+    seekToTargetPage([](GuardedBufferFrame<BTreeNode>& parent) { return parent->mNumSlots; });
+    if (mGuardedLeaf->mNumSlots == 0) {
       SetToInvalid();
       return;
     }
 
-    mSlotId = mGuardedLeaf->mNumSeps - 1;
+    mSlotId = mGuardedLeaf->mNumSlots - 1;
   }
 
   //! Seek to the position of the last key which <= the given key
@@ -194,7 +194,7 @@ public:
     }
 
     // No more keys in the BTree, return false
-    if (mGuardedLeaf->mLowerFence.mLength == 0) {
+    if (mGuardedLeaf->mLowerFence.IsInfinity()) {
       return false;
     }
 
@@ -278,8 +278,8 @@ public:
 
   bool IsLastOne() {
     LS_DCHECK(mSlotId != -1);
-    LS_DCHECK(mSlotId != mGuardedLeaf->mNumSeps);
-    return (mSlotId + 1) == mGuardedLeaf->mNumSeps;
+    LS_DCHECK(mSlotId != mGuardedLeaf->mNumSlots);
+    return (mSlotId + 1) == mGuardedLeaf->mNumSlots;
   }
 
   void Reset() {
@@ -304,13 +304,12 @@ protected:
   void seekToTargetPage(std::function<int32_t(GuardedBufferFrame<BTreeNode>&)> childPosGetter);
 
   void assembleUpperFence() {
-    mFenceSize = mGuardedLeaf->mUpperFence.mLength + 1;
+    mFenceSize = mGuardedLeaf->mUpperFence.mSize + 1;
     mIsUsingUpperFence = true;
     if (mBuffer.size() < mFenceSize) {
       mBuffer.resize(mFenceSize, 0);
     }
-    std::memcpy(mBuffer.data(), mGuardedLeaf->GetUpperFenceKey(),
-                mGuardedLeaf->mUpperFence.mLength);
+    std::memcpy(mBuffer.data(), mGuardedLeaf->UpperFenceAddr(), mGuardedLeaf->mUpperFence.mSize);
     mBuffer[mFenceSize - 1] = 0;
   }
 
@@ -331,13 +330,13 @@ inline void PessimisticIterator::Next() {
     ENSURE(mGuardedLeaf.mGuard.mState != GuardState::kOptimisticShared);
 
     // If we are not at the end of the leaf, return the next key in the leaf.
-    if ((mSlotId + 1) < mGuardedLeaf->mNumSeps) {
+    if ((mSlotId + 1) < mGuardedLeaf->mNumSlots) {
       mSlotId += 1;
       return;
     }
 
     // No more keys in the BTree, return false
-    if (mGuardedLeaf->mUpperFence.mLength == 0) {
+    if (mGuardedLeaf->mUpperFence.IsInfinity()) {
       SetToInvalid();
       return;
     }
@@ -358,7 +357,7 @@ inline void PessimisticIterator::Next() {
 
     if (utils::tlsStore->mStoreOption->mEnableOptimisticScan && mLeafPosInParent != -1) {
       JUMPMU_TRY() {
-        if ((mLeafPosInParent + 1) <= mGuardedParent->mNumSeps) {
+        if ((mLeafPosInParent + 1) <= mGuardedParent->mNumSlots) {
           int32_t nextLeafPos = mLeafPosInParent + 1;
           auto* nextLeafSwip = mGuardedParent->ChildSwipIncludingRightMost(nextLeafPos);
           GuardedBufferFrame<BTreeNode> guardedNextLeaf(mBTree.mStore->mBufferManager.get(),
@@ -379,10 +378,10 @@ inline void PessimisticIterator::Next() {
             mFuncEnterLeaf(mGuardedLeaf);
           }
 
-          if (mGuardedLeaf->mNumSeps == 0) {
+          if (mGuardedLeaf->mNumSlots == 0) {
             JUMPMU_CONTINUE;
           }
-          ENSURE(mSlotId < mGuardedLeaf->mNumSeps);
+          ENSURE(mSlotId < mGuardedLeaf->mNumSlots);
           COUNTERS_BLOCK() {
             WorkerCounters::MyCounters().dt_next_tuple_opt[mBTree.mTreeId]++;
           }
@@ -399,7 +398,7 @@ inline void PessimisticIterator::Next() {
       return guardedNode->LowerBound<false>(fenceKey);
     });
 
-    if (mGuardedLeaf->mNumSeps == 0) {
+    if (mGuardedLeaf->mNumSlots == 0) {
       SetCleanUpCallback([&, toMerge = mGuardedLeaf.mBf]() {
         JUMPMU_TRY() {
           mBTree.TryMergeMayJump(*toMerge, true);
@@ -413,7 +412,7 @@ inline void PessimisticIterator::Next() {
       continue;
     }
     mSlotId = mGuardedLeaf->LowerBound<false>(assembedFence());
-    if (mSlotId == mGuardedLeaf->mNumSeps) {
+    if (mSlotId == mGuardedLeaf->mNumSlots) {
       continue;
     }
     return;
@@ -435,18 +434,18 @@ inline void PessimisticIterator::Prev() {
     }
 
     // No more keys in the BTree, return false
-    if (mGuardedLeaf->mLowerFence.mLength == 0) {
+    if (mGuardedLeaf->mLowerFence.IsInfinity()) {
       SetToInvalid();
       return;
     }
 
     // Construct the previous key (upper bound)
-    mFenceSize = mGuardedLeaf->mLowerFence.mLength;
+    mFenceSize = mGuardedLeaf->mLowerFence.mSize;
     mIsUsingUpperFence = false;
     if (mBuffer.size() < mFenceSize) {
       mBuffer.resize(mFenceSize, 0);
     }
-    std::memcpy(&mBuffer[0], mGuardedLeaf->GetLowerFenceKey(), mFenceSize);
+    std::memcpy(&mBuffer[0], mGuardedLeaf->LowerFenceAddr(), mFenceSize);
 
     // callback before exiting current leaf
     if (mFuncExitLeaf != nullptr) {
@@ -479,14 +478,14 @@ inline void PessimisticIterator::Prev() {
           mGuardedLeaf.JumpIfModifiedByOthers();
           mGuardedLeaf = std::move(guardedNextLeaf);
           mLeafPosInParent = nextLeafPos;
-          mSlotId = mGuardedLeaf->mNumSeps - 1;
+          mSlotId = mGuardedLeaf->mNumSlots - 1;
           mIsPrefixCopied = false;
 
           if (mFuncEnterLeaf != nullptr) {
             mFuncEnterLeaf(mGuardedLeaf);
           }
 
-          if (mGuardedLeaf->mNumSeps == 0) {
+          if (mGuardedLeaf->mNumSlots == 0) {
             JUMPMU_CONTINUE;
           }
           COUNTERS_BLOCK() {
@@ -505,7 +504,7 @@ inline void PessimisticIterator::Prev() {
       return guardedNode->LowerBound<false>(fenceKey);
     });
 
-    if (mGuardedLeaf->mNumSeps == 0) {
+    if (mGuardedLeaf->mNumSlots == 0) {
       COUNTERS_BLOCK() {
         WorkerCounters::MyCounters().dt_empty_leaf[mBTree.mTreeId]++;
       }

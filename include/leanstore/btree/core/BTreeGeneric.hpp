@@ -63,17 +63,30 @@ public:
                           GuardedBufferFrame<BTreeNode>& guardedChild,
                           ParentSwipHandler& parentSwipHandler);
 
-  uint64_t CountInnerPages();
+  uint64_t CountInnerPages() {
+    return iterateAllPages([](BTreeNode&) { return 1; }, [](BTreeNode&) { return 0; });
+  }
 
-  uint64_t CountAllPages();
+  uint64_t CountAllPages() {
+    return iterateAllPages([](BTreeNode&) { return 1; }, [](BTreeNode&) { return 1; });
+  }
 
-  uint64_t CountEntries();
+  uint64_t CountEntries() {
+    return iterateAllPages([](BTreeNode&) { return 0; },
+                           [](BTreeNode& node) { return node.mNumSlots; });
+  }
 
-  uint64_t GetHeight();
+  uint64_t GetHeight() {
+    return mHeight.load();
+  }
 
-  uint32_t FreeSpaceAfterCompaction();
+  uint32_t FreeSpaceAfterCompaction() {
+    return iterateAllPages([](BTreeNode& inner) { return inner.FreeSpaceAfterCompaction(); },
+                           [](BTreeNode& leaf) { return leaf.FreeSpaceAfterCompaction(); });
+  }
 
-  void PrintInfo(uint64_t totalSize);
+  //! Get a summary of the BTree
+  std::string Summary();
 
   // for buffer manager
   virtual void IterateChildSwips(BufferFrame& bf, std::function<bool(Swip&)> callback) override;
@@ -212,7 +225,7 @@ public:
 inline void BTreeGeneric::freeBTreeNodesRecursive(BTreeGeneric& btree,
                                                   GuardedBufferFrame<BTreeNode>& guardedNode) {
   if (!guardedNode->mIsLeaf) {
-    for (auto i = 0u; i <= guardedNode->mNumSeps; ++i) {
+    for (auto i = 0u; i <= guardedNode->mNumSlots; ++i) {
       auto* childSwip = guardedNode->ChildSwipIncludingRightMost(i);
       GuardedBufferFrame<BTreeNode> guardedChild(btree.mStore->mBufferManager.get(), guardedNode,
                                                  *childSwip);
@@ -230,7 +243,7 @@ inline void BTreeGeneric::IterateChildSwips(BufferFrame& bf, std::function<bool(
   if (btreeNode.mIsLeaf) {
     return;
   }
-  for (uint16_t i = 0; i < btreeNode.mNumSeps; i++) {
+  for (uint16_t i = 0; i < btreeNode.mNumSlots; i++) {
     if (!callback(*btreeNode.ChildSwip(i))) {
       return;
     }
@@ -268,7 +281,7 @@ inline void BTreeGeneric::Checkpoint(BufferFrame& bf, void* dest) {
 
   if (!destNode->mIsLeaf) {
     // Replace all child swip to their page ID
-    for (uint64_t i = 0; i < destNode->mNumSeps; i++) {
+    for (uint64_t i = 0; i < destNode->mNumSlots; i++) {
       if (!destNode->ChildSwip(i)->IsEvicted()) {
         auto& childBf = destNode->ChildSwip(i)->AsBufferFrameMasked();
         destNode->ChildSwip(i)->Evict(childBf.mHeader.mPageId);
@@ -349,17 +362,17 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree, BufferFra
   }
 
   auto& nodeToFind = *reinterpret_cast<BTreeNode*>(bfToFind.mPage.mPayload);
-  const auto isInfinity = nodeToFind.mUpperFence.mOffset == 0;
+  const auto isInfinity = nodeToFind.mUpperFence.IsInfinity();
   const auto keyToFind = nodeToFind.GetUpperFence();
 
   auto posInParent = std::numeric_limits<uint32_t>::max();
   auto searchCondition = [&](GuardedBufferFrame<BTreeNode>& guardedNode) {
     if (isInfinity) {
       childSwip = &(guardedNode->mRightMostChildSwip);
-      posInParent = guardedNode->mNumSeps;
+      posInParent = guardedNode->mNumSlots;
     } else {
       posInParent = guardedNode->LowerBound<false>(keyToFind);
-      if (posInParent == guardedNode->mNumSeps) {
+      if (posInParent == guardedNode->mNumSlots) {
         childSwip = &(guardedNode->mRightMostChildSwip);
       } else {
         childSwip = guardedNode->ChildSwip(posInParent);

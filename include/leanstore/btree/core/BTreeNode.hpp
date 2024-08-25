@@ -5,6 +5,7 @@
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/UserThread.hpp"
 
+#include <cstdint>
 #include <cstring>
 
 namespace leanstore::storage::btree {
@@ -33,15 +34,21 @@ public:
     }
   };
 
+  //! The fence key information of a BTreeNode.
   struct FenceKey {
+    //! The offset of the fence key in the BTreeNode.
     uint16_t mOffset;
 
-    uint16_t mLength;
+    //! The length of the fence key.
+    uint16_t mSize;
+
+    //! Whether the fence key represents infinity.
+    bool IsInfinity() {
+      return mOffset == 0;
+    }
   };
 
-public:
-  //! The swip of the right-most child.
-  //! TODO(zz-jason): can it be moved to the slot array?
+  //! The swip of the right-most child, can be nullptr for leaf nodes.
   Swip mRightMostChildSwip = nullptr;
 
   //! The lower fence of the node. Exclusive.
@@ -50,10 +57,8 @@ public:
   //! The upper fence of the node. Inclusive.
   FenceKey mUpperFence = {0, 0};
 
-  //! The number of seperators. #slots = #seps + 1.
-  //! The first mNumSeps children are stored in the payload, while the last child are stored in
-  //! upper.
-  uint16_t mNumSeps = 0;
+  //! Size of the slot array.
+  uint16_t mNumSlots = 0;
 
   //! Indicates whether this node is leaf node without any child.
   bool mIsLeaf;
@@ -77,88 +82,98 @@ public:
   //! Needed for GC
   bool mHasGarbage = false;
 
-public:
+  //! Constructs a BTreeNodeHeader.
   BTreeNodeHeader(bool isLeaf, uint16_t size) : mIsLeaf(isLeaf), mDataOffset(size) {
   }
 
-  ~BTreeNodeHeader() {
-  }
+  //! Destructs a BTreeNodeHeader.
+  ~BTreeNodeHeader() = default;
 
-public:
-  uint8_t* RawPtr() {
+  //! Returns the start address of the node.
+  uint8_t* NodeBegin() {
     return reinterpret_cast<uint8_t*>(this);
   }
 
+  //! Whether the node is an inner node.
   bool IsInner() {
     return !mIsLeaf;
   }
 
+  //! Get the lower fence key slice.
   Slice GetLowerFence() {
-    return Slice(GetLowerFenceKey(), mLowerFence.mLength);
+    return Slice(LowerFenceAddr(), mLowerFence.mSize);
   }
 
-  uint8_t* GetLowerFenceKey() {
-    return mLowerFence.mOffset ? RawPtr() + mLowerFence.mOffset : nullptr;
+  //! Get the address of lower fence key. nullptr if the lower fence is infinity.
+  uint8_t* LowerFenceAddr() {
+    return mLowerFence.IsInfinity() ? nullptr : NodeBegin() + mLowerFence.mOffset;
   }
 
+  //! Get the upper fence key slice.
   Slice GetUpperFence() {
-    return Slice(GetUpperFenceKey(), mUpperFence.mLength);
+    return Slice(UpperFenceAddr(), mUpperFence.mSize);
   }
 
-  uint8_t* GetUpperFenceKey() {
-    return mUpperFence.mOffset ? RawPtr() + mUpperFence.mOffset : nullptr;
+  //! Get the address of upper fence key. nullptr if the upper fence is infinity.
+  uint8_t* UpperFenceAddr() {
+    return mUpperFence.IsInfinity() ? nullptr : NodeBegin() + mUpperFence.mOffset;
   }
+};
 
-  bool IsUpperFenceInfinity() {
-    return !mUpperFence.mOffset;
-  }
+//! The slot inside a btree node. Slot records the metadata for the key-value position inside a
+//! page. Common prefix among all keys are removed in a btree node. Slot key-value layout:
+//!  | key without prefix | value |
+struct __attribute__((packed)) BTreeNodeSlot {
+  //! Data offset of the slot, also the offset of the slot key
+  uint16_t mOffset;
 
-  bool IsLowerFenceInfinity() {
-    return !mLowerFence.mOffset;
-  }
+  //! Slot key size
+  uint16_t mKeySizeWithoutPrefix;
+
+  //! Slot value size
+  uint16_t mValSize;
+
+  //! The key header, used to improve key comparation performance
+  union {
+    HeadType mHead;
+
+    uint8_t mHeadBytes[4];
+  };
 };
 
 class BTreeNode : public BTreeNodeHeader {
 public:
-  //! The slot inside a btree node. Slot records the metadata for the key-value position inside a
-  //! page. Common prefix among all keys are removed in a btree node. Slot key-value layout:
-  //!  | key without prefix | value |
-  struct __attribute__((packed)) Slot {
-
-    //! Data offset of the slot, also the offset of the slot key
-    uint16_t mOffset;
-
-    //! Slot key size
-    uint16_t mKeySizeWithoutPrefix;
-
-    //! Slot value size
-    uint16_t mValSize;
-
-    //! The key header, used for improve key comparation performance
-    union {
-      HeadType mHead;
-      uint8_t mHeadBytes[4];
-    };
-  };
-
-  //! The slot array, which stores all the key-value positions inside a page.
-  Slot mSlot[];
+  //! The slot array, which stores all the key-value positions inside a BTreeNode.
+  BTreeNodeSlot mSlot[];
 
   //! Creates a BTreeNode. Since BTreeNode creations and utilizations are critical, please use
-  //! ExclusiveGuardedBufferFrame::InitPayload() or BTreeNode::Init() to construct a BTreeNode on an
+  //! ExclusiveGuardedBufferFrame::InitPayload() or BTreeNode::New() to construct a BTreeNode on an
   //! existing buffer which has at least BTreeNode::Size() bytes:
   //! 1. ExclusiveGuardedBufferFrame::InitPayload() creates a BTreeNode on the holding BufferFrame.
-  //! 2. BTreeNode::Init(): creates a BTreeNode on the providing buffer. The size of the underlying
+  //! 2. BTreeNode::New(): creates a BTreeNode on the providing buffer. The size of the underlying
   //!    buffer to store a BTreeNode can be obtained through BTreeNode::Size()
   BTreeNode(bool isLeaf) : BTreeNodeHeader(isLeaf, BTreeNode::Size()) {
   }
 
+  //! Creates a BTreeNode on the providing buffer. Callers should ensure the buffer has at least
+  //! BTreeNode::Size() bytes to store the BTreeNode.
+  //! @param buf: the buffer to store the BTreeNode.
+  //! @param isLeaf: whether the BTreeNode is a leaf node.
+  //! @param lowerFence: the lower fence of the BTreeNode.
+  //! @param upperFence: the upper fence of the BTreeNode.
+  //! @return the created BTreeNode.
+  static BTreeNode* New(void* buf, bool isLeaf, Slice lowerFence, Slice upperFence) {
+    auto* node = new (buf) BTreeNode(isLeaf);
+    node->setFences(lowerFence, upperFence);
+    return node;
+  }
+
   uint16_t FreeSpace() {
-    return mDataOffset - (reinterpret_cast<uint8_t*>(mSlot + mNumSeps) - RawPtr());
+    return mDataOffset - (reinterpret_cast<uint8_t*>(mSlot + mNumSlots) - NodeBegin());
   }
 
   uint16_t FreeSpaceAfterCompaction() {
-    return BTreeNode::Size() - (reinterpret_cast<uint8_t*>(mSlot + mNumSeps) - RawPtr()) -
+    return BTreeNode::Size() - (reinterpret_cast<uint8_t*>(mSlot + mNumSlots) - NodeBegin()) -
            mSpaceUsed;
   }
 
@@ -186,7 +201,7 @@ public:
   }
 
   uint8_t* KeyDataWithoutPrefix(uint16_t slotId) {
-    return RawPtr() + mSlot[slotId].mOffset;
+    return NodeBegin() + mSlot[slotId].mOffset;
   }
 
   uint16_t KeySizeWithoutPrefix(uint16_t slotId) {
@@ -200,7 +215,8 @@ public:
   // Each slot is composed of:
   // key (mKeySizeWithoutPrefix), payload (mValSize)
   uint8_t* ValData(uint16_t slotId) {
-    return RawPtr() + mSlot[slotId].mOffset + mSlot[slotId].mKeySizeWithoutPrefix;
+    auto valOffset = mSlot[slotId].mOffset + mSlot[slotId].mKeySizeWithoutPrefix;
+    return NodeBegin() + valOffset;
   }
 
   uint16_t ValSize(uint16_t slotId) {
@@ -208,7 +224,7 @@ public:
   }
 
   Swip* ChildSwipIncludingRightMost(uint16_t slotId) {
-    if (slotId == mNumSeps) {
+    if (slotId == mNumSlots) {
       return &mRightMostChildSwip;
     }
 
@@ -216,12 +232,12 @@ public:
   }
 
   Swip* ChildSwip(uint16_t slotId) {
-    LS_DCHECK(slotId < mNumSeps);
+    LS_DCHECK(slotId < mNumSlots);
     return reinterpret_cast<Swip*>(ValData(slotId));
   }
 
   uint16_t GetKVConsumedSpace(uint16_t slotId) {
-    return sizeof(Slot) + KeySizeWithoutPrefix(slotId) + ValSize(slotId);
+    return sizeof(BTreeNodeSlot) + KeySizeWithoutPrefix(slotId) + ValSize(slotId);
   }
 
   // Attention: the caller has to hold a copy of the existing payload
@@ -257,8 +273,7 @@ public:
     std::memcpy(copiedKey, KeyDataWithoutPrefix(slotId), keySizeWithoutPrefix);
 
     // release the old space occupied by the payload (keyWithoutPrefix + value)
-    mSpaceUsed -= oldTotalSize;
-    mDataOffset += oldTotalSize;
+    retreatDataOffset(oldTotalSize);
 
     mSlot[slotId].mValSize = 0;
     mSlot[slotId].mKeySizeWithoutPrefix = 0;
@@ -266,8 +281,7 @@ public:
       Compactify();
     }
     LS_DCHECK(FreeSpace() >= newTotalSize);
-    mSpaceUsed += newTotalSize;
-    mDataOffset -= newTotalSize;
+    advanceDataOffset(newTotalSize);
     mSlot[slotId].mOffset = mDataOffset;
     mSlot[slotId].mKeySizeWithoutPrefix = keySizeWithoutPrefix;
     mSlot[slotId].mValSize = targetSize;
@@ -275,15 +289,15 @@ public:
   }
 
   Slice KeyPrefix() {
-    return Slice(GetLowerFenceKey(), mPrefixSize);
+    return Slice(LowerFenceAddr(), mPrefixSize);
   }
 
   uint8_t* GetPrefix() {
-    return GetLowerFenceKey();
+    return LowerFenceAddr();
   }
 
   void CopyPrefix(uint8_t* out) {
-    memcpy(out, GetLowerFenceKey(), mPrefixSize);
+    memcpy(out, LowerFenceAddr(), mPrefixSize);
   }
 
   void CopyKeyWithoutPrefix(uint16_t slotId, uint8_t* dest) {
@@ -302,7 +316,7 @@ public:
   }
 
   void MakeHint() {
-    uint16_t dist = mNumSeps / (sHintCount + 1);
+    uint16_t dist = mNumSlots / (sHintCount + 1);
     for (uint16_t i = 0; i < sHintCount; i++)
       mHint[i] = mSlot[dist * (i + 1)].mHead;
   }
@@ -347,7 +361,7 @@ public:
   uint32_t MergeSpaceUpperBound(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedRight);
 
   uint32_t SpaceUsedBySlot(uint16_t slotId) {
-    return sizeof(BTreeNode::Slot) + KeySizeWithoutPrefix(slotId) + ValSize(slotId);
+    return sizeof(BTreeNodeSlot) + KeySizeWithoutPrefix(slotId) + ValSize(slotId);
   }
 
   // NOLINTNEXTLINE
@@ -363,8 +377,6 @@ public:
   void CopyKeyValue(uint16_t srcSlot, BTreeNode* dst, uint16_t dstSlot);
 
   void InsertFence(FenceKey& fk, Slice key);
-
-  void SetFences(Slice lowerKey, Slice upperKey);
 
   void Split(ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedParent,
              ExclusiveGuardedBufferFrame<BTreeNode>& xGuardedNewLeft,
@@ -384,9 +396,11 @@ public:
   void Reset();
 
 private:
+  void setFences(Slice lowerKey, Slice upperKey);
+
   void generateSeparator(const SeparatorInfo& sepInfo, uint8_t* sepKey) {
     // prefix
-    memcpy(sepKey, GetLowerFenceKey(), mPrefixSize);
+    memcpy(sepKey, LowerFenceAddr(), mPrefixSize);
 
     if (sepInfo.mTrunc) {
       memcpy(sepKey + mPrefixSize, KeyDataWithoutPrefix(sepInfo.mSlotId + 1),
@@ -447,12 +461,7 @@ public:
   static int32_t CmpKeys(Slice lhs, Slice rhs);
 
   static uint16_t SpaceNeeded(uint16_t keySize, uint16_t valSize, uint16_t prefixSize) {
-    return sizeof(Slot) + (keySize - prefixSize) + valSize;
-  }
-
-  template <typename... Args>
-  static BTreeNode* Init(void* addr, Args&&... args) {
-    return new (addr) BTreeNode(std::forward<Args>(args)...);
+    return sizeof(BTreeNodeSlot) + (keySize - prefixSize) + valSize;
   }
 
   static uint16_t Size() {
@@ -462,22 +471,35 @@ public:
   static uint16_t UnderFullSize() {
     return BTreeNode::Size() * 0.6;
   }
+
+private:
+  //! Advance the data offset by size
+  void advanceDataOffset(uint16_t size) {
+    mDataOffset -= size;
+    mSpaceUsed += size;
+  }
+
+  //! Oppsite of advanceDataOffset
+  void retreatDataOffset(uint16_t size) {
+    mDataOffset += size;
+    mSpaceUsed -= size;
+  }
 };
 
 template <bool equality_only>
-int16_t BTreeNode::LinearSearchWithBias(Slice key, uint16_t startPos, bool higher) {
-  if (key.size() < mPrefixSize || (bcmp(key.data(), GetLowerFenceKey(), mPrefixSize) != 0)) {
+inline int16_t BTreeNode::LinearSearchWithBias(Slice key, uint16_t startPos, bool higher) {
+  if (key.size() < mPrefixSize || (bcmp(key.data(), LowerFenceAddr(), mPrefixSize) != 0)) {
     return -1;
   }
 
-  LS_DCHECK(key.size() >= mPrefixSize && bcmp(key.data(), GetLowerFenceKey(), mPrefixSize) == 0);
+  LS_DCHECK(key.size() >= mPrefixSize && bcmp(key.data(), LowerFenceAddr(), mPrefixSize) == 0);
 
   // the compared key has the same prefix
   key.remove_prefix(mPrefixSize);
 
   if (higher) {
     auto cur = startPos + 1;
-    for (; cur < mNumSeps; cur++) {
+    for (; cur < mNumSlots; cur++) {
       if (CmpKeys(key, KeyWithoutPrefix(cur)) == 0) {
         return cur;
       }
@@ -497,33 +519,33 @@ int16_t BTreeNode::LinearSearchWithBias(Slice key, uint16_t startPos, bool highe
 }
 
 template <bool equalityOnly>
-int16_t BTreeNode::LowerBound(Slice key, bool* isEqual) {
+inline int16_t BTreeNode::LowerBound(Slice key, bool* isEqual) {
   if (isEqual != nullptr && mIsLeaf) {
     *isEqual = false;
   }
 
   // compare prefix firstly
   if (equalityOnly) {
-    if ((key.size() < mPrefixSize) || (bcmp(key.data(), GetLowerFenceKey(), mPrefixSize) != 0)) {
+    if ((key.size() < mPrefixSize) || (bcmp(key.data(), LowerFenceAddr(), mPrefixSize) != 0)) {
       return -1;
     }
   } else if (mPrefixSize != 0) {
     Slice keyPrefix(key.data(), std::min<uint16_t>(key.size(), mPrefixSize));
-    Slice lowerFencePrefix(GetLowerFenceKey(), mPrefixSize);
+    Slice lowerFencePrefix(LowerFenceAddr(), mPrefixSize);
     int cmpPrefix = CmpKeys(keyPrefix, lowerFencePrefix);
     if (cmpPrefix < 0) {
       return 0;
     }
 
     if (cmpPrefix > 0) {
-      return mNumSeps;
+      return mNumSlots;
     }
   }
 
   // the compared key has the same prefix
   key.remove_prefix(mPrefixSize);
   uint16_t lower = 0;
-  uint16_t upper = mNumSeps;
+  uint16_t upper = mNumSlots;
   HeadType keyHead = Head(key);
   SearchHint(keyHead, lower, upper);
   while (lower < upper) {
@@ -542,6 +564,19 @@ int16_t BTreeNode::LowerBound(Slice key, bool* isEqual) {
   }
 
   return equalityOnly ? -1 : lower;
+}
+
+inline void BTreeNode::setFences(Slice lowerKey, Slice upperKey) {
+  InsertFence(mLowerFence, lowerKey);
+  InsertFence(mUpperFence, upperKey);
+  LS_DCHECK(LowerFenceAddr() == nullptr || UpperFenceAddr() == nullptr ||
+            *LowerFenceAddr() <= *UpperFenceAddr());
+
+  // prefix compression
+  for (mPrefixSize = 0; (mPrefixSize < std::min(lowerKey.size(), upperKey.size())) &&
+                        (lowerKey[mPrefixSize] == upperKey[mPrefixSize]);
+       mPrefixSize++)
+    ;
 }
 
 } // namespace leanstore::storage::btree
