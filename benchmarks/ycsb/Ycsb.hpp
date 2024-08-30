@@ -59,9 +59,11 @@ class YcsbExecutor {
 public:
   virtual ~YcsbExecutor() = default;
 
-  virtual void HandleCmdLoad() = 0;
+  virtual void HandleCmdLoad() {
+  }
 
-  virtual void HandleCmdRun() = 0;
+  virtual void HandleCmdRun() {
+  }
 
 protected:
   void printTpsSummary(uint64_t reportPeriod, uint64_t runForSeconds, uint64_t numThreads,

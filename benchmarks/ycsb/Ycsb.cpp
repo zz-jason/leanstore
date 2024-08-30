@@ -2,6 +2,7 @@
 
 #include "YcsbLeanStore.hpp"
 #include "YcsbRocksDb.hpp"
+#include "YcsbWiredTiger.hpp"
 #include "leanstore/utils/Defer.hpp"
 #include "leanstore/utils/Log.hpp"
 
@@ -18,6 +19,7 @@ static std::string kCmdRun = "run";
 static std::string kTargetTransactionKv = "transactionkv";
 static std::string kTargetBasicKv = "basickv";
 static std::string kTargetRocksDb = "rocksdb";
+static std::string kWiredTiger = "wiredtiger";
 
 int main(int argc, char** argv) {
   gflags::SetUsageMessage("Ycsb Benchmark");
@@ -48,6 +50,8 @@ int main(int argc, char** argv) {
     executor = new leanstore::ycsb::YcsbLeanStore(benchTransactionKv, createFromScratch);
   } else if (FLAGS_ycsb_target == kTargetRocksDb) {
     executor = new leanstore::ycsb::YcsbRocksDb();
+  } else if (FLAGS_ycsb_target == kWiredTiger) {
+    executor = new leanstore::ycsb::YcsbWiredTiger();
   }
 
   if (executor == nullptr) {
