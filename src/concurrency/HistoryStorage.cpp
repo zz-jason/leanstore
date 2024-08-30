@@ -210,10 +210,10 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
 
       // lock successfull, check whether the page can be purged
       auto* leafNode = reinterpret_cast<BTreeNode*>(bf->mPage.mPayload);
-      if (leafNode->mLowerFence.mLength == 0 && leafNode->mNumSeps > 0) {
-        auto lastKeySize = leafNode->GetFullKeyLen(leafNode->mNumSeps - 1);
+      if (leafNode->mLowerFence.IsInfinity() && leafNode->mNumSlots > 0) {
+        auto lastKeySize = leafNode->GetFullKeyLen(leafNode->mNumSlots - 1);
         uint8_t lastKey[lastKeySize];
-        leafNode->CopyFullKey(leafNode->mNumSeps - 1, lastKey);
+        leafNode->CopyFullKey(leafNode->mNumSlots - 1, lastKey);
 
         // optimistic unlock, jump if invalid
         bfGuard.Unlock();
@@ -251,7 +251,7 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
       // check whether the whole page can be purged when enter a leaf
       xIter.SetEnterLeafCallback(
           [&](leanstore::storage::GuardedBufferFrame<BTreeNode>& guardedLeaf) {
-            if (guardedLeaf->mNumSeps == 0) {
+            if (guardedLeaf->mNumSlots == 0) {
               return;
             }
 
@@ -263,15 +263,15 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
             utils::Unfold(firstKey, txIdInFirstKey);
 
             // get the transaction id in the last key
-            auto lastKeySize = guardedLeaf->GetFullKeyLen(guardedLeaf->mNumSeps - 1);
+            auto lastKeySize = guardedLeaf->GetFullKeyLen(guardedLeaf->mNumSlots - 1);
             uint8_t lastKey[lastKeySize];
-            guardedLeaf->CopyFullKey(guardedLeaf->mNumSeps - 1, lastKey);
+            guardedLeaf->CopyFullKey(guardedLeaf->mNumSlots - 1, lastKey);
             TXID txIdInLastKey;
             utils::Unfold(lastKey, txIdInLastKey);
 
             // purge the whole page if it is in the range
             if (fromTxId <= txIdInFirstKey && txIdInLastKey <= toTxId) {
-              versionsRemoved += guardedLeaf->mNumSeps;
+              versionsRemoved += guardedLeaf->mNumSlots;
               guardedLeaf->Reset();
               isFullPagePurged = true;
             }

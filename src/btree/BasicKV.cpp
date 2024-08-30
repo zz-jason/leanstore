@@ -85,10 +85,10 @@ bool BasicKV::IsRangeEmpty(Slice startKey, Slice endKey) {
       Slice upperFence = guardedLeaf->GetUpperFence();
       LS_DCHECK(startKey >= guardedLeaf->GetLowerFence());
 
-      if ((guardedLeaf->mUpperFence.mOffset == 0 || endKey <= upperFence) &&
-          guardedLeaf->mNumSeps == 0) {
+      if ((guardedLeaf->mUpperFence.IsInfinity() || endKey <= upperFence) &&
+          guardedLeaf->mNumSlots == 0) {
         int32_t pos = guardedLeaf->LowerBound<false>(startKey);
-        if (pos == guardedLeaf->mNumSeps) {
+        if (pos == guardedLeaf->mNumSlots) {
           guardedLeaf.JumpIfModifiedByOthers();
           JUMPMU_RETURN true;
         }
@@ -201,7 +201,7 @@ OpCode BasicKV::PrefixLookup(Slice key, PrefixLookupCallback callback) {
         JUMPMU_RETURN OpCode::kOK;
       }
 
-      if (cur < guardedLeaf->mNumSeps) {
+      if (cur < guardedLeaf->mNumSlots) {
         auto fullKeySize = guardedLeaf->GetFullKeyLen(cur);
         auto fullKeyBuf = utils::JumpScopedArray<uint8_t>(fullKeySize);
         guardedLeaf->CopyFullKey(cur, fullKeyBuf->get());
@@ -368,7 +368,7 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
           }
           auto ret = xIter.RemoveCurrent();
           ENSURE(ret == OpCode::kOK);
-          if (xIter.mSlotId == xIter.mGuardedLeaf->mNumSeps) {
+          if (xIter.mSlotId == xIter.mGuardedLeaf->mNumSlots) {
             xIter.Next();
             ret = xIter.Valid() ? OpCode::kOK : OpCode::kNotFound;
           }
@@ -381,7 +381,7 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
 
     bool didPurgeFullPage = false;
     xIter.SetEnterLeafCallback([&](GuardedBufferFrame<BTreeNode>& guardedLeaf) {
-      if (guardedLeaf->mNumSeps == 0) {
+      if (guardedLeaf->mNumSlots == 0) {
         return;
       }
 
@@ -392,15 +392,15 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
       Slice pageStartKey(firstKey->get(), firstKeySize);
 
       // page end key
-      auto lastKeySize = guardedLeaf->GetFullKeyLen(guardedLeaf->mNumSeps - 1);
+      auto lastKeySize = guardedLeaf->GetFullKeyLen(guardedLeaf->mNumSlots - 1);
       auto lastKey = utils::JumpScopedArray<uint8_t>(lastKeySize);
-      guardedLeaf->CopyFullKey(guardedLeaf->mNumSeps - 1, lastKey->get());
+      guardedLeaf->CopyFullKey(guardedLeaf->mNumSlots - 1, lastKey->get());
       Slice pageEndKey(lastKey->get(), lastKeySize);
 
       if (pageStartKey >= startKey && pageEndKey <= endKey) {
         // Purge the whole page
         COUNTERS_BLOCK() {
-          WorkerCounters::MyCounters().dt_range_removed[mTreeId] += guardedLeaf->mNumSeps;
+          WorkerCounters::MyCounters().dt_range_removed[mTreeId] += guardedLeaf->mNumSlots;
         }
         guardedLeaf->Reset();
         didPurgeFullPage = true;

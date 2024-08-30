@@ -681,7 +681,7 @@ SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
   guardedNode.ToExclusiveMayJump();
   guardedNode.SyncGSNBeforeWrite();
 
-  for (uint16_t i = 0; i < guardedNode->mNumSeps; i++) {
+  for (uint16_t i = 0; i < guardedNode->mNumSlots; i++) {
     auto& tuple = *Tuple::From(guardedNode->ValData(i));
     if (tuple.mFormat == TupleFormat::kFat) {
       auto& fatTuple = *FatTuple::From(guardedNode->ValData(i));
@@ -968,8 +968,7 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
     iter.AssembleKey();
 
     // Now it begins
-    graveyardUpperBound =
-        Slice(iter.mGuardedLeaf->GetUpperFenceKey(), iter.mGuardedLeaf->mUpperFence.mLength);
+    graveyardUpperBound = iter.mGuardedLeaf->GetUpperFence();
     auto gRange = [&]() {
       gIter.Reset();
       if (mGraveyard->IsRangeEmpty(graveyardLowerBound, graveyardUpperBound)) {
@@ -1015,8 +1014,7 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
           iter.mBuffer = std::move(newBuffer);
         }
         graveyardLowerBound = Slice(&iter.mBuffer[0], iter.mFenceSize + 1);
-        graveyardUpperBound =
-            Slice(iter.mGuardedLeaf->GetUpperFenceKey(), iter.mGuardedLeaf->mUpperFence.mLength);
+        graveyardUpperBound = iter.mGuardedLeaf->GetUpperFence();
         gRange();
       }
       return true;

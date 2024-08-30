@@ -325,9 +325,9 @@ void FatTuple::GarbageCollection() {
 // NOLINTEND
 
 bool FatTuple::HasSpaceFor(const UpdateDesc& updateDesc) {
-  const uint32_t SpaceNeeded =
+  const uint32_t spaceNeeded =
       updateDesc.SizeWithDelta() + sizeof(uint16_t) + sizeof(FatTupleDelta);
-  return (mDataOffset - (mValSize + (mNumDeltas * sizeof(uint16_t)))) >= SpaceNeeded;
+  return (mDataOffset - (mValSize + (mNumDeltas * sizeof(uint16_t)))) >= spaceNeeded;
 }
 
 template <typename... Args>

@@ -8,6 +8,7 @@
 #include "leanstore/utils/UserThread.hpp"
 
 #include <condition_variable>
+#include <cstdint>
 #include <functional>
 #include <string>
 
@@ -24,6 +25,12 @@ namespace leanstore::cr {
 //!                         job senders.
 class WorkerThread : public utils::UserThread {
 public:
+  enum JobStatus : uint8_t {
+    kJobIsEmpty = 0,
+    kJobIsSet,
+    kJobIsFinished,
+  };
+
   //! The id of the worker thread.
   const WORKERID mWorkerId;
 
@@ -37,7 +44,7 @@ public:
   std::function<void()> mJob;
 
   //! Whether the current job is done.
-  bool mJobDone;
+  JobStatus mJobStatus;
 
 public:
   //! Constructor.
@@ -45,7 +52,7 @@ public:
       : utils::UserThread(store, "Worker" + std::to_string(workerId), cpu),
         mWorkerId(workerId),
         mJob(nullptr),
-        mJobDone(false) {
+        mJobStatus(kJobIsEmpty) {
   }
 
   //! Destructor.
@@ -81,7 +88,7 @@ inline void WorkerThread::runImpl() {
   while (mKeepRunning) {
     // wait until there is a job
     std::unique_lock guard(mMutex);
-    mCv.wait(guard, [&]() { return !mKeepRunning || (mJob != nullptr && !mJobDone); });
+    mCv.wait(guard, [&]() { return !mKeepRunning || (mJobStatus == kJobIsSet); });
 
     // check thread status
     if (!mKeepRunning) {
@@ -92,7 +99,7 @@ inline void WorkerThread::runImpl() {
     mJob();
 
     // Set job done, change the worker state to (jobSet, jobDone), notify the job sender
-    mJobDone = true;
+    mJobStatus = kJobIsFinished;
 
     guard.unlock();
     mCv.notify_all();
@@ -115,10 +122,11 @@ inline void WorkerThread::Stop() {
 inline void WorkerThread::SetJob(std::function<void()> job) {
   // wait the previous job to finish
   std::unique_lock guard(mMutex);
-  mCv.wait(guard, [&]() { return mJob == nullptr && !mJobDone; });
+  mCv.wait(guard, [&]() { return mJobStatus == kJobIsEmpty; });
 
   // set a new job, change the worker state to (jobSet, jobNotDone), notify the worker thread
   mJob = std::move(job);
+  mJobStatus = kJobIsSet;
 
   guard.unlock();
   mCv.notify_all();
@@ -126,11 +134,11 @@ inline void WorkerThread::SetJob(std::function<void()> job) {
 
 inline void WorkerThread::Wait() {
   std::unique_lock guard(mMutex);
-  mCv.wait(guard, [&]() { return mJob != nullptr && mJobDone; });
+  mCv.wait(guard, [&]() { return mJobStatus == kJobIsFinished; });
 
   // reset the job, change the worker state to (jobNotSet, jobDone), notify other job senders
   mJob = nullptr;
-  mJobDone = false;
+  mJobStatus = kJobIsEmpty;
 
   guard.unlock();
   mCv.notify_all();
