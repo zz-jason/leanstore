@@ -63,7 +63,8 @@
             "binaryDir": "${sourceDir}/build/performance",
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/performance",
-                "ENABLE_ROCKSDB": "ON"
+                "ENABLE_ROCKSDB": "ON",
+                "ENABLE_WIRED_TIGER": "ON"
             }
         }
     ]

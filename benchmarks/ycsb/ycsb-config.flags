@@ -1,11 +1,10 @@
---ycsb_data_dir=/root/code/Falcon/deploy/ycsb
+--ycsb_data_dir=/root/code/leanstore/deploy/ycsb
 --ycsb_key_size=16
 --ycsb_val_size=200
-# --ycsb_record_count=300000000
---ycsb_record_count=30000000
---ycsb_workload=c
---ycsb_threads=24
+--ycsb_record_count=100000
 --ycsb_mem_kb=1048576
---ycsb_run_for_seconds=360000
+--ycsb_run_for_seconds=5
 --ycsb_target=basickv
---ycsb_cmd=run
+--ycsb_workload=c
+--ycsb_threads=2
+--ycsb_cmd=load

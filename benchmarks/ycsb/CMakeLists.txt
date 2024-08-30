@@ -17,8 +17,18 @@ option(ENABLE_ROCKSDB "Enable benchmarking rocksdb" OFF)
 if(ENABLE_ROCKSDB)
   find_package(RocksDB CONFIG REQUIRED)
   list(APPEND YCSB_DEPS RocksDB::rocksdb)
-  # list(APPEND YCSB_DEPS RocksDB::rocksdb-shared)
 endif(ENABLE_ROCKSDB)
+
+option(ENABLE_WIRED_TIGER "Enable benchmarking wiredtiger" OFF)
+if(ENABLE_WIRED_TIGER)
+  #TODO(zz-jason): use pre-installed wiredtiger
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    link_directories("/root/code/wiredtiger/dist/debug/lib")
+  else()
+    link_directories("/root/code/wiredtiger/dist/release/lib")
+  endif()
+  list(APPEND YCSB_DEPS wiredtiger)
+endif(ENABLE_WIRED_TIGER)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PKG_PROFILER IMPORTED_TARGET libprofiler)
@@ -37,6 +47,11 @@ target_link_libraries(ycsb PRIVATE ${YCSB_DEPS})
 if(ENABLE_ROCKSDB)
   target_compile_definitions(ycsb PUBLIC ENABLE_ROCKSDB)
 endif(ENABLE_ROCKSDB)
+
+if(ENABLE_WIRED_TIGER)
+  target_compile_definitions(ycsb PUBLIC ENABLE_WIRED_TIGER)
+  target_include_directories(ycsb PUBLIC "/root/code/wiredtiger/dist/debug/include")
+endif(ENABLE_WIRED_TIGER)
 
 # include dirs
 target_include_directories(ycsb PUBLIC ${CMAKE_SOURCE_DIR}/include)
