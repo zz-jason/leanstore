@@ -33,7 +33,7 @@ static const StoreOption kDefaultStoreOption = {
 
     // Generic BTree related options
     .mEnableBulkInsert = false,
-    .mEnableXMerge = false,
+    .mEnableXMerge = true,
     .mXMergeK = 5,
     .mXMergeTargetPct = 80,
     .mEnableContentionSplit = true,

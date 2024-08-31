@@ -171,8 +171,8 @@ LeanStore::~LeanStore() {
     auto treeId = it.first;
     auto& [treePtr, treeName] = it.second;
     auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(treePtr.get());
-    Log::Info("leanstore/btreeName={}, btreeId={}, btreeType={}, btreeHeight={}", treeName, treeId,
-              static_cast<uint8_t>(btree->mTreeType), btree->GetHeight());
+    Log::Info("leanstore/btreeName={}, btreeId={}, btreeType={}, btreeSummary={}", treeName, treeId,
+              static_cast<uint8_t>(btree->mTreeType), btree->Summary());
   }
 
   // Stop transaction workers and group committer
@@ -305,6 +305,12 @@ void LeanStore::serializeMeta(bool allPagesUpToDate) {
       rapidjson::Value btreeJsonId(btreeId);
       btreeJsonObj.AddMember("id", btreeJsonId, allocator);
 
+      rapidjson::Value btreeEnableWal(btree->mConfig.mEnableWal);
+      btreeJsonObj.AddMember("enable_wal", btreeEnableWal, allocator);
+
+      rapidjson::Value btreeUseBulkInsert(btree->mConfig.mUseBulkInsert);
+      btreeJsonObj.AddMember("use_bulk_insert", btreeUseBulkInsert, allocator);
+
       auto btreeMetaMap = mTreeRegistry->Serialize(btreeId);
       rapidjson::Value btreeMetaJsonObj(rapidjson::kObjectType);
       for (const auto& [key, val] : btreeMetaMap) {
@@ -389,6 +395,8 @@ bool LeanStore::deserializeMeta() {
     const TREEID btreeId = btreeJsonObj["id"].GetInt64();
     const auto btreeType = btreeJsonObj["type"].GetInt();
     const std::string btreeName = btreeJsonObj["name"].GetString();
+    const auto btreeEnableWal = btreeJsonObj["enable_wal"].GetBool();
+    const auto btreeUseBulkInsert = btreeJsonObj["use_bulk_insert"].GetBool();
 
     StringMap btreeMetaMap;
     auto& btreeMetaJsonObj = btreeJsonObj["serialized"];
@@ -401,12 +409,16 @@ bool LeanStore::deserializeMeta() {
     case leanstore::storage::btree::BTreeType::kBasicKV: {
       auto btree = std::make_unique<leanstore::storage::btree::BasicKV>();
       btree->mStore = this;
+      btree->mConfig =
+          BTreeConfig{.mEnableWal = btreeEnableWal, .mUseBulkInsert = btreeUseBulkInsert};
       mTreeRegistry->RegisterTree(btreeId, std::move(btree), btreeName);
       break;
     }
     case leanstore::storage::btree::BTreeType::kTransactionKV: {
       auto btree = std::make_unique<leanstore::storage::btree::TransactionKV>();
       btree->mStore = this;
+      btree->mConfig =
+          BTreeConfig{.mEnableWal = btreeEnableWal, .mUseBulkInsert = btreeUseBulkInsert};
       // create graveyard
       ExecSync(0, [&]() {
         auto graveyardName = std::format("_{}_graveyard", btreeName);

@@ -12,6 +12,8 @@
 
 #include <functional>
 
+#include <sys/syscall.h>
+
 namespace leanstore::storage::btree {
 
 using LeafCallback = std::function<void(GuardedBufferFrame<BTreeNode>& guardedLeaf)>;
@@ -401,7 +403,8 @@ inline void PessimisticIterator::Next() {
     if (mGuardedLeaf->mNumSlots == 0) {
       SetCleanUpCallback([&, toMerge = mGuardedLeaf.mBf]() {
         JUMPMU_TRY() {
-          mBTree.TryMergeMayJump(*toMerge, true);
+          TXID sysTxId = mBTree.mStore->AllocSysTxTs();
+          mBTree.TryMergeMayJump(sysTxId, *toMerge, true);
         }
         JUMPMU_CATCH() {
         }

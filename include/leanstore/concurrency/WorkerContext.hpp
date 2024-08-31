@@ -47,22 +47,24 @@ public:
   //! All the workers.
   std::vector<WorkerContext*>& mAllWorkers;
 
-public:
   WorkerContext(uint64_t workerId, std::vector<WorkerContext*>& allWorkers,
                 leanstore::LeanStore* store);
 
   ~WorkerContext();
 
-public:
+  //! Whether a user transaction is started.
   bool IsTxStarted() {
     return mActiveTx.mState == TxState::kStarted;
   }
 
+  //! Starts a user transaction.
   void StartTx(TxMode mode = TxMode::kShortRunning,
                IsolationLevel level = IsolationLevel::kSnapshotIsolation, bool isReadOnly = false);
 
+  //! Commits a user transaction.
   void CommitTx();
 
+  //! Aborts a user transaction.
   void AbortTx();
 
 public:
@@ -76,7 +78,6 @@ public:
   static constexpr uint64_t kLongRunningBit = (1ull << 62);
   static constexpr uint64_t kCleanBitsMask = ~(kRcBit | kLongRunningBit);
 
-public:
   static WorkerContext& My() {
     return *WorkerContext::sTlsWorkerCtxRaw;
   }

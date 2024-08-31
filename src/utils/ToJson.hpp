@@ -17,7 +17,7 @@ const char kType[] = "mType";
 const char kTxId[] = "mTxId";
 const char kWorkerId[] = "mWorkerId";
 const char kPrevLsn[] = "mPrevLsn";
-const char kGsn[] = "mGsn";
+const char kPsn[] = "mPsn";
 const char kTreeId[] = "mTreeId";
 const char kPageId[] = "mPageId";
 
@@ -132,8 +132,8 @@ inline void ToJson(const leanstore::cr::WalEntryComplex* obj, rapidjson::Documen
   // psn
   {
     rapidjson::Value member;
-    member.SetUint64(obj->mGsn);
-    doc->AddMember(kGsn, member, doc->GetAllocator());
+    member.SetUint64(obj->mPsn);
+    doc->AddMember(kPsn, member, doc->GetAllocator());
   }
 
   // treeId
@@ -196,8 +196,8 @@ inline void ToJson(leanstore::storage::BufferFrame* obj, rapidjson::Value* doc,
 
   {
     rapidjson::Value member;
-    member.SetUint64(obj->mHeader.mFlushedGsn);
-    headerObj.AddMember("mFlushedGsn", member, *allocator);
+    member.SetUint64(obj->mHeader.mFlushedPsn);
+    headerObj.AddMember("mFlushedPsn", member, *allocator);
   }
 
   {
@@ -214,6 +214,11 @@ inline void ToJson(leanstore::storage::BufferFrame* obj, rapidjson::Value* doc,
     rapidjson::Value member;
     member.SetUint64(obj->mPage.mGSN);
     pageMetaObj.AddMember("mGSN", member, *allocator);
+  }
+  {
+    rapidjson::Value member;
+    member.SetUint64(obj->mPage.mPsn);
+    pageMetaObj.AddMember("mPsn", member, *allocator);
   }
   {
     rapidjson::Value member;

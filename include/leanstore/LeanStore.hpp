@@ -73,10 +73,13 @@ public:
   //! NOTE: Ownerd by LeanStore instance, should be destroyed together with it
   cr::CRManager* mCRManager;
 
-  //! The global timestamp oracle, used to generate start and commit timestamps
-  //! for all transactions in the store. Start from a positive number, 0
-  //! indicates invalid timestamp
-  std::atomic<uint64_t> mTimestampOracle = 1;
+  //! The global timestamp oracle for user transactions. Used to generate start and commit
+  //! timestamps for user transactions. Start from a positive number, 0 indicates invalid timestamp
+  std::atomic<uint64_t> mUsrTso = 1;
+
+  //! The global timestamp oracle for system transactions. Used to generate timestamps for system
+  //! transactions. Start from a positive number, 0 indicates invalid timestamp
+  std::atomic<uint64_t> mSysTso = 1;
 
   //! The metrics manager
   std::unique_ptr<leanstore::telemetry::MetricsManager> mMetricsManager;
@@ -118,13 +121,21 @@ public:
   //! Unregister a TransactionKV
   void DropTransactionKV(const std::string& name);
 
-  uint64_t GetTs() {
-    return mTimestampOracle.load();
+  uint64_t GetUsrTxTs() {
+    return mUsrTso.load();
+  }
+
+  uint64_t GetSysTxTs() {
+    return mSysTso.load();
   }
 
   //! Alloc a new timestamp from the timestamp oracle
-  uint64_t AllocTs() {
-    return mTimestampOracle.fetch_add(1);
+  uint64_t AllocUsrTxTs() {
+    return mUsrTso.fetch_add(1);
+  }
+
+  uint64_t AllocSysTxTs() {
+    return mSysTso.fetch_add(1);
   }
 
   //! Execute a custom user function on a worker thread.

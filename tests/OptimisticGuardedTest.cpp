@@ -26,7 +26,7 @@ protected:
   void SetUp() override {
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
-    auto storeDirStr = "/tmp/" + curTestName;
+    auto storeDirStr = "/tmp/leanstore/" + curTestName;
     auto* option = CreateStoreOption(storeDirStr.c_str());
     option->mCreateFromScratch = true;
     option->mWorkerThreads = 2;

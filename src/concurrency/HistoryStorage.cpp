@@ -4,10 +4,10 @@
 #include "leanstore/btree/BasicKV.hpp"
 #include "leanstore/btree/core/BTreeNode.hpp"
 #include "leanstore/btree/core/PessimisticExclusiveIterator.hpp"
-#include "leanstore/btree/core/PessimisticSharedIterator.hpp"
 #include "leanstore/profiling/counters/CRCounters.hpp"
 #include "leanstore/sync/HybridLatch.hpp"
 #include "leanstore/sync/ScopedHybridGuard.hpp"
+#include "leanstore/utils/JumpMU.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/Misc.hpp"
 #include "leanstore/utils/UserThread.hpp"
@@ -111,13 +111,15 @@ bool HistoryStorage::GetVersion(TXID newerTxId, COMMANDID newerCommandId,
 
   Slice key(keyBuffer, keySize);
   JUMPMU_TRY() {
-    auto iter = const_cast<BasicKV*>(btree)->GetIterator();
-    if (iter.SeekToEqual(key); !iter.Valid()) {
+    BasicKV* kv = const_cast<BasicKV*>(btree);
+    auto ret = kv->Lookup(key, [&](const Slice& payload) {
+      const auto& versionContainer = *VersionMeta::From(payload.data());
+      cb(versionContainer.mPayload, payload.length() - sizeof(VersionMeta));
+    });
+
+    if (ret == OpCode::kNotFound) {
       JUMPMU_RETURN false;
     }
-    Slice payload = iter.Val();
-    const auto& versionContainer = *VersionMeta::From(payload.data());
-    cb(versionContainer.mPayload, payload.length() - sizeof(VersionMeta));
     JUMPMU_RETURN true;
   }
   JUMPMU_CATCH() {
@@ -150,7 +152,8 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
       if (guardedLeaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
         xIter.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
           JUMPMU_TRY() {
-            btree->TryMergeMayJump(*toMerge);
+            TXID sysTxId = btree->mStore->AllocSysTxTs();
+            btree->TryMergeMayJump(sysTxId, *toMerge);
           }
           JUMPMU_CATCH() {
           }
@@ -239,7 +242,8 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
             if (guardedLeaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
               xIter.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
                 JUMPMU_TRY() {
-                  btree->TryMergeMayJump(*toMerge);
+                  TXID sysTxId = btree->mStore->AllocSysTxTs();
+                  btree->TryMergeMayJump(sysTxId, *toMerge);
                 }
                 JUMPMU_CATCH() {
                 }

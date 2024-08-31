@@ -53,7 +53,7 @@ TEST_F(WalEntryTest, ToJsonString) {
     EXPECT_TRUE(walStr.contains(kTxId));
     EXPECT_TRUE(walStr.contains(kWorkerId));
     EXPECT_TRUE(walStr.contains(kPrevLsn));
-    EXPECT_TRUE(walStr.contains(kGsn));
+    EXPECT_TRUE(walStr.contains(kPsn));
     EXPECT_TRUE(walStr.contains(kTreeId));
     EXPECT_TRUE(walStr.contains(kPageId));
   }

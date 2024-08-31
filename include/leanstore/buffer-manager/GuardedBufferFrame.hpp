@@ -78,7 +78,7 @@ public:
         mGuard(&mBf->mHeader.mLatch),
         mKeepAlive(true) {
     latchMayJump(mGuard, latchMode);
-    SyncGSNBeforeRead();
+    CheckRemoteDependency();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
@@ -96,7 +96,7 @@ public:
         mGuard(&mBf->mHeader.mLatch),
         mKeepAlive(true) {
     latchMayJump(mGuard, latchMode);
-    SyncGSNBeforeRead();
+    CheckRemoteDependency();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
 
     guardedParent.JumpIfModifiedByOthers();
@@ -142,47 +142,44 @@ public:
   }
 
 public:
-  inline void SyncGSNBeforeWrite() {
+  //! Mark the page as dirty after modification by a user or system transaction.
+  void MarkPageAsDirty() {
     LS_DCHECK(mBf != nullptr);
-    LS_DCHECK(mBf->mPage.mGSN <= cr::WorkerContext::My().mLogging.GetCurrentGsn(),
-              "Page GSN should <= worker GSN, pageGSN={}, workerGSN={}", mBf->mPage.mGSN,
-              cr::WorkerContext::My().mLogging.GetCurrentGsn());
+    mBf->mPage.mPsn++;
+  }
+
+  //! Sync the system transaction id to the page. Page system transaction id is updated during the
+  //! execution of a system transaction.
+  void SyncSystemTxId(TXID sysTxId) {
+    LS_DCHECK(mBf != nullptr);
 
     // update last writer worker
     mBf->mHeader.mLastWriterWorker = cr::WorkerContext::My().mWorkerId;
 
-    // increase GSN
-    const auto workerGSN = cr::WorkerContext::My().mLogging.GetCurrentGsn();
-    mBf->mPage.mGSN = workerGSN + 1;
-    cr::WorkerContext::My().mLogging.SetCurrentGsn(workerGSN + 1);
+    // update system transaction id
+    mBf->mPage.mSysTxId = sysTxId;
+
+    // update the maximum system transaction id written by the worker
+    cr::WorkerContext::My().mLogging.UpdateSysTxWrittern(sysTxId);
   }
 
-  // TODO: don't sync on temporary table pages like history trees
-  inline void SyncGSNBeforeRead() {
+  //! Check remote dependency
+  //! TODO: don't sync on temporary table pages like history trees
+  void CheckRemoteDependency() {
     // skip if not running inside a worker
     if (!cr::WorkerContext::InWorker()) {
       return;
     }
 
-    if (!cr::WorkerContext::My().mLogging.mHasRemoteDependency &&
-        mBf->mPage.mGSN > cr::WorkerContext::My().mLogging.mTxReadSnapshot &&
-        mBf->mHeader.mLastWriterWorker != cr::WorkerContext::My().mWorkerId) {
-      cr::WorkerContext::My().mLogging.mHasRemoteDependency = true;
-      LS_DLOG("Detected remote dependency, workerId={}, "
-              "txReadSnapshot(GSN)={}, pageLastWriterWorker={}, pageGSN={}",
-              cr::WorkerContext::My().mWorkerId, cr::WorkerContext::My().mLogging.mTxReadSnapshot,
-              mBf->mHeader.mLastWriterWorker, mBf->mPage.mGSN);
-    }
-
-    const auto workerGSN = cr::WorkerContext::My().mLogging.GetCurrentGsn();
-    const auto pageGSN = mBf->mPage.mGSN;
-    if (workerGSN < pageGSN) {
-      cr::WorkerContext::My().mLogging.SetCurrentGsn(pageGSN);
+    if (mBf->mHeader.mLastWriterWorker != cr::WorkerContext::My().mWorkerId &&
+        mBf->mPage.mSysTxId > cr::ActiveTx().mMaxObservedSysTxId) {
+      cr::ActiveTx().mMaxObservedSysTxId = mBf->mPage.mSysTxId;
+      cr::ActiveTx().mHasRemoteDependency = true;
     }
   }
 
   template <typename WT, typename... Args>
-  inline cr::WalPayloadHandler<WT> ReserveWALPayload(uint64_t walSize, Args&&... args) {
+  cr::WalPayloadHandler<WT> ReserveWALPayload(uint64_t walSize, Args&&... args) {
     LS_DCHECK(cr::ActiveTx().mIsDurable);
     LS_DCHECK(mGuard.mState == GuardState::kPessimisticExclusive);
 
@@ -190,45 +187,44 @@ public:
     const auto treeId = mBf->mPage.mBTreeId;
     walSize = ((walSize - 1) / 8 + 1) * 8;
     auto handler = cr::WorkerContext::My().mLogging.ReserveWALEntryComplex<WT, Args...>(
-        sizeof(WT) + walSize, pageId, mBf->mPage.mGSN, treeId, std::forward<Args>(args)...);
+        sizeof(WT) + walSize, pageId, mBf->mPage.mPsn, treeId, std::forward<Args>(args)...);
 
-    SyncGSNBeforeWrite();
     return handler;
   }
 
   template <typename WT, typename... Args>
-  inline void WriteWal(uint64_t walSize, Args&&... args) {
+  void WriteWal(uint64_t walSize, Args&&... args) {
     auto handle = ReserveWALPayload<WT>(walSize, std::forward<Args>(args)...);
     handle.SubmitWal();
   }
 
-  inline bool EncounteredContention() {
+  bool EncounteredContention() {
     return mGuard.mEncounteredContention;
   }
 
   // NOLINTBEGIN
 
-  inline void unlock() {
+  void unlock() {
     mGuard.Unlock();
   }
 
-  inline void JumpIfModifiedByOthers() {
+  void JumpIfModifiedByOthers() {
     mGuard.JumpIfModifiedByOthers();
   }
 
-  inline T& ref() {
+  T& ref() {
     return *reinterpret_cast<T*>(mBf->mPage.mPayload);
   }
 
-  inline T* ptr() {
+  T* ptr() {
     return reinterpret_cast<T*>(mBf->mPage.mPayload);
   }
 
-  inline Swip swip() {
+  Swip swip() {
     return Swip(mBf);
   }
 
-  inline T* operator->() {
+  T* operator->() {
     return reinterpret_cast<T*>(mBf->mPage.mPayload);
   }
 
@@ -311,8 +307,8 @@ public:
     mRefGuard.mKeepAlive = true;
   }
 
-  void SyncGSNBeforeWrite() {
-    mRefGuard.SyncGSNBeforeWrite();
+  void SyncSystemTxId(TXID sysTxId) {
+    mRefGuard.SyncSystemTxId(sysTxId);
   }
 
   ~ExclusiveGuardedBufferFrame() {
@@ -330,27 +326,27 @@ public:
     new (mRefGuard.mBf->mPage.mPayload) PayloadType(std::forward<Args>(args)...);
   }
 
-  inline uint8_t* GetPagePayloadPtr() {
+  uint8_t* GetPagePayloadPtr() {
     return reinterpret_cast<uint8_t*>(mRefGuard.mBf->mPage.mPayload);
   }
 
-  inline PayloadType* GetPagePayload() {
+  PayloadType* GetPagePayload() {
     return reinterpret_cast<PayloadType*>(mRefGuard.mBf->mPage.mPayload);
   }
 
-  inline PayloadType* operator->() {
+  PayloadType* operator->() {
     return GetPagePayload();
   }
 
-  inline Swip swip() {
+  Swip swip() {
     return Swip(mRefGuard.mBf);
   }
 
-  inline BufferFrame* bf() {
+  BufferFrame* bf() {
     return mRefGuard.mBf;
   }
 
-  inline void Reclaim() {
+  void Reclaim() {
     mRefGuard.Reclaim();
   }
 };

@@ -98,9 +98,8 @@ public:
   //! ID of the transaction who creates this WalEntry.
   TXID mTxId;
 
-  //! Global sequence number of the WalEntry, indicate the global order of the
-  //! WAL entry.
-  uint64_t mGsn;
+  //! Page sequence number of the WalEntry.
+  uint64_t mPsn;
 
   //! The page ID of the WalEntry, used to identify the btree node together with
   //! btree ID
@@ -116,7 +115,7 @@ public:
 
   WalEntryComplex() = default;
 
-  WalEntryComplex(LID lsn, LID prevLsn, uint64_t size, WORKERID workerId, TXID txid, LID gsn,
+  WalEntryComplex(LID lsn, LID prevLsn, uint64_t size, WORKERID workerId, TXID txid, LID psn,
                   PID pageId, TREEID treeId)
       : WalEntry(Type::kComplex),
         mCrc32(0),
@@ -125,7 +124,7 @@ public:
         mSize(size),
         mWorkerId(workerId),
         mTxId(txid),
-        mGsn(gsn),
+        mPsn(psn),
         mPageId(pageId),
         mTreeId(treeId) {
   }
@@ -185,7 +184,7 @@ const char kType[] = "mType";
 const char kTxId[] = "mTxId";
 const char kWorkerId[] = "mWorkerId";
 const char kPrevLsn[] = "mPrevLsn";
-const char kGsn[] = "mGsn";
+const char kPsn[] = "mPsn";
 const char kTreeId[] = "mTreeId";
 const char kPageId[] = "mPageId";
 

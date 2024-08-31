@@ -44,10 +44,14 @@ public:
   //! mCommitTs is the commit timestamp of the transaction.
   TXID mCommitTs = 0;
 
-  //! mMaxObservedGSN is the maximum observed global sequence number during
-  //! transaction processing. It's used to determine whether a transaction can
-  //! be committed.
-  LID mMaxObservedGSN = 0;
+  //! Maximum observed system transaction id during transaction processing. Used to track
+  //! transaction dependencies.
+  TXID mMaxObservedSysTxId = 0;
+
+  //! Whether the transaction has any remote dependencies. Currently, we only support SI isolation
+  //! level, a user transaction can only depend on a system transaction executed in a remote worker
+  //! thread.
+  bool mHasRemoteDependency = false;
 
   //! mTxMode is the mode of the current transaction.
   TxMode mTxMode = TxMode::kShortRunning;
@@ -66,20 +70,21 @@ public:
   bool mWalExceedBuffer = false;
 
 public:
-  inline bool IsLongRunning() {
+  bool IsLongRunning() {
     return mTxMode == TxMode::kLongRunning;
   }
 
-  inline bool AtLeastSI() {
+  bool AtLeastSI() {
     return mTxIsolationLevel >= IsolationLevel::kSnapshotIsolation;
   }
 
   // Start a new transaction, initialize all fields
-  inline void Start(TxMode mode, IsolationLevel level) {
+  void Start(TxMode mode, IsolationLevel level) {
     mState = TxState::kStarted;
     mStartTs = 0;
     mCommitTs = 0;
-    mMaxObservedGSN = 0;
+    mMaxObservedSysTxId = 0;
+    mHasRemoteDependency = false;
     mTxMode = mode;
     mTxIsolationLevel = level;
     mHasWrote = false;
@@ -87,8 +92,9 @@ public:
     mWalExceedBuffer = false;
   }
 
-  inline bool CanCommit(uint64_t minFlushedGSN, TXID minFlushedTxId) {
-    return mMaxObservedGSN <= minFlushedGSN && mStartTs <= minFlushedTxId;
+  //! Check whether a user transaction with remote dependencies can be committed.
+  bool CanCommit(TXID minFlushedSysTx, TXID minFlushedUsrTx) {
+    return mMaxObservedSysTxId <= minFlushedSysTx && mStartTs <= minFlushedUsrTx;
   }
 };
 

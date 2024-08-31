@@ -41,6 +41,7 @@ public:
     auto dataDirStr = FLAGS_ycsb_data_dir + std::string("/leanstore");
     StoreOption* option = CreateStoreOption(dataDirStr.c_str());
     option->mCreateFromScratch = createFromScratch;
+    option->mEnableEagerGc = true;
     option->mWorkerThreads = FLAGS_ycsb_threads;
     option->mBufferPoolSize = FLAGS_ycsb_mem_kb * 1024;
     option->mEnableMetrics = true;

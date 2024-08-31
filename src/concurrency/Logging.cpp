@@ -59,9 +59,8 @@ void Logging::WriteWalTxAbort() {
   mWalBuffered += size;
   publishWalFlushReq();
 
-  LS_DLOG("WriteWalTxAbort, workerId={}, startTs={}, curGSN={}, walJson={}",
-          WorkerContext::My().mWorkerId, WorkerContext::My().mActiveTx.mStartTs, GetCurrentGsn(),
-          utils::ToJsonString(entry));
+  LS_DLOG("WriteWalTxAbort, workerId={}, startTs={}, walJson={}", WorkerContext::My().mWorkerId,
+          WorkerContext::My().mActiveTx.mStartTs, utils::ToJsonString(entry));
 }
 
 void Logging::WriteWalTxFinish() {
@@ -78,9 +77,8 @@ void Logging::WriteWalTxFinish() {
   mWalBuffered += size;
   publishWalFlushReq();
 
-  LS_DLOG("WriteWalTxFinish, workerId={}, startTs={}, curGSN={}, walJson={}",
-          WorkerContext::My().mWorkerId, WorkerContext::My().mActiveTx.mStartTs, GetCurrentGsn(),
-          utils::ToJsonString(entry));
+  LS_DLOG("WriteWalTxFinish, workerId={}, startTs={}, walJson={}", WorkerContext::My().mWorkerId,
+          WorkerContext::My().mActiveTx.mStartTs, utils::ToJsonString(entry));
 }
 
 void Logging::WriteWalCarriageReturn() {
@@ -101,9 +99,8 @@ void Logging::SubmitWALEntryComplex(uint64_t totalSize) {
   COUNTERS_BLOCK() {
     WorkerCounters::MyCounters().wal_write_bytes += totalSize;
   }
-  LS_DLOG("SubmitWal, workerId={}, startTs={}, curGSN={}, walJson={}",
-          WorkerContext::My().mWorkerId, WorkerContext::My().mActiveTx.mStartTs, GetCurrentGsn(),
-          utils::ToJsonString(mActiveWALEntryComplex));
+  LS_DLOG("SubmitWal, workerId={}, startTs={}, walJson={}", WorkerContext::My().mWorkerId,
+          WorkerContext::My().mActiveTx.mStartTs, utils::ToJsonString(mActiveWALEntryComplex));
 }
 
 void Logging::publishWalBufferedOffset() {
@@ -111,7 +108,7 @@ void Logging::publishWalBufferedOffset() {
 }
 
 void Logging::publishWalFlushReq() {
-  WalFlushReq current(mWalBuffered, GetCurrentGsn(), WorkerContext::My().mActiveTx.mStartTs);
+  WalFlushReq current(mWalBuffered, mSysTxWrittern, WorkerContext::My().mActiveTx.mStartTs);
   mWalFlushReq.Set(current);
 }
 

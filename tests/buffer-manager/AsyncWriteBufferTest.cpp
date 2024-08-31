@@ -109,10 +109,10 @@ TEST_F(AsyncWriteBufferTest, Basic) {
 
   // check the flushed content
   testWriteBuffer.IterateFlushedBfs(
-      [](BufferFrame& flushedBf, uint64_t flushedGsn) {
+      [](BufferFrame& flushedBf, uint64_t flushedPsn) {
         EXPECT_FALSE(flushedBf.IsDirty());
         EXPECT_FALSE(flushedBf.IsFree());
-        EXPECT_EQ(flushedGsn, 0);
+        EXPECT_EQ(flushedPsn, 0);
       },
       testMaxBatchSize);
 

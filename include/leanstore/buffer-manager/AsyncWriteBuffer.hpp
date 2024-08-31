@@ -25,7 +25,7 @@ namespace leanstore::storage {
 //!  writeBuffer.SubmitAll();
 //!  writeBuffer.WaitAll();
 //!  writeBuffer.IterateFlushedBfs([](BufferFrame& flushedBf, uint64_t
-//!  flushedGsn) {
+//!  flushedPsn) {
 //!    // do something with flushedBf
 //!  }, numFlushedBfs);
 ///
@@ -72,7 +72,7 @@ public:
     return mAIo.GetNumRequests();
   }
 
-  void IterateFlushedBfs(std::function<void(BufferFrame& flushedBf, uint64_t flushedGsn)> callback,
+  void IterateFlushedBfs(std::function<void(BufferFrame& flushedBf, uint64_t flushedPsn)> callback,
                          uint64_t numFlushedBfs);
 
 private:

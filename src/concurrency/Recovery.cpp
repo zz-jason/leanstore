@@ -87,7 +87,7 @@ Result<void> Recovery::analysis() {
       auto* wal = reinterpret_cast<WalEntryComplex*>(walEntryPtr);
       mActiveTxTable[wal->mTxId] = offset;
       auto& bf = resolvePage(wal->mPageId);
-      if (wal->mGsn >= bf.mPage.mGSN &&
+      if (wal->mPsn >= bf.mPage.mPsn &&
           mDirtyPageTable.find(wal->mPageId) == mDirtyPageTable.end()) {
         // record the first WalEntry that makes the page dirty
         auto pageId = wal->mPageId;
