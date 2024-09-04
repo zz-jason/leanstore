@@ -313,7 +313,7 @@ void PageEvictor::FlushAndRecycleBufferFrames(Partition& targetPartition) {
 
   auto numFlushedBfs = result.value();
   mAsyncWriteBuffer.IterateFlushedBfs(
-      [&](BufferFrame& writtenBf, uint64_t flushedGsn) {
+      [&](BufferFrame& writtenBf, uint64_t flushedPsn) {
         JUMPMU_TRY() {
           // When the written back page is being exclusively locked, we
           // should rather waste the write and move on to another page
@@ -323,10 +323,10 @@ void PageEvictor::FlushAndRecycleBufferFrames(Partition& targetPartition) {
           BMOptimisticGuard optimisticGuard(writtenBf.mHeader.mLatch);
           BMExclusiveGuard exclusiveGuard(optimisticGuard);
           LS_DCHECK(writtenBf.mHeader.mIsBeingWrittenBack);
-          LS_DCHECK(writtenBf.mHeader.mFlushedGsn < flushedGsn);
+          LS_DCHECK(writtenBf.mHeader.mFlushedPsn < flushedPsn);
 
           // For recovery, so much has to be done here...
-          writtenBf.mHeader.mFlushedGsn = flushedGsn;
+          writtenBf.mHeader.mFlushedPsn = flushedPsn;
           writtenBf.mHeader.mIsBeingWrittenBack = false;
           PPCounters::MyCounters().flushed_pages_counter++;
         }

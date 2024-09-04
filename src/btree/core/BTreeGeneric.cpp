@@ -13,6 +13,7 @@
 #include "leanstore/utils/Defer.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/Misc.hpp"
+#include "leanstore/utils/UserThread.hpp"
 #include "utils/ToJson.hpp"
 
 #include <cstdint>
@@ -43,13 +44,18 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId, BTreeConfig
 
   // Record WAL
   if (mConfig.mEnableWal) {
+    TXID sysTxId = mStore->AllocSysTxTs();
+
     auto rootWalHandler =
-        xGuardedRoot.ReserveWALPayload<WalInitPage>(0, mTreeId, xGuardedRoot->mIsLeaf);
+        xGuardedRoot.ReserveWALPayload<WalInitPage>(0, sysTxId, mTreeId, xGuardedRoot->mIsLeaf);
     rootWalHandler.SubmitWal();
 
     auto metaWalHandler =
-        xGuardedMeta.ReserveWALPayload<WalInitPage>(0, mTreeId, xGuardedMeta->mIsLeaf);
+        xGuardedMeta.ReserveWALPayload<WalInitPage>(0, sysTxId, mTreeId, xGuardedMeta->mIsLeaf);
     metaWalHandler.SubmitWal();
+
+    xGuardedMeta.SyncSystemTxId(sysTxId);
+    xGuardedRoot.SyncSystemTxId(sysTxId);
   }
 }
 
@@ -61,15 +67,16 @@ PessimisticExclusiveIterator BTreeGeneric::GetExclusiveIterator() {
   return PessimisticExclusiveIterator(*this);
 }
 
-void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, int16_t favoredSplitPos) {
+void BTreeGeneric::TrySplitMayJump(TXID sysTxId, BufferFrame& toSplit, int16_t favoredSplitPos) {
   auto parentHandler = findParentEager(*this, toSplit);
   GuardedBufferFrame<BTreeNode> guardedParent(
       mStore->mBufferManager.get(), std::move(parentHandler.mParentGuard), parentHandler.mParentBf);
   auto guardedChild = GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(), guardedParent,
                                                     parentHandler.mChildSwip);
   if (guardedChild->mNumSlots <= 1) {
-    Log::Warn("Split failed, slots too less: pageId={}, favoredSplitPos={}, numSlots={}",
-              toSplit.mHeader.mPageId, favoredSplitPos, guardedChild->mNumSlots);
+    Log::Warn(
+        "Split failed, slots too less: sysTxId={}, pageId={}, favoredSplitPos={}, numSlots={}",
+        sysTxId, toSplit.mHeader.mPageId, favoredSplitPos, guardedChild->mNumSlots);
     return;
   }
 
@@ -91,7 +98,7 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, int16_t favoredSplitPos
 
   // split the root node
   if (isMetaNode(guardedParent)) {
-    splitRootMayJump(guardedParent, guardedChild, sepInfo);
+    splitRootMayJump(sysTxId, guardedParent, guardedChild, sepInfo);
     return;
   }
 
@@ -102,12 +109,12 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, int16_t favoredSplitPos
   if (!guardedParent->HasEnoughSpaceFor(spaceNeededForSeparator)) {
     guardedParent.unlock();
     guardedChild.unlock();
-    TrySplitMayJump(*guardedParent.mBf);
+    TrySplitMayJump(sysTxId, *guardedParent.mBf);
     return;
   }
 
   // split the non-root node
-  splitNonRootMayJump(guardedParent, guardedChild, sepInfo, spaceNeededForSeparator);
+  splitNonRootMayJump(sysTxId, guardedParent, guardedChild, sepInfo, spaceNeededForSeparator);
 }
 
 //! Split the root node, 4 nodes are involved in the split:
@@ -130,7 +137,7 @@ void BTreeGeneric::TrySplitMayJump(BufferFrame& toSplit, int16_t favoredSplitPos
 //!   - insert separator key into new root
 //!   - update meta node to point to new root
 ///
-void BTreeGeneric::splitRootMayJump(GuardedBufferFrame<BTreeNode>& guardedMeta,
+void BTreeGeneric::splitRootMayJump(TXID sysTxId, GuardedBufferFrame<BTreeNode>& guardedMeta,
                                     GuardedBufferFrame<BTreeNode>& guardedOldRoot,
                                     const BTreeNode::SeparatorInfo& sepInfo) {
   auto xGuardedMeta = ExclusiveGuardedBufferFrame(std::move(guardedMeta));
@@ -145,7 +152,8 @@ void BTreeGeneric::splitRootMayJump(GuardedBufferFrame<BTreeNode>& guardedMeta,
   auto guardedNewLeft = GuardedBufferFrame<BTreeNode>(bm, newLeftBf);
   auto xGuardedNewLeft = ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
   if (mConfig.mEnableWal) {
-    xGuardedNewLeft.WriteWal<WalInitPage>(0, mTreeId, xGuardedOldRoot->mIsLeaf);
+    xGuardedNewLeft.SyncSystemTxId(sysTxId);
+    xGuardedNewLeft.WriteWal<WalInitPage>(0, sysTxId, mTreeId, xGuardedOldRoot->mIsLeaf);
   }
   xGuardedNewLeft.InitPayload(xGuardedOldRoot->mIsLeaf);
 
@@ -154,14 +162,15 @@ void BTreeGeneric::splitRootMayJump(GuardedBufferFrame<BTreeNode>& guardedMeta,
   auto guardedNewRoot = GuardedBufferFrame<BTreeNode>(bm, newRootBf);
   auto xGuardedNewRoot = ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewRoot));
   if (mConfig.mEnableWal) {
-    xGuardedNewRoot.WriteWal<WalInitPage>(0, mTreeId, false);
+    xGuardedNewRoot.SyncSystemTxId(sysTxId);
+    xGuardedNewRoot.WriteWal<WalInitPage>(0, sysTxId, mTreeId, false);
   }
   xGuardedNewRoot.InitPayload(false);
 
   // 3.1. write wal on demand
   if (mConfig.mEnableWal) {
-    xGuardedMeta.SyncGSNBeforeWrite();
-    xGuardedOldRoot.WriteWal<WalSplitRoot>(0, xGuardedNewLeft.bf()->mHeader.mPageId,
+    xGuardedOldRoot.SyncSystemTxId(sysTxId);
+    xGuardedOldRoot.WriteWal<WalSplitRoot>(0, sysTxId, xGuardedNewLeft.bf()->mHeader.mPageId,
                                            xGuardedNewRoot.bf()->mHeader.mPageId,
                                            xGuardedMeta.bf()->mHeader.mPageId, sepInfo);
   }
@@ -183,7 +192,7 @@ void BTreeGeneric::splitRootMayJump(GuardedBufferFrame<BTreeNode>& guardedMeta,
 //!   |            |   |
 //! child     newLeft child
 ///
-void BTreeGeneric::splitNonRootMayJump(GuardedBufferFrame<BTreeNode>& guardedParent,
+void BTreeGeneric::splitNonRootMayJump(TXID sysTxId, GuardedBufferFrame<BTreeNode>& guardedParent,
                                        GuardedBufferFrame<BTreeNode>& guardedChild,
                                        const BTreeNode::SeparatorInfo& sepInfo,
                                        uint16_t spaceNeededForSeparator) {
@@ -198,14 +207,16 @@ void BTreeGeneric::splitNonRootMayJump(GuardedBufferFrame<BTreeNode>& guardedPar
   auto guardedNewLeft = GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(), newLeftBf);
   auto xGuardedNewLeft = ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedNewLeft));
   if (mConfig.mEnableWal) {
-    xGuardedNewLeft.WriteWal<WalInitPage>(0, mTreeId, xGuardedChild->mIsLeaf);
+    xGuardedNewLeft.SyncSystemTxId(sysTxId);
+    xGuardedNewLeft.WriteWal<WalInitPage>(0, sysTxId, mTreeId, xGuardedChild->mIsLeaf);
   }
   xGuardedNewLeft.InitPayload(xGuardedChild->mIsLeaf);
 
   // 2.1. write wal on demand or simply mark as dirty
   if (mConfig.mEnableWal) {
-    xGuardedParent.SyncGSNBeforeWrite();
-    xGuardedChild.WriteWal<WalSplitNonRoot>(0, xGuardedParent.bf()->mHeader.mPageId,
+    xGuardedParent.SyncSystemTxId(sysTxId);
+    xGuardedChild.SyncSystemTxId(sysTxId);
+    xGuardedChild.WriteWal<WalSplitNonRoot>(0, sysTxId, xGuardedParent.bf()->mHeader.mPageId,
                                             xGuardedNewLeft.bf()->mHeader.mPageId, sepInfo);
   }
 
@@ -216,7 +227,7 @@ void BTreeGeneric::splitNonRootMayJump(GuardedBufferFrame<BTreeNode>& guardedPar
   xGuardedChild->Split(xGuardedParent, xGuardedNewLeft, sepInfo);
 }
 
-bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
+bool BTreeGeneric::TryMergeMayJump(TXID sysTxId, BufferFrame& toMerge, bool swizzleSibling) {
   auto parentHandler = findParentEager(*this, toMerge);
   GuardedBufferFrame<BTreeNode> guardedParent(
       mStore->mBufferManager.get(), std::move(parentHandler.mParentGuard), parentHandler.mParentBf);
@@ -262,9 +273,9 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
     }
 
     if (mConfig.mEnableWal) {
-      guardedParent.SyncGSNBeforeWrite();
-      guardedChild.SyncGSNBeforeWrite();
-      guardedLeft.SyncGSNBeforeWrite();
+      guardedParent.SyncSystemTxId(sysTxId);
+      guardedChild.SyncSystemTxId(sysTxId);
+      guardedLeft.SyncSystemTxId(sysTxId);
     }
 
     xGuardedLeft.Reclaim();
@@ -295,9 +306,9 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
     }
 
     if (mConfig.mEnableWal) {
-      guardedParent.SyncGSNBeforeWrite();
-      guardedChild.SyncGSNBeforeWrite();
-      guardedRight.SyncGSNBeforeWrite();
+      guardedParent.SyncSystemTxId(sysTxId);
+      guardedChild.SyncSystemTxId(sysTxId);
+      guardedRight.SyncSystemTxId(sysTxId);
     }
 
     xGuardedChild.Reclaim();
@@ -310,7 +321,7 @@ bool BTreeGeneric::TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling) {
     if (!isMetaNode(guardedParent) &&
         guardedParent->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
       JUMPMU_TRY() {
-        TryMergeMayJump(*guardedParent.mBf, true);
+        TryMergeMayJump(sysTxId, *guardedParent.mBf, true);
       }
       JUMPMU_CATCH() {
         COUNTERS_BLOCK() {
@@ -477,7 +488,9 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(GuardedBufferFrame<BTreeNode
   }
 
   ExclusiveGuardedBufferFrame<BTreeNode> xGuardedParent = std::move(guardedParent);
-  xGuardedParent.SyncGSNBeforeWrite();
+  // TODO(zz-jason): support wal and sync system tx id
+  // TXID sysTxId = utils::tlsStore->AllocSysTxTs();
+  // xGuardedParent.SyncSystemTxId(sysTxId);
 
   XMergeReturnCode retCode = XMergeReturnCode::kPartialMerge;
   int16_t leftHand, rightHand, ret;
@@ -497,8 +510,9 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(GuardedBufferFrame<BTreeNode
       ExclusiveGuardedBufferFrame<BTreeNode> xGuardedRight(
           std::move(guardedNodes[rightHand - pos]));
       ExclusiveGuardedBufferFrame<BTreeNode> xGuardedLeft(std::move(guardedNodes[leftHand - pos]));
-      xGuardedRight.SyncGSNBeforeWrite();
-      xGuardedLeft.SyncGSNBeforeWrite();
+      // TODO(zz-jason): support wal and sync system tx id
+      // xGuardedRight.SyncSystemTxId(sysTxId);
+      // xGuardedLeft.SyncSystemTxId(sysTxId);
       maxRight = leftHand;
       ret = mergeLeftIntoRight(xGuardedParent, leftHand, xGuardedLeft, xGuardedRight,
                                leftHand == pos);
@@ -614,71 +628,69 @@ void BTreeGeneric::Deserialize(StringMap map) {
             mMetaNodeSwip.AsBufferFrame().mPage.mBTreeId);
 }
 
-// void BTreeGeneric::ToJson(BTreeGeneric& btree, rapidjson::Document* resultDoc) {
-//   LS_DCHECK(resultDoc->IsObject());
-//   auto& allocator = resultDoc->GetAllocator();
-//
-//   // meta node
-//   GuardedBufferFrame<BTreeNode> guardedMetaNode(btree.mStore->mBufferManager.get(),
-//                                                 btree.mMetaNodeSwip);
-//   rapidjson::Value metaJson(rapidjson::kObjectType);
-//   utils::ToJson(guardedMetaNode.mBf, &metaJson, &allocator);
-//   resultDoc->AddMember("metaNode", metaJson, allocator);
-//
-//   // root node
-//   GuardedBufferFrame<BTreeNode> guardedRootNode(btree.mStore->mBufferManager.get(),
-//   guardedMetaNode,
-//                                                 guardedMetaNode->mRightMostChildSwip);
-//   rapidjson::Value rootJson(rapidjson::kObjectType);
-//   toJsonRecursive(btree, guardedRootNode, &rootJson, allocator);
-//   resultDoc->AddMember("rootNode", rootJson, allocator);
-// }
-//
-// void BTreeGeneric::toJsonRecursive(BTreeGeneric& btree, GuardedBufferFrame<BTreeNode>&
-// guardedNode,
-//                                    rapidjson::Value* resultObj,
-//                                    rapidjson::Value::AllocatorType& allocator) {
-//
-//   LS_DCHECK(resultObj->IsObject());
-//   // buffer frame header
-//   utils::ToJson(guardedNode.mBf, resultObj, &allocator);
-//
-//   // btree node
-//   {
-//     rapidjson::Value nodeObj(rapidjson::kObjectType);
-//     utils::ToJson(guardedNode.ptr(), &nodeObj, &allocator);
-//     resultObj->AddMember("pagePayload(btreeNode)", nodeObj, allocator);
-//   }
-//
-//   if (guardedNode->mIsLeaf) {
-//     return;
-//   }
-//
-//   rapidjson::Value childrenJson(rapidjson::kArrayType);
-//   for (auto i = 0u; i < guardedNode->mNumSlots; ++i) {
-//     auto* childSwip = guardedNode->ChildSwip(i);
-//     GuardedBufferFrame<BTreeNode> guardedChild(btree.mStore->mBufferManager.get(), guardedNode,
-//                                                *childSwip);
-//
-//     rapidjson::Value childObj(rapidjson::kObjectType);
-//     toJsonRecursive(btree, guardedChild, &childObj, allocator);
-//     guardedChild.unlock();
-//
-//     childrenJson.PushBack(childObj, allocator);
-//   }
-//
-//   if (guardedNode->mRightMostChildSwip != nullptr) {
-//     GuardedBufferFrame<BTreeNode> guardedChild(btree.mStore->mBufferManager.get(), guardedNode,
-//                                                guardedNode->mRightMostChildSwip);
-//     rapidjson::Value childObj(rapidjson::kObjectType);
-//     toJsonRecursive(btree, guardedChild, &childObj, allocator);
-//     guardedChild.unlock();
-//
-//     childrenJson.PushBack(childObj, allocator);
-//   }
-//
-//   // children
-//   resultObj->AddMember("mChildren", childrenJson, allocator);
-// }
+void BTreeGeneric::ToJson(BTreeGeneric& btree, rapidjson::Document* resultDoc) {
+  LS_DCHECK(resultDoc->IsObject());
+  auto& allocator = resultDoc->GetAllocator();
+
+  // meta node
+  GuardedBufferFrame<BTreeNode> guardedMetaNode(btree.mStore->mBufferManager.get(),
+                                                btree.mMetaNodeSwip);
+  rapidjson::Value metaJson(rapidjson::kObjectType);
+  utils::ToJson(guardedMetaNode.mBf, &metaJson, &allocator);
+  resultDoc->AddMember("metaNode", metaJson, allocator);
+
+  // root node
+  GuardedBufferFrame<BTreeNode> guardedRootNode(btree.mStore->mBufferManager.get(), guardedMetaNode,
+                                                guardedMetaNode->mRightMostChildSwip);
+  rapidjson::Value rootJson(rapidjson::kObjectType);
+  toJsonRecursive(btree, guardedRootNode, &rootJson, allocator);
+  resultDoc->AddMember("rootNode", rootJson, allocator);
+}
+
+void BTreeGeneric::toJsonRecursive(BTreeGeneric& btree, GuardedBufferFrame<BTreeNode>& guardedNode,
+                                   rapidjson::Value* resultObj,
+                                   rapidjson::Value::AllocatorType& allocator) {
+
+  LS_DCHECK(resultObj->IsObject());
+  // buffer frame header
+  utils::ToJson(guardedNode.mBf, resultObj, &allocator);
+
+  // btree node
+  {
+    rapidjson::Value nodeObj(rapidjson::kObjectType);
+    utils::ToJson(guardedNode.ptr(), &nodeObj, &allocator);
+    resultObj->AddMember("pagePayload(btreeNode)", nodeObj, allocator);
+  }
+
+  if (guardedNode->mIsLeaf) {
+    return;
+  }
+
+  rapidjson::Value childrenJson(rapidjson::kArrayType);
+  for (auto i = 0u; i < guardedNode->mNumSlots; ++i) {
+    auto* childSwip = guardedNode->ChildSwip(i);
+    GuardedBufferFrame<BTreeNode> guardedChild(btree.mStore->mBufferManager.get(), guardedNode,
+                                               *childSwip);
+
+    rapidjson::Value childObj(rapidjson::kObjectType);
+    toJsonRecursive(btree, guardedChild, &childObj, allocator);
+    guardedChild.unlock();
+
+    childrenJson.PushBack(childObj, allocator);
+  }
+
+  if (guardedNode->mRightMostChildSwip != nullptr) {
+    GuardedBufferFrame<BTreeNode> guardedChild(btree.mStore->mBufferManager.get(), guardedNode,
+                                               guardedNode->mRightMostChildSwip);
+    rapidjson::Value childObj(rapidjson::kObjectType);
+    toJsonRecursive(btree, guardedChild, &childObj, allocator);
+    guardedChild.unlock();
+
+    childrenJson.PushBack(childObj, allocator);
+  }
+
+  // children
+  resultObj->AddMember("mChildren", childrenJson, allocator);
+}
 
 } // namespace leanstore::storage::btree

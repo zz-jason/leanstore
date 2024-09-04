@@ -28,7 +28,7 @@ protected:
   ScopedHybridGuardTest() {
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
-    auto* option = CreateStoreOption(("/tmp/" + curTestName).c_str());
+    auto* option = CreateStoreOption(("/tmp/leanstore/" + curTestName).c_str());
     option->mCreateFromScratch = true;
     option->mWorkerThreads = 2;
     option->mEnableEagerGc = true;

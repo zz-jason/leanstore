@@ -5,6 +5,7 @@
 #include "leanstore/utils/AsyncIo.hpp"
 #include "leanstore/utils/UserThread.hpp"
 
+#include <atomic>
 #include <string>
 
 #include <libaio.h>
@@ -30,14 +31,9 @@ public:
   //! Start file offset of the next WalEntry.
   uint64_t mWalSize;
 
-  //! The minimum flushed GSN among all worker threads. Transactions whose max observed GSN not
-  //! larger than it can be committed safely.
-  std::atomic<uint64_t> mGlobalMinFlushedGSN;
-
-  //! The maximum flushed GSN among all worker threads in each group commit round. It is updated by
-  //! the group commit thread and used to update the GCN counter of the current worker thread to
-  //! prevent GSN from skewing and undermining RFA.
-  std::atomic<uint64_t> mGlobalMaxFlushedGSN;
+  //! The minimum flushed system transaction ID among all worker threads. User transactions whose
+  //! max observed system transaction ID not larger than it can be committed safely.
+  std::atomic<TXID> mGlobalMinFlushedSysTx;
 
   //! All the workers.
   std::vector<WorkerContext*>& mWorkerCtxs;
@@ -52,8 +48,7 @@ public:
         mStore(store),
         mWalFd(walFd),
         mWalSize(0),
-        mGlobalMinFlushedGSN(0),
-        mGlobalMaxFlushedGSN(0),
+        mGlobalMinFlushedSysTx(0),
         mWorkerCtxs(workers),
         mAIo(workers.size() * 2 + 2) {
   }
@@ -67,12 +62,11 @@ private:
   //! Phase 1: collect wal records from all the worker threads. Collected wal records are written to
   //! libaio IOCBs.
   //!
-  //! @param[out] minFlushedGSN the min flushed GSN among all the wal records
-  //! @param[out] maxFlushedGSN the max flushed GSN among all the wal records
-  //! @param[out] minFlushedTxId the min flushed transaction ID
+  //! @param[out] minFlushedSysTx the min flushed system transaction ID
+  //! @param[out] minFlushedUsrTx the min flushed user transaction ID
   //! @param[out] numRfaTxs number of transactions without dependency
   //! @param[out] walFlushReqCopies snapshot of the flush requests
-  void collectWalRecords(uint64_t& minFlushedGSN, uint64_t& maxFlushedGSN, TXID& minFlushedTxId,
+  void collectWalRecords(TXID& minFlushedSysTx, TXID& minFlushedUsrTx,
                          std::vector<uint64_t>& numRfaTxs,
                          std::vector<WalFlushReq>& walFlushReqCopies);
 
@@ -81,12 +75,11 @@ private:
 
   //! Phase 3: determine the commitable transactions based on minFlushedGSN and minFlushedTxId.
   //!
-  //! @param[in] minFlushedGSN the min flushed GSN among all the wal records
-  //! @param[in] maxFlushedGSN the max flushed GSN among all the wal records
-  //! @param[in] minFlushedTxId the min flushed transaction ID
+  //! @param[in] minFlushedSysTx the min flushed system transaction ID
+  //! @param[in] minFlushedUsrTx the min flushed user transaction ID
   //! @param[in] numRfaTxs number of transactions without dependency
   //! @param[in] walFlushReqCopies snapshot of the flush requests
-  void determineCommitableTx(uint64_t minFlushedGSN, uint64_t maxFlushedGSN, TXID minFlushedTxId,
+  void determineCommitableTx(TXID minFlushedSysTx, TXID minFlushedUsrTx,
                              const std::vector<uint64_t>& numRfaTxs,
                              const std::vector<WalFlushReq>& walFlushReqCopies);
 

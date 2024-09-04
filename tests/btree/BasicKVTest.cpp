@@ -5,7 +5,6 @@
 #include "leanstore/btree/TransactionKV.hpp"
 #include "leanstore/buffer-manager/BufferManager.hpp"
 #include "leanstore/concurrency/CRManager.hpp"
-#include "leanstore/utils/Defer.hpp"
 
 #include <gtest/gtest.h>
 
@@ -13,7 +12,6 @@
 #include <cstddef>
 #include <string>
 #include <thread>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -311,33 +309,6 @@ TEST_F(BasicKVTest, SameKeyInsertRemoveMultiTimes) {
     kvToTest.emplace_back(std::move(key), std::move(val));
   }
 
-  // // start a new thread, remove-insert the key-values to the btree
-  // std::atomic<bool> stop{false};
-  // std::thread t1([&]() {
-  //   while (!stop) {
-  //     for (const auto& [key, val] : kvToTest) {
-  //       mStore->ExecSync(0, [&]() { EXPECT_EQ(btree->Remove(key), OpCode::kOK); });
-  //       mStore->ExecSync(0, [&]() { EXPECT_EQ(btree->Insert(key, val), OpCode::kOK); });
-  //     }
-  //   }
-  // });
-
-  // // start another thread, remove-insert the key-values to the btree
-  // std::thread t2([&]() {
-  //   while (!stop) {
-  //     for (const auto& [key, val] : kvToTest) {
-  //       mStore->ExecSync(1, [&]() { EXPECT_EQ(btree->Remove(key), OpCode::kOK); });
-  //       mStore->ExecSync(1, [&]() { EXPECT_EQ(btree->Insert(key, val), OpCode::kOK); });
-  //     }
-  //   }
-  // });
-
-  // // sleep for 1 seconds
-  // std::this_thread::sleep_for(std::chrono::seconds(1));
-  // stop = true;
-  // t1.join();
-  // t2.join();
-
   // 1. remove the key-values from the btree
   // 2. insert the key-values to the btree again
   const auto& [key, val] = kvToTest[numKVs / 2];
@@ -361,8 +332,8 @@ TEST_F(BasicKVTest, SameKeyInsertRemoveMultiTimes) {
     }
   });
 
-  // sleep for 1 seconds
-  std::this_thread::sleep_for(std::chrono::seconds(20));
+  // sleep for 2 seconds
+  std::this_thread::sleep_for(std::chrono::seconds(2));
   stop = true;
   t1.join();
   t2.join();

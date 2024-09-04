@@ -20,7 +20,7 @@ protected:
     auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
     const int pageSize = 4096;
     const int pageHeaderSize = 512;
-    auto storeDirStr = "/tmp/" + curTestName;
+    auto storeDirStr = "/tmp/leanstore/" + curTestName;
     auto* option = CreateStoreOption(storeDirStr.c_str());
     option->mCreateFromScratch = true;
     option->mLogLevel = LogLevel::kDebug;

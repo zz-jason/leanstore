@@ -8,7 +8,7 @@
 namespace leanstore::cr {
 
 template <typename T, typename... Args>
-WalPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payloadSize, PID pageId, LID gsn,
+WalPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payloadSize, PID pageId, LID psn,
                                                      TREEID treeId, Args&&... args) {
   // write transaction start on demand
   auto prevLsn = mPrevLSN;
@@ -28,7 +28,7 @@ WalPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payloadSize, PID p
 
   mActiveWALEntryComplex =
       new (entryPtr) WalEntryComplex(entryLSN, prevLsn, entrySize, WorkerContext::My().mWorkerId,
-                                     ActiveTx().mStartTs, gsn, pageId, treeId);
+                                     ActiveTx().mStartTs, psn, pageId, treeId);
 
   auto* payloadPtr = mActiveWALEntryComplex->mPayload;
   auto walPayload = new (payloadPtr) T(std::forward<Args>(args)...);

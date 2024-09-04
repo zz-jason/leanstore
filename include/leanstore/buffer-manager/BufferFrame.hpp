@@ -9,6 +9,7 @@
 #include "leanstore/utils/UserThread.hpp"
 
 #include <atomic>
+#include <cstdint>
 #include <limits>
 
 namespace leanstore::storage {
@@ -66,14 +67,14 @@ public:
   //! ID of page resides in this buffer frame.
   PID mPageId = std::numeric_limits<PID>::max();
 
-  //! ID of the last worker who has modified the containing page.  For remote
-  //! flush avoidance (RFA), see "Rethinking Logging, Checkpoints, and Recovery
-  //! for High-Performance Storage Engines, SIGMOD 2020" for details.
+  //! ID of the last worker who has modified the containing page. For remote flush avoidance (RFA),
+  //! see "Rethinking Logging, Checkpoints, and Recovery for High-Performance Storage Engines,
+  //! SIGMOD 2020" for details.
   WORKERID mLastWriterWorker = std::numeric_limits<uint8_t>::max();
 
-  //! The flushed global sequence number of the containing page. Initialized to
-  //! the page GSN when loaded from disk.
-  uint64_t mFlushedGsn = 0;
+  //! The flushed page sequence number of the containing page. Initialized when the containing page
+  //! is loaded from disk.
+  uint64_t mFlushedPsn = 0;
 
   //! Whether the containing page is being written back to disk.
   std::atomic<bool> mIsBeingWrittenBack = false;
@@ -97,7 +98,7 @@ public:
 
     mPageId = std::numeric_limits<PID>::max();
     mLastWriterWorker = std::numeric_limits<uint8_t>::max();
-    mFlushedGsn = 0;
+    mFlushedPsn = 0;
     mIsBeingWrittenBack.store(false, std::memory_order_release);
     mContentionStats.Reset();
     mCrc = 0;
@@ -130,8 +131,14 @@ public:
   //! Short for "global sequence number", increased when a page is modified.
   //! It's used to check whether the page has been read or written by
   //! transactions in other workers.
-  //! A page is "dirty" when mPage.mGSN > mHeader.mFlushedGsn.
   uint64_t mGSN = 0;
+
+  //! Short for "system transaction id", increased when a system transaction modifies the page.
+  uint64_t mSysTxId = 0;
+
+  //! Short for "page sequence number", increased when a page is modified by any user or system
+  //! transaction. A page is "dirty" when mPage.mPsn > mHeader.mFlushedPsn.
+  uint64_t mPsn = 0;
 
   //! The btree ID it belongs to.
   TREEID mBTreeId = std::numeric_limits<TREEID>::max();
@@ -176,7 +183,7 @@ public:
   }
 
   bool IsDirty() const {
-    return mPage.mGSN != mHeader.mFlushedGsn;
+    return mPage.mPsn != mHeader.mFlushedPsn;
   }
 
   bool IsFree() const {
@@ -192,9 +199,11 @@ public:
     LS_DCHECK(mHeader.mState == State::kFree);
     mHeader.mPageId = pageId;
     mHeader.mState = State::kHot;
-    mHeader.mFlushedGsn = 0;
+    mHeader.mFlushedPsn = 0;
 
     mPage.mGSN = 0;
+    mPage.mSysTxId = 0;
+    mPage.mPsn = 0;
   }
 
   // Pre: bf is exclusively locked

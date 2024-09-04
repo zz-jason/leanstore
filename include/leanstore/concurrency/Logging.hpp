@@ -4,6 +4,7 @@
 #include "leanstore/concurrency/Transaction.hpp"
 #include "leanstore/sync/OptimisticGuarded.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <functional>
 #include <mutex>
@@ -23,16 +24,20 @@ struct WalFlushReq {
   //! The offset in the wal ring buffer.
   uint64_t mWalBuffered = 0;
 
-  //! GSN of the current WAL record.
-  uint64_t mCurrGSN = 0;
+  //! The maximum system transasction ID written by the worker.
+  //! NOTE: can only be updated when all the WAL entries belonging to the system transaction are
+  //! written to the wal ring buffer.
+  TXID mSysTxWrittern = 0;
 
   //! ID of the current transaction.
+  //! NOTE: can only be updated when all the WAL entries belonging to the user transaction are
+  //! written to the wal ring buffer.
   TXID mCurrTxId = 0;
 
-  WalFlushReq(uint64_t walBuffered = 0, uint64_t currGSN = 0, TXID currTxId = 0)
+  WalFlushReq(uint64_t walBuffered = 0, uint64_t sysTxWrittern = 0, TXID currTxId = 0)
       : mVersion(0),
         mWalBuffered(walBuffered),
-        mCurrGSN(currGSN),
+        mSysTxWrittern(sysTxWrittern),
         mCurrTxId(currTxId) {
   }
 };
@@ -84,8 +89,8 @@ public:
   //! Used to track the write order of wal entries.
   LID mLsnClock = 0;
 
-  //! Used to track transaction dependencies.
-  uint64_t mGSNClock = 0;
+  //! The maximum writtern system transaction ID in the worker.
+  TXID mSysTxWrittern = 0;
 
   //! The written offset of the wal ring buffer.
   uint64_t mWalBuffered = 0;
@@ -94,24 +99,15 @@ public:
   //! by the worker thread then flushed to disk file by the group commit thread.
   std::atomic<uint64_t> mWalFlushed = 0;
 
-  //! The global min flushed GSN when transaction started. Pages whose GSN larger than this value
-  //! might be modified by other transactions running at the same time, which cause the remote
-  //! transaction dependency.
-  uint64_t mTxReadSnapshot;
-
-  //! Whether the active transaction has accessed data written by other worker transactions, i.e.
-  //! dependens on the transactions on other workers.
-  bool mHasRemoteDependency = false;
-
   //! The first WAL record of the current active transaction.
   uint64_t mTxWalBegin;
 
 public:
-  inline void UpdateSignaledCommitTs(const LID signaledCommitTs) {
+  void UpdateSignaledCommitTs(const LID signaledCommitTs) {
     mSignaledCommitTs.store(signaledCommitTs, std::memory_order_release);
   }
 
-  inline bool SafeToCommit(const TXID commitTs) {
+  bool SafeToCommit(const TXID commitTs) {
     return commitTs <= mSignaledCommitTs.load();
   }
 
@@ -125,19 +121,15 @@ public:
   void WriteWalCarriageReturn();
 
   template <typename T, typename... Args>
-  WalPayloadHandler<T> ReserveWALEntryComplex(uint64_t payloadSize, PID pageId, LID gsn,
+  WalPayloadHandler<T> ReserveWALEntryComplex(uint64_t payloadSize, PID pageId, LID psn,
                                               TREEID treeId, Args&&... args);
 
   //! Submits wal record to group committer when it is ready to flush to disk.
   //! @param totalSize size of the wal record to be flush.
   void SubmitWALEntryComplex(uint64_t totalSize);
 
-  inline uint64_t GetCurrentGsn() {
-    return mGSNClock;
-  }
-
-  inline void SetCurrentGsn(uint64_t gsn) {
-    mGSNClock = gsn;
+  void UpdateSysTxWrittern(TXID sysTxId) {
+    mSysTxWrittern = std::max(mSysTxWrittern, sysTxId);
   }
 
 private:

@@ -88,21 +88,23 @@ void CRManager::setupHistoryStorage4EachWorker() {
 }
 
 constexpr char kKeyWalSize[] = "wal_size";
-constexpr char kKeyGlobalLogicalClock[] = "global_logical_clock";
+constexpr char kKeyGlobalUsrTso[] = "global_user_tso";
+constexpr char kKeyGlobalSysTso[] = "global_system_tso";
 
 StringMap CRManager::Serialize() {
   StringMap map;
-  uint64_t val = mStore->mTimestampOracle.load();
   map[kKeyWalSize] = std::to_string(mGroupCommitter->mWalSize);
-  map[kKeyGlobalLogicalClock] = std::to_string(val);
+  map[kKeyGlobalUsrTso] = std::to_string(mStore->mUsrTso.load());
+  map[kKeyGlobalSysTso] = std::to_string(mStore->mSysTso.load());
   return map;
 }
 
 void CRManager::Deserialize(StringMap map) {
-  uint64_t val = std::stoull(map[kKeyGlobalLogicalClock]);
-  mStore->mTimestampOracle = val;
-  mStore->mCRManager->mGlobalWmkInfo.mWmkOfAllTx = val;
   mGroupCommitter->mWalSize = std::stoull(map[kKeyWalSize]);
+  mStore->mUsrTso = std::stoull(map[kKeyGlobalUsrTso]);
+  mStore->mSysTso = std::stoull(map[kKeyGlobalSysTso]);
+
+  mStore->mCRManager->mGlobalWmkInfo.mWmkOfAllTx = mStore->mUsrTso.load();
 }
 
 } // namespace leanstore::cr

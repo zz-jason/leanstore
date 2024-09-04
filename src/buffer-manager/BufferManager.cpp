@@ -162,7 +162,7 @@ Result<void> BufferManager::CheckpointAllBufferFrames() {
           auto pageOffset = bf.mHeader.mPageId * pageSize;
           mStore->mTreeRegistry->Checkpoint(bf.mPage.mBTreeId, bf, tmpBuffer);
           aio.PrepareWrite(mStore->mPageFd, tmpBuffer, pageSize, pageOffset);
-          bf.mHeader.mFlushedGsn = bf.mPage.mGSN;
+          bf.mHeader.mFlushedPsn = bf.mPage.mPsn;
           batchSize++;
         }
       }
@@ -192,7 +192,7 @@ Result<void> BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
     if (!res) {
       return std::unexpected(std::move(res.error()));
     }
-    bf.mHeader.mFlushedGsn = bf.mPage.mGSN;
+    bf.mHeader.mFlushedPsn = bf.mPage.mPsn;
   }
   bf.mHeader.mLatch.UnlockExclusively();
   return {};
@@ -226,7 +226,7 @@ BufferFrame& BufferManager::AllocNewPageMayJump(TREEID treeId) {
   }
 
   freeBf.mPage.mBTreeId = treeId;
-  freeBf.mPage.mGSN++; // mark as dirty
+  freeBf.mPage.mPsn++; // mark the page as dirty
   LS_DLOG("Alloc new page, pageId={}, btreeId={}", freeBf.mHeader.mPageId, freeBf.mPage.mBTreeId);
   return freeBf;
 }
@@ -308,7 +308,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard, Swip& swi
 
     // 4. Intialize the buffer frame header
     LS_DCHECK(!bf.mHeader.mIsBeingWrittenBack);
-    bf.mHeader.mFlushedGsn = bf.mPage.mGSN;
+    bf.mHeader.mFlushedPsn = bf.mPage.mPsn;
     bf.mHeader.mState = State::kLoaded;
     bf.mHeader.mPageId = pageId;
     if (mStore->mStoreOption->mEnableBufferCrcCheck) {

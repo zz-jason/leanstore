@@ -17,6 +17,7 @@
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/Misc.hpp"
 #include "leanstore/utils/Result.hpp"
+#include "leanstore/utils/UserThread.hpp"
 #include "telemetry/MetricsManager.hpp"
 
 #include <cstring>
@@ -679,7 +680,8 @@ SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
   }
 
   guardedNode.ToExclusiveMayJump();
-  guardedNode.SyncGSNBeforeWrite();
+  TXID sysTxId = utils::tlsStore->AllocSysTxTs();
+  guardedNode.SyncSystemTxId(sysTxId);
 
   for (uint16_t i = 0; i < guardedNode->mNumSlots; i++) {
     auto& tuple = *Tuple::From(guardedNode->ValData(i));

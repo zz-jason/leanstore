@@ -4,6 +4,7 @@
 #include "leanstore/Units.hpp"
 #include "leanstore/concurrency/HistoryStorage.hpp"
 #include "leanstore/profiling/counters/CRCounters.hpp"
+#include "leanstore/sync/HybridLatch.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/Misc.hpp"
 
@@ -26,8 +27,8 @@ namespace leanstore::cr {
 //! in the system when full.
 class CommitTree {
 public:
-  //! The mutex to guard the commit log.
-  std::shared_mutex mMutex;
+  //! The hybrid latch to guard the commit log.
+  storage::HybridLatch mLatch;
 
   //! The capacity of the commit log. Commit log is compacted when full.
   uint64_t mCapacity;

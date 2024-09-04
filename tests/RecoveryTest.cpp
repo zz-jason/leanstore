@@ -12,6 +12,9 @@
 #include "leanstore/utils/RandomGenerator.hpp"
 
 #include <gtest/gtest.h>
+#include <rapidjson/document.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 
 #include <cstddef>
 #include <format>
@@ -31,7 +34,7 @@ protected:
     // Create a leanstore instance for the test case
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
-    auto storeDirStr = "/tmp/" + curTestName;
+    auto storeDirStr = "/tmp/leanstore/" + curTestName;
     auto* option = CreateStoreOption(storeDirStr.c_str());
     option->mCreateFromScratch = true;
     option->mWorkerThreads = 2;

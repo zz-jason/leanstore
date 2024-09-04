@@ -30,9 +30,9 @@ TEST_F(BTreeWalPayloadTest, Size) {
   EXPECT_EQ(sizeof(WalTxUpdate), 48);
   EXPECT_EQ(sizeof(WalRemove), 6);
   EXPECT_EQ(sizeof(WalTxRemove), 24);
-  EXPECT_EQ(sizeof(WalInitPage), 24);
-  EXPECT_EQ(sizeof(WalSplitRoot), 40);
-  EXPECT_EQ(sizeof(WalSplitNonRoot), 32);
+  EXPECT_EQ(sizeof(WalInitPage), 32);
+  EXPECT_EQ(sizeof(WalSplitRoot), 48);
+  EXPECT_EQ(sizeof(WalSplitNonRoot), 40);
 }
 
 TEST_F(BTreeWalPayloadTest, ToJson) {
@@ -79,7 +79,7 @@ TEST_F(BTreeWalPayloadTest, ToJson) {
   EXPECT_TRUE(walStr.contains("kWalTxRemove"));
   EXPECT_TRUE(walStr.contains("Not implemented"));
 
-  wal = std::make_unique<WalInitPage>(0, false);
+  wal = std::make_unique<WalInitPage>(0, 0, false);
   walStr = WalPayload::ToJsonString(wal.get());
   EXPECT_TRUE(walStr.contains("mType"));
   EXPECT_TRUE(walStr.contains("kWalInitPage"));
@@ -87,14 +87,14 @@ TEST_F(BTreeWalPayloadTest, ToJson) {
   EXPECT_TRUE(walStr.contains("mIsLeaf"));
 
   BTreeNode::SeparatorInfo sepInfo;
-  wal = std::make_unique<WalSplitRoot>(0, 0, 0, sepInfo);
+  wal = std::make_unique<WalSplitRoot>(0, 0, 0, 0, sepInfo);
   walStr = WalPayload::ToJsonString(wal.get());
   EXPECT_TRUE(walStr.contains("mType"));
   EXPECT_TRUE(walStr.contains("kWalSplitRoot"));
   EXPECT_TRUE(walStr.contains("mNewLeft"));
   EXPECT_TRUE(walStr.contains("mNewRoot"));
 
-  wal = std::make_unique<WalSplitNonRoot>(0, 0, sepInfo);
+  wal = std::make_unique<WalSplitNonRoot>(0, 0, 0, sepInfo);
   walStr = WalPayload::ToJsonString(wal.get());
   EXPECT_TRUE(walStr.contains("mType"));
   EXPECT_TRUE(walStr.contains("kWalSplitNonRoot"));

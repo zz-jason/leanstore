@@ -166,6 +166,13 @@ void WalPayload::toJson(const WalTxRemove* wal [[maybe_unused]],
 }
 
 void WalPayload::toJson(const WalInitPage* wal, rapidjson::Document* doc) {
+  // mSysTxId
+  {
+    rapidjson::Value member;
+    member.SetInt64(wal->mSysTxId);
+    doc->AddMember("mSysTxId", member, doc->GetAllocator());
+  }
+
   // mTreeId
   {
     rapidjson::Value member;
@@ -182,6 +189,12 @@ void WalPayload::toJson(const WalInitPage* wal, rapidjson::Document* doc) {
 }
 
 void WalPayload::toJson(const WalSplitRoot* wal, rapidjson::Document* doc) {
+  {
+    rapidjson::Value member;
+    member.SetUint64(wal->mSysTxId);
+    doc->AddMember("mSysTxId", member, doc->GetAllocator());
+  }
+
   {
     rapidjson::Value member;
     member.SetUint64(wal->mNewLeft);
@@ -220,6 +233,12 @@ void WalPayload::toJson(const WalSplitRoot* wal, rapidjson::Document* doc) {
 }
 
 void WalPayload::toJson(const WalSplitNonRoot* wal, rapidjson::Document* doc) {
+  {
+    rapidjson::Value member;
+    member.SetUint64(wal->mSysTxId);
+    doc->AddMember("mSysTxId", member, doc->GetAllocator());
+  }
+
   // mParentPageId
   {
     rapidjson::Value member;

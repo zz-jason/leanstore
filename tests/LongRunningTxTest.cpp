@@ -35,7 +35,7 @@ protected:
     // Create a leanstore instance for the test case
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
-    auto storeDirStr = std::string("/tmp/") + curTestName;
+    auto storeDirStr = std::string("/tmp/leanstore/") + curTestName;
 
     StoreOption* option = CreateStoreOption(storeDirStr.c_str());
     option->mCreateFromScratch = true;

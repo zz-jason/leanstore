@@ -21,15 +21,14 @@ constexpr size_t kAligment = 4096;
 void GroupCommitter::runImpl() {
   CPUCounters::registerThread(mThreadName, false);
 
-  uint64_t minFlushedGSN = std::numeric_limits<uint64_t>::max();
-  uint64_t maxFlushedGSN = 0;
-  TXID minFlushedTxId = std::numeric_limits<TXID>::max();
+  TXID minFlushedSysTx = std::numeric_limits<TXID>::max();
+  TXID minFlushedUsrTx = std::numeric_limits<TXID>::max();
   std::vector<uint64_t> numRfaTxs(mWorkerCtxs.size(), 0);
   std::vector<WalFlushReq> walFlushReqCopies(mWorkerCtxs.size());
 
   while (mKeepRunning) {
     // phase 1
-    collectWalRecords(minFlushedGSN, maxFlushedGSN, minFlushedTxId, numRfaTxs, walFlushReqCopies);
+    collectWalRecords(minFlushedSysTx, minFlushedUsrTx, numRfaTxs, walFlushReqCopies);
 
     // phase 2
     if (!mAIo.IsEmpty()) {
@@ -37,25 +36,24 @@ void GroupCommitter::runImpl() {
     }
 
     // phase 3
-    determineCommitableTx(minFlushedGSN, maxFlushedGSN, minFlushedTxId, numRfaTxs,
-                          walFlushReqCopies);
+    determineCommitableTx(minFlushedSysTx, minFlushedUsrTx, numRfaTxs, walFlushReqCopies);
   }
 }
 
-void GroupCommitter::collectWalRecords(uint64_t& minFlushedGSN, uint64_t& maxFlushedGSN,
-                                       TXID& minFlushedTxId, std::vector<uint64_t>& numRfaTxs,
+void GroupCommitter::collectWalRecords(TXID& minFlushedSysTx, TXID& minFlushedUsrTx,
+                                       std::vector<uint64_t>& numRfaTxs,
                                        std::vector<WalFlushReq>& walFlushReqCopies) {
   leanstore::telemetry::MetricOnlyTimer timer;
   SCOPED_DEFER({
     METRIC_HIST_OBSERVE(mStore->mMetricsManager, group_committer_prep_iocbs_us, timer.ElaspedUs());
   });
 
-  minFlushedGSN = std::numeric_limits<uint64_t>::max();
-  maxFlushedGSN = 0;
-  minFlushedTxId = std::numeric_limits<TXID>::max();
+  minFlushedSysTx = std::numeric_limits<TXID>::max();
+  minFlushedUsrTx = std::numeric_limits<TXID>::max();
 
-  for (uint32_t workerId = 0; workerId < mWorkerCtxs.size(); workerId++) {
+  for (auto workerId = 0u; workerId < mWorkerCtxs.size(); workerId++) {
     auto& logging = mWorkerCtxs[workerId]->mLogging;
+
     // collect logging info
     std::unique_lock<std::mutex> guard(logging.mRfaTxToCommitMutex);
     numRfaTxs[workerId] = logging.mRfaTxToCommit.size();
@@ -65,15 +63,18 @@ void GroupCommitter::collectWalRecords(uint64_t& minFlushedGSN, uint64_t& maxFlu
     auto version = logging.mWalFlushReq.Get(walFlushReqCopies[workerId]);
     walFlushReqCopies[workerId].mVersion = version;
     const auto& reqCopy = walFlushReqCopies[workerId];
+
     if (reqCopy.mVersion == lastReqVersion) {
       // no transaction log write since last round group commit, skip.
       continue;
     }
 
-    // update GSN and commitTS info
-    maxFlushedGSN = std::max<uint64_t>(maxFlushedGSN, reqCopy.mCurrGSN);
-    minFlushedGSN = std::min<uint64_t>(minFlushedGSN, reqCopy.mCurrGSN);
-    minFlushedTxId = std::min<TXID>(minFlushedTxId, reqCopy.mCurrTxId);
+    if (reqCopy.mSysTxWrittern > 0) {
+      minFlushedSysTx = std::min(minFlushedSysTx, reqCopy.mSysTxWrittern);
+    }
+    if (reqCopy.mCurrTxId > 0) {
+      minFlushedUsrTx = std::min(minFlushedUsrTx, reqCopy.mCurrTxId);
+    }
 
     // prepare IOCBs on demand
     const uint64_t buffered = reqCopy.mWalBuffered;
@@ -118,8 +119,7 @@ void GroupCommitter::flushWalRecords() {
   }
 }
 
-void GroupCommitter::determineCommitableTx(uint64_t minFlushedGSN, uint64_t maxFlushedGSN,
-                                           TXID minFlushedTxId,
+void GroupCommitter::determineCommitableTx(TXID minFlushedSysTx, TXID minFlushedUsrTx,
                                            const std::vector<uint64_t>& numRfaTxs,
                                            const std::vector<WalFlushReq>& walFlushReqCopies) {
   leanstore::telemetry::MetricOnlyTimer timer;
@@ -141,15 +141,14 @@ void GroupCommitter::determineCommitableTx(uint64_t minFlushedGSN, uint64_t maxF
       uint64_t i = 0;
       for (; i < logging.mTxToCommit.size(); ++i) {
         auto& tx = logging.mTxToCommit[i];
-        if (!tx.CanCommit(minFlushedGSN, minFlushedTxId)) {
+        if (!tx.CanCommit(minFlushedSysTx, minFlushedUsrTx)) {
           break;
         }
         maxCommitTs = std::max<TXID>(maxCommitTs, tx.mCommitTs);
         tx.mState = TxState::kCommitted;
-        LS_DLOG("Transaction with remote dependency committed"
-                ", workerId={}, startTs={}, commitTs={}, minFlushedGSN={}, "
-                "maxFlushedGSN={}, minFlushedTxId={}",
-                workerId, tx.mStartTs, tx.mCommitTs, minFlushedGSN, maxFlushedGSN, minFlushedTxId);
+        LS_DLOG("Transaction with remote dependency committed, workerId={}, startTs={}, "
+                "commitTs={}, minFlushedSysTx={}, minFlushedUsrTx={}",
+                workerId, tx.mStartTs, tx.mCommitTs, minFlushedSysTx, minFlushedUsrTx);
       }
       if (i > 0) {
         logging.mTxToCommit.erase(logging.mTxToCommit.begin(), logging.mTxToCommit.begin() + i);
@@ -165,12 +164,10 @@ void GroupCommitter::determineCommitableTx(uint64_t minFlushedGSN, uint64_t maxF
         auto& tx = logging.mRfaTxToCommit[i];
         maxCommitTsRfa = std::max<TXID>(maxCommitTsRfa, tx.mCommitTs);
         tx.mState = TxState::kCommitted;
-        LS_DLOG("Transaction without remote dependency committed"
-                ", workerId={}, startTs={}, commitTs={}, minFlushedGSN={}, "
-                "maxFlushedGSN={}, minFlushedTxId={}",
-                workerId, tx.mStartTs, tx.mCommitTs, minFlushedGSN, maxFlushedGSN, minFlushedTxId);
+        LS_DLOG("Transaction without remote dependency committed, workerId={}, startTs={}, "
+                "commitTs={}",
+                workerId, tx.mStartTs, tx.mCommitTs);
       }
-
       if (i > 0) {
         logging.mRfaTxToCommit.erase(logging.mRfaTxToCommit.begin(),
                                      logging.mRfaTxToCommit.begin() + i);
@@ -191,12 +188,7 @@ void GroupCommitter::determineCommitableTx(uint64_t minFlushedGSN, uint64_t maxF
     }
   }
 
-  if (minFlushedGSN < std::numeric_limits<uint64_t>::max()) {
-    LS_DLOG("Group commit finished, minFlushedGSN={}, maxFlushedGSN={}", minFlushedGSN,
-            maxFlushedGSN);
-    mGlobalMinFlushedGSN.store(minFlushedGSN, std::memory_order_release);
-    mGlobalMaxFlushedGSN.store(maxFlushedGSN, std::memory_order_release);
-  }
+  mGlobalMinFlushedSysTx.store(minFlushedSysTx, std::memory_order_release);
 }
 
 void GroupCommitter::append(uint8_t* buf, uint64_t lower, uint64_t upper) {

@@ -51,11 +51,8 @@ void WorkerContext::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) 
             "Previous transaction not ended, workerId={}, startTs={}, txState={}", mWorkerId,
             prevTx.mStartTs, TxStatUtil::ToString(prevTx.mState));
   SCOPED_DEFER({
-    LS_DLOG("Start transaction, workerId={}, startTs={}, txReadSnapshot(GSN)={}, "
-            "workerGSN={}, globalMinFlushedGSN={}, globalMaxFlushedGSN={}",
-            mWorkerId, mActiveTx.mStartTs, mLogging.mTxReadSnapshot, mLogging.GetCurrentGsn(),
-            mStore->mCRManager->mGroupCommitter->mGlobalMinFlushedGSN.load(),
-            mStore->mCRManager->mGroupCommitter->mGlobalMaxFlushedGSN.load());
+    LS_DLOG("Start transaction, workerId={}, startTs={}, globalMinFlushedSysTx={}", mWorkerId,
+            mActiveTx.mStartTs, mStore->mCRManager->mGroupCommitter->mGlobalMinFlushedSysTx.load());
   });
 
   mActiveTx.Start(mode, level);
@@ -64,36 +61,24 @@ void WorkerContext::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) 
     return;
   }
 
-  // Sync GSN clock with the global max flushed (observed) GSN, so that the
-  // global min flushed GSN can be advanced, transactions with remote dependency
-  // can be committed in time.
-  const auto maxFlushedGsn = mStore->mCRManager->mGroupCommitter->mGlobalMaxFlushedGSN.load();
-  if (maxFlushedGsn > mLogging.GetCurrentGsn()) {
-    mLogging.SetCurrentGsn(maxFlushedGsn);
-  }
+  //! Reset the max observed system transaction id
+  mActiveTx.mMaxObservedSysTxId = mStore->mCRManager->mGroupCommitter->mGlobalMinFlushedSysTx;
 
   // Init wal and group commit related transaction information
   mLogging.mTxWalBegin = mLogging.mWalBuffered;
-
-  // For remote dependency validation
-  mLogging.mTxReadSnapshot = mStore->mCRManager->mGroupCommitter->mGlobalMinFlushedGSN.load();
-  mLogging.mHasRemoteDependency = false;
 
   // For now, we only support SI and SSI
   if (level < IsolationLevel::kSnapshotIsolation) {
     Log::Fatal("Unsupported isolation level: {}", static_cast<uint64_t>(level));
   }
 
-  // Draw TXID from global counter and publish it with the TX type (i.e.
-  // long-running or short-running) We have to acquire a transaction id and use
-  // it for locking in ANY isolation level
-  //
-  // TODO(jian.z): Allocating transaction start ts globally heavily hurts the
-  // scalability, especially for read-only transactions
+  // Draw TXID from global counter and publish it with the TX type (i.e.  long-running or
+  // short-running) We have to acquire a transaction id and use it for locking in ANY isolation
+  // level
   if (isReadOnly) {
-    mActiveTx.mStartTs = mStore->GetTs();
+    mActiveTx.mStartTs = mStore->GetUsrTxTs();
   } else {
-    mActiveTx.mStartTs = mStore->AllocTs();
+    mActiveTx.mStartTs = mStore->AllocUsrTxTs();
   }
   auto curTxId = mActiveTx.mStartTs;
   if (mStore->mStoreOption->mEnableLongRunningTx && mActiveTx.IsLongRunning()) {
@@ -119,7 +104,7 @@ void WorkerContext::CommitTx() {
   // Reset mCommandId on commit
   mCommandId = 0;
   if (mActiveTx.mHasWrote) {
-    mActiveTx.mCommitTs = mStore->AllocTs();
+    mActiveTx.mCommitTs = mStore->AllocUsrTxTs();
     mCc.mCommitTree.AppendCommitLog(mActiveTx.mStartTs, mActiveTx.mCommitTs);
     mCc.mLatestCommitTs.store(mActiveTx.mCommitTs, std::memory_order_release);
   } else {
@@ -140,30 +125,23 @@ void WorkerContext::CommitTx() {
     mLogging.WriteWalTxFinish();
   }
 
-  // update max observed GSN
-  mActiveTx.mMaxObservedGSN = mLogging.GetCurrentGsn();
-
-  if (mLogging.mHasRemoteDependency) {
-    // for group commit
+  // for group commit
+  if (mActiveTx.mHasRemoteDependency) {
     std::unique_lock<std::mutex> g(mLogging.mTxToCommitMutex);
     mLogging.mTxToCommit.push_back(mActiveTx);
-    LS_DLOG("Puting transaction with remote dependency to mTxToCommit"
-            ", workerId={}, startTs={}, commitTs={}, maxObservedGSN={}",
-            mWorkerId, mActiveTx.mStartTs, mActiveTx.mCommitTs, mActiveTx.mMaxObservedGSN);
   } else {
-    // for group commit
     std::unique_lock<std::mutex> g(mLogging.mRfaTxToCommitMutex);
-    CRCounters::MyCounters().rfa_committed_tx++;
     mLogging.mRfaTxToCommit.push_back(mActiveTx);
-    LS_DLOG("Puting transaction (RFA) to mRfaTxToCommit, workerId={}, "
-            "startTs={}, commitTs={}, maxObservedGSN={}",
-            mWorkerId, mActiveTx.mStartTs, mActiveTx.mCommitTs, mActiveTx.mMaxObservedGSN);
   }
 
   // Cleanup versions in history tree
   mCc.GarbageCollection();
 
   // Wait logs to be flushed
+  LS_DLOG("Wait transaction to commit, workerId={}, startTs={}, commitTs={}, maxObseredSysTx={}, "
+          "hasRemoteDep={}",
+          mWorkerId, mActiveTx.mStartTs, mActiveTx.mCommitTs, mActiveTx.mMaxObservedSysTxId,
+          mActiveTx.mHasRemoteDependency);
   telemetry::MetricOnlyTimer timer;
   while (!mLogging.SafeToCommit(mActiveTx.mCommitTs)) {
   }
@@ -186,9 +164,8 @@ void WorkerContext::AbortTx() {
     mActiveTx.mState = TxState::kAborted;
     METRIC_COUNTER_INC(mStore->mMetricsManager, tx_abort_total, 1);
     mActiveTxId.store(0, std::memory_order_release);
-    Log::Info("Transaction aborted, workerId={}, startTs={}, commitTs={}, "
-              "maxObservedGSN={}",
-              mWorkerId, mActiveTx.mStartTs, mActiveTx.mCommitTs, mActiveTx.mMaxObservedGSN);
+    Log::Info("Transaction aborted, workerId={}, startTs={}, commitTs={}, maxObservedSysTx={}",
+              mWorkerId, mActiveTx.mStartTs, mActiveTx.mCommitTs, mActiveTx.mMaxObservedSysTxId);
   });
 
   if (!(mActiveTx.mState == TxState::kStarted && mActiveTx.mIsDurable)) {

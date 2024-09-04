@@ -10,6 +10,8 @@
 #include "leanstore/sync/HybridLatch.hpp"
 #include "leanstore/utils/Log.hpp"
 
+#include <rapidjson/document.h>
+
 #include <atomic>
 #include <limits>
 
@@ -55,9 +57,9 @@ public:
 
   //! Try to merge the current node with its left or right sibling, reclaim the merged left or right
   //! sibling if successful.
-  bool TryMergeMayJump(BufferFrame& toMerge, bool swizzleSibling = true);
+  bool TryMergeMayJump(TXID sysTxId, BufferFrame& toMerge, bool swizzleSibling = true);
 
-  void TrySplitMayJump(BufferFrame& toSplit, int16_t pos = -1);
+  void TrySplitMayJump(TXID sysTxId, BufferFrame& toSplit, int16_t pos = -1);
 
   XMergeReturnCode XMerge(GuardedBufferFrame<BTreeNode>& guardedParent,
                           GuardedBufferFrame<BTreeNode>& guardedChild,
@@ -141,7 +143,7 @@ private:
   //!              |     |
   //!           newLeft toSplit
   ///
-  void splitRootMayJump(GuardedBufferFrame<BTreeNode>& guardedParent,
+  void splitRootMayJump(TXID sysTxId, GuardedBufferFrame<BTreeNode>& guardedParent,
                         GuardedBufferFrame<BTreeNode>& guardedChild,
                         const BTreeNode::SeparatorInfo& sepInfo);
 
@@ -152,7 +154,7 @@ private:
   //!   |            |   |
   //! toSplit   newLeft toSplit
   ///
-  void splitNonRootMayJump(GuardedBufferFrame<BTreeNode>& guardedParent,
+  void splitNonRootMayJump(TXID sysTxId, GuardedBufferFrame<BTreeNode>& guardedParent,
                            GuardedBufferFrame<BTreeNode>& guardedChild,
                            const BTreeNode::SeparatorInfo& sepInfo,
                            uint16_t spaceNeededForSeparator);
@@ -198,15 +200,15 @@ public:
     xGuardedMeta.Reclaim();
   }
 
-  // static void ToJson(BTreeGeneric& btree, rapidjson::Document* resultDoc);
+  static void ToJson(BTreeGeneric& btree, rapidjson::Document* resultDoc);
 
 private:
   static void freeBTreeNodesRecursive(BTreeGeneric& btree,
                                       GuardedBufferFrame<BTreeNode>& guardedNode);
 
-  // static void toJsonRecursive(BTreeGeneric& btree, GuardedBufferFrame<BTreeNode>& guardedNode,
-  //                             rapidjson::Value* resultObj,
-  //                             rapidjson::Value::AllocatorType& allocator);
+  static void toJsonRecursive(BTreeGeneric& btree, GuardedBufferFrame<BTreeNode>& guardedNode,
+                              rapidjson::Value* resultObj,
+                              rapidjson::Value::AllocatorType& allocator);
 
   static ParentSwipHandler findParentMayJump(BTreeGeneric& btree, BufferFrame& bfToFind) {
     return FindParent<true>(btree, bfToFind);

@@ -12,6 +12,7 @@
 #include <gtest/gtest.h>
 #include <rapidjson/document.h>
 
+#include <atomic>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -31,7 +32,7 @@ protected:
   TransactionKVTest() {
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
-    auto* option = CreateStoreOption(("/tmp/" + curTestName).c_str());
+    auto* option = CreateStoreOption(("/tmp/leanstore/" + curTestName).c_str());
     option->mCreateFromScratch = true;
     option->mWorkerThreads = 3;
     option->mEnableEagerGc = true;
@@ -853,6 +854,51 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
       EXPECT_EQ(copiedValue, newVal);
     }
   });
+}
+
+TEST_F(TransactionKVTest, ConcurrentInsertWithSplit) {
+  // prepare a btree for insert
+  storage::btree::TransactionKV* btree;
+  mStore->ExecSync(0, [&]() {
+    auto res = mStore->CreateTransactionKV(
+        ::testing::UnitTest::GetInstance()->current_test_info()->name());
+    btree = res.value();
+    EXPECT_NE(btree, nullptr);
+  });
+
+  std::atomic<bool> stop = false;
+  auto keySize = 24;
+  auto valSize = 120;
+
+  // insert in worker 0 asynchorously
+  mStore->ExecAsync(0, [&]() {
+    for (auto i = 0; !stop; i++) {
+      cr::WorkerContext::My().StartTx();
+      SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
+      auto key = std::format("{}_{}_{}", RandomGenerator::RandAlphString(keySize), 0, i);
+      auto val = RandomGenerator::RandAlphString(valSize);
+      auto res = btree->Insert(key, val);
+      EXPECT_EQ(res, OpCode::kOK);
+    }
+  });
+
+  // insert in worker 1 asynchorously
+  mStore->ExecAsync(1, [&]() {
+    for (auto i = 0; !stop; i++) {
+      cr::WorkerContext::My().StartTx();
+      SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
+      auto key = std::format("{}_{}_{}", RandomGenerator::RandAlphString(keySize), 1, i);
+      auto val = RandomGenerator::RandAlphString(valSize);
+      auto res = btree->Insert(key, val);
+      EXPECT_EQ(res, OpCode::kOK);
+    }
+  });
+
+  // sleep for 2 seconds
+  std::this_thread::sleep_for(std::chrono::seconds(2));
+  stop.store(true);
+  mStore->Wait(0);
+  mStore->Wait(1);
 }
 
 } // namespace leanstore::test

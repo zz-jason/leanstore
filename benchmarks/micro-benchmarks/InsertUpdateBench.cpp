@@ -22,7 +22,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
   std::filesystem::remove_all(dirPath);
   std::filesystem::create_directories(dirPath);
 
-  StoreOption* option = CreateStoreOption("/tmp/InsertUpdateBench");
+  StoreOption* option = CreateStoreOption("/tmp/leanstore/InsertUpdateBench");
   option->mCreateFromScratch = true;
   option->mWorkerThreads = 4;
   auto sLeanStore = std::make_unique<leanstore::LeanStore>(option);

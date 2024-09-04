@@ -6,7 +6,10 @@
 #include "leanstore/concurrency/CRManager.hpp"
 #include "leanstore/concurrency/WorkerContext.hpp"
 #include "leanstore/profiling/counters/WorkerCounters.hpp"
+#include "leanstore/sync/HybridLatch.hpp"
+#include "leanstore/sync/ScopedHybridGuard.hpp"
 #include "leanstore/utils/Defer.hpp"
+#include "leanstore/utils/JumpMU.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/Misc.hpp"
 #include "leanstore/utils/RandomGenerator.hpp"
@@ -25,7 +28,7 @@ namespace leanstore::cr {
 void CommitTree::AppendCommitLog(TXID startTs, TXID commitTs) {
   LS_DCHECK(mCommitLog.size() < mCapacity);
   utils::Timer timer(CRCounters::MyCounters().cc_ms_committing);
-  std::unique_lock xGuard(mMutex);
+  storage::ScopedHybridGuard xGuard(mLatch, storage::LatchMode::kPessimisticExclusive);
   mCommitLog.push_back({commitTs, startTs});
   LS_DLOG("Commit log appended, workerId={}, startTs={}, commitTs={}",
           WorkerContext::My().mWorkerId, startTs, commitTs);
@@ -65,7 +68,7 @@ void CommitTree::CompactCommitLog() {
   }
 
   // Refill the compacted commit log
-  std::unique_lock xGuard(mMutex);
+  storage::ScopedHybridGuard xGuard(mLatch, storage::LatchMode::kPessimisticExclusive);
   mCommitLog.clear();
   for (auto& p : set) {
     mCommitLog.push_back(p);
@@ -78,12 +81,19 @@ void CommitTree::CompactCommitLog() {
 }
 
 TXID CommitTree::Lcb(TXID startTs) {
-  std::shared_lock guard(mMutex);
-
-  if (auto result = lcbNoLatch(startTs); result) {
-    return result->second;
+  while (true) {
+    JUMPMU_TRY() {
+      storage::ScopedHybridGuard oGuard(mLatch, storage::LatchMode::kOptimisticOrJump);
+      if (auto result = lcbNoLatch(startTs); result) {
+        oGuard.Unlock();
+        JUMPMU_RETURN result->second;
+      }
+      oGuard.Unlock();
+      JUMPMU_RETURN 0;
+    }
+    JUMPMU_CATCH() {
+    }
   }
-  return 0;
 }
 
 std::optional<std::pair<TXID, TXID>> CommitTree::lcbNoLatch(TXID startTs) {

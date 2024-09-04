@@ -56,22 +56,23 @@ public:
   virtual void InsertToCurrentNode(Slice key, Slice val) {
     LS_DCHECK(KeyInCurrentNode(key));
     LS_DCHECK(HasEnoughSpaceFor(key.size(), val.size()));
-    LS_DCHECK(mSlotId != -1);
+    LS_DCHECK(Valid());
     mSlotId = mGuardedLeaf->InsertDoNotCopyPayload(key, val.size(), mSlotId);
     std::memcpy(mGuardedLeaf->ValData(mSlotId), val.data(), val.size());
   }
 
   void SplitForKey(Slice key) {
+    auto sysTxId = mBTree.mStore->AllocSysTxTs();
     while (true) {
       JUMPMU_TRY() {
-        if (mSlotId == -1 || !KeyInCurrentNode(key)) {
+        if (!Valid() || !KeyInCurrentNode(key)) {
           mBTree.FindLeafCanJump(key, mGuardedLeaf);
         }
         BufferFrame* bf = mGuardedLeaf.mBf;
         mGuardedLeaf.unlock();
-        mSlotId = -1;
+        SetToInvalid();
 
-        mBTree.TrySplitMayJump(*bf);
+        mBTree.TrySplitMayJump(sysTxId, *bf);
         COUNTERS_BLOCK() {
           WorkerCounters::MyCounters().dt_split[mBTree.mTreeId]++;
         }
@@ -162,7 +163,8 @@ public:
 
       mSlotId = -1;
       JUMPMU_TRY() {
-        mBTree.TrySplitMayJump(*mGuardedLeaf.mBf, splitSlot);
+        TXID sysTxId = mBTree.mStore->AllocSysTxTs();
+        mBTree.TrySplitMayJump(sysTxId, *mGuardedLeaf.mBf, splitSlot);
 
         LS_DLOG("[Contention Split] succeed, pageId={}, contention pct={}, split "
                 "slot={}",
@@ -201,7 +203,8 @@ public:
       mGuardedLeaf.unlock();
       mSlotId = -1;
       JUMPMU_TRY() {
-        mBTree.TryMergeMayJump(*mGuardedLeaf.mBf);
+        TXID sysTxId = mBTree.mStore->AllocSysTxTs();
+        mBTree.TryMergeMayJump(sysTxId, *mGuardedLeaf.mBf);
       }
       JUMPMU_CATCH() {
         LS_DLOG("TryMergeIfNeeded failed, pageId={}", mGuardedLeaf.mBf->mHeader.mPageId);
