@@ -1,6 +1,7 @@
 #include "leanstore/concurrency/GroupCommitter.hpp"
 
 #include "leanstore/concurrency/CRManager.hpp"
+#include "leanstore/concurrency/Transaction.hpp"
 #include "leanstore/concurrency/WorkerContext.hpp"
 #include "leanstore/profiling/counters/CPUCounters.hpp"
 #include "leanstore/telemetry/MetricOnlyTimer.hpp"
@@ -41,7 +42,7 @@ void GroupCommitter::runImpl() {
 }
 
 void GroupCommitter::collectWalRecords(TXID& minFlushedSysTx, TXID& minFlushedUsrTx,
-                                       std::vector<uint64_t>& numRfaTxs,
+                                       std::vector<uint64_t>& numRfaTxs [[maybe_unused]],
                                        std::vector<WalFlushReq>& walFlushReqCopies) {
   leanstore::telemetry::MetricOnlyTimer timer;
   SCOPED_DEFER({
@@ -53,11 +54,6 @@ void GroupCommitter::collectWalRecords(TXID& minFlushedSysTx, TXID& minFlushedUs
 
   for (auto workerId = 0u; workerId < mWorkerCtxs.size(); workerId++) {
     auto& logging = mWorkerCtxs[workerId]->mLogging;
-
-    // collect logging info
-    std::unique_lock<std::mutex> guard(logging.mRfaTxToCommitMutex);
-    numRfaTxs[workerId] = logging.mRfaTxToCommit.size();
-    guard.unlock();
 
     auto lastReqVersion = walFlushReqCopies[workerId].mVersion;
     auto version = logging.mWalFlushReq.Get(walFlushReqCopies[workerId]);
@@ -120,7 +116,7 @@ void GroupCommitter::flushWalRecords() {
 }
 
 void GroupCommitter::determineCommitableTx(TXID minFlushedSysTx, TXID minFlushedUsrTx,
-                                           const std::vector<uint64_t>& numRfaTxs,
+                                           const std::vector<uint64_t>& numRfaTxs [[maybe_unused]],
                                            const std::vector<WalFlushReq>& walFlushReqCopies) {
   leanstore::telemetry::MetricOnlyTimer timer;
   SCOPED_DEFER({
@@ -137,41 +133,26 @@ void GroupCommitter::determineCommitableTx(TXID minFlushedSysTx, TXID minFlushed
     // commit transactions with remote dependency
     TXID maxCommitTs = 0;
     {
-      std::unique_lock<std::mutex> g(logging.mTxToCommitMutex);
-      uint64_t i = 0;
-      for (; i < logging.mTxToCommit.size(); ++i) {
-        auto& tx = logging.mTxToCommit[i];
-        if (!tx.CanCommit(minFlushedSysTx, minFlushedUsrTx)) {
-          break;
-        }
-        maxCommitTs = std::max<TXID>(maxCommitTs, tx.mCommitTs);
-        tx.mState = TxState::kCommitted;
+      if (auto* tx = logging.mActiveTxToCommit.load(std::memory_order_relaxed);
+          tx != nullptr && tx->CanCommit(minFlushedSysTx, minFlushedUsrTx)) {
+        maxCommitTs = tx->mCommitTs;
+        tx->mState = TxState::kCommitted;
+        logging.mActiveTxToCommit.store(nullptr);
         LS_DLOG("Transaction with remote dependency committed, workerId={}, startTs={}, "
                 "commitTs={}, minFlushedSysTx={}, minFlushedUsrTx={}",
-                workerId, tx.mStartTs, tx.mCommitTs, minFlushedSysTx, minFlushedUsrTx);
-      }
-      if (i > 0) {
-        logging.mTxToCommit.erase(logging.mTxToCommit.begin(), logging.mTxToCommit.begin() + i);
+                workerId, tx->mStartTs, tx->mCommitTs, minFlushedSysTx, minFlushedUsrTx);
       }
     }
 
     // commit transactions without remote dependency
     TXID maxCommitTsRfa = 0;
-    {
-      std::unique_lock<std::mutex> g(logging.mRfaTxToCommitMutex);
-      uint64_t i = 0;
-      for (; i < numRfaTxs[workerId]; ++i) {
-        auto& tx = logging.mRfaTxToCommit[i];
-        maxCommitTsRfa = std::max<TXID>(maxCommitTsRfa, tx.mCommitTs);
-        tx.mState = TxState::kCommitted;
-        LS_DLOG("Transaction without remote dependency committed, workerId={}, startTs={}, "
-                "commitTs={}",
-                workerId, tx.mStartTs, tx.mCommitTs);
-      }
-      if (i > 0) {
-        logging.mRfaTxToCommit.erase(logging.mRfaTxToCommit.begin(),
-                                     logging.mRfaTxToCommit.begin() + i);
-      }
+    if (auto* tx = logging.mActiveRfaTxToCommit.load(std::memory_order_relaxed); tx != nullptr) {
+      maxCommitTsRfa = tx->mCommitTs;
+      tx->mState = TxState::kCommitted;
+      logging.mActiveRfaTxToCommit.store(nullptr);
+      LS_DLOG("Transaction without remote dependency committed, workerId={}, "
+              "startTs={}, commitTs={}",
+              workerId, tx->mStartTs, tx->mCommitTs);
     }
 
     // Has committed transaction

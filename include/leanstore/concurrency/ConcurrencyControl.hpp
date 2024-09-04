@@ -1,6 +1,7 @@
 #pragma once
 
 #include "leanstore/LeanStore.hpp"
+#include "leanstore/Slice.hpp"
 #include "leanstore/Units.hpp"
 #include "leanstore/concurrency/HistoryStorage.hpp"
 #include "leanstore/profiling/counters/CRCounters.hpp"
@@ -193,11 +194,12 @@ public:
   //! @param getCallback: the callback function to be called when the version is found.
   //! @return: true if the version is found, false otherwise.
   inline bool GetVersion(WORKERID newerWorkerId, TXID newerTxId, COMMANDID newerCommandId,
-                         std::function<void(const uint8_t*, uint64_t versionSize)> getCallback) {
+                         std::function<void(Slice)> versionCallback) {
     utils::Timer timer(CRCounters::MyCounters().cc_ms_history_tree_retrieve);
     auto isRemoveCommand = newerCommandId & kRemoveCommandMark;
     return Other(newerWorkerId)
-        .mHistoryStorage.GetVersion(newerTxId, newerCommandId, isRemoveCommand, getCallback);
+        .mHistoryStorage.GetVersion(newerTxId, newerCommandId, isRemoveCommand,
+                                    std::move(versionCallback));
   }
 
   //! Put a version to the version storage. The callback function is called with the version data

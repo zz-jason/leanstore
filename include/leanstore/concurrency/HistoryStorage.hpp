@@ -1,5 +1,6 @@
 #pragma once
 
+#include "leanstore/Slice.hpp"
 #include "leanstore/Units.hpp"
 
 #include <cstdint>
@@ -88,7 +89,7 @@ public:
                   uint64_t payloadLength, std::function<void(uint8_t*)> cb, bool sameThread = true);
 
   bool GetVersion(TXID newerTxId, COMMANDID newerCommandId, const bool isRemoveCommand,
-                  std::function<void(const uint8_t*, uint64_t)> cb);
+                  std::function<void(Slice)> cb);
 
   void PurgeVersions(TXID fromTxId, TXID toTxId, RemoveVersionCallback cb, const uint64_t limit);
 

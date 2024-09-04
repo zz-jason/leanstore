@@ -100,8 +100,7 @@ void HistoryStorage::PutVersion(TXID txId, COMMANDID commandId, TREEID treeId, b
 }
 
 bool HistoryStorage::GetVersion(TXID newerTxId, COMMANDID newerCommandId,
-                                const bool isRemoveCommand,
-                                std::function<void(const uint8_t*, uint64_t)> cb) {
+                                const bool isRemoveCommand, std::function<void(Slice)> cb) {
   volatile BasicKV* btree = (isRemoveCommand) ? mRemoveIndex : mUpdateIndex;
   const uint64_t keySize = sizeof(newerTxId) + sizeof(newerCommandId);
   uint8_t keyBuffer[keySize];
@@ -114,7 +113,7 @@ bool HistoryStorage::GetVersion(TXID newerTxId, COMMANDID newerCommandId,
     BasicKV* kv = const_cast<BasicKV*>(btree);
     auto ret = kv->Lookup(key, [&](const Slice& payload) {
       const auto& versionContainer = *VersionMeta::From(payload.data());
-      cb(versionContainer.mPayload, payload.length() - sizeof(VersionMeta));
+      cb({versionContainer.mPayload, payload.length() - sizeof(VersionMeta)});
     });
 
     if (ret == OpCode::kNotFound) {

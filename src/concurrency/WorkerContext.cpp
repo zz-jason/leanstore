@@ -127,11 +127,9 @@ void WorkerContext::CommitTx() {
 
   // for group commit
   if (mActiveTx.mHasRemoteDependency) {
-    std::unique_lock<std::mutex> g(mLogging.mTxToCommitMutex);
-    mLogging.mTxToCommit.push_back(mActiveTx);
+    mLogging.mActiveTxToCommit.store(&mActiveTx);
   } else {
-    std::unique_lock<std::mutex> g(mLogging.mRfaTxToCommitMutex);
-    mLogging.mRfaTxToCommit.push_back(mActiveTx);
+    mLogging.mActiveRfaTxToCommit.store(&mActiveTx);
   }
 
   // Cleanup versions in history tree

@@ -278,12 +278,12 @@ std::tuple<OpCode, uint16_t> TransactionKV::getVisibleTuple(Slice payload, ValCa
       switch (tuple->mFormat) {
       case TupleFormat::kChained: {
         const auto* const chainedTuple = ChainedTuple::From(payload.data());
-        ret = chainedTuple->GetVisibleTuple(payload, callback);
+        ret = chainedTuple->GetVisibleTuple(payload, std::move(callback));
         JUMPMU_RETURN ret;
       }
       case TupleFormat::kFat: {
         const auto* const fatTuple = FatTuple::From(payload.data());
-        ret = fatTuple->GetVisibleTuple(callback);
+        ret = fatTuple->GetVisibleTuple(std::move(callback));
         JUMPMU_RETURN ret;
       }
       default: {

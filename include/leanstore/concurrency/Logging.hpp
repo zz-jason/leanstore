@@ -57,19 +57,11 @@ public:
   //! processing.
   WalEntryComplex* mActiveWALEntryComplex;
 
-  //! Protects mTxToCommit
-  std::mutex mTxToCommitMutex;
+  //! The pending-to-commit transactions which have remote dependencies.
+  std::atomic<Transaction*> mActiveTxToCommit;
 
-  //! The queue for each worker thread to store pending-to-commit transactions which have remote
-  //! dependencies.
-  std::vector<Transaction> mTxToCommit;
-
-  //! Protects mTxToCommit
-  std::mutex mRfaTxToCommitMutex;
-
-  //! The queue for each worker thread to store pending-to-commit transactions which doesn't have
-  //! any remote dependencies.
-  std::vector<Transaction> mRfaTxToCommit;
+  //! The pending-to-commit transactions which doesn't have any remote dependencies.
+  std::atomic<Transaction*> mActiveRfaTxToCommit;
 
   //! Represents the maximum commit timestamp in the worker. Transactions in the worker are
   //! committed if their commit timestamps are smaller than it.
@@ -137,8 +129,7 @@ private:
 
   void publishWalFlushReq();
 
-  //! Calculate the continuous free space left in the wal ring buffer. Return
-  //! size of the contiguous free space.
+  //! Continuous free space left in the wal ring buffer.
   uint32_t walContiguousFreeSpace();
 };
 

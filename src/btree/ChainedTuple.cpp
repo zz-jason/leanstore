@@ -33,8 +33,9 @@ std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(Slice payload,
   uint16_t versionsRead = 1;
   while (true) {
     bool found = cr::WorkerContext::My().mCc.GetVersion(
-        newerWorkerId, newerTxId, newerCommandId,
-        [&](const uint8_t* versionBuf, uint64_t versionSize) {
+        newerWorkerId, newerTxId, newerCommandId, [&](Slice versionSlice) {
+          auto* versionBuf = versionSlice.data();
+          auto versionSize = versionSlice.size();
           auto& version = *reinterpret_cast<const Version*>(versionBuf);
           switch (version.mType) {
           case VersionType::kUpdate: {

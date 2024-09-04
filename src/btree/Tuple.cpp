@@ -70,9 +70,9 @@ bool Tuple::ToFat(PessimisticExclusiveIterator& xIter) {
     }
 
     if (!cr::WorkerContext::My().mCc.GetVersion(
-            newerWorkerId, newerTxId, newerCommandId, [&](const uint8_t* version, uint64_t) {
+            newerWorkerId, newerTxId, newerCommandId, [&](Slice version) {
               numDeltasToReplace++;
-              const auto& chainedDelta = *UpdateVersion::From(version);
+              const auto& chainedDelta = *UpdateVersion::From(version.data());
               LS_DCHECK(chainedDelta.mType == VersionType::kUpdate);
               LS_DCHECK(chainedDelta.mIsDelta);
 
