@@ -6,7 +6,6 @@
 #include "leanstore/buffer-manager/PageEvictor.hpp"
 #include "leanstore/buffer-manager/Partition.hpp"
 #include "leanstore/buffer-manager/Swip.hpp"
-#include "leanstore/profiling/tables/BMTable.hpp"
 #include "leanstore/utils/RandomGenerator.hpp"
 #include "leanstore/utils/Result.hpp"
 
@@ -18,10 +17,6 @@
 namespace leanstore {
 class LeanStore;
 } // namespace leanstore
-
-namespace leanstore::profiling {
-class BMTable;
-} // namespace leanstore::profiling
 
 namespace leanstore::storage {
 template <typename T>
@@ -171,7 +166,6 @@ private:
   }
 
   friend class leanstore::LeanStore;
-  friend class leanstore::profiling::BMTable;
 };
 
 } // namespace leanstore::storage

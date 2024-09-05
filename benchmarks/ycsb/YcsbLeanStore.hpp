@@ -1,5 +1,7 @@
 #include "Ycsb.hpp"
+#include "leanstore-c/PerfCounters.h"
 #include "leanstore-c/StoreOption.h"
+#include "leanstore-c/leanstore-c.h"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/btree/BasicKV.hpp"
@@ -17,13 +19,19 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <format>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
+
+#include <sys/types.h>
+#include <unistd.h>
 
 namespace leanstore::ycsb {
 
@@ -44,8 +52,6 @@ public:
     option->mEnableEagerGc = true;
     option->mWorkerThreads = FLAGS_ycsb_threads;
     option->mBufferPoolSize = FLAGS_ycsb_mem_kb * 1024;
-    option->mEnableMetrics = true;
-    option->mMetricsPort = 8080;
 
     auto res = LeanStore::Open(option);
     if (!res) {
@@ -55,6 +61,9 @@ public:
     }
 
     mStore = std::move(res.value());
+
+    // start metrics http exposer for cpu/mem profiling
+    StartMetricsHttpExposer(8080);
   }
 
   ~YcsbLeanStore() override {
@@ -164,6 +173,12 @@ public:
       a = 0;
     }
 
+    std::vector<PerfCounters*> workerPerfCounters;
+    for (auto i = 0u; i < mStore->mStoreOption->mWorkerThreads; i++) {
+      mStore->ExecSync(
+          i, [&]() { workerPerfCounters.push_back(cr::WorkerContext::My().GetPerfCounters()); });
+    }
+
     for (uint64_t workerId = 0; workerId < mStore->mStoreOption->mWorkerThreads; workerId++) {
       mStore->ExecAsync(workerId, [&]() {
         uint8_t key[FLAGS_ycsb_key_size];
@@ -239,11 +254,45 @@ public:
       a = 0;
     }
 
+    std::thread perfContextReporter([&]() {
+      auto reportPeriod = 1;
+      const char* counterFilePath = "/tmp/leanstore/worker-counters.txt";
+      std::ofstream ost;
+
+      while (keepRunning) {
+        sleep(reportPeriod);
+        uint64_t txWithRemoteDependencies = 0;
+        uint64_t lcbExecuted = 0;
+        uint64_t lcbTotalLatNs [[maybe_unused]] = 0;
+        uint64_t gcExecuted = 0;
+        uint64_t gcTotalLatNs [[maybe_unused]] = 0;
+        uint64_t txCommitWait = 0;
+
+        // collect counters
+        for (auto* perfCounters : workerPerfCounters) {
+          txWithRemoteDependencies += atomic_exchange(&perfCounters->mTxWithRemoteDependencies, 0);
+          txCommitWait += atomic_exchange(&perfCounters->mTxCommitWait, 0);
+
+          lcbExecuted += atomic_exchange(&perfCounters->mLcbExecuted, 0);
+          lcbTotalLatNs += atomic_exchange(&perfCounters->mLcbTotalLatNs, 0);
+
+          gcExecuted += atomic_exchange(&perfCounters->mGcExecuted, 0);
+          gcTotalLatNs += atomic_exchange(&perfCounters->mGcTotalLatNs, 0);
+        }
+        ost.open(counterFilePath, std::ios_base::app);
+        ost << std::format("TxWithDep: {}, txCommitWait: {}, LcbExec: {}, GcExec: {}",
+                           txWithRemoteDependencies, txCommitWait, lcbExecuted, gcExecuted)
+            << std::endl;
+        ost.close();
+      }
+    });
+
     printTpsSummary(1, FLAGS_ycsb_run_for_seconds, mStore->mStoreOption->mWorkerThreads,
                     threadCommitted, threadAborted);
 
     // Shutdown threads
     keepRunning = false;
+    perfContextReporter.join();
     mStore->WaitAll();
   }
 };

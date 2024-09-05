@@ -25,7 +25,7 @@ protected:
   void SetUp() override {
     auto* curTest = ::testing::UnitTest::GetInstance()->current_test_info();
     auto curTestName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
-    std::string storeDir = "/tmp/" + curTestName;
+    std::string storeDir = "/tmp/leanstore/" + curTestName;
     uint32_t sessionLimit = 2;
     mStore = StoreFactory::NewLeanStoreMVCC(storeDir, sessionLimit);
     ASSERT_NE(mStore, nullptr);

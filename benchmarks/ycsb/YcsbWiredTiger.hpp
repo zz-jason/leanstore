@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Ycsb.hpp"
+#include "leanstore-c/leanstore-c.h"
 #include "leanstore/utils/Defer.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/Parallelize.hpp"
@@ -26,6 +27,7 @@ class YcsbWiredTiger : public YcsbExecutor {
 
 public:
   YcsbWiredTiger() : mConn(nullptr) {
+    StartMetricsHttpExposer(8080);
   }
 
   ~YcsbWiredTiger() override {
@@ -195,7 +197,8 @@ private:
     }
 
     std::string configString(
-        "create, direct_io=[data, log, checkpoint], log=(enabled=false), statistics_log=(wait=1), "
+        "create, direct_io=[data, log, checkpoint], "
+        "log=(enabled=true,archive=true), statistics_log=(wait=1), "
         "statistics=(all, clear), session_max=2000, eviction=(threads_max=4), cache_size=" +
         std::to_string(FLAGS_ycsb_mem_kb / 1024) + "M");
     int ret = wiredtiger_open(dataDir.c_str(), nullptr, configString.c_str(), &mConn);

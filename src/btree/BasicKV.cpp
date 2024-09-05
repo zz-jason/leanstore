@@ -45,7 +45,6 @@ OpCode BasicKV::lookupOptimistic(Slice key, ValCallback valCallback) {
     JUMPMU_RETURN OpCode::kNotFound;
   }
   JUMPMU_CATCH() {
-    WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
     return OpCode::kOther;
   }
 }
@@ -64,7 +63,6 @@ OpCode BasicKV::lookupPessimistic(Slice key, ValCallback valCallback) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
     JUMPMU_CATCH() {
-      WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
     }
   }
 }
@@ -108,10 +106,6 @@ bool BasicKV::IsRangeEmpty(Slice startKey, Slice endKey) {
 }
 
 OpCode BasicKV::ScanAsc(Slice startKey, ScanCallback callback) {
-  COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().dt_scan_asc[mTreeId]++;
-  }
-
   JUMPMU_TRY() {
     auto iter = GetIterator();
     if (iter.SeekToFirstGreaterEqual(startKey); !iter.Valid()) {
@@ -135,9 +129,6 @@ OpCode BasicKV::ScanAsc(Slice startKey, ScanCallback callback) {
 }
 
 OpCode BasicKV::ScanDesc(Slice scanKey, ScanCallback callback) {
-  COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().dt_scan_desc[mTreeId]++;
-  }
   JUMPMU_TRY() {
     auto iter = GetIterator();
     if (iter.SeekToLastLessEqual(scanKey); !iter.Valid()) {
@@ -220,7 +211,6 @@ OpCode BasicKV::PrefixLookup(Slice key, PrefixLookupCallback callback) {
       JUMPMU_RETURN ret;
     }
     JUMPMU_CATCH() {
-      WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
     }
   }
 
@@ -262,7 +252,6 @@ OpCode BasicKV::PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
       JUMPMU_RETURN ret;
     }
     JUMPMU_CATCH() {
-      WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
     }
   }
 
@@ -364,9 +353,6 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
         xIter.AssembleKey();
         auto currentKey = xIter.Key();
         if (currentKey >= startKey && currentKey <= endKey) {
-          COUNTERS_BLOCK() {
-            WorkerCounters::MyCounters().dt_range_removed[mTreeId]++;
-          }
           auto ret = xIter.RemoveCurrent();
           ENSURE(ret == OpCode::kOK);
           if (xIter.mSlotId == xIter.mGuardedLeaf->mNumSlots) {
@@ -400,9 +386,6 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
 
       if (pageStartKey >= startKey && pageEndKey <= endKey) {
         // Purge the whole page
-        COUNTERS_BLOCK() {
-          WorkerCounters::MyCounters().dt_range_removed[mTreeId] += guardedLeaf->mNumSlots;
-        }
         guardedLeaf->Reset();
         didPurgeFullPage = true;
       }

@@ -2,9 +2,6 @@
 
 #include "leanstore/concurrency/CRManager.hpp"
 #include "leanstore/concurrency/WorkerContext.hpp"
-#include "leanstore/profiling/counters/CPUCounters.hpp"
-#include "leanstore/telemetry/MetricOnlyTimer.hpp"
-#include "telemetry/MetricsManager.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -19,8 +16,6 @@ namespace leanstore::cr {
 constexpr size_t kAligment = 4096;
 
 void GroupCommitter::runImpl() {
-  CPUCounters::registerThread(mThreadName, false);
-
   TXID minFlushedSysTx = std::numeric_limits<TXID>::max();
   TXID minFlushedUsrTx = std::numeric_limits<TXID>::max();
   std::vector<uint64_t> numRfaTxs(mWorkerCtxs.size(), 0);
@@ -43,11 +38,6 @@ void GroupCommitter::runImpl() {
 void GroupCommitter::collectWalRecords(TXID& minFlushedSysTx, TXID& minFlushedUsrTx,
                                        std::vector<uint64_t>& numRfaTxs,
                                        std::vector<WalFlushReq>& walFlushReqCopies) {
-  leanstore::telemetry::MetricOnlyTimer timer;
-  SCOPED_DEFER({
-    METRIC_HIST_OBSERVE(mStore->mMetricsManager, group_committer_prep_iocbs_us, timer.ElaspedUs());
-  });
-
   minFlushedSysTx = std::numeric_limits<TXID>::max();
   minFlushedUsrTx = std::numeric_limits<TXID>::max();
 
@@ -94,11 +84,6 @@ void GroupCommitter::collectWalRecords(TXID& minFlushedSysTx, TXID& minFlushedUs
 }
 
 void GroupCommitter::flushWalRecords() {
-  leanstore::telemetry::MetricOnlyTimer timer;
-  SCOPED_DEFER({
-    METRIC_HIST_OBSERVE(mStore->mMetricsManager, group_committer_write_iocbs_us, timer.ElaspedUs());
-  });
-
   // submit all log writes using a single system call.
   if (auto res = mAIo.SubmitAll(); !res) {
     Log::Error("Failed to submit all IO, error={}", res.error().ToString());
@@ -122,11 +107,6 @@ void GroupCommitter::flushWalRecords() {
 void GroupCommitter::determineCommitableTx(TXID minFlushedSysTx, TXID minFlushedUsrTx,
                                            const std::vector<uint64_t>& numRfaTxs,
                                            const std::vector<WalFlushReq>& walFlushReqCopies) {
-  leanstore::telemetry::MetricOnlyTimer timer;
-  SCOPED_DEFER({
-    METRIC_HIST_OBSERVE(mStore->mMetricsManager, group_committer_commit_txs_us, timer.ElaspedUs());
-  });
-
   for (WORKERID workerId = 0; workerId < mWorkerCtxs.size(); workerId++) {
     auto& logging = mWorkerCtxs[workerId]->mLogging;
     const auto& reqCopy = walFlushReqCopies[workerId];
@@ -200,8 +180,6 @@ void GroupCommitter::append(uint8_t* buf, uint64_t lower, uint64_t upper) {
 
   mAIo.PrepareWrite(mWalFd, bufAligned, countAligned, offsetAligned);
   mWalSize += upper - lower;
-
-  METRIC_COUNTER_INC(mStore->mMetricsManager, group_committer_disk_write_total, countAligned);
 };
 
 } // namespace leanstore::cr

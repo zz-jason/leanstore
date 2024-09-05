@@ -1,6 +1,5 @@
 #include "leanstore/buffer-manager/BufferManager.hpp"
 
-#include "leanstore/Exceptions.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "leanstore/buffer-manager/BufferFrame.hpp"
@@ -8,7 +7,6 @@
 #include "leanstore/concurrency/CRManager.hpp"
 #include "leanstore/concurrency/GroupCommitter.hpp"
 #include "leanstore/concurrency/Recovery.hpp"
-#include "leanstore/profiling/counters/WorkerCounters.hpp"
 #include "leanstore/sync/HybridLatch.hpp"
 #include "leanstore/sync/ScopedHybridGuard.hpp"
 #include "leanstore/utils/AsyncIo.hpp"
@@ -221,10 +219,6 @@ BufferFrame& BufferManager::AllocNewPageMayJump(TREEID treeId) {
   new (&freeBf) BufferFrame();
   freeBf.Init(partition.NextPageId());
 
-  COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().allocate_operations_counter++;
-  }
-
   freeBf.mPage.mBTreeId = treeId;
   freeBf.mPage.mPsn++; // mark the page as dirty
   LS_DLOG("Alloc new page, pageId={}, btreeId={}", freeBf.mHeader.mPageId, freeBf.mPage.mBTreeId);
@@ -302,9 +296,6 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& nodeGuard, Swip& swi
     // 3. Read page at pageId to the target buffer frame
     ReadPageSync(pageId, &bf.mPage);
     LS_DLOG("Read page from disk, pageId={}, btreeId={}", pageId, bf.mPage.mBTreeId);
-    COUNTERS_BLOCK() {
-      WorkerCounters::MyCounters().dt_page_reads[bf.mPage.mBTreeId]++;
-    }
 
     // 4. Intialize the buffer frame header
     LS_DCHECK(!bf.mHeader.mIsBeingWrittenBack);
@@ -432,10 +423,6 @@ void BufferManager::ReadPageSync(PID pageId, void* pageBuffer) {
     }
 
     bytesLeft -= bytesRead;
-  }
-
-  COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().read_operations_counter++;
   }
 }
 

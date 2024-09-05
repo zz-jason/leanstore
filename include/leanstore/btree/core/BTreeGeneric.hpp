@@ -6,7 +6,6 @@
 #include "leanstore/buffer-manager/BufferManager.hpp"
 #include "leanstore/buffer-manager/GuardedBufferFrame.hpp"
 #include "leanstore/buffer-manager/TreeRegistry.hpp"
-#include "leanstore/profiling/counters/WorkerCounters.hpp"
 #include "leanstore/sync/HybridLatch.hpp"
 #include "leanstore/utils/Log.hpp"
 
@@ -312,10 +311,6 @@ inline void BTreeGeneric::FindLeafCanJump(Slice key, GuardedBufferFrame<BTreeNod
 
   volatile uint16_t level = 0;
   while (!guardedTarget->mIsLeaf) {
-    COUNTERS_BLOCK() {
-      WorkerCounters::MyCounters().dt_inner_page[mTreeId]++;
-    }
-
     auto& childSwip = guardedTarget->LookupInner(key);
     LS_DCHECK(!childSwip.IsEmpty());
     guardedParent = std::move(guardedTarget);
@@ -334,10 +329,6 @@ inline void BTreeGeneric::FindLeafCanJump(Slice key, GuardedBufferFrame<BTreeNod
 
 template <bool jumpIfEvicted>
 inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree, BufferFrame& bfToFind) {
-  COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().dt_find_parent[btree.mTreeId]++;
-  }
-
   // Check whether search on the wrong tree or the root node is evicted
   GuardedBufferFrame<BTreeNode> guardedParent(btree.mStore->mBufferManager.get(),
                                               btree.mMetaNodeSwip);
@@ -349,9 +340,6 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree, BufferFra
   auto* childSwip = &guardedParent->mRightMostChildSwip;
   if (&childSwip->AsBufferFrameMasked() == &bfToFind) {
     guardedParent.JumpIfModifiedByOthers();
-    COUNTERS_BLOCK() {
-      WorkerCounters::MyCounters().dt_find_parent_root[btree.mTreeId]++;
-    }
     return {.mParentGuard = std::move(guardedParent.mGuard),
             .mParentBf = &btree.mMetaNodeSwip.AsBufferFrame(),
             .mChildSwip = *childSwip};
@@ -415,9 +403,6 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree, BufferFra
                                      .mParentBf = guardedChild.mBf,
                                      .mChildSwip = *childSwip,
                                      .mPosInParent = posInParent};
-  COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().dt_find_parent_slow[btree.mTreeId]++;
-  }
   return parentHandler;
 }
 

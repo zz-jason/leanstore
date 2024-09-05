@@ -3,7 +3,6 @@
 #include "leanstore/Exceptions.hpp"
 #include "leanstore/Slice.hpp"
 #include "leanstore/buffer-manager/GuardedBufferFrame.hpp"
-#include "leanstore/profiling/counters/WorkerCounters.hpp"
 #include "leanstore/utils/Defer.hpp"
 #include "leanstore/utils/Log.hpp"
 
@@ -67,14 +66,6 @@ void BTreeNode::SearchHint(HeadType keyHead, uint16_t& lowerOut, uint16_t& upper
       lowerOut = pos * dist;
       if (pos2 < sHintCount) {
         upperOut = (pos2 + 1) * dist;
-      }
-
-      if (mIsLeaf) {
-        WorkerCounters::MyCounters().dt_researchy[0][0]++;
-        WorkerCounters::MyCounters().dt_researchy[0][1] += pos > 0 || pos2 < sHintCount;
-      } else {
-        WorkerCounters::MyCounters().dt_researchy[0][2]++;
-        WorkerCounters::MyCounters().dt_researchy[0][3] += pos > 0 || pos2 < sHintCount;
       }
     } else {
     }

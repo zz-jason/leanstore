@@ -3,7 +3,6 @@
 #include "leanstore/Exceptions.hpp"
 #include "leanstore/concurrency/WalEntry.hpp"
 #include "leanstore/concurrency/WorkerContext.hpp"
-#include "leanstore/profiling/counters/WorkerCounters.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "utils/ToJson.hpp"
 
@@ -96,9 +95,6 @@ void Logging::SubmitWALEntryComplex(uint64_t totalSize) {
   mWalBuffered += totalSize;
   publishWalFlushReq();
 
-  COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().wal_write_bytes += totalSize;
-  }
   LS_DLOG("SubmitWal, workerId={}, startTs={}, walJson={}", WorkerContext::My().mWorkerId,
           WorkerContext::My().mActiveTx.mStartTs, utils::ToJsonString(mActiveWALEntryComplex));
 }

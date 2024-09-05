@@ -2,6 +2,7 @@
 
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/btree/core/PessimisticIterator.hpp"
+#include "leanstore/utils/CounterUtil.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/RandomGenerator.hpp"
 #include "leanstore/utils/UserThread.hpp"
@@ -24,7 +25,7 @@ public:
   }
 
   virtual OpCode SeekToInsertWithHint(Slice key, bool higher = true) {
-    ENSURE(mSlotId != -1);
+    LS_DCHECK(Valid());
     mSlotId = mGuardedLeaf->LinearSearchWithBias(key, mSlotId, higher);
     if (mSlotId == -1) {
       return SeekToInsert(key);
@@ -73,12 +74,11 @@ public:
         SetToInvalid();
 
         mBTree.TrySplitMayJump(sysTxId, *bf);
-        COUNTERS_BLOCK() {
-          WorkerCounters::MyCounters().dt_split[mBTree.mTreeId]++;
-        }
+        COUNTER_INC(&leanstore::cr::tlsPerfCounters.mSplitSucceed);
         JUMPMU_BREAK;
       }
       JUMPMU_CATCH() {
+        COUNTER_INC(&leanstore::cr::tlsPerfCounters.mSplitFailed);
       }
     }
   }
@@ -166,23 +166,16 @@ public:
         TXID sysTxId = mBTree.mStore->AllocSysTxTs();
         mBTree.TrySplitMayJump(sysTxId, *mGuardedLeaf.mBf, splitSlot);
 
+        COUNTER_INC(&leanstore::cr::tlsPerfCounters.mContentionSplitSucceed);
         LS_DLOG("[Contention Split] succeed, pageId={}, contention pct={}, split "
                 "slot={}",
                 mGuardedLeaf.mBf->mHeader.mPageId, contentionPct, splitSlot);
-
-        COUNTERS_BLOCK() {
-          WorkerCounters::MyCounters().contention_split_succ_counter[mBTree.mTreeId]++;
-          WorkerCounters::MyCounters().dt_split[mBTree.mTreeId]++;
-        }
       }
       JUMPMU_CATCH() {
+        COUNTER_INC(&leanstore::cr::tlsPerfCounters.mContentionSplitFailed);
         Log::Info("[Contention Split] contention split failed, pageId={}, contention "
                   "pct={}, split slot={}",
                   mGuardedLeaf.mBf->mHeader.mPageId, contentionPct, splitSlot);
-
-        COUNTERS_BLOCK() {
-          WorkerCounters::MyCounters().contention_split_fail_counter[mBTree.mTreeId]++;
-        }
       }
     }
   }

@@ -1,8 +1,10 @@
 #pragma once
 
+#include "leanstore-c/PerfCounters.h"
 #include "leanstore/Units.hpp"
 #include "leanstore/concurrency/Transaction.hpp"
 #include "leanstore/sync/OptimisticGuarded.hpp"
+#include "leanstore/utils/CounterUtil.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -107,8 +109,10 @@ public:
     mSignaledCommitTs.store(signaledCommitTs, std::memory_order_release);
   }
 
-  bool SafeToCommit(const TXID commitTs) {
-    return commitTs <= mSignaledCommitTs.load();
+  void WaitToCommit(const TXID commitTs) {
+    COUNTER_INC(&tlsPerfCounters.mTxCommitWait);
+    while (!(commitTs <= mSignaledCommitTs.load())) {
+    }
   }
 
   void ReserveContiguousBuffer(uint32_t requestedSize);

@@ -13,7 +13,6 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
-#include <type_traits>
 #include <utility>
 
 #include <stdint.h>
@@ -281,7 +280,7 @@ static std::mutex sGlobalMetricsHttpExposerMutex;
 
 void StartMetricsHttpExposer(int32_t port) {
   std::unique_lock guard{sGlobalMetricsHttpExposerMutex};
-  sGlobalMetricsHttpExposer = new leanstore::telemetry::MetricsHttpExposer(nullptr, port);
+  sGlobalMetricsHttpExposer = new leanstore::telemetry::MetricsHttpExposer(port);
   sGlobalMetricsHttpExposer->Start();
 }
 

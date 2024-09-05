@@ -7,11 +7,8 @@
 #include <gperftools/heap-profiler.h>
 #include <gperftools/profiler.h>
 #endif
-#include <httplib.h>
-#include <prometheus/collectable.h>
-#include <prometheus/text_serializer.h>
 
-#include <mutex>
+#include <httplib.h>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -21,18 +18,18 @@ namespace leanstore::telemetry {
 const std::string kContentType("text/plain; version=0.0.4; charset=utf-8");
 
 class MetricsHttpExposer : public utils::UserThread {
-public:
-  MetricsHttpExposer(LeanStore* store);
+private:
+  //! The http server
+  httplib::Server mServer;
 
-  MetricsHttpExposer(LeanStore* store, int32_t port);
+  //! The port to expose metrics
+  int32_t mPort;
+
+public:
+  MetricsHttpExposer(int32_t port);
 
   ~MetricsHttpExposer() override {
     mServer.stop();
-  }
-
-  void SetCollectable(std::shared_ptr<prometheus::Collectable> collectable) {
-    auto guard = std::unique_lock(mCollectableMutex);
-    mCollectable = collectable;
   }
 
 protected:
@@ -43,23 +40,6 @@ protected:
   }
 
 private:
-  void handleMetrics(const httplib::Request&, httplib::Response& res) {
-    auto guard = std::unique_lock(mCollectableMutex);
-    if (mCollectable != nullptr) {
-      auto metrics = mCollectable->Collect();
-      guard.unlock();
-      const prometheus::TextSerializer serializer;
-      res.set_content(serializer.Serialize(metrics), kContentType);
-      return;
-    }
-
-    // empty
-    guard.unlock();
-    const prometheus::TextSerializer serializer;
-    std::vector<prometheus::MetricFamily> empty;
-    res.set_content(serializer.Serialize(empty), kContentType);
-  }
-
   void handleHeap(const httplib::Request& req [[maybe_unused]], httplib::Response& res) {
 #ifdef ENABLE_PROFILING
     // get the profiling time in seconds from the query
@@ -125,18 +105,6 @@ private:
     buffer << stream.rdbuf();
     res.set_content(buffer.str(), kContentType);
   }
-
-  //! The http server
-  httplib::Server mServer;
-
-  //! The port to expose metrics
-  int32_t mPort;
-
-  //! The mutex to protect mCollectable
-  std::mutex mCollectableMutex;
-
-  //! The Collectable to expose metrics
-  std::shared_ptr<prometheus::Collectable> mCollectable;
 };
 
 } // namespace leanstore::telemetry

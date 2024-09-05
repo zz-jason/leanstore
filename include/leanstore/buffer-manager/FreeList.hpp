@@ -1,7 +1,7 @@
 #pragma once
 
-#include "leanstore/Exceptions.hpp"
 #include "leanstore/buffer-manager/BufferFrame.hpp"
+#include "leanstore/utils/Log.hpp"
 
 #include <mutex>
 
@@ -22,8 +22,8 @@ public:
 };
 
 inline void FreeList::PushFront(BufferFrame& bf) {
-  PARANOID(bf.mHeader.mState == State::kFree);
-  assert(!bf.mHeader.mLatch.IsLockedExclusively());
+  LS_DCHECK(bf.mHeader.mState == State::kFree);
+  LS_DCHECK(!bf.mHeader.mLatch.IsLockedExclusively());
 
   JumpScoped<std::unique_lock<std::mutex>> guard(mMutex);
   bf.mHeader.mNextFreeBf = mHead;
@@ -46,7 +46,7 @@ inline BufferFrame& FreeList::PopFrontMayJump() {
   } else {
     mHead = mHead->mHeader.mNextFreeBf;
     mSize--;
-    PARANOID(freeBf->mHeader.mState == State::kFree);
+    LS_DCHECK(freeBf->mHeader.mState == State::kFree);
   }
   return *freeBf;
 }

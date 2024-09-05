@@ -117,9 +117,6 @@ void ChainedTuple::Update(PessimisticExclusiveIterator& xIter, Slice key,
   SCOPED_DEFER({
     WriteUnlock();
     xIter.UpdateContentionStats();
-    COUNTERS_BLOCK() {
-      WorkerCounters::MyCounters().cc_update_versions_created[treeId]++;
-    }
   });
 
   if (!xIter.mBTree.mConfig.mEnableWal) {

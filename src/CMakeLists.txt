@@ -22,8 +22,6 @@ set(leanstore_deps
   spdlog::spdlog_header_only
   Crc32c::crc32c
   httplib::httplib
-  prometheus-cpp::core
-  prometheus-cpp::pull
   PkgConfig::libunwind
 )
 target_link_libraries(leanstore PUBLIC ${leanstore_deps})
@@ -66,14 +64,10 @@ if(SANI)
   target_link_libraries(leanstore asan)
 endif(SANI)
 
-option(PARANOID "Enable sanity checks in release mode" OFF)
-if(PARANOID)
-  target_compile_definitions(leanstore PUBLIC PARANOID)
-endif(PARANOID)
 
-option(COUNTERS_LEVEL "Which counters to leave in leanstore build" "all")
-if(COUNTERS_LEVEL STREQUAL "all")
-  target_compile_definitions(leanstore PUBLIC MACRO_COUNTERS_ALL)
+option(ENABLE_PERF_COUNTERS "Whether to enable perf counters" OFF)
+if(ENABLE_PERF_COUNTERS)
+  target_compile_definitions(leanstore PUBLIC ENABLE_PERF_COUNTERS)
 endif()
 
 set(CHECKS_LEVEL "default" CACHE STRING "Which checks to leave in leanstore build")

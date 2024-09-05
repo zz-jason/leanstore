@@ -3,10 +3,8 @@
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
 #include "leanstore/concurrency/HistoryStorage.hpp"
-#include "leanstore/profiling/counters/CRCounters.hpp"
 #include "leanstore/sync/HybridLatch.hpp"
 #include "leanstore/utils/Log.hpp"
-#include "leanstore/utils/Misc.hpp"
 
 #include <atomic>
 #include <memory>
@@ -194,7 +192,6 @@ public:
   //! @return: true if the version is found, false otherwise.
   inline bool GetVersion(WORKERID newerWorkerId, TXID newerTxId, COMMANDID newerCommandId,
                          std::function<void(const uint8_t*, uint64_t versionSize)> getCallback) {
-    utils::Timer timer(CRCounters::MyCounters().cc_ms_history_tree_retrieve);
     auto isRemoveCommand = newerCommandId & kRemoveCommandMark;
     return Other(newerWorkerId)
         .mHistoryStorage.GetVersion(newerTxId, newerCommandId, isRemoveCommand, getCallback);

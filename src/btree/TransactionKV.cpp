@@ -11,14 +11,12 @@
 #include "leanstore/btree/core/PessimisticSharedIterator.hpp"
 #include "leanstore/concurrency/WorkerContext.hpp"
 #include "leanstore/sync/HybridGuard.hpp"
-#include "leanstore/telemetry/MetricOnlyTimer.hpp"
 #include "leanstore/utils/Defer.hpp"
 #include "leanstore/utils/Error.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/Misc.hpp"
 #include "leanstore/utils/Result.hpp"
 #include "leanstore/utils/UserThread.hpp"
-#include "telemetry/MetricsManager.hpp"
 
 #include <cstring>
 #include <format>
@@ -57,7 +55,6 @@ OpCode TransactionKV::lookupOptimistic(Slice key, ValCallback valCallback) {
     auto slotId = guardedLeaf->LowerBound<true>(key);
     if (slotId != -1) {
       auto [ret, versionsRead] = getVisibleTuple(guardedLeaf->Value(slotId), valCallback);
-      METRIC_COUNTER_INC(mStore->mMetricsManager, tx_version_read_total, versionsRead);
       guardedLeaf.JumpIfModifiedByOthers();
       JUMPMU_RETURN ret;
     }
@@ -66,7 +63,6 @@ OpCode TransactionKV::lookupOptimistic(Slice key, ValCallback valCallback) {
     JUMPMU_RETURN OpCode::kNotFound;
   }
   JUMPMU_CATCH() {
-    WorkerCounters::MyCounters().dt_restarts_read[mTreeId]++;
   }
 
   // lock optimistically failed, return kOther to retry
@@ -74,11 +70,6 @@ OpCode TransactionKV::lookupOptimistic(Slice key, ValCallback valCallback) {
 }
 
 OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
-  telemetry::MetricOnlyTimer timer;
-  SCOPED_DEFER({
-    METRIC_COUNTER_INC(mStore->mMetricsManager, tx_kv_lookup_total, 1);
-    METRIC_HIST_OBSERVE(mStore->mMetricsManager, tx_kv_lookup_us, timer.ElaspedUs());
-  });
   LS_DCHECK(cr::WorkerContext::My().IsTxStarted(),
             "WorkerContext is not in a transaction, workerId={}, startTs={}",
             cr::WorkerContext::My().mWorkerId, cr::WorkerContext::My().mActiveTx.mStartTs);
@@ -88,7 +79,6 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
       return OpCode::kNotFound;
     }
     auto [ret, versionsRead] = getVisibleTuple(gIter.Val(), valCallback);
-    METRIC_COUNTER_INC(mStore->mMetricsManager, tx_version_read_total, versionsRead);
     return ret;
   };
 
@@ -111,7 +101,6 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
   }
 
   auto [ret, versionsRead] = getVisibleTuple(iter.Val(), valCallback);
-  METRIC_COUNTER_INC(mStore->mMetricsManager, tx_version_read_total, versionsRead);
   if (cr::ActiveTx().IsLongRunning() && ret == OpCode::kNotFound) {
     ret = lookupInGraveyard();
   }
@@ -120,11 +109,6 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback valCallback) {
 
 OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback updateCallBack,
                                     UpdateDesc& updateDesc) {
-  telemetry::MetricOnlyTimer timer;
-  SCOPED_DEFER({
-    METRIC_COUNTER_INC(mStore->mMetricsManager, tx_kv_update_total, 1);
-    METRIC_HIST_OBSERVE(mStore->mMetricsManager, tx_kv_update_us, timer.ElaspedUs());
-  });
   LS_DCHECK(cr::WorkerContext::My().IsTxStarted());
   JUMPMU_TRY() {
     auto xIter = GetExclusiveIterator();
@@ -608,7 +592,6 @@ void TransactionKV::undoLastRemove(const WalTxRemove* walRemove) {
 
 bool TransactionKV::UpdateInFatTuple(PessimisticExclusiveIterator& xIter, Slice key,
                                      MutValCallback updateCallBack, UpdateDesc& updateDesc) {
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_fat_tuple);
   while (true) {
     auto* fatTuple = reinterpret_cast<FatTuple*>(xIter.MutableVal().Data());
     LS_DCHECK(fatTuple->IsWriteLocked(), "Tuple should be write locked");
@@ -823,9 +806,6 @@ void TransactionKV::GarbageCollect(const uint8_t* versionData, WORKERID versionW
                   "versionWorkerId={}, versionTxId={}, removedKey={}",
                   ToString(ret), versionWorkerId, versionTxId, removedKey.ToString());
         xIter.TryMergeIfNeeded();
-        COUNTERS_BLOCK() {
-          WorkerCounters::MyCounters().cc_todo_moved_gy[mTreeId]++;
-        }
       } else {
         Log::Fatal("Meet a remove version upper than mCc.mLocalWmkOfShortTx, "
                    "should not happen, mCc.mLocalWmkOfShortTx={}, "
@@ -889,14 +869,6 @@ void TransactionKV::unlock(const uint8_t* walEntryPtr) {
 // TODO: index range lock for serializability
 template <bool asc>
 OpCode TransactionKV::scan4ShortRunningTx(Slice key, ScanCallback callback) {
-  COUNTERS_BLOCK() {
-    if constexpr (asc) {
-      WorkerCounters::MyCounters().dt_scan_asc[mTreeId]++;
-    } else {
-      WorkerCounters::MyCounters().dt_scan_desc[mTreeId]++;
-    }
-  }
-
   bool keepScanning = true;
   JUMPMU_TRY() {
     auto iter = GetIterator();
@@ -909,20 +881,8 @@ OpCode TransactionKV::scan4ShortRunningTx(Slice key, ScanCallback callback) {
     while (iter.Valid()) {
       iter.AssembleKey();
       Slice scannedKey = iter.Key();
-      auto [opCode, versionsRead] = getVisibleTuple(iter.Val(), [&](Slice scannedVal) {
-        COUNTERS_BLOCK() {
-          WorkerCounters::MyCounters().dt_scan_callback[mTreeId] += cr::ActiveTx().IsLongRunning();
-        }
-        keepScanning = callback(scannedKey, scannedVal);
-      });
-      COUNTERS_BLOCK() {
-        WorkerCounters::MyCounters().cc_read_chains[mTreeId]++;
-        WorkerCounters::MyCounters().cc_read_versions_visited[mTreeId] += versionsRead;
-        if (opCode != OpCode::kOK) {
-          WorkerCounters::MyCounters().cc_read_chains_not_found[mTreeId]++;
-          WorkerCounters::MyCounters().cc_read_versions_visited_not_found[mTreeId] += versionsRead;
-        }
-      }
+      getVisibleTuple(iter.Val(),
+                      [&](Slice scannedVal) { keepScanning = callback(scannedKey, scannedVal); });
       if (!keepScanning) {
         JUMPMU_RETURN OpCode::kOK;
       }
@@ -944,14 +904,6 @@ OpCode TransactionKV::scan4ShortRunningTx(Slice key, ScanCallback callback) {
 // TODO: support scanning desc
 template <bool asc>
 OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
-  COUNTERS_BLOCK() {
-    if constexpr (asc) {
-      WorkerCounters::MyCounters().dt_scan_asc[mTreeId]++;
-    } else {
-      WorkerCounters::MyCounters().dt_scan_desc[mTreeId]++;
-    }
-  }
-
   bool keepScanning = true;
   JUMPMU_TRY() {
     auto iter = GetIterator();
@@ -994,12 +946,7 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
 
     gRange();
     auto takeFromOltp = [&]() {
-      getVisibleTuple(iter.Val(), [&](Slice value) {
-        COUNTERS_BLOCK() {
-          WorkerCounters::MyCounters().dt_scan_callback[mTreeId] += cr::ActiveTx().IsLongRunning();
-        }
-        keepScanning = callback(iter.Key(), value);
-      });
+      getVisibleTuple(iter.Val(), [&](Slice value) { keepScanning = callback(iter.Key(), value); });
       if (!keepScanning) {
         return false;
       }
@@ -1030,13 +977,7 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
       } else if (gRet == OpCode::kOK && oRet != OpCode::kOK) {
         gIter.AssembleKey();
         Slice gKey = gIter.Key();
-        getVisibleTuple(gIter.Val(), [&](Slice value) {
-          COUNTERS_BLOCK() {
-            WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
-                cr::ActiveTx().IsLongRunning();
-          }
-          keepScanning = callback(gKey, value);
-        });
+        getVisibleTuple(gIter.Val(), [&](Slice value) { keepScanning = callback(gKey, value); });
         if (!keepScanning) {
           JUMPMU_RETURN OpCode::kOK;
         }
@@ -1052,13 +993,7 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
             JUMPMU_RETURN OpCode::kOK;
           }
         } else {
-          getVisibleTuple(gIter.Val(), [&](Slice value) {
-            COUNTERS_BLOCK() {
-              WorkerCounters::MyCounters().dt_scan_callback[mTreeId] +=
-                  cr::ActiveTx().IsLongRunning();
-            }
-            keepScanning = callback(gKey, value);
-          });
+          getVisibleTuple(gIter.Val(), [&](Slice value) { keepScanning = callback(gKey, value); });
           if (!keepScanning) {
             JUMPMU_RETURN OpCode::kOK;
           }
