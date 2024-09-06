@@ -1,21 +1,20 @@
 #include "leanstore/concurrency/ConcurrencyControl.hpp"
 
+#include "leanstore-c/PerfCounters.h"
 #include "leanstore/Exceptions.hpp"
 #include "leanstore/Units.hpp"
 #include "leanstore/buffer-manager/TreeRegistry.hpp"
 #include "leanstore/concurrency/CRManager.hpp"
 #include "leanstore/concurrency/WorkerContext.hpp"
-#include "leanstore/profiling/counters/WorkerCounters.hpp"
 #include "leanstore/sync/HybridLatch.hpp"
 #include "leanstore/sync/ScopedHybridGuard.hpp"
+#include "leanstore/utils/CounterUtil.hpp"
 #include "leanstore/utils/Defer.hpp"
 #include "leanstore/utils/JumpMU.hpp"
 #include "leanstore/utils/Log.hpp"
-#include "leanstore/utils/Misc.hpp"
 #include "leanstore/utils/RandomGenerator.hpp"
 
 #include <atomic>
-#include <mutex>
 #include <set>
 #include <shared_mutex>
 
@@ -27,7 +26,6 @@ namespace leanstore::cr {
 
 void CommitTree::AppendCommitLog(TXID startTs, TXID commitTs) {
   LS_DCHECK(mCommitLog.size() < mCapacity);
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_committing);
   storage::ScopedHybridGuard xGuard(mLatch, storage::LatchMode::kPessimisticExclusive);
   mCommitLog.push_back({commitTs, startTs});
   LS_DLOG("Commit log appended, workerId={}, startTs={}, commitTs={}",
@@ -35,7 +33,6 @@ void CommitTree::AppendCommitLog(TXID startTs, TXID commitTs) {
 }
 
 void CommitTree::CompactCommitLog() {
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_cm);
   if (mCommitLog.size() < mCapacity) {
     return;
   }
@@ -81,6 +78,9 @@ void CommitTree::CompactCommitLog() {
 }
 
 TXID CommitTree::Lcb(TXID startTs) {
+  COUNTER_INC(&tlsPerfCounters.mLcbExecuted);
+  COUNTER_TIMER_SCOPED(&tlsPerfCounters.mLcbTotalLatNs);
+
   while (true) {
     JUMPMU_TRY() {
       storage::ScopedHybridGuard oGuard(mLatch, storage::LatchMode::kOptimisticOrJump);
@@ -113,7 +113,6 @@ std::optional<std::pair<TXID, TXID>> CommitTree::lcbNoLatch(TXID startTs) {
 
 COMMANDID ConcurrencyControl::PutVersion(TREEID treeId, bool isRemoveCommand, uint64_t versionSize,
                                          std::function<void(uint8_t*)> putCallBack) {
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_history_tree_insert);
   auto& curWorker = WorkerContext::My();
   auto commandId = curWorker.mCommandId++;
   if (isRemoveCommand) {
@@ -154,7 +153,6 @@ bool ConcurrencyControl::VisibleForMe(WORKERID workerId, TXID txId) {
     }
 
     // Now we need to query LCB on the target worker and update the local cache.
-    utils::Timer timer(CRCounters::MyCounters().cc_ms_snapshotting);
     TXID largestVisibleTxId = Other(workerId).mCommitTree.Lcb(ActiveTx().mStartTs);
     if (largestVisibleTxId) {
       mLcbCacheKey[workerId] = ActiveTx().mStartTs;
@@ -180,17 +178,18 @@ bool ConcurrencyControl::VisibleForAll(TXID txId) {
 // TODO: smooth purge, we should not let the system hang on this, as a quick
 // fix, it should be enough if we purge in small batches
 void ConcurrencyControl::GarbageCollection() {
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_gc);
   if (!mStore->mStoreOption->mEnableGc) {
     return;
   }
+
+  COUNTER_INC(&tlsPerfCounters.mGcExecuted);
+  COUNTER_TIMER_SCOPED(&tlsPerfCounters.mGcTotalLatNs);
 
   updateGlobalTxWatermarks();
   updateLocalWatermarks();
 
   // remove versions that are nolonger needed by any transaction
   if (mCleanedWmkOfShortTx <= mLocalWmkOfAllTx) {
-    utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_history_tree);
     LS_DLOG("Garbage collect history tree, workerId={}, fromTxId={}, toTxId(mLocalWmkOfAllTx)={}",
             WorkerContext::My().mWorkerId, 0, mLocalWmkOfAllTx);
     mHistoryStorage.PurgeVersions(
@@ -199,9 +198,6 @@ void ConcurrencyControl::GarbageCollection() {
             uint64_t versionSize [[maybe_unused]], const bool calledBefore) {
           mStore->mTreeRegistry->GarbageCollect(treeId, versionData, WorkerContext::My().mWorkerId,
                                                 versionTxId, calledBefore);
-          COUNTERS_BLOCK() {
-            WorkerCounters::MyCounters().cc_gc_long_tx_executed[treeId]++;
-          }
         },
         0);
     mCleanedWmkOfShortTx = mLocalWmkOfAllTx + 1;
@@ -214,7 +210,6 @@ void ConcurrencyControl::GarbageCollection() {
   // move tombstones to graveyard
   if (mStore->mStoreOption->mEnableLongRunningTx && mLocalWmkOfAllTx < mLocalWmkOfShortTx &&
       mCleanedWmkOfShortTx <= mLocalWmkOfShortTx) {
-    utils::Timer timer(CRCounters::MyCounters().cc_ms_gc_graveyard);
     LS_DLOG("Garbage collect graveyard, workerId={}, fromTxId={}, "
             "toTxId(mLocalWmkOfShortTx)={}",
             WorkerContext::My().mWorkerId, mCleanedWmkOfShortTx, mLocalWmkOfShortTx);
@@ -224,9 +219,6 @@ void ConcurrencyControl::GarbageCollection() {
             const bool calledBefore) {
           mStore->mTreeRegistry->GarbageCollect(treeId, versionData, WorkerContext::My().mWorkerId,
                                                 versionTxId, calledBefore);
-          COUNTERS_BLOCK() {
-            WorkerCounters::MyCounters().cc_todo_oltp_executed[treeId]++;
-          }
         });
     mCleanedWmkOfShortTx = mLocalWmkOfShortTx + 1;
   } else {
@@ -255,7 +247,6 @@ void ConcurrencyControl::updateGlobalTxWatermarks() {
     return;
   }
 
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_refresh_global_state);
   auto meetGcProbability =
       mStore->mStoreOption->mEnableEagerGc ||
       utils::RandomGenerator::RandU64(0, WorkerContext::My().mAllWorkers.size()) == 0;

@@ -322,9 +322,6 @@ protected:
 };
 
 inline void PessimisticIterator::Next() {
-  COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().dt_next_tuple[mBTree.mTreeId]++;
-  }
   if (!Valid()) {
     return;
   }
@@ -384,9 +381,6 @@ inline void PessimisticIterator::Next() {
             JUMPMU_CONTINUE;
           }
           ENSURE(mSlotId < mGuardedLeaf->mNumSlots);
-          COUNTERS_BLOCK() {
-            WorkerCounters::MyCounters().dt_next_tuple_opt[mBTree.mTreeId]++;
-          }
           JUMPMU_RETURN;
         }
       }
@@ -409,9 +403,6 @@ inline void PessimisticIterator::Next() {
         JUMPMU_CATCH() {
         }
       });
-      COUNTERS_BLOCK() {
-        WorkerCounters::MyCounters().dt_empty_leaf[mBTree.mTreeId]++;
-      }
       continue;
     }
     mSlotId = mGuardedLeaf->LowerBound<false>(assembedFence());
@@ -423,10 +414,6 @@ inline void PessimisticIterator::Next() {
 }
 
 inline void PessimisticIterator::Prev() {
-  COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().dt_prev_tuple[mBTree.mTreeId]++;
-  }
-
   while (true) {
     ENSURE(mGuardedLeaf.mGuard.mState != GuardState::kOptimisticShared);
     // If we are not at the beginning of the leaf, return the previous key
@@ -491,9 +478,6 @@ inline void PessimisticIterator::Prev() {
           if (mGuardedLeaf->mNumSlots == 0) {
             JUMPMU_CONTINUE;
           }
-          COUNTERS_BLOCK() {
-            WorkerCounters::MyCounters().dt_prev_tuple_opt[mBTree.mTreeId]++;
-          }
           JUMPMU_RETURN;
         }
       }
@@ -508,9 +492,6 @@ inline void PessimisticIterator::Prev() {
     });
 
     if (mGuardedLeaf->mNumSlots == 0) {
-      COUNTERS_BLOCK() {
-        WorkerCounters::MyCounters().dt_empty_leaf[mBTree.mTreeId]++;
-      }
       continue;
     }
     bool isEqual = false;
@@ -533,14 +514,6 @@ inline void PessimisticIterator::seekToTargetPage(
     Log::Fatal("Unsupported latch mode: {}", uint64_t(mMode));
   }
 
-  COUNTERS_BLOCK() {
-    if (mMode == LatchMode::kPessimisticExclusive) {
-      WorkerCounters::MyCounters().dt_goto_page_exec[mBTree.mTreeId]++;
-    } else {
-      WorkerCounters::MyCounters().dt_goto_page_shared[mBTree.mTreeId]++;
-    }
-  }
-
   while (true) {
     mLeafPosInParent = -1;
     JUMPMU_TRY() {
@@ -554,10 +527,6 @@ inline void PessimisticIterator::seekToTargetPage(
           mBTree.mStore->mBufferManager.get(), mGuardedParent, mGuardedParent->mRightMostChildSwip);
 
       for (uint16_t level = 0; !mGuardedLeaf->mIsLeaf; level++) {
-        COUNTERS_BLOCK() {
-          WorkerCounters::MyCounters().dt_inner_page[mBTree.mTreeId]++;
-        }
-
         mLeafPosInParent = childPosGetter(mGuardedLeaf);
         auto* childSwip = mGuardedLeaf->ChildSwipIncludingRightMost(mLeafPosInParent);
 

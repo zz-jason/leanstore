@@ -3,7 +3,6 @@
 #include "leanstore/utils/JumpMU.hpp"
 #include "leanstore/utils/Log.hpp"
 
-#include <atomic>
 #include <chrono>
 #include <cmath>
 
@@ -163,16 +162,6 @@ public:
   T* CastTo() {
     return reinterpret_cast<T*>(mBuffer);
   }
-};
-
-struct Timer {
-  std::atomic<uint64_t>& mTimeCounterUS;
-
-  std::chrono::high_resolution_clock::time_point mStartTimePoint;
-
-  Timer(std::atomic<uint64_t>& timeCounterUS);
-
-  ~Timer();
 };
 
 } // namespace leanstore::utils

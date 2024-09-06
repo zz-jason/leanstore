@@ -41,8 +41,6 @@ static uint64_t MaxFatTupleLength() {
 }
 
 bool Tuple::ToFat(PessimisticExclusiveIterator& xIter) {
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_fat_tuple_conversion);
-
   // Process the chain tuple
   MutableSlice mutRawVal = xIter.MutableVal();
   auto& chainedTuple = *ChainedTuple::From(mutRawVal.Data());
@@ -180,8 +178,6 @@ void FatTuple::GarbageCollection() {
   if (mNumDeltas == 0) {
     return;
   }
-  utils::Timer timer(CRCounters::MyCounters().cc_ms_gc);
-
   auto appendDelta = [](FatTuple& fatTuple, uint8_t* delta, uint16_t deltaSize) {
     assert(fatTuple.mPayloadCapacity >= (fatTuple.mPayloadSize + deltaSize + sizeof(uint16_t)));
     const uint16_t i = fatTuple.mNumDeltas++;
@@ -432,12 +428,6 @@ void FatTuple::ConvertToChained(TREEID treeId) {
   }
 
   new (this) ChainedTuple(*this);
-
-  COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().cc_fat_tuple_decompose[treeId]++;
-  }
 }
-
-// TODO: Implement inserts after remove cases
 
 } // namespace leanstore::storage::btree

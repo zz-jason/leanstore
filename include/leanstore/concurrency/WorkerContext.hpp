@@ -1,5 +1,6 @@
 #pragma once
 
+#include "leanstore-c/PerfCounters.h"
 #include "leanstore/Units.hpp"
 #include "leanstore/concurrency/ConcurrencyControl.hpp"
 #include "leanstore/concurrency/Logging.hpp"
@@ -47,9 +48,11 @@ public:
   //! All the workers.
   std::vector<WorkerContext*>& mAllWorkers;
 
+  //! Construct a WorkerContext.
   WorkerContext(uint64_t workerId, std::vector<WorkerContext*>& allWorkers,
                 leanstore::LeanStore* store);
 
+  //! Destruct a WorkerContext.
   ~WorkerContext();
 
   //! Whether a user transaction is started.
@@ -66,6 +69,9 @@ public:
 
   //! Aborts a user transaction.
   void AbortTx();
+
+  //! Get the PerfCounters of the current worker.
+  PerfCounters* GetPerfCounters();
 
 public:
   //! Thread-local storage for WorkerContext.

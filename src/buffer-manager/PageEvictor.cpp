@@ -2,8 +2,6 @@
 
 #include "leanstore/buffer-manager/BufferManager.hpp"
 #include "leanstore/buffer-manager/TreeRegistry.hpp"
-#include "leanstore/profiling/counters/CPUCounters.hpp"
-#include "leanstore/profiling/counters/PPCounters.hpp"
 #include "leanstore/utils/Defer.hpp"
 #include "leanstore/utils/Log.hpp"
 
@@ -14,8 +12,6 @@ namespace leanstore::storage {
 using Time = decltype(std::chrono::high_resolution_clock::now());
 
 void PageEvictor::runImpl() {
-  CPUCounters::registerThread(mThreadName);
-
   while (mKeepRunning) {
     auto& targetPartition = mStore->mBufferManager->RandomPartition();
     if (!targetPartition.NeedMoreFreeBfs()) {
@@ -30,10 +26,6 @@ void PageEvictor::runImpl() {
 
     // Phase 3
     FlushAndRecycleBufferFrames(targetPartition);
-
-    COUNTERS_BLOCK() {
-      PPCounters::MyCounters().pp_thread_rounds++;
-    }
   }
 }
 
@@ -41,15 +33,6 @@ void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
   LS_DLOG("Phase1: PickBufferFramesToCool begins");
   SCOPED_DEFER(LS_DLOG("Phase1: PickBufferFramesToCool ended, mEvictCandidateBfs.size={}",
                        mEvictCandidateBfs.size()));
-
-  COUNTERS_BLOCK() {
-    auto phase1Begin = std::chrono::high_resolution_clock::now();
-    SCOPED_DEFER({
-      auto phase1End = std::chrono::high_resolution_clock::now();
-      PPCounters::MyCounters().mPhase1MS +=
-          (std::chrono::duration_cast<std::chrono::microseconds>(phase1End - phase1Begin).count());
-    });
-  }
 
   // [corner cases]: prevent starving when free list is empty and cooling to
   // the required level can not be achieved
@@ -59,9 +42,6 @@ void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
     while (mCoolCandidateBfs.size() > 0) {
       auto* coolCandidate = mCoolCandidateBfs.back();
       mCoolCandidateBfs.pop_back();
-      COUNTERS_BLOCK() {
-        PPCounters::MyCounters().phase_1_counter++;
-      }
       JUMPMU_TRY() {
         BMOptimisticGuard readGuard(coolCandidate->mHeader.mLatch);
         if (coolCandidate->ShouldRemainInMem()) {
@@ -92,10 +72,6 @@ void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
         }
         readGuard.JumpIfModifiedByOthers();
 
-        COUNTERS_BLOCK() {
-          PPCounters::MyCounters().touched_bfs_counter++;
-        }
-
         // Iterate all the child pages to check whether all the children are
         // evicted, otherwise pick the fist met unevicted child as the next
         // cool page candidate.
@@ -103,9 +79,6 @@ void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
         bool pickedAChild(false);
         [[maybe_unused]] Time iterateChildrenBegin;
         [[maybe_unused]] Time iterateChildrenEnd;
-        COUNTERS_BLOCK() {
-          iterateChildrenBegin = std::chrono::high_resolution_clock::now();
-        }
 
         mStore->mTreeRegistry->IterateChildSwips(
             coolCandidate->mPage.mBTreeId, *coolCandidate, [&](Swip& childSwip) {
@@ -126,13 +99,6 @@ void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
               return true;
             });
 
-        COUNTERS_BLOCK() {
-          iterateChildrenEnd = std::chrono::high_resolution_clock::now();
-          PPCounters::MyCounters().mIterateChildrenMS +=
-              (std::chrono::duration_cast<std::chrono::microseconds>(iterateChildrenEnd -
-                                                                     iterateChildrenBegin)
-                   .count());
-        }
         if (!allChildrenEvicted || pickedAChild) {
           LS_DLOG("Cool candidate discarded, not all the children are "
                   "evicted, pageId={}, allChildrenEvicted={}, pickedAChild={}",
@@ -143,22 +109,12 @@ void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
 
         [[maybe_unused]] Time findParentBegin;
         [[maybe_unused]] Time findParentEnd;
-        COUNTERS_BLOCK() {
-          findParentBegin = std::chrono::high_resolution_clock::now();
-        }
         TREEID btreeId = coolCandidate->mPage.mBTreeId;
         readGuard.JumpIfModifiedByOthers();
         auto parentHandler = mStore->mTreeRegistry->FindParent(btreeId, *coolCandidate);
 
         LS_DCHECK(parentHandler.mParentGuard.mState == GuardState::kOptimisticShared);
         LS_DCHECK(parentHandler.mParentGuard.mLatch != reinterpret_cast<HybridLatch*>(0x99));
-        COUNTERS_BLOCK() {
-          findParentEnd = std::chrono::high_resolution_clock::now();
-          PPCounters::MyCounters().mFindParentMS +=
-              (std::chrono::duration_cast<std::chrono::microseconds>(findParentEnd -
-                                                                     findParentBegin)
-                   .count());
-        }
         readGuard.JumpIfModifiedByOthers();
         auto checkResult = mStore->mTreeRegistry->CheckSpaceUtilization(
             coolCandidate->mPage.mBTreeId, *coolCandidate);
@@ -194,9 +150,6 @@ void PageEvictor::PickBufferFramesToCool(Partition& targetPartition) {
                   coolCandidate->mHeader.mPageId);
         }
 
-        COUNTERS_BLOCK() {
-          PPCounters::MyCounters().unswizzled_pages_counter++;
-        }
         failedAttempts = 0;
       }
       JUMPMU_CATCH() {
@@ -213,7 +166,7 @@ void PageEvictor::randomBufferFramesToCoolOrEvict() {
   mCoolCandidateBfs.clear();
   for (auto i = 0u; i < mStore->mStoreOption->mBufferFrameRecycleBatchSize; i++) {
     auto* randomBf = &mStore->mBufferManager->RandomBufferFrame();
-    DO_NOT_OPTIMIZE(randomBf->mHeader.mState);
+    DoNotOptimize(randomBf->mHeader.mState);
     mCoolCandidateBfs.push_back(randomBf);
   }
 }
@@ -328,7 +281,6 @@ void PageEvictor::FlushAndRecycleBufferFrames(Partition& targetPartition) {
           // For recovery, so much has to be done here...
           writtenBf.mHeader.mFlushedPsn = flushedPsn;
           writtenBf.mHeader.mIsBeingWrittenBack = false;
-          PPCounters::MyCounters().flushed_pages_counter++;
         }
         JUMPMU_CATCH() {
           writtenBf.mHeader.mCrc = 0;
@@ -379,10 +331,6 @@ void PageEvictor::evictFlushedBf(BufferFrame& cooledBf, BMOptimisticGuard& optim
   mFreeBfList.PushFront(cooledBf);
   if (mFreeBfList.Size() <= std::min<uint64_t>(mStore->mStoreOption->mWorkerThreads, 128)) {
     mFreeBfList.PopTo(targetPartition);
-  }
-
-  COUNTERS_BLOCK() {
-    PPCounters::MyCounters().evicted_pages++;
   }
 };
 

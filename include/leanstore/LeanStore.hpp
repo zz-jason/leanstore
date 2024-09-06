@@ -13,14 +13,6 @@
 #include <string>
 
 //! forward declarations
-namespace leanstore::telemetry {
-
-class MetricsManager;
-class MetricsHttpExposer;
-
-} // namespace leanstore::telemetry
-
-//! forward declarations
 namespace leanstore::storage::btree {
 
 class BTreeGeneric;
@@ -80,12 +72,6 @@ public:
   //! The global timestamp oracle for system transactions. Used to generate timestamps for system
   //! transactions. Start from a positive number, 0 indicates invalid timestamp
   std::atomic<uint64_t> mSysTso = 1;
-
-  //! The metrics manager
-  std::unique_ptr<leanstore::telemetry::MetricsManager> mMetricsManager;
-
-  //! The http metrics exposer
-  std::unique_ptr<leanstore::telemetry::MetricsHttpExposer> mMetricsExposer;
 
 #ifdef DEBUG
   utils::DebugFlagsRegistry mDebugFlagsRegistry;

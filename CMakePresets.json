@@ -10,7 +10,8 @@
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "BUILD_SHARED_LIBS": "ON",
-                "ENABLE_PROFILING": "ON"
+                "ENABLE_PROFILING": "ON",
+                "ENABLE_PERF_COUNTERS": "ON"
             }
         },
         {
@@ -26,8 +27,7 @@
             "inherits": "base",
             "hidden": true,
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "COUNTERS_LEVEL": "none"
+                "CMAKE_BUILD_TYPE": "Release"
             }
         },
         {

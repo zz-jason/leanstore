@@ -2,9 +2,6 @@
 
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Units.hpp"
-#include "leanstore/profiling/counters/CPUCounters.hpp"
-#include "leanstore/profiling/counters/CRCounters.hpp"
-#include "leanstore/profiling/counters/WorkerCounters.hpp"
 #include "leanstore/utils/UserThread.hpp"
 
 #include <condition_variable>
@@ -78,13 +75,6 @@ protected:
 };
 
 inline void WorkerThread::runImpl() {
-  if (utils::tlsStore->mStoreOption->mEnableCpuCounters) {
-    CPUCounters::registerThread(mThreadName, false);
-  }
-
-  WorkerCounters::MyCounters().mWorkerId = mWorkerId;
-  CRCounters::MyCounters().mWorkerId = mWorkerId;
-
   while (mKeepRunning) {
     // wait until there is a job
     std::unique_lock guard(mMutex);

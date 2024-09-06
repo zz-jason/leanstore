@@ -6,15 +6,12 @@
 #include "leanstore/btree/core/BTreeGeneric.hpp"
 #include "leanstore/buffer-manager/BufferManager.hpp"
 #include "leanstore/concurrency/CRManager.hpp"
-#include "leanstore/profiling/tables/BMTable.hpp"
 #include "leanstore/utils/Defer.hpp"
 #include "leanstore/utils/Error.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/Misc.hpp"
 #include "leanstore/utils/Result.hpp"
 #include "leanstore/utils/UserThread.hpp"
-#include "telemetry/MetricsHttpExposer.hpp"
-#include "telemetry/MetricsManager.hpp"
 
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
@@ -58,24 +55,11 @@ Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption* option) {
   return std::make_unique<LeanStore>(option);
 }
 
-LeanStore::LeanStore(StoreOption* option)
-    : mStoreOption(option),
-      mMetricsManager(nullptr),
-      mMetricsExposer(nullptr) {
+LeanStore::LeanStore(StoreOption* option) : mStoreOption(option) {
   utils::tlsStore = this;
 
   Log::Info("LeanStore starting ...");
   SCOPED_DEFER(Log::Info("LeanStore started"));
-
-  // Expose the metrics
-  if (mStoreOption->mEnableMetrics) {
-    mMetricsManager = std::make_unique<leanstore::telemetry::MetricsManager>();
-
-    //! Expose the metrics via HTTP
-    mMetricsExposer = std::make_unique<leanstore::telemetry::MetricsHttpExposer>(this);
-    mMetricsExposer->SetCollectable(mMetricsManager->GetRegistry());
-    mMetricsExposer->Start();
-  }
 
   initPageAndWalFd();
 
@@ -157,11 +141,6 @@ void LeanStore::initPageAndWalFd() {
 LeanStore::~LeanStore() {
   Log::Info("LeanStore stopping ...");
   SCOPED_DEFER({
-    // stop metrics manager in the last
-    if (mStoreOption->mEnableMetrics) {
-      mMetricsManager = nullptr;
-      mMetricsExposer = nullptr;
-    }
     DestroyStoreOption(mStoreOption);
     Log::Info("LeanStore stopped");
   });

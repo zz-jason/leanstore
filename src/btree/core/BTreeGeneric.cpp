@@ -9,7 +9,6 @@
 #include "leanstore/buffer-manager/BufferFrame.hpp"
 #include "leanstore/buffer-manager/BufferManager.hpp"
 #include "leanstore/buffer-manager/GuardedBufferFrame.hpp"
-#include "leanstore/profiling/counters/WorkerCounters.hpp"
 #include "leanstore/utils/Defer.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/Misc.hpp"
@@ -324,9 +323,6 @@ bool BTreeGeneric::TryMergeMayJump(TXID sysTxId, BufferFrame& toMerge, bool swiz
         TryMergeMayJump(sysTxId, *guardedParent.mBf, true);
       }
       JUMPMU_CATCH() {
-        COUNTERS_BLOCK() {
-          WorkerCounters::MyCounters().dt_merge_fail[mTreeId]++;
-        }
       }
     }
   });
@@ -337,14 +333,6 @@ bool BTreeGeneric::TryMergeMayJump(TXID sysTxId, BufferFrame& toMerge, bool swiz
   }
   if (!succeed && posInParent < guardedParent->mNumSlots) {
     succeed = mergeAndReclaimRight();
-  }
-
-  COUNTERS_BLOCK() {
-    if (succeed) {
-      WorkerCounters::MyCounters().dt_merge_succ[mTreeId]++;
-    } else {
-      WorkerCounters::MyCounters().dt_merge_fail[mTreeId]++;
-    }
   }
 
   return succeed;
@@ -442,7 +430,6 @@ int16_t BTreeGeneric::mergeLeftIntoRight(ExclusiveGuardedBufferFrame<BTreeNode>&
 BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(GuardedBufferFrame<BTreeNode>& guardedParent,
                                                     GuardedBufferFrame<BTreeNode>& guardedChild,
                                                     ParentSwipHandler& parentHandler) {
-  WorkerCounters::MyCounters().dt_researchy[0][1]++;
   if (guardedChild->FillFactorAfterCompaction() >= 0.9) {
     return XMergeReturnCode::kNothing;
   }
@@ -519,11 +506,9 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(GuardedBufferFrame<BTreeNode
       // we unlock only the left page, the right one should not be touched again
       if (ret == 1) {
         fullyMerged[leftHand - pos] = true;
-        WorkerCounters::MyCounters().xmerge_full_counter[mTreeId]++;
         retCode = XMergeReturnCode::kFullMerge;
       } else if (ret == 2) {
         guardedNodes[leftHand - pos] = std::move(xGuardedLeft);
-        WorkerCounters::MyCounters().xmerge_partial_counter[mTreeId]++;
       } else if (ret == 0) {
         break;
       } else {

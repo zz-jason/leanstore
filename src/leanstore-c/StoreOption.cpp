@@ -51,8 +51,6 @@ static const StoreOption kDefaultStoreOption = {
     .mEnableEagerGc = false,
 
     // Metrics related options
-    .mEnableMetrics = false,
-    .mMetricsPort = 8080,
     .mEnableCpuCounters = true,
     .mEnableTimeMeasure = false,
     .mEnablePerfEvents = false,

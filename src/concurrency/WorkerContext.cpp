@@ -1,5 +1,6 @@
 #include "leanstore/concurrency/WorkerContext.hpp"
 
+#include "leanstore-c/PerfCounters.h"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/buffer-manager/TreeRegistry.hpp"
 #include "leanstore/concurrency/CRManager.hpp"
@@ -7,11 +8,9 @@
 #include "leanstore/concurrency/Logging.hpp"
 #include "leanstore/concurrency/Transaction.hpp"
 #include "leanstore/concurrency/WalEntry.hpp"
-#include "leanstore/profiling/counters/CRCounters.hpp"
-#include "leanstore/telemetry/MetricOnlyTimer.hpp"
+#include "leanstore/utils/CounterUtil.hpp"
 #include "leanstore/utils/Defer.hpp"
 #include "leanstore/utils/Log.hpp"
-#include "telemetry/MetricsManager.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -21,6 +20,7 @@ namespace leanstore::cr {
 
 thread_local std::unique_ptr<WorkerContext> WorkerContext::sTlsWorkerCtx = nullptr;
 thread_local WorkerContext* WorkerContext::sTlsWorkerCtxRaw = nullptr;
+thread_local PerfCounters tlsPerfCounters;
 
 WorkerContext::WorkerContext(uint64_t workerId, std::vector<WorkerContext*>& allWorkers,
                              leanstore::LeanStore* store)
@@ -29,7 +29,6 @@ WorkerContext::WorkerContext(uint64_t workerId, std::vector<WorkerContext*>& all
       mActiveTxId(0),
       mWorkerId(workerId),
       mAllWorkers(allWorkers) {
-  CRCounters::MyCounters().mWorkerId = workerId;
 
   // init wal buffer
   mLogging.mWalBufferSize = mStore->mStoreOption->mWalBufferSize;
@@ -95,7 +94,15 @@ void WorkerContext::StartTx(TxMode mode, IsolationLevel level, bool isReadOnly) 
 }
 
 void WorkerContext::CommitTx() {
-  SCOPED_DEFER(mActiveTx.mState = TxState::kCommitted);
+  SCOPED_DEFER({
+    COUNTER_INC(&tlsPerfCounters.mTxCommitted);
+    if (mActiveTx.mHasRemoteDependency) {
+      COUNTER_INC(&tlsPerfCounters.mTxWithRemoteDependencies);
+    } else {
+      COUNTER_INC(&tlsPerfCounters.mTxWithoutRemoteDependencies);
+    }
+    mActiveTx.mState = TxState::kCommitted;
+  });
 
   if (!mActiveTx.mIsDurable) {
     return;
@@ -142,27 +149,27 @@ void WorkerContext::CommitTx() {
           "hasRemoteDep={}",
           mWorkerId, mActiveTx.mStartTs, mActiveTx.mCommitTs, mActiveTx.mMaxObservedSysTxId,
           mActiveTx.mHasRemoteDependency);
-  telemetry::MetricOnlyTimer timer;
-  while (!mLogging.SafeToCommit(mActiveTx.mCommitTs)) {
-  }
 
-  METRIC_HIST_OBSERVE(mStore->mMetricsManager, tx_commit_wal_wait_us, timer.ElaspedUs());
+  mLogging.WaitToCommit(mActiveTx.mCommitTs);
 }
 
-//! TODO(jian.z): revert changes made in-place on the btree
-//! process of a transaction abort:
+//! TODO(jian.z): revert changes made in-place on the btree process of a transaction abort:
 //!
 //! 1. Read previous wal entries
 //! 2. Undo the changes via btree operations
 //! 3. Write compensation wal entries during the undo process
-//! 4. Purge versions in history tree, clean garbages made by the aborted
-//!    transaction
+//! 4. Purge versions in history tree, clean garbages made by the aborted transaction
 //!
 //! It may share the same code with the recovery process?
 void WorkerContext::AbortTx() {
   SCOPED_DEFER({
     mActiveTx.mState = TxState::kAborted;
-    METRIC_COUNTER_INC(mStore->mMetricsManager, tx_abort_total, 1);
+    COUNTER_INC(&tlsPerfCounters.mTxAborted);
+    if (mActiveTx.mHasRemoteDependency) {
+      COUNTER_INC(&tlsPerfCounters.mTxWithRemoteDependencies);
+    } else {
+      COUNTER_INC(&tlsPerfCounters.mTxWithoutRemoteDependencies);
+    }
     mActiveTxId.store(0, std::memory_order_release);
     Log::Info("Transaction aborted, workerId={}, startTs={}, commitTs={}, maxObservedSysTx={}",
               mWorkerId, mActiveTx.mStartTs, mActiveTx.mCommitTs, mActiveTx.mMaxObservedSysTxId);
@@ -196,6 +203,10 @@ void WorkerContext::AbortTx() {
     mLogging.WriteWalTxAbort();
     mLogging.WriteWalTxFinish();
   }
+}
+
+PerfCounters* WorkerContext::GetPerfCounters() {
+  return &tlsPerfCounters;
 }
 
 } // namespace leanstore::cr

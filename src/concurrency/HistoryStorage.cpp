@@ -4,7 +4,6 @@
 #include "leanstore/btree/BasicKV.hpp"
 #include "leanstore/btree/core/BTreeNode.hpp"
 #include "leanstore/btree/core/PessimisticExclusiveIterator.hpp"
-#include "leanstore/profiling/counters/CRCounters.hpp"
 #include "leanstore/sync/HybridLatch.hpp"
 #include "leanstore/sync/ScopedHybridGuard.hpp"
 #include "leanstore/utils/JumpMU.hpp"
@@ -52,9 +51,6 @@ void HistoryStorage::PutVersion(TXID txId, COMMANDID commandId, TREEID treeId, b
         auto& versionMeta = *new (xIter.MutableVal().Data()) VersionMeta();
         versionMeta.mTreeId = treeId;
         insertCallBack(versionMeta.mPayload);
-        COUNTERS_BLOCK() {
-          WorkerCounters::MyCounters().cc_versions_space_inserted_opt[treeId]++;
-        }
         xIter.mGuardedLeaf.unlock();
         JUMPMU_RETURN;
       }
@@ -89,9 +85,6 @@ void HistoryStorage::PutVersion(TXID txId, COMMANDID commandId, TREEID treeId, b
         session->mLastTxId = txId;
       }
 
-      COUNTERS_BLOCK() {
-        WorkerCounters::MyCounters().cc_versions_space_inserted[treeId]++;
-      }
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
@@ -293,9 +286,6 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
     JUMPMU_CATCH() {
       UNREACHABLE();
     }
-  }
-  COUNTERS_BLOCK() {
-    CRCounters::MyCounters().cc_versions_space_removed += versionsRemoved;
   }
 }
 

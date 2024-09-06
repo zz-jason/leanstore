@@ -1,8 +1,6 @@
 #include "leanstore/buffer-manager/AsyncWriteBuffer.hpp"
 
-#include "leanstore/Exceptions.hpp"
 #include "leanstore/buffer-manager/BufferFrame.hpp"
-#include "leanstore/profiling/counters/WorkerCounters.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/Result.hpp"
 
@@ -25,9 +23,6 @@ bool AsyncWriteBuffer::IsFull() {
 
 void AsyncWriteBuffer::Add(const BufferFrame& bf) {
   LS_DCHECK(uint64_t(&bf) % 512 == 0, "BufferFrame is not aligned to 512 bytes");
-  COUNTERS_BLOCK() {
-    WorkerCounters::MyCounters().dt_page_writes[bf.mPage.mBTreeId]++;
-  }
 
   // record the written buffer frame and page id for later use
   auto pageId = bf.mHeader.mPageId;
