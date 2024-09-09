@@ -1,6 +1,5 @@
 #pragma once
 
-#include "leanstore/concurrency/GroupCommitter.hpp"
 #include "leanstore/concurrency/WorkerContext.hpp"
 
 namespace leanstore::cr {
@@ -23,21 +22,17 @@ public:
   WalPayloadHandler(T* walPayload, uint64_t size) : mWalPayload(walPayload), mTotalSize(size) {
   }
 
-public:
-  inline T* operator->() {
+  T* operator->() {
     return mWalPayload;
   }
 
-  inline T& operator*() {
+  T& operator*() {
     return *mWalPayload;
   }
 
-  void SubmitWal();
+  void SubmitWal() {
+    cr::WorkerContext::My().mLogging.mWalBuffer.Advance(mTotalSize);
+  }
 };
-
-template <typename T>
-inline void WalPayloadHandler<T>::SubmitWal() {
-  cr::WorkerContext::My().mLogging.SubmitWALEntryComplex(mTotalSize);
-}
 
 } // namespace leanstore::cr

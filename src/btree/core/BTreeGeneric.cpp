@@ -9,6 +9,7 @@
 #include "leanstore/buffer-manager/BufferFrame.hpp"
 #include "leanstore/buffer-manager/BufferManager.hpp"
 #include "leanstore/buffer-manager/GuardedBufferFrame.hpp"
+#include "leanstore/concurrency/WorkerContext.hpp"
 #include "leanstore/utils/Defer.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/Misc.hpp"
@@ -43,7 +44,8 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId, BTreeConfig
 
   // Record WAL
   if (mConfig.mEnableWal) {
-    TXID sysTxId = mStore->AllocSysTxTs();
+    TXID sysTxId = cr::WorkerContext::My().StartSysTx();
+    SCOPED_DEFER(cr::WorkerContext::My().CommitSysTx());
 
     auto rootWalHandler =
         xGuardedRoot.ReserveWALPayload<WalInitPage>(0, sysTxId, mTreeId, xGuardedRoot->mIsLeaf);
@@ -476,8 +478,6 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(GuardedBufferFrame<BTreeNode
 
   ExclusiveGuardedBufferFrame<BTreeNode> xGuardedParent = std::move(guardedParent);
   // TODO(zz-jason): support wal and sync system tx id
-  // TXID sysTxId = utils::tlsStore->AllocSysTxTs();
-  // xGuardedParent.SyncSystemTxId(sysTxId);
 
   XMergeReturnCode retCode = XMergeReturnCode::kPartialMerge;
   int16_t leftHand, rightHand, ret;
@@ -498,8 +498,6 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(GuardedBufferFrame<BTreeNode
           std::move(guardedNodes[rightHand - pos]));
       ExclusiveGuardedBufferFrame<BTreeNode> xGuardedLeft(std::move(guardedNodes[leftHand - pos]));
       // TODO(zz-jason): support wal and sync system tx id
-      // xGuardedRight.SyncSystemTxId(sysTxId);
-      // xGuardedLeft.SyncSystemTxId(sysTxId);
       maxRight = leftHand;
       ret = mergeLeftIntoRight(xGuardedParent, leftHand, xGuardedLeft, xGuardedRight,
                                leftHand == pos);

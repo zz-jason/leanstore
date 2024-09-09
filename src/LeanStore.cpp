@@ -52,7 +52,9 @@ Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption* option) {
   }
 
   Log::Init(option);
-  return std::make_unique<LeanStore>(option);
+  auto store = std::make_unique<LeanStore>(option);
+
+  return store;
 }
 
 LeanStore::LeanStore(StoreOption* option) : mStoreOption(option) {
@@ -60,6 +62,14 @@ LeanStore::LeanStore(StoreOption* option) : mStoreOption(option) {
 
   Log::Info("LeanStore starting ...");
   SCOPED_DEFER(Log::Info("LeanStore started"));
+
+  // clean wal dir
+  if (mStoreOption->mCreateFromScratch) {
+    Log::Info("Clean wal dir: {}", getDbWalDir());
+    std::filesystem::path walDirPath = getDbWalDir();
+    std::filesystem::remove_all(walDirPath);
+    std::filesystem::create_directories(walDirPath);
+  }
 
   initPageAndWalFd();
 
@@ -90,10 +100,7 @@ LeanStore::LeanStore(StoreOption* option) : mStoreOption(option) {
 }
 
 void LeanStore::initPageAndWalFd() {
-  SCOPED_DEFER({
-    LS_DCHECK(fcntl(mPageFd, F_GETFL) != -1);
-    LS_DCHECK(fcntl(mWalFd, F_GETFL) != -1);
-  });
+  SCOPED_DEFER(LS_DCHECK(fcntl(mPageFd, F_GETFL) != -1));
 
   // Create a new instance on the specified DB file
   if (mStoreOption->mCreateFromScratch) {
@@ -105,13 +112,6 @@ void LeanStore::initPageAndWalFd() {
       Log::Fatal("Could not open file at: {}", dbFilePath);
     }
     Log::Info("Init page fd succeed, pageFd={}, pageFile={}", mPageFd, dbFilePath);
-
-    auto walFilePath = GetWalFilePath();
-    mWalFd = open(walFilePath.c_str(), flags, 0666);
-    if (mWalFd == -1) {
-      Log::Fatal("Could not open file at: {}", walFilePath);
-    }
-    Log::Info("Init wal fd succeed, walFd={}, walFile={}", mWalFd, walFilePath);
     return;
   }
 
@@ -127,15 +127,6 @@ void LeanStore::initPageAndWalFd() {
                dbFilePath);
   }
   Log::Info("Init page fd succeed, pageFd={}, pageFile={}", mPageFd, dbFilePath);
-
-  auto walFilePath = GetWalFilePath();
-  mWalFd = open(walFilePath.c_str(), flags, 0666);
-  if (mWalFd == -1) {
-    Log::Fatal("Recover failed, could not open file at: {}. The data is lost, "
-               "please create a new WAL file and start a new instance from it",
-               walFilePath);
-  }
-  Log::Info("Init wal fd succeed, walFd={}, walFile={}", mWalFd, walFilePath);
 }
 
 LeanStore::~LeanStore() {
@@ -184,19 +175,6 @@ LeanStore::~LeanStore() {
     perror("Failed to close page file: ");
   } else {
     Log::Info("Page file closed");
-  }
-
-  {
-    auto walFilePath = GetWalFilePath();
-    struct stat st;
-    if (stat(walFilePath.c_str(), &st) == 0) {
-      LS_DLOG("The size of {} is {} bytes", walFilePath, st.st_size);
-    }
-  }
-  if (close(mWalFd) == -1) {
-    perror("Failed to close WAL file: ");
-  } else {
-    Log::Info("WAL file closed");
   }
 }
 

@@ -21,10 +21,9 @@ WalPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payloadSize, PID p
   // update prev lsn in the end
   SCOPED_DEFER(mPrevLSN = mActiveWALEntryComplex->mLsn);
 
-  auto entryLSN = mLsnClock++;
-  auto* entryPtr = mWalBuffer + mWalBuffered;
   auto entrySize = sizeof(WalEntryComplex) + payloadSize;
-  ReserveContiguousBuffer(entrySize);
+  auto* entryPtr = mWalBuffer.Get(entrySize);
+  auto entryLSN = mLsnClock++;
 
   mActiveWALEntryComplex =
       new (entryPtr) WalEntryComplex(entryLSN, prevLsn, entrySize, WorkerContext::My().mWorkerId,

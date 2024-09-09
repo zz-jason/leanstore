@@ -2,7 +2,6 @@
 
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/btree/BasicKV.hpp"
-#include "leanstore/concurrency/GroupCommitter.hpp"
 #include "leanstore/concurrency/HistoryStorage.hpp"
 #include "leanstore/concurrency/WorkerContext.hpp"
 #include "leanstore/concurrency/WorkerThread.hpp"
@@ -13,7 +12,7 @@
 
 namespace leanstore::cr {
 
-CRManager::CRManager(leanstore::LeanStore* store) : mStore(store), mGroupCommitter(nullptr) {
+CRManager::CRManager(leanstore::LeanStore* store) : mStore(store) {
   auto* storeOption = store->mStoreOption;
   // start all worker threads
   mWorkerCtxs.resize(storeOption->mWorkerThreads);
@@ -32,13 +31,6 @@ CRManager::CRManager(leanstore::LeanStore* store) : mStore(store), mGroupCommitt
     mWorkerThreads.emplace_back(std::move(workerThread));
   }
 
-  // start group commit thread
-  if (mStore->mStoreOption->mEnableWal) {
-    const int cpu = storeOption->mWorkerThreads;
-    mGroupCommitter = std::make_unique<GroupCommitter>(mStore, mStore->mWalFd, mWorkerCtxs, cpu);
-    mGroupCommitter->Start();
-  }
-
   // create history storage for each worker
   // History tree should be created after worker thread and group committer are
   // started.
@@ -49,8 +41,6 @@ CRManager::CRManager(leanstore::LeanStore* store) : mStore(store), mGroupCommitt
 }
 
 void CRManager::Stop() {
-  mGroupCommitter->Stop();
-
   for (auto& workerThread : mWorkerThreads) {
     workerThread->Stop();
   }
@@ -87,20 +77,17 @@ void CRManager::setupHistoryStorage4EachWorker() {
   }
 }
 
-constexpr char kKeyWalSize[] = "wal_size";
 constexpr char kKeyGlobalUsrTso[] = "global_user_tso";
 constexpr char kKeyGlobalSysTso[] = "global_system_tso";
 
 StringMap CRManager::Serialize() {
   StringMap map;
-  map[kKeyWalSize] = std::to_string(mGroupCommitter->mWalSize);
   map[kKeyGlobalUsrTso] = std::to_string(mStore->mUsrTso.load());
   map[kKeyGlobalSysTso] = std::to_string(mStore->mSysTso.load());
   return map;
 }
 
 void CRManager::Deserialize(StringMap map) {
-  mGroupCommitter->mWalSize = std::stoull(map[kKeyWalSize]);
   mStore->mUsrTso = std::stoull(map[kKeyGlobalUsrTso]);
   mStore->mSysTso = std::stoull(map[kKeyGlobalSysTso]);
 

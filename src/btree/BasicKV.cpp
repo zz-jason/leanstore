@@ -6,6 +6,7 @@
 #include "leanstore/btree/core/BTreeGeneric.hpp"
 #include "leanstore/btree/core/PessimisticExclusiveIterator.hpp"
 #include "leanstore/btree/core/PessimisticSharedIterator.hpp"
+#include "leanstore/concurrency/WorkerContext.hpp"
 #include "leanstore/sync/HybridLatch.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/Misc.hpp"
@@ -334,8 +335,9 @@ OpCode BasicKV::RangeRemove(Slice startKey, Slice endKey, bool pageWise) {
       if (guardedLeaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
         xIter.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
           JUMPMU_TRY() {
-            TXID sysTxId = mStore->AllocSysTxTs();
+            TXID sysTxId = cr::WorkerContext::My().StartSysTx();
             this->TryMergeMayJump(sysTxId, *toMerge);
+            cr::WorkerContext::My().CommitSysTx();
           }
           JUMPMU_CATCH() {
           }

@@ -5,7 +5,6 @@
 #include "leanstore/buffer-manager/BufferFrame.hpp"
 #include "leanstore/buffer-manager/TreeRegistry.hpp"
 #include "leanstore/concurrency/CRManager.hpp"
-#include "leanstore/concurrency/GroupCommitter.hpp"
 #include "leanstore/concurrency/Recovery.hpp"
 #include "leanstore/sync/HybridLatch.hpp"
 #include "leanstore/sync/ScopedHybridGuard.hpp"
@@ -197,9 +196,10 @@ Result<void> BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
 }
 
 void BufferManager::RecoverFromDisk() {
-  auto recovery = std::make_unique<leanstore::cr::Recovery>(
-      mStore, 0, mStore->mCRManager->mGroupCommitter->mWalSize);
-  recovery->Run();
+  // TODO: implement recovery
+  //  auto recovery = std::make_unique<leanstore::cr::Recovery>(
+  //      mStore, 0, mStore->mCRManager->mGroupCommitter->mWalSize);
+  //  recovery->Run();
 }
 
 uint64_t BufferManager::ConsumedPages() {

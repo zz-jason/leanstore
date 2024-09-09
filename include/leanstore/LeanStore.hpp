@@ -8,6 +8,7 @@
 #include <atomic>
 #include <cstdint>
 #include <expected>
+#include <format>
 #include <functional>
 #include <memory>
 #include <string>
@@ -51,9 +52,6 @@ public:
 
   //! The file descriptor for pages
   int32_t mPageFd;
-
-  //! The file descriptor for write-ahead log
-  int32_t mWalFd;
 
   //! The tree registry
   std::unique_ptr<storage::TreeRegistry> mTreeRegistry;
@@ -144,8 +142,8 @@ public:
     return std::string(mStoreOption->mStoreDir) + "/db.pages";
   }
 
-  std::string GetWalFilePath() const {
-    return std::string(mStoreOption->mStoreDir) + "/db.wal";
+  std::string GetDbWalPath(uint64_t workerId) const {
+    return std::format("{}/worker_{}.wal", getDbWalDir(), workerId);
   }
 
 private:
@@ -163,6 +161,10 @@ private:
   void deserializeFlags();
 
   void initPageAndWalFd();
+
+  std::string getDbWalDir() const {
+    return std::format("{}/wal", mStoreOption->mStoreDir);
+  }
 };
 
 } // namespace leanstore

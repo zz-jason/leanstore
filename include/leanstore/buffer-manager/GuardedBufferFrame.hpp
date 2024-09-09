@@ -158,9 +158,6 @@ public:
 
     // update system transaction id
     mBf->mPage.mSysTxId = sysTxId;
-
-    // update the maximum system transaction id written by the worker
-    cr::WorkerContext::My().mLogging.UpdateSysTxWrittern(sysTxId);
   }
 
   //! Check remote dependency
@@ -172,8 +169,8 @@ public:
     }
 
     if (mBf->mHeader.mLastWriterWorker != cr::WorkerContext::My().mWorkerId &&
-        mBf->mPage.mSysTxId > cr::ActiveTx().mMaxObservedSysTxId) {
-      cr::ActiveTx().mMaxObservedSysTxId = mBf->mPage.mSysTxId;
+        mBf->mPage.mSysTxId > cr::ActiveTx().mDependentSysTx) {
+      cr::ActiveTx().mDependentSysTx = mBf->mPage.mSysTxId;
       cr::ActiveTx().mHasRemoteDependency = true;
     }
   }

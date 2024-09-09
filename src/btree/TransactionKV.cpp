@@ -663,9 +663,6 @@ SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
   }
 
   guardedNode.ToExclusiveMayJump();
-  TXID sysTxId = utils::tlsStore->AllocSysTxTs();
-  guardedNode.SyncSystemTxId(sysTxId);
-
   for (uint16_t i = 0; i < guardedNode->mNumSlots; i++) {
     auto& tuple = *Tuple::From(guardedNode->ValData(i));
     if (tuple.mFormat == TupleFormat::kFat) {

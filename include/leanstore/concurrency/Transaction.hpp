@@ -5,8 +5,7 @@
 #include "leanstore/Units.hpp"
 #include "leanstore/utils/UserThread.hpp"
 
-namespace leanstore {
-namespace cr {
+namespace leanstore::cr {
 
 enum class TxState { kIdle, kStarted, kCommitted, kAborted };
 
@@ -46,7 +45,7 @@ public:
 
   //! Maximum observed system transaction id during transaction processing. Used to track
   //! transaction dependencies.
-  TXID mMaxObservedSysTxId = 0;
+  TXID mDependentSysTx = 0;
 
   //! Whether the transaction has any remote dependencies. Currently, we only support SI isolation
   //! level, a user transaction can only depend on a system transaction executed in a remote worker
@@ -83,7 +82,7 @@ public:
     mState = TxState::kStarted;
     mStartTs = 0;
     mCommitTs = 0;
-    mMaxObservedSysTxId = 0;
+    mDependentSysTx = 0;
     mHasRemoteDependency = false;
     mTxMode = mode;
     mTxIsolationLevel = level;
@@ -91,12 +90,6 @@ public:
     mIsDurable = utils::tlsStore->mStoreOption->mEnableWal;
     mWalExceedBuffer = false;
   }
-
-  //! Check whether a user transaction with remote dependencies can be committed.
-  bool CanCommit(TXID minFlushedSysTx, TXID minFlushedUsrTx) {
-    return mMaxObservedSysTxId <= minFlushedSysTx && mStartTs <= minFlushedUsrTx;
-  }
 };
 
-} // namespace cr
-} // namespace leanstore
+} // namespace leanstore::cr
