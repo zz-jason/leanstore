@@ -11,6 +11,9 @@
 #include "leanstore/utils/Misc.hpp"
 
 #include <format>
+#include <string>
+
+#include <sys/types.h>
 
 using namespace std;
 using namespace leanstore::storage;
@@ -178,42 +181,31 @@ OpCode BasicKV::Insert(Slice key, Slice val) {
   return OpCode::kOK;
 }
 
-OpCode BasicKV::PrefixLookup(Slice key, PrefixLookupCallback callback) {
-  while (true) {
-    JUMPMU_TRY() {
-      GuardedBufferFrame<BTreeNode> guardedLeaf;
-      FindLeafCanJump(key, guardedLeaf);
-
-      bool isEqual = false;
-      int16_t cur = guardedLeaf->LowerBound<false>(key, &isEqual);
-      if (isEqual) {
-        callback(key, guardedLeaf->Value(cur));
-        guardedLeaf.JumpIfModifiedByOthers();
-        JUMPMU_RETURN OpCode::kOK;
-      }
-
-      if (cur < guardedLeaf->mNumSlots) {
-        auto fullKeySize = guardedLeaf->GetFullKeyLen(cur);
-        auto fullKeyBuf = utils::JumpScopedArray<uint8_t>(fullKeySize);
-        guardedLeaf->CopyFullKey(cur, fullKeyBuf->get());
-        guardedLeaf.JumpIfModifiedByOthers();
-
-        callback(Slice(fullKeyBuf->get(), fullKeySize), guardedLeaf->Value(cur));
-        guardedLeaf.JumpIfModifiedByOthers();
-
-        JUMPMU_RETURN OpCode::kOK;
-      }
-
-      OpCode ret = ScanAsc(key, [&](Slice scannedKey, Slice scannedVal) {
-        callback(scannedKey, scannedVal);
-        return false;
-      });
-      JUMPMU_RETURN ret;
+OpCode BasicKV::PrefixLookup(Slice prefixKey, PrefixLookupCallback callback) {
+  JUMPMU_TRY() {
+    auto iter = GetIterator();
+    if (iter.SeekToFirstGreaterEqual(prefixKey); !iter.Valid()) {
+      JUMPMU_RETURN OpCode::kNotFound;
     }
-    JUMPMU_CATCH() {
+    bool foundPrefixKey = false;
+    uint16_t prefixSize = prefixKey.size();
+    for (; iter.Valid(); iter.Next()) {
+      iter.AssembleKey();
+      auto key = iter.Key();
+      auto value = iter.Val();
+      if ((key.size() < prefixSize) || (bcmp(key.data(), prefixKey.data(), prefixSize) != 0)) {
+        break;
+      }
+      callback(key, value);
+      foundPrefixKey = true;
     }
+    if (!foundPrefixKey) {
+      JUMPMU_RETURN OpCode::kNotFound;
+    }
+    JUMPMU_RETURN OpCode::kOK;
   }
-
+  JUMPMU_CATCH() {
+  }
   UNREACHABLE();
   return OpCode::kOther;
 }
