@@ -299,7 +299,7 @@ TEST_F(BasicKVTest, SameKeyInsertRemoveMultiTimes) {
     btree = res.value();
   });
 
-  // insert 100 key-values to the btree
+  // insert 1000 key-values to the btree
   size_t numKVs(1000);
   std::vector<std::pair<std::string, std::string>> kvToTest;
   for (size_t i = 0; i < numKVs; ++i) {
@@ -340,6 +340,81 @@ TEST_F(BasicKVTest, SameKeyInsertRemoveMultiTimes) {
 
   // count the key-values in the btree
   mStore->ExecSync(0, [&]() { EXPECT_EQ(btree->CountEntries(), numKVs); });
+}
+
+TEST_F(BasicKVTest, PrefixLookup) {
+  storage::btree::BasicKV* btree;
+  mStore->ExecSync(0, [&]() {
+    auto res = mStore->CreateBasicKV(genBtreeName("_tree1"));
+    ASSERT_TRUE(res);
+    ASSERT_NE(res.value(), nullptr);
+    btree = res.value();
+  });
+  // callback function
+  std::vector<std::tuple<std::string, std::string>> copiedKeyValue;
+  auto copyKeyAndValueOut = [&](Slice key, Slice val) {
+    copiedKeyValue.emplace_back(key.ToString(), val.ToString());
+  };
+
+  {
+    // not found valid prefix key
+    std::string prefixString("key_");
+    auto prefixKey = Slice(prefixString);
+    EXPECT_EQ(btree->PrefixLookup(prefixKey, copyKeyAndValueOut), OpCode::kNotFound);
+  }
+
+  {
+    // insert key and value
+    size_t numKVs(10);
+    std::vector<std::pair<std::string, std::string>> kvToTest;
+    for (size_t i = 0; i < numKVs; ++i) {
+      std::string key("key_" + std::string(10, 'x') + std::to_string(i));
+      std::string val("val_" + std::string(100, 'x') + std::to_string(i));
+      mStore->ExecSync(0, [&]() { EXPECT_EQ(btree->Insert(key, val), OpCode::kOK); });
+      kvToTest.emplace_back(std::move(key), std::move(val));
+    }
+
+    // prefix lookup the full set
+    auto prefixString("key_" + std::string(10, 'x'));
+    auto prefixKey = Slice(prefixString);
+    EXPECT_EQ(btree->PrefixLookup(prefixKey, copyKeyAndValueOut), OpCode::kOK);
+    EXPECT_EQ(copiedKeyValue.size(), kvToTest.size());
+    for (size_t i = 0; i < copiedKeyValue.size(); i++) {
+      const auto& [key, expectedVal] = kvToTest[i];
+      const auto& [copiedKey, copiedValue] = copiedKeyValue[i];
+      EXPECT_EQ(copiedKey, key);
+      EXPECT_EQ(copiedValue, expectedVal);
+    }
+
+    // insert special key for prefix lookup
+    std::vector<std::pair<std::string, std::string>> kvToTest2;
+    for (size_t i = 0; i < numKVs; ++i) {
+      std::string key("prefix_key_" + std::string(10, 'x') + std::to_string(i));
+      std::string val("prefix_value_" + std::string(100, 'x') + std::to_string(i));
+      mStore->ExecSync(0, [&]() { EXPECT_EQ(btree->Insert(key, val), OpCode::kOK); });
+      kvToTest2.emplace_back(std::move(key), std::move(val));
+    }
+
+    // prefix lookup the partial set
+    copiedKeyValue.clear();
+    auto prefixString2("prefix_key_" + std::string(10, 'x'));
+    auto prefixKey2 = Slice(prefixString2);
+    EXPECT_EQ(btree->PrefixLookup(prefixKey2, copyKeyAndValueOut), OpCode::kOK);
+    EXPECT_EQ(copiedKeyValue.size(), kvToTest2.size());
+    for (size_t i = 0; i < copiedKeyValue.size(); i++) {
+      const auto& [key, expectedVal] = kvToTest2[i];
+      const auto& [copiedKey, copiedValue] = copiedKeyValue[i];
+      EXPECT_EQ(copiedKey, key);
+      EXPECT_EQ(copiedValue, expectedVal);
+    }
+  }
+  {
+    // greater than the prefix key, but not a true prefix
+    copiedKeyValue.clear();
+    auto prefixString("prefix_kex_" + std::string(10, 'w'));
+    auto prefixKey = Slice(prefixString);
+    EXPECT_EQ(btree->PrefixLookup(prefixKey, copyKeyAndValueOut), OpCode::kNotFound);
+  }
 }
 
 } // namespace leanstore::test
