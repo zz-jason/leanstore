@@ -198,7 +198,7 @@ private:
 
     std::string configString(
         "create, direct_io=[data, log, checkpoint], "
-        "log=(enabled=true,archive=true), statistics_log=(wait=1), "
+        "log=(enabled),transaction_sync=(enabled=true,method=none), statistics_log=(wait=1), "
         "statistics=(all, clear), session_max=2000, eviction=(threads_max=4), cache_size=" +
         std::to_string(FLAGS_ycsb_mem_kb / 1024) + "M");
     int ret = wiredtiger_open(dataDir.c_str(), nullptr, configString.c_str(), &mConn);

@@ -2,7 +2,9 @@
 
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/btree/core/PessimisticIterator.hpp"
+#include "leanstore/concurrency/WorkerContext.hpp"
 #include "leanstore/utils/CounterUtil.hpp"
+#include "leanstore/utils/Defer.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/RandomGenerator.hpp"
 #include "leanstore/utils/UserThread.hpp"
@@ -63,7 +65,9 @@ public:
   }
 
   void SplitForKey(Slice key) {
-    auto sysTxId = mBTree.mStore->AllocSysTxTs();
+    TXID sysTxId = cr::WorkerContext::My().StartSysTx();
+    SCOPED_DEFER(cr::WorkerContext::My().CommitSysTx());
+
     while (true) {
       JUMPMU_TRY() {
         if (!Valid() || !KeyInCurrentNode(key)) {
@@ -163,18 +167,18 @@ public:
 
       mSlotId = -1;
       JUMPMU_TRY() {
-        TXID sysTxId = mBTree.mStore->AllocSysTxTs();
+        TXID sysTxId = cr::WorkerContext::My().StartSysTx();
         mBTree.TrySplitMayJump(sysTxId, *mGuardedLeaf.mBf, splitSlot);
+        cr::WorkerContext::My().CommitSysTx();
 
         COUNTER_INC(&leanstore::cr::tlsPerfCounters.mContentionSplitSucceed);
-        LS_DLOG("[Contention Split] succeed, pageId={}, contention pct={}, split "
-                "slot={}",
+        LS_DLOG("[Contention Split] succeed, pageId={}, contentionPct={}, splitSlot={}",
                 mGuardedLeaf.mBf->mHeader.mPageId, contentionPct, splitSlot);
       }
       JUMPMU_CATCH() {
         COUNTER_INC(&leanstore::cr::tlsPerfCounters.mContentionSplitFailed);
-        Log::Info("[Contention Split] contention split failed, pageId={}, contention "
-                  "pct={}, split slot={}",
+        Log::Info("[Contention Split] contention split failed, pageId={}, "
+                  "contentionPct={}, splitSlot={}",
                   mGuardedLeaf.mBf->mHeader.mPageId, contentionPct, splitSlot);
       }
     }
@@ -196,8 +200,9 @@ public:
       mGuardedLeaf.unlock();
       mSlotId = -1;
       JUMPMU_TRY() {
-        TXID sysTxId = mBTree.mStore->AllocSysTxTs();
+        TXID sysTxId = cr::WorkerContext::My().StartSysTx();
         mBTree.TryMergeMayJump(sysTxId, *mGuardedLeaf.mBf);
+        cr::WorkerContext::My().CommitSysTx();
       }
       JUMPMU_CATCH() {
         LS_DLOG("TryMergeIfNeeded failed, pageId={}", mGuardedLeaf.mBf->mHeader.mPageId);

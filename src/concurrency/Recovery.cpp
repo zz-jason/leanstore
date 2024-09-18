@@ -8,6 +8,7 @@
 #include "leanstore/concurrency/WalEntry.hpp"
 #include "leanstore/sync/HybridGuard.hpp"
 #include "leanstore/utils/Defer.hpp"
+#include "leanstore/utils/Error.hpp"
 #include "leanstore/utils/Log.hpp"
 
 #include <cstdint>
@@ -96,8 +97,8 @@ Result<void> Recovery::analysis() {
       continue;
     }
     default: {
-      Log::Fatal("Unrecognized WalEntry type: {}, offset={}, walFd={}",
-                 static_cast<uint8_t>(walEntry->mType), startOffset, mStore->mWalFd);
+      Log::Fatal("Unrecognized WalEntry type: {}, offset={}", static_cast<uint8_t>(walEntry->mType),
+                 startOffset);
     }
     }
   }
@@ -460,23 +461,27 @@ storage::BufferFrame& Recovery::resolvePage(PID pageId) {
 }
 
 // TODO(zz-jason): refactor with aio
-Result<void> Recovery::readFromWalFile(int64_t offset, size_t nbytes, void* destination) {
-  auto fileName = mStore->GetWalFilePath();
-  FILE* fp = fopen(fileName.c_str(), "rb");
-  if (fp == nullptr) {
-    return std::unexpected(utils::Error::FileOpen(fileName, errno, strerror(errno)));
-  }
-  SCOPED_DEFER(fclose(fp));
+Result<void> Recovery::readFromWalFile(int64_t offset [[maybe_unused]],
+                                       size_t nbytes [[maybe_unused]],
+                                       void* destination [[maybe_unused]]) {
+  // auto fileName = mStore->GetWalFilePath();
+  // FILE* fp = fopen(fileName.c_str(), "rb");
+  // if (fp == nullptr) {
+  //   return std::unexpected(utils::Error::FileOpen(fileName, errno, strerror(errno)));
+  // }
+  // SCOPED_DEFER(fclose(fp));
 
-  if (fseek(fp, offset, SEEK_SET) != 0) {
-    return std::unexpected(utils::Error::FileSeek(fileName, errno, strerror(errno)));
-  }
+  // if (fseek(fp, offset, SEEK_SET) != 0) {
+  //   return std::unexpected(utils::Error::FileSeek(fileName, errno, strerror(errno)));
+  // }
 
-  if (fread(destination, 1, nbytes, fp) != nbytes) {
-    return std::unexpected(utils::Error::FileRead(fileName, errno, strerror(errno)));
-  }
+  // if (fread(destination, 1, nbytes, fp) != nbytes) {
+  //   return std::unexpected(utils::Error::FileRead(fileName, errno, strerror(errno)));
+  // }
 
-  return {};
+  // return {};
+
+  return std::unexpected(utils::Error::General("Not implemented"));
 }
 
 } // namespace leanstore::cr

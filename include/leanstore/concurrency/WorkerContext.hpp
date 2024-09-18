@@ -53,7 +53,7 @@ public:
                 leanstore::LeanStore* store);
 
   //! Destruct a WorkerContext.
-  ~WorkerContext();
+  ~WorkerContext() = default;
 
   //! Whether a user transaction is started.
   bool IsTxStarted() {
@@ -69,6 +69,22 @@ public:
 
   //! Aborts a user transaction.
   void AbortTx();
+
+  //! Starts a system transaction.
+  TXID StartSysTx() {
+    auto sysTx = mStore->AllocSysTxTs();
+    mLogging.mActiveSysTx.store(sysTx);
+    return sysTx;
+  }
+
+  //! Commits a system transaction.
+  void CommitSysTx() {
+    // 1. Write all the buffered write-ahead logs
+    mLogging.mWalBuffer.Persist();
+
+    // 2. Update the committed system transaction ID in the end
+    mLogging.mActiveSysTx.store(0);
+  }
 
   //! Get the PerfCounters of the current worker.
   PerfCounters* GetPerfCounters();
@@ -91,9 +107,30 @@ public:
   static bool InWorker() {
     return WorkerContext::sTlsWorkerCtxRaw != nullptr;
   }
+
+private:
+  void waitDependencyToCommit() {
+    while (mActiveTx.mDependentSysTx > Logging::sGlobalMinCommittedSysTx.load()) {
+      TXID curSysTso = mStore->GetSysTxTs();
+
+      // collect min committed system transaction ID
+      TXID minActiveSysTx = std::numeric_limits<TXID>::max();
+      for (auto& workerCtx : mAllWorkers) {
+        auto activeSysTx = workerCtx->mLogging.mActiveSysTx.load();
+        if (activeSysTx < minActiveSysTx && activeSysTx != 0) {
+          minActiveSysTx = activeSysTx;
+        }
+      }
+
+      if (minActiveSysTx != std::numeric_limits<TXID>::max()) {
+        Logging::sGlobalMinCommittedSysTx.store(minActiveSysTx - 1);
+      } else {
+        Logging::sGlobalMinCommittedSysTx.store(curSysTso);
+      }
+    }
+  }
 };
 
-// Shortcuts
 inline Transaction& ActiveTx() {
   return cr::WorkerContext::My().mActiveTx;
 }

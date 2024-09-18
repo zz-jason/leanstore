@@ -6,6 +6,7 @@
 #include "leanstore/Slice.hpp"
 #include "leanstore/btree/core/BTreeNode.hpp"
 #include "leanstore/buffer-manager/GuardedBufferFrame.hpp"
+#include "leanstore/concurrency/WorkerContext.hpp"
 #include "leanstore/sync/HybridLatch.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/UserThread.hpp"
@@ -397,8 +398,9 @@ inline void PessimisticIterator::Next() {
     if (mGuardedLeaf->mNumSlots == 0) {
       SetCleanUpCallback([&, toMerge = mGuardedLeaf.mBf]() {
         JUMPMU_TRY() {
-          TXID sysTxId = mBTree.mStore->AllocSysTxTs();
+          TXID sysTxId = cr::WorkerContext::My().StartSysTx();
           mBTree.TryMergeMayJump(sysTxId, *toMerge, true);
+          cr::WorkerContext::My().CommitSysTx();
         }
         JUMPMU_CATCH() {
         }

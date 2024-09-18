@@ -145,8 +145,9 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
       if (guardedLeaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
         xIter.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
           JUMPMU_TRY() {
-            TXID sysTxId = btree->mStore->AllocSysTxTs();
-            btree->TryMergeMayJump(sysTxId, *toMerge);
+            // wal logging is not supported for internal memory only history b+ tree, no need to
+            // start a sys tx
+            btree->TryMergeMayJump(0, *toMerge);
           }
           JUMPMU_CATCH() {
           }
@@ -235,8 +236,9 @@ void HistoryStorage::PurgeVersions(TXID fromTxId, TXID toTxId,
             if (guardedLeaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
               xIter.SetCleanUpCallback([&, toMerge = guardedLeaf.mBf] {
                 JUMPMU_TRY() {
-                  TXID sysTxId = btree->mStore->AllocSysTxTs();
-                  btree->TryMergeMayJump(sysTxId, *toMerge);
+                  // wal logging is not supported for internal memory only history b+ tree, no need
+                  // to start a sys tx
+                  btree->TryMergeMayJump(0, *toMerge);
                 }
                 JUMPMU_CATCH() {
                 }
