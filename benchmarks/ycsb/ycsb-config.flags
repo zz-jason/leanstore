@@ -1,10 +1,10 @@
 --ycsb_data_dir=/root/code/leanstore/deploy/ycsb
 --ycsb_key_size=16
 --ycsb_val_size=200
---ycsb_record_count=100000
---ycsb_mem_kb=1048576
---ycsb_run_for_seconds=600
---ycsb_target=transactionkv
---ycsb_workload=b
---ycsb_threads=8
+--ycsb_record_count=1000000
+--ycsb_mem_gb=1
+--ycsb_run_for_seconds=30
+--ycsb_target=basickv
+--ycsb_workload=c
+--ycsb_threads=4
 --ycsb_cmd=run

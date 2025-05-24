@@ -225,6 +225,17 @@ BufferFrame& BufferManager::AllocNewPageMayJump(TREEID treeId) {
   return freeBf;
 }
 
+BufferFrame& BufferManager::AllocNewPage(TREEID treeId) {
+  while (true) {
+    JUMPMU_TRY() {
+      auto& res = AllocNewPageMayJump(treeId);
+      JUMPMU_RETURN res;
+    }
+    JUMPMU_CATCH() {
+    }
+  }
+}
+
 void BufferManager::ReclaimPage(BufferFrame& bf) {
   Partition& partition = GetPartition(bf.mHeader.mPageId);
   if (mStore->mStoreOption->mEnableReclaimPageIds) {

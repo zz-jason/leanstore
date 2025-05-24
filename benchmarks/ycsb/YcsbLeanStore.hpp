@@ -51,7 +51,7 @@ public:
     option->mCreateFromScratch = createFromScratch;
     option->mEnableEagerGc = true;
     option->mWorkerThreads = FLAGS_ycsb_threads;
-    option->mBufferPoolSize = FLAGS_ycsb_mem_kb * 1024;
+    option->mBufferPoolSize = FLAGS_ycsb_mem_gb << 30;
 
     auto res = LeanStore::Open(option);
     if (!res) {

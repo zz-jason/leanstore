@@ -96,6 +96,8 @@ public:
   //! frame is initialized with an unused page ID, and is exclusively locked.
   BufferFrame& AllocNewPageMayJump(TREEID treeId);
 
+  BufferFrame& AllocNewPage(TREEID treeId);
+
   //! Resolve the swip to get the underlying buffer frame. Target page is read
   //! from disk if the swip is evicted. Called by worker threads.
   BufferFrame* ResolveSwipMayJump(HybridGuard& nodeGuard, Swip& swipInNode);
