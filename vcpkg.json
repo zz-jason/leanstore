@@ -9,7 +9,6 @@
     "gtest",
     "rapidjson",
     "gperftools",
-    "tabulate",
     {
       "name": "cpp-httplib",
       "version>=": "0.14.3"

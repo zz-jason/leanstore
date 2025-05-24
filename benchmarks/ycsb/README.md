@@ -2,22 +2,27 @@
 
 ## Build With RocksDB
 
-Add a `rocksdb` dependency on `vcpkg.json` and recompile the project:
+1. Add `rocksdb` to `$CMAKE_SOURCE_DIR/vcpkg.json`
+
+2. Build the project:
 
 ```sh
-cmake --preset=performance_profile
-cmake --build build/release -j `nproc`
+cmake --preset=performance
+cmake --build build/performance -j `nproc`
 ```
 
-## Run
+## Run YCSB
+
+For convenience, a `ycsb-config.flags` file is provided to configure the YCSB
+benchmark. You can modify the parameters in this file or override them with
+command line arguments according to your needs
 
 ```sh
-./build/release/benchmarks/ycsb/ycsb \
-  --ycsb_threads=8 \
-  --ycsb_record_count=100000 \
-  --ycsb_workload=c \
-  --ycsb_run_for_seconds=600 \
-  --ycsb_target=basickv
+# load data
+./build/performance/benchmarks/ycsb/ycsb -flagfile=benchmarks/ycsb/ycsb-config.flags -ycsb_cmd=load
+
+# run benchmark
+./build/performance/benchmarks/ycsb/ycsb -flagfile=benchmarks/ycsb/ycsb-config.flags -ycsb_cmd=run
 ```
 
 ## Profile

@@ -27,7 +27,6 @@ void HistoryStorage::PutVersion(TXID txId, COMMANDID commandId, TREEID treeId, b
   uint64_t offset = 0;
   offset += utils::Fold(keyBuffer + offset, txId);
   offset += utils::Fold(keyBuffer + offset, commandId);
-  Slice key(keyBuffer, keySize);
   versionSize += sizeof(VersionMeta);
 
   Session* session = nullptr;
@@ -36,6 +35,7 @@ void HistoryStorage::PutVersion(TXID txId, COMMANDID commandId, TREEID treeId, b
   }
   if (session != nullptr && session->mRightmostBf != nullptr) {
     JUMPMU_TRY() {
+      Slice key(keyBuffer, keySize);
       PessimisticExclusiveIterator xIter(*static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)),
                                          session->mRightmostBf, session->mRightmostVersion);
       if (xIter.HasEnoughSpaceFor(key.size(), versionSize) && xIter.KeyInCurrentNode(key)) {
@@ -61,6 +61,7 @@ void HistoryStorage::PutVersion(TXID txId, COMMANDID commandId, TREEID treeId, b
 
   while (true) {
     JUMPMU_TRY() {
+      Slice key(keyBuffer, keySize);
       auto xIter = const_cast<BasicKV*>(btree)->GetExclusiveIterator();
       OpCode ret = xIter.SeekToInsert(key);
       if (ret == OpCode::kDuplicated) {
@@ -102,10 +103,9 @@ bool HistoryStorage::GetVersion(TXID newerTxId, COMMANDID newerCommandId,
   offset += utils::Fold(keyBuffer + offset, newerTxId);
   offset += utils::Fold(keyBuffer + offset, newerCommandId);
 
-  Slice key(keyBuffer, keySize);
   JUMPMU_TRY() {
     BasicKV* kv = const_cast<BasicKV*>(btree);
-    auto ret = kv->Lookup(key, [&](const Slice& payload) {
+    auto ret = kv->Lookup(Slice(keyBuffer, keySize), [&](const Slice& payload) {
       const auto& versionContainer = *VersionMeta::From(payload.data());
       cb(versionContainer.mPayload, payload.length() - sizeof(VersionMeta));
     });

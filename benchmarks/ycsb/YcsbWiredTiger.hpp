@@ -200,7 +200,7 @@ private:
         "create, direct_io=[data, log, checkpoint], "
         "log=(enabled=true,archive=true), statistics_log=(wait=1), "
         "statistics=(all, clear), session_max=2000, eviction=(threads_max=4), cache_size=" +
-        std::to_string(FLAGS_ycsb_mem_kb / 1024) + "M");
+        std::to_string(FLAGS_ycsb_mem_gb * 1024) + "M");
     int ret = wiredtiger_open(dataDir.c_str(), nullptr, configString.c_str(), &mConn);
     if (ret != 0) {
       Log::Fatal("Failed to open wiredtiger: {}", wiredtiger_strerror(ret));

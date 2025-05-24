@@ -18,7 +18,6 @@
 #include <rapidjson/prettywriter.h>
 #include <rapidjson/rapidjson.h>
 #include <rapidjson/stringbuffer.h>
-#include <tabulate/table.hpp>
 
 #include <cstdint>
 #include <expected>

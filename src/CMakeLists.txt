@@ -17,7 +17,6 @@ endif()
 # dependencies
 set(leanstore_deps
   aio
-  tabulate::tabulate
   rapidjson
   spdlog::spdlog_header_only
   Crc32c::crc32c

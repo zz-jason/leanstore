@@ -27,12 +27,12 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btreeId, BTreeConfig
   this->mTreeId = btreeId;
   this->mConfig = std::move(config);
 
-  mMetaNodeSwip = &mStore->mBufferManager->AllocNewPageMayJump(btreeId);
+  mMetaNodeSwip = &mStore->mBufferManager->AllocNewPage(btreeId);
   mMetaNodeSwip.AsBufferFrame().mHeader.mKeepInMemory = true;
   LS_DCHECK(mMetaNodeSwip.AsBufferFrame().mHeader.mLatch.GetOptimisticVersion() == 0);
 
-  auto guardedRoot = GuardedBufferFrame<BTreeNode>(
-      mStore->mBufferManager.get(), &mStore->mBufferManager->AllocNewPageMayJump(btreeId));
+  auto guardedRoot = GuardedBufferFrame<BTreeNode>(mStore->mBufferManager.get(),
+                                                   &mStore->mBufferManager->AllocNewPage(btreeId));
   auto xGuardedRoot = ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guardedRoot));
   xGuardedRoot.InitPayload(true);
 

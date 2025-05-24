@@ -33,7 +33,7 @@ public:
     rocksdb::Options options;
     options.create_if_missing = true;
     options.error_if_exists = false;
-    options.arena_block_size = FLAGS_ycsb_mem_kb * 1024;
+    options.arena_block_size = FLAGS_ycsb_mem_gb << 30;
 
     auto status =
         rocksdb::DB::Open(options, FLAGS_ycsb_data_dir + "/rocksdb/" + FLAGS_ycsb_workload, &mDb);
