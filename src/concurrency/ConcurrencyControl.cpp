@@ -1,6 +1,6 @@
 #include "leanstore/concurrency/ConcurrencyControl.hpp"
 
-#include "leanstore-c/PerfCounters.h"
+#include "leanstore-c/perf_counters.h"
 #include "leanstore/Exceptions.hpp"
 #include "leanstore/Units.hpp"
 #include "leanstore/buffer-manager/TreeRegistry.hpp"

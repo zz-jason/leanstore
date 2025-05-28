@@ -1,7 +1,7 @@
 #include "Ycsb.hpp"
-#include "leanstore-c/PerfCounters.h"
-#include "leanstore-c/StoreOption.h"
-#include "leanstore-c/leanstore-c.h"
+#include "leanstore-c/leanstore.h"
+#include "leanstore-c/perf_counters.h"
+#include "leanstore-c/store_option.h"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/btree/BasicKV.hpp"
@@ -89,7 +89,7 @@ public:
     // create table with basic kv
     leanstore::storage::btree::BasicKV* table;
     mStore->ExecSync(0, [&]() {
-      auto res = mStore->CreateBasicKV(kTableName);
+      auto res = mStore->CreateBasicKv(kTableName);
       if (!res) {
         Log::Fatal("Failed to create table: name={}, error={}", kTableName, res.error().ToString());
       }

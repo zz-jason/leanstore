@@ -1,5 +1,5 @@
-#ifndef LEANSTORE_STORE_OPTION_H
-#define LEANSTORE_STORE_OPTION_H
+#ifndef LEANSTORE_C_STORE_OPTION_H
+#define LEANSTORE_C_STORE_OPTION_H
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -190,4 +190,4 @@ typedef struct BTreeConfig {
 }
 #endif
 
-#endif // LEANSTORE_STORE_OPTION_H
+#endif // LEANSTORE_C_STORE_OPTION_H

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore-c/StoreOption.h"
+#include "leanstore-c/store_option.h"
 #include "leanstore/Units.hpp"
 #include "leanstore/utils/DebugFlags.hpp"
 #include "leanstore/utils/Result.hpp"
@@ -86,7 +86,7 @@ public:
   ~LeanStore();
 
   //! Create a BasicKV
-  Result<leanstore::storage::btree::BasicKV*> CreateBasicKV(
+  Result<leanstore::storage::btree::BasicKV*> CreateBasicKv(
       const std::string& name,
       BTreeConfig config = BTreeConfig{.mEnableWal = true, .mUseBulkInsert = false});
 

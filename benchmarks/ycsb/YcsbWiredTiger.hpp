@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Ycsb.hpp"
-#include "leanstore-c/leanstore-c.h"
+#include "leanstore-c/leanstore.h"
 #include "leanstore/utils/Defer.hpp"
 #include "leanstore/utils/Log.hpp"
 #include "leanstore/utils/Parallelize.hpp"

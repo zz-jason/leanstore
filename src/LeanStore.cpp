@@ -1,6 +1,6 @@
 #include "leanstore/LeanStore.hpp"
 
-#include "leanstore-c/StoreOption.h"
+#include "leanstore-c/store_option.h"
 #include "leanstore/btree/BasicKV.hpp"
 #include "leanstore/btree/TransactionKV.hpp"
 #include "leanstore/btree/core/BTreeGeneric.hpp"
@@ -45,7 +45,7 @@ Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption* option) {
 
   if (option->mCreateFromScratch) {
     std::cout << std::format("Clean store dir: {}", option->mStoreDir) << std::endl;
-    std::filesystem::path dirPath = option->mStoreDir;
+    std::filesystem::path dirPath(option->mStoreDir);
     std::filesystem::remove_all(dirPath);
     std::filesystem::create_directories(dirPath);
   }
@@ -441,7 +441,7 @@ void LeanStore::deserializeFlags() {
   }
 }
 
-Result<storage::btree::BasicKV*> LeanStore::CreateBasicKV(const std::string& name,
+Result<storage::btree::BasicKV*> LeanStore::CreateBasicKv(const std::string& name,
                                                           BTreeConfig config) {
   return storage::btree::BasicKV::Create(this, name, std::move(config));
 }

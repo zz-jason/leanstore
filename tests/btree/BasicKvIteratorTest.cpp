@@ -1,5 +1,6 @@
-#include "leanstore-c/StoreOption.h"
-#include "leanstore-c/leanstore-c.h"
+#include "leanstore-c/kv_basic.h"
+#include "leanstore-c/leanstore.h"
+#include "leanstore-c/store_option.h"
 
 #include <gtest/gtest.h>
 
@@ -23,12 +24,12 @@ protected:
     mStoreHandle = CreateLeanStore(option);
     ASSERT_NE(mStoreHandle, nullptr);
 
-    mKvHandle = CreateBasicKV(mStoreHandle, 0, "testTree1");
+    mKvHandle = CreateBasicKv(mStoreHandle, 0, "testTree1");
     ASSERT_NE(mKvHandle, nullptr);
   }
 
   void TearDown() override {
-    DestroyBasicKV(mKvHandle);
+    DestroyBasicKv(mKvHandle);
     DestroyLeanStore(mStoreHandle);
   }
 };

@@ -1,6 +1,7 @@
-#include "leanstore-c/leanstore-c.h"
+#include "leanstore-c/leanstore.h"
 
-#include "leanstore-c/StoreOption.h"
+#include "leanstore-c/kv_basic.h"
+#include "leanstore-c/store_option.h"
 #include "leanstore/KVInterface.hpp"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/Slice.hpp"
@@ -82,7 +83,7 @@ void DestroyLeanStore(LeanStoreHandle* handle) {
 }
 
 //------------------------------------------------------------------------------
-// BasicKV API
+// BasicKv API
 //------------------------------------------------------------------------------
 
 struct BasicKvHandle {
@@ -90,10 +91,10 @@ struct BasicKvHandle {
   leanstore::storage::btree::BasicKV* mBtree;
 };
 
-BasicKvHandle* CreateBasicKV(LeanStoreHandle* handle, uint64_t workerId, const char* btreeName) {
+BasicKvHandle* CreateBasicKv(LeanStoreHandle* handle, uint64_t workerId, const char* btreeName) {
   leanstore::storage::btree::BasicKV* btree{nullptr};
   handle->mStore->ExecSync(workerId, [&]() {
-    auto res = handle->mStore->CreateBasicKV(btreeName);
+    auto res = handle->mStore->CreateBasicKv(btreeName);
     if (!res) {
       std::cerr << "create btree failed: " << res.error().ToString() << std::endl;
       return;
@@ -113,7 +114,7 @@ BasicKvHandle* CreateBasicKV(LeanStoreHandle* handle, uint64_t workerId, const c
   return btreeHandle;
 }
 
-void DestroyBasicKV(BasicKvHandle* handle) {
+void DestroyBasicKv(BasicKvHandle* handle) {
   if (handle != nullptr) {
     delete handle;
   }
@@ -173,7 +174,7 @@ uint64_t BasicKvNumEntries(BasicKvHandle* handle, uint64_t workerId) {
 }
 
 //------------------------------------------------------------------------------
-// Iterator API for BasicKV
+// Iterator API for BasicKv
 //------------------------------------------------------------------------------
 
 struct BasicKvIterHandle {
