@@ -25,7 +25,7 @@ CheckOptions:
 
   # parameter
   - key:   readability-identifier-naming.ParameterCase
-    value: camelBack
+    value: lower_case
 
   # class
   - key:   readability-identifier-naming.ClassCase
@@ -37,29 +37,29 @@ CheckOptions:
 
   # protected method
   - key:   readability-identifier-naming.ProtectedMethodCase
-    value: camelBack
+    value: CamelCase
 
   # private method
   - key:   readability-identifier-naming.PrivateMethodCase
-    value: camelBack
+    value: CamelCase
 
   # public member
   - key:   readability-identifier-naming.PublicMemberCase
-    value: CamelCase
-  - key:   readability-identifier-naming.PublicMemberPrefix
-    value: m
+    value: lower_case
+  - key:   readability-identifier-naming.PublicMemberSuffix
+    value: _
 
   # protected member
   - key:   readability-identifier-naming.ProtectedMemberCase
-    value: CamelCase
-  - key:   readability-identifier-naming.ProtectedMemberPrefix
-    value: m
+    value: lower_case
+  - key:   readability-identifier-naming.ProtectedMemberSuffix
+    value: _
 
   # private member
   - key:   readability-identifier-naming.PrivateMemberCase
-    value: CamelCase
-  - key:   readability-identifier-naming.PrivateMemberPrefix
-    value: m
+    value: lower_case
+  - key:   readability-identifier-naming.PrivateMemberSuffix
+    value: _
 
   # class member
   - key:   readability-identifier-naming.ClassMemberCase
@@ -81,7 +81,7 @@ CheckOptions:
 
   # variable
   - key:   readability-identifier-naming.VariableCase
-    value: camelBack
+    value: lower_case
 
   # static variable
   - key:   readability-identifier-naming.StaticVariableCase

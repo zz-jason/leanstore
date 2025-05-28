@@ -7,72 +7,72 @@
 extern "C" {
 #endif
 
-//! The counter type.
+/// The counter type.
 typedef atomic_ullong CounterType;
 
-//! The performance counters for each worker.
+/// The performance counters for each worker.
 typedef struct PerfCounters {
 
   // ---------------------------------------------------------------------------
   // Transaction related counters
   // ---------------------------------------------------------------------------
 
-  //! The number of transactions committed.
-  CounterType mTxCommitted;
+  /// The number of transactions committed.
+  CounterType tx_committed_;
 
-  //! The number of transactions commit wait.
-  CounterType mTxCommitWait;
+  /// The number of transactions commit wait.
+  CounterType tx_commit_wait_;
 
-  //! The number of transactions aborted.
-  CounterType mTxAborted;
+  /// The number of transactions aborted.
+  CounterType tx_aborted_;
 
-  ///! The number of transactions with remote dependencies.
-  CounterType mTxWithRemoteDependencies;
+  //// The number of transactions with remote dependencies.
+  CounterType tx_with_remote_dependencies_;
 
-  //! The number of transactions without remote dependencies.
-  CounterType mTxWithoutRemoteDependencies;
+  /// The number of transactions without remote dependencies.
+  CounterType tx_without_remote_dependencies_;
 
-  //! The number of short running transactions.
-  CounterType mTxShortRunning;
+  /// The number of short running transactions.
+  CounterType tx_short_running_;
 
-  //! The number of long running transactions.
-  CounterType mTxLongRunning;
+  /// The number of long running transactions.
+  CounterType tx_long_running_;
 
   // ---------------------------------------------------------------------------
   // MVCC concurrency control related counters
   // ---------------------------------------------------------------------------
 
-  //! The number of LCB query executed.
-  CounterType mLcbExecuted;
+  /// The number of LCB query executed.
+  CounterType lcb_executed_;
 
-  //! The total latency of LCB query in nanoseconds.
-  CounterType mLcbTotalLatNs;
+  /// The total latency of LCB query in nanoseconds.
+  CounterType lcb_total_lat_ns_;
 
   // ---------------------------------------------------------------------------
   // MVCC garbage collection related counters
   // ---------------------------------------------------------------------------
 
-  //! The number of MVCC garbage collection executed.
-  CounterType mGcExecuted;
+  /// The number of MVCC garbage collection executed.
+  CounterType gc_executed_;
 
-  //! The total latency of MVCC garbage collection in nanoseconds.
-  CounterType mGcTotalLatNs;
+  /// The total latency of MVCC garbage collection in nanoseconds.
+  CounterType gc_total_lat_ns_;
 
   // ---------------------------------------------------------------------------
   // Contention split related counters
   // ---------------------------------------------------------------------------
 
-  //! The number of contention split succeed.
-  CounterType mContentionSplitSucceed;
+  /// The number of contention split succeed.
+  CounterType contention_split_succeed_;
 
-  //! The number of contention split failed.
-  CounterType mContentionSplitFailed;
+  /// The number of contention split failed.
+  CounterType contention_split_failed_;
 
-  //! The number of normal split succeed.
-  CounterType mSplitSucceed;
+  /// The number of normal split succeed.
+  CounterType split_succeed_;
 
-  //! The number of normal split failed.
-  CounterType mSplitFailed;
+  /// The number of normal split failed.
+  CounterType split_failed_;
 
 } PerfCounters;
 

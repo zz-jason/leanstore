@@ -14,38 +14,38 @@ extern "C" {
 // String API
 //------------------------------------------------------------------------------
 
-//! String is a data structure that holds an owned bytes buffer
+/// String is a data structure that holds an owned bytes buffer
 typedef struct String {
-  //! The owned data pointer
-  char* mData;
+  /// The owned data pointer
+  char* data_;
 
-  //! The size of the data
-  uint64_t mSize;
+  /// The size of the data
+  uint64_t size_;
 
-  //! The capacity of the data
-  uint64_t mCapacity;
+  /// The capacity of the data
+  uint64_t capacity_;
 } String;
 
-//! Creates a new string, copying the data from the given buffer to the new string
-//! @param data the data buffer
-//! @param size the size of the data buffer
-//! @return the new string, which should be destroyed by the caller with DestroyString()
+/// Creates a new string, copying the data from the given buffer to the new string
+/// @param data the data buffer
+/// @param size the size of the data buffer
+/// @return the new string, which should be destroyed by the caller with DestroyString()
 String* CreateString(const char* data, uint64_t size);
 
-//! Destroys a string
+/// Destroys a string
 void DestroyString(String* str);
 
 //------------------------------------------------------------------------------
 // StringSlice API
 //------------------------------------------------------------------------------
 
-//! StringSlice is a read-only data structure that holds a slice of a bytes buffer
+/// StringSlice is a read-only data structure that holds a slice of a bytes buffer
 typedef struct StringSlice {
-  //! The read-only data pointer
-  const char* mData;
+  /// The read-only data pointer
+  const char* data_;
 
-  //! The size of the data
-  uint64_t mSize;
+  /// The size of the data
+  uint64_t size_;
 } StringSlice;
 
 //------------------------------------------------------------------------------
@@ -54,20 +54,20 @@ typedef struct StringSlice {
 
 typedef struct LeanStoreHandle LeanStoreHandle;
 
-//! Create and init a leanstore instance
+/// Create and init a leanstore instance
 LeanStoreHandle* CreateLeanStore(StoreOption* option);
 
-//! Deinit and destroy a leanstore instance
+/// Deinit and destroy a leanstore instance
 void DestroyLeanStore(LeanStoreHandle* handle);
 
 //------------------------------------------------------------------------------
 // Interfaces for metrics
 //------------------------------------------------------------------------------
 
-//! Start the global http metrics exposer
+/// Start the global http metrics exposer
 void StartMetricsHttpExposer(int32_t port);
 
-//! Stop the global http metrics exposer
+/// Stop the global http metrics exposer
 void StopMetricsHttpExposer();
 
 #ifdef __cplusplus
