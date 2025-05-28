@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore-c/StoreOption.h"
+#include "leanstore-c/store_option.h"
 
 #include <format>
 #include <mutex>

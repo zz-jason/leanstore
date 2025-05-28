@@ -1,4 +1,4 @@
-#include "leanstore-c/StoreOption.h"
+#include "leanstore-c/store_option.h"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/btree/BasicKV.hpp"
 #include "leanstore/btree/TransactionKV.hpp"

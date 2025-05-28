@@ -1,7 +1,7 @@
-#ifndef LEANSTORE_C_H
-#define LEANSTORE_C_H
+#ifndef LEANSTORE_C_KV_BASIC_H
+#define LEANSTORE_C_KV_BASIC_H
 
-#include "leanstore-c/StoreOption.h"
+#include "leanstore-c/leanstore.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -11,68 +11,18 @@ extern "C" {
 #endif
 
 //------------------------------------------------------------------------------
-// String API
-//------------------------------------------------------------------------------
-
-//! String is a data structure that holds an owned bytes buffer
-typedef struct String {
-  //! The owned data pointer
-  char* mData;
-
-  //! The size of the data
-  uint64_t mSize;
-
-  //! The capacity of the data
-  uint64_t mCapacity;
-} String;
-
-//! Creates a new string, copying the data from the given buffer to the new string
-//! @param data the data buffer
-//! @param size the size of the data buffer
-//! @return the new string, which should be destroyed by the caller with DestroyString()
-String* CreateString(const char* data, uint64_t size);
-
-//! Destroys a string
-void DestroyString(String* str);
-
-//------------------------------------------------------------------------------
-// StringSlice API
-//------------------------------------------------------------------------------
-
-//! StringSlice is a read-only data structure that holds a slice of a bytes buffer
-typedef struct StringSlice {
-  //! The read-only data pointer
-  const char* mData;
-
-  //! The size of the data
-  uint64_t mSize;
-} StringSlice;
-
-//------------------------------------------------------------------------------
-// LeanStore API
-//------------------------------------------------------------------------------
-
-typedef struct LeanStoreHandle LeanStoreHandle;
-
-//! Create and init a leanstore instance
-LeanStoreHandle* CreateLeanStore(StoreOption* option);
-
-//! Deinit and destroy a leanstore instance
-void DestroyLeanStore(LeanStoreHandle* handle);
-
-//------------------------------------------------------------------------------
-// BasicKV API
+// BasicKv API
 //------------------------------------------------------------------------------
 
 typedef struct BasicKvHandle BasicKvHandle;
 
 //! Create a basic key-value store in a leanstore instance at workerId
 //! @return the basic key-value store handle, or nullptr if the creation fails. The handle should be
-//!         destroyed by the caller with DestroyBasicKV()
-BasicKvHandle* CreateBasicKV(LeanStoreHandle* handle, uint64_t workerId, const char* btreeName);
+//!         destroyed by the caller with DestroyBasicKv()
+BasicKvHandle* CreateBasicKv(LeanStoreHandle* handle, uint64_t workerId, const char* btreeName);
 
 //! Destroy the basic key-value store handle
-void DestroyBasicKV(BasicKvHandle* handle);
+void DestroyBasicKv(BasicKvHandle* handle);
 
 //! Insert a key-value pair into a basic key-value store at workerId
 //! @return true if the insert is successful, false otherwise
@@ -91,7 +41,7 @@ bool BasicKvRemove(BasicKvHandle* handle, uint64_t workerId, StringSlice key);
 uint64_t BasicKvNumEntries(BasicKvHandle* handle, uint64_t workerId);
 
 //------------------------------------------------------------------------------
-// Iterator API for BasicKV
+// Iterator API for BasicKv
 //------------------------------------------------------------------------------
 
 //! The BasicKvIterHandle is an opaque handle to an iterator for a basic key-value store. The
@@ -156,18 +106,8 @@ StringSlice BasicKvIterKey(BasicKvIterHandle* handle);
 //! @return the read-only value slice
 StringSlice BasicKvIterVal(BasicKvIterHandle* handle);
 
-//------------------------------------------------------------------------------
-// Interfaces for metrics
-//------------------------------------------------------------------------------
-
-//! Start the global http metrics exposer
-void StartMetricsHttpExposer(int32_t port);
-
-//! Stop the global http metrics exposer
-void StopMetricsHttpExposer();
-
 #ifdef __cplusplus
 }
 #endif
 
-#endif // LEANSTORE_C_H
+#endif // LEANSTORE_C_KV_BASIC_H

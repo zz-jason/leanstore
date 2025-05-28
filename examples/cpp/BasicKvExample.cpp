@@ -1,4 +1,4 @@
-#include <leanstore-c/StoreOption.h>
+#include <leanstore-c/store_option.h>
 #include <leanstore/LeanStore.hpp>
 #include <leanstore/btree/BasicKV.hpp>
 #include <leanstore/concurrency/WorkerContext.hpp>
@@ -29,7 +29,7 @@ int main() {
   std::string btreeName = "testTree1";
   leanstore::storage::btree::BasicKV* btree = nullptr;
   store->ExecSync(0, [&]() {
-    auto res = store->CreateBasicKV(btreeName);
+    auto res = store->CreateBasicKv(btreeName);
     if (!res) {
       std::cerr << "create btree failed: " << res.error().ToString() << std::endl;
     }

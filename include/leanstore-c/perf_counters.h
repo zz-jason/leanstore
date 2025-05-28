@@ -1,5 +1,5 @@
-#ifndef LEANSTORE_PERF_COUNTERS_H
-#define LEANSTORE_PERF_COUNTERS_H
+#ifndef LEANSTORE_C_PERF_COUNTERS_H
+#define LEANSTORE_C_PERF_COUNTERS_H
 
 #include <stdatomic.h>
 
@@ -80,4 +80,4 @@ typedef struct PerfCounters {
 }
 #endif
 
-#endif
+#endif // LEANSTORE_C_PERF_COUNTERS_H

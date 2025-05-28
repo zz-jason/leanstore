@@ -1,5 +1,6 @@
-#include "leanstore-c/StoreOption.h"
-#include "leanstore-c/leanstore-c.h"
+#include "leanstore-c/kv_basic.h"
+#include "leanstore-c/leanstore.h"
+#include "leanstore-c/store_option.h"
 
 #include <stddef.h>
 #include <stdio.h>
@@ -13,7 +14,7 @@ int main() {
   option->mEnableBulkInsert = 0;
   option->mEnableEagerGc = 1;
   LeanStoreHandle* storeHandle = CreateLeanStore(option);
-  BasicKvHandle* kvHandle = CreateBasicKV(storeHandle, 0, "testTree1");
+  BasicKvHandle* kvHandle = CreateBasicKv(storeHandle, 0, "testTree1");
   if (kvHandle == NULL) {
     DestroyStoreOption(option);
     printf("create basic kv failed\n");
@@ -122,7 +123,7 @@ int main() {
   }
 
   // cleanup the basic kv handle
-  DestroyBasicKV(kvHandle);
+  DestroyBasicKv(kvHandle);
 
   // cleanup the store handle
   DestroyLeanStore(storeHandle);

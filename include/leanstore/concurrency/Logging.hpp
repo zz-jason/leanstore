@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore-c/PerfCounters.h"
+#include "leanstore-c/perf_counters.h"
 #include "leanstore/Units.hpp"
 #include "leanstore/concurrency/Transaction.hpp"
 #include "leanstore/sync/OptimisticGuarded.hpp"

@@ -1,6 +1,6 @@
 #include "leanstore/btree/BasicKV.hpp"
 
-#include "leanstore-c/StoreOption.h"
+#include "leanstore-c/store_option.h"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/btree/TransactionKV.hpp"
 #include "leanstore/buffer-manager/BufferManager.hpp"
@@ -55,27 +55,27 @@ TEST_F(BasicKVTest, BasicKVCreate) {
   const auto* btreeName = "testTree1";
 
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateBasicKV(btreeName);
+    auto res = mStore->CreateBasicKv(btreeName);
     EXPECT_TRUE(res);
     EXPECT_NE(res.value(), nullptr);
   });
 
   // create btree with same should fail in the same worker
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateBasicKV(btreeName);
+    auto res = mStore->CreateBasicKv(btreeName);
     EXPECT_FALSE(res);
   });
 
   // create btree with same should also fail in other workers
   mStore->ExecSync(1, [&]() {
-    auto res = mStore->CreateBasicKV(btreeName);
+    auto res = mStore->CreateBasicKv(btreeName);
     EXPECT_FALSE(res);
   });
 
   // create btree with another different name should success
   btreeName = "testTree2";
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateBasicKV(btreeName);
+    auto res = mStore->CreateBasicKv(btreeName);
     EXPECT_TRUE(res);
     EXPECT_NE(res.value(), nullptr);
   });
@@ -96,7 +96,7 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
   // create leanstore btree for table records
   const auto* btreeName = "testTree1";
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateBasicKV(btreeName);
+    auto res = mStore->CreateBasicKv(btreeName);
     EXPECT_TRUE(res);
     EXPECT_NE(res.value(), nullptr);
 
@@ -153,7 +153,7 @@ TEST_F(BasicKVTest, BasicKVInsertDuplicatedKey) {
   const auto* btreeName = "testTree1";
 
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateBasicKV(btreeName);
+    auto res = mStore->CreateBasicKv(btreeName);
     EXPECT_TRUE(res);
     EXPECT_NE(res.value(), nullptr);
 
@@ -217,7 +217,7 @@ TEST_F(BasicKVTest, BasicKVScanAscAndScanDesc) {
   auto btreeName = std::string(curTest->test_case_name()) + "_" + std::string(curTest->name());
 
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateBasicKV(btreeName);
+    auto res = mStore->CreateBasicKv(btreeName);
     EXPECT_TRUE(res);
     EXPECT_NE(res.value(), nullptr);
 
@@ -293,7 +293,7 @@ TEST_F(BasicKVTest, SameKeyInsertRemoveMultiTimes) {
   // create a basickv
   storage::btree::BasicKV* btree;
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateBasicKV(genBtreeName("_tree1"));
+    auto res = mStore->CreateBasicKv(genBtreeName("_tree1"));
     ASSERT_TRUE(res);
     ASSERT_NE(res.value(), nullptr);
     btree = res.value();
@@ -345,7 +345,7 @@ TEST_F(BasicKVTest, SameKeyInsertRemoveMultiTimes) {
 TEST_F(BasicKVTest, PrefixLookup) {
   storage::btree::BasicKV* btree;
   mStore->ExecSync(0, [&]() {
-    auto res = mStore->CreateBasicKV(genBtreeName("_tree1"));
+    auto res = mStore->CreateBasicKv(genBtreeName("_tree1"));
     ASSERT_TRUE(res);
     ASSERT_NE(res.value(), nullptr);
     btree = res.value();

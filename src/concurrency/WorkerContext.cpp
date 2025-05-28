@@ -1,6 +1,6 @@
 #include "leanstore/concurrency/WorkerContext.hpp"
 
-#include "leanstore-c/PerfCounters.h"
+#include "leanstore-c/perf_counters.h"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/buffer-manager/TreeRegistry.hpp"
 #include "leanstore/concurrency/CRManager.hpp"

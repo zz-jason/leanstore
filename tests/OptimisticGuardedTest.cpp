@@ -1,6 +1,6 @@
 #include "leanstore/sync/OptimisticGuarded.hpp"
 
-#include "leanstore-c/StoreOption.h"
+#include "leanstore-c/store_option.h"
 #include "leanstore/LeanStore.hpp"
 #include "leanstore/buffer-manager/BufferManager.hpp"
 #include "leanstore/concurrency/CRManager.hpp"
