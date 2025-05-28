@@ -2,12 +2,12 @@
 
 #include "leanstore-c/kv_basic.h"
 #include "leanstore-c/store_option.h"
-#include "leanstore/KVInterface.hpp"
-#include "leanstore/LeanStore.hpp"
-#include "leanstore/Slice.hpp"
-#include "leanstore/btree/BasicKV.hpp"
-#include "leanstore/btree/core/PessimisticSharedIterator.hpp"
-#include "telemetry/MetricsHttpExposer.hpp"
+#include "leanstore/btree/basic_kv.hpp"
+#include "leanstore/btree/core/pessimistic_shared_iterator.hpp"
+#include "leanstore/kv_interface.hpp"
+#include "leanstore/lean_store.hpp"
+#include "leanstore/slice.hpp"
+#include "telemetry/metrics_http_exposer.hpp"
 
 #include <cstdint>
 #include <cstring>
@@ -27,32 +27,32 @@ String* CreateString(const char* data, uint64_t size) {
   String* str = new String();
 
   if (data == nullptr || size == 0) {
-    str->mData = nullptr;
-    str->mSize = 0;
-    str->mCapacity = 0;
+    str->data_ = nullptr;
+    str->size_ = 0;
+    str->capacity_ = 0;
     return str;
   }
 
   // allocate memory, copy data
-  str->mSize = size;
-  str->mCapacity = size + 1;
-  str->mData = new char[size + 1];
-  memcpy(str->mData, data, size);
-  str->mData[size] = '\0';
+  str->size_ = size;
+  str->capacity_ = size + 1;
+  str->data_ = new char[size + 1];
+  memcpy(str->data_, data, size);
+  str->data_[size] = '\0';
 
   return str;
 }
 
 void DestroyString(String* str) {
   if (str != nullptr) {
-    if (str->mData != nullptr) {
+    if (str->data_ != nullptr) {
       // release memory
-      delete[] str->mData;
+      delete[] str->data_;
     }
 
-    str->mData = nullptr;
-    str->mSize = 0;
-    str->mCapacity = 0;
+    str->data_ = nullptr;
+    str->size_ = 0;
+    str->capacity_ = 0;
 
     // release the string object
     delete str;
@@ -64,7 +64,7 @@ void DestroyString(String* str) {
 //------------------------------------------------------------------------------
 
 struct LeanStoreHandle {
-  std::unique_ptr<leanstore::LeanStore> mStore;
+  std::unique_ptr<leanstore::LeanStore> store_;
 };
 
 LeanStoreHandle* CreateLeanStore(StoreOption* option) {
@@ -74,7 +74,7 @@ LeanStoreHandle* CreateLeanStore(StoreOption* option) {
     return nullptr;
   }
   LeanStoreHandle* handle = new LeanStoreHandle();
-  handle->mStore = std::move(res.value());
+  handle->store_ = std::move(res.value());
   return handle;
 }
 
@@ -87,14 +87,14 @@ void DestroyLeanStore(LeanStoreHandle* handle) {
 //------------------------------------------------------------------------------
 
 struct BasicKvHandle {
-  leanstore::LeanStore* mStore;
-  leanstore::storage::btree::BasicKV* mBtree;
+  leanstore::LeanStore* store_;
+  leanstore::storage::btree::BasicKV* btree_;
 };
 
-BasicKvHandle* CreateBasicKv(LeanStoreHandle* handle, uint64_t workerId, const char* btreeName) {
+BasicKvHandle* CreateBasicKv(LeanStoreHandle* handle, uint64_t worker_id, const char* btree_name) {
   leanstore::storage::btree::BasicKV* btree{nullptr};
-  handle->mStore->ExecSync(workerId, [&]() {
-    auto res = handle->mStore->CreateBasicKv(btreeName);
+  handle->store_->ExecSync(worker_id, [&]() {
+    auto res = handle->store_->CreateBasicKv(btree_name);
     if (!res) {
       std::cerr << "create btree failed: " << res.error().ToString() << std::endl;
       return;
@@ -107,11 +107,11 @@ BasicKvHandle* CreateBasicKv(LeanStoreHandle* handle, uint64_t workerId, const c
   }
 
   // placement new to construct BasicKvHandle
-  BasicKvHandle* btreeHandle = new BasicKvHandle();
-  btreeHandle->mStore = handle->mStore.get();
-  btreeHandle->mBtree = btree;
+  BasicKvHandle* btree_handle = new BasicKvHandle();
+  btree_handle->store_ = handle->store_.get();
+  btree_handle->btree_ = btree;
 
-  return btreeHandle;
+  return btree_handle;
 }
 
 void DestroyBasicKv(BasicKvHandle* handle) {
@@ -120,56 +120,56 @@ void DestroyBasicKv(BasicKvHandle* handle) {
   }
 }
 
-bool BasicKvInsert(BasicKvHandle* handle, uint64_t workerId, StringSlice key, StringSlice val) {
+bool BasicKvInsert(BasicKvHandle* handle, uint64_t worker_id, StringSlice key, StringSlice val) {
   bool succeed{false};
-  handle->mStore->ExecSync(workerId, [&]() {
-    auto opCode = handle->mBtree->Insert(leanstore::Slice(key.mData, key.mSize),
-                                         leanstore::Slice(val.mData, val.mSize));
-    succeed = (opCode == leanstore::OpCode::kOK);
+  handle->store_->ExecSync(worker_id, [&]() {
+    auto op_code = handle->btree_->Insert(leanstore::Slice(key.data_, key.size_),
+                                          leanstore::Slice(val.data_, val.size_));
+    succeed = (op_code == leanstore::OpCode::kOK);
   });
   return succeed;
 }
 
-bool BasicKvLookup(BasicKvHandle* handle, uint64_t workerId, StringSlice key, String** val) {
+bool BasicKvLookup(BasicKvHandle* handle, uint64_t worker_id, StringSlice key, String** val) {
   bool found = false;
-  handle->mStore->ExecSync(workerId, [&]() {
+  handle->store_->ExecSync(worker_id, [&]() {
     // copy value out to a thread-local buffer to reduce memory allocation
-    auto copyValueOut = [&](leanstore::Slice valSlice) {
+    auto copy_value_out = [&](leanstore::Slice val_slice) {
       // set the found flag
       found = true;
 
       // create a new string if the value is out of the buffer size
-      if ((**val).mCapacity < valSlice.size() + 1) {
+      if ((**val).capacity_ < val_slice.size() + 1) {
         DestroyString(*val);
-        *val = CreateString(reinterpret_cast<const char*>(valSlice.data()), valSlice.size());
+        *val = CreateString(reinterpret_cast<const char*>(val_slice.data()), val_slice.size());
         return;
       }
 
       // copy data to the buffer
-      (**val).mSize = valSlice.size();
-      memcpy((**val).mData, valSlice.data(), valSlice.size());
-      (**val).mData[valSlice.size()] = '\0';
+      (**val).size_ = val_slice.size();
+      memcpy((**val).data_, val_slice.data(), val_slice.size());
+      (**val).data_[val_slice.size()] = '\0';
     };
 
     // lookup the key
-    handle->mBtree->Lookup(leanstore::Slice(key.mData, key.mSize), std::move(copyValueOut));
+    handle->btree_->Lookup(leanstore::Slice(key.data_, key.size_), std::move(copy_value_out));
   });
 
   return found;
 }
 
-bool BasicKvRemove(BasicKvHandle* handle, uint64_t workerId, StringSlice key) {
+bool BasicKvRemove(BasicKvHandle* handle, uint64_t worker_id, StringSlice key) {
   bool succeed{false};
-  handle->mStore->ExecSync(workerId, [&]() {
-    auto opCode = handle->mBtree->Remove(leanstore::Slice(key.mData, key.mSize));
-    succeed = (opCode == leanstore::OpCode::kOK);
+  handle->store_->ExecSync(worker_id, [&]() {
+    auto op_code = handle->btree_->Remove(leanstore::Slice(key.data_, key.size_));
+    succeed = (op_code == leanstore::OpCode::kOK);
   });
   return succeed;
 }
 
-uint64_t BasicKvNumEntries(BasicKvHandle* handle, uint64_t workerId) {
+uint64_t BasicKvNumEntries(BasicKvHandle* handle, uint64_t worker_id) {
   uint64_t ret{0};
-  handle->mStore->ExecSync(workerId, [&]() { ret = handle->mBtree->CountEntries(); });
+  handle->store_->ExecSync(worker_id, [&]() { ret = handle->btree_->CountEntries(); });
   return ret;
 }
 
@@ -180,21 +180,21 @@ uint64_t BasicKvNumEntries(BasicKvHandle* handle, uint64_t workerId) {
 struct BasicKvIterHandle {
   BasicKvIterHandle(leanstore::storage::btree::PessimisticSharedIterator iter,
                     leanstore::LeanStore* store)
-      : mIterator(std::move(iter)),
-        mStore(store) {
+      : iterator_(std::move(iter)),
+        store_(store) {
   }
 
-  //! The actual iterator
-  leanstore::storage::btree::PessimisticSharedIterator mIterator;
+  /// The actual iterator
+  leanstore::storage::btree::PessimisticSharedIterator iterator_;
 
-  //! The leanstore
-  leanstore::LeanStore* mStore;
+  /// The leanstore
+  leanstore::LeanStore* store_;
 };
 
 BasicKvIterHandle* CreateBasicKvIter(const BasicKvHandle* handle) {
-  BasicKvIterHandle* iteratorHandle{nullptr};
-  iteratorHandle = new BasicKvIterHandle(handle->mBtree->GetIterator(), handle->mStore);
-  return iteratorHandle;
+  BasicKvIterHandle* iterator_handle{nullptr};
+  iterator_handle = new BasicKvIterHandle(handle->btree_->GetIterator(), handle->store_);
+  return iterator_handle;
 }
 
 void DestroyBasicKvIter(BasicKvIterHandle* handle) {
@@ -207,69 +207,70 @@ void DestroyBasicKvIter(BasicKvIterHandle* handle) {
 // Interfaces for ascending iteration
 //------------------------------------------------------------------------------
 
-void BasicKvIterSeekToFirst(BasicKvIterHandle* handle, uint64_t workerId) {
-  handle->mStore->ExecSync(workerId, [&]() { handle->mIterator.SeekToFirst(); });
+void BasicKvIterSeekToFirst(BasicKvIterHandle* handle, uint64_t worker_id) {
+  handle->store_->ExecSync(worker_id, [&]() { handle->iterator_.SeekToFirst(); });
 }
 
-void BasicKvIterSeekToFirstGreaterEqual(BasicKvIterHandle* handle, uint64_t workerId,
+void BasicKvIterSeekToFirstGreaterEqual(BasicKvIterHandle* handle, uint64_t worker_id,
                                         StringSlice key) {
-  handle->mStore->ExecSync(workerId, [&]() {
-    handle->mIterator.SeekToFirstGreaterEqual(leanstore::Slice(key.mData, key.mSize));
+  handle->store_->ExecSync(worker_id, [&]() {
+    handle->iterator_.SeekToFirstGreaterEqual(leanstore::Slice(key.data_, key.size_));
   });
 }
 
-bool BasicKvIterHasNext(BasicKvIterHandle* handle, uint64_t workerId) {
-  bool hasNext{false};
-  handle->mStore->ExecSync(workerId, [&]() { hasNext = handle->mIterator.HasNext(); });
-  return hasNext;
+bool BasicKvIterHasNext(BasicKvIterHandle* handle, uint64_t worker_id) {
+  bool has_next{false};
+  handle->store_->ExecSync(worker_id, [&]() { has_next = handle->iterator_.HasNext(); });
+  return has_next;
 }
 
-void BasicKvIterNext(BasicKvIterHandle* handle, uint64_t workerId) {
-  handle->mStore->ExecSync(workerId, [&]() { handle->mIterator.Next(); });
+void BasicKvIterNext(BasicKvIterHandle* handle, uint64_t worker_id) {
+  handle->store_->ExecSync(worker_id, [&]() { handle->iterator_.Next(); });
 }
 
 //------------------------------------------------------------------------------
 // Interfaces for descending iteration
 //------------------------------------------------------------------------------
 
-void BasicKvIterSeekToLast(BasicKvIterHandle* handle, uint64_t workerId) {
-  handle->mStore->ExecSync(workerId, [&]() { handle->mIterator.SeekToLast(); });
+void BasicKvIterSeekToLast(BasicKvIterHandle* handle, uint64_t worker_id) {
+  handle->store_->ExecSync(worker_id, [&]() { handle->iterator_.SeekToLast(); });
 }
 
-void BasicKvIterSeekToLastLessEqual(BasicKvIterHandle* handle, uint64_t workerId, StringSlice key) {
-  handle->mStore->ExecSync(workerId, [&]() {
-    handle->mIterator.SeekToLastLessEqual(leanstore::Slice(key.mData, key.mSize));
+void BasicKvIterSeekToLastLessEqual(BasicKvIterHandle* handle, uint64_t worker_id,
+                                    StringSlice key) {
+  handle->store_->ExecSync(worker_id, [&]() {
+    handle->iterator_.SeekToLastLessEqual(leanstore::Slice(key.data_, key.size_));
   });
 }
 
-bool BasicKvIterHasPrev(BasicKvIterHandle* handle, uint64_t workerId) {
-  bool hasPrev{false};
-  handle->mStore->ExecSync(workerId, [&]() { hasPrev = handle->mIterator.HasPrev(); });
-  return hasPrev;
+bool BasicKvIterHasPrev(BasicKvIterHandle* handle, uint64_t worker_id) {
+  bool has_prev{false};
+  handle->store_->ExecSync(worker_id, [&]() { has_prev = handle->iterator_.HasPrev(); });
+  return has_prev;
 }
 
-void BasicKvIterPrev(BasicKvIterHandle* handle, uint64_t workerId) {
-  handle->mStore->ExecSync(workerId, [&]() { handle->mIterator.Prev(); });
+void BasicKvIterPrev(BasicKvIterHandle* handle, uint64_t worker_id) {
+  handle->store_->ExecSync(worker_id, [&]() { handle->iterator_.Prev(); });
 }
 
 //------------------------------------------------------------------------------
 // Interfaces for accessing the current iterator position
 //------------------------------------------------------------------------------
 
-//! Whether the iterator is valid
+/// Whether the iterator is valid
 bool BasicKvIterValid(BasicKvIterHandle* handle) {
-  return handle->mIterator.Valid();
+  return handle->iterator_.Valid();
 }
 
 StringSlice BasicKvIterKey(BasicKvIterHandle* handle) {
-  handle->mIterator.AssembleKey();
-  auto keySlice = handle->mIterator.Key();
-  return {reinterpret_cast<const char*>(keySlice.data()), keySlice.size()};
+  handle->iterator_.AssembleKey();
+  auto key_slice = handle->iterator_.Key();
+  return {reinterpret_cast<const char*>(key_slice.data()), key_slice.size()};
 }
 
 StringSlice BasicKvIterVal(BasicKvIterHandle* handle) {
-  auto valSlice = handle->mIterator.Val();
-  return {reinterpret_cast<const char*>(valSlice.data()), valSlice.size()};
+  auto val_slice = handle->iterator_.Val();
+  return {reinterpret_cast<const char*>(val_slice.data()), val_slice.size()};
 }
 
 //------------------------------------------------------------------------------

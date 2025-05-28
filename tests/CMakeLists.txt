@@ -43,13 +43,13 @@ endfunction(leanstore_add_test_in_dir)
 
 
 # Add tests
-leanstore_add_test(RecoveryTest)
-leanstore_add_test(OptimisticGuardedTest)
-leanstore_add_test(TransactionKVTest)
-leanstore_add_test(MvccTest)
-leanstore_add_test(AnomaliesTest)
-leanstore_add_test(AbortTest)
-leanstore_add_test(LongRunningTxTest)
+leanstore_add_test(recovery_test)
+leanstore_add_test(optimistic_guarded_test)
+leanstore_add_test(transaction_kv_test)
+leanstore_add_test(mvcc_test)
+leanstore_add_test(anomalies_test)
+leanstore_add_test(abort_test)
+leanstore_add_test(long_running_tx_test)
 
 # tests in sub-directories
 leanstore_add_test_in_dir(btree)

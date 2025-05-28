@@ -3,8 +3,8 @@
 # ---------------------------------------------------------------------------
 
 set(YCSB_SRC
-  Ycsb.cpp
-  YcsbFlags.cpp
+  ycsb.cpp
+  ycsb_flags.cpp
 )
 
 find_package(gflags CONFIG REQUIRED)
