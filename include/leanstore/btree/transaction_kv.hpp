@@ -75,7 +75,7 @@ public:
   void unlock(const uint8_t* wal_entry_ptr) override;
 
 private:
-  OpCode lookup_optimistic(Slice key, ValCallback val_callback);
+  OpCode LookupOptimistic(Slice key, ValCallback val_callback);
 
   template <bool asc = true>
   OpCode scan4ShortRunningTx(Slice key, ScanCallback callback);

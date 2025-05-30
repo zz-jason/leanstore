@@ -21,21 +21,21 @@ namespace leanstore::storage {
 
 class ParentSwipHandler {
 public:
-  /// @brief parent_guard_ is the latch guard to the parent buffer frame. It
-  /// should already optimistically latched.
+  /// parent_guard_ is the latch guard to the parent buffer frame. It should
+  /// already optimistically latched.
   HybridGuard parent_guard_;
 
-  /// @brief parent_bf_ is the parent buffer frame.
+  /// parent_bf_ is the parent buffer frame.
   BufferFrame* parent_bf_;
 
-  /// @brief child_swip_ is the swip reference to the child who generated this
+  /// child_swip_ is the swip reference to the child who generated this
   /// ParentSwipHandler.
   Swip& child_swip_;
 
-  /// @brief pos_in_parent_ is the slot id in the parent buffer frame.
+  /// pos_in_parent_ is the slot id in the parent buffer frame.
   uint32_t pos_in_parent_ = std::numeric_limits<uint32_t>::max();
 
-  /// @brief is_child_bf_updated_ records whether the child buffer frame is updated
+  /// is_child_bf_updated_ records whether the child buffer frame is updated
   /// since this ParentSwipHandler was created.
   bool is_child_bf_updated_ = false;
 };

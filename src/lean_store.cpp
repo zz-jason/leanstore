@@ -12,13 +12,9 @@
 #include "leanstore/utils/misc.hpp"
 #include "leanstore/utils/result.hpp"
 #include "leanstore/utils/user_thread.hpp"
+#include "utils/json.hpp"
 
-#include <rapidjson/document.h>
-#include <rapidjson/istreamwrapper.h>
-#include <rapidjson/prettywriter.h>
-#include <rapidjson/rapidjson.h>
-#include <rapidjson/stringbuffer.h>
-
+#include <cassert>
 #include <cstdint>
 #include <expected>
 #include <filesystem>
@@ -115,7 +111,6 @@ void LeanStore::init_page_and_wal_fd() {
   }
 
   // Recover pages and WAL from existing files
-  deserialize_flags();
   Log::Info("Reopen existing page and wal files");
   int flags = O_RDWR | O_DIRECT;
   auto db_file_path = GetDbFilePath();
@@ -222,48 +217,46 @@ constexpr char kMetaKeyCrManager[] = "cr_manager";
 constexpr char kMetaKeyBufferManager[] = "buffer_manager";
 constexpr char kMetaKeyBTrees[] = "leanstore/btrees";
 constexpr char kMetaKeyFlags[] = "flags";
+constexpr char kName[] = "name";
+constexpr char kType[] = "type";
+constexpr char kId[] = "id";
+constexpr char kEnableWal[] = "enable_wal";
+constexpr char kUseBulkInsert[] = "use_bulk_insert";
+constexpr char kSerialized[] = "serialized";
+constexpr char kPagesUpToDate[] = "pages_up_to_date";
 
 void LeanStore::serialize_meta(bool all_pages_up_to_date) {
   Log::Info("serializeMeta started");
   SCOPED_DEFER(Log::Info("serializeMeta ended"));
 
   // serialize data structure instances
+  utils::JsonObj meta_json_obj;
   std::ofstream meta_file;
   meta_file.open(GetMetaFilePath(), std::ios::trunc);
 
-  rapidjson::Document doc;
-  auto& allocator = doc.GetAllocator();
-  doc.SetObject();
-
   // cr_manager
   {
+    utils::JsonObj cr_json_obj;
     auto cr_meta_map = crmanager_->Serialize();
-    rapidjson::Value cr_json_obj(rapidjson::kObjectType);
     for (const auto& [key, val] : cr_meta_map) {
-      rapidjson::Value k, v;
-      k.SetString(key.data(), key.size(), allocator);
-      v.SetString(val.data(), val.size(), allocator);
-      cr_json_obj.AddMember(k, v, allocator);
+      cr_json_obj.AddString(key, val);
     }
-    doc.AddMember(kMetaKeyCrManager, cr_json_obj, allocator);
+    meta_json_obj.AddJsonObj(kMetaKeyCrManager, cr_json_obj);
   }
 
   // buffer_manager
   {
+    utils::JsonObj bm_json_obj;
     auto bm_meta_map = buffer_manager_->Serialize();
-    rapidjson::Value bm_json_obj(rapidjson::kObjectType);
     for (const auto& [key, val] : bm_meta_map) {
-      rapidjson::Value k, v;
-      k.SetString(key.data(), key.size(), allocator);
-      v.SetString(val.data(), val.size(), allocator);
-      bm_json_obj.AddMember(k, v, allocator);
+      bm_json_obj.AddString(key, val);
     }
-    doc.AddMember(kMetaKeyBufferManager, bm_json_obj, allocator);
+    meta_json_obj.AddJsonObj(kMetaKeyBufferManager, bm_json_obj);
   }
 
   // registered_datastructures, i.e. btrees
   {
-    rapidjson::Value btree_json_array(rapidjson::kArrayType);
+    utils::JsonArray btree_json_array;
     for (auto& it : tree_registry_->trees_) {
       auto btree_id = it.first;
       auto& [tree_ptr, btree_name] = it.second;
@@ -272,62 +265,30 @@ void LeanStore::serialize_meta(bool all_pages_up_to_date) {
       }
 
       auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(tree_ptr.get());
-      rapidjson::Value btree_json_obj(rapidjson::kObjectType);
-      rapidjson::Value btree_json_name;
-      btree_json_name.SetString(btree_name.data(), btree_name.size(), allocator);
-      btree_json_obj.AddMember("name", btree_json_name, allocator);
-
-      rapidjson::Value btree_json_type(static_cast<uint8_t>(btree->tree_type_));
-      btree_json_obj.AddMember("type", btree_json_type, allocator);
-
-      rapidjson::Value btree_json_id(btree_id);
-      btree_json_obj.AddMember("id", btree_json_id, allocator);
-
-      rapidjson::Value btree_enable_wal(btree->config_.enable_wal_);
-      btree_json_obj.AddMember("enable_wal", btree_enable_wal, allocator);
-
-      rapidjson::Value btree_use_bulk_insert(btree->config_.use_bulk_insert_);
-      btree_json_obj.AddMember("use_bulk_insert", btree_use_bulk_insert, allocator);
-
+      utils::JsonObj btree_meta_json_obj;
       auto btree_meta_map = tree_registry_->Serialize(btree_id);
-      rapidjson::Value btree_meta_json_obj(rapidjson::kObjectType);
       for (const auto& [key, val] : btree_meta_map) {
-        rapidjson::Value k, v;
-        k.SetString(key.c_str(), key.length(), allocator);
-        v.SetString(val.c_str(), val.length(), allocator);
-        btree_meta_json_obj.AddMember(k, v, allocator);
+        btree_meta_json_obj.AddString(key, val);
       }
-      btree_json_obj.AddMember("serialized", btree_meta_json_obj, allocator);
 
-      btree_json_array.PushBack(btree_json_obj, allocator);
+      utils::JsonObj btree_json_obj;
+      btree_json_obj.AddString(kName, btree_name);
+      btree_json_obj.AddInt64(kType, static_cast<int64_t>(btree->tree_type_));
+      btree_json_obj.AddInt64(kId, btree_id);
+      btree_json_obj.AddBool(kEnableWal, btree->config_.enable_wal_);
+      btree_json_obj.AddBool(kUseBulkInsert, btree->config_.use_bulk_insert_);
+      btree_json_obj.AddJsonObj(kSerialized, btree_meta_json_obj);
+
+      btree_json_array.AppendJsonObj(btree_json_obj);
     }
-    doc.AddMember(kMetaKeyBTrees, btree_json_array, allocator);
+
+    meta_json_obj.AddJsonArray(kMetaKeyBTrees, btree_json_array);
   }
 
   // pages_up_to_date
-  {
-    rapidjson::Value update_to_date(all_pages_up_to_date);
-    doc.AddMember("pages_up_to_date", all_pages_up_to_date, doc.GetAllocator());
-  }
+  meta_json_obj.AddBool(kPagesUpToDate, all_pages_up_to_date);
 
-  // flags
-  serialize_flags(reinterpret_cast<uint8_t*>(&doc));
-
-  rapidjson::StringBuffer sb;
-  rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(sb);
-  doc.Accept(writer);
-  meta_file << sb.GetString();
-}
-
-void LeanStore::serialize_flags(uint8_t* dest) {
-  rapidjson::Document& doc = *reinterpret_cast<rapidjson::Document*>(dest);
-  Log::Info("serializeFlags started");
-  SCOPED_DEFER(Log::Info("serializeFlags ended"));
-
-  rapidjson::Value flags_json_obj(rapidjson::kObjectType);
-  auto& allocator = doc.GetAllocator();
-
-  doc.AddMember(kMetaKeyFlags, flags_json_obj, allocator);
+  meta_file << meta_json_obj.Serialize();
 }
 
 bool LeanStore::deserialize_meta() {
@@ -336,51 +297,66 @@ bool LeanStore::deserialize_meta() {
 
   std::ifstream meta_file;
   meta_file.open(GetMetaFilePath());
-  rapidjson::IStreamWrapper isw(meta_file);
-  rapidjson::Document doc;
-  doc.ParseStream(isw);
+
+  utils::JsonObj meta_json_obj;
+  meta_json_obj.Deserialize(
+      std::string(std::istreambuf_iterator<char>(meta_file), std::istreambuf_iterator<char>()));
 
   // Deserialize concurrent resource manager
   {
-    auto& cr_json_obj = doc[kMetaKeyCrManager];
+    assert(meta_json_obj.HasMember(kMetaKeyCrManager));
+    auto cr_json_obj = meta_json_obj.GetJsonObj(kMetaKeyCrManager).value();
     StringMap cr_meta_map;
-    for (auto it = cr_json_obj.MemberBegin(); it != cr_json_obj.MemberEnd(); ++it) {
-      cr_meta_map[it->name.GetString()] = it->value.GetString();
-    }
+    cr_json_obj.Foreach([&](const std::string_view& key, const utils::JsonValue& value) {
+      assert(value.IsString());
+      auto meta_key = std::string(key.data(), key.size());
+      auto meta_val = std::string(value.GetString(), value.GetStringLength());
+      cr_meta_map[meta_key] = meta_val;
+    });
+
     crmanager_->Deserialize(cr_meta_map);
   }
 
   // Deserialize buffer manager
   {
-    auto& bm_json_obj = doc[kMetaKeyBufferManager];
+    assert(meta_json_obj.HasMember(kMetaKeyBufferManager));
+    auto bm_json_obj = meta_json_obj.GetJsonObj(kMetaKeyBufferManager).value();
     StringMap bm_meta_map;
-    for (auto it = bm_json_obj.MemberBegin(); it != bm_json_obj.MemberEnd(); ++it) {
-      bm_meta_map[it->name.GetString()] = it->value.GetString();
-    }
+    bm_json_obj.Foreach([&](const std::string_view& key, const utils::JsonValue& value) {
+      assert(value.IsString());
+      auto meta_key = std::string(key.data(), key.size());
+      auto meta_val = std::string(value.GetString(), value.GetStringLength());
+      bm_meta_map[meta_key] = meta_val;
+    });
     buffer_manager_->Deserialize(bm_meta_map);
   }
 
-  // pages_up_to_date
-  // rapidjson::Value updateToDate(allPagesUpToDate);
-  // doc.AddMember("pages_up_to_date", allPagesUpToDate, doc.GetAllocator());
-  auto& update_to_date = doc["pages_up_to_date"];
-  auto all_pages_up_to_date = update_to_date.GetBool();
+  assert(meta_json_obj.HasMember(kMetaKeyBTrees));
+  auto all_pages_up_to_date = meta_json_obj.GetBool("pages_up_to_date").value();
 
-  auto& btree_json_array = doc[kMetaKeyBTrees];
-  LS_DCHECK(btree_json_array.IsArray());
-  for (auto& btree_json_obj : btree_json_array.GetArray()) {
-    LS_DCHECK(btree_json_obj.IsObject());
-    const TREEID btree_id = btree_json_obj["id"].GetInt64();
-    const auto btree_type = btree_json_obj["type"].GetInt();
-    const std::string btree_name = btree_json_obj["name"].GetString();
-    const auto btree_enable_wal = btree_json_obj["enable_wal"].GetBool();
-    const auto btree_use_bulk_insert = btree_json_obj["use_bulk_insert"].GetBool();
+  assert(meta_json_obj.HasMember(kMetaKeyBTrees));
+  auto btree_json_array = meta_json_obj.GetJsonArray(kMetaKeyBTrees).value();
+
+  for (auto i = 0u; i < btree_json_array.Size(); ++i) {
+    assert(btree_json_array.GetJsonObj(i).has_value());
+    auto btree_json_obj = btree_json_array.GetJsonObj(i).value();
+
+    const TREEID btree_id = btree_json_obj.GetInt64("id").value();
+    const auto btree_type = btree_json_obj.GetInt64("type").value();
+    const auto btree_name_ref = btree_json_obj.GetString("name").value();
+    const auto btree_enable_wal = btree_json_obj.GetBool("enable_wal").value();
+    const auto btree_use_bulk_insert = btree_json_obj.GetBool("use_bulk_insert").value();
+
+    std::string btree_name(btree_name_ref.data(), btree_name_ref.size());
 
     StringMap btree_meta_map;
-    auto& btree_meta_json_obj = btree_json_obj["serialized"];
-    for (auto it = btree_meta_json_obj.MemberBegin(); it != btree_meta_json_obj.MemberEnd(); ++it) {
-      btree_meta_map[it->name.GetString()] = it->value.GetString();
-    }
+    auto btree_meta_json_obj = btree_json_obj.GetJsonObj("serialized").value();
+    btree_meta_json_obj.Foreach([&](const std::string_view& key, const utils::JsonValue& value) {
+      assert(value.IsString());
+      auto meta_key = std::string(key.data(), key.size());
+      auto meta_val = std::string(value.GetString(), value.GetStringLength());
+      btree_meta_map[meta_key] = meta_val;
+    });
 
     // create and register btrees
     switch (static_cast<leanstore::storage::btree::BTreeType>(btree_type)) {
@@ -422,23 +398,6 @@ bool LeanStore::deserialize_meta() {
   }
 
   return all_pages_up_to_date;
-}
-
-void LeanStore::deserialize_flags() {
-  Log::Info("deserializeFlags started");
-  SCOPED_DEFER(Log::Info("deserializeFlags ended"));
-
-  std::ifstream json_file;
-  json_file.open(GetMetaFilePath());
-  rapidjson::IStreamWrapper isw(json_file);
-  rapidjson::Document doc;
-  doc.ParseStream(isw);
-
-  const rapidjson::Value& flags_json_obj = doc[kMetaKeyFlags];
-  StringMap serialized_flags;
-  for (auto it = flags_json_obj.MemberBegin(); it != flags_json_obj.MemberEnd(); ++it) {
-    serialized_flags[it->name.GetString()] = it->value.GetString();
-  }
 }
 
 Result<storage::btree::BasicKV*> LeanStore::CreateBasicKv(const std::string& name,

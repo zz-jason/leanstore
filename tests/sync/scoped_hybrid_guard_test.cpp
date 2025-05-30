@@ -8,7 +8,6 @@
 #include "leanstore/utils/random_generator.hpp"
 
 #include <gtest/gtest.h>
-#include <rapidjson/document.h>
 
 #include <atomic>
 #include <cstdint>

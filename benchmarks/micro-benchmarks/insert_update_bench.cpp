@@ -9,8 +9,6 @@
 #include <benchmark/benchmark.h>
 
 #include <gtest/gtest.h>
-#include <rapidjson/document.h>
-#include <rapidjson/rapidjson.h>
 
 #include <filesystem>
 #include <unordered_set>
@@ -25,14 +23,14 @@ static void BenchUpdateInsert(benchmark::State& state) {
   StoreOption* option = CreateStoreOption("/tmp/leanstore/InsertUpdateBench");
   option->create_from_scratch_ = true;
   option->worker_threads_ = 4;
-  auto sLeanStore = std::make_unique<leanstore::LeanStore>(option);
+  auto leanstore = std::make_unique<leanstore::LeanStore>(option);
 
   storage::btree::TransactionKV* btree;
 
   // create leanstore btree for table records
   const auto* btree_name = "testTree1";
-  sLeanStore->ExecSync(0, [&]() {
-    auto res = sLeanStore->CreateTransactionKV(btree_name);
+  leanstore->ExecSync(0, [&]() {
+    auto res = leanstore->CreateTransactionKV(btree_name);
     EXPECT_TRUE(res);
     EXPECT_NE(res.value(), nullptr);
     btree = res.value();
@@ -40,7 +38,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
 
   std::unordered_set<std::string> dedup;
   for (auto _ : state) {
-    sLeanStore->ExecSync(0, [&]() {
+    leanstore->ExecSync(0, [&]() {
       cr::WorkerContext::My().StartTx();
       std::string key;
       std::string val;
@@ -54,10 +52,10 @@ static void BenchUpdateInsert(benchmark::State& state) {
     });
   }
 
-  sLeanStore->ExecSync(0, [&]() {
+  leanstore->ExecSync(0, [&]() {
     cr::WorkerContext::My().StartTx();
     SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
-    sLeanStore->DropTransactionKV(btree_name);
+    leanstore->DropTransactionKV(btree_name);
   });
 }
 

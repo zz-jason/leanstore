@@ -33,7 +33,7 @@ Result<BasicKV*> BasicKV::Create(leanstore::LeanStore* store, const std::string&
   return tree;
 }
 
-OpCode BasicKV::lookup_optimistic(Slice key, ValCallback val_callback) {
+OpCode BasicKV::LookupOptimistic(Slice key, ValCallback val_callback) {
   JUMPMU_TRY() {
     GuardedBufferFrame<BTreeNode> guarded_leaf;
     FindLeafCanJump(key, guarded_leaf, LatchMode::kOptimisticOrJump);
@@ -52,7 +52,7 @@ OpCode BasicKV::lookup_optimistic(Slice key, ValCallback val_callback) {
   }
 }
 
-OpCode BasicKV::lookup_pessimistic(Slice key, ValCallback val_callback) {
+OpCode BasicKV::LookupPessimistic(Slice key, ValCallback val_callback) {
   while (true) {
     JUMPMU_TRY() {
       GuardedBufferFrame<BTreeNode> guarded_leaf;
@@ -71,10 +71,10 @@ OpCode BasicKV::lookup_pessimistic(Slice key, ValCallback val_callback) {
 }
 
 OpCode BasicKV::Lookup(Slice key, ValCallback val_callback) {
-  if (auto ret = lookup_optimistic(key, val_callback); ret != OpCode::kOther) {
+  if (auto ret = LookupOptimistic(key, val_callback); ret != OpCode::kOther) {
     return ret;
   }
-  return lookup_pessimistic(std::move(key), std::move(val_callback));
+  return LookupPessimistic(std::move(key), std::move(val_callback));
 }
 
 bool BasicKV::IsRangeEmpty(Slice start_key, Slice end_key) {

@@ -2,7 +2,6 @@
 #include "utils/to_json.hpp"
 
 #include <gtest/gtest.h>
-#include <rapidjson/document.h>
 
 namespace leanstore::cr::test {
 
@@ -15,6 +14,17 @@ TEST_F(WalEntryTest, Size) {
   EXPECT_EQ(sizeof(WalCarriageReturn), 3);
   EXPECT_EQ(sizeof(WalEntryComplex), 57);
 }
+
+constexpr char kCrc32[] = "crc32";
+constexpr char kLsn[] = "lsn";
+constexpr char kSize[] = "size";
+constexpr char kType[] = "type";
+constexpr char kTxId[] = "tx_id";
+constexpr char kWorkerId[] = "worker_id";
+constexpr char kPrevLsn[] = "prev_lsn";
+constexpr char kPsn[] = "psn";
+constexpr char kTreeId[] = "tree_id";
+constexpr char kPageId[] = "page_id";
 
 TEST_F(WalEntryTest, ToJsonString) {
   // WalTxAbort

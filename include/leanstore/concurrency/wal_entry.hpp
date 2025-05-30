@@ -177,15 +177,4 @@ inline size_t WalEntry::Size(const WalEntry* entry) {
   return 0;
 }
 
-const char kCrc32[] = "crc32_";
-const char kLsn[] = "lsn_";
-const char kSize[] = "size_";
-const char kType[] = "type_";
-const char kTxId[] = "tx_id_";
-const char kWorkerId[] = "worker_id_";
-const char kPrevLsn[] = "prev_lsn_";
-const char kPsn[] = "psn_";
-const char kTreeId[] = "tree_id_";
-const char kPageId[] = "page_id_";
-
 } // namespace leanstore::cr

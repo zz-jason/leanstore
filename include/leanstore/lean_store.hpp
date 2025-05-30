@@ -37,6 +37,10 @@ class CRManager;
 
 } // namespace leanstore::cr
 
+namespace leanstore::utils {
+class JsonObj;
+} // namespace leanstore::utils
+
 namespace leanstore {
 
 class LeanStore {
@@ -153,14 +157,8 @@ private:
   /// buffer manager, btrees, and flags
   void serialize_meta(bool all_pages_up_to_date);
 
-  /// serializeFlags serializes all the persisted flags to the provided json.
-  void serialize_flags(uint8_t* dest);
-
   /// deserializeMeta deserializes all the metadata except for the flags.
   bool deserialize_meta();
-
-  /// deserializeFlags deserializes the flags.
-  void deserialize_flags();
 
   void init_page_and_wal_fd();
 };
