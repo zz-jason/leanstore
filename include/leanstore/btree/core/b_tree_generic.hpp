@@ -8,8 +8,7 @@
 #include "leanstore/sync/hybrid_latch.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/log.hpp"
-
-#include <rapidjson/document.h>
+#include "utils/json.hpp"
 
 #include <atomic>
 #include <limits>
@@ -201,15 +200,14 @@ public:
     x_guarded_meta.Reclaim();
   }
 
-  static void ToJson(BTreeGeneric& btree, rapidjson::Document* result_doc);
+  static void ToJson(BTreeGeneric& btree, utils::JsonObj* btree_json_obj);
 
 private:
   static void free_b_tree_nodes_recursive(BTreeGeneric& btree,
                                           GuardedBufferFrame<BTreeNode>& guarded_node);
 
   static void to_json_recursive(BTreeGeneric& btree, GuardedBufferFrame<BTreeNode>& guarded_node,
-                                rapidjson::Value* result_obj,
-                                rapidjson::Value::AllocatorType& allocator);
+                                utils::JsonObj* node_json_obj);
 
   static ParentSwipHandler find_parent_may_jump(BTreeGeneric& btree, BufferFrame& bf_to_find) {
     return FindParent<true>(btree, bf_to_find);

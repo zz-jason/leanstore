@@ -48,7 +48,7 @@ void TransactionKV::Init(leanstore::LeanStore* store, TREEID tree_id, BTreeConfi
   BasicKV::Init(store, tree_id, std::move(config));
 }
 
-OpCode TransactionKV::lookup_optimistic(Slice key, ValCallback val_callback) {
+OpCode TransactionKV::LookupOptimistic(Slice key, ValCallback val_callback) {
   JUMPMU_TRY() {
     GuardedBufferFrame<BTreeNode> guarded_leaf;
     FindLeafCanJump(key, guarded_leaf, LatchMode::kOptimisticOrJump);
@@ -82,7 +82,7 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback val_callback) {
     return ret;
   };
 
-  auto optimistic_ret = lookup_optimistic(key, val_callback);
+  auto optimistic_ret = LookupOptimistic(key, val_callback);
   if (optimistic_ret == OpCode::kOK) {
     return OpCode::kOK;
   }

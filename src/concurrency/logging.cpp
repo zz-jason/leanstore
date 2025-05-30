@@ -6,9 +6,6 @@
 #include "leanstore/utils/log.hpp"
 #include "utils/to_json.hpp"
 
-#include <rapidjson/stringbuffer.h>
-#include <rapidjson/writer.h>
-
 #include <cstring>
 
 namespace leanstore::cr {

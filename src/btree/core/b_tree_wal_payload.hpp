@@ -5,8 +5,6 @@
 #include "leanstore/units.hpp"
 #include "leanstore/utils/log.hpp"
 
-#include <rapidjson/document.h>
-
 #include <string>
 
 namespace leanstore::storage::btree {
@@ -64,22 +62,6 @@ public:
   static const WalPayload* From(const void* data) {
     return reinterpret_cast<const WalPayload*>(const_cast<void*>(data));
   }
-
-  static void ToJson(const WalPayload* wal, rapidjson::Document* doc);
-
-  static std::string ToJsonString(const WalPayload* wal);
-
-private:
-  static void to_json(const WalPayload* wal, rapidjson::Document* doc);
-  static void to_json(const WalInsert* wal, rapidjson::Document* doc);
-  static void to_json(const WalTxInsert* wal, rapidjson::Document* doc);
-  static void to_json(const WalUpdate* wal, rapidjson::Document* doc);
-  static void to_json(const WalTxUpdate* wal, rapidjson::Document* doc);
-  static void to_json(const WalRemove* wal, rapidjson::Document* doc);
-  static void to_json(const WalTxRemove* wal, rapidjson::Document* doc);
-  static void to_json(const WalInitPage* wal, rapidjson::Document* doc);
-  static void to_json(const WalSplitRoot* wal, rapidjson::Document* doc);
-  static void to_json(const WalSplitNonRoot* wal, rapidjson::Document* doc);
 };
 
 #undef TYPE_NAME

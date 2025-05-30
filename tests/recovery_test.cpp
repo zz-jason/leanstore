@@ -12,9 +12,6 @@
 #include "leanstore/utils/random_generator.hpp"
 
 #include <gtest/gtest.h>
-#include <rapidjson/document.h>
-#include <rapidjson/stringbuffer.h>
-#include <rapidjson/writer.h>
 
 #include <cstddef>
 #include <format>

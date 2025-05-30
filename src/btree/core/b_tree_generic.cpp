@@ -621,71 +621,70 @@ void BTreeGeneric::Deserialize(StringMap map) {
             meta_node_swip_.AsBufferFrame().page_.btree_id_);
 }
 
-void BTreeGeneric::ToJson(BTreeGeneric& btree, rapidjson::Document* result_doc) {
-  LS_DCHECK(result_doc->IsObject());
-  auto& allocator = result_doc->GetAllocator();
+void BTreeGeneric::ToJson(BTreeGeneric& btree, utils::JsonObj* btree_json_obj) {
+  constexpr char kMetaNode[] = "meta_node";
+  constexpr char kRootNode[] = "root_node";
 
   // meta node
   GuardedBufferFrame<BTreeNode> guarded_meta_node(btree.store_->buffer_manager_.get(),
                                                   btree.meta_node_swip_);
-  rapidjson::Value meta_json(rapidjson::kObjectType);
-  utils::ToJson(guarded_meta_node.bf_, &meta_json, &allocator);
-  result_doc->AddMember("metaNode", meta_json, allocator);
+  utils::JsonObj meta_json_obj;
+  utils::ToJson(guarded_meta_node.bf_, &meta_json_obj);
+  btree_json_obj->AddJsonObj(kMetaNode, meta_json_obj);
 
   // root node
   GuardedBufferFrame<BTreeNode> guarded_root_node(btree.store_->buffer_manager_.get(),
                                                   guarded_meta_node,
                                                   guarded_meta_node->right_most_child_swip_);
-  rapidjson::Value root_json(rapidjson::kObjectType);
-  to_json_recursive(btree, guarded_root_node, &root_json, allocator);
-  result_doc->AddMember("rootNode", root_json, allocator);
+  utils::JsonObj root_json_obj;
+  to_json_recursive(btree, guarded_root_node, &root_json_obj);
+  btree_json_obj->AddJsonObj(kRootNode, root_json_obj);
 }
 
 void BTreeGeneric::to_json_recursive(BTreeGeneric& btree,
                                      GuardedBufferFrame<BTreeNode>& guarded_node,
-                                     rapidjson::Value* result_obj,
-                                     rapidjson::Value::AllocatorType& allocator) {
+                                     utils::JsonObj* node_json_obj) {
 
-  LS_DCHECK(result_obj->IsObject());
+  constexpr char kBtreeNode[] = "btree_node";
+  constexpr char kChildren[] = "children";
+
   // buffer frame header
-  utils::ToJson(guarded_node.bf_, result_obj, &allocator);
+  utils::ToJson(guarded_node.bf_, node_json_obj);
 
   // btree node
   {
-    rapidjson::Value node_obj(rapidjson::kObjectType);
-    utils::ToJson(guarded_node.ptr(), &node_obj, &allocator);
-    result_obj->AddMember("pagePayload(btreeNode)", node_obj, allocator);
+    utils::JsonObj btree_node_json_obj;
+    utils::ToJson(guarded_node.ptr(), &btree_node_json_obj);
+    node_json_obj->AddJsonObj(kBtreeNode, btree_node_json_obj);
   }
 
   if (guarded_node->is_leaf_) {
     return;
   }
 
-  rapidjson::Value children_json(rapidjson::kArrayType);
+  utils::JsonArray children_json_array;
   for (auto i = 0u; i < guarded_node->num_slots_; ++i) {
     auto* child_swip = guarded_node->ChildSwip(i);
     GuardedBufferFrame<BTreeNode> guarded_child(btree.store_->buffer_manager_.get(), guarded_node,
                                                 *child_swip);
-
-    rapidjson::Value child_obj(rapidjson::kObjectType);
-    to_json_recursive(btree, guarded_child, &child_obj, allocator);
+    utils::JsonObj child_json_obj;
+    to_json_recursive(btree, guarded_child, &child_json_obj);
     guarded_child.unlock();
 
-    children_json.PushBack(child_obj, allocator);
+    children_json_array.AppendJsonObj(child_json_obj);
   }
 
   if (guarded_node->right_most_child_swip_ != nullptr) {
     GuardedBufferFrame<BTreeNode> guarded_child(btree.store_->buffer_manager_.get(), guarded_node,
                                                 guarded_node->right_most_child_swip_);
-    rapidjson::Value child_obj(rapidjson::kObjectType);
-    to_json_recursive(btree, guarded_child, &child_obj, allocator);
+    utils::JsonObj child_json_obj;
+    to_json_recursive(btree, guarded_child, &child_json_obj);
     guarded_child.unlock();
 
-    children_json.PushBack(child_obj, allocator);
+    children_json_array.AppendJsonObj(child_json_obj);
   }
 
-  // children
-  result_obj->AddMember("children_", children_json, allocator);
+  node_json_obj->AddJsonArray(kChildren, children_json_array);
 }
 
 } // namespace leanstore::storage::btree

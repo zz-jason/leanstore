@@ -96,8 +96,8 @@ public:
   }
 
 private:
-  OpCode lookup_optimistic(Slice key, ValCallback val_callback);
-  OpCode lookup_pessimistic(Slice key, ValCallback val_callback);
+  OpCode LookupOptimistic(Slice key, ValCallback val_callback);
+  OpCode LookupPessimistic(Slice key, ValCallback val_callback);
 };
 
 } // namespace leanstore::storage::btree
