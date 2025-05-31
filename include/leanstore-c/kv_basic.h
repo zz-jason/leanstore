@@ -30,7 +30,7 @@ bool BasicKvInsert(BasicKvHandle* handle, uint64_t worker_id, StringSlice key, S
 
 /// Lookup a key in a basic key-value store at workerId
 /// @return whether the value exists, The input val is untouched if the key is not found
-bool BasicKvLookup(BasicKvHandle* handle, uint64_t worker_id, StringSlice key, String** val);
+bool BasicKvLookup(BasicKvHandle* handle, uint64_t worker_id, StringSlice key, OwnedString** val);
 
 /// Remove a key in a basic key-value store at workerId
 /// @return true if the key is found and removed, false otherwise

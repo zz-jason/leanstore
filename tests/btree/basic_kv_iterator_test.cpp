@@ -53,7 +53,7 @@ TEST_F(BasicKvIteratorTest, BasicKvHandle) {
 
   // lookup
   for (auto i = 0; i < num_entries; i++) {
-    String* val = CreateString(nullptr, 0);
+    OwnedString* val = CreateOwnedString(nullptr, 0);
     bool found = BasicKvLookup(kv_handle_, 1, {keys[i].data(), keys[i].size()}, &val);
     ASSERT_TRUE(found);
     EXPECT_EQ(val->size_, vals[i].size());
