@@ -20,11 +20,11 @@
 #include <stdlib.h>
 
 //------------------------------------------------------------------------------
-// String API
+// OwnedString API
 //------------------------------------------------------------------------------
 
-String* CreateString(const char* data, uint64_t size) {
-  String* str = new String();
+OwnedString* CreateOwnedString(const char* data, uint64_t size) {
+  OwnedString* str = new OwnedString();
 
   if (data == nullptr || size == 0) {
     str->data_ = nullptr;
@@ -43,7 +43,7 @@ String* CreateString(const char* data, uint64_t size) {
   return str;
 }
 
-void DestroyString(String* str) {
+void DestroyOwnedString(OwnedString* str) {
   if (str != nullptr) {
     if (str->data_ != nullptr) {
       // release memory
@@ -130,18 +130,17 @@ bool BasicKvInsert(BasicKvHandle* handle, uint64_t worker_id, StringSlice key, S
   return succeed;
 }
 
-bool BasicKvLookup(BasicKvHandle* handle, uint64_t worker_id, StringSlice key, String** val) {
+bool BasicKvLookup(BasicKvHandle* handle, uint64_t worker_id, StringSlice key, OwnedString** val) {
   bool found = false;
   handle->store_->ExecSync(worker_id, [&]() {
-    // copy value out to a thread-local buffer to reduce memory allocation
     auto copy_value_out = [&](leanstore::Slice val_slice) {
       // set the found flag
       found = true;
 
       // create a new string if the value is out of the buffer size
       if ((**val).capacity_ < val_slice.size() + 1) {
-        DestroyString(*val);
-        *val = CreateString(reinterpret_cast<const char*>(val_slice.data()), val_slice.size());
+        DestroyOwnedString(*val);
+        *val = CreateOwnedString(reinterpret_cast<const char*>(val_slice.data()), val_slice.size());
         return;
       }
 
@@ -277,19 +276,19 @@ StringSlice BasicKvIterVal(BasicKvIterHandle* handle) {
 // Interfaces for metrics
 //------------------------------------------------------------------------------
 
-static leanstore::telemetry::MetricsHttpExposer* sGlobalMetricsHttpExposer = nullptr;
-static std::mutex sGlobalMetricsHttpExposerMutex;
+static leanstore::telemetry::MetricsHttpExposer* global_metrics_http_exposer = nullptr;
+static std::mutex global_metrics_http_exposer_mutex;
 
 void StartMetricsHttpExposer(int32_t port) {
-  std::unique_lock guard{sGlobalMetricsHttpExposerMutex};
-  sGlobalMetricsHttpExposer = new leanstore::telemetry::MetricsHttpExposer(port);
-  sGlobalMetricsHttpExposer->Start();
+  std::unique_lock guard{global_metrics_http_exposer_mutex};
+  global_metrics_http_exposer = new leanstore::telemetry::MetricsHttpExposer(port);
+  global_metrics_http_exposer->Start();
 }
 
 void StopMetricsHttpExposer() {
-  std::unique_lock guard{sGlobalMetricsHttpExposerMutex};
-  if (sGlobalMetricsHttpExposer != nullptr) {
-    delete sGlobalMetricsHttpExposer;
-    sGlobalMetricsHttpExposer = nullptr;
+  std::unique_lock guard{global_metrics_http_exposer_mutex};
+  if (global_metrics_http_exposer != nullptr) {
+    delete global_metrics_http_exposer;
+    global_metrics_http_exposer = nullptr;
   }
 }
