@@ -4,6 +4,7 @@
 #include "leanstore-c/store_option.h"
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -11,11 +12,11 @@ extern "C" {
 #endif
 
 //------------------------------------------------------------------------------
-// String API
+// OwnedString API
 //------------------------------------------------------------------------------
 
-/// String is a data structure that holds an owned bytes buffer
-typedef struct String {
+/// OwnedString is a data structure that holds an owned bytes buffer
+typedef struct OwnedString {
   /// The owned data pointer
   char* data_;
 
@@ -24,16 +25,16 @@ typedef struct String {
 
   /// The capacity of the data
   uint64_t capacity_;
-} String;
+} OwnedString;
 
 /// Creates a new string, copying the data from the given buffer to the new string
 /// @param data the data buffer
 /// @param size the size of the data buffer
-/// @return the new string, which should be destroyed by the caller with DestroyString()
-String* CreateString(const char* data, uint64_t size);
+/// @return the new string, which should be destroyed by the caller with DestroyOwnedString()
+OwnedString* CreateOwnedString(const char* data, uint64_t size);
 
 /// Destroys a string
-void DestroyString(String* str);
+void DestroyOwnedString(OwnedString* str);
 
 //------------------------------------------------------------------------------
 // StringSlice API
