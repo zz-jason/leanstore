@@ -25,7 +25,7 @@ cmake -B build -S . \
 cmake --build build -j `nproc`
 
 # run the example
-./build/BasicKvExample
+./build/kv_basic_example
 ```
 
 Or you can directly build the example:
@@ -34,10 +34,10 @@ Or you can directly build the example:
 cd $LEANSTORE_HOME/examples/c
 
 # build with leanstore library
-gcc -o basickv-example BasicKvExample.c \
+gcc -o kv_basic_example kv_basic_example.c \
     -L$LEANSTORE_HOME/dist/debug/lib -lleanstore -lstdc++ \
     -I$LEANSTORE_HOME/dist/debug/include
 
 # run with LD_LIBRARY_PATH set to the leanstore library path
-LD_LIBRARY_PATH=$LEANSTORE_HOME/dist/debug/lib ./basickv-example
+LD_LIBRARY_PATH=$LEANSTORE_HOME/dist/debug/lib ./kv_basic_example
 ```

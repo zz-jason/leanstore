@@ -17,9 +17,13 @@ extern "C" {
 typedef struct BasicKvHandle BasicKvHandle;
 
 /// Create a basic key-value store in a leanstore instance at workerId
-/// @return the basic key-value store handle, or nullptr if the creation fails. The handle should be
-///         destroyed by the caller with DestroyBasicKv()
+/// @return the basic key-value store handle, or nullptr if the creation fails.
+///         The handle should be destroyed by the caller with DestroyBasicKv()
 BasicKvHandle* CreateBasicKv(LeanStoreHandle* handle, uint64_t worker_id, const char* btree_name);
+
+/// Get the basic key-value handle for btree name
+/// @return nullptr if not found
+BasicKvHandle* GetBasicKv(LeanStoreHandle* handle, const char* btree_name);
 
 /// Destroy the basic key-value store handle
 void DestroyBasicKv(BasicKvHandle* handle);

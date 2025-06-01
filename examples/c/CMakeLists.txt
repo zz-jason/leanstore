@@ -17,7 +17,12 @@ option(LEANSTORE_LIBRARY_DIR "Path to the leanstore library directory" "")
 message(STATUS "LEANSTORE_LIBRARY_DIR: ${LEANSTORE_LIBRARY_DIR}")
 link_directories(${LEANSTORE_LIBRARY_DIR})
 
-# Rules to build BasicKvExample
-add_executable(BasicKvExample BasicKvExample.c)
-target_link_libraries(BasicKvExample leanstore)
-target_include_directories(BasicKvExample PUBLIC ${LEANSTORE_INCLUDE_DIR})
+# Rules to build kv_basic_example
+add_executable(kv_basic_example kv_basic_example.c)
+target_link_libraries(kv_basic_example leanstore)
+target_include_directories(kv_basic_example PUBLIC ${LEANSTORE_INCLUDE_DIR})
+
+add_executable(kv_txn_example kv_txn_example.c)
+target_link_libraries(kv_txn_example leanstore)
+target_include_directories(kv_txn_example PUBLIC ${LEANSTORE_INCLUDE_DIR})
+
