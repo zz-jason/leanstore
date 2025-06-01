@@ -61,6 +61,9 @@ LeanStoreHandle* CreateLeanStore(StoreOption* option);
 /// Deinit and destroy a leanstore instance
 void DestroyLeanStore(LeanStoreHandle* handle);
 
+/// Get the LeanStore instance, return NULL if the handle is invalid
+void* GetLeanStore(LeanStoreHandle* handle);
+
 //------------------------------------------------------------------------------
 // Interfaces for metrics
 //------------------------------------------------------------------------------

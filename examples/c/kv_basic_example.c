@@ -50,7 +50,7 @@ int main() {
 
   // lookup a key
   {
-    OwnedString* val = CreateOwnedString(nullptr, 0);
+    OwnedString* val = CreateOwnedString(NULL, 0);
     bool found = BasicKvLookup(kv_handle, 1, key_slice, &val);
     if (!found) {
       printf("lookup value failed, value may not exist, key=%.*s\n", (int)key_slice.size_,
