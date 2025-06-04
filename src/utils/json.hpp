@@ -1,9 +1,16 @@
 #pragma once
 
 #include "leanstore/utils/result.hpp"
-#include <leanstore/utils/error.hpp>
+
+#define RAPIDJSON_NAMESPACE leanstore::rapidjson
+#define RAPIDJSON_NAMESPACE_BEGIN namespace leanstore::rapidjson {
+#define RAPIDJSON_NAMESPACE_END }
 
 #include <rapidjson/document.h>
+
+#undef RAPIDJSON_NAMESPACE_END
+#undef RAPIDJSON_NAMESPACE_BEGIN
+#undef RAPIDJSON_NAMESPACE
 
 #include <cstddef>
 #include <cstdint>
