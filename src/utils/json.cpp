@@ -3,9 +3,17 @@
 #include "leanstore/utils/error.hpp"
 #include "leanstore/utils/result.hpp"
 
+#define RAPIDJSON_NAMESPACE leanstore::rapidjson
+#define RAPIDJSON_NAMESPACE_BEGIN namespace leanstore::rapidjson {
+#define RAPIDJSON_NAMESPACE_END }
+
 #include <rapidjson/document.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
+
+#undef RAPIDJSON_NAMESPACE_END
+#undef RAPIDJSON_NAMESPACE_BEGIN
+#undef RAPIDJSON_NAMESPACE
 
 #include <cstdint>
 #include <expected>
