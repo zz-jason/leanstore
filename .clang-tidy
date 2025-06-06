@@ -63,9 +63,9 @@ CheckOptions:
 
   # class member
   - key:   readability-identifier-naming.ClassMemberCase
-    value: CamelCase
+    value: lower_case
   - key:   readability-identifier-naming.ClassMemberPrefix
-    value: s
+    value: s_
 
   # enum
   - key:   readability-identifier-naming.EnumCase
@@ -85,9 +85,7 @@ CheckOptions:
 
   # static variable
   - key:   readability-identifier-naming.StaticVariableCase
-    value: CamelCase
-  - key:   readability-identifier-naming.StaticVariablePrefix
-    value: s
+    value: lower_case
 
   # static const
   - key:   readability-identifier-naming.StaticConstantCase

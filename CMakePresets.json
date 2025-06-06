@@ -35,8 +35,7 @@
             "inherits": "base_debug",
             "binaryDir": "${sourceDir}/build/debug",
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/debug",
-                "ENABLE_COVERAGE": "ON"
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/debug"
             }
         },
         {

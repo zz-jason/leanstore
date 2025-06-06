@@ -22,6 +22,7 @@ set(leanstore_deps
   Crc32c::crc32c
   httplib::httplib
   PkgConfig::libunwind
+  Boost::context
 )
 target_link_libraries(leanstore PUBLIC ${leanstore_deps})
 

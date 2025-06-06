@@ -71,7 +71,7 @@ endif (CYGWIN)
 # ------------------------------------------------------------------------------
 # Dependencies
 # ------------------------------------------------------------------------------
-
+find_package(Boost REQUIRED CONFIG COMPONENTS context)
 find_package(RapidJSON CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
