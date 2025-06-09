@@ -33,7 +33,7 @@ public:
   }
 
 protected:
-  void run_impl() override {
+  void RunImpl() override {
     while (keep_running_) {
       server_.listen("0.0.0.0", port_);
     }

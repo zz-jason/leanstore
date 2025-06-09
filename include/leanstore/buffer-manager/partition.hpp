@@ -114,7 +114,12 @@ public:
 
   /// Whether the partition needs more free buffer frames.
   bool NeedMoreFreeBfs() {
-    return free_bf_list_.size_ < free_bfs_limit_;
+    return NumFreeBfs() < free_bfs_limit_;
+  }
+
+  /// Returns the number of free buffer frames in the partition.
+  uint64_t NumFreeBfs() {
+    return free_bf_list_.size_;
   }
 
   /// Allocates a new page id.

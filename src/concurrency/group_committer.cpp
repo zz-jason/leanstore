@@ -15,7 +15,7 @@ namespace leanstore::cr {
 /// The alignment of the WAL record
 constexpr size_t kAligment = 4096;
 
-void GroupCommitter::run_impl() {
+void GroupCommitter::RunImpl() {
   TXID min_flushed_sys_tx = std::numeric_limits<TXID>::max();
   TXID min_flushed_usr_tx = std::numeric_limits<TXID>::max();
   std::vector<uint64_t> num_rfa_txs(worker_ctxs_.size(), 0);

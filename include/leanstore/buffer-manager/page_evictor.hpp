@@ -10,6 +10,7 @@
 #include "leanstore/utils/user_thread.hpp"
 
 #include <cstdint>
+#include <vector>
 
 #include <fcntl.h>
 #include <sys/resource.h>
@@ -55,22 +56,6 @@ public:
 /// Evicts in-memory pages, provides free BufferFrames for partitions.
 class PageEvictor : public utils::UserThread {
 public:
-  leanstore::LeanStore* store_;
-  const uint64_t num_bfs_;
-  uint8_t* buffer_pool_;
-
-  const uint64_t num_partitions_;
-  const uint64_t partitions_mask_;
-  std::vector<std::unique_ptr<Partition>>& partitions_;
-
-  const int fd_;
-
-  std::vector<BufferFrame*> cool_candidate_bfs_;  // input of phase 1
-  std::vector<BufferFrame*> evict_candidate_bfs_; // output of phase 1
-  AsyncWriteBuffer async_write_buffer_;           // output of phase 2
-  FreeBfList free_bf_list_;                       // output of phase 3
-
-public:
   PageEvictor(leanstore::LeanStore* store, const std::string& thread_name, uint64_t running_cpu,
               uint64_t num_bfs, uint8_t* bfs, uint64_t num_partitions, uint64_t partition_mask,
               std::vector<std::unique_ptr<Partition>>& partitions)
@@ -103,7 +88,6 @@ public:
     Stop();
   }
 
-public:
   /// Randomly picks a batch of buffer frames from the whole memory, gather the
   /// cool buffer frames for the next round to evict, cools the hot buffer
   /// frames if all their children are evicted.
@@ -131,14 +115,33 @@ public:
   /// Writes all picked pages, push free BufferFrames to target partition.
   void FlushAndRecycleBufferFrames(Partition& target_partition);
 
+  auto& GetPartitions() {
+    return partitions_;
+  }
+
 protected:
-  void run_impl() override;
+  void RunImpl() override;
+
+  void RandomBufferFrames2CoolOrEvict();
+
+  void EvictFlushedBufferFrame(BufferFrame& cooled_bf, BMOptimisticGuard& optimistic_guard,
+                               Partition& target_partition);
 
 private:
-  void random_buffer_frames_to_cool_or_evict();
+  leanstore::LeanStore* store_;
+  const uint64_t num_bfs_;
+  uint8_t* buffer_pool_;
 
-  void evict_flushed_bf(BufferFrame& cooled_bf, BMOptimisticGuard& optimistic_guard,
-                        Partition& target_partition);
+  const uint64_t num_partitions_;
+  const uint64_t partitions_mask_;
+  std::vector<std::unique_ptr<Partition>>& partitions_;
+
+  const int fd_;
+
+  std::vector<BufferFrame*> cool_candidate_bfs_;  // input of phase 1
+  std::vector<BufferFrame*> evict_candidate_bfs_; // output of phase 1
+  AsyncWriteBuffer async_write_buffer_;           // output of phase 2
+  FreeBfList free_bf_list_;                       // output of phase 3
 };
 
 } // namespace leanstore::storage

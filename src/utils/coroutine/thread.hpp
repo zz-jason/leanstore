@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils/coroutine/blocking_queue_mpsc.hpp"
+#include "utils/coroutine/coro_io.hpp"
 #include "utils/coroutine/coroutine.hpp"
 
 #include <atomic>
@@ -9,6 +10,7 @@
 #include <format>
 #include <memory>
 #include <thread>
+#include <vector>
 
 #include <pthread.h>
 #include <unistd.h>
@@ -20,10 +22,20 @@ public:
   static constexpr int64_t kMaxCoroutinesPerThread = 256;
 
   Thread(int64_t thread_id = -1) : thread_id_(thread_id) {
+    // Create a system task for IO polling
+    sys_tasks_.emplace_back(std::make_unique<Coroutine>([this]() {
+      while (keep_running_) {
+        coro_io_.Poll();
+        CurrentCoro()->Yield(CoroState::kRunning);
+      }
+    }));
   }
 
   ~Thread() {
     Stop();
+    if (thread_.joinable()) {
+      thread_.join();
+    }
   }
 
   Thread(const Thread&) = delete;
@@ -44,7 +56,7 @@ public:
   /// Stops the worker thread.
   void Stop() {
     keep_running_ = false;
-    coroutine_queue_.Shutdown();
+    user_task_queue_.Shutdown();
   }
 
   void Join() {
@@ -53,12 +65,16 @@ public:
     }
   }
 
+  bool IsRunning() const {
+    return keep_running_.load(std::memory_order_acquire);
+  }
+
   void PushBack(std::unique_ptr<Coroutine> coroutine) {
-    coroutine_queue_.PushBack(std::move(coroutine));
+    user_task_queue_.PushBack(std::move(coroutine));
   }
 
   bool PopFront(std::unique_ptr<Coroutine>& coroutine) {
-    return coroutine_queue_.PopFront(coroutine);
+    return user_task_queue_.PopFront(coroutine);
   }
 
   void RunCoroutine(Coroutine* coroutine) {
@@ -68,12 +84,16 @@ public:
     current_coroutine_ = nullptr;
   }
 
+  static CoroIo* CurrentCoroIo() {
+    return &CurrentThread()->coro_io_;
+  }
+
   static Thread* CurrentThread() {
     assert(s_current_thread != nullptr);
     return s_current_thread;
   }
 
-  static Coroutine* CurrentCoroutine() {
+  static Coroutine* CurrentCoro() {
     return CurrentThread()->current_coroutine_;
   }
 
@@ -101,7 +121,12 @@ private:
   Coroutine* current_coroutine_ = nullptr;
 
   /// Ring buffer to hold coroutines that are ready to run.
-  BlockingQueueMpsc<std::unique_ptr<Coroutine>> coroutine_queue_{kMaxCoroutinesPerThread};
+  BlockingQueueMpsc<std::unique_ptr<Coroutine>> user_task_queue_{kMaxCoroutinesPerThread};
+
+  /// Task queue for system tasks, e.g. IO operations.
+  std::vector<std::unique_ptr<Coroutine>> sys_tasks_;
+
+  CoroIo coro_io_{kMaxCoroutinesPerThread};
 
   std::thread thread_;
 

@@ -12,6 +12,6 @@ extern void Init();
 extern void Deinit();
 
 extern Thread* CurrentThread();
-extern Coroutine* CurrentCoroutine();
+extern Coroutine* CurrentCoro();
 
 } // namespace leanstore::env

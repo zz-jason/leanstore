@@ -4,20 +4,25 @@
 
 #include <cassert>
 #include <memory>
+#include <utility>
 
 namespace leanstore {
 
 void Thread::ThreadLoop() {
   constexpr int kCoroutineRunsLimit = 1;
   std::unique_ptr<Coroutine> coroutine{nullptr};
-  int coroutine_runs = 0;
+  int user_task_runs = 0;
 
   while (keep_running_) {
-    coroutine_runs = 0;
-    while (coroutine_runs < kCoroutineRunsLimit && PopFront(coroutine)) {
+    user_task_runs = 0;
+    while (user_task_runs < kCoroutineRunsLimit && PopFront(coroutine)) {
       // Mutex is not available, push back to the queue
-      if (coroutine->GetState() == CoroState::kWaitingMutex &&
-          !coroutine->GetWaitingMutex()->TryLock()) {
+      if (coroutine->GetState() == CoroState::kWaitingMutex && !coroutine->TryLock()) {
+        PushBack(std::move(coroutine));
+        break;
+      }
+
+      if (coroutine->GetState() == CoroState::kWaitingIo && !coroutine->IsIoCompleted()) {
         PushBack(std::move(coroutine));
         break;
       }
@@ -31,7 +36,12 @@ void Thread::ThreadLoop() {
         PushBack(std::move(coroutine));
       }
 
-      coroutine_runs++;
+      user_task_runs++;
+    }
+
+    // Run system tasks if any
+    for (auto& sys_task : sys_tasks_) {
+      RunCoroutine(sys_task.get());
     }
   }
 }

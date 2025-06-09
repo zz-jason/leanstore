@@ -150,7 +150,7 @@ public:
                            std::function<void(BufferFrame& bf)> action);
 
 private:
-  Result<void> write_page(PID page_id, void* buffer) {
+  Result<void> WritePageSync(PID page_id, void* buffer) {
     utils::AsyncIo aio(1);
     const auto page_size = store_->store_option_->page_size_;
     DEBUG_BLOCK() {

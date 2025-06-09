@@ -56,7 +56,7 @@ public:
   virtual ~GroupCommitter() override = default;
 
 protected:
-  virtual void run_impl() override;
+  virtual void RunImpl() override;
 
 private:
   /// Phase 1: collect wal records from all the worker threads. Collected wal records are written to

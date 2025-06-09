@@ -188,7 +188,7 @@ Result<void> BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
   bf.header_.latch_.LockExclusively();
   if (!bf.IsFree()) {
     store_->tree_registry_->Checkpoint(bf.page_.btree_id_, bf, buffer);
-    auto res = write_page(bf.header_.page_id_, buffer);
+    auto res = WritePageSync(bf.header_.page_id_, buffer);
     if (!res) {
       return std::unexpected(std::move(res.error()));
     }
@@ -463,7 +463,7 @@ Result<void> BufferManager::WritePageSync(BufferFrame& bf) {
   auto page_id = bf.header_.page_id_;
   auto& partition = GetPartition(page_id);
 
-  write_page(page_id, &bf.page_);
+  WritePageSync(page_id, &bf.page_);
 
   bf.Reset();
   guard.Unlock();

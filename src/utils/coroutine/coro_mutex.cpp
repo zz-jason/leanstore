@@ -6,21 +6,49 @@
 
 namespace leanstore {
 
+// -----------------------------------------------------------------------------
+// CoroMutex
+// -----------------------------------------------------------------------------
+
 void CoroMutex::Lock() {
   if (!TryLock()) {
-    auto* current_coro = Thread::CurrentCoroutine();
-    current_coro->SetWaitingMutex(this);
+    auto* current_coro = Thread::CurrentCoro();
+    current_coro->SetTryLockFunc([this]() { return this->TryLock(); });
     current_coro->Yield(CoroState::kWaitingMutex);
 
-    // resume after the mutex is available
-    current_coro->SetWaitingMutex(nullptr);
+    // The current coroutine only resumes if the TryLockFunc returns true (succeed)
+    current_coro->ClearTryLockFunc();
   }
 }
 
-void CoroMutex::Unlock() {
-  assert(lock_flag_.test_and_set(std::memory_order_acquire) &&
-         "Mutex must be locked before unlocking");
-  lock_flag_.clear(std::memory_order_release);
+// -----------------------------------------------------------------------------
+// CoroSharedMutex
+// -----------------------------------------------------------------------------
+
+void CoroSharedMutex::Lock() {
+  if (!TryLock()) {
+    auto* current_coro = Thread::CurrentCoro();
+    current_coro->SetTryLockFunc([this]() { return this->TryLock(); });
+    current_coro->Yield(CoroState::kWaitingMutex);
+
+    // The current coroutine only resumes if the TryLockFunc returns true (succeed)
+    current_coro->ClearTryLockFunc();
+  }
+
+  assert(state_ == kLockedExclusively);
+}
+
+void CoroSharedMutex::LockShared() {
+  if (!TryLockShared()) {
+    auto* current_coro = Thread::CurrentCoro();
+    current_coro->SetTryLockFunc([this]() { return this->TryLockShared(); });
+    current_coro->Yield(CoroState::kWaitingMutex);
+
+    // The current coroutine only resumes if the TryLockFunc returns true (succeed)
+    current_coro->ClearTryLockFunc();
+  }
+
+  assert(state_ != kLockedExclusively);
 }
 
 } // namespace leanstore

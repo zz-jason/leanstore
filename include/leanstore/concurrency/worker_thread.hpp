@@ -71,10 +71,10 @@ public:
 
 protected:
   /// The main loop of the worker thread.
-  void run_impl() override;
+  void RunImpl() override;
 };
 
-inline void WorkerThread::run_impl() {
+inline void WorkerThread::RunImpl() {
   while (keep_running_) {
     // wait until there is a job
     std::unique_lock guard(mutex_);

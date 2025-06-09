@@ -94,11 +94,11 @@ protected:
     }
 
     // run custom thread loop
-    run_impl();
+    RunImpl();
   }
 
   /// Custom thread loop
-  virtual void run_impl() = 0;
+  virtual void RunImpl() = 0;
 };
 
 } // namespace leanstore::utils

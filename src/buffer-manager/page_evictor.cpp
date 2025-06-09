@@ -11,7 +11,7 @@ namespace leanstore::storage {
 
 using Time = decltype(std::chrono::high_resolution_clock::now());
 
-void PageEvictor::run_impl() {
+void PageEvictor::RunImpl() {
   while (keep_running_) {
     auto& target_partition = store_->buffer_manager_->RandomPartition();
     if (!target_partition.NeedMoreFreeBfs()) {
@@ -38,7 +38,7 @@ void PageEvictor::PickBufferFramesToCool(Partition& target_partition) {
   // the required level can not be achieved
   uint64_t failed_attempts = 0;
   if (target_partition.NeedMoreFreeBfs() && failed_attempts < 10) {
-    random_buffer_frames_to_cool_or_evict();
+    RandomBufferFrames2CoolOrEvict();
     while (cool_candidate_bfs_.size() > 0) {
       auto* cool_candidate = cool_candidate_bfs_.back();
       cool_candidate_bfs_.pop_back();
@@ -162,7 +162,7 @@ void PageEvictor::PickBufferFramesToCool(Partition& target_partition) {
   }
 }
 
-void PageEvictor::random_buffer_frames_to_cool_or_evict() {
+void PageEvictor::RandomBufferFrames2CoolOrEvict() {
   cool_candidate_bfs_.clear();
   for (auto i = 0u; i < store_->store_option_->buffer_frame_recycle_batch_size_; i++) {
     auto* random_bf = &store_->buffer_manager_->RandomBufferFrame();
@@ -207,7 +207,7 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& target_partition) {
       // Evict clean pages. They can be safely cleared in memory without
       // writing any bytes back to the underlying disk.
       if (!cooled_bf->IsDirty()) {
-        evict_flushed_bf(*cooled_bf, optimistic_guard, target_partition);
+        EvictFlushedBufferFrame(*cooled_bf, optimistic_guard, target_partition);
         LS_DLOG("COOLed buffer frame is not dirty, reclaim directly, pageId={}",
                 cooled_bf->header_.page_id_);
         JUMPMU_CONTINUE;
@@ -291,7 +291,7 @@ void PageEvictor::FlushAndRecycleBufferFrames(Partition& target_partition) {
           BMOptimisticGuard optimistic_guard(written_bf.header_.latch_);
           if (written_bf.header_.state_ == State::kCool &&
               !written_bf.header_.is_being_written_back_ && !written_bf.IsDirty()) {
-            evict_flushed_bf(written_bf, optimistic_guard, target_partition);
+            EvictFlushedBufferFrame(written_bf, optimistic_guard, target_partition);
           }
         }
         JUMPMU_CATCH() {
@@ -304,8 +304,9 @@ void PageEvictor::FlushAndRecycleBufferFrames(Partition& target_partition) {
   }
 }
 
-void PageEvictor::evict_flushed_bf(BufferFrame& cooled_bf, BMOptimisticGuard& optimistic_guard,
-                                   Partition& target_partition) {
+void PageEvictor::EvictFlushedBufferFrame(BufferFrame& cooled_bf,
+                                          BMOptimisticGuard& optimistic_guard,
+                                          Partition& target_partition) {
   TREEID btree_id = cooled_bf.page_.btree_id_;
   optimistic_guard.JumpIfModifiedByOthers();
   ParentSwipHandler parent_handler = store_->tree_registry_->FindParent(btree_id, cooled_bf);
