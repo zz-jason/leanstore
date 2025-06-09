@@ -32,6 +32,8 @@ public:
   CoroScheduler& operator=(CoroScheduler&&) = delete;
 
   void Init() {
+    auto start_ts = std::chrono::steady_clock::now();
+
     // Start all threads
     for (auto& thread : threads_) {
       thread->Start();
@@ -42,9 +44,17 @@ public:
       while (!thread->IsReady()) {
       }
     }
+
+    auto elapsed_ms = std::chrono::duration_cast<std::chrono::microseconds>(
+                          std::chrono::steady_clock::now() - start_ts)
+                          .count() /
+                      1000.0;
+    Log::Info("CoroScheduler initialized, num_threads={}, elapsed={}ms", num_threads_, elapsed_ms);
   }
 
   void Deinit() {
+    auto start_ts = std::chrono::steady_clock::now();
+
     // Stop all threads
     for (auto& thread : threads_) {
       thread->Stop();
@@ -54,6 +64,12 @@ public:
     for (auto& thread : threads_) {
       thread->Join();
     }
+
+    auto elapsed_ms = std::chrono::duration_cast<std::chrono::microseconds>(
+                          std::chrono::steady_clock::now() - start_ts)
+                          .count() /
+                      1000.0;
+    Log::Info("CoroScheduler deinitialized, elapsed={}ms", elapsed_ms);
   }
 
   template <typename F, typename R = std::invoke_result_t<F>>

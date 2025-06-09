@@ -40,11 +40,11 @@ TEST_F(PageEvictorTest, page_evict_basic) {
   EXPECT_EQ(store_->buffer_manager_->page_evictors_.size(), 1);
   auto& page_evictor = store_->buffer_manager_->page_evictors_[0];
   EXPECT_TRUE(page_evictor->IsStarted());
-  EXPECT_EQ(page_evictor->partitions_.size(), 1);
-  page_evictor->partitions_[0]->NeedMoreFreeBfs();
-  page_evictor->PickBufferFramesToCool(*page_evictor->partitions_[0]);
-  page_evictor->PrepareAsyncWriteBuffer(*page_evictor->partitions_[0]);
-  page_evictor->FlushAndRecycleBufferFrames(*page_evictor->partitions_[0]);
+  EXPECT_EQ(page_evictor->GetPartitions().size(), 1);
+  page_evictor->GetPartitions()[0]->NeedMoreFreeBfs();
+  page_evictor->PickBufferFramesToCool(*page_evictor->GetPartitions()[0]);
+  page_evictor->PrepareAsyncWriteBuffer(*page_evictor->GetPartitions()[0]);
+  page_evictor->FlushAndRecycleBufferFrames(*page_evictor->GetPartitions()[0]);
 }
 
 } // namespace leanstore::storage::test

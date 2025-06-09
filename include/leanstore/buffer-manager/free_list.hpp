@@ -3,6 +3,7 @@
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/utils/log.hpp"
 
+#include <cstdint>
 #include <mutex>
 
 namespace leanstore::storage {
@@ -17,6 +18,10 @@ public:
   void PushFront(BufferFrame& bf);
 
   void PushFront(BufferFrame* head, BufferFrame* tail, uint64_t size);
+
+  uint64_t Size() const {
+    return size_.load(std::memory_order_relaxed);
+  }
 
   BufferFrame& PopFrontMayJump();
 };

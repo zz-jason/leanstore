@@ -9,15 +9,13 @@
 #include <boost/context/continuation_fcontext.hpp>
 #undef BOOST_NAMESPACE
 
-#include "utils/coroutine/coro_mutex.hpp"
-
 namespace leanstore {
 
 enum class CoroState : uint8_t {
   kReady = 0,          // Ready to run, not started yet.
   kRunning,            // Running, not yielded yet.
   kWaitingBufferFrame, // Waiting for buffer frame.
-  kWaitingMutex,       // Waiting for lock.
+  kWaitingMutex,       // Waiting for mutex.
   kWaitingJumpLock,    // Waiting for jump lock.
   kWaitingIo,          // Waiting for IO operation, read/write file, etc.
   kDone,               // Finished execution.
@@ -73,8 +71,6 @@ public:
   void Yield(CoroState state) {
     assert(IsStarted());
     state_ = state;
-    assert(IsWaiting());
-
     sink_context_ = sink_context_.resume();
   }
 
@@ -82,20 +78,30 @@ public:
     return state_;
   }
 
-  void SetWaitingMutex(CoroMutex* mutex) {
-    waiting_mutex_ = mutex;
+  void SetTryLockFunc(std::function<bool()> try_lock_func) {
+    try_lock_func_ = std::move(try_lock_func);
   }
 
-  CoroMutex* GetWaitingMutex() const {
-    return waiting_mutex_;
+  void ClearTryLockFunc() {
+    try_lock_func_ = nullptr;
   }
 
-  void SetWorkerId(int64_t worker_id) {
-    worker_id_ = worker_id;
+  bool TryLock() {
+    assert(try_lock_func_ != nullptr);
+    return try_lock_func_();
   }
 
-  int64_t GetWorkerId() const {
-    return worker_id_;
+  void IncWaitingIoReqs(int64_t inc = 1) {
+    waiting_io_reqs_ += inc;
+  }
+
+  void DecWaitingIoReqs(int64_t dec = 1) {
+    assert(waiting_io_reqs_ >= dec);
+    waiting_io_reqs_ -= dec;
+  }
+
+  bool IsIoCompleted() {
+    return waiting_io_reqs_ == 0;
   }
 
   bool IsStarted() const {
@@ -123,12 +129,13 @@ private:
   /// This is a callable object that contains the logic of the coroutine.
   CoroFunc func_ = nullptr;
 
-  /// Worker ID, or thread id, this coroutine is runnning on.
-  int64_t worker_id_ = -1;
+  /// Try lock function for the coroutine.
+  std::function<bool()> try_lock_func_ = nullptr;
 
-  /// Pointer to the mutex this coroutine is waiting on, if any. It's used to
-  /// avoid deadlocks and manage coroutine synchronization.
-  CoroMutex* waiting_mutex_ = nullptr;
+  /// Number of IO requests that are currently waiting to be processed.
+  /// Used to track the number of IO operations that are pending for this
+  /// coroutine, allowing it to yield until the IO operations are complete.
+  int64_t waiting_io_reqs_ = 0;
 
   /// Current state of the coroutine.
   CoroState state_ = CoroState::kReady;
