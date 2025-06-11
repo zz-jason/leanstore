@@ -46,7 +46,7 @@ protected:
   }
 
   static bool is_encountered_contention(const storage::ScopedHybridGuard& guard) {
-    return guard.encountered_contention_;
+    return guard.contented_;
   }
 
   static bool is_locked(const storage::ScopedHybridGuard& guard) {
@@ -70,8 +70,8 @@ TEST_F(ScopedHybridGuardTest, OptimisticSpinAfterExclusive) {
 
   store_->ExecAsync(0, [&]() {
     // lock exclusively
-    storage::ScopedHybridGuard guard(latch, storage::LatchMode::kPessimisticExclusive);
-    EXPECT_EQ(get_latch_mode(guard), storage::LatchMode::kPessimisticExclusive);
+    storage::ScopedHybridGuard guard(latch, storage::LatchMode::kExclusivePessimistic);
+    EXPECT_EQ(get_latch_mode(guard), storage::LatchMode::kExclusivePessimistic);
     EXPECT_EQ(get_version_on_lock(guard), 0);
     EXPECT_FALSE(is_encountered_contention(guard));
     EXPECT_TRUE(is_locked(guard));
@@ -86,7 +86,7 @@ TEST_F(ScopedHybridGuardTest, OptimisticSpinAfterExclusive) {
 
     // unlock
     guard.Unlock();
-    EXPECT_EQ(get_latch_mode(guard), storage::LatchMode::kPessimisticExclusive);
+    EXPECT_EQ(get_latch_mode(guard), storage::LatchMode::kExclusivePessimistic);
     EXPECT_EQ(get_version_on_lock(guard), 0);
     EXPECT_FALSE(is_encountered_contention(guard));
     EXPECT_FALSE(is_locked(guard));
@@ -156,8 +156,8 @@ TEST_F(ScopedHybridGuardTest, OptimisticSpinBeforeExclusive) {
     }
 
     // lock exclusively
-    storage::ScopedHybridGuard guard(latch, storage::LatchMode::kPessimisticExclusive);
-    EXPECT_EQ(get_latch_mode(guard), storage::LatchMode::kPessimisticExclusive);
+    storage::ScopedHybridGuard guard(latch, storage::LatchMode::kExclusivePessimistic);
+    EXPECT_EQ(get_latch_mode(guard), storage::LatchMode::kExclusivePessimistic);
     EXPECT_EQ(get_version_on_lock(guard), 0);
     EXPECT_FALSE(is_encountered_contention(guard));
     EXPECT_TRUE(is_locked(guard));
@@ -167,7 +167,7 @@ TEST_F(ScopedHybridGuardTest, OptimisticSpinBeforeExclusive) {
 
     // unlock
     guard.Unlock();
-    EXPECT_EQ(get_latch_mode(guard), storage::LatchMode::kPessimisticExclusive);
+    EXPECT_EQ(get_latch_mode(guard), storage::LatchMode::kExclusivePessimistic);
     EXPECT_EQ(get_version_on_lock(guard), 0);
     EXPECT_FALSE(is_encountered_contention(guard));
     EXPECT_FALSE(is_locked(guard));
@@ -231,7 +231,7 @@ TEST_F(ScopedHybridGuardTest, MixedSharedMode) {
   // thread 0: pessimistic shared lock
   store_->ExecAsync(0, [&]() {
     for (int i = 0; i < 1000; i++) {
-      auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kPessimisticShared);
+      auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kSharedPessimistic);
       auto a_copy = a;
       auto b_copy = b;
       guard.Unlock();
@@ -291,7 +291,7 @@ TEST_F(ScopedHybridGuardTest, OptimisticBankTransfer) {
   store_->ExecAsync(0, [&]() {
     for (int i = 0; i < 1000; i++) {
       {
-        auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kPessimisticExclusive);
+        auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kExclusivePessimistic);
         EXPECT_TRUE(is_locked(guard));
 
         // transfer random amount from a to b
@@ -301,7 +301,7 @@ TEST_F(ScopedHybridGuardTest, OptimisticBankTransfer) {
       }
 
       {
-        auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kPessimisticExclusive);
+        auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kExclusivePessimistic);
         EXPECT_TRUE(is_locked(guard));
 
         // transfer random amount from b to a
@@ -348,7 +348,7 @@ TEST_F(ScopedHybridGuardTest, PessimisticBankTransfer) {
   store_->ExecAsync(0, [&]() {
     for (int i = 0; i < 1000; i++) {
       {
-        auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kPessimisticExclusive);
+        auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kExclusivePessimistic);
         EXPECT_TRUE(is_locked(guard));
 
         // transfer random amount from a to b
@@ -358,7 +358,7 @@ TEST_F(ScopedHybridGuardTest, PessimisticBankTransfer) {
       }
 
       {
-        auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kPessimisticExclusive);
+        auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kExclusivePessimistic);
         EXPECT_TRUE(is_locked(guard));
 
         // transfer random amount from b to a
@@ -372,7 +372,7 @@ TEST_F(ScopedHybridGuardTest, PessimisticBankTransfer) {
   // thread 1: check if a + b is always 100, 1000 times
   store_->ExecAsync(1, [&]() {
     for (int i = 0; i < 1000; i++) {
-      auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kPessimisticShared);
+      auto guard = storage::ScopedHybridGuard(latch, storage::LatchMode::kSharedPessimistic);
       auto a_copy = a;
       auto b_copy = b;
       guard.Unlock();

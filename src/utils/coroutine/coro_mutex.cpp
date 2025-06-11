@@ -10,10 +10,10 @@ namespace leanstore {
 // CoroMutex
 // -----------------------------------------------------------------------------
 
-void CoroMutex::Lock() {
-  if (!TryLock()) {
+void CoroMutex::lock() {
+  if (!try_lock()) {
     auto* current_coro = Thread::CurrentCoro();
-    current_coro->SetTryLockFunc([this]() { return this->TryLock(); });
+    current_coro->SetTryLockFunc([this]() { return this->try_lock(); });
     current_coro->Yield(CoroState::kWaitingMutex);
 
     // The current coroutine only resumes if the TryLockFunc returns true (succeed)
@@ -25,10 +25,10 @@ void CoroMutex::Lock() {
 // CoroSharedMutex
 // -----------------------------------------------------------------------------
 
-void CoroSharedMutex::Lock() {
-  if (!TryLock()) {
+void CoroSharedMutex::lock() {
+  if (!try_lock()) {
     auto* current_coro = Thread::CurrentCoro();
-    current_coro->SetTryLockFunc([this]() { return this->TryLock(); });
+    current_coro->SetTryLockFunc([this]() { return this->try_lock(); });
     current_coro->Yield(CoroState::kWaitingMutex);
 
     // The current coroutine only resumes if the TryLockFunc returns true (succeed)
@@ -38,10 +38,10 @@ void CoroSharedMutex::Lock() {
   assert(state_ == kLockedExclusively);
 }
 
-void CoroSharedMutex::LockShared() {
-  if (!TryLockShared()) {
+void CoroSharedMutex::lock_shared() {
+  if (!try_lock_shared()) {
     auto* current_coro = Thread::CurrentCoro();
-    current_coro->SetTryLockFunc([this]() { return this->TryLockShared(); });
+    current_coro->SetTryLockFunc([this]() { return this->try_lock_shared(); });
     current_coro->Yield(CoroState::kWaitingMutex);
 
     // The current coroutine only resumes if the TryLockFunc returns true (succeed)

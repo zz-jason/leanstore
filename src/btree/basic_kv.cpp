@@ -56,7 +56,7 @@ OpCode BasicKV::LookupPessimistic(Slice key, ValCallback val_callback) {
   while (true) {
     JUMPMU_TRY() {
       GuardedBufferFrame<BTreeNode> guarded_leaf;
-      FindLeafCanJump(key, guarded_leaf, LatchMode::kPessimisticShared);
+      FindLeafCanJump(key, guarded_leaf, LatchMode::kSharedPessimistic);
       auto slot_id = guarded_leaf->LowerBound<true>(key);
       if (slot_id != -1) {
         val_callback(guarded_leaf->Value(slot_id));

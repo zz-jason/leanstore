@@ -256,7 +256,7 @@ void BufferManager::ReclaimPage(BufferFrame& bf) {
 }
 
 BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& swip_in_node) {
-  LS_DCHECK(node_guard.state_ == GuardState::kOptimisticShared);
+  LS_DCHECK(node_guard.state_ == GuardState::kSharedOptimistic);
   if (swip_in_node.IsHot()) {
     // Resolve swip from hot state
     auto* bf = &swip_in_node.AsBufferFrame();
@@ -459,7 +459,7 @@ BufferFrame& BufferManager::ReadPageSync(PID page_id) {
 }
 
 Result<void> BufferManager::WritePageSync(BufferFrame& bf) {
-  ScopedHybridGuard guard(bf.header_.latch_, LatchMode::kPessimisticExclusive);
+  ScopedHybridGuard guard(bf.header_.latch_, LatchMode::kExclusivePessimistic);
   auto page_id = bf.header_.page_id_;
   auto& partition = GetPartition(page_id);
 

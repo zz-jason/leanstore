@@ -7,7 +7,7 @@ namespace leanstore::storage::btree {
 class PessimisticSharedIterator : public PessimisticIterator {
 public:
   PessimisticSharedIterator(BTreeGeneric& btree)
-      : PessimisticIterator(btree, LatchMode::kPessimisticShared) {
+      : PessimisticIterator(btree, LatchMode::kSharedPessimistic) {
   }
 };
 

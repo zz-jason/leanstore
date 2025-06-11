@@ -15,8 +15,8 @@ class HybridGuard;
 enum class LatchMode : uint8_t {
   kOptimisticOrJump = 0,
   kOptimisticSpin = 1,
-  kPessimisticShared = 2,
-  kPessimisticExclusive = 3,
+  kSharedPessimistic = 2,
+  kExclusivePessimistic = 3,
 };
 
 constexpr static uint64_t kLatchExclusiveBit = 1ull;
@@ -58,7 +58,7 @@ public:
     mutex_.unlock();
   }
 
-  uint64_t GetOptimisticVersion() {
+  uint64_t GetVersion() {
     return version_.load();
   }
 

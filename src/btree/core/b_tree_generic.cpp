@@ -29,7 +29,7 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btree_id, BTreeConfi
 
   meta_node_swip_ = &store_->buffer_manager_->AllocNewPage(btree_id);
   meta_node_swip_.AsBufferFrame().header_.keep_in_memory_ = true;
-  LS_DCHECK(meta_node_swip_.AsBufferFrame().header_.latch_.GetOptimisticVersion() == 0);
+  LS_DCHECK(meta_node_swip_.AsBufferFrame().header_.latch_.GetVersion() == 0);
 
   auto guarded_root = GuardedBufferFrame<BTreeNode>(
       store_->buffer_manager_.get(), &store_->buffer_manager_->AllocNewPage(btree_id));
