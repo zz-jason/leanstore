@@ -70,7 +70,7 @@ public:
         bf_(bf),
         guard_(bf_->header_.latch_, GuardState::kUninitialized),
         keep_alive_(keep_alive) {
-    LS_DCHECK(!HasExclusiveMark(bf_->header_.latch_.GetOptimisticVersion()));
+    LS_DCHECK(!HasExclusiveMark(bf_->header_.latch_.GetVersion()));
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }
 
@@ -123,7 +123,7 @@ public:
   JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP(GuardedBufferFrame)
 
   ~GuardedBufferFrame() {
-    if (guard_.state_ == GuardState::kPessimisticExclusive) {
+    if (guard_.state_ == GuardState::kExclusivePessimistic) {
       if (!keep_alive_) {
         Reclaim();
       }
@@ -185,7 +185,7 @@ public:
   template <typename WT, typename... Args>
   cr::WalPayloadHandler<WT> ReserveWALPayload(uint64_t wal_size, Args&&... args) {
     LS_DCHECK(cr::ActiveTx().is_durable_);
-    LS_DCHECK(guard_.state_ == GuardState::kPessimisticExclusive);
+    LS_DCHECK(guard_.state_ == GuardState::kExclusivePessimistic);
 
     const auto page_id = bf_->header_.page_id_;
     const auto tree_id = bf_->page_.btree_id_;
@@ -203,7 +203,7 @@ public:
   }
 
   bool EncounteredContention() {
-    return guard_.encountered_contention_;
+    return guard_.contented_;
   }
 
   // NOLINTBEGIN
@@ -265,11 +265,11 @@ protected:
       guard.ToOptimisticSpin();
       break;
     }
-    case LatchMode::kPessimisticExclusive: {
+    case LatchMode::kExclusivePessimistic: {
       guard.ToOptimisticOrExclusive();
       break;
     }
-    case LatchMode::kPessimisticShared: {
+    case LatchMode::kSharedPessimistic: {
       guard.ToOptimisticOrShared();
       break;
     }
@@ -318,7 +318,7 @@ public:
   }
 
   ~ExclusiveGuardedBufferFrame() {
-    if (!ref_guard_.keep_alive_ && ref_guard_.guard_.state_ == GuardState::kPessimisticExclusive) {
+    if (!ref_guard_.keep_alive_ && ref_guard_.guard_.state_ == GuardState::kExclusivePessimistic) {
       ref_guard_.Reclaim();
     } else {
       ref_guard_.unlock();

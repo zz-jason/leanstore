@@ -59,24 +59,24 @@ TEST_F(CoroTest, Mutex) {
   for (int i = 0; i < 10; ++i) {
     auto future1 = coro_scheduler.Submit(
         [&]() {
-          mutex.Lock();
+          mutex.lock();
           EXPECT_EQ(Thread::CurrentCoro()->GetState(), CoroState::kRunning);
           value_x -= 50;
           value_y += 50;
           EXPECT_EQ(value_x + value_y, 100);
-          mutex.Unlock();
+          mutex.unlock();
           EXPECT_EQ(Thread::CurrentCoro()->GetState(), CoroState::kRunning);
         },
         0);
 
     auto future2 = coro_scheduler.Submit(
         [&]() {
-          mutex.Lock();
+          mutex.lock();
           EXPECT_EQ(Thread::CurrentCoro()->GetState(), CoroState::kRunning);
           value_x -= 30;
           value_y += 30;
           EXPECT_EQ(value_x + value_y, 100);
-          mutex.Unlock();
+          mutex.unlock();
           EXPECT_EQ(Thread::CurrentCoro()->GetState(), CoroState::kRunning);
         },
         1);
@@ -101,24 +101,24 @@ TEST_F(CoroTest, SharedMutex) {
   for (int i = 0; i < 20; ++i) {
     futures.push_back(coro_scheduler.Submit(
         [&]() {
-          shared_mutex.Lock();
+          shared_mutex.lock();
           value_x -= 10 + i;
           value_y += 10 + i;
           EXPECT_EQ(value_x + value_y, 100);
 
-          shared_mutex.Unlock();
+          shared_mutex.unlock();
           EXPECT_EQ(Thread::CurrentCoro()->GetState(), CoroState::kRunning);
         },
         i % 2));
 
     futures.push_back(coro_scheduler.Submit(
         [&]() {
-          shared_mutex.LockShared();
+          shared_mutex.lock_shared();
           value_x -= 30;
           value_y += 30;
           EXPECT_EQ(value_x + value_y, 100);
 
-          shared_mutex.UnlockShared();
+          shared_mutex.unlock_shared();
           EXPECT_EQ(Thread::CurrentCoro()->GetState(), CoroState::kRunning);
         },
         i % 2));

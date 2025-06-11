@@ -36,7 +36,7 @@ private:
 
   /// Whether the guard has encountered contention, checked when the latch is
   /// optimistically locked.
-  bool encountered_contention_;
+  bool contented_;
 
   /// Whether the guard has locked the latch.
   bool locked_;
@@ -49,7 +49,7 @@ public:
       : latch_(&latch),
         latch_mode_(latch_mode),
         version_on_lock_(0),
-        encountered_contention_(false),
+        contented_(false),
         locked_(false) {
     Lock();
   }
@@ -61,7 +61,7 @@ public:
       : latch_(&latch),
         latch_mode_(LatchMode::kOptimisticOrJump),
         version_on_lock_(version),
-        encountered_contention_(false),
+        contented_(false),
         locked_(false) {
     // jump if the optimistic lock is invalid
     jump_if_modified_by_others();
@@ -91,7 +91,7 @@ public:
     latch_ = other.latch_;
     latch_mode_ = other.latch_mode_;
     version_on_lock_ = other.version_on_lock_;
-    encountered_contention_ = other.encountered_contention_;
+    contented_ = other.contented_;
     locked_ = other.locked_;
     other.locked_ = false;
     return *this;
@@ -120,16 +120,16 @@ private:
   /// Jump if the latch has been modified by others.
   void jump_if_modified_by_others();
 
-  /// Lock the latch in kPessimisticShared mode.
+  /// Lock the latch in kSharedPessimistic mode.
   void lock_pessimistic_shared();
 
-  /// Unlock the latch in kPessimisticShared mode.
+  /// Unlock the latch in kSharedPessimistic mode.
   void unlock_pessimistic_shared();
 
-  /// Lock the latch in kPessimisticExclusive mode.
+  /// Lock the latch in kExclusivePessimistic mode.
   void lock_pessimistic_exclusive();
 
-  /// Unlock the latch in kPessimisticExclusive mode.
+  /// Unlock the latch in kExclusivePessimistic mode.
   void unlock_pessimistic_exclusive();
 
 private:
@@ -161,7 +161,7 @@ inline void ScopedHybridGuard::Get(HybridLatch& latch, std::function<void()> cop
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
-      auto guard = ScopedHybridGuard(latch, LatchMode::kPessimisticShared);
+      auto guard = ScopedHybridGuard(latch, LatchMode::kSharedPessimistic);
       copier();
       guard.Unlock();
       return;
@@ -183,11 +183,11 @@ inline void ScopedHybridGuard::Lock() {
     lock_optimistic_spin();
     break;
   }
-  case LatchMode::kPessimisticShared: {
+  case LatchMode::kSharedPessimistic: {
     lock_pessimistic_shared();
     break;
   }
-  case LatchMode::kPessimisticExclusive: {
+  case LatchMode::kExclusivePessimistic: {
     lock_pessimistic_exclusive();
     break;
   }
@@ -212,11 +212,11 @@ inline void ScopedHybridGuard::Unlock() {
     unlock_optimistic_or_jump();
     break;
   }
-  case LatchMode::kPessimisticShared: {
+  case LatchMode::kSharedPessimistic: {
     unlock_pessimistic_shared();
     break;
   }
-  case LatchMode::kPessimisticExclusive: {
+  case LatchMode::kExclusivePessimistic: {
     unlock_pessimistic_exclusive();
     break;
   }
@@ -232,7 +232,7 @@ inline void ScopedHybridGuard::lock_optimistic_or_jump() {
   LS_DCHECK(latch_mode_ == LatchMode::kOptimisticOrJump && latch_ != nullptr);
   version_on_lock_ = latch_->version_.load();
   if (HasExclusiveMark(version_on_lock_)) {
-    encountered_contention_ = true;
+    contented_ = true;
     LS_DLOG("lockOptimisticOrJump() failed, target latch, latch={}, version={}", (void*)&latch_,
             version_on_lock_);
     jumpmu::Jump();
@@ -243,7 +243,7 @@ inline void ScopedHybridGuard::lock_optimistic_spin() {
   LS_DCHECK(latch_mode_ == LatchMode::kOptimisticSpin && latch_ != nullptr);
   version_on_lock_ = latch_->version_.load();
   while (HasExclusiveMark(version_on_lock_)) {
-    encountered_contention_ = true;
+    contented_ = true;
     version_on_lock_ = latch_->version_.load();
   }
 }
@@ -258,7 +258,7 @@ inline void ScopedHybridGuard::unlock_optimistic_or_jump() {
 inline void ScopedHybridGuard::jump_if_modified_by_others() {
   auto cur_version = latch_->version_.load();
   if (version_on_lock_ != cur_version) {
-    encountered_contention_ = true;
+    contented_ = true;
     LS_DLOG("jumpIfModifiedByOthers() failed, target latch, latch={}, "
             "version(expected)={}, version(actual)={}",
             (void*)&latch_, version_on_lock_, cur_version);
@@ -267,22 +267,22 @@ inline void ScopedHybridGuard::jump_if_modified_by_others() {
 }
 
 inline void ScopedHybridGuard::lock_pessimistic_shared() {
-  LS_DCHECK(latch_mode_ == LatchMode::kPessimisticShared && latch_ != nullptr);
+  LS_DCHECK(latch_mode_ == LatchMode::kSharedPessimistic && latch_ != nullptr);
   latch_->mutex_.lock_shared();
 }
 
 inline void ScopedHybridGuard::unlock_pessimistic_shared() {
-  LS_DCHECK(latch_mode_ == LatchMode::kPessimisticShared && latch_ != nullptr);
+  LS_DCHECK(latch_mode_ == LatchMode::kSharedPessimistic && latch_ != nullptr);
   latch_->mutex_.unlock_shared();
 }
 
 inline void ScopedHybridGuard::lock_pessimistic_exclusive() {
-  LS_DCHECK(latch_mode_ == LatchMode::kPessimisticExclusive && latch_ != nullptr);
+  LS_DCHECK(latch_mode_ == LatchMode::kExclusivePessimistic && latch_ != nullptr);
   latch_->LockExclusively();
 }
 
 inline void ScopedHybridGuard::unlock_pessimistic_exclusive() {
-  LS_DCHECK(latch_mode_ == LatchMode::kPessimisticExclusive && latch_ != nullptr);
+  LS_DCHECK(latch_mode_ == LatchMode::kExclusivePessimistic && latch_ != nullptr);
   latch_->UnlockExclusively();
 }
 

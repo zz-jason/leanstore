@@ -171,7 +171,7 @@ private:
 public:
   // Helpers
   inline void FindLeafCanJump(Slice key, GuardedBufferFrame<BTreeNode>& guarded_target,
-                              LatchMode mode = LatchMode::kPessimisticShared);
+                              LatchMode mode = LatchMode::kSharedPessimistic);
 
 public:
   /// Note on Synchronization: it is called by the page provide thread which are not allowed to
@@ -377,7 +377,7 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree, BufferFra
   };
 
   // LatchMode latchMode = (jumpIfEvicted) ?
-  // LatchMode::kOptimisticOrJump : LatchMode::kPessimisticExclusive;
+  // LatchMode::kOptimisticOrJump : LatchMode::kExclusivePessimistic;
   LatchMode latch_mode = LatchMode::kOptimisticOrJump;
   // The parent of the bf we are looking for (bfToFind)
   GuardedBufferFrame<BTreeNode> guarded_child(btree.store_->buffer_manager_.get(), guarded_parent,

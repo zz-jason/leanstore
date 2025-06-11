@@ -26,7 +26,7 @@ namespace leanstore::cr {
 
 void CommitTree::AppendCommitLog(TXID start_ts, TXID commit_ts) {
   LS_DCHECK(commit_log_.size() < capacity_);
-  storage::ScopedHybridGuard x_guard(latch_, storage::LatchMode::kPessimisticExclusive);
+  storage::ScopedHybridGuard x_guard(latch_, storage::LatchMode::kExclusivePessimistic);
   commit_log_.push_back({commit_ts, start_ts});
   LS_DLOG("Commit log appended, workerId={}, startTs={}, commitTs={}",
           WorkerContext::My().worker_id_, start_ts, commit_ts);
@@ -65,7 +65,7 @@ void CommitTree::CompactCommitLog() {
   }
 
   // Refill the compacted commit log
-  storage::ScopedHybridGuard x_guard(latch_, storage::LatchMode::kPessimisticExclusive);
+  storage::ScopedHybridGuard x_guard(latch_, storage::LatchMode::kExclusivePessimistic);
   commit_log_.clear();
   for (auto& p : set) {
     commit_log_.push_back(p);

@@ -1,12 +1,11 @@
 #pragma once
 
-#include "leanstore/utils/log.hpp"
-
 #include <atomic>
 #include <cassert>
 #include <cstdint>
 
 #include <emmintrin.h>
+#include <sys/types.h>
 
 namespace leanstore {
 
@@ -20,23 +19,27 @@ namespace leanstore {
 /// the mutex to become available.
 class CoroMutex {
 public:
+  // NOLINTBEGIN
+
   /// Tries to acquire the mutex without blocking.
   /// Returns true if the mutex was acquired successfully, false otherwise.
-  bool TryLock() {
+  bool try_lock() {
     return !lock_flag_.test_and_set(std::memory_order_acquire);
   }
 
   /// Locks the mutex, yield the current coroutine if the mutex is already held
   /// by another coroutine.
-  void Lock();
+  void lock();
 
   /// Unlocks the mutex, allowing other coroutines to acquire it.
   /// It is an error to unlock a mutex that is not held by the current coroutine.
-  void Unlock() {
+  void unlock() {
     assert(lock_flag_.test_and_set(std::memory_order_acquire) &&
            "Mutex must be locked before unlocking");
     lock_flag_.clear(std::memory_order_release);
   }
+
+  // NOLINTEND
 
 private:
   /// Exclusive lock flag. Indicates if the mutex is held exclusively.
@@ -53,29 +56,31 @@ private:
 /// coroutine.
 class CoroSharedMutex {
 public:
+  // NOLINTBEGIN
+
   /// Tries to acquire an exclusive lock without blocking.
   /// Returns true if the exclusive lock was acquired successfully, false
   /// otherwise.
-  bool TryLock() {
+  bool try_lock() {
     int64_t expected = kUnlocked;
     return state_.compare_exchange_strong(expected, kLockedExclusively, std::memory_order_acquire);
   }
 
   /// Locks the mutex exclusively, yielding the current coroutine if the
   /// mutex is already held by another coroutine.
-  void Lock();
+  void lock();
 
   /// Unlocks the mutex, allowing other coroutines to acquire it.
   ///
-  /// Used together with TryLock(), Lock().
-  void Unlock() {
+  /// Used together with try_lock(), lock().
+  void unlock() {
     assert(state_ == kLockedExclusively && "Exclusive lock must be held to unlock");
     state_.store(kUnlocked, std::memory_order_release);
   }
 
   /// Tries to acquire a shared lock without blocking.
   /// Returns true if the shared lock was acquired successfully, false otherwise.
-  bool TryLockShared() {
+  bool try_lock_shared() {
     int64_t expected = kUnlocked;
     while (!state_.compare_exchange_strong(expected, expected + 1, std::memory_order_acquire)) {
       if (expected == kLockedExclusively) {
@@ -88,16 +93,18 @@ public:
   /// Locks the mutex in shared mode, yielding the current coroutine if the
   /// mutex is already held exclusively by another coroutine. This allows
   /// multiple coroutines to hold a shared lock concurrently.
-  void LockShared();
+  void lock_shared();
 
   /// Unlocks the mutex from shared mode, allowing other coroutines to
   /// acquire it in shared mode or exclusively.
   ///
-  /// Used together with TryLockShared(), LockShared().
-  void UnlockShared() {
+  /// Used together with try_lock_shared(), lock_shared().
+  void unlock_shared() {
     assert(state_ != kLockedExclusively && "Cannot unlock shared on exclusive lock");
     state_.fetch_add(-1, std::memory_order_release);
   }
+
+  // NOLINTEND
 
 private:
   static constexpr int64_t kLockedExclusively = 1LL << 63;
@@ -110,34 +117,59 @@ private:
 // CoroHybridMutex
 // -----------------------------------------------------------------------------
 
+/// A hybrid mutex that combines optimistic and pessimistic locking strategies.
+/// All the APIs are designed to be used together with CoroHybridLockGuard.
 class alignas(64) CoroHybridMutex {
 public:
+  constexpr static uint64_t kLatchExclusiveBit = 1ull;
+
   CoroHybridMutex(uint64_t version = 0) : version_(version) {
   }
 
-  void LockExclusively() {
-    mutex_.Lock();
-    version_.fetch_add(kLatchExclusiveBit, std::memory_order_release);
-    LS_DCHECK(IsLockedExclusively());
+  /// Lock the mutex exclusively.
+  /// Returns the new version after locking.
+  uint64_t Lock() {
+    mutex_.lock();
+
+    auto old_version = version_.load(std::memory_order_acquire);
+    auto new_version = old_version + kLatchExclusiveBit;
+    version_.store(new_version, std::memory_order_release);
+    assert((new_version & kLatchExclusiveBit) != 0);
+
+    return new_version;
   }
 
-  void UnlockExclusively() {
-    LS_DCHECK(IsLockedExclusively());
-    version_.fetch_add(kLatchExclusiveBit, std::memory_order_release);
-    mutex_.Unlock();
+  /// Unlock the mutex exclusively with the given old version, which must match
+  /// the version when the mutex was locked.
+  /// Returns the new version after unlocking.
+  uint64_t Unlock(uint64_t old_version) {
+    assert(old_version == version_.load(std::memory_order_acquire));
+    auto new_version = old_version + kLatchExclusiveBit;
+    version_.store(new_version, std::memory_order_release);
+    assert((new_version & kLatchExclusiveBit) == 0);
+
+    mutex_.unlock();
+    return new_version;
   }
 
-  uint64_t GetOptimisticVersion() {
-    return version_.load();
+  /// Lock the mutex in shared mode.
+  /// Returns the current version of the mutex after acquiring the shared lock.
+  uint64_t LockShared() {
+    mutex_.lock_shared();
+    return version_.load(std::memory_order_acquire);
   }
 
-  bool IsLockedExclusively() {
-    return (version_.load() & kLatchExclusiveBit) == kLatchExclusiveBit;
+  /// Unlock the mutex from shared mode.
+  void UnlockShared() {
+    mutex_.unlock_shared();
+  }
+
+  /// Get the current version of the mutex.
+  uint64_t GetVersion() {
+    return version_.load(std::memory_order_acquire);
   }
 
 private:
-  constexpr static uint64_t kLatchExclusiveBit = 1ull;
-
   /// The optimistic version.
   std::atomic<uint64_t> version_ = 0;
 

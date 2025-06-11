@@ -71,7 +71,7 @@ private:
 public:
   BMExclusiveUpgradeIfNeeded(HybridGuard& guard)
       : guard_(guard),
-        was_exclusive_(guard.state_ == GuardState::kPessimisticExclusive) {
+        was_exclusive_(guard.state_ == GuardState::kExclusivePessimistic) {
     guard_.TryToExclusiveMayJump();
     JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
   }

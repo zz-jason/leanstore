@@ -12,11 +12,11 @@ namespace leanstore::storage::btree {
 class PessimisticExclusiveIterator : public PessimisticIterator {
 public:
   PessimisticExclusiveIterator(BTreeGeneric& tree)
-      : PessimisticIterator(tree, LatchMode::kPessimisticExclusive) {
+      : PessimisticIterator(tree, LatchMode::kExclusivePessimistic) {
   }
 
   PessimisticExclusiveIterator(BTreeGeneric& tree, BufferFrame* bf, const uint64_t bf_version)
-      : PessimisticIterator(tree, LatchMode::kPessimisticExclusive) {
+      : PessimisticIterator(tree, LatchMode::kExclusivePessimistic) {
     HybridGuard optimistic_guard(bf->header_.latch_, bf_version);
     optimistic_guard.JumpIfModifiedByOthers();
     guarded_leaf_ = GuardedBufferFrame<BTreeNode>(tree.store_->buffer_manager_.get(),

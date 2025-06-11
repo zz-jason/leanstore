@@ -66,7 +66,7 @@ public:
   bool is_using_upper_fence_;
 
 public:
-  PessimisticIterator(BTreeGeneric& tree, const LatchMode mode = LatchMode::kPessimisticShared)
+  PessimisticIterator(BTreeGeneric& tree, const LatchMode mode = LatchMode::kSharedPessimistic)
       : btree_(tree),
         mode_(mode),
         func_enter_leaf_(nullptr),
@@ -327,7 +327,7 @@ inline void PessimisticIterator::Next() {
     return;
   }
   while (true) {
-    ENSURE(guarded_leaf_.guard_.state_ != GuardState::kOptimisticShared);
+    ENSURE(guarded_leaf_.guard_.state_ != GuardState::kSharedOptimistic);
 
     // If we are not at the end of the leaf, return the next key in the leaf.
     if ((slot_id_ + 1) < guarded_leaf_->num_slots_) {
@@ -363,7 +363,7 @@ inline void PessimisticIterator::Next() {
           GuardedBufferFrame<BTreeNode> guarded_next_leaf(btree_.store_->buffer_manager_.get(),
                                                           guarded_parent_, *next_leaf_swip,
                                                           LatchMode::kOptimisticOrJump);
-          if (mode_ == LatchMode::kPessimisticExclusive) {
+          if (mode_ == LatchMode::kExclusivePessimistic) {
             guarded_next_leaf.TryToExclusiveMayJump();
           } else {
             guarded_next_leaf.TryToSharedMayJump();
@@ -416,7 +416,7 @@ inline void PessimisticIterator::Next() {
 
 inline void PessimisticIterator::Prev() {
   while (true) {
-    ENSURE(guarded_leaf_.guard_.state_ != GuardState::kOptimisticShared);
+    ENSURE(guarded_leaf_.guard_.state_ != GuardState::kSharedOptimistic);
     // If we are not at the beginning of the leaf, return the previous key
     // in the leaf.
     if (slot_id_ > 0) {
@@ -461,7 +461,7 @@ inline void PessimisticIterator::Prev() {
           GuardedBufferFrame<BTreeNode> guarded_next_leaf(btree_.store_->buffer_manager_.get(),
                                                           guarded_parent_, *next_leaf_swip,
                                                           LatchMode::kOptimisticOrJump);
-          if (mode_ == LatchMode::kPessimisticExclusive) {
+          if (mode_ == LatchMode::kExclusivePessimistic) {
             guarded_next_leaf.TryToExclusiveMayJump();
           } else {
             guarded_next_leaf.TryToSharedMayJump();
@@ -511,7 +511,7 @@ inline void PessimisticIterator::Prev() {
 
 inline void PessimisticIterator::seek_to_target_page(
     std::function<int32_t(GuardedBufferFrame<BTreeNode>&)> child_pos_getter) {
-  if (mode_ != LatchMode::kPessimisticShared && mode_ != LatchMode::kPessimisticExclusive) {
+  if (mode_ != LatchMode::kSharedPessimistic && mode_ != LatchMode::kExclusivePessimistic) {
     Log::Fatal("Unsupported latch mode: {}", uint64_t(mode_));
   }
 
@@ -545,7 +545,7 @@ inline void PessimisticIterator::seek_to_target_page(
       }
 
       guarded_parent_.unlock();
-      if (mode_ == LatchMode::kPessimisticExclusive) {
+      if (mode_ == LatchMode::kExclusivePessimistic) {
         guarded_leaf_.ToExclusiveMayJump();
       } else {
         guarded_leaf_.ToSharedMayJump();

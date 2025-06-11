@@ -113,7 +113,7 @@ void PageEvictor::PickBufferFramesToCool(Partition& target_partition) {
         read_guard.JumpIfModifiedByOthers();
         auto parent_handler = store_->tree_registry_->FindParent(btree_id, *cool_candidate);
 
-        LS_DCHECK(parent_handler.parent_guard_.state_ == GuardState::kOptimisticShared);
+        LS_DCHECK(parent_handler.parent_guard_.state_ == GuardState::kSharedOptimistic);
         LS_DCHECK(parent_handler.parent_guard_.latch_ != reinterpret_cast<HybridLatch*>(0x99));
         read_guard.JumpIfModifiedByOthers();
         auto check_result = store_->tree_registry_->CheckSpaceUtilization(
@@ -139,7 +139,7 @@ void PageEvictor::PickBufferFramesToCool(Partition& target_partition) {
           LS_DCHECK(cool_candidate->header_.state_ == State::kHot);
           LS_DCHECK(cool_candidate->header_.is_being_written_back_ == false);
           LS_DCHECK(parent_handler.parent_guard_.version_ ==
-                    parent_handler.parent_guard_.latch_->GetOptimisticVersion());
+                    parent_handler.parent_guard_.latch_->GetVersion());
           LS_DCHECK(parent_handler.child_swip_.bf_ == cool_candidate);
 
           // mark the buffer frame in cool state
@@ -311,7 +311,7 @@ void PageEvictor::EvictFlushedBufferFrame(BufferFrame& cooled_bf,
   optimistic_guard.JumpIfModifiedByOthers();
   ParentSwipHandler parent_handler = store_->tree_registry_->FindParent(btree_id, cooled_bf);
 
-  LS_DCHECK(parent_handler.parent_guard_.state_ == GuardState::kOptimisticShared);
+  LS_DCHECK(parent_handler.parent_guard_.state_ == GuardState::kSharedOptimistic);
   BMExclusiveUpgradeIfNeeded parent_write_guard(parent_handler.parent_guard_);
   optimistic_guard.guard_.ToExclusiveMayJump();
 
