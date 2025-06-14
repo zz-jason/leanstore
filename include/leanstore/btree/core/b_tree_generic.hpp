@@ -11,6 +11,7 @@
 #include "utils/json.hpp"
 
 #include <atomic>
+#include <cassert>
 #include <limits>
 
 namespace leanstore::storage::btree {
@@ -27,7 +28,6 @@ public:
 
   enum class XMergeReturnCode : uint8_t { kNothing, kFullMerge, kPartialMerge };
 
-public:
   leanstore::LeanStore* store_;
 
   TREEID tree_id_;
@@ -41,12 +41,10 @@ public:
 
   std::atomic<uint64_t> height_ = 1;
 
-public:
   BTreeGeneric() = default;
 
   virtual ~BTreeGeneric() override = default;
 
-public:
   void Init(leanstore::LeanStore* store, TREEID tree_id, BTreeConfig config);
 
   PessimisticSharedIterator GetIterator();
@@ -170,10 +168,11 @@ private:
 
 public:
   // Helpers
-  inline void FindLeafCanJump(Slice key, GuardedBufferFrame<BTreeNode>& guarded_target,
-                              LatchMode mode = LatchMode::kSharedPessimistic);
+  void FindLeafCanJump(Slice key, GuardedBufferFrame<BTreeNode>& guarded_target,
+                       LatchMode mode = LatchMode::kSharedPessimistic);
 
-public:
+  // void CoroFindLeaf(Slice key, CoroLockedBufferFrame& guarded_target, LockMode mode);
+
   /// Note on Synchronization: it is called by the page provide thread which are not allowed to
   /// block. Therefore, we jump whenever we encounter a latched node on our way Moreover, we jump if
   /// any page on the path is already evicted or of the bf could not be found Pre: bfToFind is not
@@ -331,6 +330,44 @@ inline void BTreeGeneric::FindLeafCanJump(Slice key, GuardedBufferFrame<BTreeNod
   guarded_parent.unlock();
 }
 
+// inline void BTreeGeneric::CoroFindLeaf(Slice key, CoroLockedBufferFrame& guarded_target,
+//                                        LockMode mode) {
+//
+//   auto non_leaf_lock_mode = LockMode::kSharedOptimistic;
+//   auto* buffer_manager = store_->buffer_manager_.get();
+//
+//   // lock meta buffer frame
+//   auto* parent_bf = &meta_node_swip_.AsBufferFrame();
+//   auto* parent_node = BTreeNode::From(parent_bf);
+//   CoroLockedBufferFrame locked_parent(parent_bf, non_leaf_lock_mode);
+//
+//   // lock root buffer frame
+//   auto* child_bf = &parent_node->right_most_child_swip_.AsBufferFrame();
+//   auto* child_node = BTreeNode::From(&parent_node->right_most_child_swip_.AsBufferFrame());
+//   CoroLockedBufferFrame locked_child(locked_parent.LockChild(child_bf, non_leaf_lock_mode));
+//
+//   // search for the leaf node
+//   auto level = 0u;
+//   while (!child_node->is_leaf_) {
+//     auto& child_swip = child_node->LookupInner(key);
+//     LS_DCHECK(!child_swip.IsEmpty());
+//
+//     // TODO: yield and retry from the begining
+//     if (locked_parent.IsConflicted()) {
+//     }
+//
+//     locked_parent = std::move(locked_child);
+//     if (level == height_ - 1) {
+//       locked_child = locked_parent.LockChild(&child_swip.AsBufferFrame(), mode);
+//     } else {
+//       locked_child = locked_parent.LockChild(&child_swip.AsBufferFrame(), non_leaf_lock_mode);
+//     }
+//     child_bf = &locked_child.BufferFrame();
+//     child_node = BTreeNode::From(child_bf);
+//     level++;
+//   }
+// }
+
 template <bool jump_if_evicted>
 inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree, BufferFrame& bf_to_find) {
   // Check whether search on the wrong tree or the root node is evicted
@@ -338,7 +375,7 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree, BufferFra
                                                btree.meta_node_swip_);
   if (btree.tree_id_ != bf_to_find.page_.btree_id_ ||
       guarded_parent->right_most_child_swip_.IsEvicted()) {
-    jumpmu::Jump();
+    leanstore::JumpContext::Jump();
   }
 
   // Check whether the parent buffer frame to find is root
@@ -353,7 +390,7 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree, BufferFra
   // Check whether the root node is cool, all nodes below including the parent
   // of the buffer frame to find are evicted.
   if (guarded_parent->right_most_child_swip_.IsCool()) {
-    jumpmu::Jump();
+    leanstore::JumpContext::Jump();
   }
 
   auto& node_to_find = *reinterpret_cast<BTreeNode*>(bf_to_find.page_.payload_);
@@ -387,7 +424,7 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree, BufferFra
     guarded_parent = std::move(guarded_child);
     if constexpr (jump_if_evicted) {
       if (child_swip->IsEvicted()) {
-        jumpmu::Jump();
+        leanstore::JumpContext::Jump();
       }
     }
     guarded_child = GuardedBufferFrame<BTreeNode>(btree.store_->buffer_manager_.get(),
@@ -399,7 +436,7 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree, BufferFra
   const bool found = &child_swip->AsBufferFrameMasked() == &bf_to_find;
   guarded_child.JumpIfModifiedByOthers();
   if (!found) {
-    jumpmu::Jump();
+    leanstore::JumpContext::Jump();
   }
 
   LS_DCHECK(pos_in_parent != std::numeric_limits<uint32_t>::max(), "Invalid posInParent={}",

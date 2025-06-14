@@ -96,7 +96,11 @@ public:
   }
 
 private:
+  /// Number of threads in the thread pool.
   const int64_t num_threads_;
+
+  /// Thread pool, each thread is responsible for executing coroutines submitted
+  /// to it, runs its own coroutine scheduler.
   std::vector<std::unique_ptr<Thread>> threads_;
 };
 

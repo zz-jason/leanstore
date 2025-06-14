@@ -47,7 +47,7 @@ inline BufferFrame& FreeList::PopFrontMayJump() {
   JumpScoped<std::unique_lock<std::mutex>> guard(mutex_);
   BufferFrame* free_bf = head_;
   if (head_ == nullptr) {
-    jumpmu::Jump();
+    leanstore::JumpContext::Jump();
   } else {
     head_ = head_->header_.next_free_bf_;
     size_--;

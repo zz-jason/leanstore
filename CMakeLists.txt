@@ -4,82 +4,63 @@
 
 cmake_minimum_required(VERSION 3.10)
 project(leanstoredb CXX)
+enable_language(ASM)
 
-if (NOT UNIX)
+if(NOT UNIX)
   message(SEND_ERROR "unsupported platform")
 endif ()
 
-enable_language(ASM)
+set(LEANSTORE_CXX_STANDARD 23)
 
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+if(NOT DEFINED CMAKE_EXPORT_COMPILE_COMMANDS)
+  set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+endif()
 
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -Wextra -rdynamic -fno-omit-frame-pointer -pthread -Wno-error=clobbered")
-if (CMAKE_BUILD_TYPE MATCHES Debug)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDEBUG -O0 -g3")
+# ------------------------------------------------------------------------------
+# Compiler settings
+# ------------------------------------------------------------------------------
+set(LEANSTORE_COMPILE_DEFINITIONS __cpp_concepts=202002L) # for clangd
+set(LEANSTORE_COMPILE_FEATURES cxx_std_23)
+set(LEANSTORE_COMPILE_OPTIONS -Wall -Werror -Wextra -rdynamic -fno-omit-frame-pointer -pthread -Wno-error=clobbered)
+
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+  set(LEANSTORE_COMPILE_OPTIONS ${LEANSTORE_COMPILE_OPTIONS} -DDEBUG -O0 -g3)
 else()
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNDEBUG -O3 -g")
+  set(LEANSTORE_COMPILE_OPTIONS ${LEANSTORE_COMPILE_OPTIONS} -DNDEBUG -O3 -g)
 endif()
+
+# clang
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    add_compile_options(-Wno-vla-cxx-extension)
+  set(LEANSTORE_COMPILE_OPTIONS ${LEANSTORE_COMPILE_OPTIONS} -Wno-vla-cxx-extension)
 endif()
 
-# for clangd
-add_compile_definitions(__cpp_concepts=202002L)
-
-# TODO(jian.z): support compile with clang
-# # compile flags for clang
-# if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-#   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-command-line-argument")
-#   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} __cpp_concepts=202002L")
-# endif()
+if(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" AND CMAKE_BUILD_TYPE MATCHES Debug)
+  set(LEANSTORE_COMPILE_OPTIONS ${LEANSTORE_COMPILE_OPTIONS} -fstandalone-debug)
+endif ()
 
 # platform specific flags
-if (CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
-  add_compile_options(-mavx2 -mcx16 -m64)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
+  set(LEANSTORE_COMPILE_OPTIONS ${LEANSTORE_COMPILE_OPTIONS} -mavx2 -mcx16 -m64)
 else()
-  add_compile_options(-march=native)
+  set(LEANSTORE_COMPILE_OPTIONS ${LEANSTORE_COMPILE_OPTIONS} -march=native)
 endif()
 
+if(CYGWIN)
+  SET(LEANSTORE_COMPILE_OPTIONS ${LEANSTORE_COMPILE_OPTIONS} -static-libstdc++)
+endif (CYGWIN)
+
 if(ENABLE_COVERAGE)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
+  set(LEANSTORE_COMPILE_OPTIONS ${LEANSTORE_COMPILE_OPTIONS} --coverage)
 endif()
 
 if(ENABLE_ASAN)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
+  set(LEANSTORE_COMPILE_OPTIONS ${LEANSTORE_COMPILE_OPTIONS} -fsanitize=address)
 endif()
 
 if(ENABLE_TSAN)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread")
+  set(LEANSTORE_COMPILE_OPTIONS ${LEANSTORE_COMPILE_OPTIONS} -fsanitize=thread)
 endif()
 
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" AND CMAKE_BUILD_TYPE MATCHES Debug)
-  add_compile_options(-fstandalone-debug)
-endif ()
-
-if (APPLE)
-  LIST(APPEND CMAKE_PREFIX_PATH /usr/local/opt/bison)
-  LIST(APPEND CMAKE_PREFIX_PATH /usr/local/opt/flex)
-endif (APPLE)
-
-if (CYGWIN)
-  SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++")
-endif (CYGWIN)
-
-
-# ------------------------------------------------------------------------------
-# Dependencies
-# ------------------------------------------------------------------------------
-find_package(Boost REQUIRED CONFIG COMPONENTS context)
-find_package(RapidJSON CONFIG REQUIRED)
-find_package(spdlog CONFIG REQUIRED)
-find_package(GTest CONFIG REQUIRED)
-find_package(benchmark CONFIG REQUIRED)
-find_package(Crc32c CONFIG REQUIRED)
-find_package(httplib CONFIG REQUIRED)
-find_package(PkgConfig)
-pkg_check_modules(libunwind REQUIRED IMPORTED_TARGET GLOBAL libunwind)
 
 # ------------------------------------------------------------------------------
 # Project build targets
@@ -120,7 +101,6 @@ add_custom_target(format
 # clang-tidy
 # ---------------------------------------------------------------------------
 
-# clang-tidy
 add_custom_target(check-tidy
     COMMAND clang-tidy -p=${CMAKE_BINARY_DIR} --config-file=${CMAKE_SOURCE_DIR}/.clang-tidy ${ALL_SOURCE_FILES} -extra-arg='--std=c++2b'
     COMMENT "Running Clang-Tidy"

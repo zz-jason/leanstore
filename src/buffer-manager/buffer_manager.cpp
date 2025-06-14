@@ -345,7 +345,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
       if (io_frame_guard->owns_lock()) {
         io_frame_guard->unlock();
       }
-      jumpmu::Jump();
+      leanstore::JumpContext::Jump();
     }
   }
 
@@ -365,7 +365,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
       }
       inflight_io_guard->unlock();
     }
-    jumpmu::Jump(); // why jump?
+    leanstore::JumpContext::Jump(); // why jump?
     break;
   }
   case IOFrame::State::kReady: {
@@ -399,7 +399,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
       partition.inflight_ios_.Remove(page_id);
     }
     inflight_io_guard->unlock();
-    jumpmu::Jump();
+    leanstore::JumpContext::Jump();
     break;
   }
   default: {

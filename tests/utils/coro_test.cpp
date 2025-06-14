@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace leanstore::test {
@@ -18,35 +19,25 @@ namespace leanstore::test {
 class CoroTest : public ::testing::Test {};
 
 TEST_F(CoroTest, Submit) {
-  auto start_ts = std::chrono::steady_clock::now();
+  CoroScheduler coro_scheduler(1);
+  coro_scheduler.Init();
+
+  // case 1
   {
-
-    CoroScheduler coro_scheduler(1);
-    coro_scheduler.Init();
-
-    // case 1
-    {
-      std::atomic<bool> executed = false;
-      auto future = coro_scheduler.Submit([&executed]() { executed.store(true); });
-      future->Wait();
-      EXPECT_TRUE(executed.load(std::memory_order_acquire));
-    }
-
-    // case 2
-    {
-      auto future = coro_scheduler.Submit([]() -> int64_t { return 42; });
-      future->Wait();
-      EXPECT_EQ(future->GetResult(), 42);
-    }
-
-    coro_scheduler.Deinit();
+    std::atomic<bool> executed = false;
+    auto future = coro_scheduler.Submit([&executed]() { executed.store(true); });
+    future->Wait();
+    EXPECT_TRUE(executed.load(std::memory_order_acquire));
   }
 
-  auto elapsed_ms = std::chrono::duration_cast<std::chrono::microseconds>(
-                        std::chrono::steady_clock::now() - start_ts)
-                        .count() /
-                    1000.0;
-  Log::Info("CoroTest::Submit finished, elapsed={}ms", elapsed_ms);
+  // case 2
+  {
+    auto future = coro_scheduler.Submit([]() -> int64_t { return 42; });
+    future->Wait();
+    EXPECT_EQ(future->GetResult(), 42);
+  }
+
+  coro_scheduler.Deinit();
 }
 
 TEST_F(CoroTest, Mutex) {
@@ -186,6 +177,102 @@ TEST_F(CoroTest, Io) {
   for (auto& read_future : read_futures) {
     read_future->Wait();
   }
+
+  coro_scheduler.Deinit();
+}
+
+TEST_F(CoroTest, ChildCoro) {
+  CoroScheduler coro_scheduler(1);
+  coro_scheduler.Init();
+
+  std::vector<std::string> messages;
+  int64_t value = 0;
+  auto future = coro_scheduler.Submit([&]() {
+    messages.push_back("Parent coroutine started");
+
+    Coroutine child_coro([&]() {
+      messages.push_back("Child coroutine started");
+
+      value = 42;
+
+      Thread::CurrentCoro()->Yield(CoroState::kDone);
+
+      // this will not be executed
+      value = 43;
+      messages.push_back("Child coroutine finished");
+    });
+
+    Thread::CurrentThread()->RunCoroutine(&child_coro);
+
+    // after child coroutine finishes
+    EXPECT_EQ(value, 42);
+    EXPECT_NE(Thread::CurrentCoro(), &child_coro);
+    messages.push_back("Parent coroutine finished");
+  });
+
+  future->Wait();
+  // concat messages to a single string for easier comparison
+  std::string messages_str;
+  for (const auto& msg : messages) {
+    messages_str += msg + "\n";
+  }
+  EXPECT_EQ(messages_str, "Parent coroutine started\n"
+                          "Child coroutine started\n"
+                          "Parent coroutine finished\n");
+
+  coro_scheduler.Deinit();
+}
+
+TEST_F(CoroTest, JumpContext) {
+  CoroScheduler coro_scheduler(1);
+  coro_scheduler.Init();
+
+  std::atomic<int64_t> version = 1; // inited to exclusively locked
+  std::atomic<bool> conflicted = false;
+  int64_t value = 0;
+
+  Coroutine coro1([&]() {
+    EXPECT_EQ(JumpContext::Current(), Thread::CurrentCoro()->GetJumpContext());
+
+    while (true) {
+      JUMPMU_TRY() {
+        // 1. lock
+        auto version_lock = version.load(std::memory_order_acquire);
+        if ((version_lock & 1) == 1) {
+          conflicted.store(true, std::memory_order_release);
+          JUMPMU_CONTINUE; // continue to lock if conflicted
+        }
+
+        // 2. read value
+        auto value_read = value;
+
+        // 3. unlock
+        auto version_unlock = version.load(std::memory_order_acquire);
+        if (version_unlock != version_lock) {
+          JumpContext::Jump(JumpContext::JumpReason::kWaitingLock); // jump if conflict
+        }
+
+        // 4. read value success
+        EXPECT_EQ(value_read, 42);
+
+        // 5. finished, break the loop
+        JUMPMU_BREAK;
+      }
+      JUMPMU_CATCH() {
+      }
+    }
+  });
+
+  auto future1 = coro_scheduler.Submit([&]() { Thread::CurrentThread()->RunCoroutine(&coro1); });
+
+  while (!conflicted.load(std::memory_order_acquire)) {
+  }
+
+  value = 42;
+  version.store(2, std::memory_order_release); // release the lock
+  future1->Wait();
+
+  EXPECT_EQ(value, 42);
 
   coro_scheduler.Deinit();
 }

@@ -51,14 +51,14 @@ private:
 public:
   BMExclusiveGuard(BMOptimisticGuard& optimistic_guard) : optimistic_guard_(optimistic_guard) {
     optimistic_guard_.guard_.TryToExclusiveMayJump();
-    JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
+    JUMPMU_REGISTER_STACK_OBJECT(this);
   }
 
-  JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP(BMExclusiveGuard)
+  JUMPMU_DEFINE_DESTRUCTOR(BMExclusiveGuard)
 
   ~BMExclusiveGuard() {
     optimistic_guard_.guard_.Unlock();
-    JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP();
+    JUMPMU_UNREGISTER_STACK_OBJECT(this);
   }
 };
 
@@ -73,16 +73,16 @@ public:
       : guard_(guard),
         was_exclusive_(guard.state_ == GuardState::kExclusivePessimistic) {
     guard_.TryToExclusiveMayJump();
-    JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
+    JUMPMU_REGISTER_STACK_OBJECT(this);
   }
 
-  JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP(BMExclusiveUpgradeIfNeeded)
+  JUMPMU_DEFINE_DESTRUCTOR(BMExclusiveUpgradeIfNeeded)
 
   ~BMExclusiveUpgradeIfNeeded() {
     if (!was_exclusive_) {
       guard_.Unlock();
     }
-    JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP()
+    JUMPMU_UNREGISTER_STACK_OBJECT(this)
   }
 };
 
@@ -93,14 +93,14 @@ private:
 public:
   BMSharedGuard(BMOptimisticGuard& optimistic_guard) : optimistic_guard_(optimistic_guard) {
     optimistic_guard_.guard_.TryToSharedMayJump();
-    JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
+    JUMPMU_REGISTER_STACK_OBJECT(this);
   }
 
-  JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP(BMSharedGuard)
+  JUMPMU_DEFINE_DESTRUCTOR(BMSharedGuard)
 
   ~BMSharedGuard() {
     optimistic_guard_.guard_.Unlock();
-    JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP()
+    JUMPMU_UNREGISTER_STACK_OBJECT(this)
   }
 };
 

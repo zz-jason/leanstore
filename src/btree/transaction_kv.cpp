@@ -659,7 +659,7 @@ SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
   HybridGuard bf_guard(&bf.header_.latch_);
   bf_guard.ToOptimisticOrJump();
   if (bf.page_.btree_id_ != tree_id_) {
-    jumpmu::Jump();
+    leanstore::JumpContext::Jump();
   }
 
   GuardedBufferFrame<BTreeNode> guarded_node(store_->buffer_manager_.get(), std::move(bf_guard),

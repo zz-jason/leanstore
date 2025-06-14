@@ -143,6 +143,10 @@ struct __attribute__((packed)) BTreeNodeSlot {
 
 class BTreeNode : public BTreeNodeHeader {
 public:
+  static BTreeNode* From(BufferFrame* bf) {
+    return reinterpret_cast<BTreeNode*>(bf->page_.payload_);
+  }
+
   /// The slot array, which stores all the key-value positions inside a BTreeNode.
   BTreeNodeSlot slot_[];
 

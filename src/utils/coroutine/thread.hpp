@@ -1,5 +1,6 @@
 #pragma once
 
+#include "leanstore//utils/jump_mu.hpp"
 #include "utils/coroutine/blocking_queue_mpsc.hpp"
 #include "utils/coroutine/coro_io.hpp"
 #include "utils/coroutine/coroutine.hpp"
@@ -78,10 +79,16 @@ public:
   }
 
   void RunCoroutine(Coroutine* coroutine) {
-    assert(coroutine != nullptr);
+    assert(coroutine != nullptr && "Coroutine cannot be null");
+    assert(!coroutine->IsDone() && "Coroutine must not be done before running");
+
     current_coroutine_ = coroutine;
+    JumpContext::SetCurrent(coroutine->GetJumpContext());
+
     coroutine->Run();
+
     current_coroutine_ = nullptr;
+    JumpContext::SetCurrent(&def_jump_context_);
   }
 
   static CoroIo* CurrentCoroIo() {
@@ -111,6 +118,8 @@ private:
     std::string thread_name = std::format("worker_{}", thread_id_);
     pthread_setname_np(pthread_self(), thread_name.c_str());
     s_current_thread = this;
+    JumpContext::SetCurrent(&def_jump_context_);
+
     ready_ = true;
   }
 
@@ -135,6 +144,9 @@ private:
   std::atomic<bool> keep_running_{false};
 
   std::atomic<bool> ready_{false};
+
+  /// Jump context for the thread, used for setjmp/longjmp operations.
+  JumpContext def_jump_context_;
 
   inline static thread_local Thread* s_current_thread = nullptr;
 };
