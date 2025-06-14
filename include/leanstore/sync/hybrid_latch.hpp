@@ -43,8 +43,7 @@ private:
   friend class ScopedHybridGuard;
 
 public:
-  HybridLatch(uint64_t version = 0) : version_(version) {
-  }
+  HybridLatch() = default;
 
   void LockExclusively() {
     mutex_.lock();

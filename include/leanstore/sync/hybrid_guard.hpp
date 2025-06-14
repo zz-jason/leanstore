@@ -78,7 +78,7 @@ public:
       LS_DLOG("JumpIfModifiedByOthers, version_(expected)={}, "
               "latch_->GetVersion()(actual)={}",
               version_, latch_->GetVersion());
-      jumpmu::Jump();
+      leanstore::JumpContext::Jump();
     }
   }
 
@@ -115,7 +115,7 @@ public:
     version_ = latch_->GetVersion();
     if (HasExclusiveMark(version_)) {
       contented_ = true;
-      jumpmu::Jump();
+      leanstore::JumpContext::Jump();
     }
     state_ = GuardState::kSharedOptimistic;
   }
@@ -158,7 +158,7 @@ public:
       latch_->mutex_.lock();
       if (!latch_->version_.compare_exchange_strong(expected, new_version)) {
         latch_->mutex_.unlock();
-        jumpmu::Jump();
+        leanstore::JumpContext::Jump();
       }
       version_ = new_version;
       state_ = GuardState::kExclusivePessimistic;
@@ -176,7 +176,7 @@ public:
       latch_->mutex_.lock_shared();
       if (latch_->GetVersion() != version_) {
         latch_->mutex_.unlock_shared();
-        jumpmu::Jump();
+        leanstore::JumpContext::Jump();
       }
       state_ = GuardState::kSharedPessimistic;
     } else {
@@ -191,12 +191,12 @@ public:
     uint64_t expected = version_;
 
     if (!latch_->mutex_.try_lock()) {
-      jumpmu::Jump();
+      leanstore::JumpContext::Jump();
     }
 
     if (!latch_->version_.compare_exchange_strong(expected, new_version)) {
       latch_->mutex_.unlock();
-      jumpmu::Jump();
+      leanstore::JumpContext::Jump();
     }
 
     version_ = new_version;
@@ -206,11 +206,11 @@ public:
   inline void TryToSharedMayJump() {
     LS_DCHECK(state_ == GuardState::kSharedOptimistic);
     if (!latch_->mutex_.try_lock_shared()) {
-      jumpmu::Jump();
+      leanstore::JumpContext::Jump();
     }
     if (latch_->GetVersion() != version_) {
       latch_->mutex_.unlock_shared();
-      jumpmu::Jump();
+      leanstore::JumpContext::Jump();
     }
     state_ = GuardState::kSharedPessimistic;
   }

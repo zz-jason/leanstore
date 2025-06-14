@@ -235,7 +235,7 @@ inline void ScopedHybridGuard::lock_optimistic_or_jump() {
     contented_ = true;
     LS_DLOG("lockOptimisticOrJump() failed, target latch, latch={}, version={}", (void*)&latch_,
             version_on_lock_);
-    jumpmu::Jump();
+    leanstore::JumpContext::Jump();
   }
 }
 
@@ -262,7 +262,7 @@ inline void ScopedHybridGuard::jump_if_modified_by_others() {
     LS_DLOG("jumpIfModifiedByOthers() failed, target latch, latch={}, "
             "version(expected)={}, version(actual)={}",
             (void*)&latch_, version_on_lock_, cur_version);
-    jumpmu::Jump();
+    leanstore::JumpContext::Jump();
   }
 }
 

@@ -43,7 +43,7 @@ public:
         bf_(nullptr),
         guard_(nullptr),
         keep_alive_(true) {
-    JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
+    JUMPMU_REGISTER_STACK_OBJECT(this);
   }
 
   /// Construct a GuardedBufferFrame from an existing latch guard.
@@ -54,7 +54,7 @@ public:
         bf_(bf),
         guard_(std::move(hybrid_guard)),
         keep_alive_(true) {
-    JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
+    JUMPMU_REGISTER_STACK_OBJECT(this);
   }
 
   GuardedBufferFrame(GuardedBufferFrame& other) = delete; // Copy constructor
@@ -62,7 +62,7 @@ public:
   GuardedBufferFrame(GuardedBufferFrame&& other) {
     // call the move assignment
     *this = std::move(other);
-    JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
+    JUMPMU_REGISTER_STACK_OBJECT(this);
   }
 
   GuardedBufferFrame(BufferManager* buffer_manager, BufferFrame* bf, bool keep_alive = true)
@@ -71,7 +71,7 @@ public:
         guard_(bf_->header_.latch_, GuardState::kUninitialized),
         keep_alive_(keep_alive) {
     LS_DCHECK(!HasExclusiveMark(bf_->header_.latch_.GetVersion()));
-    JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
+    JUMPMU_REGISTER_STACK_OBJECT(this);
   }
 
   /// Guard a single page, usually used for latching the meta node of a BTree.
@@ -83,7 +83,7 @@ public:
         keep_alive_(true) {
     latch_may_jump(guard_, latch_mode);
     CheckRemoteDependency();
-    JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
+    JUMPMU_REGISTER_STACK_OBJECT(this);
   }
 
   /// Guard the childSwip when holding the guarded parent, usually used for lock
@@ -101,7 +101,7 @@ public:
         keep_alive_(true) {
     latch_may_jump(guard_, latch_mode);
     CheckRemoteDependency();
-    JUMPMU_PUSH_BACK_DESTRUCTOR_BEFORE_JUMP();
+    JUMPMU_REGISTER_STACK_OBJECT(this);
 
     guarded_parent.JumpIfModifiedByOthers();
   }
@@ -120,7 +120,7 @@ public:
     return *this;
   }
 
-  JUMPMU_DEFINE_DESTRUCTOR_BEFORE_JUMP(GuardedBufferFrame)
+  JUMPMU_DEFINE_DESTRUCTOR(GuardedBufferFrame)
 
   ~GuardedBufferFrame() {
     if (guard_.state_ == GuardState::kExclusivePessimistic) {
@@ -129,7 +129,7 @@ public:
       }
     }
     guard_.Unlock();
-    JUMPMU_POP_BACK_DESTRUCTOR_BEFORE_JUMP()
+    JUMPMU_UNREGISTER_STACK_OBJECT(this)
   }
 
   /// Assignment operator

@@ -1,5 +1,8 @@
 #pragma once
 
+#include "utils/coroutine/coroutine.hpp"
+#include "utils/coroutine/thread.hpp"
+
 #include <atomic>
 #include <cassert>
 #include <cstdint>
@@ -123,8 +126,7 @@ class alignas(64) CoroHybridMutex {
 public:
   constexpr static uint64_t kLatchExclusiveBit = 1ull;
 
-  CoroHybridMutex(uint64_t version = 0) : version_(version) {
-  }
+  CoroHybridMutex() = default;
 
   /// Lock the mutex exclusively.
   /// Returns the new version after locking.
@@ -150,6 +152,15 @@ public:
 
     mutex_.unlock();
     return new_version;
+  }
+
+  uint64_t LockSharedOptimistic() {
+    auto version_on_lock = GetVersion();
+    while (version_on_lock & kLatchExclusiveBit) {
+      Thread::CurrentCoro()->Yield(CoroState::kRunning);
+      version_on_lock = GetVersion();
+    }
+    return version_on_lock;
   }
 
   /// Lock the mutex in shared mode.

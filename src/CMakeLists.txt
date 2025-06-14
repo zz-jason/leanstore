@@ -15,15 +15,24 @@ else()
 endif()
 
 # dependencies
+find_package(Boost REQUIRED CONFIG COMPONENTS context)
+find_package(RapidJSON CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
+find_package(Crc32c CONFIG REQUIRED)
+find_package(httplib CONFIG REQUIRED)
+find_package(PkgConfig)
+pkg_check_modules(libunwind REQUIRED IMPORTED_TARGET GLOBAL libunwind)
+
 set(leanstore_deps
   aio
+  Boost::context
   rapidjson
   spdlog::spdlog_header_only
   Crc32c::crc32c
   httplib::httplib
   PkgConfig::libunwind
-  Boost::context
 )
+
 target_link_libraries(leanstore PUBLIC ${leanstore_deps})
 
 option(ENABLE_PROFILING "Enable profiling" OFF)
@@ -57,6 +66,10 @@ endforeach()
 # ---------------------------------------------------------------------------
 # Set compile options for the lib
 # ---------------------------------------------------------------------------
+
+target_compile_options(leanstore PRIVATE ${LEANSTORE_COMPILE_OPTIONS})
+target_compile_definitions(leanstore PRIVATE ${LEANSTORE_COMPILE_DEFINITIONS})
+target_compile_features(leanstore PRIVATE ${LEANSTORE_COMPILE_FEATURES})
 
 option(SANI "Compile leanstore with sanitizers" OFF)
 if(SANI)

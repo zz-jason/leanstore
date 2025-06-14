@@ -1,6 +1,8 @@
 include(GoogleTest)
 enable_testing()
 
+find_package(GTest CONFIG REQUIRED)
+
 set(TEST_EXECUTABLES "")
 
 # Define a cmake function to add a test file linked with Google Test
@@ -15,6 +17,9 @@ function(leanstore_add_test TARGET_NAME)
     GTest::gtest_main
     leanstore
   )
+  target_compile_options(${TARGET_NAME} PRIVATE ${LEANSTORE_COMPILE_OPTIONS})
+  target_compile_definitions(${TARGET_NAME} PRIVATE ${LEANSTORE_COMPILE_DEFINITIONS})
+  target_compile_features(${TARGET_NAME} PRIVATE ${LEANSTORE_COMPILE_FEATURES})
   gtest_discover_tests(${TARGET_NAME})
   list(APPEND TEST_EXECUTABLES ${TARGET_NAME})
 endfunction(leanstore_add_test)
@@ -36,6 +41,9 @@ function(leanstore_add_test_in_dir TARGET_DIR)
       GTest::gtest_main
       leanstore
     )
+    target_compile_options(${TEST_NAME} PRIVATE ${LEANSTORE_COMPILE_OPTIONS})
+    target_compile_definitions(${TEST_NAME} PRIVATE ${LEANSTORE_COMPILE_DEFINITIONS})
+    target_compile_features(${TEST_NAME} PRIVATE ${LEANSTORE_COMPILE_FEATURES})
     gtest_discover_tests(${TEST_NAME})
     list(APPEND TEST_EXECUTABLES ${TEST_NAME})
   endforeach()

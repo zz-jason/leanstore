@@ -9,6 +9,8 @@
 #include <boost/context/continuation_fcontext.hpp>
 #undef BOOST_NAMESPACE
 
+#include "leanstore/utils/jump_mu.hpp"
+
 namespace leanstore {
 
 enum class CoroState : uint8_t {
@@ -116,6 +118,10 @@ public:
     return state_ == CoroState::kDone;
   }
 
+  JumpContext* GetJumpContext() {
+    return &jump_context_;
+  }
+
 private:
   /// Continuation for the coroutine's execution context.
   boost::context::continuation context_;
@@ -139,6 +145,9 @@ private:
 
   /// Current state of the coroutine.
   CoroState state_ = CoroState::kReady;
+
+  /// Jump context for the coroutine.
+  JumpContext jump_context_;
 };
 
 } // namespace leanstore

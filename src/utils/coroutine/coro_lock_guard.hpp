@@ -23,9 +23,8 @@ public:
     kMoved,
   };
 
-  CoroHybridLockGuard() = default;
-
-  CoroHybridLockGuard(CoroHybridMutex* hybrid_mutex, uint64_t version_on_lock = kVersionUnlocked)
+  CoroHybridLockGuard(CoroHybridMutex* hybrid_mutex = nullptr,
+                      uint64_t version_on_lock = kVersionUnlocked)
       : hybrid_mutex_(hybrid_mutex),
         version_on_lock_(version_on_lock),
         mutex_state_(version_on_lock == kVersionUnlocked ? State::kUninitialized
@@ -40,33 +39,52 @@ public:
   }
 
   // move constructor
-  CoroHybridLockGuard(CoroHybridLockGuard&& other) {
-    *this = std::move(other);
+  CoroHybridLockGuard(CoroHybridLockGuard&& other)
+      : hybrid_mutex_(other.hybrid_mutex_),
+        version_on_lock_(other.version_on_lock_),
+        mutex_state_(other.mutex_state_),
+        contented_(other.contented_) {
+    other.hybrid_mutex_ = nullptr;
+    other.version_on_lock_ = kVersionUnlocked;
+    other.mutex_state_ = State::kMoved;
+    other.contented_ = false;
   }
 
   // move assignment
   CoroHybridLockGuard& operator=(CoroHybridLockGuard&& other) {
     if (this != &other) {
-      hybrid_mutex_ = other.hybrid_mutex_;
-      version_on_lock_ = other.version_on_lock_;
-      mutex_state_ = other.mutex_state_;
-      contented_ = other.contented_;
+      this->Unlock();
+
+      this->hybrid_mutex_ = other.hybrid_mutex_;
+      this->version_on_lock_ = other.version_on_lock_;
+      this->mutex_state_ = other.mutex_state_;
+      this->contented_ = other.contented_;
 
       other.hybrid_mutex_ = nullptr;
       other.version_on_lock_ = kVersionUnlocked;
       other.mutex_state_ = State::kMoved;
       other.contented_ = false;
     }
+
     return *this;
   }
 
-  void JumpIfModifiedByOthers() {
-    auto current_version = hybrid_mutex_->GetVersion();
-    if (mutex_state_ == State::kSharedOptimistic && version_on_lock_ != current_version) {
-      LS_DLOG("Jump, version mismatch, version_on_lock_(expected)={}, current_version(actual)={}",
-              version_on_lock_, current_version);
-      jumpmu::Jump();
-    }
+  bool IsConflicted() {
+    return (mutex_state_ == State::kSharedOptimistic &&
+            version_on_lock_ != hybrid_mutex_->GetVersion());
+  }
+
+  void LockSharedOptimistic() {
+    version_on_lock_ = hybrid_mutex_->LockSharedOptimistic();
+    mutex_state_ = State::kSharedOptimistic;
+  }
+
+  void LockSharedPessimistic() {
+    assert(false && "LockSharedPessimistic is not implemented");
+  }
+
+  void LockExclusivePessimistic() {
+    assert(false && "LockExclusivePessimistic is not implemented");
   }
 
   void Unlock() {
@@ -79,10 +97,6 @@ public:
     assert(mutex_state_ == State::kMoved || mutex_state_ == State::kUninitialized ||
            mutex_state_ == State::kSharedOptimistic);
     return;
-  }
-
-  void ToSharedOptimistic() {
-
   }
 
 private:
@@ -114,13 +128,20 @@ private:
     mutex_state_ = State::kSharedOptimistic;
   }
 
+private:
+  /// The hybrid mutex that this guard is managing. It can be null if the guard
+  /// is uninitialized.
   CoroHybridMutex* hybrid_mutex_ = nullptr;
 
+  /// The version of the mutex when it was locked.
   uint64_t version_on_lock_ = kVersionUnlocked;
 
+  /// The state of the mutex.
   State mutex_state_ = State::kUninitialized;
 
   bool contented_ = false;
 };
+
+static_assert(sizeof(CoroHybridLockGuard) == 24);
 
 } // namespace leanstore
