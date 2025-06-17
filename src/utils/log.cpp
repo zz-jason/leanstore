@@ -19,7 +19,7 @@ void Log::Init(const StoreOption* option) {
 
   std::unique_lock write_lock(sInitMutex);
 
-  auto log_path = std::string(option->store_dir_) + "/db.log";
+  auto log_path = std::string(option->store_dir_) + "/leanstore.log";
   auto logger = spdlog::basic_logger_mt("basic_logger", log_path.c_str());
 
   SCOPED_DEFER({
@@ -29,7 +29,7 @@ void Log::Init(const StoreOption* option) {
   });
 
   // set log pattern
-  logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
+  logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%t] [%l] %v");
 
   // set flush strategy
   logger->flush_on(spdlog::level::info);

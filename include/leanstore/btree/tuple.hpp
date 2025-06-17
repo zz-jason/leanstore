@@ -1,8 +1,9 @@
 #pragma once
 
-#include "leanstore/btree/core/pessimistic_exclusive_iterator.hpp"
+#include "leanstore/btree/core/btree_iter_mut.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/log.hpp"
+#include "leanstore/utils/portable.hpp"
 
 namespace leanstore::storage::btree {
 /// Plan: we should handle frequently and infrequently updated tuples
@@ -58,10 +59,7 @@ struct TupleFormatUtil {
 // -----------------------------------------------------------------------------
 
 /// The internal value format in TransactionKV.
-///
-/// NOTE: __attribute__((packed)) is used to avoid padding between field members
-/// to avoid using space more than given.
-class __attribute__((packed)) Tuple {
+class PACKED Tuple {
 public:
   /// Format of the current tuple.
   TupleFormat format_;
@@ -111,7 +109,7 @@ public:
     return reinterpret_cast<const Tuple*>(buffer);
   }
 
-  static bool ToFat(PessimisticExclusiveIterator& iterator);
+  static bool ToFat(BTreeIterMut* iterator);
 };
 
 // -----------------------------------------------------------------------------
@@ -127,7 +125,7 @@ public:
 /// | worker_id_ | tx_id_ | command_id_ | UpdateDesc | Delta |
 ///
 /// FatTuple uses precise garbage collection
-struct __attribute__((packed)) FatTupleDelta {
+struct PACKED FatTupleDelta {
 public:
   /// ID of the worker who creates this delta.
   WORKERID worker_id_;
@@ -184,7 +182,7 @@ public:
 ///
 /// | FatTuple meta |  newest value | FatTupleDelta O2N |
 ///
-class __attribute__((packed)) FatTuple : public Tuple {
+class PACKED FatTuple : public Tuple {
 public:
   /// Size of the newest value.
   uint16_t val_size_ = 0;
@@ -292,7 +290,7 @@ public:
 // DanglingPointer
 // -----------------------------------------------------------------------------
 
-struct __attribute__((packed)) DanglingPointer {
+struct PACKED DanglingPointer {
   BufferFrame* bf_ = nullptr;
 
   uint64_t latch_version_should_be_ = -1;
@@ -302,10 +300,10 @@ struct __attribute__((packed)) DanglingPointer {
 public:
   DanglingPointer() = default;
 
-  DanglingPointer(const PessimisticExclusiveIterator& x_iter)
-      : bf_(x_iter.guarded_leaf_.bf_),
-        latch_version_should_be_(x_iter.guarded_leaf_.guard_.version_),
-        head_slot_(x_iter.slot_id_) {
+  DanglingPointer(const BTreeIterMut* x_iter)
+      : bf_(x_iter->guarded_leaf_.bf_),
+        latch_version_should_be_(x_iter->guarded_leaf_.guard_.version_),
+        head_slot_(x_iter->slot_id_) {
   }
 };
 
@@ -315,7 +313,7 @@ public:
 
 enum class VersionType : uint8_t { kUpdate, kInsert, kRemove };
 
-struct __attribute__((packed)) Version {
+struct PACKED Version {
 public:
   VersionType type_;
 
@@ -337,7 +335,7 @@ public:
 // UpdateVersion
 // -----------------------------------------------------------------------------
 
-struct __attribute__((packed)) UpdateVersion : Version {
+struct PACKED UpdateVersion : Version {
   uint8_t is_delta_ = 1;
 
   uint8_t payload_[]; // UpdateDescriptor + Delta
@@ -360,7 +358,7 @@ public:
   }
 };
 
-struct __attribute__((packed)) InsertVersion : Version {
+struct PACKED InsertVersion : Version {
 public:
   uint16_t key_size_;
 
@@ -403,7 +401,7 @@ public:
 // RemoveVersion
 // -----------------------------------------------------------------------------
 
-struct __attribute__((packed)) RemoveVersion : Version {
+struct PACKED RemoveVersion : Version {
 public:
   uint16_t key_size_;
 

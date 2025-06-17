@@ -1,5 +1,6 @@
 #pragma once
 
+#include "leanstore/utils/portable.hpp"
 #include "utils/coroutine/coroutine.hpp"
 #include "utils/coroutine/thread.hpp"
 
@@ -122,7 +123,7 @@ private:
 
 /// A hybrid mutex that combines optimistic and pessimistic locking strategies.
 /// All the APIs are designed to be used together with CoroHybridLockGuard.
-class alignas(64) CoroHybridMutex {
+class ALIGNAS(64) CoroHybridMutex {
 public:
   constexpr static uint64_t kLatchExclusiveBit = 1ull;
 

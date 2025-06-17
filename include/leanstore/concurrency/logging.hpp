@@ -5,6 +5,7 @@
 #include "leanstore/sync/optimistic_guarded.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/counter_util.hpp"
+#include "leanstore/utils/portable.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -83,7 +84,7 @@ public:
 
   /// The ring buffer of the current worker thread. All the wal entries of the current worker are
   /// writtern to this ring buffer firstly, then flushed to disk by the group commit thread.
-  alignas(512) uint8_t* wal_buffer_;
+  ALIGNAS(512) uint8_t* wal_buffer_;
 
   /// The size of the wal ring buffer.
   uint64_t wal_buffer_size_;

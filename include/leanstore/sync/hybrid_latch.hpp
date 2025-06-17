@@ -1,6 +1,7 @@
 #pragma once
 
 #include "leanstore/utils/log.hpp"
+#include "leanstore/utils/portable.hpp"
 
 #include <atomic>
 #include <shared_mutex>
@@ -31,7 +32,7 @@ inline bool HasExclusiveMark(uint64_t version) {
 ///   mode, the version number is used to detech latch contention.
 /// - pessimistic shared: in shared mode, for high-contention scenarios.
 /// - pessimistic exclusive: in exclusive mode, for high-contention scenarios.
-class alignas(64) HybridLatch {
+class ALIGNAS(64) HybridLatch {
 private:
   /// The optimistic version.
   std::atomic<uint64_t> version_ = 0;

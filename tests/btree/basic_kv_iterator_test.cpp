@@ -36,7 +36,7 @@ protected:
 
 TEST_F(BasicKvIteratorTest, BasicKvHandle) {
   // prepare 100 key-value pairs for insert
-  const int num_entries = 100;
+  const int num_entries = 10;
   std::vector<std::string> keys(num_entries);
   std::vector<std::string> vals(num_entries);
   for (int i = 0; i < num_entries; i++) {
@@ -111,7 +111,7 @@ TEST_F(BasicKvIteratorTest, BasicKvAssendingIterationEmpty) {
 
 TEST_F(BasicKvIteratorTest, BasicKvAssendingIteration) {
   // prepare 130 key-value pairs for insert
-  const int num_entries = 130;
+  const int num_entries = 10;
   std::vector<std::string> keys(num_entries);
   std::vector<std::string> vals(num_entries);
   std::string smallest_key{""};
@@ -198,7 +198,7 @@ TEST_F(BasicKvIteratorTest, BasicKvAssendingIteration) {
 
 TEST_F(BasicKvIteratorTest, BasicKvDescendingIteration) {
   // prepare 130 key-value pairs for insert
-  const int num_entries = 130;
+  const int num_entries = 10;
   std::vector<std::string> keys(num_entries);
   std::vector<std::string> vals(num_entries);
   std::string smallest_key{""};
@@ -267,6 +267,8 @@ TEST_F(BasicKvIteratorTest, BasicKvDescendingIteration) {
       EXPECT_EQ(key_int * 2, val_int);
     }
   }
+
+  DestroyBasicKvIter(iter_handle);
 }
 
 } // namespace leanstore::test

@@ -70,7 +70,6 @@ public:
     return *this;
   }
 
-public:
   void JumpIfModifiedByOthers() {
     LS_DCHECK(state_ == GuardState::kSharedOptimistic || version_ == latch_->GetVersion());
 
@@ -82,7 +81,7 @@ public:
     }
   }
 
-  inline void Unlock() {
+  void Unlock() {
     switch (state_) {
     case GuardState::kExclusivePessimistic: {
       unlock_exclusive();

@@ -16,6 +16,7 @@ endif()
 
 # dependencies
 find_package(Boost REQUIRED CONFIG COMPONENTS context)
+find_package(cpptrace CONFIG REQUIRED)
 find_package(RapidJSON CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(Crc32c CONFIG REQUIRED)
@@ -26,6 +27,7 @@ pkg_check_modules(libunwind REQUIRED IMPORTED_TARGET GLOBAL libunwind)
 set(leanstore_deps
   aio
   Boost::context
+  cpptrace::cpptrace
   rapidjson
   spdlog::spdlog_header_only
   Crc32c::crc32c

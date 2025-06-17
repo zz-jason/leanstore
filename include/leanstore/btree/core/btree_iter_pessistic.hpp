@@ -19,7 +19,7 @@ namespace leanstore::storage::btree {
 using LeafCallback = std::function<void(GuardedBufferFrame<BTreeNode>& guarded_leaf)>;
 
 // Iterator
-class PessimisticIterator : public Iterator {
+class BTreeIterPessistic : public Iterator {
 private:
   friend class BTreeGeneric;
 
@@ -66,7 +66,7 @@ public:
   bool is_using_upper_fence_;
 
 public:
-  PessimisticIterator(BTreeGeneric& tree, const LatchMode mode = LatchMode::kSharedPessimistic)
+  BTreeIterPessistic(BTreeGeneric& tree, const LatchMode mode = LatchMode::kSharedPessimistic)
       : btree_(tree),
         mode_(mode),
         func_enter_leaf_(nullptr),
@@ -82,34 +82,15 @@ public:
         is_using_upper_fence_(false) {
   }
 
-  /// move constructor
-  PessimisticIterator(PessimisticIterator&& other)
-      : btree_(other.btree_),
-        mode_(other.mode_),
-        func_enter_leaf_(std::move(other.func_enter_leaf_)),
-        func_exit_leaf_(std::move(other.func_exit_leaf_)),
-        func_clean_up_(std::move(other.func_clean_up_)),
-        slot_id_(other.slot_id_),
-        is_prefix_copied_(other.is_prefix_copied_),
-        guarded_leaf_(std::move(other.guarded_leaf_)),
-        guarded_parent_(std::move(other.guarded_parent_)),
-        leaf_pos_in_parent_(other.leaf_pos_in_parent_),
-        buffer_(std::move(other.buffer_)),
-        fence_size_(other.fence_size_),
-        is_using_upper_fence_(other.is_using_upper_fence_) {
-    other.SetToInvalid();
-    other.leaf_pos_in_parent_ = -1;
-  }
-
   /// Seek to the position of the key which = the given key
   void SeekToEqual(Slice key) override {
-    seek_to_target_page_on_demand(key);
+    SeekTargetPageOnDemand(key);
     slot_id_ = guarded_leaf_->LowerBound<true>(key);
   }
 
   /// Seek to the position of the first key
   void SeekToFirst() override {
-    seek_to_target_page([](GuardedBufferFrame<BTreeNode>&) { return 0; });
+    SeekTargetPage([](GuardedBufferFrame<BTreeNode>&) { return 0; });
     if (guarded_leaf_->num_slots_ == 0) {
       SetToInvalid();
       return;
@@ -119,7 +100,7 @@ public:
 
   /// Seek to the position of the first key which >= the given key
   void SeekToFirstGreaterEqual(Slice key) override {
-    seek_to_target_page_on_demand(key);
+    SeekTargetPageOnDemand(key);
 
     slot_id_ = guarded_leaf_->LowerBound<false>(key);
     if (slot_id_ < guarded_leaf_->num_slots_) {
@@ -155,7 +136,7 @@ public:
 
   /// Seek to the position of the last key
   void SeekToLast() override {
-    seek_to_target_page([](GuardedBufferFrame<BTreeNode>& parent) { return parent->num_slots_; });
+    SeekTargetPage([](GuardedBufferFrame<BTreeNode>& parent) { return parent->num_slots_; });
     if (guarded_leaf_->num_slots_ == 0) {
       SetToInvalid();
       return;
@@ -166,7 +147,7 @@ public:
 
   /// Seek to the position of the last key which <= the given key
   void SeekToLastLessEqual(Slice key) override {
-    seek_to_target_page_on_demand(key);
+    SeekTargetPageOnDemand(key);
 
     bool is_equal = false;
     slot_id_ = guarded_leaf_->LowerBound<false>(key, &is_equal);
@@ -294,9 +275,9 @@ public:
 
 protected:
   /// Seek to the target page of the BTree on demand
-  void seek_to_target_page_on_demand(Slice key) {
+  void SeekTargetPageOnDemand(Slice key) {
     if (!Valid() || !KeyInCurrentNode(key)) {
-      seek_to_target_page([&key](GuardedBufferFrame<BTreeNode>& guarded_node) {
+      SeekTargetPage([&key](GuardedBufferFrame<BTreeNode>& guarded_node) {
         return guarded_node->LowerBound<false>(key);
       });
     }
@@ -304,9 +285,9 @@ protected:
 
   /// Seek to the target page of the BTree
   /// @param childPosGetter a function to get the child position in the parent node
-  void seek_to_target_page(std::function<int32_t(GuardedBufferFrame<BTreeNode>&)> child_pos_getter);
+  void SeekTargetPage(std::function<int32_t(GuardedBufferFrame<BTreeNode>&)> child_pos_getter);
 
-  void assemble_upper_fence() {
+  void AssembleUpperFence() {
     fence_size_ = guarded_leaf_->upper_fence_.size_ + 1;
     is_using_upper_fence_ = true;
     if (buffer_.size() < fence_size_) {
@@ -316,13 +297,13 @@ protected:
     buffer_[fence_size_ - 1] = 0;
   }
 
-  Slice assembed_fence() {
+  Slice AssembedFence() {
     LS_DCHECK(buffer_.size() >= fence_size_);
     return Slice(&buffer_[0], fence_size_);
   }
 };
 
-inline void PessimisticIterator::Next() {
+inline void BTreeIterPessistic::Next() {
   if (!Valid()) {
     return;
   }
@@ -341,7 +322,7 @@ inline void PessimisticIterator::Next() {
       return;
     }
 
-    assemble_upper_fence();
+    AssembleUpperFence();
 
     if (func_exit_leaf_ != nullptr) {
       func_exit_leaf_(guarded_leaf_);
@@ -390,8 +371,8 @@ inline void PessimisticIterator::Next() {
     }
 
     guarded_parent_.unlock();
-    Slice fence_key = assembed_fence();
-    seek_to_target_page([&fence_key](GuardedBufferFrame<BTreeNode>& guarded_node) {
+    Slice fence_key = AssembedFence();
+    SeekTargetPage([&fence_key](GuardedBufferFrame<BTreeNode>& guarded_node) {
       return guarded_node->LowerBound<false>(fence_key);
     });
 
@@ -406,7 +387,7 @@ inline void PessimisticIterator::Next() {
       });
       continue;
     }
-    slot_id_ = guarded_leaf_->LowerBound<false>(assembed_fence());
+    slot_id_ = guarded_leaf_->LowerBound<false>(AssembedFence());
     if (slot_id_ == guarded_leaf_->num_slots_) {
       continue;
     }
@@ -414,7 +395,7 @@ inline void PessimisticIterator::Next() {
   }
 }
 
-inline void PessimisticIterator::Prev() {
+inline void BTreeIterPessistic::Prev() {
   while (true) {
     ENSURE(guarded_leaf_.guard_.state_ != GuardState::kSharedOptimistic);
     // If we are not at the beginning of the leaf, return the previous key
@@ -487,8 +468,8 @@ inline void PessimisticIterator::Prev() {
     }
 
     // Construct the next key (lower bound)
-    Slice fence_key = assembed_fence();
-    seek_to_target_page([&fence_key](GuardedBufferFrame<BTreeNode>& guarded_node) {
+    Slice fence_key = AssembedFence();
+    SeekTargetPage([&fence_key](GuardedBufferFrame<BTreeNode>& guarded_node) {
       return guarded_node->LowerBound<false>(fence_key);
     });
 
@@ -496,7 +477,7 @@ inline void PessimisticIterator::Prev() {
       continue;
     }
     bool is_equal = false;
-    slot_id_ = guarded_leaf_->LowerBound<false>(assembed_fence(), &is_equal);
+    slot_id_ = guarded_leaf_->LowerBound<false>(AssembedFence(), &is_equal);
     if (is_equal) {
       return;
     }
@@ -509,7 +490,7 @@ inline void PessimisticIterator::Prev() {
   }
 }
 
-inline void PessimisticIterator::seek_to_target_page(
+inline void BTreeIterPessistic::SeekTargetPage(
     std::function<int32_t(GuardedBufferFrame<BTreeNode>&)> child_pos_getter) {
   if (mode_ != LatchMode::kSharedPessimistic && mode_ != LatchMode::kExclusivePessimistic) {
     Log::Fatal("Unsupported latch mode: {}", uint64_t(mode_));

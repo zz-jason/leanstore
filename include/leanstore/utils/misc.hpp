@@ -2,6 +2,7 @@
 
 #include "leanstore/utils/jump_mu.hpp"
 #include "leanstore/utils/log.hpp"
+#include "leanstore/utils/portable.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -139,7 +140,7 @@ JumpScoped<std::unique_ptr<T[]>> JumpScopedArray(size_t size) {
 template <size_t Alignment = 512>
 class AlignedBuffer {
 public:
-  alignas(Alignment) uint8_t* buffer_;
+  ALIGNAS(Alignment) uint8_t* buffer_;
 
 public:
   AlignedBuffer(size_t size)

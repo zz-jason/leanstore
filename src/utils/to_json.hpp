@@ -278,7 +278,7 @@ inline void ToJson(leanstore::storage::btree::BTreeNode* obj, JsonObj* btree_nod
   }
 
   utils::JsonArray hints_json_array;
-  for (auto i = 0; i < leanstore::storage::btree::BTreeNode::sHintCount; ++i) {
+  for (auto i = 0; i < leanstore::storage::btree::BTreeNode::kHintCount; ++i) {
     hints_json_array.AppendInt64(obj->hint_[i]);
   }
 

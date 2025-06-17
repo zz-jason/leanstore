@@ -59,12 +59,6 @@ public:
 
   GuardedBufferFrame(GuardedBufferFrame& other) = delete; // Copy constructor
 
-  GuardedBufferFrame(GuardedBufferFrame&& other) {
-    // call the move assignment
-    *this = std::move(other);
-    JUMPMU_REGISTER_STACK_OBJECT(this);
-  }
-
   GuardedBufferFrame(BufferManager* buffer_manager, BufferFrame* bf, bool keep_alive = true)
       : buffer_manager_(buffer_manager),
         bf_(bf),
@@ -138,6 +132,8 @@ public:
   /// Move assignment
   template <typename T2>
   constexpr GuardedBufferFrame& operator=(GuardedBufferFrame<T2>&& other) {
+    guard_.Unlock();
+
     buffer_manager_ = other.buffer_manager_;
     bf_ = other.bf_;
     guard_ = std::move(other.guard_);

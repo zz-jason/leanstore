@@ -2,8 +2,8 @@
 
 #include "btree/core/b_tree_wal_payload.hpp"
 #include "leanstore/btree/core/b_tree_node.hpp"
-#include "leanstore/btree/core/pessimistic_exclusive_iterator.hpp"
-#include "leanstore/btree/core/pessimistic_shared_iterator.hpp"
+#include "leanstore/btree/core/btree_iter.hpp"
+#include "leanstore/btree/core/btree_iter_mut.hpp"
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/buffer-manager/guarded_buffer_frame.hpp"
@@ -17,6 +17,7 @@
 
 #include <cstdint>
 #include <format>
+#include <memory>
 
 using namespace leanstore::storage;
 
@@ -58,12 +59,12 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btree_id, BTreeConfi
   }
 }
 
-PessimisticSharedIterator BTreeGeneric::GetIterator() {
-  return PessimisticSharedIterator(*this);
+std::unique_ptr<BTreeIter> BTreeGeneric::NewBTreeIter() {
+  return std::make_unique<BTreeIter>(*this);
 }
 
-PessimisticExclusiveIterator BTreeGeneric::GetExclusiveIterator() {
-  return PessimisticExclusiveIterator(*this);
+std::unique_ptr<BTreeIterMut> BTreeGeneric::NewBTreeIterMut() {
+  return std::make_unique<BTreeIterMut>(*this);
 }
 
 void BTreeGeneric::TrySplitMayJump(TXID sys_tx_id, BufferFrame& to_split,
