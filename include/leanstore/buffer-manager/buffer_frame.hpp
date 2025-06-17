@@ -6,6 +6,7 @@
 #include "leanstore/units.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/misc.hpp"
+#include "leanstore/utils/portable.hpp"
 #include "leanstore/utils/user_thread.hpp"
 #include "utils/coroutine/coro_mutex.hpp"
 
@@ -171,13 +172,13 @@ class BufferFrame {
 public:
   /// The control part. Information used by buffer manager, concurrent
   /// transaction control, etc. are stored here.
-  alignas(512) BufferFrameHeader header_;
+  ALIGNAS(512) BufferFrameHeader header_;
 
   // The persisted data part. Each page maps to a underlying disk page. It's
   // persisted to disk when the checkpoint happens, or when the storage is
   // shutdown. It should be recovered based on the old page content and the
   // write-ahead log of the page.
-  alignas(512) Page page_;
+  ALIGNAS(512) Page page_;
 
   BufferFrame() = default;
 

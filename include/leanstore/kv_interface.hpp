@@ -8,14 +8,7 @@
 
 namespace leanstore {
 
-enum class OpCode : uint8_t {
-  kOK = 0,
-  kNotFound = 1,
-  kDuplicated = 2,
-  kAbortTx = 3,
-  kSpaceNotEnough = 4,
-  kOther = 5
-};
+enum class OpCode : uint8_t { kOK = 0, kNotFound, kDuplicated, kAbortTx, kSpaceNotEnough, kOther };
 
 inline std::string ToString(OpCode result) {
   switch (result) {
@@ -103,11 +96,11 @@ public:
   }
 
   uint64_t SizeWithDelta() const {
-    return Size() + delta_size();
+    return Size() + DeltaSize();
   }
 
 private:
-  uint64_t delta_size() const {
+  uint64_t DeltaSize() const {
     uint64_t length = 0;
     for (uint8_t i = 0; i < num_slots_; i++) {
       length += update_slots_[i].size_;

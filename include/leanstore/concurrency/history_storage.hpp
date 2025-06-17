@@ -1,6 +1,7 @@
 #pragma once
 
 #include "leanstore/units.hpp"
+#include "leanstore/utils/portable.hpp"
 
 #include <cstdint>
 #include <functional>
@@ -19,7 +20,7 @@ using RemoveVersionCallback =
     std::function<void(const TXID version_tx_id, const TREEID tree_id, const uint8_t* version_data,
                        uint64_t version_size, const bool visited_before)>;
 
-struct __attribute__((packed)) VersionMeta {
+struct PACKED VersionMeta {
   bool called_before_ = false;
 
   TREEID tree_id_;
@@ -38,7 +39,7 @@ public:
 
 class HistoryStorage {
 private:
-  struct alignas(64) Session {
+  struct ALIGNAS(64) Session {
     leanstore::storage::BufferFrame* rightmost_bf_ = nullptr;
 
     uint64_t rightmost_version_ = 0;

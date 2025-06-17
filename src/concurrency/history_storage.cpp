@@ -2,7 +2,7 @@
 
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/core/b_tree_node.hpp"
-#include "leanstore/btree/core/pessimistic_exclusive_iterator.hpp"
+#include "leanstore/btree/core/btree_iter_mut.hpp"
 #include "leanstore/sync/hybrid_latch.hpp"
 #include "leanstore/sync/scoped_hybrid_guard.hpp"
 #include "leanstore/units.hpp"
@@ -36,8 +36,8 @@ void HistoryStorage::PutVersion(TXID tx_id, COMMANDID command_id, TREEID tree_id
   if (session != nullptr && session->rightmost_bf_ != nullptr) {
     JUMPMU_TRY() {
       Slice key(key_buffer, key_size);
-      PessimisticExclusiveIterator x_iter(*static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)),
-                                          session->rightmost_bf_, session->rightmost_version_);
+      BTreeIterMut x_iter(*static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)),
+                          session->rightmost_bf_, session->rightmost_version_);
       if (x_iter.HasEnoughSpaceFor(key.size(), version_size) && x_iter.KeyInCurrentNode(key)) {
 
         if (session->last_tx_id_ == tx_id) {
@@ -62,27 +62,27 @@ void HistoryStorage::PutVersion(TXID tx_id, COMMANDID command_id, TREEID tree_id
   while (true) {
     JUMPMU_TRY() {
       Slice key(key_buffer, key_size);
-      auto x_iter = const_cast<BasicKV*>(btree)->GetExclusiveIterator();
-      OpCode ret = x_iter.SeekToInsert(key);
+      auto x_iter = const_cast<BasicKV*>(btree)->NewBTreeIterMut();
+      OpCode ret = x_iter->SeekToInsert(key);
       if (ret == OpCode::kDuplicated) {
         // remove the last inserted version for the key
-        x_iter.RemoveCurrent();
+        x_iter->RemoveCurrent();
       } else {
         ENSURE(ret == OpCode::kOK);
       }
-      if (!x_iter.HasEnoughSpaceFor(key.size(), version_size)) {
-        x_iter.SplitForKey(key);
+      if (!x_iter->HasEnoughSpaceFor(key.size(), version_size)) {
+        x_iter->SplitForKey(key);
         JUMPMU_CONTINUE;
       }
-      x_iter.InsertToCurrentNode(key, version_size);
-      auto& version_meta = *new (x_iter.MutableVal().Data()) VersionMeta();
+      x_iter->InsertToCurrentNode(key, version_size);
+      auto& version_meta = *new (x_iter->MutableVal().Data()) VersionMeta();
       version_meta.tree_id_ = tree_id;
       insert_call_back(version_meta.payload_);
 
       if (session != nullptr) {
-        session->rightmost_bf_ = x_iter.guarded_leaf_.bf_;
-        session->rightmost_version_ = x_iter.guarded_leaf_.guard_.version_ + 1;
-        session->rightmost_pos_ = x_iter.slot_id_ + 1;
+        session->rightmost_bf_ = x_iter->guarded_leaf_.bf_;
+        session->rightmost_version_ = x_iter->guarded_leaf_.guard_.version_ + 1;
+        session->rightmost_pos_ = x_iter->slot_id_ + 1;
         session->last_tx_id_ = tx_id;
       }
 
@@ -140,11 +140,11 @@ void HistoryStorage::PurgeVersions(TXID from_tx_id, TXID to_tx_id,
   auto* btree = remove_index_;
   JUMPMU_TRY() {
   restartrem: {
-    auto x_iter = btree->GetExclusiveIterator();
-    x_iter.SetExitLeafCallback(
+    auto x_iter = btree->NewBTreeIterMut();
+    x_iter->SetExitLeafCallback(
         [&](leanstore::storage::GuardedBufferFrame<BTreeNode>& guarded_leaf) {
           if (guarded_leaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
-            x_iter.SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
+            x_iter->SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
               JUMPMU_TRY() {
                 TXID sys_tx_id = btree->store_->AllocSysTxTs();
                 btree->TryMergeMayJump(sys_tx_id, *to_merge);
@@ -154,33 +154,34 @@ void HistoryStorage::PurgeVersions(TXID from_tx_id, TXID to_tx_id,
             });
           }
         });
-    for (x_iter.SeekToFirstGreaterEqual(key); x_iter.Valid(); x_iter.SeekToFirstGreaterEqual(key)) {
+    for (x_iter->SeekToFirstGreaterEqual(key); x_iter->Valid();
+         x_iter->SeekToFirstGreaterEqual(key)) {
       // finished if we are out of the transaction range
-      x_iter.AssembleKey();
+      x_iter->AssembleKey();
       TXID cur_tx_id;
-      utils::Unfold(x_iter.Key().data(), cur_tx_id);
+      utils::Unfold(x_iter->Key().data(), cur_tx_id);
       if (cur_tx_id < from_tx_id || cur_tx_id > to_tx_id) {
         break;
       }
 
-      auto& version_container = *reinterpret_cast<VersionMeta*>(x_iter.MutableVal().Data());
+      auto& version_container = *reinterpret_cast<VersionMeta*>(x_iter->MutableVal().Data());
       const TREEID tree_id = version_container.tree_id_;
       const bool called_before = version_container.called_before_;
       version_container.called_before_ = true;
 
       // set the next key to be seeked
-      key_size = x_iter.Key().size();
-      std::memcpy(key_buffer, x_iter.Key().data(), key_size);
+      key_size = x_iter->Key().size();
+      std::memcpy(key_buffer, x_iter->Key().data(), key_size);
       key = Slice(key_buffer, key_size + 1);
 
       // get the remove version
-      payload_size = x_iter.Val().size() - sizeof(VersionMeta);
+      payload_size = x_iter->Val().size() - sizeof(VersionMeta);
       std::memcpy(payload, version_container.payload_, payload_size);
 
       // remove the version from history
-      x_iter.RemoveCurrent();
+      x_iter->RemoveCurrent();
       versions_removed = versions_removed + 1;
-      x_iter.Reset();
+      x_iter->Reset();
 
       on_remove_version(cur_tx_id, tree_id, payload, payload_size, called_before);
       goto restartrem;
@@ -230,12 +231,12 @@ void HistoryStorage::PurgeVersions(TXID from_tx_id, TXID to_tx_id,
 
   while (should_try) {
     JUMPMU_TRY() {
-      auto x_iter = btree->GetExclusiveIterator();
+      auto x_iter = btree->NewBTreeIterMut();
       // check whether the page can be merged when exit a leaf
-      x_iter.SetExitLeafCallback(
+      x_iter->SetExitLeafCallback(
           [&](leanstore::storage::GuardedBufferFrame<BTreeNode>& guarded_leaf) {
             if (guarded_leaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
-              x_iter.SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
+              x_iter->SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
                 JUMPMU_TRY() {
                   TXID sys_tx_id = btree->store_->AllocSysTxTs();
                   btree->TryMergeMayJump(sys_tx_id, *to_merge);
@@ -248,7 +249,7 @@ void HistoryStorage::PurgeVersions(TXID from_tx_id, TXID to_tx_id,
 
       bool is_full_page_purged = false;
       // check whether the whole page can be purged when enter a leaf
-      x_iter.SetEnterLeafCallback(
+      x_iter->SetEnterLeafCallback(
           [&](leanstore::storage::GuardedBufferFrame<BTreeNode>& guarded_leaf) {
             if (guarded_leaf->num_slots_ == 0) {
               return;
@@ -276,13 +277,13 @@ void HistoryStorage::PurgeVersions(TXID from_tx_id, TXID to_tx_id,
             }
           });
 
-      x_iter.SeekToFirstGreaterEqual(key);
+      x_iter->SeekToFirstGreaterEqual(key);
       if (is_full_page_purged) {
         is_full_page_purged = false;
         JUMPMU_CONTINUE;
       }
-      session->left_most_bf_ = x_iter.guarded_leaf_.bf_;
-      session->left_most_version_ = x_iter.guarded_leaf_.guard_.version_ + 1;
+      session->left_most_bf_ = x_iter->guarded_leaf_.bf_;
+      session->left_most_version_ = x_iter->guarded_leaf_.guard_.version_ + 1;
       JUMPMU_BREAK;
     }
     JUMPMU_CATCH() {
@@ -305,17 +306,18 @@ void HistoryStorage::VisitRemovedVersions(TXID from_tx_id, TXID to_tx_id,
 
   JUMPMU_TRY() {
   restart: {
-    auto x_iter = remove_tree->GetExclusiveIterator();
-    for (x_iter.SeekToFirstGreaterEqual(key); x_iter.Valid(); x_iter.SeekToFirstGreaterEqual(key)) {
+    auto x_iter = remove_tree->NewBTreeIterMut();
+    for (x_iter->SeekToFirstGreaterEqual(key); x_iter->Valid();
+         x_iter->SeekToFirstGreaterEqual(key)) {
       // skip versions out of the transaction range
-      x_iter.AssembleKey();
+      x_iter->AssembleKey();
       TXID cur_tx_id;
-      utils::Unfold(x_iter.Key().data(), cur_tx_id);
+      utils::Unfold(x_iter->Key().data(), cur_tx_id);
       if (cur_tx_id < from_tx_id || cur_tx_id > to_tx_id) {
         break;
       }
 
-      auto& version_container = *VersionMeta::From(x_iter.MutableVal().Data());
+      auto& version_container = *VersionMeta::From(x_iter->MutableVal().Data());
       const TREEID tree_id = version_container.tree_id_;
       const bool called_before = version_container.called_before_;
       LS_DCHECK(called_before == false,
@@ -325,15 +327,15 @@ void HistoryStorage::VisitRemovedVersions(TXID from_tx_id, TXID to_tx_id,
       version_container.called_before_ = true;
 
       // set the next key to be seeked
-      key_size = x_iter.Key().length();
-      std::memcpy(key_buffer, x_iter.Key().data(), key_size);
+      key_size = x_iter->Key().length();
+      std::memcpy(key_buffer, x_iter->Key().data(), key_size);
       key = Slice(key_buffer, key_size + 1);
 
       // get the remove version
-      payload_size = x_iter.Val().length() - sizeof(VersionMeta);
+      payload_size = x_iter->Val().length() - sizeof(VersionMeta);
       std::memcpy(payload, version_container.payload_, payload_size);
 
-      x_iter.Reset();
+      x_iter->Reset();
       on_remove_version(cur_tx_id, tree_id, payload, payload_size, called_before);
       goto restart;
     }

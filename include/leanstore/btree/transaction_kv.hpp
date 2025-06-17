@@ -3,7 +3,7 @@
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/chained_tuple.hpp"
 #include "leanstore/btree/core/b_tree_generic.hpp"
-#include "leanstore/btree/core/pessimistic_exclusive_iterator.hpp"
+#include "leanstore/btree/core/btree_iter_mut.hpp"
 #include "leanstore/btree/tuple.hpp"
 #include "leanstore/buffer-manager/guarded_buffer_frame.hpp"
 #include "leanstore/concurrency/worker_context.hpp"
@@ -90,7 +90,7 @@ private:
 
   std::tuple<OpCode, uint16_t> get_visible_tuple(Slice payload, ValCallback callback);
 
-  void insert_after_remove(PessimisticExclusiveIterator& x_iter, Slice key, Slice val);
+  void InsertAfterRemove(BTreeIterMut* x_iter, Slice key, Slice val);
 
   void undo_last_insert(const WalTxInsert* wal_insert);
 
@@ -117,8 +117,8 @@ public:
   /// Updates the value stored in FatTuple. The former newest version value is
   /// moved to the tail.
   /// @return false to fallback to chained mode
-  static bool UpdateInFatTuple(PessimisticExclusiveIterator& x_iter, Slice key,
-                               MutValCallback update_call_back, UpdateDesc& update_desc);
+  static bool UpdateInFatTuple(BTreeIterMut* x_iter, Slice key, MutValCallback update_call_back,
+                               UpdateDesc& update_desc);
 };
 
 } // namespace leanstore::storage::btree

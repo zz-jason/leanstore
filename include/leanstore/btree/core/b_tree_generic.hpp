@@ -18,13 +18,13 @@ namespace leanstore::storage::btree {
 
 enum class BTreeType : uint8_t { kGeneric = 0, kBasicKV = 1, kTransactionKV = 2 };
 
-class PessimisticSharedIterator;
-class PessimisticExclusiveIterator;
+class BTreeIter;
+class BTreeIterMut;
 using BTreeNodeCallback = std::function<int64_t(BTreeNode&)>;
 
 class BTreeGeneric : public leanstore::storage::BufferManagedTree {
 public:
-  friend class PessimisticIterator;
+  friend class BTreeIterPessistic;
 
   enum class XMergeReturnCode : uint8_t { kNothing, kFullMerge, kPartialMerge };
 
@@ -47,9 +47,11 @@ public:
 
   void Init(leanstore::LeanStore* store, TREEID tree_id, BTreeConfig config);
 
-  PessimisticSharedIterator GetIterator();
+  /// Create an immutable iterator for the BTree.
+  std::unique_ptr<BTreeIter> NewBTreeIter();
 
-  PessimisticExclusiveIterator GetExclusiveIterator();
+  /// Create an mutable iterator for the BTree.
+  std::unique_ptr<BTreeIterMut> NewBTreeIterMut();
 
   /// Try to merge the current node with its left or right sibling, reclaim the merged left or right
   /// sibling if successful.

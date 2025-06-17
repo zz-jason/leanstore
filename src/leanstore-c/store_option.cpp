@@ -3,10 +3,10 @@
 #include <string.h>
 
 /// The default store option.
-static const StoreOption kDefaultStoreOption = {
+static constexpr StoreOption kDefaultStoreOption = {
     // Store related options
     .create_from_scratch_ = true,
-    .store_dir_ = "~/.leanstore",
+    .store_dir_ = "leanstore",
 
     // log related options
     .log_level_ = LogLevel::kInfo,

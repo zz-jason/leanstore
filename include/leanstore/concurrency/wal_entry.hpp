@@ -3,6 +3,7 @@
 #include "leanstore/units.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/misc.hpp"
+#include "leanstore/utils/portable.hpp"
 
 #include <cstdint>
 #include <string>
@@ -31,7 +32,7 @@ class WalEntryComplex;
 ///
 /// EalEntry size is critical to the write performance, packed attribute is used and virtual
 /// functions are avoided to make the size as small as possible.
-class __attribute__((packed)) WalEntry {
+class PACKED WalEntry {
 public:
   enum class Type : uint8_t { DO_WITH_WAL_ENTRY_TYPES(DECR_WAL_ENTRY_TYPE) };
 
@@ -52,7 +53,7 @@ public:
 
 // maybe it can also be removed, we can use the first compensation log to
 // indicate transaction abort
-class __attribute__((packed)) WalTxAbort : public WalEntry {
+class PACKED WalTxAbort : public WalEntry {
 public:
   TXID tx_id_;
 
@@ -60,7 +61,7 @@ public:
   }
 };
 
-class __attribute__((packed)) WalTxFinish : public WalEntry {
+class PACKED WalTxFinish : public WalEntry {
 public:
   TXID tx_id_;
 
@@ -68,7 +69,7 @@ public:
   }
 };
 
-class __attribute__((packed)) WalCarriageReturn : public WalEntry {
+class PACKED WalCarriageReturn : public WalEntry {
 public:
   uint16_t size_;
 
@@ -76,7 +77,7 @@ public:
   }
 };
 
-class __attribute__((packed)) WalEntryComplex : public WalEntry {
+class PACKED WalEntryComplex : public WalEntry {
 public:
   /// Crc of the whole WalEntry, including all the payloads.
   uint32_t crc32_;

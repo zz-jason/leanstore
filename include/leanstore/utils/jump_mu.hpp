@@ -45,10 +45,8 @@ public:
 
   ~JumpContext() {
     assert(jump_env_counter_ == 0 && "JumpContext should not be destroyed with active jump envs");
-
-    // TODO: uncomment the following assert
-    // assert(stack_obj_counter_ == 0 &&
-    //        "JumpContext should not be destroyed with registered stack objects");
+    assert(stack_obj_counter_ == 0 &&
+           "JumpContext should not be destroyed with registered stack objects");
   }
 
   jmp_buf& AllocJumpEnv() {
@@ -86,10 +84,8 @@ public:
   /// object destructor
   void UnregisterObject(void* obj [[maybe_unused]]) {
     assert(stack_obj_counter_ > 0);
-
-    // TODO: uncomment the following assert
-    // assert(stack_objs_[stack_obj_counter_ - 1] == obj &&
-    //        "Unregistering an object that is not the last registered one");
+    assert(stack_objs_[stack_obj_counter_ - 1] == obj &&
+           "Unregistering an object that is not the last registered one");
 
     stack_obj_counter_--;
     stack_objs_[stack_obj_counter_] = nullptr;

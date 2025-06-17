@@ -90,13 +90,13 @@ std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(Slice payload,
   return {OpCode::kNotFound, versions_read};
 }
 
-void ChainedTuple::Update(PessimisticExclusiveIterator& x_iter, Slice key,
-                          MutValCallback update_call_back, UpdateDesc& update_desc) {
+void ChainedTuple::Update(BTreeIterMut* x_iter, Slice key, MutValCallback update_call_back,
+                          UpdateDesc& update_desc) {
   auto size_of_desc_and_delta = update_desc.SizeWithDelta();
   auto version_size = size_of_desc_and_delta + sizeof(UpdateVersion);
 
   // Move the newest tuple to the history version tree.
-  auto tree_id = x_iter.btree_.tree_id_;
+  auto tree_id = x_iter->btree_.tree_id_;
   auto curr_command_id = cr::WorkerContext::My().cc_.PutVersion(
       tree_id, false, version_size, [&](uint8_t* version_buf) {
         auto& update_version =
@@ -107,7 +107,7 @@ void ChainedTuple::Update(PessimisticExclusiveIterator& x_iter, Slice key,
       });
 
   auto perform_update = [&]() {
-    auto mut_raw_val = x_iter.MutableVal();
+    auto mut_raw_val = x_iter->MutableVal();
     auto user_val_size = mut_raw_val.Size() - sizeof(ChainedTuple);
     update_call_back(MutableSlice(payload_, user_val_size));
     worker_id_ = cr::WorkerContext::My().worker_id_;
@@ -117,10 +117,10 @@ void ChainedTuple::Update(PessimisticExclusiveIterator& x_iter, Slice key,
 
   SCOPED_DEFER({
     WriteUnlock();
-    x_iter.UpdateContentionStats();
+    x_iter->UpdateContentionStats();
   });
 
-  if (!x_iter.btree_.config_.enable_wal_) {
+  if (!x_iter->btree_.config_.enable_wal_) {
     perform_update();
     return;
   }
@@ -128,7 +128,7 @@ void ChainedTuple::Update(PessimisticExclusiveIterator& x_iter, Slice key,
   auto prev_worker_id = worker_id_;
   auto prev_tx_id = tx_id_;
   auto prev_command_id = command_id_;
-  auto wal_handler = x_iter.guarded_leaf_.ReserveWALPayload<WalTxUpdate>(
+  auto wal_handler = x_iter->guarded_leaf_.ReserveWALPayload<WalTxUpdate>(
       key.size() + size_of_desc_and_delta, key, update_desc, size_of_desc_and_delta, prev_worker_id,
       prev_tx_id, prev_command_id ^ curr_command_id);
   auto* wal_buf = wal_handler->GetDeltaPtr();

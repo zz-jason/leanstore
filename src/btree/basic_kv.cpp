@@ -2,8 +2,8 @@
 
 #include "btree/core/b_tree_wal_payload.hpp"
 #include "leanstore/btree/core/b_tree_generic.hpp"
-#include "leanstore/btree/core/pessimistic_exclusive_iterator.hpp"
-#include "leanstore/btree/core/pessimistic_shared_iterator.hpp"
+#include "leanstore/btree/core/btree_iter.hpp"
+#include "leanstore/btree/core/btree_iter_mut.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_latch.hpp"
@@ -136,14 +136,14 @@ bool BasicKV::IsRangeEmpty(Slice start_key, Slice end_key) {
 
 OpCode BasicKV::ScanAsc(Slice start_key, ScanCallback callback) {
   JUMPMU_TRY() {
-    auto iter = GetIterator();
-    if (iter.SeekToFirstGreaterEqual(start_key); !iter.Valid()) {
+    auto iter = NewBTreeIter();
+    if (iter->SeekToFirstGreaterEqual(start_key); !iter->Valid()) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
-    for (; iter.Valid(); iter.Next()) {
-      iter.AssembleKey();
-      auto key = iter.Key();
-      auto value = iter.Val();
+    for (; iter->Valid(); iter->Next()) {
+      iter->AssembleKey();
+      auto key = iter->Key();
+      auto value = iter->Val();
       if (!callback(key, value)) {
         break;
       }
@@ -159,14 +159,14 @@ OpCode BasicKV::ScanAsc(Slice start_key, ScanCallback callback) {
 
 OpCode BasicKV::ScanDesc(Slice scan_key, ScanCallback callback) {
   JUMPMU_TRY() {
-    auto iter = GetIterator();
-    if (iter.SeekToLastLessEqual(scan_key); !iter.Valid()) {
+    auto iter = NewBTreeIter();
+    if (iter->SeekToLastLessEqual(scan_key); !iter->Valid()) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
-    for (; iter.Valid(); iter.Prev()) {
-      iter.AssembleKey();
-      auto key = iter.Key();
-      auto value = iter.Val();
+    for (; iter->Valid(); iter->Prev()) {
+      iter->AssembleKey();
+      auto key = iter->Key();
+      auto value = iter->Val();
       if (!callback(key, value)) {
         break;
       }
@@ -182,8 +182,8 @@ OpCode BasicKV::ScanDesc(Slice scan_key, ScanCallback callback) {
 
 OpCode BasicKV::Insert(Slice key, Slice val) {
   JUMPMU_TRY() {
-    auto x_iter = GetExclusiveIterator();
-    auto ret = x_iter.InsertKV(key, val);
+    auto x_iter = NewBTreeIterMut();
+    auto ret = x_iter->InsertKV(key, val);
 
     if (ret == OpCode::kDuplicated) {
       Log::Info("Insert duplicated, workerId={}, key={}, treeId={}",
@@ -199,7 +199,7 @@ OpCode BasicKV::Insert(Slice key, Slice val) {
 
     if (config_.enable_wal_) {
       auto wal_size = key.length() + val.length();
-      x_iter.guarded_leaf_.WriteWal<WalInsert>(wal_size, key, val);
+      x_iter->guarded_leaf_.WriteWal<WalInsert>(wal_size, key, val);
     }
   }
   JUMPMU_CATCH() {
@@ -209,16 +209,16 @@ OpCode BasicKV::Insert(Slice key, Slice val) {
 
 OpCode BasicKV::PrefixLookup(Slice prefix_key, PrefixLookupCallback callback) {
   JUMPMU_TRY() {
-    auto iter = GetIterator();
-    if (iter.SeekToFirstGreaterEqual(prefix_key); !iter.Valid()) {
+    auto iter = NewBTreeIter();
+    if (iter->SeekToFirstGreaterEqual(prefix_key); !iter->Valid()) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
     bool found_prefix_key = false;
     uint16_t prefix_size = prefix_key.size();
-    for (; iter.Valid(); iter.Next()) {
-      iter.AssembleKey();
-      auto key = iter.Key();
-      auto value = iter.Val();
+    for (; iter->Valid(); iter->Next()) {
+      iter->AssembleKey();
+      auto key = iter->Key();
+      auto value = iter->Val();
       if ((key.size() < prefix_size) || (bcmp(key.data(), prefix_key.data(), prefix_size) != 0)) {
         break;
       }
@@ -279,16 +279,16 @@ OpCode BasicKV::PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) {
 
 OpCode BasicKV::UpdatePartial(Slice key, MutValCallback update_call_back, UpdateDesc& update_desc) {
   JUMPMU_TRY() {
-    auto x_iter = GetExclusiveIterator();
-    if (x_iter.SeekToEqual(key); !x_iter.Valid()) {
+    auto x_iter = NewBTreeIterMut();
+    if (x_iter->SeekToEqual(key); !x_iter->Valid()) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
-    auto current_val = x_iter.MutableVal();
+    auto current_val = x_iter->MutableVal();
     if (config_.enable_wal_) {
       LS_DCHECK(update_desc.num_slots_ > 0);
       auto size_of_desc_and_delta = update_desc.SizeWithDelta();
       auto wal_handler =
-          x_iter.guarded_leaf_.ReserveWALPayload<WalUpdate>(key.length() + size_of_desc_and_delta);
+          x_iter->guarded_leaf_.ReserveWALPayload<WalUpdate>(key.length() + size_of_desc_and_delta);
       wal_handler->type_ = WalPayload::Type::kWalUpdate;
       wal_handler->key_size_ = key.length();
       wal_handler->delta_length_ = size_of_desc_and_delta;
@@ -312,7 +312,7 @@ OpCode BasicKV::UpdatePartial(Slice key, MutValCallback update_call_back, Update
       update_call_back(current_val);
     }
 
-    x_iter.UpdateContentionStats();
+    x_iter->UpdateContentionStats();
     JUMPMU_RETURN OpCode::kOK;
   }
   JUMPMU_CATCH() {
@@ -323,20 +323,20 @@ OpCode BasicKV::UpdatePartial(Slice key, MutValCallback update_call_back, Update
 
 OpCode BasicKV::Remove(Slice key) {
   JUMPMU_TRY() {
-    auto x_iter = GetExclusiveIterator();
-    if (x_iter.SeekToEqual(key); !x_iter.Valid()) {
+    auto x_iter = NewBTreeIterMut();
+    if (x_iter->SeekToEqual(key); !x_iter->Valid()) {
       JUMPMU_RETURN OpCode::kNotFound;
     }
 
-    Slice value = x_iter.Val();
+    Slice value = x_iter->Val();
     if (config_.enable_wal_) {
       auto wal_handler =
-          x_iter.guarded_leaf_.ReserveWALPayload<WalRemove>(key.size() + value.size(), key, value);
+          x_iter->guarded_leaf_.ReserveWALPayload<WalRemove>(key.size() + value.size(), key, value);
       wal_handler.SubmitWal();
     }
-    auto ret = x_iter.RemoveCurrent();
+    auto ret = x_iter->RemoveCurrent();
     ENSURE(ret == OpCode::kOK);
-    x_iter.TryMergeIfNeeded();
+    x_iter->TryMergeIfNeeded();
     JUMPMU_RETURN OpCode::kOK;
   }
   JUMPMU_CATCH() {
@@ -347,10 +347,10 @@ OpCode BasicKV::Remove(Slice key) {
 
 OpCode BasicKV::RangeRemove(Slice start_key, Slice end_key, bool page_wise) {
   JUMPMU_TRY() {
-    auto x_iter = GetExclusiveIterator();
-    x_iter.SetExitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guarded_leaf) {
+    auto x_iter = NewBTreeIterMut();
+    x_iter->SetExitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guarded_leaf) {
       if (guarded_leaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
-        x_iter.SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
+        x_iter->SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
           JUMPMU_TRY() {
             TXID sys_tx_id = store_->AllocSysTxTs();
             this->TryMergeMayJump(sys_tx_id, *to_merge);
@@ -363,19 +363,19 @@ OpCode BasicKV::RangeRemove(Slice start_key, Slice end_key, bool page_wise) {
 
     ENSURE(config_.enable_wal_ == false);
     if (!page_wise) {
-      x_iter.SeekToFirstGreaterEqual(start_key);
-      if (!x_iter.Valid()) {
+      x_iter->SeekToFirstGreaterEqual(start_key);
+      if (!x_iter->Valid()) {
         JUMPMU_RETURN OpCode::kNotFound;
       }
       while (true) {
-        x_iter.AssembleKey();
-        auto current_key = x_iter.Key();
+        x_iter->AssembleKey();
+        auto current_key = x_iter->Key();
         if (current_key >= start_key && current_key <= end_key) {
-          auto ret = x_iter.RemoveCurrent();
+          auto ret = x_iter->RemoveCurrent();
           ENSURE(ret == OpCode::kOK);
-          if (x_iter.slot_id_ == x_iter.guarded_leaf_->num_slots_) {
-            x_iter.Next();
-            ret = x_iter.Valid() ? OpCode::kOK : OpCode::kNotFound;
+          if (x_iter->slot_id_ == x_iter->guarded_leaf_->num_slots_) {
+            x_iter->Next();
+            ret = x_iter->Valid() ? OpCode::kOK : OpCode::kNotFound;
           }
         } else {
           break;
@@ -385,7 +385,7 @@ OpCode BasicKV::RangeRemove(Slice start_key, Slice end_key, bool page_wise) {
     }
 
     bool did_purge_full_page = false;
-    x_iter.SetEnterLeafCallback([&](GuardedBufferFrame<BTreeNode>& guarded_leaf) {
+    x_iter->SetEnterLeafCallback([&](GuardedBufferFrame<BTreeNode>& guarded_leaf) {
       if (guarded_leaf->num_slots_ == 0) {
         return;
       }
@@ -410,7 +410,7 @@ OpCode BasicKV::RangeRemove(Slice start_key, Slice end_key, bool page_wise) {
     });
 
     while (true) {
-      x_iter.SeekToFirstGreaterEqual(start_key);
+      x_iter->SeekToFirstGreaterEqual(start_key);
       if (did_purge_full_page) {
         did_purge_full_page = false;
         continue;

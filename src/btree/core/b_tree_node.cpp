@@ -12,22 +12,22 @@
 namespace leanstore::storage::btree {
 
 void BTreeNode::UpdateHint(uint16_t slot_id) {
-  uint16_t dist = num_slots_ / (sHintCount + 1);
+  uint16_t dist = num_slots_ / (kHintCount + 1);
   uint16_t begin = 0;
-  if ((num_slots_ > sHintCount * 2 + 1) && (((num_slots_ - 1) / (sHintCount + 1)) == dist) &&
+  if ((num_slots_ > kHintCount * 2 + 1) && (((num_slots_ - 1) / (kHintCount + 1)) == dist) &&
       ((slot_id / dist) > 1))
     begin = (slot_id / dist) - 1;
-  for (uint16_t i = begin; i < sHintCount; i++)
+  for (uint16_t i = begin; i < kHintCount; i++)
     hint_[i] = slot_[dist * (i + 1)].head_;
-  for (uint16_t i = 0; i < sHintCount; i++)
+  for (uint16_t i = 0; i < kHintCount; i++)
     assert(hint_[i] == slot_[dist * (i + 1)].head_);
 }
 
 void BTreeNode::SearchHint(HeadType key_head, uint16_t& lower_out, uint16_t& upper_out) {
-  if (num_slots_ > sHintCount * 2) {
+  if (num_slots_ > kHintCount * 2) {
     if (utils::tls_store->store_option_->btree_hints_ == 2) {
 #ifdef __AVX512F__
-      const uint16_t dist = num_slots_ / (sHintCount + 1);
+      const uint16_t dist = num_slots_ / (kHintCount + 1);
       uint16_t pos, pos2;
       __m512i key_head_reg = _mm512_set1_epi32(key_head);
       __m512i chunk = _mm512_loadu_si512(hint);
@@ -37,34 +37,34 @@ void BTreeNode::SearchHint(HeadType key_head, uint16_t& lower_out, uint16_t& upp
       pos = __builtin_ctz(compare_mask);
       lower_out = pos * dist;
       // -------------------------------------------------------------------------------------
-      for (pos2 = pos; pos2 < sHintCount; pos2++) {
+      for (pos2 = pos; pos2 < kHintCount; pos2++) {
         if (hint_[pos2] != key_head) {
           break;
         }
       }
-      if (pos2 < sHintCount) {
+      if (pos2 < kHintCount) {
         upper_out = (pos2 + 1) * dist;
       }
 #else
       Log::Error("Search hint with AVX512 failed: __AVX512F__ not found");
 #endif
     } else if (utils::tls_store->store_option_->btree_hints_ == 1) {
-      const uint16_t dist = num_slots_ / (sHintCount + 1);
+      const uint16_t dist = num_slots_ / (kHintCount + 1);
       uint16_t pos, pos2;
 
-      for (pos = 0; pos < sHintCount; pos++) {
+      for (pos = 0; pos < kHintCount; pos++) {
         if (hint_[pos] >= key_head) {
           break;
         }
       }
-      for (pos2 = pos; pos2 < sHintCount; pos2++) {
+      for (pos2 = pos; pos2 < kHintCount; pos2++) {
         if (hint_[pos2] != key_head) {
           break;
         }
       }
 
       lower_out = pos * dist;
-      if (pos2 < sHintCount) {
+      if (pos2 < kHintCount) {
         upper_out = (pos2 + 1) * dist;
       }
     } else {

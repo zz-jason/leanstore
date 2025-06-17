@@ -3,6 +3,7 @@
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/buffer-manager/guarded_buffer_frame.hpp"
 #include "leanstore/utils/log.hpp"
+#include "leanstore/utils/portable.hpp"
 #include "leanstore/utils/user_thread.hpp"
 
 #include <cstdint>
@@ -15,7 +16,7 @@ using HeadType = uint32_t;
 
 class BTreeNodeHeader {
 public:
-  static const uint16_t sHintCount = 16;
+  static constexpr uint16_t kHintCount = 16;
 
   struct SeparatorInfo {
     /// The full length of the separator key.
@@ -77,7 +78,7 @@ public:
 
   uint16_t prefix_size_ = 0;
 
-  uint32_t hint_[sHintCount];
+  uint32_t hint_[kHintCount];
 
   /// Needed for GC
   bool has_garbage_ = false;
@@ -123,7 +124,7 @@ public:
 /// The slot inside a btree node. Slot records the metadata for the key-value position inside a
 /// page. Common prefix among all keys are removed in a btree node. Slot key-value layout:
 ///  | key without prefix | value |
-struct __attribute__((packed)) BTreeNodeSlot {
+struct PACKED BTreeNodeSlot {
   /// Data offset of the slot, also the offset of the slot key
   uint16_t offset_;
 
@@ -320,8 +321,8 @@ public:
   }
 
   void MakeHint() {
-    uint16_t dist = num_slots_ / (sHintCount + 1);
-    for (uint16_t i = 0; i < sHintCount; i++)
+    uint16_t dist = num_slots_ / (kHintCount + 1);
+    for (uint16_t i = 0; i < kHintCount; i++)
       hint_[i] = slot_[dist * (i + 1)].head_;
   }
 

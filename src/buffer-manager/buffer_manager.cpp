@@ -16,6 +16,7 @@
 #include "leanstore/utils/jump_mu.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/parallelize.hpp"
+#include "leanstore/utils/portable.hpp"
 #include "leanstore/utils/user_thread.hpp"
 
 #include <cerrno>
@@ -147,7 +148,7 @@ Result<void> BufferManager::CheckpointAllBufferFrames() {
     // the underlying batch for aio
     const auto batch_capacity = store_->store_option_->buffer_write_batch_size_;
     // const auto batchCapacity = 1;
-    alignas(512) uint8_t buffer[page_size * batch_capacity];
+    ALIGNAS(512) uint8_t buffer[page_size * batch_capacity];
     auto batch_size = 0u;
 
     // the aio itself
@@ -184,7 +185,7 @@ Result<void> BufferManager::CheckpointAllBufferFrames() {
 }
 
 Result<void> BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
-  alignas(512) uint8_t buffer[store_->store_option_->page_size_];
+  ALIGNAS(512) uint8_t buffer[store_->store_option_->page_size_];
   bf.header_.latch_.LockExclusively();
   if (!bf.IsFree()) {
     store_->tree_registry_->Checkpoint(bf.page_.btree_id_, bf, buffer);

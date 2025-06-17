@@ -1,10 +1,11 @@
 #pragma once
 
 #include "leanstore/btree/basic_kv.hpp"
-#include "leanstore/btree/core/pessimistic_exclusive_iterator.hpp"
+#include "leanstore/btree/core/btree_iter_mut.hpp"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/concurrency/worker_context.hpp"
 #include "leanstore/units.hpp"
+#include "leanstore/utils/portable.hpp"
 #include "tuple.hpp"
 
 namespace leanstore::storage::btree {
@@ -12,7 +13,7 @@ namespace leanstore::storage::btree {
 /// History versions of chained tuple are stored in the history tree of the
 /// current worker thread.
 /// Chained: only scheduled gc.
-class __attribute__((packed)) ChainedTuple : public Tuple {
+class PACKED ChainedTuple : public Tuple {
 public:
   uint16_t total_updates_ = 0;
 
@@ -84,7 +85,7 @@ public:
     return command_valid && has_long_running_olap && recent_updated_by_others && frequently_updated;
   }
 
-  void Update(PessimisticExclusiveIterator& x_iter, Slice key, MutValCallback update_call_back,
+  void Update(BTreeIterMut* x_iter, Slice key, MutValCallback update_call_back,
               UpdateDesc& update_desc);
 
 public:

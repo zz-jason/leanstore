@@ -56,6 +56,7 @@ typedef struct BasicKvIterHandle BasicKvIterHandle;
 /// @return the iterator handle, or nullptr if the creation fails. The handle should be destroyed by
 ///         the caller with DestroyBasicKvIter()
 BasicKvIterHandle* CreateBasicKvIter(const BasicKvHandle* handle);
+BasicKvIterHandle* CreateBasicKvIterMut(const BasicKvHandle* handle);
 
 /// Destroy an iterator for a basic key-value store at workerId
 void DestroyBasicKvIter(BasicKvIterHandle* handle);

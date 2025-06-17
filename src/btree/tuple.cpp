@@ -40,9 +40,9 @@ static uint64_t MaxFatTupleLength() {
   return BTreeNode::Size() - 1000;
 }
 
-bool Tuple::ToFat(PessimisticExclusiveIterator& x_iter) {
+bool Tuple::ToFat(BTreeIterMut* x_iter) {
   // Process the chain tuple
-  MutableSlice mut_raw_val = x_iter.MutableVal();
+  MutableSlice mut_raw_val = x_iter->MutableVal();
   auto& chained_tuple = *ChainedTuple::From(mut_raw_val.Data());
   LS_DCHECK(chained_tuple.IsWriteLocked());
   LS_DCHECK(chained_tuple.format_ == TupleFormat::kChained);
@@ -125,15 +125,15 @@ bool Tuple::ToFat(PessimisticExclusiveIterator& x_iter) {
   // Finalize the new FatTuple
   // TODO: corner cases, more careful about space usage
   const uint16_t fat_tuple_size = sizeof(FatTuple) + fat_tuple->payload_capacity_;
-  if (x_iter.Val().size() < fat_tuple_size) {
-    auto succeed = x_iter.ExtendPayload(fat_tuple_size);
+  if (x_iter->Val().size() < fat_tuple_size) {
+    auto succeed = x_iter->ExtendPayload(fat_tuple_size);
     if (!succeed) {
       Log::Fatal("Failed to extend current value buffer to fit the FatTuple, "
                  "fatTupleSize={}, current value buffer size={}",
-                 fat_tuple_size, x_iter.Val().size());
+                 fat_tuple_size, x_iter->Val().size());
     }
   } else {
-    x_iter.ShortenWithoutCompaction(fat_tuple_size);
+    x_iter->ShortenWithoutCompaction(fat_tuple_size);
   }
 
   // Copy the FatTuple back to the underlying value buffer.

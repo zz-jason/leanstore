@@ -1,22 +1,23 @@
 #pragma once
 
-#include "leanstore/btree/core/pessimistic_iterator.hpp"
+#include "leanstore/btree/core/btree_iter_pessistic.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/utils/counter_util.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/random_generator.hpp"
 #include "leanstore/utils/user_thread.hpp"
 
+#include <memory>
+
 namespace leanstore::storage::btree {
 
-class PessimisticExclusiveIterator : public PessimisticIterator {
+class BTreeIterMut : public BTreeIterPessistic {
 public:
-  PessimisticExclusiveIterator(BTreeGeneric& tree)
-      : PessimisticIterator(tree, LatchMode::kExclusivePessimistic) {
+  BTreeIterMut(BTreeGeneric& tree) : BTreeIterPessistic(tree, LatchMode::kExclusivePessimistic) {
   }
 
-  PessimisticExclusiveIterator(BTreeGeneric& tree, BufferFrame* bf, const uint64_t bf_version)
-      : PessimisticIterator(tree, LatchMode::kExclusivePessimistic) {
+  BTreeIterMut(BTreeGeneric& tree, BufferFrame* bf, const uint64_t bf_version)
+      : BTreeIterPessistic(tree, LatchMode::kExclusivePessimistic) {
     HybridGuard optimistic_guard(bf->header_.latch_, bf_version);
     optimistic_guard.JumpIfModifiedByOthers();
     guarded_leaf_ = GuardedBufferFrame<BTreeNode>(tree.store_->buffer_manager_.get(),
@@ -24,7 +25,9 @@ public:
     guarded_leaf_.ToExclusiveMayJump();
   }
 
-  virtual OpCode SeekToInsertWithHint(Slice key, bool higher = true) {
+  std::unique_ptr<BTreeIter> IntoBtreeIter();
+
+  OpCode SeekToInsertWithHint(Slice key, bool higher = true) {
     LS_DCHECK(Valid());
     slot_id_ = guarded_leaf_->LinearSearchWithBias(key, slot_id_, higher);
     if (slot_id_ == -1) {
@@ -33,8 +36,8 @@ public:
     return OpCode::kOK;
   }
 
-  virtual OpCode SeekToInsert(Slice key) {
-    seek_to_target_page_on_demand(key);
+  OpCode SeekToInsert(Slice key) {
+    SeekTargetPageOnDemand(key);
 
     bool is_equal = false;
     slot_id_ = guarded_leaf_->LowerBound<false>(key, &is_equal);
@@ -44,17 +47,17 @@ public:
     return OpCode::kOK;
   }
 
-  virtual bool HasEnoughSpaceFor(const uint16_t key_size, const uint16_t val_size) {
+  bool HasEnoughSpaceFor(const uint16_t key_size, const uint16_t val_size) {
     return guarded_leaf_->CanInsert(key_size, val_size);
   }
 
-  virtual void InsertToCurrentNode(Slice key, uint16_t val_size) {
+  void InsertToCurrentNode(Slice key, uint16_t val_size) {
     LS_DCHECK(KeyInCurrentNode(key));
     LS_DCHECK(HasEnoughSpaceFor(key.size(), val_size));
     slot_id_ = guarded_leaf_->InsertDoNotCopyPayload(key, val_size, slot_id_);
   }
 
-  virtual void InsertToCurrentNode(Slice key, Slice val) {
+  void InsertToCurrentNode(Slice key, Slice val) {
     LS_DCHECK(KeyInCurrentNode(key));
     LS_DCHECK(HasEnoughSpaceFor(key.size(), val.size()));
     LS_DCHECK(Valid());
@@ -83,7 +86,7 @@ public:
     }
   }
 
-  virtual OpCode InsertKV(Slice key, Slice val) {
+  OpCode InsertKV(Slice key, Slice val) {
     while (true) {
       OpCode ret = SeekToInsert(key);
       if (ret != OpCode::kOK) {
@@ -101,7 +104,7 @@ public:
   }
 
   /// The caller must retain the payload when using any of the following payload resize functions
-  virtual void ShortenWithoutCompaction(const uint16_t target_size) {
+  void ShortenWithoutCompaction(const uint16_t target_size) {
     guarded_leaf_->ShortenPayload(slot_id_, target_size);
   }
 
@@ -125,12 +128,12 @@ public:
     return true;
   }
 
-  virtual MutableSlice MutableVal() {
+  MutableSlice MutableVal() {
     return MutableSlice(guarded_leaf_->ValData(slot_id_), guarded_leaf_->ValSize(slot_id_));
   }
 
   /// Updates contention statistics after each slot modification on the page.
-  virtual void UpdateContentionStats() {
+  void UpdateContentionStats() {
     if (!utils::tls_store->store_option_->enable_contention_split_) {
       return;
     }
@@ -181,7 +184,7 @@ public:
     }
   }
 
-  virtual OpCode RemoveCurrent() {
+  OpCode RemoveCurrent() {
     if (!(guarded_leaf_.bf_ != nullptr && slot_id_ >= 0 && slot_id_ < guarded_leaf_->num_slots_)) {
       LS_DCHECK(false, "RemoveCurrent failed, pageId={}, slotId={}",
                 guarded_leaf_.bf_->header_.page_id_, slot_id_);
