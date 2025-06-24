@@ -54,10 +54,10 @@ jobs:
         cmake --preset debug_tsan;
 
     - name: Cppcheck
-      run: cppcheck --project=build/debug_tsan/compile_commands.json -i tests --error-exitcode=1
+      run: cppcheck --project=build/debug_tsan/compile_commands.json -i tests --error-exitcode=1 --check-level=exhaustive
 
     - name: Check clang-format
-      run: cmake --build build/debug_tsan --target=check-format 
+      run: cmake --build build/debug_tsan --target=check-format
 
     - name: Build project
       run: cmake --build build/debug_tsan -j `nproc`

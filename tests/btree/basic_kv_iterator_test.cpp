@@ -1,10 +1,12 @@
 #include "leanstore-c/kv_basic.h"
 #include "leanstore-c/leanstore.h"
 #include "leanstore-c/store_option.h"
+#include "leanstore/utils/defer.hpp"
 
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -36,7 +38,7 @@ protected:
 
 TEST_F(BasicKvIteratorTest, BasicKvHandle) {
   // prepare 100 key-value pairs for insert
-  const int num_entries = 10;
+  const int num_entries = 100;
   std::vector<std::string> keys(num_entries);
   std::vector<std::string> vals(num_entries);
   for (int i = 0; i < num_entries; i++) {
@@ -111,7 +113,7 @@ TEST_F(BasicKvIteratorTest, BasicKvAssendingIterationEmpty) {
 
 TEST_F(BasicKvIteratorTest, BasicKvAssendingIteration) {
   // prepare 130 key-value pairs for insert
-  const int num_entries = 10;
+  const int num_entries = 130;
   std::vector<std::string> keys(num_entries);
   std::vector<std::string> vals(num_entries);
   std::string smallest_key{""};
@@ -198,7 +200,7 @@ TEST_F(BasicKvIteratorTest, BasicKvAssendingIteration) {
 
 TEST_F(BasicKvIteratorTest, BasicKvDescendingIteration) {
   // prepare 130 key-value pairs for insert
-  const int num_entries = 10;
+  const int num_entries = 130;
   std::vector<std::string> keys(num_entries);
   std::vector<std::string> vals(num_entries);
   std::string smallest_key{""};
@@ -269,6 +271,72 @@ TEST_F(BasicKvIteratorTest, BasicKvDescendingIteration) {
   }
 
   DestroyBasicKvIter(iter_handle);
+}
+
+TEST_F(BasicKvIteratorTest, BasicKvIterMut) {
+  // prepare 130 key-value pairs for insert
+  const int num_entries = 130;
+  std::vector<std::string> keys(num_entries);
+  std::vector<std::string> vals(num_entries);
+  std::string smallest_key{""};
+  std::string biggest_key{""};
+  for (int i = 0; i < num_entries; i++) {
+    keys[i] = std::to_string(i);
+    vals[i] = std::to_string(i * 2);
+    for (int i = 0; i < num_entries; i++) {
+      keys[i] = std::to_string(i);
+      vals[i] = std::to_string(i * 2);
+      if (i == 0 || keys[i] < smallest_key) {
+        smallest_key = keys[i];
+      }
+      if (i == 0 || keys[i] > biggest_key) {
+        biggest_key = keys[i];
+      }
+    }
+  }
+  for (auto i = 0; i < num_entries; i++) {
+    auto succeed = BasicKvInsert(kv_handle_, 0, {keys[i].data(), keys[i].size()},
+                                 {vals[i].data(), vals[i].size()});
+    ASSERT_TRUE(succeed);
+  }
+
+  // create iterator handle
+  BasicKvIterHandle* iter_handle = CreateBasicKvIter(kv_handle_);
+  ASSERT_NE(iter_handle, nullptr);
+  SCOPED_DEFER(DestroyBasicKvIter(iter_handle));
+
+  BasicKvIterSeekToFirst(iter_handle, 0);
+  auto key1 = BasicKvIterKey(iter_handle);
+  auto val1 = BasicKvIterVal(iter_handle);
+  EXPECT_TRUE(BasicKvIterValid(iter_handle));
+  EXPECT_TRUE(BasicKvIterHasNext(iter_handle, 0));
+
+  BasicKvIterMutHandle* iter_mut_handle = IntoBasicKvIterMut(iter_handle);
+  ASSERT_NE(iter_mut_handle, nullptr);
+  ASSERT_FALSE(BasicKvIterValid(iter_handle));
+  ASSERT_TRUE(BasicKvIterMutValid(iter_mut_handle));
+  SCOPED_DEFER(DestroyBasicKvIterMut(iter_mut_handle));
+
+  auto key2 = BasicKvIterMutKey(iter_mut_handle);
+  auto val2 = BasicKvIterMutVal(iter_mut_handle);
+  EXPECT_EQ(key1.size_, key2.size_);
+  EXPECT_EQ(val1.size_, val2.size_);
+  EXPECT_EQ(memcmp(key1.data_, key2.data_, key1.size_), 0);
+  EXPECT_EQ(memcmp(val1.data_, val2.data_, val1.size_), 0);
+
+  // remove current key
+  BasicKvIterMutRemove(iter_mut_handle, 0);
+  EXPECT_TRUE(BasicKvIterMutValid(iter_mut_handle));
+  auto key3 = BasicKvIterMutKey(iter_mut_handle);
+  EXPECT_EQ(key1.size_, key3.size_);
+  EXPECT_NE(memcmp(key1.data_, key3.data_, key1.size_), 0);
+
+  // insert a new key-value pair
+  auto* new_key = "new_key";
+  auto* new_val = "new_val";
+  EXPECT_TRUE(BasicKvIterMutInsert(iter_mut_handle, 0, {new_key, strlen(new_key)},
+                                   {new_val, strlen(new_val)}));
+  EXPECT_TRUE(BasicKvIterMutValid(iter_mut_handle));
 }
 
 } // namespace leanstore::test

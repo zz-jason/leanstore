@@ -492,9 +492,8 @@ inline void BTreeIterPessistic::Prev() {
 
 inline void BTreeIterPessistic::SeekTargetPage(
     std::function<int32_t(GuardedBufferFrame<BTreeNode>&)> child_pos_getter) {
-  if (mode_ != LatchMode::kSharedPessimistic && mode_ != LatchMode::kExclusivePessimistic) {
-    Log::Fatal("Unsupported latch mode: {}", uint64_t(mode_));
-  }
+  LS_DCHECK(mode_ == LatchMode::kSharedPessimistic || mode_ == LatchMode::kExclusivePessimistic,
+            "Unsupported latch mode: {}", uint64_t(mode_));
 
   while (true) {
     leaf_pos_in_parent_ = -1;

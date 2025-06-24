@@ -1,12 +1,15 @@
 #include "leanstore-c/kv_basic.h"
 
+#include "btree/core/b_tree_wal_payload.hpp"
 #include "leanstore-c/leanstore.h"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/core/btree_iter.hpp"
+#include "leanstore/btree/core/btree_iter_mut.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/slice.hpp"
 
+#include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
@@ -127,21 +130,21 @@ uint64_t BasicKvNumEntries(BasicKvHandle* handle, uint64_t worker_id) {
 struct BasicKvIterHandle {
   BasicKvIterHandle(std::unique_ptr<leanstore::storage::btree::BTreeIter> iter,
                     leanstore::LeanStore* store)
-      : iter_immutable_(std::move(iter)),
+      : iter_(std::move(iter)),
         store_(store) {
   }
 
   /// The actual iterator
-  std::unique_ptr<leanstore::storage::btree::BTreeIter> iter_immutable_;
+  std::unique_ptr<leanstore::storage::btree::BTreeIter> iter_;
 
   /// The leanstore
   leanstore::LeanStore* store_;
 };
 
 BasicKvIterHandle* CreateBasicKvIter(const BasicKvHandle* handle) {
-  BasicKvIterHandle* iterator_handle{nullptr};
-  iterator_handle = new BasicKvIterHandle(handle->btree_->NewBTreeIter(), handle->store_);
-  return iterator_handle;
+  BasicKvIterHandle* iter_handle{nullptr};
+  iter_handle = new BasicKvIterHandle(handle->btree_->NewBTreeIter(), handle->store_);
+  return iter_handle;
 }
 
 void DestroyBasicKvIter(BasicKvIterHandle* handle) {
@@ -150,29 +153,89 @@ void DestroyBasicKvIter(BasicKvIterHandle* handle) {
   }
 }
 
+struct BasicKvIterMutHandle {
+  BasicKvIterMutHandle(std::unique_ptr<leanstore::storage::btree::BTreeIterMut> iter_mut,
+                       leanstore::LeanStore* store)
+      : iter_mut_(std::move(iter_mut)),
+        store_(store) {
+  }
+
+  /// The actual mutable iterator
+  std::unique_ptr<leanstore::storage::btree::BTreeIterMut> iter_mut_;
+
+  /// The leanstore
+  leanstore::LeanStore* store_;
+};
+
+BasicKvIterMutHandle* CreateBasicKvIterMut(const BasicKvHandle* handle) {
+  BasicKvIterMutHandle* iter_mut_handle{nullptr};
+  iter_mut_handle = new BasicKvIterMutHandle(handle->btree_->NewBTreeIterMut(), handle->store_);
+  return iter_mut_handle;
+}
+
+void DestroyBasicKvIterMut(BasicKvIterMutHandle* handle) {
+  if (handle != nullptr) {
+    delete handle;
+  }
+}
+
+BasicKvIterMutHandle* IntoBasicKvIterMut(BasicKvIterHandle* handle) {
+  assert(handle != nullptr && handle->iter_ != nullptr);
+  auto* iter_mut_handle =
+      new BasicKvIterMutHandle(handle->iter_->IntoBtreeIterMut(), handle->store_);
+  return iter_mut_handle;
+}
+
+BasicKvIterHandle* IntoBasicKvIter(BasicKvIterMutHandle* handle) {
+  assert(handle != nullptr && handle->iter_mut_ != nullptr);
+  auto* iter_handle = new BasicKvIterHandle(handle->iter_mut_->IntoBtreeIter(), handle->store_);
+  return iter_handle;
+}
+
 //------------------------------------------------------------------------------
 // Interfaces for ascending iteration
 //------------------------------------------------------------------------------
 
 void BasicKvIterSeekToFirst(BasicKvIterHandle* handle, uint64_t worker_id) {
-  handle->store_->ExecSync(worker_id, [&]() { handle->iter_immutable_->SeekToFirst(); });
+  handle->store_->ExecSync(worker_id, [&]() { handle->iter_->SeekToFirst(); });
 }
 
 void BasicKvIterSeekToFirstGreaterEqual(BasicKvIterHandle* handle, uint64_t worker_id,
                                         StringSlice key) {
   handle->store_->ExecSync(worker_id, [&]() {
-    handle->iter_immutable_->SeekToFirstGreaterEqual(leanstore::Slice(key.data_, key.size_));
+    handle->iter_->SeekToFirstGreaterEqual(leanstore::Slice(key.data_, key.size_));
   });
 }
 
 bool BasicKvIterHasNext(BasicKvIterHandle* handle, uint64_t worker_id) {
   bool has_next{false};
-  handle->store_->ExecSync(worker_id, [&]() { has_next = handle->iter_immutable_->HasNext(); });
+  handle->store_->ExecSync(worker_id, [&]() { has_next = handle->iter_->HasNext(); });
   return has_next;
 }
 
 void BasicKvIterNext(BasicKvIterHandle* handle, uint64_t worker_id) {
-  handle->store_->ExecSync(worker_id, [&]() { handle->iter_immutable_->Next(); });
+  handle->store_->ExecSync(worker_id, [&]() { handle->iter_->Next(); });
+}
+
+void BasicKvIterMutSeekToFirst(BasicKvIterMutHandle* handle, uint64_t worker_id) {
+  handle->store_->ExecSync(worker_id, [&]() { handle->iter_mut_->SeekToFirst(); });
+}
+
+void BasicKvIterMutSeekToFirstGreaterEqual(BasicKvIterMutHandle* handle, uint64_t worker_id,
+                                           StringSlice key) {
+  handle->store_->ExecSync(worker_id, [&]() {
+    handle->iter_mut_->SeekToFirstGreaterEqual(leanstore::Slice(key.data_, key.size_));
+  });
+}
+
+bool BasicKvIterMutHasNext(BasicKvIterMutHandle* handle, uint64_t worker_id) {
+  bool has_next{false};
+  handle->store_->ExecSync(worker_id, [&]() { has_next = handle->iter_mut_->HasNext(); });
+  return has_next;
+}
+
+void BasicKvIterMutNext(BasicKvIterMutHandle* handle, uint64_t worker_id) {
+  handle->store_->ExecSync(worker_id, [&]() { handle->iter_mut_->Next(); });
 }
 
 //------------------------------------------------------------------------------
@@ -180,24 +243,45 @@ void BasicKvIterNext(BasicKvIterHandle* handle, uint64_t worker_id) {
 //------------------------------------------------------------------------------
 
 void BasicKvIterSeekToLast(BasicKvIterHandle* handle, uint64_t worker_id) {
-  handle->store_->ExecSync(worker_id, [&]() { handle->iter_immutable_->SeekToLast(); });
+  handle->store_->ExecSync(worker_id, [&]() { handle->iter_->SeekToLast(); });
 }
 
 void BasicKvIterSeekToLastLessEqual(BasicKvIterHandle* handle, uint64_t worker_id,
                                     StringSlice key) {
   handle->store_->ExecSync(worker_id, [&]() {
-    handle->iter_immutable_->SeekToLastLessEqual(leanstore::Slice(key.data_, key.size_));
+    handle->iter_->SeekToLastLessEqual(leanstore::Slice(key.data_, key.size_));
   });
 }
 
 bool BasicKvIterHasPrev(BasicKvIterHandle* handle, uint64_t worker_id) {
   bool has_prev{false};
-  handle->store_->ExecSync(worker_id, [&]() { has_prev = handle->iter_immutable_->HasPrev(); });
+  handle->store_->ExecSync(worker_id, [&]() { has_prev = handle->iter_->HasPrev(); });
   return has_prev;
 }
 
 void BasicKvIterPrev(BasicKvIterHandle* handle, uint64_t worker_id) {
-  handle->store_->ExecSync(worker_id, [&]() { handle->iter_immutable_->Prev(); });
+  handle->store_->ExecSync(worker_id, [&]() { handle->iter_->Prev(); });
+}
+
+void BasicKvIterMutSeekToLast(BasicKvIterMutHandle* handle, uint64_t worker_id) {
+  handle->store_->ExecSync(worker_id, [&]() { handle->iter_mut_->SeekToLast(); });
+}
+
+void BasicKvIterMutSeekToLastLessEqual(BasicKvIterMutHandle* handle, uint64_t worker_id,
+                                       StringSlice key) {
+  handle->store_->ExecSync(worker_id, [&]() {
+    handle->iter_mut_->SeekToLastLessEqual(leanstore::Slice(key.data_, key.size_));
+  });
+}
+
+bool BasicKvIterMutHasPrev(BasicKvIterMutHandle* handle, uint64_t worker_id) {
+  bool has_prev{false};
+  handle->store_->ExecSync(worker_id, [&]() { has_prev = handle->iter_mut_->HasPrev(); });
+  return has_prev;
+}
+
+void BasicKvIterMutPrev(BasicKvIterMutHandle* handle, uint64_t worker_id) {
+  handle->store_->ExecSync(worker_id, [&]() { handle->iter_mut_->Prev(); });
 }
 
 //------------------------------------------------------------------------------
@@ -206,16 +290,83 @@ void BasicKvIterPrev(BasicKvIterHandle* handle, uint64_t worker_id) {
 
 /// Whether the iterator is valid
 bool BasicKvIterValid(BasicKvIterHandle* handle) {
-  return handle->iter_immutable_->Valid();
+  return handle->iter_->Valid();
 }
 
 StringSlice BasicKvIterKey(BasicKvIterHandle* handle) {
-  handle->iter_immutable_->AssembleKey();
-  auto key_slice = handle->iter_immutable_->Key();
+  handle->iter_->AssembleKey();
+  auto key_slice = handle->iter_->Key();
   return {reinterpret_cast<const char*>(key_slice.data()), key_slice.size()};
 }
 
 StringSlice BasicKvIterVal(BasicKvIterHandle* handle) {
-  auto val_slice = handle->iter_immutable_->Val();
+  auto val_slice = handle->iter_->Val();
   return {reinterpret_cast<const char*>(val_slice.data()), val_slice.size()};
+}
+
+bool BasicKvIterMutValid(BasicKvIterMutHandle* handle) {
+  return handle->iter_mut_->Valid();
+}
+
+StringSlice BasicKvIterMutKey(BasicKvIterMutHandle* handle) {
+  handle->iter_mut_->AssembleKey();
+  auto key_slice = handle->iter_mut_->Key();
+  return {reinterpret_cast<const char*>(key_slice.data()), key_slice.size()};
+}
+
+StringSlice BasicKvIterMutVal(BasicKvIterMutHandle* handle) {
+  auto val_slice = handle->iter_mut_->Val();
+  return {reinterpret_cast<const char*>(val_slice.data()), val_slice.size()};
+}
+
+//------------------------------------------------------------------------------
+// Interfaces for mutation
+//------------------------------------------------------------------------------
+void BasicKvIterMutRemove(BasicKvIterMutHandle* handle, uint64_t worker_id) {
+  handle->store_->ExecSync(worker_id, [&]() {
+    assert(handle->iter_mut_->Valid() &&
+           "Iterator is not valid, cannot remove current key-value pair");
+    // wal
+    if (handle->store_->store_option_->enable_wal_) {
+      handle->iter_mut_->AssembleKey();
+      auto key = handle->iter_mut_->Key();
+      auto value = handle->iter_mut_->Val();
+      auto wal_handler =
+          handle->iter_mut_->guarded_leaf_.ReserveWALPayload<leanstore::storage::btree::WalRemove>(
+              key.size() + value.size(), key, value);
+      wal_handler.SubmitWal();
+    }
+
+    // remove
+    handle->iter_mut_->RemoveCurrent();
+
+    // merge if needed
+    handle->iter_mut_->TryMergeIfNeeded();
+  });
+}
+
+bool BasicKvIterMutInsert(BasicKvIterMutHandle* handle, uint64_t worker_id, StringSlice key,
+                          StringSlice val) {
+  auto succeed = true;
+  handle->store_->ExecSync(worker_id, [&]() {
+    // insert
+    auto op_code = handle->iter_mut_->InsertKV(leanstore::Slice(key.data_, key.size_),
+                                               leanstore::Slice(val.data_, val.size_));
+    if (op_code != leanstore::OpCode::kOK) {
+      succeed = false;
+      return;
+    }
+
+    // wal
+    if (handle->store_->store_option_->enable_wal_) {
+      handle->iter_mut_->AssembleKey();
+      auto key = handle->iter_mut_->Key();
+      auto val = handle->iter_mut_->Val();
+      auto wal_size = key.size() + val.size();
+      handle->iter_mut_->guarded_leaf_.WriteWal<leanstore::storage::btree::WalInsert>(wal_size, key,
+                                                                                      val);
+    }
+  });
+
+  return succeed;
 }

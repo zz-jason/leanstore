@@ -14,8 +14,11 @@ else()
   add_library(leanstore STATIC ${LEANSTORE_SRC})
 endif()
 
-# dependencies
-find_package(Boost REQUIRED CONFIG COMPONENTS context)
+if(POLICY CMP0167)
+  cmake_policy(SET CMP0167 OLD)
+endif()
+find_package(Boost REQUIRED COMPONENTS context)
+
 find_package(cpptrace CONFIG REQUIRED)
 find_package(RapidJSON CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)

@@ -48,18 +48,24 @@ uint64_t BasicKvNumEntries(BasicKvHandle* handle, uint64_t worker_id);
 // Iterator API for BasicKv
 //------------------------------------------------------------------------------
 
-/// The BasicKvIterHandle is an opaque handle to an iterator for a basic key-value store. The
-/// iterator should be destroyed by the caller after use.
+/// The BasicKvIterHandle is an opaque handle to an iterator for a basic
+/// key-value store. The iterator should be destroyed by the caller after use.
 typedef struct BasicKvIterHandle BasicKvIterHandle;
-
-/// Create an iterator for a basic key-value store at workerId
-/// @return the iterator handle, or nullptr if the creation fails. The handle should be destroyed by
-///         the caller with DestroyBasicKvIter()
 BasicKvIterHandle* CreateBasicKvIter(const BasicKvHandle* handle);
-BasicKvIterHandle* CreateBasicKvIterMut(const BasicKvHandle* handle);
-
-/// Destroy an iterator for a basic key-value store at workerId
 void DestroyBasicKvIter(BasicKvIterHandle* handle);
+
+/// The BasicKvIterMutHandle is an opaque handle to a mutable iterator for a
+/// basic key-value store.  It allows modification of the key-value store while
+/// iterating. The iterator should be destroyed by the caller after use.
+typedef struct BasicKvIterMutHandle BasicKvIterMutHandle;
+BasicKvIterMutHandle* CreateBasicKvIterMut(const BasicKvHandle* handle);
+void DestroyBasicKvIterMut(BasicKvIterMutHandle* handle);
+
+/// Convert a BasicKvIterHandle to a BasicKvIterMutHandle and vice versa. The
+/// original handle is invalidated after the conversion, should be destroyed by
+/// the caller with either DestroyBasicKvIter() or DestroyBasicKvIterMut().
+BasicKvIterMutHandle* IntoBasicKvIterMut(BasicKvIterHandle* handle);
+BasicKvIterHandle* IntoBasicKvIter(BasicKvIterMutHandle* handle);
 
 //------------------------------------------------------------------------------
 // Interfaces for ascending iteration
@@ -79,6 +85,12 @@ bool BasicKvIterHasNext(BasicKvIterHandle* handle, uint64_t worker_id);
 /// Iterate to the next key in a basic key-value store at workerId
 void BasicKvIterNext(BasicKvIterHandle* handle, uint64_t worker_id);
 
+void BasicKvIterMutSeekToFirst(BasicKvIterMutHandle* handle, uint64_t worker_id);
+void BasicKvIterMutSeekToFirstGreaterEqual(BasicKvIterMutHandle* handle, uint64_t worker_id,
+                                           StringSlice key);
+bool BasicKvIterMutHasNext(BasicKvIterMutHandle* handle, uint64_t worker_id);
+void BasicKvIterMutNext(BasicKvIterMutHandle* handle, uint64_t worker_id);
+
 //------------------------------------------------------------------------------
 // Interfaces for descending iteration
 //------------------------------------------------------------------------------
@@ -96,6 +108,12 @@ bool BasicKvIterHasPrev(BasicKvIterHandle* handle, uint64_t worker_id);
 /// Iterate to the previous key in a basic key-value store at workerId
 void BasicKvIterPrev(BasicKvIterHandle* handle, uint64_t worker_id);
 
+void BasicKvIterMutSeekToLast(BasicKvIterMutHandle* handle, uint64_t worker_id);
+void BasicKvIterMutSeekToLastLessEqual(BasicKvIterMutHandle* handle, uint64_t worker_id,
+                                       StringSlice key);
+bool BasicKvIterMutHasPrev(BasicKvIterMutHandle* handle, uint64_t worker_id);
+void BasicKvIterMutPrev(BasicKvIterMutHandle* handle, uint64_t worker_id);
+
 //------------------------------------------------------------------------------
 // Interfaces for accessing the current iterator position
 //------------------------------------------------------------------------------
@@ -110,6 +128,21 @@ StringSlice BasicKvIterKey(BasicKvIterHandle* handle);
 /// Get the value of the current iterator position in a basic key-value store at workerId
 /// @return the read-only value slice
 StringSlice BasicKvIterVal(BasicKvIterHandle* handle);
+
+bool BasicKvIterMutValid(BasicKvIterMutHandle* handle);
+StringSlice BasicKvIterMutKey(BasicKvIterMutHandle* handle);
+StringSlice BasicKvIterMutVal(BasicKvIterMutHandle* handle);
+
+//------------------------------------------------------------------------------
+// Interfaces for mutation
+//------------------------------------------------------------------------------
+
+/// Remove the current key-value pair in a basic key-value store at workerId
+void BasicKvIterMutRemove(BasicKvIterMutHandle* handle, uint64_t worker_id);
+
+/// Insert a key-value pair in a basic key-value store at workerId
+bool BasicKvIterMutInsert(BasicKvIterMutHandle* handle, uint64_t worker_id, StringSlice key,
+                          StringSlice val);
 
 #ifdef __cplusplus
 }
