@@ -12,7 +12,7 @@
 #if defined(__GNUC__) || defined(__clang__)
 #define PACKED __attribute__((packed))
 #else
-#error "Unknown compiler"
+#define PACKED
 #endif
 
 /// Portable alignment attribute definition.
@@ -28,5 +28,5 @@
 #if defined(__GNUC__) || defined(__clang__)
 #define ALIGNAS(x) alignas(x)
 #else
-#error "Unknown compiler"
+#define ALIGNAS(x)
 #endif

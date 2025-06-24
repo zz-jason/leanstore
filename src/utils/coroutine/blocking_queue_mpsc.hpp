@@ -59,7 +59,7 @@ public:
 
 private:
   std::vector<T> queue_;
-  const size_t capacity_ = 0;
+  const size_t capacity_;
   bool stopped_ = false;
 
   size_t head_ = 0;

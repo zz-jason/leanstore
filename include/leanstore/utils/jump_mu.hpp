@@ -4,7 +4,6 @@
 
 #include <cassert>
 #include <cstdint>
-#include <format>
 #include <utility>
 
 #include <setjmp.h>
@@ -165,8 +164,6 @@ private:
 #define JUMPMU_UNREGISTER_STACK_OBJECT(obj_ptr)                                                    \
   leanstore::JumpContext::Current()->UnregisterObject(obj_ptr);
 
-} // namespace leanstore
-
 template <typename T>
 class JumpScoped {
 public:
@@ -185,8 +182,7 @@ public:
     return reinterpret_cast<T*>(&obj_);
   }
 
-  /// Destructs the object, releases all the resources before longjump.
-  static void DestructBeforeJump(void* jmuw_obj) {
-    reinterpret_cast<JumpScoped<T>*>(jmuw_obj)->~JumpScoped<T>();
-  }
+  JUMPMU_DEFINE_DESTRUCTOR(JumpScoped<T>);
 };
+
+} // namespace leanstore
