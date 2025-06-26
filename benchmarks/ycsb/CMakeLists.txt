@@ -43,10 +43,6 @@ endif (PKG_TCMALLOC_FOUND)
 
 add_executable(ycsb ${YCSB_SRC})
 target_link_libraries(ycsb PRIVATE ${YCSB_DEPS})
-set(TARGET_NAME ycsb)
-target_compile_options(${TARGET_NAME} PRIVATE ${LEANSTORE_COMPILE_OPTIONS})
-target_compile_definitions(${TARGET_NAME} PRIVATE ${LEANSTORE_COMPILE_DEFINITIONS})
-target_compile_features(${TARGET_NAME} PRIVATE ${LEANSTORE_COMPILE_FEATURES})
 
 if(ENABLE_ROCKSDB)
   target_compile_definitions(ycsb PUBLIC ENABLE_ROCKSDB)

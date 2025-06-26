@@ -92,9 +92,10 @@ TEST_F(CoroTest, SharedMutex) {
   for (int i = 0; i < 20; ++i) {
     futures.push_back(coro_scheduler.Submit(
         [&]() {
+          auto rand_num = utils::RandomGenerator::RandU64(1, 100);
           shared_mutex.lock();
-          value_x -= 10 + i;
-          value_y += 10 + i;
+          value_x -= 10 + rand_num;
+          value_y += 10 + rand_num;
           EXPECT_EQ(value_x + value_y, 100);
 
           shared_mutex.unlock();
@@ -105,8 +106,6 @@ TEST_F(CoroTest, SharedMutex) {
     futures.push_back(coro_scheduler.Submit(
         [&]() {
           shared_mutex.lock_shared();
-          value_x -= 30;
-          value_y += 30;
           EXPECT_EQ(value_x + value_y, 100);
 
           shared_mutex.unlock_shared();
