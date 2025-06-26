@@ -10,7 +10,6 @@
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "BUILD_SHARED_LIBS": "ON",
-                "ENABLE_PROFILING": "ON",
                 "ENABLE_PERF_COUNTERS": "ON"
             }
         },
@@ -35,7 +34,8 @@
             "inherits": "base_debug",
             "binaryDir": "${sourceDir}/build/debug",
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/debug"
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/debug",
+                "ENABLE_PROFILING": "ON"
             }
         },
         {
@@ -53,7 +53,8 @@
             "inherits": "base_release",
             "binaryDir": "${sourceDir}/build/release",
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/release"
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/release",
+                "ENABLE_PROFILING": "ON"
             }
         },
         {
@@ -63,7 +64,8 @@
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/performance",
                 "ENABLE_ROCKSDB": "ON",
-                "ENABLE_WIRED_TIGER": "ON"
+                "ENABLE_WIRED_TIGER": "ON",
+                "ENABLE_PROFILING": "ON"
             }
         }
     ]

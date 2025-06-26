@@ -14,18 +14,12 @@ else()
   add_library(leanstore STATIC ${LEANSTORE_SRC})
 endif()
 
+# dependencies
+find_package(cpptrace CONFIG REQUIRED)
 if(POLICY CMP0167)
   cmake_policy(SET CMP0167 OLD)
 endif()
 find_package(Boost REQUIRED COMPONENTS context)
-
-find_package(cpptrace CONFIG REQUIRED)
-find_package(RapidJSON CONFIG REQUIRED)
-find_package(spdlog CONFIG REQUIRED)
-find_package(Crc32c CONFIG REQUIRED)
-find_package(httplib CONFIG REQUIRED)
-find_package(PkgConfig)
-pkg_check_modules(libunwind REQUIRED IMPORTED_TARGET GLOBAL libunwind)
 
 set(leanstore_deps
   aio
@@ -37,7 +31,6 @@ set(leanstore_deps
   httplib::httplib
   PkgConfig::libunwind
 )
-
 target_link_libraries(leanstore PUBLIC ${leanstore_deps})
 
 option(ENABLE_PROFILING "Enable profiling" OFF)
@@ -71,10 +64,6 @@ endforeach()
 # ---------------------------------------------------------------------------
 # Set compile options for the lib
 # ---------------------------------------------------------------------------
-
-target_compile_options(leanstore PRIVATE ${LEANSTORE_COMPILE_OPTIONS})
-target_compile_definitions(leanstore PRIVATE ${LEANSTORE_COMPILE_DEFINITIONS})
-target_compile_features(leanstore PRIVATE ${LEANSTORE_COMPILE_FEATURES})
 
 option(SANI "Compile leanstore with sanitizers" OFF)
 if(SANI)
