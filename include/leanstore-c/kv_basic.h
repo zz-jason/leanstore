@@ -51,14 +51,14 @@ uint64_t BasicKvNumEntries(BasicKvHandle* handle, uint64_t worker_id);
 /// The BasicKvIterHandle is an opaque handle to an iterator for a basic
 /// key-value store. The iterator should be destroyed by the caller after use.
 typedef struct BasicKvIterHandle BasicKvIterHandle;
-BasicKvIterHandle* CreateBasicKvIter(const BasicKvHandle* handle);
+BasicKvIterHandle* CreateBasicKvIter(const BasicKvHandle* handle, uint64_t worker_id);
 void DestroyBasicKvIter(BasicKvIterHandle* handle);
 
 /// The BasicKvIterMutHandle is an opaque handle to a mutable iterator for a
 /// basic key-value store.  It allows modification of the key-value store while
 /// iterating. The iterator should be destroyed by the caller after use.
 typedef struct BasicKvIterMutHandle BasicKvIterMutHandle;
-BasicKvIterMutHandle* CreateBasicKvIterMut(const BasicKvHandle* handle);
+BasicKvIterMutHandle* CreateBasicKvIterMut(const BasicKvHandle* handle, uint64_t worker_id);
 void DestroyBasicKvIterMut(BasicKvIterMutHandle* handle);
 
 /// Convert a BasicKvIterHandle to a BasicKvIterMutHandle and vice versa. The
@@ -72,47 +72,44 @@ BasicKvIterHandle* IntoBasicKvIter(BasicKvIterMutHandle* handle);
 //------------------------------------------------------------------------------
 
 /// Seek to the first key of the basic key-value store at workerId
-void BasicKvIterSeekToFirst(BasicKvIterHandle* handle, uint64_t worker_id);
+void BasicKvIterSeekToFirst(BasicKvIterHandle* handle);
 
 /// Seek to the first key that >= the given key
-void BasicKvIterSeekToFirstGreaterEqual(BasicKvIterHandle* handle, uint64_t worker_id,
-                                        StringSlice key);
+void BasicKvIterSeekToFirstGreaterEqual(BasicKvIterHandle* handle, StringSlice key);
 
 /// Whether the iterator has a next key in a basic key-value store at workerId
 /// @return true if the next key exists, false otherwise
-bool BasicKvIterHasNext(BasicKvIterHandle* handle, uint64_t worker_id);
+bool BasicKvIterHasNext(BasicKvIterHandle* handle);
 
 /// Iterate to the next key in a basic key-value store at workerId
-void BasicKvIterNext(BasicKvIterHandle* handle, uint64_t worker_id);
+void BasicKvIterNext(BasicKvIterHandle* handle);
 
-void BasicKvIterMutSeekToFirst(BasicKvIterMutHandle* handle, uint64_t worker_id);
-void BasicKvIterMutSeekToFirstGreaterEqual(BasicKvIterMutHandle* handle, uint64_t worker_id,
-                                           StringSlice key);
-bool BasicKvIterMutHasNext(BasicKvIterMutHandle* handle, uint64_t worker_id);
-void BasicKvIterMutNext(BasicKvIterMutHandle* handle, uint64_t worker_id);
+void BasicKvIterMutSeekToFirst(BasicKvIterMutHandle* handle);
+void BasicKvIterMutSeekToFirstGreaterEqual(BasicKvIterMutHandle* handle, StringSlice key);
+bool BasicKvIterMutHasNext(BasicKvIterMutHandle* handle);
+void BasicKvIterMutNext(BasicKvIterMutHandle* handle);
 
 //------------------------------------------------------------------------------
 // Interfaces for descending iteration
 //------------------------------------------------------------------------------
 
 /// Seek to the last key of the basic key-value store at workerId
-void BasicKvIterSeekToLast(BasicKvIterHandle* handle, uint64_t worker_id);
+void BasicKvIterSeekToLast(BasicKvIterHandle* handle);
 
 /// Seek to the last key that <= the given key
-void BasicKvIterSeekToLastLessEqual(BasicKvIterHandle* handle, uint64_t worker_id, StringSlice key);
+void BasicKvIterSeekToLastLessEqual(BasicKvIterHandle* handle, StringSlice key);
 
 /// Whether the iterator has a previous key in a basic key-value store at workerId
 /// @return true if the previous key exists, false otherwise
-bool BasicKvIterHasPrev(BasicKvIterHandle* handle, uint64_t worker_id);
+bool BasicKvIterHasPrev(BasicKvIterHandle* handle);
 
 /// Iterate to the previous key in a basic key-value store at workerId
-void BasicKvIterPrev(BasicKvIterHandle* handle, uint64_t worker_id);
+void BasicKvIterPrev(BasicKvIterHandle* handle);
 
-void BasicKvIterMutSeekToLast(BasicKvIterMutHandle* handle, uint64_t worker_id);
-void BasicKvIterMutSeekToLastLessEqual(BasicKvIterMutHandle* handle, uint64_t worker_id,
-                                       StringSlice key);
-bool BasicKvIterMutHasPrev(BasicKvIterMutHandle* handle, uint64_t worker_id);
-void BasicKvIterMutPrev(BasicKvIterMutHandle* handle, uint64_t worker_id);
+void BasicKvIterMutSeekToLast(BasicKvIterMutHandle* handle);
+void BasicKvIterMutSeekToLastLessEqual(BasicKvIterMutHandle* handle, StringSlice key);
+bool BasicKvIterMutHasPrev(BasicKvIterMutHandle* handle);
+void BasicKvIterMutPrev(BasicKvIterMutHandle* handle);
 
 //------------------------------------------------------------------------------
 // Interfaces for accessing the current iterator position
@@ -138,11 +135,10 @@ StringSlice BasicKvIterMutVal(BasicKvIterMutHandle* handle);
 //------------------------------------------------------------------------------
 
 /// Remove the current key-value pair in a basic key-value store at workerId
-void BasicKvIterMutRemove(BasicKvIterMutHandle* handle, uint64_t worker_id);
+void BasicKvIterMutRemove(BasicKvIterMutHandle* handle);
 
 /// Insert a key-value pair in a basic key-value store at workerId
-bool BasicKvIterMutInsert(BasicKvIterMutHandle* handle, uint64_t worker_id, StringSlice key,
-                          StringSlice val);
+bool BasicKvIterMutInsert(BasicKvIterMutHandle* handle, StringSlice key, StringSlice val);
 
 #ifdef __cplusplus
 }

@@ -117,12 +117,11 @@ public:
   JUMPMU_DEFINE_DESTRUCTOR(GuardedBufferFrame)
 
   ~GuardedBufferFrame() {
-    if (guard_.state_ == GuardState::kExclusivePessimistic) {
-      if (!keep_alive_) {
-        Reclaim();
-      }
+    if (!keep_alive_ && guard_.state_ != GuardState::kExclusivePessimistic) {
+      Reclaim();
+    } else {
+      unlock();
     }
-    guard_.Unlock();
     JUMPMU_UNREGISTER_STACK_OBJECT(this)
   }
 

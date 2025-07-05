@@ -83,8 +83,8 @@ public:
   /// object destructor
   void UnregisterObject(void* obj [[maybe_unused]]) {
     assert(stack_obj_counter_ > 0);
-    assert(stack_objs_[stack_obj_counter_ - 1] == obj &&
-           "Unregistering an object that is not the last registered one");
+    LS_DCHECK(stack_objs_[stack_obj_counter_ - 1] == obj &&
+              "Unregistering an object that is not the last registered one");
 
     stack_obj_counter_--;
     stack_objs_[stack_obj_counter_] = nullptr;
