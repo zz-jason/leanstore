@@ -7,29 +7,37 @@
 #include <spdlog/spdlog.h>
 
 #include <cstdlib>
+#include <format>
 #include <iostream>
 #include <string>
 
 namespace leanstore {
 
+static constexpr char kLoggerName[] = "leanstore_logger";
+static constexpr char kLogFileName[] = "leanstore.log";
+static constexpr char kLogFormat[] = "[%Y-%m-%d %H:%M:%S.%e] [%t] [%l] %v";
+static constexpr int kFlushIntervalSeconds = 3;
+
 void Log::Init(const StoreOption* option) {
-  if (sInited) {
+  if (s_inited) {
     return;
   }
 
-  std::unique_lock write_lock(sInitMutex);
+  std::unique_lock write_lock(s_init_mutex);
 
-  auto log_path = std::string(option->store_dir_) + "/leanstore.log";
-  auto logger = spdlog::basic_logger_mt("basic_logger", log_path.c_str());
+  auto log_path = std::format("{}/{}", option->store_dir_, kLogFileName);
+  auto logger = spdlog::basic_logger_mt(kLoggerName, log_path.c_str());
 
   SCOPED_DEFER({
     spdlog::set_default_logger(logger);
-    spdlog::flush_every(std::chrono::seconds(3));
-    sInited = true;
+    spdlog::flush_every(std::chrono::seconds(kFlushIntervalSeconds));
+    s_inited = true;
+    spdlog::info("Logger initialized, flushed every {} seconds, flushed on {}",
+                 kFlushIntervalSeconds, SPDLOG_LEVEL_NAME_INFO);
   });
 
   // set log pattern
-  logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%t] [%l] %v");
+  logger->set_pattern(kLogFormat);
 
   // set flush strategy
   logger->flush_on(spdlog::level::info);
@@ -57,6 +65,14 @@ void Log::Init(const StoreOption* option) {
     std::abort();
   }
   }
+}
+
+void Log::Deinit() {
+  spdlog::info("Logger deinited");
+  spdlog::drop(kLoggerName);
+  spdlog::set_default_logger(nullptr);
+  spdlog::flush_every(std::chrono::seconds(0));
+  Log::s_inited = false;
 }
 
 void Log::DebugCheck(bool condition, const std::string& msg) {

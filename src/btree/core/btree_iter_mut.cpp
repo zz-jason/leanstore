@@ -4,18 +4,17 @@
 
 namespace leanstore::storage::btree {
 
-std::unique_ptr<BTreeIter> BTreeIterMut::IntoBtreeIter() {
-  auto iter = std::make_unique<BTreeIter>(btree_);
+void BTreeIterMut::IntoBtreeIter(BTreeIter* iter) {
   if (Valid()) {
     AssembleKey();
     auto current_key = Key();
     Reset();
+
     iter->SeekToFirstGreaterEqual(current_key);
-    return iter;
+    return;
   }
 
   Reset();
-  return iter;
 }
 
 } // namespace leanstore::storage::btree

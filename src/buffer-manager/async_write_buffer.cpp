@@ -30,7 +30,7 @@ void AsyncWriteBuffer::Add(const BufferFrame& bf) {
   write_commands_[slot].Reset(&bf, page_id);
 
   // copy the page content to write buffer
-  auto* buffer = copy_to_buffer(&bf.page_, slot);
+  auto* buffer = CopyToBuffer(&bf.page_, slot);
 
   aio_.PrepareWrite(fd_, buffer, page_size_, page_size_ * page_id);
 }
@@ -50,7 +50,7 @@ void AsyncWriteBuffer::IterateFlushedBfs(
     const auto slot = (reinterpret_cast<uint64_t>(aio_.GetIoEvent(i)->data) -
                        reinterpret_cast<uint64_t>(write_buffer_.Get())) /
                       page_size_;
-    auto* flushed_page = reinterpret_cast<Page*>(get_write_buffer(slot));
+    auto* flushed_page = reinterpret_cast<Page*>(GetWriteBuffer(slot));
     auto flushed_psn = flushed_page->psn_;
     auto* flushed_bf = write_commands_[slot].bf_;
     callback(*const_cast<BufferFrame*>(flushed_bf), flushed_psn);

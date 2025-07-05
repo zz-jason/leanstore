@@ -3,6 +3,7 @@
 #include "leanstore-c/store_option.h"
 #include "leanstore/utils/defer.hpp"
 
+#include "gtest/gtest.h"
 #include <gtest/gtest.h>
 
 #include <cstdint>
@@ -311,7 +312,7 @@ TEST_F(BasicKvIteratorTest, BasicKvIterMut) {
   EXPECT_TRUE(BasicKvIterValid(iter_handle));
   EXPECT_TRUE(BasicKvIterHasNext(iter_handle, 0));
 
-  BasicKvIterMutHandle* iter_mut_handle = IntoBasicKvIterMut(iter_handle);
+  BasicKvIterMutHandle* iter_mut_handle = IntoBasicKvIterMut(iter_handle, 0);
   ASSERT_NE(iter_mut_handle, nullptr);
   ASSERT_FALSE(BasicKvIterValid(iter_handle));
   ASSERT_TRUE(BasicKvIterMutValid(iter_mut_handle));

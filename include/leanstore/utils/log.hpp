@@ -17,10 +17,11 @@ namespace leanstore {
 
 class Log {
 public:
-  inline static bool sInited = false;
-  inline static std::mutex sInitMutex;
+  inline static bool s_inited = false;
+  inline static std::mutex s_init_mutex;
 
   static void Init(const StoreOption* option);
+  static void Deinit();
 
   static void DebugCheck(bool condition, const std::string& msg = "");
 
