@@ -64,8 +64,8 @@ void DestroyBasicKvIterMut(BasicKvIterMutHandle* handle);
 /// Convert a BasicKvIterHandle to a BasicKvIterMutHandle and vice versa. The
 /// original handle is invalidated after the conversion, should be destroyed by
 /// the caller with either DestroyBasicKvIter() or DestroyBasicKvIterMut().
-BasicKvIterMutHandle* IntoBasicKvIterMut(BasicKvIterHandle* handle);
-BasicKvIterHandle* IntoBasicKvIter(BasicKvIterMutHandle* handle);
+BasicKvIterMutHandle* IntoBasicKvIterMut(BasicKvIterHandle* handle, uint64_t worker_id);
+BasicKvIterHandle* IntoBasicKvIter(BasicKvIterMutHandle* handle, uint64_t worker_id);
 
 //------------------------------------------------------------------------------
 // Interfaces for ascending iteration

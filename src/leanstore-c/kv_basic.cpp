@@ -8,8 +8,10 @@
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/slice.hpp"
+#include "leanstore/utils/log.hpp"
 
 #include <cassert>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
@@ -34,7 +36,8 @@ BasicKvHandle* CreateBasicKv(LeanStoreHandle* handle, uint64_t worker_id, const 
   store->ExecSync(worker_id, [&]() {
     auto res = store->CreateBasicKv(btree_name);
     if (!res) {
-      std::cerr << "create btree failed: " << res.error().ToString() << std::endl;
+      leanstore::Log::Error("Failed to create BasicKV, btreeName={}, error={}", btree_name,
+                            res.error().ToString());
       return;
     }
     btree = res.value();
@@ -179,16 +182,33 @@ void DestroyBasicKvIterMut(BasicKvIterMutHandle* handle) {
   }
 }
 
-BasicKvIterMutHandle* IntoBasicKvIterMut(BasicKvIterHandle* handle) {
-  assert(handle != nullptr && handle->iter_ != nullptr);
-  auto* iter_mut_handle =
-      new BasicKvIterMutHandle(handle->iter_->IntoBtreeIterMut(), handle->store_);
+BasicKvIterMutHandle* IntoBasicKvIterMut(BasicKvIterHandle* iter_handle, uint64_t worker_id) {
+  assert(iter_handle != nullptr && iter_handle->iter_ != nullptr);
+  BasicKvIterMutHandle* iter_mut_handle{nullptr};
+  auto& btree = iter_handle->iter_->btree_;
+  auto iter_mut = std::make_unique<leanstore::storage::btree::BTreeIterMut>(btree);
+
+  iter_handle->store_->ExecSync(worker_id, [&]() {
+    // convert the iterator to a mutable iterator
+    iter_handle->iter_->IntoBtreeIterMut(iter_mut.get());
+  });
+
+  iter_mut_handle = new BasicKvIterMutHandle(std::move(iter_mut), iter_handle->store_);
   return iter_mut_handle;
 }
 
-BasicKvIterHandle* IntoBasicKvIter(BasicKvIterMutHandle* handle) {
-  assert(handle != nullptr && handle->iter_mut_ != nullptr);
-  auto* iter_handle = new BasicKvIterHandle(handle->iter_mut_->IntoBtreeIter(), handle->store_);
+BasicKvIterHandle* IntoBasicKvIter(BasicKvIterMutHandle* iter_mut_handle, uint64_t worker_id) {
+  assert(iter_mut_handle != nullptr && iter_mut_handle->iter_mut_ != nullptr);
+  BasicKvIterHandle* iter_handle{nullptr};
+  auto& btree = iter_mut_handle->iter_mut_->btree_;
+  auto iter = std::make_unique<leanstore::storage::btree::BTreeIter>(btree);
+
+  iter_mut_handle->store_->ExecSync(worker_id, [&]() {
+    // convert the mutable iterator to a regular iterator
+    iter_mut_handle->iter_mut_->IntoBtreeIter(iter.get());
+  });
+
+  iter_handle = new BasicKvIterHandle(std::move(iter), iter_mut_handle->store_);
   return iter_handle;
 }
 

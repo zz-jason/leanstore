@@ -15,7 +15,8 @@ function(leanstore_add_test TARGET_NAME)
     GTest::gtest_main
     leanstore
   )
-  gtest_discover_tests(${TARGET_NAME})
+  # gtest_discover_tests(${TARGET_NAME})
+  add_test(NAME ${TARGET_NAME} COMMAND ${TARGET_NAME})
   list(APPEND TEST_EXECUTABLES ${TARGET_NAME})
 endfunction(leanstore_add_test)
 
@@ -36,7 +37,8 @@ function(leanstore_add_test_in_dir TARGET_DIR)
       GTest::gtest_main
       leanstore
     )
-    gtest_discover_tests(${TEST_NAME})
+    # gtest_discover_tests(${TEST_NAME})
+    add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
     list(APPEND TEST_EXECUTABLES ${TEST_NAME})
   endforeach()
 endfunction(leanstore_add_test_in_dir)

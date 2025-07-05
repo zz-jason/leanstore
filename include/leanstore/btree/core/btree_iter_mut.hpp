@@ -25,7 +25,7 @@ public:
     guarded_leaf_.ToExclusiveMayJump();
   }
 
-  std::unique_ptr<BTreeIter> IntoBtreeIter();
+  void IntoBtreeIter(BTreeIter* iter);
 
   OpCode SeekToInsertWithHint(Slice key, bool higher = true) {
     LS_DCHECK(Valid());

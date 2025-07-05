@@ -77,13 +77,13 @@ public:
       uint64_t num_flushed_bfs);
 
 private:
-  void* copy_to_buffer(const Page* page, size_t slot) {
-    void* dest = get_write_buffer(slot);
+  void* CopyToBuffer(const Page* page, size_t slot) {
+    void* dest = GetWriteBuffer(slot);
     std::memcpy(dest, page, page_size_);
     return dest;
   }
 
-  uint8_t* get_write_buffer(size_t slot) {
+  uint8_t* GetWriteBuffer(size_t slot) {
     return &write_buffer_.Get()[slot * page_size_];
   }
 };
