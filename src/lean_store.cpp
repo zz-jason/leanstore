@@ -39,14 +39,15 @@ Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption* option) {
     return std::unexpected(leanstore::utils::Error::General("StoreOption should not be null"));
   }
 
+  Log::Init(option);
+
   if (option->create_from_scratch_) {
-    std::cout << std::format("Clean store dir: {}", option->store_dir_) << std::endl;
+    Log::Info("Create store from scratch, clean store dir: {}", option->store_dir_);
     std::filesystem::path dir_path(option->store_dir_);
     std::filesystem::remove_all(dir_path);
     std::filesystem::create_directories(dir_path);
   }
 
-  Log::Init(option);
   return std::make_unique<LeanStore>(option);
 }
 
@@ -56,7 +57,7 @@ LeanStore::LeanStore(StoreOption* option) : store_option_(option) {
   Log::Info("LeanStore starting ...");
   SCOPED_DEFER(Log::Info("LeanStore started"));
 
-  init_page_and_wal_fd();
+  InitDbFiles();
 
   // create global btree catalog
   tree_registry_ = std::make_unique<storage::TreeRegistry>();
@@ -73,7 +74,7 @@ LeanStore::LeanStore(StoreOption* option) : store_option_(option) {
 
   // recover from disk
   if (!store_option_->create_from_scratch_) {
-    auto all_pages_up_to_date = deserialize_meta();
+    auto all_pages_up_to_date = DeserializeMeta();
     if (!all_pages_up_to_date) {
       Log::Info("Not all pages up-to-date, recover from disk");
       buffer_manager_->RecoverFromDisk();
@@ -84,7 +85,7 @@ LeanStore::LeanStore(StoreOption* option) : store_option_(option) {
   }
 }
 
-void LeanStore::init_page_and_wal_fd() {
+void LeanStore::InitDbFiles() {
   SCOPED_DEFER({
     LS_DCHECK(fcntl(page_fd_, F_GETFL) != -1);
     LS_DCHECK(fcntl(wal_fd_, F_GETFL) != -1);
@@ -137,6 +138,7 @@ LeanStore::~LeanStore() {
   SCOPED_DEFER({
     DestroyStoreOption(store_option_);
     Log::Info("LeanStore stopped");
+    Log::Deinit();
   });
 
   // print trees
@@ -156,7 +158,7 @@ LeanStore::~LeanStore() {
   if (auto res = buffer_manager_->CheckpointAllBufferFrames(); !res) {
     all_pages_up_to_date = false;
   }
-  serialize_meta(all_pages_up_to_date);
+  SerializeMeta(all_pages_up_to_date);
 
   buffer_manager_->SyncAllPageWrites();
 
@@ -225,7 +227,7 @@ constexpr char kUseBulkInsert[] = "use_bulk_insert";
 constexpr char kSerialized[] = "serialized";
 constexpr char kPagesUpToDate[] = "pages_up_to_date";
 
-void LeanStore::serialize_meta(bool all_pages_up_to_date) {
+void LeanStore::SerializeMeta(bool all_pages_up_to_date) {
   Log::Info("serializeMeta started");
   SCOPED_DEFER(Log::Info("serializeMeta ended"));
 
@@ -291,7 +293,7 @@ void LeanStore::serialize_meta(bool all_pages_up_to_date) {
   meta_file << meta_json_obj.Serialize();
 }
 
-bool LeanStore::deserialize_meta() {
+bool LeanStore::DeserializeMeta() {
   Log::Info("deserializeMeta started");
   SCOPED_DEFER(Log::Info("deserializeMeta ended"));
 

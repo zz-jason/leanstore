@@ -95,9 +95,8 @@ void BufferManager::StartPageEvictors() {
 
     auto running_cpu =
         store_->store_option_->worker_threads_ + store_->store_option_->enable_wal_ + i;
-    page_evictors_.push_back(std::make_unique<PageEvictor>(store_, thread_name, running_cpu,
-                                                           num_bfs_, buffer_pool_, num_partitions_,
-                                                           partitions_mask_, partitions_));
+    page_evictors_.push_back(std::make_unique<PageEvictor>(
+        store_, thread_name, running_cpu, num_bfs_, buffer_pool_, num_partitions_, partitions_));
   }
 
   for (auto i = 0u; i < page_evictors_.size(); ++i) {

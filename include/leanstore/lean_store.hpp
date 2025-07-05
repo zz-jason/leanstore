@@ -155,12 +155,13 @@ public:
 private:
   /// serializeMeta serializes all the metadata about concurrent resources,
   /// buffer manager, btrees, and flags
-  void serialize_meta(bool all_pages_up_to_date);
+  void SerializeMeta(bool all_pages_up_to_date);
 
   /// deserializeMeta deserializes all the metadata except for the flags.
-  bool deserialize_meta();
+  bool DeserializeMeta();
 
-  void init_page_and_wal_fd();
+  /// Init database files, i.e. page and wal file descriptors.
+  void InitDbFiles();
 };
 
 } // namespace leanstore

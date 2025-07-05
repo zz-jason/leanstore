@@ -3,6 +3,7 @@
 #include "leanstore-c/store_option.h"
 #include "leanstore/utils/defer.hpp"
 
+#include "gtest/gtest.h"
 #include <gtest/gtest.h>
 
 #include <cstdint>
@@ -76,35 +77,35 @@ TEST_F(BasicKvIteratorTest, BasicKvHandle) {
 
 TEST_F(BasicKvIteratorTest, BasicKvAssendingIterationEmpty) {
   // create iterator handle
-  BasicKvIterHandle* iter_handle = CreateBasicKvIter(kv_handle_);
+  BasicKvIterHandle* iter_handle = CreateBasicKvIter(kv_handle_, 0);
   ASSERT_NE(iter_handle, nullptr);
 
   // next without seek
   {
-    BasicKvIterNext(iter_handle, 0);
+    BasicKvIterNext(iter_handle);
     EXPECT_FALSE(BasicKvIterValid(iter_handle));
-    EXPECT_FALSE(BasicKvIterHasNext(iter_handle, 0));
+    EXPECT_FALSE(BasicKvIterHasNext(iter_handle));
   }
 
   // iterate ascending
   {
-    BasicKvIterSeekToFirst(iter_handle, 0);
+    BasicKvIterSeekToFirst(iter_handle);
     EXPECT_FALSE(BasicKvIterValid(iter_handle));
-    EXPECT_FALSE(BasicKvIterHasNext(iter_handle, 0));
+    EXPECT_FALSE(BasicKvIterHasNext(iter_handle));
 
-    BasicKvIterNext(iter_handle, 0);
+    BasicKvIterNext(iter_handle);
     EXPECT_FALSE(BasicKvIterValid(iter_handle));
-    EXPECT_FALSE(BasicKvIterHasNext(iter_handle, 0));
+    EXPECT_FALSE(BasicKvIterHasNext(iter_handle));
   }
 
   // seek to first greater equal
   {
-    BasicKvIterSeekToFirstGreaterEqual(iter_handle, 0, {"hello", 5});
+    BasicKvIterSeekToFirstGreaterEqual(iter_handle, {"hello", 5});
     EXPECT_FALSE(BasicKvIterValid(iter_handle));
 
-    BasicKvIterNext(iter_handle, 0);
+    BasicKvIterNext(iter_handle);
     EXPECT_FALSE(BasicKvIterValid(iter_handle));
-    EXPECT_FALSE(BasicKvIterHasNext(iter_handle, 0));
+    EXPECT_FALSE(BasicKvIterHasNext(iter_handle));
   }
 
   // destroy the iterator
@@ -139,21 +140,21 @@ TEST_F(BasicKvIteratorTest, BasicKvAssendingIteration) {
   }
 
   // create iterator handle
-  BasicKvIterHandle* iter_handle = CreateBasicKvIter(kv_handle_);
+  BasicKvIterHandle* iter_handle = CreateBasicKvIter(kv_handle_, 0);
   ASSERT_NE(iter_handle, nullptr);
 
   // next without seek
   {
-    BasicKvIterNext(iter_handle, 0);
+    BasicKvIterNext(iter_handle);
     EXPECT_FALSE(BasicKvIterValid(iter_handle));
-    EXPECT_FALSE(BasicKvIterHasNext(iter_handle, 0));
+    EXPECT_FALSE(BasicKvIterHasNext(iter_handle));
   }
 
   // iterate ascending
   {
     uint64_t num_entries_iterated = 0;
-    for (BasicKvIterSeekToFirst(iter_handle, 0); BasicKvIterValid(iter_handle);
-         BasicKvIterNext(iter_handle, 0)) {
+    for (BasicKvIterSeekToFirst(iter_handle); BasicKvIterValid(iter_handle);
+         BasicKvIterNext(iter_handle)) {
       StringSlice key = BasicKvIterKey(iter_handle);
       StringSlice val = BasicKvIterVal(iter_handle);
       int key_int = std::stoi(std::string(key.data_, key.size_));
@@ -162,30 +163,30 @@ TEST_F(BasicKvIteratorTest, BasicKvAssendingIteration) {
 
       num_entries_iterated++;
       if (num_entries_iterated < num_entries) {
-        EXPECT_TRUE(BasicKvIterHasNext(iter_handle, 0));
+        EXPECT_TRUE(BasicKvIterHasNext(iter_handle));
       } else {
-        EXPECT_FALSE(BasicKvIterHasNext(iter_handle, 0));
+        EXPECT_FALSE(BasicKvIterHasNext(iter_handle));
       }
     }
 
     // iterate one more time to check if the iterator is still valid
-    BasicKvIterNext(iter_handle, 0);
+    BasicKvIterNext(iter_handle);
     EXPECT_FALSE(BasicKvIterValid(iter_handle));
-    EXPECT_FALSE(BasicKvIterHasNext(iter_handle, 0));
+    EXPECT_FALSE(BasicKvIterHasNext(iter_handle));
   }
 
   // iterate ascending with seek to first greater equal
   {
     for (auto i = 0; i < num_entries; i++) {
-      BasicKvIterSeekToFirstGreaterEqual(iter_handle, 0, {keys[i].data(), keys[i].size()});
+      BasicKvIterSeekToFirstGreaterEqual(iter_handle, {keys[i].data(), keys[i].size()});
       ASSERT_TRUE(BasicKvIterValid(iter_handle));
       StringSlice key = BasicKvIterKey(iter_handle);
       StringSlice val = BasicKvIterVal(iter_handle);
 
       if (std::string{key.data_, key.size_} == biggest_key) {
-        EXPECT_FALSE(BasicKvIterHasNext(iter_handle, 0));
+        EXPECT_FALSE(BasicKvIterHasNext(iter_handle));
       } else {
-        EXPECT_TRUE(BasicKvIterHasNext(iter_handle, 0));
+        EXPECT_TRUE(BasicKvIterHasNext(iter_handle));
       }
 
       int key_int = std::stoi(std::string(key.data_, key.size_));
@@ -222,14 +223,14 @@ TEST_F(BasicKvIteratorTest, BasicKvDescendingIteration) {
   }
 
   // create iterator handle
-  BasicKvIterHandle* iter_handle = CreateBasicKvIter(kv_handle_);
+  BasicKvIterHandle* iter_handle = CreateBasicKvIter(kv_handle_, 0);
   ASSERT_NE(iter_handle, nullptr);
 
   // iterate descending
   {
     uint64_t num_entries_iterated = 0;
-    for (BasicKvIterSeekToLast(iter_handle, 0); BasicKvIterValid(iter_handle);
-         BasicKvIterPrev(iter_handle, 0)) {
+    for (BasicKvIterSeekToLast(iter_handle); BasicKvIterValid(iter_handle);
+         BasicKvIterPrev(iter_handle)) {
       StringSlice key = BasicKvIterKey(iter_handle);
       StringSlice val = BasicKvIterVal(iter_handle);
       int key_int = std::stoi(std::string(key.data_, key.size_));
@@ -238,30 +239,30 @@ TEST_F(BasicKvIteratorTest, BasicKvDescendingIteration) {
 
       num_entries_iterated++;
       if (num_entries_iterated < num_entries) {
-        EXPECT_TRUE(BasicKvIterHasPrev(iter_handle, 0));
+        EXPECT_TRUE(BasicKvIterHasPrev(iter_handle));
       } else {
-        EXPECT_FALSE(BasicKvIterHasPrev(iter_handle, 0));
+        EXPECT_FALSE(BasicKvIterHasPrev(iter_handle));
       }
     }
 
     // iterate one more time to check if the iterator is still valid
-    BasicKvIterPrev(iter_handle, 0);
+    BasicKvIterPrev(iter_handle);
     EXPECT_FALSE(BasicKvIterValid(iter_handle));
-    EXPECT_FALSE(BasicKvIterHasPrev(iter_handle, 0));
+    EXPECT_FALSE(BasicKvIterHasPrev(iter_handle));
   }
 
   // iterate descending with seek to last less equal
   {
     for (auto i = 0; i < num_entries; i++) {
-      BasicKvIterSeekToLastLessEqual(iter_handle, 0, {keys[i].data(), keys[i].size()});
+      BasicKvIterSeekToLastLessEqual(iter_handle, {keys[i].data(), keys[i].size()});
       ASSERT_TRUE(BasicKvIterValid(iter_handle));
       StringSlice key = BasicKvIterKey(iter_handle);
       StringSlice val = BasicKvIterVal(iter_handle);
 
       if (std::string{key.data_, key.size_} == biggest_key) {
-        EXPECT_FALSE(BasicKvIterHasNext(iter_handle, 0));
+        EXPECT_FALSE(BasicKvIterHasNext(iter_handle));
       } else {
-        EXPECT_TRUE(BasicKvIterHasNext(iter_handle, 0));
+        EXPECT_TRUE(BasicKvIterHasNext(iter_handle));
       }
 
       int key_int = std::stoi(std::string(key.data_, key.size_));
@@ -301,15 +302,15 @@ TEST_F(BasicKvIteratorTest, BasicKvIterMut) {
   }
 
   // create iterator handle
-  BasicKvIterHandle* iter_handle = CreateBasicKvIter(kv_handle_);
+  BasicKvIterHandle* iter_handle = CreateBasicKvIter(kv_handle_, 0);
   ASSERT_NE(iter_handle, nullptr);
   SCOPED_DEFER(DestroyBasicKvIter(iter_handle));
 
-  BasicKvIterSeekToFirst(iter_handle, 0);
+  BasicKvIterSeekToFirst(iter_handle);
   auto key1 = BasicKvIterKey(iter_handle);
   auto val1 = BasicKvIterVal(iter_handle);
   EXPECT_TRUE(BasicKvIterValid(iter_handle));
-  EXPECT_TRUE(BasicKvIterHasNext(iter_handle, 0));
+  EXPECT_TRUE(BasicKvIterHasNext(iter_handle));
 
   BasicKvIterMutHandle* iter_mut_handle = IntoBasicKvIterMut(iter_handle);
   ASSERT_NE(iter_mut_handle, nullptr);
@@ -325,7 +326,7 @@ TEST_F(BasicKvIteratorTest, BasicKvIterMut) {
   EXPECT_EQ(memcmp(val1.data_, val2.data_, val1.size_), 0);
 
   // remove current key
-  BasicKvIterMutRemove(iter_mut_handle, 0);
+  BasicKvIterMutRemove(iter_mut_handle);
   EXPECT_TRUE(BasicKvIterMutValid(iter_mut_handle));
   auto key3 = BasicKvIterMutKey(iter_mut_handle);
   EXPECT_EQ(key1.size_, key3.size_);
@@ -334,7 +335,7 @@ TEST_F(BasicKvIteratorTest, BasicKvIterMut) {
   // insert a new key-value pair
   auto* new_key = "new_key";
   auto* new_val = "new_val";
-  EXPECT_TRUE(BasicKvIterMutInsert(iter_mut_handle, 0, {new_key, strlen(new_key)},
+  EXPECT_TRUE(BasicKvIterMutInsert(iter_mut_handle, {new_key, strlen(new_key)},
                                    {new_val, strlen(new_val)}));
   EXPECT_TRUE(BasicKvIterMutValid(iter_mut_handle));
 }

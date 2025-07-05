@@ -2,8 +2,6 @@
 
 #include "btree_iter_pessistic.hpp"
 
-#include <memory>
-
 namespace leanstore::storage::btree {
 
 class BTreeIterMut;
@@ -13,7 +11,7 @@ public:
   BTreeIter(BTreeGeneric& btree) : BTreeIterPessistic(btree, LatchMode::kSharedPessimistic) {
   }
 
-  std::unique_ptr<BTreeIterMut> IntoBtreeIterMut();
+  void IntoBtreeIterMut(BTreeIterMut* iter_mut);
 };
 
 } // namespace leanstore::storage::btree
