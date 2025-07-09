@@ -1,8 +1,8 @@
 #pragma once
 
-#include "defer.hpp"
+#include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/log.hpp"
-#include "misc.hpp"
+#include "leanstore/utils/misc.hpp"
 
 #include <atomic>
 #include <memory>

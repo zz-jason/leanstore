@@ -42,6 +42,9 @@ typedef struct StoreOption {
   /// The number of worker threads.
   uint64_t worker_threads_;
 
+  /// Whether to enable coroutine for worker threads.
+  bool enable_coroutine_;
+
   /// The WAL buffer size for each worker (bytes).
   uint64_t wal_buffer_size_;
 

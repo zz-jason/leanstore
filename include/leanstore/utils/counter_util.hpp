@@ -12,8 +12,8 @@ namespace cr {
 extern thread_local PerfCounters tls_perf_counters;
 } // namespace cr
 
-/// ScopedTimer for perf counters
-class ScopedTimer {
+/// ScopedCounterTimer for perf counters
+class ScopedCounterTimer {
 private:
 #ifdef ENABLE_PERF_COUNTERS
   /// Counter to cumulate the time elasped
@@ -24,14 +24,14 @@ private:
 #endif
 
 public:
-  ScopedTimer(CounterType* counter [[maybe_unused]]) {
+  ScopedCounterTimer(CounterType* counter [[maybe_unused]]) {
 #ifdef ENABLE_PERF_COUNTERS
     counter_to_cum_ = counter;
     started_at_ = std::chrono::steady_clock::now();
 #endif
   }
 
-  ~ScopedTimer() {
+  ~ScopedCounterTimer() {
 #ifdef ENABLE_PERF_COUNTERS
     auto stopped_at = std::chrono::steady_clock::now();
     auto elasped_ns =
@@ -50,9 +50,9 @@ public:
 #define SCOPED_TIME_INTERNAL_INTERNAL(LINE) scoped_timer_at_line##LINE
 #define SCOPED_TIME_INTERNAL(LINE) SCOPED_TIME_INTERNAL_INTERNAL(LINE)
 
-/// Macro to create a ScopedTimer
+/// Macro to create a ScopedCounterTimer
 #define COUNTER_TIMER_SCOPED(counter)                                                              \
-  leanstore::ScopedTimer SCOPED_TIME_INTERNAL(__LINE__){counter};
+  leanstore::ScopedCounterTimer SCOPED_TIME_INTERNAL(__LINE__){counter};
 
 /// Macro to inc a counter
 #define COUNTER_INC(counter) atomic_fetch_add(counter, 1);

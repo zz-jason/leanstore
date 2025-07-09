@@ -2,6 +2,7 @@
 
 #include "coro_future.hpp"
 #include "thread.hpp"
+#include "utils/scoped_timer.hpp"
 
 #include <cassert>
 #include <memory>
@@ -17,10 +18,12 @@ namespace leanstore {
 /// parallel execution of user tasks.
 class CoroScheduler {
 public:
-  CoroScheduler(int64_t num_threads) : num_threads_(num_threads), threads_(num_threads) {
+  CoroScheduler(LeanStore* store, int64_t num_threads)
+      : num_threads_(num_threads),
+        threads_(num_threads) {
     assert(num_threads > 0 && "Number of threads must be greater than zero");
     for (int64_t i = 0; i < num_threads; ++i) {
-      threads_[i] = std::make_unique<Thread>(i);
+      threads_[i] = std::make_unique<Thread>(store, i);
     }
   }
 
@@ -32,7 +35,10 @@ public:
   CoroScheduler& operator=(CoroScheduler&&) = delete;
 
   void Init() {
-    auto start_ts = std::chrono::steady_clock::now();
+    ScopedTimer timer([this](double elapsed_ms) {
+      Log::Info("CoroScheduler initialized, num_threads={}, elapsed={}ms", num_threads_,
+                elapsed_ms);
+    });
 
     // Start all threads
     for (auto& thread : threads_) {
@@ -44,16 +50,12 @@ public:
       while (!thread->IsReady()) {
       }
     }
-
-    auto elapsed_ms = std::chrono::duration_cast<std::chrono::microseconds>(
-                          std::chrono::steady_clock::now() - start_ts)
-                          .count() /
-                      1000.0;
-    Log::Info("CoroScheduler initialized, num_threads={}, elapsed={}ms", num_threads_, elapsed_ms);
   }
 
   void Deinit() {
-    auto start_ts = std::chrono::steady_clock::now();
+    ScopedTimer timer([](double elapsed_ms) {
+      Log::Info("CoroScheduler deinitialized, elapsed={}ms", elapsed_ms);
+    });
 
     // Stop all threads
     for (auto& thread : threads_) {
@@ -64,12 +66,6 @@ public:
     for (auto& thread : threads_) {
       thread->Join();
     }
-
-    auto elapsed_ms = std::chrono::duration_cast<std::chrono::microseconds>(
-                          std::chrono::steady_clock::now() - start_ts)
-                          .count() /
-                      1000.0;
-    Log::Info("CoroScheduler deinitialized, elapsed={}ms", elapsed_ms);
   }
 
   template <typename F, typename R = std::invoke_result_t<F>>

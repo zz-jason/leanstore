@@ -1,13 +1,23 @@
 #include "leanstore/buffer-manager/partition.hpp"
 
-#include <cstring>
+#include "leanstore/units.hpp"
 
+#include <cerrno>
+#include <cstdint>
+#include <cstring>
+#include <expected>
+
+#include <fcntl.h>
+#include <linux/perf_event.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
+#include <sys/time.h>
+#include <unistd.h>
 
 namespace leanstore {
 namespace storage {
 
-void* MallocHuge(size_t size) {
+static void* MallocHuge(size_t size) {
   void* p = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   madvise(p, size, MADV_HUGEPAGE);
   memset(p, 0, size);

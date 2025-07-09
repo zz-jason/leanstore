@@ -3,7 +3,6 @@
 #include "leanstore/buffer-manager/async_write_buffer.hpp"
 #include "leanstore/buffer-manager/bm_plain_guard.hpp"
 #include "leanstore/buffer-manager/buffer_frame.hpp"
-#include "leanstore/buffer-manager/free_list.hpp"
 #include "leanstore/buffer-manager/partition.hpp"
 #include "leanstore/buffer-manager/swip.hpp"
 #include "leanstore/lean_store.hpp"
@@ -35,7 +34,7 @@ public:
   }
 
   void PopTo(Partition& partition) {
-    partition.free_bf_list_.PushFront(first_, last_, size_);
+    partition.AddFreeBfs(first_, last_, size_);
     Reset();
   }
 
@@ -113,6 +112,18 @@ public:
 
   /// Writes all picked pages, push free BufferFrames to target partition.
   void FlushAndRecycleBufferFrames(Partition& target_partition);
+
+  void Run4Partitions(const std::unordered_set<uint64_t>& partition_ids) {
+    for (const auto& partition_id : partition_ids) {
+      auto& target_partition = *partitions_[partition_id];
+      if (!target_partition.NeedMoreFreeBfs()) {
+        continue;
+      }
+      PickBufferFramesToCool(target_partition);
+      PrepareAsyncWriteBuffer(target_partition);
+      FlushAndRecycleBufferFrames(target_partition);
+    }
+  }
 
   auto& GetPartitions() {
     return partitions_;
