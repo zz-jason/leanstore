@@ -16,8 +16,9 @@
 #include "leanstore/utils/jump_mu.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/parallelize.hpp"
-#include "leanstore/utils/portable.hpp"
 #include "leanstore/utils/user_thread.hpp"
+#include "utils/coroutine/thread.hpp"
+#include "utils/small_vector.hpp"
 
 #include <cerrno>
 #include <cstdint>
@@ -72,7 +73,7 @@ BufferManager::BufferManager(leanstore::LeanStore* store) : store_(store) {
     for (uint64_t i = begin; i < end; i++) {
       auto& partition = GetPartition(partition_id);
       auto* bf_addr = &buffer_pool_[i * store_->store_option_->buffer_frame_size_];
-      partition.free_bf_list_.PushFront(*new (bf_addr) BufferFrame());
+      partition.AddFreeBf(*new (bf_addr) BufferFrame());
       partition_id = (partition_id + 1) % num_partitions_;
     }
   });
@@ -109,7 +110,7 @@ StringMap BufferManager::Serialize() {
   StringMap map;
   PID max_page_id = 0;
   for (uint64_t i = 0; i < num_partitions_; i++) {
-    max_page_id = std::max<PID>(GetPartition(i).next_page_id_, max_page_id);
+    max_page_id = std::max<PID>(GetPartition(i).GetNextPageId(), max_page_id);
   }
   map["max_pid"] = std::to_string(max_page_id);
   return map;
@@ -119,7 +120,7 @@ void BufferManager::Deserialize(StringMap map) {
   PID max_page_id = std::stoull(map["max_pid"]);
   max_page_id = (max_page_id + (num_partitions_ - 1)) & ~(num_partitions_ - 1);
   for (uint64_t i = 0; i < num_partitions_; i++) {
-    GetPartition(i).next_page_id_ = max_page_id + i;
+    GetPartition(i).SetNextPageId(max_page_id + i);
   }
 }
 
@@ -146,8 +147,8 @@ Result<void> BufferManager::CheckpointAllBufferFrames() {
 
     // the underlying batch for aio
     const auto batch_capacity = store_->store_option_->buffer_write_batch_size_;
-    // const auto batchCapacity = 1;
-    ALIGNAS(512) uint8_t buffer[page_size * batch_capacity];
+    auto small_buffer = SmallBuffer512Aligned<4096 * 1024>(page_size * batch_capacity);
+    auto* buffer = small_buffer.Data();
     auto batch_size = 0u;
 
     // the aio itself
@@ -184,7 +185,9 @@ Result<void> BufferManager::CheckpointAllBufferFrames() {
 }
 
 Result<void> BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
-  ALIGNAS(512) uint8_t buffer[store_->store_option_->page_size_];
+  auto small_buffer = SmallBuffer512Aligned<4096>(store_->store_option_->page_size_);
+  auto* buffer = small_buffer.Data();
+
   bf.header_.latch_.LockExclusively();
   if (!bf.IsFree()) {
     store_->tree_registry_->Checkpoint(bf.page_.btree_id_, bf, buffer);
@@ -216,16 +219,18 @@ uint64_t BufferManager::ConsumedPages() {
 
 BufferFrame& BufferManager::AllocNewPageMayJump(TREEID tree_id) {
   Partition& partition = RandomPartition();
-  BufferFrame& free_bf = partition.free_bf_list_.PopFrontMayJump();
-  memset((void*)&free_bf, 0, store_->store_option_->buffer_frame_size_);
-  new (&free_bf) BufferFrame();
-  free_bf.Init(partition.NextPageId());
+  auto* free_bf = partition.GetFreeBfMayJump();
 
-  free_bf.page_.btree_id_ = tree_id;
-  free_bf.page_.psn_++; // mark the page as dirty
-  LS_DLOG("Alloc new page, pageId={}, btreeId={}", free_bf.header_.page_id_,
-          free_bf.page_.btree_id_);
-  return free_bf;
+  // BufferFrame& free_bf = *bf;
+  memset((void*)free_bf, 0, store_->store_option_->buffer_frame_size_);
+  new (free_bf) BufferFrame();
+  free_bf->Init(partition.NextPageId());
+
+  free_bf->page_.btree_id_ = tree_id;
+  free_bf->page_.psn_++; // mark the page as dirty
+  LS_DLOG("Alloc new page, pageId={}, btreeId={}", free_bf->header_.page_id_,
+          free_bf->page_.btree_id_);
+  return *free_bf;
 }
 
 BufferFrame& BufferManager::AllocNewPage(TREEID tree_id) {
@@ -251,7 +256,7 @@ void BufferManager::ReclaimPage(BufferFrame& bf) {
   } else {
     bf.Reset();
     bf.header_.latch_.UnlockExclusively();
-    partition.free_bf_list_.PushFront(bf);
+    partition.AddFreeBf(bf);
   }
 }
 
@@ -288,7 +293,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
   const PID page_id = swip_in_node.AsPageId();
   Partition& partition = GetPartition(page_id);
 
-  JumpScoped<std::unique_lock<std::mutex>> inflight_io_guard(partition.inflight_iomutex_);
+  JumpScoped<std::unique_lock<std::mutex>> inflight_io_guard(partition.inflight_ios_mutex_);
   node_guard.JumpIfModifiedByOthers();
 
   auto frame_handler = partition.inflight_ios_.Lookup(page_id);
@@ -296,7 +301,9 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
   // Create an IO frame to read page from disk.
   if (!frame_handler) {
     // 1. Randomly get a buffer frame from partitions
-    BufferFrame& bf = RandomPartition().free_bf_list_.PopFrontMayJump();
+    auto* free_bf = partition.GetFreeBfMayJump();
+    BufferFrame& bf = *free_bf;
+
     LS_DCHECK(!bf.header_.latch_.IsLockedExclusively());
     LS_DCHECK(bf.header_.state_ == State::kFree);
 
@@ -324,7 +331,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
     JUMPMU_TRY() {
       node_guard.JumpIfModifiedByOthers();
       io_frame_guard->unlock();
-      JumpScoped<std::unique_lock<std::mutex>> inflight_io_guard(partition.inflight_iomutex_);
+      JumpScoped<std::unique_lock<std::mutex>> inflight_io_guard(partition.inflight_ios_mutex_);
       BMExclusiveUpgradeIfNeeded swip_x_guard(node_guard);
 
       swip_in_node.MarkHOT(&bf);
@@ -454,6 +461,7 @@ BufferFrame& BufferManager::ReadPageSync(PID page_id) {
       JUMPMU_RETURN swip.AsBufferFrame();
     }
     JUMPMU_CATCH() {
+      Thread::CurrentCoro()->Yield(CoroState::kRunning);
     }
   }
 }
@@ -467,7 +475,7 @@ Result<void> BufferManager::WritePageSync(BufferFrame& bf) {
 
   bf.Reset();
   guard.Unlock();
-  partition.free_bf_list_.PushFront(bf);
+  partition.AddFreeBf(bf);
   return {};
 }
 

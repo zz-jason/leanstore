@@ -190,18 +190,18 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& target_partition) {
                 cooled_bf->header_.is_being_written_back_.load());
         JUMPMU_CONTINUE;
       }
-      PID cooled_page_id = cooled_bf->header_.page_id_;
-      auto partition_id = store_->buffer_manager_->GetPartitionID(cooled_page_id);
 
       // Prevent evicting a page that already has an IO Frame with (possibly)
       // threads working on it.
-      Partition& partition = *partitions_[partition_id];
-      JumpScoped<std::unique_lock<std::mutex>> io_guard(partition.inflight_iomutex_);
-      if (partition.inflight_ios_.Lookup(cooled_page_id)) {
-        LS_DLOG("COOLed buffer frame discarded, already in IO stage, "
-                "pageId={}, partitionId={}",
-                cooled_page_id, partition_id);
-        JUMPMU_CONTINUE;
+      {
+        PID cooled_page_id = cooled_bf->header_.page_id_;
+        auto partition_id = store_->buffer_manager_->GetPartitionID(cooled_page_id);
+        Partition& partition = *partitions_[partition_id];
+        if (partition.IsBeingReadBack(cooled_page_id)) {
+          LS_DLOG("COOLed buffer frame discarded, is being read back, pageId={}, partitionId={}",
+                  cooled_page_id, partition_id);
+          JUMPMU_CONTINUE;
+        }
       }
 
       // Evict clean pages. They can be safely cleared in memory without

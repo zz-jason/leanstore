@@ -13,6 +13,7 @@ static constexpr StoreOption kDefaultStoreOption = {
 
     // Worker thread related options
     .worker_threads_ = 4,
+    .enable_coroutine_ = false,
     .wal_buffer_size_ = 10 * 1024 * 1024,
 
     // Buffer pool related options

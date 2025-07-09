@@ -19,7 +19,7 @@ namespace leanstore::test {
 class CoroTest : public ::testing::Test {};
 
 TEST_F(CoroTest, Submit) {
-  CoroScheduler coro_scheduler(1);
+  CoroScheduler coro_scheduler(nullptr, 1);
   coro_scheduler.Init();
 
   // case 1
@@ -41,7 +41,7 @@ TEST_F(CoroTest, Submit) {
 }
 
 TEST_F(CoroTest, Mutex) {
-  CoroScheduler coro_scheduler(2);
+  CoroScheduler coro_scheduler(nullptr, 2);
   coro_scheduler.Init();
 
   CoroMutex mutex;
@@ -81,7 +81,7 @@ TEST_F(CoroTest, Mutex) {
 }
 
 TEST_F(CoroTest, SharedMutex) {
-  CoroScheduler coro_scheduler(2);
+  CoroScheduler coro_scheduler(nullptr, 2);
   coro_scheduler.Init();
 
   CoroSharedMutex shared_mutex;
@@ -123,7 +123,7 @@ TEST_F(CoroTest, SharedMutex) {
 }
 
 TEST_F(CoroTest, Io) {
-  CoroScheduler coro_scheduler(2);
+  CoroScheduler coro_scheduler(nullptr, 2);
   coro_scheduler.Init();
 
   std::string filedir = "/tmp/leanstore/test/coro_test";
@@ -181,7 +181,7 @@ TEST_F(CoroTest, Io) {
 }
 
 TEST_F(CoroTest, ChildCoro) {
-  CoroScheduler coro_scheduler(1);
+  CoroScheduler coro_scheduler(nullptr, 1);
   coro_scheduler.Init();
 
   std::vector<std::string> messages;
@@ -223,7 +223,7 @@ TEST_F(CoroTest, ChildCoro) {
 }
 
 TEST_F(CoroTest, JumpContext) {
-  CoroScheduler coro_scheduler(1);
+  CoroScheduler coro_scheduler(nullptr, 1);
   coro_scheduler.Init();
 
   std::atomic<int64_t> version = 1; // inited to exclusively locked

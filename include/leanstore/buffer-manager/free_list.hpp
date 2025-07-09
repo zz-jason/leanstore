@@ -10,11 +10,6 @@ namespace leanstore::storage {
 
 class FreeList {
 public:
-  std::mutex mutex_;
-  BufferFrame* head_ = nullptr;
-  std::atomic<uint64_t> size_ = 0;
-
-public:
   void PushFront(BufferFrame& bf);
 
   void PushFront(BufferFrame* head, BufferFrame* tail, uint64_t size);
@@ -23,7 +18,12 @@ public:
     return size_.load(std::memory_order_relaxed);
   }
 
-  BufferFrame& PopFrontMayJump();
+  BufferFrame* TryPopFront();
+
+private:
+  std::mutex mutex_;
+  BufferFrame* head_ = nullptr;
+  std::atomic<uint64_t> size_ = 0;
 };
 
 inline void FreeList::PushFront(BufferFrame& bf) {
@@ -43,17 +43,17 @@ inline void FreeList::PushFront(BufferFrame* head, BufferFrame* tail, uint64_t s
   size_ += size;
 }
 
-inline BufferFrame& FreeList::PopFrontMayJump() {
-  JumpScoped<std::unique_lock<std::mutex>> guard(mutex_);
+inline BufferFrame* FreeList::TryPopFront() {
+  std::unique_lock<std::mutex> guard(mutex_);
   BufferFrame* free_bf = head_;
   if (head_ == nullptr) {
-    leanstore::JumpContext::Jump();
-  } else {
-    head_ = head_->header_.next_free_bf_;
-    size_--;
-    LS_DCHECK(free_bf->header_.state_ == State::kFree);
+    return nullptr;
   }
-  return *free_bf;
+
+  head_ = head_->header_.next_free_bf_;
+  size_--;
+  LS_DCHECK(free_bf->header_.state_ == State::kFree);
+  return free_bf;
 }
 
 } // namespace leanstore::storage

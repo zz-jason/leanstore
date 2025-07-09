@@ -11,6 +11,7 @@
 #include <format>
 #include <memory>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 #include <pthread.h>
@@ -18,26 +19,18 @@
 
 namespace leanstore {
 
+class LeanStore;
+namespace storage {
+class PageEvictor;
+} // namespace storage
+
 class Thread {
 public:
   static constexpr int64_t kMaxCoroutinesPerThread = 256;
 
-  Thread(int64_t thread_id = -1) : thread_id_(thread_id) {
-    // Create a system task for IO polling
-    sys_tasks_.emplace_back(std::make_unique<Coroutine>([this]() {
-      while (keep_running_) {
-        coro_io_.Poll();
-        CurrentCoro()->Yield(CoroState::kRunning);
-      }
-    }));
-  }
+  Thread(LeanStore* store, int64_t thread_id = -1);
 
-  ~Thread() {
-    Stop();
-    if (thread_.joinable()) {
-      thread_.join();
-    }
-  }
+  ~Thread();
 
   Thread(const Thread&) = delete;
   Thread& operator=(const Thread&) = delete;
@@ -91,6 +84,10 @@ public:
     JumpContext::SetCurrent(&def_jump_context_);
   }
 
+  void AddEvictionPendingPartition(uint64_t partition_id) {
+    eviction_pending_partitions_.insert(partition_id);
+  }
+
   static CoroIo* CurrentCoroIo() {
     return &CurrentThread()->coro_io_;
   }
@@ -105,6 +102,8 @@ public:
   }
 
 private:
+  void CreateSysCoros();
+
   void ThreadMain() {
     ThreadInit();
     ThreadLoop();
@@ -126,6 +125,9 @@ private:
   void ThreadLoop();
 
 private:
+  /// The LeanStore instance.
+  LeanStore* store_ = nullptr;
+
   /// Pointer to the currently running coroutine.
   Coroutine* current_coroutine_ = nullptr;
 
@@ -136,6 +138,9 @@ private:
   std::vector<std::unique_ptr<Coroutine>> sys_tasks_;
 
   CoroIo coro_io_{kMaxCoroutinesPerThread};
+
+  std::unordered_set<uint64_t> eviction_pending_partitions_;
+  std::unique_ptr<leanstore::storage::PageEvictor> page_evictor_;
 
   std::thread thread_;
 

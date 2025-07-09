@@ -4,12 +4,18 @@
 #include "leanstore/buffer-manager/free_list.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/misc.hpp"
+#include "leanstore/utils/user_thread.hpp"
+#include "utils/coroutine/thread.hpp"
 
 #include <atomic>
+#include <cassert>
+#include <cstdint>
 #include <mutex>
 #include <vector>
 
 namespace leanstore::storage {
+
+class BufferManager;
 
 struct IOFrame {
   enum class State : uint8_t {
@@ -77,9 +83,11 @@ struct HashTable {
 /// The I/O partition for the underlying pages. Page read/write operations are
 /// dispatched to partitions based on the page id.
 class Partition {
-public:
+private:
+  friend class BufferManager;
+
   /// Protects the concurrent access to inflight_ios_.
-  std::mutex inflight_iomutex_;
+  std::mutex inflight_ios_mutex_;
 
   /// Stores all the inflight IOs in the partition.
   HashTable inflight_ios_;
@@ -104,12 +112,30 @@ public:
   /// The distance between two consecutive allocated page ids.
   const uint64_t page_id_distance_;
 
+  const uint64_t partition_id_;
+
 public:
   Partition(uint64_t first_page_id, uint64_t page_id_distance, uint64_t free_bfs_limit)
       : inflight_ios_(utils::GetBitsNeeded(free_bfs_limit)),
         free_bfs_limit_(free_bfs_limit),
         next_page_id_(first_page_id),
-        page_id_distance_(page_id_distance) {
+        page_id_distance_(page_id_distance),
+        partition_id_(first_page_id) {
+  }
+
+  /// Tries to insert a new inflight IO for the given cooled page id. Used to
+  /// prevent multiple threads from trying to write the same cooled page at the
+  /// same time.
+  ///
+  /// Returns true if the insertion was successful, false if the page id is
+  /// already in the inflight IOs.
+  bool IsBeingReadBack(PID cooled_page_id) {
+    std::unique_lock<std::mutex> io_guard(inflight_ios_mutex_);
+    return inflight_ios_.Lookup(cooled_page_id);
+  }
+
+  uint64_t PartitionId() const {
+    return partition_id_;
   }
 
   /// Whether the partition needs more free buffer frames.
@@ -119,7 +145,7 @@ public:
 
   /// Returns the number of free buffer frames in the partition.
   uint64_t NumFreeBfs() {
-    return free_bf_list_.size_;
+    return free_bf_list_.Size();
   }
 
   /// Allocates a new page id.
@@ -147,10 +173,38 @@ public:
     return next_page_id_ / page_id_distance_;
   }
 
+  uint64_t GetNextPageId() const {
+    return next_page_id_;
+  }
+
+  void SetNextPageId(uint64_t next_page_id) {
+    next_page_id_ = next_page_id;
+  }
+
   /// How many pages have been reclaimed.
   uint64_t NumReclaimedPages() {
     std::unique_lock<std::mutex> guard(reclaimed_page_ids_mutex_);
     return reclaimed_page_ids_.size();
+  }
+
+  void AddFreeBf(BufferFrame& bf) {
+    free_bf_list_.PushFront(bf);
+  }
+
+  void AddFreeBfs(BufferFrame* first, BufferFrame* last, uint64_t size) {
+    free_bf_list_.PushFront(first, last, size);
+  }
+
+  /// Returns a reference to the next free buffer frame in the partition.
+  BufferFrame* GetFreeBfMayJump() {
+    auto* free_bf = free_bf_list_.TryPopFront();
+    if (free_bf == nullptr) {
+      if (utils::tls_store->store_option_->enable_coroutine_) {
+        Thread::CurrentThread()->AddEvictionPendingPartition(partition_id_);
+      }
+      JumpContext::Jump(JumpContext::JumpReason::kWaitingBufferframe);
+    }
+    return free_bf;
   }
 };
 
