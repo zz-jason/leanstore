@@ -122,7 +122,7 @@ private:
 // -----------------------------------------------------------------------------
 
 /// A hybrid mutex that combines optimistic and pessimistic locking strategies.
-/// All the APIs are designed to be used together with CoroHybridLockGuard.
+/// All the APIs are designed to be used together with CoroHybridLock.
 class ALIGNAS(64) CoroHybridMutex {
 public:
   constexpr static uint64_t kLatchExclusiveBit = 1ull;

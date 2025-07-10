@@ -4,13 +4,12 @@
 #include "leanstore/buffer-manager/free_list.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/misc.hpp"
-#include "leanstore/utils/user_thread.hpp"
+#include "utils/coroutine/lean_mutex.hpp"
 #include "utils/coroutine/thread.hpp"
 
 #include <atomic>
 #include <cassert>
 #include <cstdint>
-#include <mutex>
 #include <vector>
 
 namespace leanstore::storage {
@@ -25,7 +24,7 @@ struct IOFrame {
     kUndefined = 3 // for debugging
   };
 
-  std::mutex mutex_;
+  LeanMutex mutex_;
 
   State state_ = State::kUndefined;
 
@@ -87,7 +86,7 @@ private:
   friend class BufferManager;
 
   /// Protects the concurrent access to inflight_ios_.
-  std::mutex inflight_ios_mutex_;
+  LeanSharedMutex inflight_ios_mutex_;
 
   /// Stores all the inflight IOs in the partition.
   HashTable inflight_ios_;
@@ -99,7 +98,7 @@ private:
   FreeList free_bf_list_;
 
   /// Protects the concurrent access to reclaimed_page_ids_.
-  std::mutex reclaimed_page_ids_mutex_;
+  LeanSharedMutex reclaimed_page_ids_mutex_;
 
   /// Stores all the reclaimed page ids in the partition. Page id is reclaimed
   /// when the page is removed. The reclaimed page id can be reused when a new
@@ -130,7 +129,7 @@ public:
   /// Returns true if the insertion was successful, false if the page id is
   /// already in the inflight IOs.
   bool IsBeingReadBack(PID cooled_page_id) {
-    std::unique_lock<std::mutex> io_guard(inflight_ios_mutex_);
+    LEAN_SHARED_LOCK(inflight_ios_mutex_);
     return inflight_ios_.Lookup(cooled_page_id);
   }
 
@@ -150,7 +149,7 @@ public:
 
   /// Allocates a new page id.
   PID NextPageId() {
-    std::unique_lock<std::mutex> guard(reclaimed_page_ids_mutex_);
+    LEAN_UNIQUE_LOCK(reclaimed_page_ids_mutex_);
     if (reclaimed_page_ids_.size()) {
       const uint64_t page_id = reclaimed_page_ids_.back();
       reclaimed_page_ids_.pop_back();
@@ -164,7 +163,7 @@ public:
 
   /// Reclaims a freed page id.
   void ReclaimPageId(PID page_id) {
-    std::unique_lock<std::mutex> guard(reclaimed_page_ids_mutex_);
+    LEAN_UNIQUE_LOCK(reclaimed_page_ids_mutex_);
     reclaimed_page_ids_.push_back(page_id);
   }
 
@@ -183,7 +182,7 @@ public:
 
   /// How many pages have been reclaimed.
   uint64_t NumReclaimedPages() {
-    std::unique_lock<std::mutex> guard(reclaimed_page_ids_mutex_);
+    LEAN_SHARED_LOCK(reclaimed_page_ids_mutex_);
     return reclaimed_page_ids_.size();
   }
 
@@ -199,9 +198,9 @@ public:
   BufferFrame* GetFreeBfMayJump() {
     auto* free_bf = free_bf_list_.TryPopFront();
     if (free_bf == nullptr) {
-      if (utils::tls_store->store_option_->enable_coroutine_) {
-        Thread::CurrentThread()->AddEvictionPendingPartition(partition_id_);
-      }
+#ifdef ENABLE_COROUTINE
+      Thread::CurrentThread()->AddEvictionPendingPartition(partition_id_);
+#endif
       JumpContext::Jump(JumpContext::JumpReason::kWaitingBufferframe);
     }
     return free_bf;

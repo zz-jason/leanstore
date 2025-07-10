@@ -6,7 +6,7 @@
 #include "leanstore/concurrency/group_committer.hpp"
 #include "leanstore/concurrency/recovery.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/sync/hybrid_latch.hpp"
+#include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/sync/scoped_hybrid_guard.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/async_io.hpp"
@@ -17,7 +17,9 @@
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/parallelize.hpp"
 #include "leanstore/utils/user_thread.hpp"
+#include "utils/coroutine/lean_mutex.hpp"
 #include "utils/coroutine/thread.hpp"
+#include "utils/scoped_timer.hpp"
 #include "utils/small_vector.hpp"
 
 #include <cerrno>
@@ -125,14 +127,11 @@ void BufferManager::Deserialize(StringMap map) {
 }
 
 Result<void> BufferManager::CheckpointAllBufferFrames() {
-  auto start_at = std::chrono::steady_clock::now();
-  Log::Info("CheckpointAllBufferFrames, num_bfs_={}", num_bfs_);
-  SCOPED_DEFER({
-    auto stopped_at = std::chrono::steady_clock::now();
-    auto elasped_ns =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(stopped_at - start_at).count();
-    Log::Info("CheckpointAllBufferFrames finished, timeElasped={:.6f}s", elasped_ns / 1000000000.0);
+  ScopedTimer timer([](double elapsed_ms) {
+    Log::Info("CheckpointAllBufferFrames finished, timeElasped={:.6f}ms", elapsed_ms);
   });
+
+  Log::Info("CheckpointAllBufferFrames, num_bfs_={}", num_bfs_);
 
   LS_DEBUG_EXECUTE(store_, "skip_CheckpointAllBufferFrames", {
     Log::Error("CheckpointAllBufferFrames skipped due to debug flag");
@@ -293,7 +292,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
   const PID page_id = swip_in_node.AsPageId();
   Partition& partition = GetPartition(page_id);
 
-  JumpScoped<std::unique_lock<std::mutex>> inflight_io_guard(partition.inflight_ios_mutex_);
+  JumpScoped<LeanUniqueLock<LeanSharedMutex>> inflight_io_guard(partition.inflight_ios_mutex_);
   node_guard.JumpIfModifiedByOthers();
 
   auto frame_handler = partition.inflight_ios_.Lookup(page_id);
@@ -311,7 +310,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
     IOFrame& io_frame = partition.inflight_ios_.Insert(page_id);
     io_frame.state_ = IOFrame::State::kReading;
     io_frame.num_readers_ = 1;
-    JumpScoped<std::unique_lock<std::mutex>> io_frame_guard(io_frame.mutex_);
+    JumpScoped<LeanUniqueLock<LeanMutex>> io_frame_guard(io_frame.mutex_);
     inflight_io_guard->unlock();
 
     // 3. Read page at pageId to the target buffer frame
@@ -331,7 +330,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
     JUMPMU_TRY() {
       node_guard.JumpIfModifiedByOthers();
       io_frame_guard->unlock();
-      JumpScoped<std::unique_lock<std::mutex>> inflight_io_guard(partition.inflight_ios_mutex_);
+      JumpScoped<LeanUniqueLock<LeanSharedMutex>> inflight_io_guard(partition.inflight_ios_mutex_);
       BMExclusiveUpgradeIfNeeded swip_x_guard(node_guard);
 
       swip_in_node.MarkHOT(&bf);
@@ -363,7 +362,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
     inflight_io_guard->unlock();
 
     // wait untile the reading is finished
-    JumpScoped<std::unique_lock<std::mutex>> io_frame_guard(io_frame.mutex_);
+    JumpScoped<LeanUniqueLock<LeanMutex>> io_frame_guard(io_frame.mutex_);
     io_frame_guard->unlock(); // no need to hold the mutex anymore
     if (io_frame.num_readers_.fetch_add(-1) == 1) {
       inflight_io_guard->lock();
@@ -448,7 +447,7 @@ void BufferManager::ReadPageSync(PID page_id, void* page_buffer) {
 }
 
 BufferFrame& BufferManager::ReadPageSync(PID page_id) {
-  HybridLatch dummy_parent_latch;
+  HybridMutex dummy_parent_latch;
   HybridGuard dummy_parent_guard(&dummy_parent_latch);
   dummy_parent_guard.ToOptimisticSpin();
 

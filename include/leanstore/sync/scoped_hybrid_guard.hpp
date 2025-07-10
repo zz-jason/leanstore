@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore/sync/hybrid_latch.hpp"
+#include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/utils/jump_mu.hpp"
 #include "leanstore/utils/log.hpp"
 
@@ -26,7 +26,7 @@ namespace storage {
 class ScopedHybridGuard {
 private:
   /// The latch to guard.
-  HybridLatch* latch_;
+  HybridMutex* latch_;
 
   /// The latch mode.
   LatchMode latch_mode_;
@@ -45,7 +45,7 @@ public:
   /// Construct a guard for the latch, lock it immediately in the specified
   /// latch mode. It may jump if latchMode is kOptimisticOrJump and the latch is
   /// exclusive locked by others.
-  ScopedHybridGuard(HybridLatch& latch, LatchMode latch_mode)
+  ScopedHybridGuard(HybridMutex& latch, LatchMode latch_mode)
       : latch_(&latch),
         latch_mode_(latch_mode),
         version_on_lock_(0),
@@ -57,7 +57,7 @@ public:
   /// Construct a guard for the latch, lock it in kOptimisticOrJump mode with
   /// the specified version. It may jump if the optimistic version does not
   /// match the current version.
-  ScopedHybridGuard(HybridLatch& latch, uint64_t version)
+  ScopedHybridGuard(HybridMutex& latch, uint64_t version)
       : latch_(&latch),
         latch_mode_(LatchMode::kOptimisticOrJump),
         version_on_lock_(version),
@@ -103,9 +103,9 @@ public:
   /// Unlock the latch if it is locked.
   void Unlock();
 
-  static void GetOptimistic(HybridLatch& latch, LatchMode latch_mode, std::function<void()> copier);
+  static void GetOptimistic(HybridMutex& latch, LatchMode latch_mode, std::function<void()> copier);
 
-  static void Get(HybridLatch& latch, std::function<void()> copier);
+  static void Get(HybridMutex& latch, std::function<void()> copier);
 
 private:
   /// Lock the latch in kOptimisticOrJump mode.
@@ -137,7 +137,7 @@ private:
   friend class leanstore::test::ScopedHybridGuardTest;
 };
 
-inline void ScopedHybridGuard::GetOptimistic(HybridLatch& latch, LatchMode latch_mode,
+inline void ScopedHybridGuard::GetOptimistic(HybridMutex& latch, LatchMode latch_mode,
                                              std::function<void()> copier) {
   LS_DCHECK(latch_mode == LatchMode::kOptimisticOrJump || latch_mode == LatchMode::kOptimisticSpin);
   while (true) {
@@ -152,7 +152,7 @@ inline void ScopedHybridGuard::GetOptimistic(HybridLatch& latch, LatchMode latch
   }
 }
 
-inline void ScopedHybridGuard::Get(HybridLatch& latch, std::function<void()> copier) {
+inline void ScopedHybridGuard::Get(HybridMutex& latch, std::function<void()> copier) {
   while (true) {
     JUMPMU_TRY() {
       auto guard = ScopedHybridGuard(latch, LatchMode::kOptimisticOrJump);
@@ -268,12 +268,12 @@ inline void ScopedHybridGuard::jump_if_modified_by_others() {
 
 inline void ScopedHybridGuard::lock_pessimistic_shared() {
   LS_DCHECK(latch_mode_ == LatchMode::kSharedPessimistic && latch_ != nullptr);
-  latch_->mutex_.lock_shared();
+  latch_->shared_mutex_.lock_shared();
 }
 
 inline void ScopedHybridGuard::unlock_pessimistic_shared() {
   LS_DCHECK(latch_mode_ == LatchMode::kSharedPessimistic && latch_ != nullptr);
-  latch_->mutex_.unlock_shared();
+  latch_->shared_mutex_.unlock_shared();
 }
 
 inline void ScopedHybridGuard::lock_pessimistic_exclusive() {

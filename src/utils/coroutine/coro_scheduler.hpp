@@ -72,6 +72,7 @@ public:
   std::shared_ptr<CoroFuture<R>> Submit(F&& coro_func, int64_t thread_id = -1) {
     if (thread_id < 0 || thread_id >= num_threads_) {
       // Default to the first thread if not specified
+      // TODO: Implement a better thread selection strategy
       thread_id = 0;
     }
 

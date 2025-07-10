@@ -6,7 +6,7 @@
 #include "leanstore/concurrency/wal_payload_handler.hpp"
 #include "leanstore/concurrency/worker_context.hpp"
 #include "leanstore/sync/hybrid_guard.hpp"
-#include "leanstore/sync/hybrid_latch.hpp"
+#include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/utils/log.hpp"
 
 #include <utility>

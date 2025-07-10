@@ -11,15 +11,15 @@
 #include "leanstore/utils/counter_util.hpp"
 #include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/log.hpp"
+#include "utils/coroutine/lean_mutex.hpp"
 
 #include <algorithm>
 #include <cstdlib>
-#include <mutex>
 
 namespace leanstore::cr {
 
-thread_local std::unique_ptr<WorkerContext> WorkerContext::sTlsWorkerCtx = nullptr;
-thread_local WorkerContext* WorkerContext::sTlsWorkerCtxRaw = nullptr;
+thread_local std::unique_ptr<WorkerContext> WorkerContext::s_tls_worker_ctx = nullptr;
+thread_local WorkerContext* WorkerContext::s_tls_worker_ctx_ptr = nullptr;
 thread_local PerfCounters tls_perf_counters;
 
 WorkerContext::WorkerContext(uint64_t worker_id, std::vector<WorkerContext*>& all_workers,
@@ -136,10 +136,10 @@ void WorkerContext::CommitTx() {
 
   // for group commit
   if (active_tx_.has_remote_dependency_) {
-    std::unique_lock<std::mutex> g(logging_.tx_to_commit_mutex_);
+    LEAN_UNIQUE_LOCK(logging_.tx_to_commit_mutex_);
     logging_.tx_to_commit_.push_back(active_tx_);
   } else {
-    std::unique_lock<std::mutex> g(logging_.rfa_tx_to_commit_mutex_);
+    LEAN_UNIQUE_LOCK(logging_.rfa_tx_to_commit_mutex_);
     logging_.rfa_tx_to_commit_.push_back(active_tx_);
   }
 

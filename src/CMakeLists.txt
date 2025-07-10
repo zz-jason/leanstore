@@ -92,6 +92,11 @@ elseif(CHECKS_LEVEL STREQUAL "benchmark")
   target_compile_definitions(leanstore PUBLIC MACRO_CHECK_BENCHMARK)
 endif()
 
+option(ENABLE_COROUTINE "Enable coroutine support" ON)
+if(ENABLE_COROUTINE)
+  target_compile_definitions(leanstore PUBLIC ENABLE_COROUTINE)
+endif()
+
 # ------------------------------------------------------------------------------
 # export header files for lib consumers
 # ------------------------------------------------------------------------------

@@ -1,10 +1,10 @@
-#include "ycsb.hpp"
+#include "benchmarks/ycsb/ycsb.hpp"
 
+#include "benchmarks/ycsb/ycsb_lean_store.hpp"
+#include "benchmarks/ycsb/ycsb_rocks_db.hpp"
+#include "benchmarks/ycsb/ycsb_wired_tiger.hpp"
 #include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/log.hpp"
-#include "ycsb_lean_store.hpp"
-#include "ycsb_rocks_db.hpp"
-#include "ycsb_wired_tiger.hpp"
 
 #include <gflags/gflags.h>
 
@@ -14,12 +14,12 @@
 #include <string>
 
 // For data preparation
-static std::string kCmdLoad = "load";
-static std::string kCmdRun = "run";
-static std::string kTargetTransactionKv = "transactionkv";
-static std::string kTargetBasicKv = "basickv";
-static std::string kTargetRocksDb = "rocksdb";
-static std::string kWiredTiger = "wiredtiger";
+static constexpr auto kCmdLoad = "load";
+static constexpr auto kCmdRun = "run";
+static constexpr auto kTargetTransactionKv = "transactionkv";
+static constexpr auto kTargetBasicKv = "basickv";
+static constexpr auto kTargetRocksDb = "rocksdb";
+static constexpr auto kWiredTiger = "wiredtiger";
 
 int main(int argc, char** argv) {
   gflags::SetUsageMessage("Ycsb Benchmark");

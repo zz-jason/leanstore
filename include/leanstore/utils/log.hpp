@@ -3,7 +3,6 @@
 #include "leanstore-c/store_option.h"
 
 #include <format>
-#include <mutex>
 
 #ifdef DEBUG
 #define LS_DLOG(...) leanstore::Log::Debug(__VA_ARGS__);
@@ -17,9 +16,6 @@ namespace leanstore {
 
 class Log {
 public:
-  inline static bool s_inited = false;
-  inline static std::mutex s_init_mutex;
-
   static void Init(const StoreOption* option);
   static void Deinit();
 

@@ -5,7 +5,7 @@
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/concurrency/worker_context.hpp"
 #include "leanstore/exceptions.hpp"
-#include "leanstore/sync/hybrid_latch.hpp"
+#include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/sync/scoped_hybrid_guard.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/counter_util.hpp"
@@ -16,7 +16,6 @@
 
 #include <atomic>
 #include <set>
-#include <shared_mutex>
 
 namespace leanstore::cr {
 
@@ -59,7 +58,7 @@ void CommitTree::CompactCommitLog() {
     }
 
     active_tx_id &= WorkerContext::kCleanBitsMask;
-    if (auto result = lcb_no_latch(active_tx_id); result) {
+    if (auto result = LcbUnlocked(active_tx_id); result) {
       set.insert(*result);
     }
   }
@@ -84,7 +83,7 @@ TXID CommitTree::Lcb(TXID start_ts) {
   while (true) {
     JUMPMU_TRY() {
       storage::ScopedHybridGuard o_guard(latch_, storage::LatchMode::kOptimisticOrJump);
-      if (auto result = lcb_no_latch(start_ts); result) {
+      if (auto result = LcbUnlocked(start_ts); result) {
         o_guard.Unlock();
         JUMPMU_RETURN result->second;
       }
@@ -96,7 +95,7 @@ TXID CommitTree::Lcb(TXID start_ts) {
   }
 }
 
-std::optional<std::pair<TXID, TXID>> CommitTree::lcb_no_latch(TXID start_ts) {
+std::optional<std::pair<TXID, TXID>> CommitTree::LcbUnlocked(TXID start_ts) {
   auto comp = [&](const auto& pair, TXID start_ts) { return start_ts > pair.first; };
   auto it = std::lower_bound(commit_log_.begin(), commit_log_.end(), start_ts, comp);
   if (it == commit_log_.begin()) {
@@ -186,8 +185,8 @@ void ConcurrencyControl::GarbageCollection() {
   COUNTER_INC(&tls_perf_counters.gc_executed_);
   COUNTER_TIMER_SCOPED(&tls_perf_counters.gc_total_lat_ns_);
 
-  update_global_tx_watermarks();
-  update_local_watermarks();
+  UpdateGlobalWmks();
+  UpdateLocalWmks();
 
   // remove versions that are nolonger needed by any transaction
   if (cleaned_wmk_of_short_tx_ <= local_wmk_of_all_tx_) {
@@ -244,7 +243,7 @@ ConcurrencyControl& ConcurrencyControl::Other(WORKERID other_worker_id) {
 //
 // Called by the worker thread that is committing a transaction before garbage
 // collection.
-void ConcurrencyControl::update_global_tx_watermarks() {
+void ConcurrencyControl::UpdateGlobalWmks() {
   if (!store_->store_option_->enable_gc_) {
     LS_DLOG("Skip updating global watermarks, GC is disabled");
     return;
@@ -310,13 +309,13 @@ void ConcurrencyControl::update_global_tx_watermarks() {
   TXID global_wmk_of_all_tx = std::numeric_limits<TXID>::max();
   TXID global_wmk_of_short_tx = std::numeric_limits<TXID>::max();
   for (WORKERID i = 0; i < WorkerContext::My().all_workers_.size(); i++) {
-    ConcurrencyControl& cc_ = Other(i);
-    if (cc_.updated_latest_commit_ts_ == cc_.latest_commit_ts_) {
+    ConcurrencyControl& cc = Other(i);
+    if (cc.updated_latest_commit_ts_ == cc.latest_commit_ts_) {
       LS_DLOG("Skip updating watermarks for worker {}, no transaction "
               "committed since last round, latest_commit_ts_={}",
-              i, cc_.latest_commit_ts_.load());
-      TXID wmk_of_all_tx = cc_.wmk_of_all_tx_;
-      TXID wmk_of_short_tx = cc_.wmk_of_short_tx_;
+              i, cc.latest_commit_ts_.load());
+      TXID wmk_of_all_tx = cc.wmk_of_all_tx_;
+      TXID wmk_of_short_tx = cc.wmk_of_short_tx_;
       if (wmk_of_all_tx > 0 || wmk_of_short_tx > 0) {
         global_wmk_of_all_tx = std::min(wmk_of_all_tx, global_wmk_of_all_tx);
         global_wmk_of_short_tx = std::min(wmk_of_short_tx, global_wmk_of_short_tx);
@@ -325,19 +324,19 @@ void ConcurrencyControl::update_global_tx_watermarks() {
     }
 
     TXID wmk_of_all_tx =
-        cc_.commit_tree_.Lcb(store_->crmanager_->global_wmk_info_.oldest_active_tx_);
+        cc.commit_tree_.Lcb(store_->crmanager_->global_wmk_info_.oldest_active_tx_);
     TXID wmk_of_short_tx =
-        cc_.commit_tree_.Lcb(store_->crmanager_->global_wmk_info_.oldest_active_short_tx_);
+        cc.commit_tree_.Lcb(store_->crmanager_->global_wmk_info_.oldest_active_short_tx_);
 
-    cc_.wmk_version_.store(cc_.wmk_version_.load() + 1, std::memory_order_release);
-    cc_.wmk_of_all_tx_.store(wmk_of_all_tx, std::memory_order_release);
-    cc_.wmk_of_short_tx_.store(wmk_of_short_tx, std::memory_order_release);
-    cc_.wmk_version_.store(cc_.wmk_version_.load() + 1, std::memory_order_release);
-    cc_.updated_latest_commit_ts_.store(cc_.latest_commit_ts_, std::memory_order_release);
+    cc.wmk_version_.store(cc.wmk_version_.load() + 1, std::memory_order_release);
+    cc.wmk_of_all_tx_.store(wmk_of_all_tx, std::memory_order_release);
+    cc.wmk_of_short_tx_.store(wmk_of_short_tx, std::memory_order_release);
+    cc.wmk_version_.store(cc.wmk_version_.load() + 1, std::memory_order_release);
+    cc.updated_latest_commit_ts_.store(cc.latest_commit_ts_, std::memory_order_release);
     LS_DLOG("Watermarks updated for worker {}, wmk_of_all_tx_=LCB({})={}, "
             "wmk_of_short_tx_=LCB({})={}",
-            i, wmk_of_all_tx, cc_.wmk_of_all_tx_.load(), wmk_of_short_tx,
-            cc_.wmk_of_short_tx_.load());
+            i, wmk_of_all_tx, cc.wmk_of_all_tx_.load(), wmk_of_short_tx,
+            cc.wmk_of_short_tx_.load());
 
     // The lower watermarks of current worker only matters when there are
     // transactions started before global oldestActiveTx
@@ -373,7 +372,7 @@ void ConcurrencyControl::update_global_tx_watermarks() {
   store_->crmanager_->global_wmk_info_.UpdateWmks(global_wmk_of_all_tx, global_wmk_of_short_tx);
 }
 
-void ConcurrencyControl::update_local_watermarks() {
+void ConcurrencyControl::UpdateLocalWmks() {
   SCOPED_DEFER(LS_DLOG("Local watermarks updated, workerId={}, "
                        "local_wmk_of_all_tx_={}, local_wmk_of_short_tx_={}",
                        WorkerContext::My().worker_id_, local_wmk_of_all_tx_,

@@ -3,7 +3,7 @@
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/core/b_tree_node.hpp"
 #include "leanstore/btree/core/btree_iter_mut.hpp"
-#include "leanstore/sync/hybrid_latch.hpp"
+#include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/sync/scoped_hybrid_guard.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/jump_mu.hpp"

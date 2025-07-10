@@ -55,7 +55,7 @@ public:
   void Start() {
     if (thread_ == nullptr) {
       keep_running_ = true;
-      thread_ = std::make_unique<std::thread>(&UserThread::run, this);
+      thread_ = std::make_unique<std::thread>(&UserThread::Run, this);
     }
   }
 
@@ -73,7 +73,7 @@ public:
   }
 
 protected:
-  void run() {
+  void Run() {
     tls_store = store_;
 
     // set thread-local thread name at the very beging so that logs printed by

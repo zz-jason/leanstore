@@ -604,7 +604,7 @@ void BTreeGeneric::Deserialize(StringMap map) {
   meta_node_swip_.Evict(std::stoull(map[kMetaPageId]));
 
   // load meta node to memory
-  HybridLatch dummy_latch;
+  HybridMutex dummy_latch;
   HybridGuard dummy_guard(&dummy_latch);
   dummy_guard.ToOptimisticSpin();
   while (true) {

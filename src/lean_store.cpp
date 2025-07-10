@@ -142,13 +142,15 @@ LeanStore::~LeanStore() {
   });
 
   // print trees
-  for (auto& it : tree_registry_->trees_) {
-    auto tree_id = it.first;
-    auto& [tree_ptr, tree_name] = it.second;
-    auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(tree_ptr.get());
-    Log::Info("leanstore/btreeName={}, btreeId={}, btreeType={}, btreeSummary={}", tree_name,
-              tree_id, static_cast<uint8_t>(btree->tree_type_), btree->Summary());
-  }
+  tree_registry_->VisitAllTrees([](const storage::TreeMap& all_trees) {
+    for (const auto& it : all_trees) {
+      auto tree_id = it.first;
+      auto& [tree_ptr, tree_name] = it.second;
+      auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(tree_ptr.get());
+      Log::Info("leanstore/btreeName={}, btreeId={}, btreeType={}, btreeSummary={}", tree_name,
+                tree_id, static_cast<uint8_t>(btree->tree_type_), btree->Summary());
+    }
+  });
 
   // Stop transaction workers and group committer
   crmanager_->Stop();
@@ -259,30 +261,32 @@ void LeanStore::SerializeMeta(bool all_pages_up_to_date) {
   // registered_datastructures, i.e. btrees
   {
     utils::JsonArray btree_json_array;
-    for (auto& it : tree_registry_->trees_) {
-      auto btree_id = it.first;
-      auto& [tree_ptr, btree_name] = it.second;
-      if (btree_name.substr(0, 1) == "_") {
-        continue;
+    tree_registry_->VisitAllTrees([&](const storage::TreeMap& all_trees) {
+      for (const auto& it : all_trees) {
+        auto btree_id = it.first;
+        auto& [tree_ptr, btree_name] = it.second;
+        if (btree_name.substr(0, 1) == "_") {
+          continue;
+        }
+
+        auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(tree_ptr.get());
+        utils::JsonObj btree_meta_json_obj;
+        auto btree_meta_map = tree_registry_->Serialize(btree_id);
+        for (const auto& [key, val] : btree_meta_map) {
+          btree_meta_json_obj.AddString(key, val);
+        }
+
+        utils::JsonObj btree_json_obj;
+        btree_json_obj.AddString(kName, btree_name);
+        btree_json_obj.AddInt64(kType, static_cast<int64_t>(btree->tree_type_));
+        btree_json_obj.AddInt64(kId, btree_id);
+        btree_json_obj.AddBool(kEnableWal, btree->config_.enable_wal_);
+        btree_json_obj.AddBool(kUseBulkInsert, btree->config_.use_bulk_insert_);
+        btree_json_obj.AddJsonObj(kSerialized, btree_meta_json_obj);
+
+        btree_json_array.AppendJsonObj(btree_json_obj);
       }
-
-      auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(tree_ptr.get());
-      utils::JsonObj btree_meta_json_obj;
-      auto btree_meta_map = tree_registry_->Serialize(btree_id);
-      for (const auto& [key, val] : btree_meta_map) {
-        btree_meta_json_obj.AddString(key, val);
-      }
-
-      utils::JsonObj btree_json_obj;
-      btree_json_obj.AddString(kName, btree_name);
-      btree_json_obj.AddInt64(kType, static_cast<int64_t>(btree->tree_type_));
-      btree_json_obj.AddInt64(kId, btree_id);
-      btree_json_obj.AddBool(kEnableWal, btree->config_.enable_wal_);
-      btree_json_obj.AddBool(kUseBulkInsert, btree->config_.use_bulk_insert_);
-      btree_json_obj.AddJsonObj(kSerialized, btree_meta_json_obj);
-
-      btree_json_array.AppendJsonObj(btree_json_obj);
-    }
+    });
 
     meta_json_obj.AddJsonArray(kMetaKeyBTrees, btree_json_array);
   }

@@ -10,7 +10,7 @@
 
 namespace leanstore::cr {
 
-uint32_t Logging::wal_contiguous_free_space() {
+uint32_t Logging::WalContiguousFreeSpace() {
   const auto flushed = wal_flushed_.load();
   if (flushed <= wal_buffered_) {
     return wal_buffer_size_ - wal_buffered_;
@@ -53,7 +53,7 @@ void Logging::WriteWalTxAbort() {
 
   // Submit the WalTxAbort to group committer
   wal_buffered_ += size;
-  publish_wal_flush_req();
+  PublishWalFlushReq();
 
   LS_DLOG("WriteWalTxAbort, workerId={}, startTs={}, walJson={}", WorkerContext::My().worker_id_,
           WorkerContext::My().active_tx_.start_ts_, utils::ToJsonString(entry));
@@ -71,7 +71,7 @@ void Logging::WriteWalTxFinish() {
 
   // Submit the WalTxAbort to group committer
   wal_buffered_ += size;
-  publish_wal_flush_req();
+  PublishWalFlushReq();
 
   LS_DLOG("WriteWalTxFinish, workerId={}, startTs={}, walJson={}", WorkerContext::My().worker_id_,
           WorkerContext::My().active_tx_.start_ts_, utils::ToJsonString(entry));
@@ -84,23 +84,23 @@ void Logging::WriteWalCarriageReturn() {
   auto* entry_ptr = wal_buffer_ + wal_buffered_;
   new (entry_ptr) WalCarriageReturn(entry_size);
   wal_buffered_ = 0;
-  publish_wal_buffered_offset();
+  PublishWalBufferedOffset();
 }
 
 void Logging::SubmitWALEntryComplex(uint64_t total_size) {
   active_walentry_complex_->crc32_ = active_walentry_complex_->ComputeCRC32();
   wal_buffered_ += total_size;
-  publish_wal_flush_req();
+  PublishWalFlushReq();
 
   LS_DLOG("SubmitWal, workerId={}, startTs={}, walJson={}", WorkerContext::My().worker_id_,
           WorkerContext::My().active_tx_.start_ts_, utils::ToJsonString(active_walentry_complex_));
 }
 
-void Logging::publish_wal_buffered_offset() {
+void Logging::PublishWalBufferedOffset() {
   wal_flush_req_.UpdateAttribute(&WalFlushReq::wal_buffered_, wal_buffered_);
 }
 
-void Logging::publish_wal_flush_req() {
+void Logging::PublishWalFlushReq() {
   WalFlushReq current(wal_buffered_, sys_tx_writtern_, WorkerContext::My().active_tx_.start_ts_);
   wal_flush_req_.Set(current);
 }

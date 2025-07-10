@@ -6,11 +6,11 @@
 #include "leanstore/units.hpp"
 #include "leanstore/utils/counter_util.hpp"
 #include "leanstore/utils/portable.hpp"
+#include "utils/coroutine/lean_mutex.hpp"
 
 #include <algorithm>
 #include <atomic>
 #include <functional>
-#include <mutex>
 #include <vector>
 
 namespace leanstore::cr {
@@ -61,14 +61,14 @@ public:
   WalEntryComplex* active_walentry_complex_;
 
   /// Protects tx_to_commit_
-  std::mutex tx_to_commit_mutex_;
+  LeanMutex tx_to_commit_mutex_;
 
   /// The queue for each worker thread to store pending-to-commit transactions which have remote
   /// dependencies.
   std::vector<Transaction> tx_to_commit_;
 
   /// Protects tx_to_commit_
-  std::mutex rfa_tx_to_commit_mutex_;
+  LeanMutex rfa_tx_to_commit_mutex_;
 
   /// The queue for each worker thread to store pending-to-commit transactions which doesn't have
   /// any remote dependencies.
@@ -138,13 +138,13 @@ public:
   }
 
 private:
-  void publish_wal_buffered_offset();
+  void PublishWalBufferedOffset();
 
-  void publish_wal_flush_req();
+  void PublishWalFlushReq();
 
   /// Calculate the continuous free space left in the wal ring buffer. Return
   /// size of the contiguous free space.
-  uint32_t wal_contiguous_free_space();
+  uint32_t WalContiguousFreeSpace();
 };
 
 } // namespace leanstore::cr

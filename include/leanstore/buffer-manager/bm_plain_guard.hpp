@@ -24,7 +24,7 @@ class BMOptimisticGuard {
 public:
   HybridGuard guard_;
 
-  BMOptimisticGuard(HybridLatch& lock) : guard_(&lock) {
+  BMOptimisticGuard(HybridMutex& lock) : guard_(&lock) {
     guard_.ToOptimisticOrJump();
   }
 

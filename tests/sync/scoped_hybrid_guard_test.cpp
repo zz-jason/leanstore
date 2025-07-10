@@ -2,7 +2,7 @@
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/sync/hybrid_latch.hpp"
+#include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/sync/scoped_hybrid_guard.hpp"
 #include "leanstore/utils/jump_mu.hpp"
 #include "leanstore/utils/random_generator.hpp"
@@ -63,7 +63,7 @@ protected:
 // |          |                  | unlock                   |
 TEST_F(ScopedHybridGuardTest, OptimisticSpinAfterExclusive) {
   uint64_t value = 0;
-  storage::HybridLatch latch;
+  storage::HybridMutex latch;
 
   std::atomic<bool> start_to_read(false);
   std::atomic<bool> read_started(false);
@@ -145,7 +145,7 @@ TEST_F(ScopedHybridGuardTest, OptimisticSpinAfterExclusive) {
 // |          |                  | unlock                   |
 TEST_F(ScopedHybridGuardTest, OptimisticSpinBeforeExclusive) {
   uint64_t value = 0;
-  storage::HybridLatch latch;
+  storage::HybridMutex latch;
 
   std::atomic<bool> start_to_write(false);
   std::atomic<bool> start_to_read(false);
@@ -226,7 +226,7 @@ TEST_F(ScopedHybridGuardTest, OptimisticSpinBeforeExclusive) {
 TEST_F(ScopedHybridGuardTest, MixedSharedMode) {
   uint64_t a = 0;
   uint64_t b = 100;
-  storage::HybridLatch latch;
+  storage::HybridMutex latch;
 
   // thread 0: pessimistic shared lock
   store_->ExecAsync(0, [&]() {
@@ -285,7 +285,7 @@ TEST_F(ScopedHybridGuardTest, MixedSharedMode) {
 TEST_F(ScopedHybridGuardTest, OptimisticBankTransfer) {
   uint64_t a = 0;
   uint64_t b = 100;
-  storage::HybridLatch latch;
+  storage::HybridMutex latch;
 
   // thread 0: transfer random amount between a and b 1000 times
   store_->ExecAsync(0, [&]() {
@@ -342,7 +342,7 @@ TEST_F(ScopedHybridGuardTest, OptimisticBankTransfer) {
 TEST_F(ScopedHybridGuardTest, PessimisticBankTransfer) {
   uint64_t a = 0;
   uint64_t b = 100;
-  storage::HybridLatch latch;
+  storage::HybridMutex latch;
 
   // thread 0: transfer random amount between a and b 1000 times
   store_->ExecAsync(0, [&]() {

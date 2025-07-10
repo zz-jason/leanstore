@@ -1,7 +1,7 @@
 #pragma once
 
-#include <mutex>
-#include <shared_mutex>
+#include "utils/coroutine/lean_mutex.hpp"
+
 #include <string>
 #include <unordered_set>
 
@@ -29,26 +29,26 @@ namespace utils {
 #endif
 
 class DebugFlagsRegistry {
-public:
-  std::shared_mutex mutex_;
+private:
+  LeanSharedMutex mutex_;
   std::unordered_set<std::string> flags_;
 
+public:
   DebugFlagsRegistry() = default;
   ~DebugFlagsRegistry() = default;
 
-public:
   void Insert(const std::string& name) {
-    std::unique_lock unique_guard(mutex_);
+    LEAN_UNIQUE_LOCK(mutex_);
     flags_.insert(name);
   }
 
   void Erase(const std::string& name) {
-    std::unique_lock unique_guard(mutex_);
+    LEAN_UNIQUE_LOCK(mutex_);
     flags_.erase(name);
   }
 
   bool IsExists(const std::string& name) {
-    std::shared_lock shared_guard(mutex_);
+    LEAN_SHARED_LOCK(mutex_);
     auto it = flags_.find(name);
     return it != flags_.end();
   }

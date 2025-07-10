@@ -7,13 +7,13 @@
 #include "leanstore/utils/error.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/result.hpp"
+#include "utils/coroutine/lean_mutex.hpp"
 
 #include <cstdlib>
 #include <expected>
 #include <functional>
 #include <limits>
 #include <memory>
-#include <mutex>
 #include <tuple>
 #include <unordered_map>
 
@@ -94,11 +94,11 @@ using TreeMap = std::unordered_map<TREEID, TreeAndName>;
 using TreeIndexByName = std::unordered_map<std::string, TreeMap::iterator>;
 
 class TreeRegistry {
-public:
+private:
   /// mutex_ protects concurrent access to trees_, tree_index_by_name_, and the
   /// lifetime of a managed tree object, i.e. the tree should stay valid during
   /// read/write access.
-  std::shared_mutex mutex_;
+  LeanSharedMutex mutex_;
 
   /// trees_ records and manages the lifetime of all the trees whose content are
   /// stored the buffer pool, for example BTrees.
@@ -118,10 +118,15 @@ public:
     return allocated_tree_id;
   }
 
+  void VisitAllTrees(std::function<void(const TreeMap& all_trees)> visitor) {
+    LEAN_SHARED_LOCK(mutex_);
+    visitor(trees_);
+  };
+
   /// Creates a tree managed by buffer manager.
   inline std::tuple<BufferManagedTree*, TREEID> CreateTree(
       const std::string& tree_name, std::function<std::unique_ptr<BufferManagedTree>()> ctor) {
-    std::unique_lock unique_guard(mutex_);
+    LEAN_UNIQUE_LOCK(mutex_);
 
     // check uniqueness
     if (tree_index_by_name_.find(tree_name) != tree_index_by_name_.end()) {
@@ -147,7 +152,7 @@ public:
   inline bool RegisterTree(TREEID tree_id, std::unique_ptr<BufferManagedTree> tree,
                            const std::string& tree_name) {
     SCOPED_DEFER(if (tree_id > tree_id_allocator_) { tree_id_allocator_ = tree_id; });
-    std::unique_lock unique_guard(mutex_);
+    LEAN_UNIQUE_LOCK(mutex_);
     if (tree_index_by_name_.find(tree_name) != tree_index_by_name_.end()) {
       return false;
     }
@@ -159,7 +164,7 @@ public:
   }
 
   [[nodiscard]] inline Result<bool> UnregisterTree(const std::string& tree_name) {
-    std::unique_lock unique_guard(mutex_);
+    LEAN_UNIQUE_LOCK(mutex_);
     auto it = tree_index_by_name_.find(tree_name);
     if (it != tree_index_by_name_.end()) {
       auto tree_it = it->second;
@@ -171,7 +176,7 @@ public:
   }
 
   [[nodiscard]] inline Result<bool> UnRegisterTree(TREEID tree_id) {
-    std::unique_lock unique_guard(mutex_);
+    LEAN_UNIQUE_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it != trees_.end()) {
       auto& [tree, tree_name] = it->second;
@@ -183,7 +188,7 @@ public:
   }
 
   inline BufferManagedTree* GetTree(const std::string& tree_name) {
-    std::shared_lock shared_guard(mutex_);
+    LEAN_SHARED_LOCK(mutex_);
     auto it = tree_index_by_name_.find(tree_name);
     if (it != tree_index_by_name_.end()) {
       auto tree_it = it->second;
@@ -194,7 +199,7 @@ public:
 
   inline void IterateChildSwips(TREEID tree_id, BufferFrame& bf,
                                 std::function<bool(Swip&)> callback) {
-    std::shared_lock shared_guard(mutex_);
+    LEAN_SHARED_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {
       Log::Fatal("BufferManagedTree not find, address={}, treeId={}", (void*)&bf, tree_id);
@@ -204,7 +209,7 @@ public:
   }
 
   inline ParentSwipHandler FindParent(TREEID tree_id, BufferFrame& bf) {
-    std::shared_lock shared_guard(mutex_);
+    LEAN_SHARED_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {
       Log::Fatal("BufferManagedTree not find, address={}, treeId={}", (void*)&bf, tree_id);
@@ -214,7 +219,7 @@ public:
   }
 
   inline SpaceCheckResult CheckSpaceUtilization(TREEID tree_id, BufferFrame& bf) {
-    std::shared_lock shared_guard(mutex_);
+    LEAN_SHARED_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {
       Log::Fatal("BufferManagedTree not find, address={}, treeId={}", (void*)&bf, tree_id);
@@ -225,7 +230,7 @@ public:
 
   // Pre: bf is shared/exclusive latched
   inline void Checkpoint(TREEID tree_id, BufferFrame& bf, void* dest) {
-    std::shared_lock shared_guard(mutex_);
+    LEAN_SHARED_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {
       Log::Fatal("BufferManagedTree not find, address={}, treeId={}", (void*)&bf, tree_id);
@@ -246,7 +251,7 @@ public:
 
   inline void GarbageCollect(TREEID tree_id, const uint8_t* version_data,
                              WORKERID version_worker_id, TXID version_tx_id, bool called_before) {
-    std::shared_lock shared_guard(mutex_);
+    LEAN_SHARED_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {
       LS_DLOG("Skip GarbageCollect on non-existing tree, it is probably that "
@@ -259,7 +264,7 @@ public:
   }
 
   inline void unlock(TREEID tree_id, const uint8_t* entry) {
-    std::shared_lock shared_guard(mutex_);
+    LEAN_SHARED_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {
       Log::Fatal("BufferManagedTree not find, treeId={}", tree_id);
@@ -270,7 +275,7 @@ public:
 
   // Serialization
   inline StringMap Serialize(TREEID tree_id) {
-    std::shared_lock shared_guard(mutex_);
+    LEAN_SHARED_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {
       Log::Fatal("BufferManagedTree not find, treeId={}", tree_id);
@@ -280,7 +285,7 @@ public:
   }
 
   inline void Deserialize(TREEID tree_id, StringMap map) {
-    std::shared_lock shared_guard(mutex_);
+    LEAN_SHARED_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {
       Log::Fatal("BufferManagedTree not find, treeId={}", tree_id);
