@@ -2,7 +2,7 @@
 
 #include "leanstore/buffer-manager/swip.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/sync/hybrid_latch.hpp"
+#include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/misc.hpp"
@@ -58,7 +58,7 @@ public:
 
   /// Latch of the buffer frame. The optimistic version in the latch is never
   /// decreased.
-  HybridLatch latch_;
+  HybridMutex latch_;
 
   CoroHybridMutex coro_hybrid_mutex_;
 

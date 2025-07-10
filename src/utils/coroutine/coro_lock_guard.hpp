@@ -1,8 +1,6 @@
 #pragma once
 
 #include "coro_mutex.hpp"
-#include "leanstore/utils/jump_mu.hpp"
-#include "leanstore/utils/log.hpp"
 #include "utils/coroutine/coro_mutex.hpp"
 
 #include <cassert>
@@ -10,7 +8,65 @@
 
 namespace leanstore {
 
-class CoroHybridLockGuard {
+template <typename T>
+class CoroUniqueLock {
+public:
+  CoroUniqueLock(T& coro_mutex) : coro_mutex_(coro_mutex) {
+    lock();
+  }
+
+  ~CoroUniqueLock() {
+    if (owns_lock_) {
+      unlock();
+    }
+  }
+
+  // no copy && assignment
+  CoroUniqueLock(const CoroUniqueLock&) = delete;
+  CoroUniqueLock& operator=(const CoroUniqueLock&) = delete;
+
+  /// NOLINTNEXTLINE
+  void lock() {
+    coro_mutex_.lock();
+    owns_lock_ = true;
+  }
+
+  /// NOLINTNEXTLINE
+  void unlock() {
+    coro_mutex_.unlock();
+    owns_lock_ = false;
+  }
+
+  /// NOLINTNEXTLINE
+  bool owns_lock() const {
+    return owns_lock_;
+  }
+
+private:
+  T& coro_mutex_;
+  bool owns_lock_;
+};
+
+template <typename T>
+class CoroSharedLock {
+public:
+  CoroSharedLock(T& coro_mutex) : coro_mutex_(coro_mutex) {
+    coro_mutex_.lock_shared();
+  }
+
+  ~CoroSharedLock() {
+    coro_mutex_.unlock_shared();
+  }
+
+  // no copy && assignment
+  CoroSharedLock(const CoroSharedLock&) = delete;
+  CoroSharedLock& operator=(const CoroSharedLock&) = delete;
+
+private:
+  T& coro_mutex_;
+};
+
+class CoroHybridLock {
 public:
   constexpr static uint64_t kVersionUnlocked = 0ull;
   constexpr static uint64_t kLatchExclusiveBit = 1ull;
@@ -23,15 +79,15 @@ public:
     kMoved,
   };
 
-  CoroHybridLockGuard(CoroHybridMutex* hybrid_mutex = nullptr,
-                      uint64_t version_on_lock = kVersionUnlocked)
+  CoroHybridLock(CoroHybridMutex* hybrid_mutex = nullptr,
+                 uint64_t version_on_lock = kVersionUnlocked)
       : hybrid_mutex_(hybrid_mutex),
         version_on_lock_(version_on_lock),
         mutex_state_(version_on_lock == kVersionUnlocked ? State::kUninitialized
                                                          : State::kSharedOptimistic) {
   }
 
-  CoroHybridLockGuard(CoroHybridMutex* hybrid_mutex, State state)
+  CoroHybridLock(CoroHybridMutex* hybrid_mutex, State state)
       : hybrid_mutex_(hybrid_mutex),
         version_on_lock_(state == State::kUninitialized ? kVersionUnlocked
                                                         : hybrid_mutex->GetVersion()),
@@ -39,7 +95,7 @@ public:
   }
 
   // move constructor
-  CoroHybridLockGuard(CoroHybridLockGuard&& other)
+  CoroHybridLock(CoroHybridLock&& other)
       : hybrid_mutex_(other.hybrid_mutex_),
         version_on_lock_(other.version_on_lock_),
         mutex_state_(other.mutex_state_),
@@ -51,7 +107,7 @@ public:
   }
 
   // move assignment
-  CoroHybridLockGuard& operator=(CoroHybridLockGuard&& other) {
+  CoroHybridLock& operator=(CoroHybridLock&& other) {
     if (this != &other) {
       this->Unlock();
 
@@ -142,6 +198,6 @@ private:
   bool contented_ = false;
 };
 
-static_assert(sizeof(CoroHybridLockGuard) == 24);
+static_assert(sizeof(CoroHybridLock) == 24);
 
 } // namespace leanstore

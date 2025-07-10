@@ -1,7 +1,7 @@
 #pragma once
 
-#include "hybrid_latch.hpp"
 #include "leanstore/exceptions.hpp"
+#include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/utils/jump_mu.hpp"
 #include "leanstore/utils/log.hpp"
 
@@ -20,12 +20,12 @@ enum class GuardState : uint8_t {
 };
 
 /// Like std::unique_lock, std::shared_lock, std::lock_guard, this HybridGuard
-/// is used together with HybridLatch to provide various lock mode.
+/// is used together with HybridMutex to provide various lock mode.
 ///
 /// TODO(jian.z): should we unlock the guard when it's destroied?
 class HybridGuard {
 public:
-  HybridLatch* latch_ = nullptr;
+  HybridMutex* latch_ = nullptr;
 
   GuardState state_ = GuardState::kUninitialized;
 
@@ -36,18 +36,18 @@ public:
 public:
   HybridGuard() = default;
 
-  HybridGuard(HybridLatch* latch) : latch_(latch), state_(GuardState::kUninitialized), version_(0) {
+  HybridGuard(HybridMutex* latch) : latch_(latch), state_(GuardState::kUninitialized), version_(0) {
   }
 
   // Manually construct a guard from a snapshot. Use with caution!
-  HybridGuard(HybridLatch& latch, const uint64_t last_seen_version)
+  HybridGuard(HybridMutex& latch, const uint64_t last_seen_version)
       : latch_(&latch),
         state_(GuardState::kSharedOptimistic),
         version_(last_seen_version),
         contented_(false) {
   }
 
-  HybridGuard(HybridLatch& latch, GuardState state)
+  HybridGuard(HybridMutex& latch, GuardState state)
       : latch_(&latch),
         state_(state),
         version_(latch.GetVersion()) {
@@ -154,9 +154,9 @@ public:
       const uint64_t new_version = version_ + kLatchExclusiveBit;
       uint64_t expected = version_;
       // changed from try_lock because of possible retries b/c lots of readers
-      latch_->mutex_.lock();
+      latch_->shared_mutex_.lock();
       if (!latch_->version_.compare_exchange_strong(expected, new_version)) {
-        latch_->mutex_.unlock();
+        latch_->shared_mutex_.unlock();
         leanstore::JumpContext::Jump();
       }
       version_ = new_version;
@@ -172,9 +172,9 @@ public:
       return;
     }
     if (state_ == GuardState::kSharedOptimistic) {
-      latch_->mutex_.lock_shared();
+      latch_->shared_mutex_.lock_shared();
       if (latch_->GetVersion() != version_) {
-        latch_->mutex_.unlock_shared();
+        latch_->shared_mutex_.unlock_shared();
         leanstore::JumpContext::Jump();
       }
       state_ = GuardState::kSharedPessimistic;
@@ -189,12 +189,12 @@ public:
     const uint64_t new_version = version_ + kLatchExclusiveBit;
     uint64_t expected = version_;
 
-    if (!latch_->mutex_.try_lock()) {
+    if (!latch_->shared_mutex_.try_lock()) {
       leanstore::JumpContext::Jump();
     }
 
     if (!latch_->version_.compare_exchange_strong(expected, new_version)) {
-      latch_->mutex_.unlock();
+      latch_->shared_mutex_.unlock();
       leanstore::JumpContext::Jump();
     }
 
@@ -204,11 +204,11 @@ public:
 
   inline void TryToSharedMayJump() {
     LS_DCHECK(state_ == GuardState::kSharedOptimistic);
-    if (!latch_->mutex_.try_lock_shared()) {
+    if (!latch_->shared_mutex_.try_lock_shared()) {
       leanstore::JumpContext::Jump();
     }
     if (latch_->GetVersion() != version_) {
-      latch_->mutex_.unlock_shared();
+      latch_->shared_mutex_.unlock_shared();
       leanstore::JumpContext::Jump();
     }
     state_ = GuardState::kSharedPessimistic;
@@ -218,7 +218,7 @@ private:
   // NOLINTBEGIN
 
   inline void lock_exclusive() {
-    latch_->mutex_.lock();
+    latch_->shared_mutex_.lock();
     LS_DCHECK(!HasExclusiveMark(latch_->GetVersion()));
     version_ = latch_->GetVersion() + kLatchExclusiveBit;
     latch_->version_.store(version_, std::memory_order_release);
@@ -230,12 +230,12 @@ private:
     version_ += kLatchExclusiveBit;
     latch_->version_.store(version_, std::memory_order_release);
     LS_DCHECK(!HasExclusiveMark(latch_->GetVersion()));
-    latch_->mutex_.unlock();
+    latch_->shared_mutex_.unlock();
     state_ = GuardState::kSharedOptimistic;
   }
 
   inline void lock_shared() {
-    latch_->mutex_.lock_shared();
+    latch_->shared_mutex_.lock_shared();
     LS_DCHECK(!HasExclusiveMark(latch_->GetVersion()));
     version_ = latch_->GetVersion();
     state_ = GuardState::kSharedPessimistic;
@@ -243,7 +243,7 @@ private:
 
   inline void unlock_shared() {
     LS_DCHECK(!HasExclusiveMark(latch_->GetVersion()));
-    latch_->mutex_.unlock_shared();
+    latch_->shared_mutex_.unlock_shared();
     state_ = GuardState::kSharedOptimistic;
   }
 

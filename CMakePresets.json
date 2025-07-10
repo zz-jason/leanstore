@@ -10,6 +10,7 @@
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "BUILD_SHARED_LIBS": "ON",
+                "ENABLE_COROUTINE": "OFF",
                 "ENABLE_PERF_COUNTERS": "ON"
             }
         },

@@ -2,14 +2,14 @@
 
 #include "leanstore/concurrency/history_storage.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/sync/hybrid_latch.hpp"
+#include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/log.hpp"
+#include "utils/coroutine/lean_mutex.hpp"
 
 #include <atomic>
 #include <memory>
 #include <optional>
-#include <shared_mutex>
 #include <utility>
 #include <vector>
 
@@ -26,7 +26,7 @@ namespace leanstore::cr {
 class CommitTree {
 public:
   /// The hybrid latch to guard the commit log.
-  storage::HybridLatch latch_;
+  storage::HybridMutex latch_;
 
   /// The capacity of the commit log. Commit log is compacted when full.
   uint64_t capacity_;
@@ -62,14 +62,14 @@ public:
 
 private:
   /// LcbNoLatch is the same as Lcb, but it doesn't acquire the latch on the commit log.
-  std::optional<std::pair<TXID, TXID>> lcb_no_latch(TXID start_ts);
+  std::optional<std::pair<TXID, TXID>> LcbUnlocked(TXID start_ts);
 };
 
 /// The global watermark info. It's used to store the global watermarks of all the worker threads.
-struct WaterMarkInfo {
+struct WatermarkInfo {
   /// The write mutex to guard all the global watermark info, including the active transaction info
   /// and the watermark info.
-  std::shared_mutex global_mutex_;
+  LeanSharedMutex global_mutex_;
 
   /// The oldest active transaction id in the store.
   std::atomic<TXID> oldest_active_tx_;
@@ -219,10 +219,10 @@ public:
 
 private:
   /// Update global watermarks of all the worker threads before GC.
-  void update_global_tx_watermarks();
+  void UpdateGlobalWmks();
 
   /// Update local watermarks of the current worker thread before GC.
-  void update_local_watermarks();
+  void UpdateLocalWmks();
 };
 
 } // namespace leanstore::cr

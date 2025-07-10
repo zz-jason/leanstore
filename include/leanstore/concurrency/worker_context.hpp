@@ -76,21 +76,21 @@ public:
 
 public:
   /// Thread-local storage for WorkerContext.
-  static thread_local std::unique_ptr<WorkerContext> sTlsWorkerCtx;
+  static thread_local std::unique_ptr<WorkerContext> s_tls_worker_ctx;
 
-  /// Raw pointer to sTlsWorkerCtx to avoid the overhead of std::unique_ptr.
-  static thread_local WorkerContext* sTlsWorkerCtxRaw;
+  /// Raw pointer to s_tls_worker_ctx to avoid the overhead of std::unique_ptr.
+  static thread_local WorkerContext* s_tls_worker_ctx_ptr;
 
   static constexpr uint64_t kRcBit = (1ull << 63);
   static constexpr uint64_t kLongRunningBit = (1ull << 62);
   static constexpr uint64_t kCleanBitsMask = ~(kRcBit | kLongRunningBit);
 
   static WorkerContext& My() {
-    return *WorkerContext::sTlsWorkerCtxRaw;
+    return *WorkerContext::s_tls_worker_ctx_ptr;
   }
 
   static bool InWorker() {
-    return WorkerContext::sTlsWorkerCtxRaw != nullptr;
+    return WorkerContext::s_tls_worker_ctx_ptr != nullptr;
   }
 };
 

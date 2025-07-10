@@ -24,10 +24,10 @@ CRManager::CRManager(leanstore::LeanStore* store) : store_(store), group_committ
 
     // create thread-local transaction executor on each worker thread
     worker_thread->SetJob([&]() {
-      WorkerContext::sTlsWorkerCtx =
+      WorkerContext::s_tls_worker_ctx =
           std::make_unique<WorkerContext>(worker_id, worker_ctxs_, store_);
-      WorkerContext::sTlsWorkerCtxRaw = WorkerContext::sTlsWorkerCtx.get();
-      worker_ctxs_[worker_id] = WorkerContext::sTlsWorkerCtx.get();
+      WorkerContext::s_tls_worker_ctx_ptr = WorkerContext::s_tls_worker_ctx.get();
+      worker_ctxs_[worker_id] = WorkerContext::s_tls_worker_ctx.get();
     });
     worker_thread->Wait();
     worker_threads_.emplace_back(std::move(worker_thread));

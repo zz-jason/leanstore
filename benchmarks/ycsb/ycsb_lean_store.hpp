@@ -1,3 +1,4 @@
+#include "benchmarks/ycsb/ycsb.hpp"
 #include "leanstore-c/leanstore.h"
 #include "leanstore-c/perf_counters.h"
 #include "leanstore-c/store_option.h"
@@ -7,18 +8,17 @@
 #include "leanstore/concurrency/worker_context.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/jump_mu.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/random_generator.hpp"
 #include "leanstore/utils/scrambled_zipf_generator.hpp"
-#include "ycsb.hpp"
+#include "utils/scoped_timer.hpp"
+#include "utils/small_vector.hpp"
 
 #include <gperftools/heap-profiler.h>
 #include <gperftools/profiler.h>
 
 #include <atomic>
-#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -111,17 +111,15 @@ public:
 
   void HandleCmdLoad() override {
     auto* table = CreateTable();
+    std::cout << "Inserting " << FLAGS_ycsb_record_count << " values" << std::endl;
 
     // record the start and end time, calculating throughput in the end
-    auto start = std::chrono::high_resolution_clock::now();
-    std::cout << "Inserting " << FLAGS_ycsb_record_count << " values" << std::endl;
-    SCOPED_DEFER({
-      auto end = std::chrono::high_resolution_clock::now();
-      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-      auto summary =
-          std::format("Done inserting, time elapsed={:.2f} seconds, throughput={:.2f} tps",
-                      duration / 1000000.0, CalculateTps(start, end, FLAGS_ycsb_record_count));
-      std::cout << summary << std::endl;
+    ScopedTimer timer([&](double elapsed_ms) {
+      auto elapsed_sec = elapsed_ms / 1000.0;
+      auto ops = FLAGS_ycsb_record_count / elapsed_sec;
+      std::cout << std::format("Inserted values: {}, time_elapsed_sec: {:.2f}, tps: {:.2f}",
+                               FLAGS_ycsb_record_count, elapsed_sec, ops)
+                << std::endl;
     });
 
     auto num_workers = store_->store_option_->worker_threads_;
@@ -130,8 +128,10 @@ public:
     for (auto worker_id = 0u, begin = 0u; worker_id < num_workers;) {
       auto end = begin + avg + (rem-- > 0 ? 1 : 0);
       store_->ExecAsync(worker_id, [&, begin, end]() {
-        uint8_t key[FLAGS_ycsb_key_size];
-        uint8_t val[FLAGS_ycsb_val_size];
+        SmallBuffer<1024> key_buffer(FLAGS_ycsb_key_size);
+        SmallBuffer<1024> val_buffer(FLAGS_ycsb_val_size);
+        uint8_t* key = key_buffer.Data();
+        uint8_t* val = val_buffer.Data();
 
         for (uint64_t i = begin; i < end; i++) {
           // generate key-value for insert
@@ -181,12 +181,16 @@ public:
 
     for (uint64_t worker_id = 0; worker_id < store_->store_option_->worker_threads_; worker_id++) {
       store_->ExecAsync(worker_id, [&]() {
-        uint8_t key[FLAGS_ycsb_key_size];
+        SmallBuffer<1024> key_buffer(FLAGS_ycsb_key_size);
+        uint8_t* key = key_buffer.Data();
+
         std::string val_read;
         auto copy_value = [&](Slice val) { val.CopyTo(val_read); };
 
         auto update_desc_buf_size = UpdateDesc::Size(1);
-        uint8_t update_desc_buf[update_desc_buf_size];
+        SmallBuffer<4096> update_desc_buffer(update_desc_buf_size);
+        uint8_t* update_desc_buf = update_desc_buffer.Data();
+
         auto* update_desc = UpdateDesc::CreateFrom(update_desc_buf);
         update_desc->num_slots_ = 1;
         update_desc->update_slots_[0].offset_ = 0;

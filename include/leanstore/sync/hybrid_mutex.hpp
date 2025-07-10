@@ -2,9 +2,9 @@
 
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/portable.hpp"
+#include "utils/coroutine/lean_mutex.hpp"
 
 #include <atomic>
-#include <shared_mutex>
 
 #include <unistd.h>
 
@@ -32,22 +32,22 @@ inline bool HasExclusiveMark(uint64_t version) {
 ///   mode, the version number is used to detech latch contention.
 /// - pessimistic shared: in shared mode, for high-contention scenarios.
 /// - pessimistic exclusive: in exclusive mode, for high-contention scenarios.
-class ALIGNAS(64) HybridLatch {
+class ALIGNAS(64) HybridMutex {
 private:
   /// The optimistic version.
   std::atomic<uint64_t> version_ = 0;
 
   /// The pessimistic shared mutex.
-  std::shared_mutex mutex_;
+  LeanSharedMutex shared_mutex_;
 
   friend class HybridGuard;
   friend class ScopedHybridGuard;
 
 public:
-  HybridLatch() = default;
+  HybridMutex() = default;
 
   void LockExclusively() {
-    mutex_.lock();
+    shared_mutex_.lock();
     version_.fetch_add(kLatchExclusiveBit, std::memory_order_release);
     LS_DCHECK(IsLockedExclusively());
   }
@@ -55,7 +55,7 @@ public:
   void UnlockExclusively() {
     LS_DCHECK(IsLockedExclusively());
     version_.fetch_add(kLatchExclusiveBit, std::memory_order_release);
-    mutex_.unlock();
+    shared_mutex_.unlock();
   }
 
   uint64_t GetVersion() {
@@ -67,6 +67,6 @@ public:
   }
 };
 
-static_assert(sizeof(HybridLatch) == 64, "");
+static_assert(sizeof(HybridMutex) == 64, "");
 
 } // namespace leanstore::storage

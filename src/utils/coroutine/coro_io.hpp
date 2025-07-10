@@ -1,6 +1,7 @@
 #pragma once
 
 #include "leanstore/utils/log.hpp"
+#include "utils/scoped_timer.hpp"
 
 #include <cassert>
 #include <cerrno>
@@ -25,33 +26,27 @@ public:
       : max_reqs_(max_batch_size),
         num_reqs_(0),
         io_events_(max_batch_size) {
-    auto start_ts = std::chrono::steady_clock::now();
+    ScopedTimer timer([this](double elapsed_ms) {
+      Log::Info("CoroIo initialized, max_reqs={}, elapsed={}ms", max_reqs_, elapsed_ms);
+    });
 
     std::memset(&aio_ctx_, 0, sizeof(aio_ctx_));
     auto ret = io_setup(max_reqs_, &aio_ctx_);
     if (ret < 0) {
       Log::Fatal("io_setup failed, error={}", ret);
     }
-    auto end_ts = std::chrono::steady_clock::now();
-    auto elapsed_ms =
-        std::chrono::duration_cast<std::chrono::microseconds>(end_ts - start_ts).count() / 1000.0;
-
-    Log::Info("CoroIo initialized, max_reqs={}, elapsed={}ms", max_reqs_, elapsed_ms);
   }
 
   ~CoroIo() {
-    auto start_ts = std::chrono::steady_clock::now();
+    ScopedTimer timer([](double elapsed_ms) {
+      // Log the elapsed time for deinitialization
+      Log::Info("CoroIo deinitialized, elapsed={}ms", elapsed_ms);
+    });
 
     auto ret = io_destroy(aio_ctx_);
     if (ret < 0) {
       Log::Fatal("io_destroy failed, error={}", ret);
     }
-
-    auto elapsed_ms = std::chrono::duration_cast<std::chrono::microseconds>(
-                          std::chrono::steady_clock::now() - start_ts)
-                          .count() /
-                      1000.0;
-    Log::Info("CoroIo deinitialized, elapsed={}ms", elapsed_ms);
   }
 
   /// Read data from a file descriptor asynchronously.

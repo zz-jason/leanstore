@@ -6,7 +6,7 @@
 #include "leanstore/buffer-manager/guarded_buffer_frame.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/slice.hpp"
-#include "leanstore/sync/hybrid_latch.hpp"
+#include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/user_thread.hpp"
 

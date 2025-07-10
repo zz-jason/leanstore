@@ -66,12 +66,12 @@ private:
   /// @param[out] minFlushedUsrTx the min flushed user transaction ID
   /// @param[out] numRfaTxs number of transactions without dependency
   /// @param[out] walFlushReqCopies snapshot of the flush requests
-  void collect_wal_records(TXID& min_flushed_sys_tx, TXID& min_flushed_usr_tx,
-                           std::vector<uint64_t>& num_rfa_txs,
-                           std::vector<WalFlushReq>& wal_flush_req_copies);
+  void CollectWalRecords(TXID& min_flushed_sys_tx, TXID& min_flushed_usr_tx,
+                         std::vector<uint64_t>& num_rfa_txs,
+                         std::vector<WalFlushReq>& wal_flush_req_copies);
 
   /// Phase 2: write all the collected wal records to the wal file with libaio.
-  void flush_wal_records();
+  void FlushWalRecords();
 
   /// Phase 3: determine the commitable transactions based on minFlushedGSN and minFlushedTxId.
   ///
@@ -79,16 +79,16 @@ private:
   /// @param[in] minFlushedUsrTx the min flushed user transaction ID
   /// @param[in] numRfaTxs number of transactions without dependency
   /// @param[in] walFlushReqCopies snapshot of the flush requests
-  void determine_commitable_tx(TXID min_flushed_sys_tx, TXID min_flushed_usr_tx,
-                               const std::vector<uint64_t>& num_rfa_txs,
-                               const std::vector<WalFlushReq>& wal_flush_req_copies);
+  void DetermineCommitableTx(TXID min_flushed_sys_tx, TXID min_flushed_usr_tx,
+                             const std::vector<uint64_t>& num_rfa_txs,
+                             const std::vector<WalFlushReq>& wal_flush_req_copies);
 
   /// Append a wal entry to libaio IOCBs.
   ///
   /// @param[in] buf the wal entry buffer
   /// @param[in] lower the begin offset of the wal entry in the buffer
   /// @param[in] upper the end offset of the wal entry in the buffer
-  void append(uint8_t* buf, uint64_t lower, uint64_t upper);
+  void Append(uint8_t* buf, uint64_t lower, uint64_t upper);
 };
 
 } // namespace leanstore::cr

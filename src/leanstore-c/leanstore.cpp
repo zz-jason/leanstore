@@ -88,17 +88,21 @@ void* GetLeanStore(LeanStoreHandle* handle) {
 // Interfaces for metrics
 //------------------------------------------------------------------------------
 
-static leanstore::telemetry::MetricsHttpExposer* global_metrics_http_exposer = nullptr;
-static std::mutex global_metrics_http_exposer_mutex;
+namespace {
+leanstore::telemetry::MetricsHttpExposer* global_metrics_http_exposer = nullptr;
+std::mutex global_metrics_http_exposer_mutex;
+} // namespace
 
 void StartMetricsHttpExposer(int32_t port) {
-  std::unique_lock guard{global_metrics_http_exposer_mutex};
-  global_metrics_http_exposer = new leanstore::telemetry::MetricsHttpExposer(port);
-  global_metrics_http_exposer->Start();
+  std::lock_guard guard{global_metrics_http_exposer_mutex};
+  if (global_metrics_http_exposer == nullptr) {
+    global_metrics_http_exposer = new leanstore::telemetry::MetricsHttpExposer(port);
+    global_metrics_http_exposer->Start();
+  }
 }
 
 void StopMetricsHttpExposer() {
-  std::unique_lock guard{global_metrics_http_exposer_mutex};
+  std::lock_guard guard{global_metrics_http_exposer_mutex};
   if (global_metrics_http_exposer != nullptr) {
     delete global_metrics_http_exposer;
     global_metrics_http_exposer = nullptr;

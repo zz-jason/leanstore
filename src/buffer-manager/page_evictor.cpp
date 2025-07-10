@@ -5,8 +5,6 @@
 #include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/log.hpp"
 
-#include <mutex>
-
 namespace leanstore::storage {
 
 using Time = decltype(std::chrono::high_resolution_clock::now());
@@ -114,7 +112,7 @@ void PageEvictor::PickBufferFramesToCool(Partition& target_partition) {
         auto parent_handler = store_->tree_registry_->FindParent(btree_id, *cool_candidate);
 
         LS_DCHECK(parent_handler.parent_guard_.state_ == GuardState::kSharedOptimistic);
-        LS_DCHECK(parent_handler.parent_guard_.latch_ != reinterpret_cast<HybridLatch*>(0x99));
+        LS_DCHECK(parent_handler.parent_guard_.latch_ != reinterpret_cast<HybridMutex*>(0x99));
         read_guard.JumpIfModifiedByOthers();
         auto check_result = store_->tree_registry_->CheckSpaceUtilization(
             cool_candidate->page_.btree_id_, *cool_candidate);

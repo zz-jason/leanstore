@@ -6,7 +6,7 @@
 #include "leanstore/btree/core/btree_iter_mut.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/sync/hybrid_latch.hpp"
+#include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/misc.hpp"
 

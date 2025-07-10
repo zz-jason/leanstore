@@ -12,8 +12,8 @@
 namespace leanstore {
 
 Thread::Thread(LeanStore* store, int64_t thread_id) : store_(store), thread_id_(thread_id) {
-  LS_DCHECK(store_ != nullptr,
-            std::format("Thread created with null store, thread_id={}", thread_id_));
+  // LS_DCHECK(store_ != nullptr,
+  //           std::format("Thread created with null store, thread_id={}", thread_id_));
 
   if (store_ != nullptr) {
     auto* buffer_manager = store_->buffer_manager_.get();

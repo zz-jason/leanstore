@@ -13,7 +13,7 @@ class LeanStore;
 
 namespace cr {
 
-struct WaterMarkInfo;
+struct WatermarkInfo;
 class GroupCommitter;
 
 /// Manages a fixed number of worker threads and group committer threads.
@@ -28,7 +28,7 @@ public:
   /// All the thread-local worker references
   std::vector<WorkerContext*> worker_ctxs_;
 
-  WaterMarkInfo global_wmk_info_;
+  WatermarkInfo global_wmk_info_;
 
   /// The group committer thread, created and started if WAL is enabled when the
   /// CRManager instance is created.
