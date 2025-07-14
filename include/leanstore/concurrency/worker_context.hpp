@@ -75,7 +75,7 @@ public:
   PerfCounters* GetPerfCounters();
 
 public:
-  /// Thread-local storage for WorkerContext.
+  /// thread-local storage for WorkerContext.
   static thread_local std::unique_ptr<WorkerContext> s_tls_worker_ctx;
 
   /// Raw pointer to s_tls_worker_ctx to avoid the overhead of std::unique_ptr.

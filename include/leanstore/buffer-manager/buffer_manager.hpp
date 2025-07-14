@@ -8,6 +8,7 @@
 #include "leanstore/units.hpp"
 #include "leanstore/utils/random_generator.hpp"
 #include "leanstore/utils/result.hpp"
+#include "utils/json.hpp"
 
 #include <expected>
 
@@ -26,11 +27,11 @@ class GuardedBufferFrame;
 namespace leanstore::storage {
 
 /// Synchronization in Buffer Manager, terminology:
-///  - PET: Page Evictor Thread
-///  - WT: Worker Thread
-///  - P: Parent
-///  - C: Child
-///  - M: Cooling stage mutex
+///  - PET: page evictor thread
+///  - WT: worker thread
+///  - P: parent
+///  - C: child
+///  - M: cooling stage mutex
 ///
 /// Latching order for all page evictor operations (unswizzle, evict):
 ///   M -> P -> C
@@ -125,6 +126,8 @@ public:
     fdatasync(store_->page_fd_);
   }
 
+  void InitFreeBfLists();
+
   void StartPageEvictors();
 
   void StopPageEvictors();
@@ -139,9 +142,9 @@ public:
 
   void RecoverFromDisk();
 
-  StringMap Serialize();
+  utils::JsonObj Serialize();
 
-  void Deserialize(StringMap map);
+  void Deserialize(const utils::JsonObj& json_obj);
 
   uint64_t ConsumedPages();
 

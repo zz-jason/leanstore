@@ -33,32 +33,6 @@ Result<BasicKV*> BasicKV::Create(leanstore::LeanStore* store, const std::string&
   return tree;
 }
 
-/*
-
-void LookupOptimistic(Slice key, ValCallback val_callback) {
-  OpCode result = kOther;
-
-  Coroutine lookup_coro([&]{
-    GuardedBufferFrame<BTreeNode> guarded_leaf;
-    FindLeafCanYield(key, guarded_leaf, LatchMode::kOptimisticOrJump);
-    auto slot_id = guarded_leaf->LowerBound<true>(key);
-    if (slot_id != -1) {
-      val_callback(guarded_leaf->Value(slot_id));
-      guarded_leaf.YieldIfConflict();
-
-      result = kOk;
-      return;
-    }
-
-    guarded_leaf.YieldIfConflict();
-    result = kNotFound;
-  });
-
-  Thread::CurrentThread()->RunCoroutine(&lookup_coro);
-  return result;
-}
-*/
-
 OpCode BasicKV::LookupOptimistic(Slice key, ValCallback val_callback) {
   JUMPMU_TRY() {
     GuardedBufferFrame<BTreeNode> guarded_leaf;

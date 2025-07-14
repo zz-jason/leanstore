@@ -9,8 +9,7 @@
                 "CMAKE_CXX_COMPILER": "g++",
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "BUILD_SHARED_LIBS": "ON",
-                "ENABLE_COROUTINE": "OFF",
+                "BUILD_SHARED_LIBS": "OFF",
                 "ENABLE_PERF_COUNTERS": "ON"
             }
         },
@@ -36,6 +35,7 @@
             "binaryDir": "${sourceDir}/build/debug",
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/debug",
+                "ENABLE_COROUTINE": "ON",
                 "ENABLE_PROFILING": "ON"
             }
         },
@@ -50,23 +50,27 @@
             }
         },
         {
-            "name": "release",
+            "name": "release_coro",
             "inherits": "base_release",
-            "binaryDir": "${sourceDir}/build/release",
+            "binaryDir": "${sourceDir}/build/release_coro",
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/release",
-                "ENABLE_PROFILING": "ON"
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/release_coro",
+                "ENABLE_PROFILING": "ON",
+                "ENABLE_ROCKSDB": "OFF",
+                "ENABLE_WIRED_TIGER": "OFF",
+                "ENABLE_COROUTINE": "ON"
             }
         },
         {
-            "name": "performance",
+            "name": "release_thread",
             "inherits": "base_release",
-            "binaryDir": "${sourceDir}/build/performance",
+            "binaryDir": "${sourceDir}/build/release_thread",
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/performance",
-                "ENABLE_ROCKSDB": "ON",
-                "ENABLE_WIRED_TIGER": "ON",
-                "ENABLE_PROFILING": "ON"
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/release_thread",
+                "ENABLE_PROFILING": "ON",
+                "ENABLE_ROCKSDB": "OFF",
+                "ENABLE_WIRED_TIGER": "OFF",
+                "ENABLE_COROUTINE": "OFF"
             }
         }
     ]

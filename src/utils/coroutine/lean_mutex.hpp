@@ -18,7 +18,6 @@ namespace leanstore {
 
 using LeanMutex = leanstore::CoroMutex;
 using LeanSharedMutex = leanstore::CoroSharedMutex;
-// using LeanHybridMutex = leanstore::CoroHybridMutex;
 
 template <typename T>
 using LeanUniqueLock = leanstore::CoroUniqueLock<T>;
@@ -29,7 +28,6 @@ using LeanSharedLock = leanstore::CoroSharedLock<T>;
 
 using LeanMutex = std::mutex;
 using LeanSharedMutex = std::shared_mutex;
-// using LeanHybridMutex = leanstore::storage::HybridMutex;
 
 template <typename T>
 using LeanUniqueLock = std::unique_lock<T>;

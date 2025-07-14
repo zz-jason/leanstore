@@ -28,7 +28,7 @@ protected:
 
   void SetUp() override {
     // Create a leanstore instance for the test case
-    StoreOption* option = CreateStoreOption(get_test_data_dir().c_str());
+    StoreOption* option = CreateStoreOption(GetTestDataDir().c_str());
     option->worker_threads_ = 2;
     auto res = LeanStore::Open(option);
     ASSERT_TRUE(res);
@@ -38,12 +38,12 @@ protected:
   }
 
 protected:
-  std::string get_test_data_dir() {
+  std::string GetTestDataDir() {
     auto* cur_test = ::testing::UnitTest::GetInstance()->current_test_info();
     return std::string("/tmp/leanstore/") + cur_test->name();
   }
 
-  std::string gen_btree_name(const std::string& suffix = "") {
+  std::string GenBtreeName(const std::string& suffix = "") {
     auto* cur_test = ::testing::UnitTest::GetInstance()->current_test_info();
     return std::string(cur_test->name()) + suffix;
   }
@@ -84,9 +84,9 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
   storage::btree::BasicKV* btree;
 
   // prepare key-value pairs to insert
-  size_t num_k_vs(10);
+  size_t num_keys(10);
   std::vector<std::tuple<std::string, std::string>> kv_to_test;
-  for (size_t i = 0; i < num_k_vs; ++i) {
+  for (size_t i = 0; i < num_keys; ++i) {
     std::string key("key_btree_LL_xxxxxxxxxxxx_" + std::to_string(i));
     std::string val("VAL_BTREE_LL_YYYYYYYYYYYY_" + std::to_string(i));
     kv_to_test.push_back(std::make_tuple(key, val));
@@ -101,7 +101,7 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
 
     // insert some values
     btree = res.value();
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
       EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
                               Slice((const uint8_t*)val.data(), val.size())),
@@ -115,7 +115,7 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
     auto copy_value_out = [&](Slice val) {
       copied_value = std::string((const char*)val.data(), val.size());
     };
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, expected_val] = kv_to_test[i];
       EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copy_value_out),
                 OpCode::kOK);
@@ -129,7 +129,7 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
     auto copy_value_out = [&](Slice val) {
       copied_value = std::string((const char*)val.data(), val.size());
     };
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, expected_val] = kv_to_test[i];
       EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copy_value_out),
                 OpCode::kOK);
@@ -141,9 +141,9 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
 TEST_F(BasicKVTest, BasicKVInsertDuplicatedKey) {
   storage::btree::BasicKV* btree;
   // prepare key-value pairs to insert
-  size_t num_k_vs(10);
+  size_t num_keys(10);
   std::vector<std::tuple<std::string, std::string>> kv_to_test;
-  for (size_t i = 0; i < num_k_vs; ++i) {
+  for (size_t i = 0; i < num_keys; ++i) {
     std::string key("key_btree_LL_xxxxxxxxxxxx_" + std::to_string(i));
     std::string val("VAL_BTREE_LL_YYYYYYYYYYYY_" + std::to_string(i));
     kv_to_test.push_back(std::make_tuple(key, val));
@@ -157,7 +157,7 @@ TEST_F(BasicKVTest, BasicKVInsertDuplicatedKey) {
     EXPECT_NE(res.value(), nullptr);
 
     btree = res.value();
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
       EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
                               Slice((const uint8_t*)val.data(), val.size())),
@@ -168,14 +168,14 @@ TEST_F(BasicKVTest, BasicKVInsertDuplicatedKey) {
       copied_value = std::string((const char*)val.data(), val.size());
     };
     // query the keys
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, expected_val] = kv_to_test[i];
       EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copy_value_out),
                 OpCode::kOK);
       EXPECT_EQ(copied_value, expected_val);
     }
     // it will failed when insert duplicated keys
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
       EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
                               Slice((const uint8_t*)val.data(), val.size())),
@@ -186,7 +186,7 @@ TEST_F(BasicKVTest, BasicKVInsertDuplicatedKey) {
   // insert duplicated keys in another worker
   store_->ExecSync(1, [&]() {
     // duplicated keys will failed
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
       EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
                               Slice((const uint8_t*)val.data(), val.size())),
@@ -198,11 +198,11 @@ TEST_F(BasicKVTest, BasicKVInsertDuplicatedKey) {
 TEST_F(BasicKVTest, BasicKVScanAscAndScanDesc) {
   storage::btree::BasicKV* btree;
   // prepare key-value pairs to insert
-  size_t num_k_vs(10);
+  size_t num_keys(10);
   std::vector<std::tuple<std::string, std::string>> kv_to_test;
   const auto key_size = sizeof(size_t);
   uint8_t key_buffer[key_size];
-  for (size_t i = 0; i < num_k_vs; ++i) {
+  for (size_t i = 0; i < num_keys; ++i) {
     utils::Fold(key_buffer, i);
     std::string key("key_btree_LL_xxxxxxxxxxxx_" +
                     std::string(reinterpret_cast<char*>(key_buffer), key_size));
@@ -221,7 +221,7 @@ TEST_F(BasicKVTest, BasicKVScanAscAndScanDesc) {
     EXPECT_NE(res.value(), nullptr);
 
     btree = res.value();
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
       EXPECT_EQ(btree->Insert(Slice(key), Slice(val)), OpCode::kOK);
     }
@@ -253,7 +253,7 @@ TEST_F(BasicKVTest, BasicKVScanAscAndScanDesc) {
       // query on ScanAsc
       EXPECT_EQ(btree->ScanAsc(start_key, copy_key_and_value_out), OpCode::kOK);
       EXPECT_EQ(copied_key_value.size(), 5);
-      for (size_t i = start_index, j = 0; i < num_k_vs && j < copied_key_value.size(); i++, j++) {
+      for (size_t i = start_index, j = 0; i < num_keys && j < copied_key_value.size(); i++, j++) {
         const auto& [key, expected_val] = kv_to_test[i];
         const auto& [copied_key, copied_value] = copied_key_value[j];
         EXPECT_EQ(copied_key, key);
@@ -292,16 +292,16 @@ TEST_F(BasicKVTest, SameKeyInsertRemoveMultiTimes) {
   // create a basickv
   storage::btree::BasicKV* btree;
   store_->ExecSync(0, [&]() {
-    auto res = store_->CreateBasicKv(gen_btree_name("_tree1"));
+    auto res = store_->CreateBasicKv(GenBtreeName("_tree1"));
     ASSERT_TRUE(res);
     ASSERT_NE(res.value(), nullptr);
     btree = res.value();
   });
 
   // insert 1000 key-values to the btree
-  size_t num_k_vs(1000);
+  size_t num_keys(1000);
   std::vector<std::pair<std::string, std::string>> kv_to_test;
-  for (size_t i = 0; i < num_k_vs; ++i) {
+  for (size_t i = 0; i < num_keys; ++i) {
     std::string key("key_" + std::to_string(i) + std::string(10, 'x'));
     std::string val("val_" + std::to_string(i) + std::string(200, 'x'));
     store_->ExecSync(0, [&]() { EXPECT_EQ(btree->Insert(key, val), OpCode::kOK); });
@@ -310,7 +310,7 @@ TEST_F(BasicKVTest, SameKeyInsertRemoveMultiTimes) {
 
   // 1. remove the key-values from the btree
   // 2. insert the key-values to the btree again
-  const auto& [key, val] = kv_to_test[num_k_vs / 2];
+  const auto& [key, val] = kv_to_test[num_keys / 2];
   std::atomic<bool> stop{false};
 
   std::thread t1([&]() {
@@ -338,13 +338,13 @@ TEST_F(BasicKVTest, SameKeyInsertRemoveMultiTimes) {
   t2.join();
 
   // count the key-values in the btree
-  store_->ExecSync(0, [&]() { EXPECT_EQ(btree->CountEntries(), num_k_vs); });
+  store_->ExecSync(0, [&]() { EXPECT_EQ(btree->CountEntries(), num_keys); });
 }
 
 TEST_F(BasicKVTest, PrefixLookup) {
   storage::btree::BasicKV* btree;
   store_->ExecSync(0, [&]() {
-    auto res = store_->CreateBasicKv(gen_btree_name("_tree1"));
+    auto res = store_->CreateBasicKv(GenBtreeName("_tree1"));
     ASSERT_TRUE(res);
     ASSERT_NE(res.value(), nullptr);
     btree = res.value();
@@ -364,9 +364,9 @@ TEST_F(BasicKVTest, PrefixLookup) {
 
   {
     // insert key and value
-    size_t num_k_vs(10);
+    size_t num_keys(10);
     std::vector<std::pair<std::string, std::string>> kv_to_test;
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       std::string key("key_" + std::string(10, 'x') + std::to_string(i));
       std::string val("val_" + std::string(100, 'x') + std::to_string(i));
       store_->ExecSync(0, [&]() { EXPECT_EQ(btree->Insert(key, val), OpCode::kOK); });
@@ -387,7 +387,7 @@ TEST_F(BasicKVTest, PrefixLookup) {
 
     // insert special key for prefix lookup
     std::vector<std::pair<std::string, std::string>> kv_to_test2;
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       std::string key("prefix_key_" + std::string(10, 'x') + std::to_string(i));
       std::string val("prefix_value_" + std::string(100, 'x') + std::to_string(i));
       store_->ExecSync(0, [&]() { EXPECT_EQ(btree->Insert(key, val), OpCode::kOK); });

@@ -42,15 +42,14 @@ public:
   utils::AsyncIo aio_;
 
 public:
-  GroupCommitter(leanstore::LeanStore* store, int32_t wal_fd, std::vector<WorkerContext*>& workers,
-                 int cpu)
+  GroupCommitter(leanstore::LeanStore* store, std::vector<WorkerContext*>& worker_ctxs, int cpu)
       : UserThread(store, "GroupCommitter", cpu),
         store_(store),
-        wal_fd_(wal_fd),
+        wal_fd_(store->wal_fd_),
         wal_size_(0),
         global_min_flushed_sys_tx_(0),
-        worker_ctxs_(workers),
-        aio_(workers.size() * 2 + 2) {
+        worker_ctxs_(worker_ctxs),
+        aio_(worker_ctxs.size() * 2 + 2) {
   }
 
   virtual ~GroupCommitter() override = default;

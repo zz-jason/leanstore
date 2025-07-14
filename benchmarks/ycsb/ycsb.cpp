@@ -1,6 +1,6 @@
 #include "benchmarks/ycsb/ycsb.hpp"
 
-#include "benchmarks/ycsb/ycsb_lean_store.hpp"
+#include "benchmarks/ycsb/ycsb_leanstore.hpp"
 #include "benchmarks/ycsb/ycsb_rocks_db.hpp"
 #include "benchmarks/ycsb/ycsb_wired_tiger.hpp"
 #include "leanstore/utils/defer.hpp"

@@ -1,4 +1,5 @@
 #include "benchmarks/ycsb/ycsb.hpp"
+#include "benchmarks/ycsb/ycsb_leanstore_client.hpp"
 #include "leanstore-c/leanstore.h"
 #include "leanstore-c/perf_counters.h"
 #include "leanstore-c/store_option.h"
@@ -12,6 +13,7 @@
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/random_generator.hpp"
 #include "leanstore/utils/scrambled_zipf_generator.hpp"
+#include "utils/coroutine/coro_future.hpp"
 #include "utils/scoped_timer.hpp"
 #include "utils/small_vector.hpp"
 
@@ -46,10 +48,12 @@ private:
 public:
   YcsbLeanStore(bool bench_transaction_kv, bool create_from_scratch)
       : bench_transaction_kv_(bench_transaction_kv) {
-    auto data_dir_str = FLAGS_ycsb_data_dir + std::string("/leanstore");
-    StoreOption* option = CreateStoreOption(data_dir_str.c_str());
+
+    auto datadir_str = std::format("{}/{}", FLAGS_ycsb_data_dir, kTableName);
+    StoreOption* option = CreateStoreOption(datadir_str.c_str());
     option->create_from_scratch_ = create_from_scratch;
     option->enable_eager_gc_ = true;
+    option->enable_wal_ = false;
     option->worker_threads_ = FLAGS_ycsb_threads;
     option->buffer_pool_size_ = FLAGS_ycsb_mem_gb << 30;
 
@@ -75,26 +79,43 @@ public:
     // create table with transaction kv
     if (bench_transaction_kv_) {
       leanstore::storage::btree::TransactionKV* table;
-      store_->ExecSync(0, [&]() {
-        auto res = store_->CreateTransactionKV(kTableName);
+      BTreeConfig config{.enable_wal_ = false, .use_bulk_insert_ = false};
+      auto job = [&]() {
+        auto res = store_->CreateTransactionKV(kTableName, config);
         if (!res) {
           Log::Fatal("Failed to create table: name={}, error={}", kTableName,
                      res.error().ToString());
         }
         table = res.value();
-      });
+      };
+
+#ifdef ENABLE_COROUTINE
+      store_->Submit(std::move(job), 0)->Wait();
+#else
+      store_->ExecSync(0, std::move(job));
+#endif
+
       return table;
     }
 
     // create table with basic kv
     leanstore::storage::btree::BasicKV* table;
-    store_->ExecSync(0, [&]() {
-      auto res = store_->CreateBasicKv(kTableName);
+
+    auto job = [&]() {
+      BTreeConfig config{.enable_wal_ = false, .use_bulk_insert_ = false};
+      auto res = store_->CreateBasicKv(kTableName, config);
       if (!res) {
         Log::Fatal("Failed to create table: name={}, error={}", kTableName, res.error().ToString());
       }
       table = res.value();
-    });
+    };
+
+#ifdef ENABLE_COROUTINE
+    store_->Submit(std::move(job), 0)->Wait();
+#else
+    store_->ExecSync(0, std::move(job));
+#endif
+
     return table;
   }
 
@@ -125,9 +146,11 @@ public:
     auto num_workers = store_->store_option_->worker_threads_;
     auto avg = FLAGS_ycsb_record_count / num_workers;
     auto rem = FLAGS_ycsb_record_count % num_workers;
-    for (auto worker_id = 0u, begin = 0u; worker_id < num_workers;) {
+
+    std::vector<std::shared_ptr<CoroFuture<void>>> futures;
+    for (auto i = 0u, begin = 0u; i < num_workers;) {
       auto end = begin + avg + (rem-- > 0 ? 1 : 0);
-      store_->ExecAsync(worker_id, [&, begin, end]() {
+      auto insert_func = [&, begin, end]() {
         SmallBuffer<1024> key_buffer(FLAGS_ycsb_key_size);
         SmallBuffer<1024> val_buffer(FLAGS_ycsb_val_size);
         uint8_t* key = key_buffer.Data();
@@ -141,46 +164,61 @@ public:
           if (bench_transaction_kv_) {
             cr::WorkerContext::My().StartTx();
           }
+
           auto op_code =
               table->Insert(Slice(key, FLAGS_ycsb_key_size), Slice(val, FLAGS_ycsb_val_size));
           if (op_code != OpCode::kOK) {
             Log::Fatal("Failed to insert, opCode={}", static_cast<uint8_t>(op_code));
           }
+
           if (bench_transaction_kv_) {
             cr::WorkerContext::My().CommitTx();
           }
         }
-      });
-      worker_id++, begin = end;
+      };
+
+#ifdef ENABLE_COROUTINE
+      futures.emplace_back(store_->Submit(std::move(insert_func), i));
+#else
+      store_->ExecAsync(i, std::move(insert_func));
+#endif
+      i++, begin = end;
     }
+
+#ifdef ENABLE_COROUTINE
+    for (const auto& future : futures) {
+      future->Wait();
+    }
+#else
     store_->WaitAll();
+#endif
   }
 
   void HandleCmdRun() override {
+    if (FLAGS_ycsb_clients > 0) {
+      return CmdRunWithMultiClients();
+    }
+
     auto* table = GetTable();
-    auto workload_type = static_cast<Workload>(FLAGS_ycsb_workload[0] - 'a');
+    auto workload_type = GetWorkloadType();
     auto workload = GetWorkloadSpec(workload_type);
     auto zipf_random =
         utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count, FLAGS_ycsb_zipf_factor);
     std::atomic<bool> keep_running = true;
-    std::vector<std::atomic<uint64_t>> thread_committed(store_->store_option_->worker_threads_);
-    std::vector<std::atomic<uint64_t>> thread_aborted(store_->store_option_->worker_threads_);
-    // init counters
-    for (auto& c : thread_committed) {
-      c = 0;
-    }
-    for (auto& a : thread_aborted) {
-      a = 0;
-    }
 
     std::vector<PerfCounters*> worker_perf_counters;
+    auto job = [&]() { worker_perf_counters.push_back(GetTlsPerfCounters()); };
     for (auto i = 0u; i < store_->store_option_->worker_threads_; i++) {
-      store_->ExecSync(
-          i, [&]() { worker_perf_counters.push_back(cr::WorkerContext::My().GetPerfCounters()); });
+#ifdef ENABLE_COROUTINE
+      store_->Submit(std::move(job), i)->Wait();
+#else
+      store_->ExecSync(i, std::move(job));
+#endif
     }
 
+    std::vector<std::shared_ptr<CoroFuture<void>>> futures;
     for (uint64_t worker_id = 0; worker_id < store_->store_option_->worker_threads_; worker_id++) {
-      store_->ExecAsync(worker_id, [&]() {
+      auto job = [&]() {
         SmallBuffer<1024> key_buffer(FLAGS_ycsb_key_size);
         uint8_t* key = key_buffer.Data();
 
@@ -241,28 +279,31 @@ public:
               Log::Fatal("Unsupported workload type: {}", static_cast<uint8_t>(workload_type));
             }
             }
-            thread_committed[cr::WorkerContext::My().worker_id_]++;
+            if (!bench_transaction_kv_) {
+              GetTlsPerfCounters()->tx_committed_++;
+            }
           }
           JUMPMU_CATCH() {
-            thread_aborted[cr::WorkerContext::My().worker_id_]++;
+            if (!bench_transaction_kv_) {
+              GetTlsPerfCounters()->tx_aborted_++;
+            }
           }
         }
-      });
-    }
+      };
 
-    // init counters
-    for (auto& c : thread_committed) {
-      c = 0;
-    }
-    for (auto& a : thread_aborted) {
-      a = 0;
+#ifdef ENABLE_COROUTINE
+      futures.emplace_back(store_->Submit(std::move(job), worker_id));
+#else
+      store_->ExecAsync(worker_id, std::move(job));
+#endif
     }
 
     std::thread perf_context_reporter([&]() {
       auto report_period = 1;
       const char* counter_file_path = "/tmp/leanstore/worker-counters.txt";
-      std::ofstream ost;
+      Log::Info("Perf counters written to {}", counter_file_path);
 
+      std::ofstream ost;
       while (keep_running) {
         sleep(report_period);
         uint64_t tx_with_remote_dependencies = 0;
@@ -292,13 +333,87 @@ public:
       }
     });
 
-    print_tps_summary(1, FLAGS_ycsb_run_for_seconds, store_->store_option_->worker_threads_,
-                      thread_committed, thread_aborted);
+    uint64_t report_period = 1;
+    for (uint64_t i = 0; i < FLAGS_ycsb_run_for_seconds; i += report_period) {
+      sleep(report_period);
+
+      uint64_t tx_committed = 0;
+      uint64_t tx_aborted = 0;
+      for (auto* perf_counters : worker_perf_counters) {
+        tx_committed += atomic_exchange(&perf_counters->tx_committed_, 0);
+        tx_aborted += atomic_exchange(&perf_counters->tx_aborted_, 0);
+      }
+      PrintTps(store_->store_option_->worker_threads_, i, tx_committed, tx_aborted, report_period);
+    }
 
     // Shutdown threads
     keep_running = false;
     perf_context_reporter.join();
+
+#ifdef ENABLE_COROUTINE
+    for (const auto& future : futures) {
+      future->Wait();
+    }
+#else
     store_->WaitAll();
+#endif
+  }
+
+  void CmdRunWithMultiClients() {
+    Log::Info("Running YCSB with {} clients", FLAGS_ycsb_clients);
+    // collect perf counters
+    auto all_perf_counters = GetPerfCounters();
+
+    // create && start clients
+    Log::Info("Starting YCSB clients, num_clients={}", FLAGS_ycsb_clients);
+    std::vector<std::unique_ptr<YcsbLeanStoreClient>> clients;
+    for (auto i = 0u; i < FLAGS_ycsb_clients; i++) {
+      clients.emplace_back(YcsbLeanStoreClient::New(store_.get(), GetTable(), GetWorkloadType()));
+    }
+    for (auto& client : clients) {
+      client->Start();
+    }
+
+    // report tps
+    auto report_period = 1u;
+    for (auto i = 0u; i < FLAGS_ycsb_run_for_seconds; i += report_period) {
+      sleep(report_period);
+      uint64_t tx_committed = 0;
+      uint64_t tx_aborted = 0;
+      for (auto* perf_counters : all_perf_counters) {
+        tx_committed += atomic_exchange(&perf_counters->tx_committed_, 0);
+        tx_aborted += atomic_exchange(&perf_counters->tx_aborted_, 0);
+      }
+      PrintTps(store_->store_option_->worker_threads_, i, tx_committed, tx_aborted, report_period);
+    }
+
+    // stop clients
+    for (auto& client : clients) {
+      client->Stop();
+    }
+  }
+
+  Workload GetWorkloadType() const {
+    return static_cast<Workload>(FLAGS_ycsb_workload[0] - 'a');
+  }
+
+  std::vector<PerfCounters*> GetPerfCounters() {
+    std::vector<PerfCounters*> perf_counters;
+    auto job = [&]() { perf_counters.push_back(GetTlsPerfCounters()); };
+    for (auto i = 0u; i < store_->store_option_->worker_threads_; i++) {
+      SubmitJobSync(std::move(job), i);
+    }
+
+    Log::Info("Collected {} perf counters", perf_counters.size());
+    return perf_counters;
+  }
+
+  void SubmitJobSync(std::function<void()>&& job, uint64_t worker_id) {
+#ifdef ENABLE_COROUTINE
+    store_->Submit(std::move(job), worker_id)->Wait();
+#else
+    store_->ExecSync(worker_id, std::move(job));
+#endif
   }
 };
 

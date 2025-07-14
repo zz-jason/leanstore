@@ -8,7 +8,6 @@
 #include "leanstore/utils/misc.hpp"
 #include "leanstore/utils/portable.hpp"
 #include "leanstore/utils/user_thread.hpp"
-#include "utils/coroutine/coro_mutex.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -59,8 +58,6 @@ public:
   /// Latch of the buffer frame. The optimistic version in the latch is never
   /// decreased.
   HybridMutex latch_;
-
-  CoroHybridMutex coro_hybrid_mutex_;
 
   /// Used to make the buffer frame remain in memory.
   bool keep_in_memory_ = false;

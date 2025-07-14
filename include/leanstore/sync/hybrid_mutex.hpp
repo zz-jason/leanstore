@@ -20,7 +20,7 @@ enum class LatchMode : uint8_t {
   kExclusivePessimistic = 3,
 };
 
-constexpr static uint64_t kLatchExclusiveBit = 1ull;
+static constexpr uint64_t kLatchExclusiveBit = 1ull;
 
 inline bool HasExclusiveMark(uint64_t version) {
   return (version & kLatchExclusiveBit) == kLatchExclusiveBit;

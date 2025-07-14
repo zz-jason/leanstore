@@ -4,8 +4,11 @@
 #include "leanstore/units.hpp"
 #include "leanstore/utils/debug_flags.hpp"
 #include "leanstore/utils/result.hpp"
+#include "utils/coroutine/coro_future.hpp"
+#include "utils/coroutine/coro_scheduler.hpp"
 
 #include <atomic>
+#include <cassert>
 #include <cstdint>
 #include <expected>
 #include <functional>
@@ -69,6 +72,8 @@ public:
   /// NOTE: Ownerd by LeanStore instance, should be destroyed together with it
   cr::CRManager* crmanager_;
 
+  CoroScheduler* coro_scheduler_;
+
   /// The global timestamp oracle for user transactions. Used to generate start and commit
   /// timestamps for user transactions. Start from a positive number, 0 indicates invalid timestamp
   std::atomic<uint64_t> usr_tso_ = 1;
@@ -128,6 +133,12 @@ public:
     return sys_tso_.fetch_add(1);
   }
 
+  template <typename F, typename R = std::invoke_result_t<F>>
+  std::shared_ptr<CoroFuture<R>> Submit(F&& coro_func, int64_t thread_id = -1) {
+    assert(coro_scheduler_ != nullptr && "CoroScheduler is not initialized");
+    return coro_scheduler_->Submit(std::forward<F>(coro_func), thread_id);
+  }
+
   /// Execute a custom user function on a worker thread.
   void ExecSync(uint64_t worker_id, std::function<void()> fn);
 
@@ -139,6 +150,9 @@ public:
 
   /// Waits for all Workers to complete.
   void WaitAll();
+
+  void ParallelRange(uint64_t num_jobs,
+                     std::function<void(uint64_t job_begin, uint64_t job_end)>&& job_handler);
 
   std::string GetMetaFilePath() const {
     return std::string(store_option_->store_dir_) + "/db.meta.json";
@@ -153,6 +167,9 @@ public:
   }
 
 private:
+  void StartBackgroundThreads();
+  void StopBackgroundThreads();
+
   /// serializeMeta serializes all the metadata about concurrent resources,
   /// buffer manager, btrees, and flags
   void SerializeMeta(bool all_pages_up_to_date);

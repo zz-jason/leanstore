@@ -58,3 +58,11 @@ target_include_directories(ycsb PUBLIC ${CMAKE_SOURCE_DIR})
 target_include_directories(ycsb PUBLIC ${CMAKE_SOURCE_DIR}/include)
 target_include_directories(ycsb PUBLIC ${CMAKE_SOURCE_DIR}/benchmarks)
 target_include_directories(ycsb PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+
+# install the executable
+install(TARGETS ycsb
+  EXPORT leanstore-targets
+  RUNTIME DESTINATION bin
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+)

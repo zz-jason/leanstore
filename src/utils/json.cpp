@@ -3,6 +3,8 @@
 #include "leanstore/utils/error.hpp"
 #include "leanstore/utils/result.hpp"
 
+#include <cassert>
+
 #define RAPIDJSON_NAMESPACE leanstore::rapidjson
 #define RAPIDJSON_NAMESPACE_BEGIN namespace leanstore::rapidjson {
 #define RAPIDJSON_NAMESPACE_END }
@@ -37,7 +39,7 @@ std::string JsonObj::Serialize() const {
   return std::string(buffer.GetString(), buffer.GetSize());
 }
 
-Result<void> JsonObj::Deserialize(const std::string_view& json) {
+Result<void> JsonObj::Deserialize(std::string_view json) {
   doc_.Parse(json.data(), json.size());
   if (doc_.HasParseError()) {
     return std::unexpected(Error(ErrorCode::kGeneral, "Failed to parse JSON: {}",
@@ -46,149 +48,105 @@ Result<void> JsonObj::Deserialize(const std::string_view& json) {
   return {};
 }
 
-void JsonObj::AddBool(const std::string_view& key, bool value) {
+void JsonObj::AddBool(std::string_view key, bool value) {
   auto key_copy = rapidjson::Value(key.data(), key.size(), doc_.GetAllocator());
   auto value_copy = rapidjson::Value(value);
   doc_.AddMember(key_copy, value_copy, doc_.GetAllocator());
 }
 
-void JsonObj::AddInt64(const std::string_view& key, int64_t value) {
+void JsonObj::AddInt64(std::string_view key, int64_t value) {
   auto key_copy = rapidjson::Value(key.data(), key.size(), doc_.GetAllocator());
   auto value_copy = rapidjson::Value(value);
   doc_.AddMember(key_copy, value_copy, doc_.GetAllocator());
 }
 
-void JsonObj::AddString(const std::string_view& key, const std::string_view& value) {
+void JsonObj::AddUint64(std::string_view key, uint64_t value) {
+  auto key_copy = rapidjson::Value(key.data(), key.size(), doc_.GetAllocator());
+  auto value_copy = rapidjson::Value(value);
+  doc_.AddMember(key_copy, value_copy, doc_.GetAllocator());
+}
+
+void JsonObj::AddString(std::string_view key, std::string_view value) {
   auto key_copy = rapidjson::Value(key.data(), key.size(), doc_.GetAllocator());
   auto value_copy = rapidjson::Value(value.data(), doc_.GetAllocator());
   doc_.AddMember(key_copy, value_copy, doc_.GetAllocator());
 }
 
-void JsonObj::AddJsonObj(const std::string_view& key, const JsonObj& value) {
+void JsonObj::AddJsonObj(std::string_view key, const JsonObj& value) {
   auto key_copy = rapidjson::Value(key.data(), key.size(), doc_.GetAllocator());
   auto value_copy = rapidjson::Value(value.doc_, doc_.GetAllocator());
   doc_.AddMember(key_copy, value_copy, doc_.GetAllocator());
 }
 
-void JsonObj::AddJsonArray(const std::string_view& key, const JsonArray& value) {
+void JsonObj::AddJsonArray(std::string_view key, const JsonArray& value) {
   auto key_copy = rapidjson::Value(key.data(), key.size(), doc_.GetAllocator());
   auto value_copy = rapidjson::Value(value.doc_, doc_.GetAllocator());
   doc_.AddMember(key_copy, value_copy, doc_.GetAllocator());
 }
 
-std::optional<bool> JsonObj::GetBool(const std::string_view& key) const {
-  if (!doc_.IsObject()) {
+std::optional<bool> JsonObj::GetBool(std::string_view key) const {
+  const auto* value = GetJsonValue(key);
+  if (!value || !value->IsBool()) {
     return {};
   }
-
-  const auto& obj = doc_.GetObject();
-  if (!obj.HasMember(key.data())) {
-    return {};
-  }
-
-  const auto& value = obj[key.data()];
-  if (!value.IsBool()) {
-    return {};
-  }
-
-  return value.GetBool();
+  return value->GetBool();
 }
 
-std::optional<int64_t> JsonObj::GetInt64(const std::string_view& key) const {
-  if (!doc_.IsObject()) {
+std::optional<int64_t> JsonObj::GetInt64(std::string_view key) const {
+  const auto* value = GetJsonValue(key);
+  if (!value || !value->IsInt64()) {
     return {};
   }
-
-  const auto& obj = doc_.GetObject();
-  if (!obj.HasMember(key.data())) {
-    return {};
-  }
-
-  const auto& value = obj[key.data()];
-  if (!value.IsInt64()) {
-    return {};
-  }
-
-  return value.GetInt64();
+  return value->GetInt64();
 }
 
-std::optional<std::string_view> JsonObj::GetString(const std::string_view& key) const {
-  if (!doc_.IsObject()) {
+std::optional<uint64_t> JsonObj::GetUint64(std::string_view key) const {
+  const auto* value = GetJsonValue(key);
+  if (!value || !value->IsUint64()) {
     return {};
   }
-
-  const auto& obj = doc_.GetObject();
-  if (!obj.HasMember(key.data())) {
-    return {};
-  }
-
-  const auto& value = obj[key.data()];
-  if (!value.IsString()) {
-    return {};
-  }
-
-  return std::string_view(value.GetString(), value.GetStringLength());
+  return value->GetUint64();
 }
 
-std::optional<JsonObj> JsonObj::GetJsonObj(const std::string_view& key) const {
-  if (!doc_.IsObject()) {
+std::optional<std::string_view> JsonObj::GetString(std::string_view key) const {
+  const auto* value = GetJsonValue(key);
+  if (!value || !value->IsString()) {
     return {};
   }
+  return std::string_view(value->GetString(), value->GetStringLength());
+}
 
-  const auto& obj = doc_.GetObject();
-  if (!obj.HasMember(key.data())) {
-    return {};
-  }
-
-  const auto& value = obj[key.data()];
-  if (!value.IsObject()) {
+std::optional<JsonObj> JsonObj::GetJsonObj(std::string_view key) const {
+  const auto* value = GetJsonValue(key);
+  if (!value || !value->IsObject()) {
     return {};
   }
 
   JsonObj json;
-  json.doc_.CopyFrom(value, json.doc_.GetAllocator());
-
+  json.doc_.CopyFrom(*value, json.doc_.GetAllocator());
   return json;
 }
 
-std::optional<JsonArray> JsonObj::GetJsonArray(const std::string_view& key) const {
-  if (!doc_.IsObject()) {
-    return {};
-  }
-
-  const auto& obj = doc_.GetObject();
-  if (!obj.HasMember(key.data())) {
-    return {};
-  }
-
-  const auto& value = obj[key.data()];
-  if (!value.IsArray()) {
+std::optional<JsonArray> JsonObj::GetJsonArray(std::string_view key) const {
+  const auto* value = GetJsonValue(key);
+  if (!value || !value->IsArray()) {
     return {};
   }
 
   JsonArray json;
-  json.doc_.CopyFrom(value, json.doc_.GetAllocator());
-
+  json.doc_.CopyFrom(*value, json.doc_.GetAllocator());
   return json;
 }
 
 void JsonObj::Foreach(
-    const std::function<void(const std::string_view& key, const JsonValue& value)>& fn) const {
-  if (!doc_.IsObject()) {
-    return;
-  }
-
+    const std::function<void(std::string_view key, const JsonValue& value)>& fn) const {
   const auto& obj = doc_.GetObject();
   for (const auto& member : obj) {
     fn(member.name.GetString(), member.value);
   }
 }
 
-bool JsonObj::HasMember(const std::string_view& key) const {
-  if (!doc_.IsObject()) {
-    return false;
-  }
-
+bool JsonObj::HasMember(std::string_view key) const {
   const auto& obj = doc_.GetObject();
   return obj.HasMember(key.data());
 }

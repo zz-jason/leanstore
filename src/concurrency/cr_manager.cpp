@@ -1,5 +1,6 @@
 #include "leanstore/concurrency/cr_manager.hpp"
 
+#include "leanstore-c/store_option.h"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/concurrency/group_committer.hpp"
 #include "leanstore/concurrency/history_storage.hpp"
@@ -7,50 +8,67 @@
 #include "leanstore/concurrency/worker_thread.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/log.hpp"
+#include "utils/json.hpp"
 
+#include <cassert>
 #include <memory>
 #include <vector>
+
+namespace {
+constexpr auto kKeyWalSize = "wal_size";
+constexpr auto kKeyGlobalUsrTso = "global_user_tso";
+constexpr auto kKeyGlobalSysTso = "global_system_tso";
+constexpr auto kUpdateNameFormat = "_history_tree_{}_updates";
+constexpr auto kRemoveNameFormat = "_history_tree_{}_removes";
+constexpr BTreeConfig kBtreeConfig = {.enable_wal_ = false, .use_bulk_insert_ = true};
+} // namespace
 
 namespace leanstore::cr {
 
 CRManager::CRManager(leanstore::LeanStore* store) : store_(store), group_committer_(nullptr) {
-  auto* store_option = store->store_option_;
-  // start all worker threads
-  worker_ctxs_.resize(store_option->worker_threads_);
-  worker_threads_.reserve(store_option->worker_threads_);
-  for (uint64_t worker_id = 0; worker_id < store_option->worker_threads_; worker_id++) {
-    auto worker_thread = std::make_unique<WorkerThread>(store, worker_id, worker_id);
+  // start worker threads
+  auto num_worker_threads = store->store_option_->worker_threads_;
+  StartWorkerThreads(num_worker_threads);
+
+  // start group commit thread
+  StartGroupCommitter(num_worker_threads);
+
+  // create history storage for each worker
+  CreateWorkerHistories();
+}
+
+void CRManager::StartWorkerThreads(uint64_t num_worker_threads) {
+  worker_ctxs_.resize(num_worker_threads);
+  worker_threads_.reserve(num_worker_threads);
+
+  for (auto i = 0u; i < num_worker_threads; i++) {
+    auto worker_thread = std::make_unique<WorkerThread>(store_, i, i);
     worker_thread->Start();
 
-    // create thread-local transaction executor on each worker thread
     worker_thread->SetJob([&]() {
-      WorkerContext::s_tls_worker_ctx =
-          std::make_unique<WorkerContext>(worker_id, worker_ctxs_, store_);
+      WorkerContext::s_tls_worker_ctx = std::make_unique<WorkerContext>(i, worker_ctxs_, store_);
       WorkerContext::s_tls_worker_ctx_ptr = WorkerContext::s_tls_worker_ctx.get();
-      worker_ctxs_[worker_id] = WorkerContext::s_tls_worker_ctx.get();
+      worker_ctxs_[i] = WorkerContext::s_tls_worker_ctx_ptr;
     });
     worker_thread->Wait();
     worker_threads_.emplace_back(std::move(worker_thread));
   }
+}
 
-  // start group commit thread
-  if (store_->store_option_->enable_wal_) {
-    const int cpu = store_option->worker_threads_;
-    group_committer_ = std::make_unique<GroupCommitter>(store_, store_->wal_fd_, worker_ctxs_, cpu);
-    group_committer_->Start();
+void CRManager::StartGroupCommitter(int cpu) {
+  if (!store_->store_option_->enable_wal_) {
+    Log::Info("WAL is disabled, skip starting group committer thread");
+    return;
   }
 
-  // create history storage for each worker
-  // History tree should be created after worker thread and group committer are
-  // started.
-  if (store_option->worker_threads_ > 0) {
-    worker_threads_[0]->SetJob([&]() { setup_history_storage4_each_worker(); });
-    worker_threads_[0]->Wait();
-  }
+  group_committer_ = std::make_unique<GroupCommitter>(store_, worker_ctxs_, cpu);
+  group_committer_->Start();
 }
 
 void CRManager::Stop() {
-  group_committer_->Stop();
+  if (group_committer_ != nullptr) {
+    group_committer_->Stop();
+  }
 
   for (auto& worker_thread : worker_threads_) {
     worker_thread->Stop();
@@ -62,50 +80,47 @@ CRManager::~CRManager() {
   Stop();
 }
 
-void CRManager::setup_history_storage4_each_worker() {
-  for (uint64_t i = 0; i < store_->store_option_->worker_threads_; i++) {
-    // setup update tree
-    std::string update_btree_name = std::format("_history_tree_{}_updates", i);
-    auto res = storage::btree::BasicKV::Create(
-        store_, update_btree_name, BTreeConfig{.enable_wal_ = false, .use_bulk_insert_ = true});
-    if (!res) {
-      Log::Fatal("Failed to set up update history tree, updateBtreeName={}, error={}",
-                 update_btree_name, res.error().ToString());
-    }
-    auto* update_index = res.value();
-
-    // setup delete tree
-    std::string remove_btree_name = std::format("_history_tree_{}_removes", i);
-    res = storage::btree::BasicKV::Create(
-        store_, remove_btree_name, BTreeConfig{.enable_wal_ = false, .use_bulk_insert_ = true});
-    if (!res) {
-      Log::Fatal("Failed to set up remove history tree, removeBtreeName={}, error={}",
-                 remove_btree_name, res.error().ToString());
-    }
-    auto* remove_index = res.value();
-    worker_ctxs_[i]->cc_.history_storage_.SetUpdateIndex(update_index);
-    worker_ctxs_[i]->cc_.history_storage_.SetRemoveIndex(remove_index);
+void CRManager::CreateWorkerHistories() {
+  if (worker_threads_.empty()) {
+    return;
   }
+
+  auto create_btree = [this](const std::string& name) -> storage::btree::BasicKV* {
+    auto res = storage::btree::BasicKV::Create(store_, name, kBtreeConfig);
+    if (!res) {
+      Log::Fatal("Create btree failed, name={}, error={}", name, res.error().ToString());
+    }
+    return res.value();
+  };
+
+  worker_threads_[0]->SetJob([&]() {
+    for (uint64_t i = 0; i < store_->store_option_->worker_threads_; i++) {
+      std::string update_btree_name = std::format(kUpdateNameFormat, i);
+      std::string remove_btree_name = std::format(kRemoveNameFormat, i);
+      worker_ctxs_[i]->cc_.history_storage_.SetUpdateIndex(create_btree(update_btree_name));
+      worker_ctxs_[i]->cc_.history_storage_.SetRemoveIndex(create_btree(remove_btree_name));
+    }
+  });
+  worker_threads_[0]->Wait();
 }
 
-constexpr char kKeyWalSize[] = "wal_size";
-constexpr char kKeyGlobalUsrTso[] = "global_user_tso";
-constexpr char kKeyGlobalSysTso[] = "global_system_tso";
-
-StringMap CRManager::Serialize() {
-  StringMap map;
-  map[kKeyWalSize] = std::to_string(group_committer_->wal_size_);
-  map[kKeyGlobalUsrTso] = std::to_string(store_->usr_tso_.load());
-  map[kKeyGlobalSysTso] = std::to_string(store_->sys_tso_.load());
-  return map;
+utils::JsonObj CRManager::Serialize() const {
+  utils::JsonObj json_obj;
+  if (group_committer_ != nullptr) {
+    json_obj.AddUint64(kKeyWalSize, group_committer_->wal_size_);
+  }
+  json_obj.AddUint64(kKeyGlobalUsrTso, store_->usr_tso_.load());
+  json_obj.AddUint64(kKeyGlobalSysTso, store_->sys_tso_.load());
+  return json_obj;
 }
 
-void CRManager::Deserialize(StringMap map) {
-  group_committer_->wal_size_ = std::stoull(map[kKeyWalSize]);
-  store_->usr_tso_ = std::stoull(map[kKeyGlobalUsrTso]);
-  store_->sys_tso_ = std::stoull(map[kKeyGlobalSysTso]);
-
-  store_->crmanager_->global_wmk_info_.wmk_of_all_tx_ = store_->usr_tso_.load();
+void CRManager::Deserialize(const utils::JsonObj& json_obj) {
+  if (group_committer_ != nullptr && json_obj.HasMember(kKeyWalSize)) {
+    group_committer_->wal_size_ = json_obj.GetUint64(kKeyWalSize).value();
+  }
+  store_->usr_tso_.store(json_obj.GetUint64(kKeyGlobalUsrTso).value());
+  store_->sys_tso_.store(json_obj.GetUint64(kKeyGlobalSysTso).value());
+  global_wmk_info_.wmk_of_all_tx_ = store_->usr_tso_.load();
 }
 
 } // namespace leanstore::cr

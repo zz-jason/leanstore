@@ -2,6 +2,8 @@
 
 #include "leanstore/utils/result.hpp"
 
+#include <cassert>
+
 #define RAPIDJSON_NAMESPACE leanstore::rapidjson
 #define RAPIDJSON_NAMESPACE_BEGIN namespace leanstore::rapidjson {
 #define RAPIDJSON_NAMESPACE_END }
@@ -47,32 +49,42 @@ public:
   JsonObj& operator=(JsonObj&& other);
 
   std::string Serialize() const;
-  Result<void> Deserialize(const std::string_view& json);
+  Result<void> Deserialize(std::string_view json);
 
   //----------------------------------------------------------------------------
   // Utils to add element to a JSON object
   //----------------------------------------------------------------------------
 
-  void AddBool(const std::string_view& key, bool value);
-  void AddInt64(const std::string_view& key, int64_t value);
-  void AddString(const std::string_view& key, const std::string_view& value);
-  void AddJsonObj(const std::string_view& key, const JsonObj& value);
-  void AddJsonArray(const std::string_view& key, const JsonArray& value);
+  void AddBool(std::string_view key, bool value);
+  void AddInt64(std::string_view key, int64_t value);
+  void AddUint64(std::string_view key, uint64_t value);
+  void AddString(std::string_view key, std::string_view value);
+  void AddJsonObj(std::string_view key, const JsonObj& value);
+  void AddJsonArray(std::string_view key, const JsonArray& value);
 
   //----------------------------------------------------------------------------
   // Utils to access element in a JSON object
   //----------------------------------------------------------------------------
 
-  std::optional<bool> GetBool(const std::string_view& key) const;
-  std::optional<int64_t> GetInt64(const std::string_view& key) const;
-  std::optional<std::string_view> GetString(const std::string_view& key) const;
-  std::optional<JsonObj> GetJsonObj(const std::string_view& key) const;
-  std::optional<JsonArray> GetJsonArray(const std::string_view& key) const;
-  void Foreach(
-      const std::function<void(const std::string_view& key, const JsonValue& value)>& fn) const;
-  bool HasMember(const std::string_view& key) const;
+  std::optional<bool> GetBool(std::string_view key) const;
+  std::optional<int64_t> GetInt64(std::string_view key) const;
+  std::optional<uint64_t> GetUint64(std::string_view key) const;
+  std::optional<std::string_view> GetString(std::string_view key) const;
+  std::optional<JsonObj> GetJsonObj(std::string_view key) const;
+  std::optional<JsonArray> GetJsonArray(std::string_view key) const;
+  void Foreach(const std::function<void(std::string_view key, const JsonValue& value)>& fn) const;
+  bool HasMember(std::string_view key) const;
 
 private:
+  const rapidjson::Value* GetJsonValue(std::string_view key) const {
+    assert(doc_.IsObject() && "JsonObj must be an object");
+    const auto& obj = doc_.GetObject();
+    if (!obj.HasMember(key.data())) {
+      return nullptr;
+    }
+    return &obj[key.data()];
+  }
+
   rapidjson::Document doc_;
 
   friend class JsonArray;
@@ -113,7 +125,7 @@ public:
     doc_.PushBack(value_copy, doc_.GetAllocator());
   }
 
-  void AppendString(const std::string_view& value) {
+  void AppendString(std::string_view value) {
     auto value_copy = rapidjson::Value(value.data(), value.size(), doc_.GetAllocator());
     doc_.PushBack(value_copy, doc_.GetAllocator());
   }

@@ -1,7 +1,8 @@
 #pragma once
 
-#include "coro_future.hpp"
-#include "thread.hpp"
+#include "leanstore/utils/log.hpp"
+#include "utils/coroutine/coro_executor.hpp"
+#include "utils/coroutine/coro_future.hpp"
 #include "utils/scoped_timer.hpp"
 
 #include <cassert>
@@ -20,10 +21,10 @@ class CoroScheduler {
 public:
   CoroScheduler(LeanStore* store, int64_t num_threads)
       : num_threads_(num_threads),
-        threads_(num_threads) {
+        coro_executors_(num_threads) {
     assert(num_threads > 0 && "Number of threads must be greater than zero");
     for (int64_t i = 0; i < num_threads; ++i) {
-      threads_[i] = std::make_unique<Thread>(store, i);
+      coro_executors_[i] = std::make_unique<CoroExecutor>(store, i);
     }
   }
 
@@ -36,35 +37,33 @@ public:
 
   void Init() {
     ScopedTimer timer([this](double elapsed_ms) {
-      Log::Info("CoroScheduler initialized, num_threads={}, elapsed={}ms", num_threads_,
-                elapsed_ms);
+      Log::Info("CoroScheduler inited, num_threads={}, elapsed={}ms", num_threads_, elapsed_ms);
     });
 
     // Start all threads
-    for (auto& thread : threads_) {
-      thread->Start();
+    for (auto& executor : coro_executors_) {
+      executor->Start();
     }
 
     // Wait for all threads to be ready
-    for (auto& thread : threads_) {
-      while (!thread->IsReady()) {
+    for (auto& executor : coro_executors_) {
+      while (!executor->IsReady()) {
       }
     }
   }
 
   void Deinit() {
-    ScopedTimer timer([](double elapsed_ms) {
-      Log::Info("CoroScheduler deinitialized, elapsed={}ms", elapsed_ms);
-    });
+    ScopedTimer timer(
+        [](double elapsed_ms) { Log::Info("CoroScheduler deinited, elapsed={}ms", elapsed_ms); });
 
     // Stop all threads
-    for (auto& thread : threads_) {
-      thread->Stop();
+    for (auto& executor : coro_executors_) {
+      executor->Stop();
     }
 
     // Wait for all threads to finish
-    for (auto& thread : threads_) {
-      thread->Join();
+    for (auto& executor : coro_executors_) {
+      executor->Join();
     }
   }
 
@@ -88,17 +87,48 @@ public:
           }
         });
 
-    threads_[thread_id]->PushBack(std::move(coro));
+    coro_executors_[thread_id]->EnqueueCoro(std::move(coro));
     return coro_future;
+  }
+
+  void ParallelRange(uint64_t num_jobs,
+                     std::function<void(uint64_t job_begin, uint64_t job_end)>&& job_handler) {
+    auto num_executors = coro_executors_.size();
+    uint64_t jobs_per_thread = num_jobs / num_executors;
+    uint64_t num_remaining = num_jobs % num_executors;
+    uint64_t num_proceed_tasks = 0;
+    if (jobs_per_thread < num_executors) {
+      num_executors = num_remaining;
+    }
+
+    // To balance the workload among all threads:
+    // - the first numRemaining threads process jobsPerThread+1 tasks
+    // - other threads process jobsPerThread tasks
+    std::vector<std::shared_ptr<CoroFuture<void>>> futures;
+    for (uint64_t i = 0; i < num_executors; i++) {
+      uint64_t begin = num_proceed_tasks;
+      uint64_t end = begin + jobs_per_thread;
+      if (num_remaining > 0) {
+        end++;
+        num_remaining--;
+      }
+      num_proceed_tasks = end;
+
+      futures.emplace_back(Submit([begin, end, job_handler]() { job_handler(begin, end); }, i));
+    }
+
+    for (auto& future : futures) {
+      future->Wait();
+    }
   }
 
 private:
   /// Number of threads in the thread pool.
   const int64_t num_threads_;
 
-  /// Thread pool, each thread is responsible for executing coroutines submitted
+  /// CoroExecutor pool, each thread is responsible for executing coroutines submitted
   /// to it, runs its own coroutine scheduler.
-  std::vector<std::unique_ptr<Thread>> threads_;
+  std::vector<std::unique_ptr<CoroExecutor>> coro_executors_;
 };
 
 } // namespace leanstore

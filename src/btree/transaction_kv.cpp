@@ -438,7 +438,7 @@ OpCode TransactionKV::ScanAsc(Slice start_key, ScanCallback callback) {
   return scan4ShortRunningTx<true>(start_key, callback);
 }
 
-void TransactionKV::undo(const uint8_t* wal_payload_ptr, const uint64_t tx_id [[maybe_unused]]) {
+void TransactionKV::Undo(const uint8_t* wal_payload_ptr, const uint64_t tx_id [[maybe_unused]]) {
   auto& wal_payload = *reinterpret_cast<const WalPayload*>(wal_payload_ptr);
   switch (wal_payload.type_) {
   case WalPayload::Type::kWalTxInsert: {
@@ -830,7 +830,7 @@ void TransactionKV::GarbageCollect(const uint8_t* version_data, WORKERID version
   }
 }
 
-void TransactionKV::unlock(const uint8_t* wal_entry_ptr) {
+void TransactionKV::Unlock(const uint8_t* wal_entry_ptr) {
   const WalPayload& entry = *reinterpret_cast<const WalPayload*>(wal_entry_ptr);
   Slice key;
   switch (entry.type_) {

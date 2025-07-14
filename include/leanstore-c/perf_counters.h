@@ -76,6 +76,8 @@ typedef struct PerfCounters {
 
 } PerfCounters;
 
+PerfCounters* GetTlsPerfCounters();
+
 #ifdef __cplusplus
 }
 #endif

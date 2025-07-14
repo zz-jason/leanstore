@@ -64,7 +64,7 @@ public:
     Log::Fatal("BufferManagedTree::Checkpoint is unimplemented");
   }
 
-  virtual void undo(const uint8_t*, const uint64_t) {
+  virtual void Undo(const uint8_t*, const uint64_t) {
     Log::Fatal("BufferManagedTree::undo is unimplemented");
   }
 
@@ -72,7 +72,7 @@ public:
     Log::Fatal("BufferManagedTree::GarbageCollect is unimplemented");
   }
 
-  virtual void unlock(const uint8_t*) {
+  virtual void Unlock(const uint8_t*) {
     Log::Fatal("BufferManagedTree::unlock is unimplemented");
   }
 
@@ -240,13 +240,13 @@ public:
   }
 
   // Recovery / SI
-  inline void undo(TREEID tree_id, const uint8_t* wal_entry, uint64_t tts) {
+  inline void Undo(TREEID tree_id, const uint8_t* wal_entry, uint64_t tts) {
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {
       Log::Fatal("BufferManagedTree not find, treeId={}", tree_id);
     }
     auto& [tree, tree_name] = it->second;
-    return tree->undo(wal_entry, tts);
+    return tree->Undo(wal_entry, tts);
   }
 
   inline void GarbageCollect(TREEID tree_id, const uint8_t* version_data,
@@ -263,25 +263,14 @@ public:
     return tree->GarbageCollect(version_data, version_worker_id, version_tx_id, called_before);
   }
 
-  inline void unlock(TREEID tree_id, const uint8_t* entry) {
+  inline void Unlock(TREEID tree_id, const uint8_t* entry) {
     LEAN_SHARED_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {
       Log::Fatal("BufferManagedTree not find, treeId={}", tree_id);
     }
     auto& [tree, tree_name] = it->second;
-    return tree->unlock(entry);
-  }
-
-  // Serialization
-  inline StringMap Serialize(TREEID tree_id) {
-    LEAN_SHARED_LOCK(mutex_);
-    auto it = trees_.find(tree_id);
-    if (it == trees_.end()) {
-      Log::Fatal("BufferManagedTree not find, treeId={}", tree_id);
-    }
-    auto& [tree, tree_name] = it->second;
-    return tree->Serialize();
+    return tree->Unlock(entry);
   }
 
   inline void Deserialize(TREEID tree_id, StringMap map) {

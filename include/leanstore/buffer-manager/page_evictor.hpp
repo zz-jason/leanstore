@@ -7,6 +7,7 @@
 #include "leanstore/buffer-manager/swip.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/user_thread.hpp"
+#include "utils/scoped_timer.hpp"
 
 #include <cstdint>
 #include <vector>
@@ -70,6 +71,15 @@ public:
         async_write_buffer_(store->page_fd_, store->store_option_->page_size_,
                             store_->store_option_->buffer_write_batch_size_),
         free_bf_list_() {
+    ScopedTimer timer([this](double elapsed_ms) {
+      Log::Info("PageEvictor created, num_bfs={}, page_size={}, buffer_write_batch_size={}, "
+                "buffer_frame_recycle_batch_size={}, num_partitions={}, elapsed={}ms",
+                num_bfs_, store_->store_option_->page_size_,
+                store_->store_option_->buffer_write_batch_size_,
+                store_->store_option_->buffer_frame_recycle_batch_size_, num_partitions_,
+                elapsed_ms);
+    });
+
     cool_candidate_bfs_.reserve(store_->store_option_->buffer_frame_recycle_batch_size_);
     evict_candidate_bfs_.reserve(store_->store_option_->buffer_frame_recycle_batch_size_);
   }

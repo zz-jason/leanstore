@@ -2,16 +2,16 @@
 
 #include "leanstore/concurrency/worker_context.hpp"
 #include "leanstore/concurrency/worker_thread.hpp"
-#include "leanstore/units.hpp"
+#include "utils/json.hpp"
 
 #include <memory>
 #include <vector>
 
 namespace leanstore {
-
 class LeanStore;
+} // namespace leanstore
 
-namespace cr {
+namespace leanstore::cr {
 
 struct WatermarkInfo;
 class GroupCommitter;
@@ -42,19 +42,21 @@ public:
 
   ~CRManager();
 
-public:
   // State Serialization
-  StringMap Serialize();
+  utils::JsonObj Serialize() const;
 
   /// Deserialize the state of the CRManager from a StringMap.
-  void Deserialize(StringMap map);
+  void Deserialize(const utils::JsonObj& json_obj);
 
   /// Stop all the worker threads and the group committer thread.
   void Stop();
 
 private:
-  void setup_history_storage4_each_worker();
+  void StartWorkerThreads(uint64_t num_worker_threads);
+
+  void StartGroupCommitter(int cpu);
+
+  void CreateWorkerHistories();
 };
 
-} // namespace cr
-} // namespace leanstore
+} // namespace leanstore::cr

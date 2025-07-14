@@ -141,8 +141,8 @@ public:
       a = 0;
     }
 
-    print_tps_summary(1, FLAGS_ycsb_run_for_seconds, FLAGS_ycsb_threads, thread_committed,
-                      thread_aborted);
+    PrintTpsSummary(1, FLAGS_ycsb_run_for_seconds, FLAGS_ycsb_threads, thread_committed,
+                    thread_aborted);
 
     keep_running.store(false);
     for (auto& thread : threads) {

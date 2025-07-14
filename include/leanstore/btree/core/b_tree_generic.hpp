@@ -107,7 +107,7 @@ public:
   /// NOTE: The source buffer frame should be shared latched
   virtual void Checkpoint(BufferFrame& bf, void* dest) override;
 
-  virtual void undo(const uint8_t*, const uint64_t) override {
+  virtual void Undo(const uint8_t*, const uint64_t) override {
     Log::Fatal("undo is unsupported");
   }
 
@@ -115,7 +115,7 @@ public:
     Log::Fatal("GarbageCollect is unsupported");
   }
 
-  virtual void unlock(const uint8_t*) override {
+  virtual void Unlock(const uint8_t*) override {
     Log::Fatal("unlock is unsupported");
   }
 

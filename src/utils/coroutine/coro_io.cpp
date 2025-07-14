@@ -1,7 +1,8 @@
 #include "utils/coroutine/coro_io.hpp"
 
+#include "leanstore/utils/log.hpp"
+#include "utils/coroutine/coro_executor.hpp"
 #include "utils/coroutine/coroutine.hpp"
-#include "utils/coroutine/thread.hpp"
 
 #include <cassert>
 #include <cerrno>
@@ -17,7 +18,7 @@
 namespace leanstore {
 
 void CoroIo::Read(int32_t fd, void* buf, size_t count, uint64_t offset) {
-  Coroutine* self = Thread::CurrentCoro();
+  Coroutine* self = CoroExecutor::CurrentCoro();
   assert(self != nullptr && "CoroIo::Read() should be called from a coroutine");
   assert((reinterpret_cast<uint64_t>(buf) & (512 - 1)) == 0 &&
          "Buffer must be aligned to 512 bytes for O_DIRECT");
@@ -47,7 +48,7 @@ void CoroIo::Read(int32_t fd, void* buf, size_t count, uint64_t offset) {
 }
 
 void CoroIo::Write(int32_t fd, const void* buf, size_t count, uint64_t offset) {
-  Coroutine* self = Thread::CurrentCoro();
+  Coroutine* self = CoroExecutor::CurrentCoro();
   assert(self != nullptr && "CoroIo::Write() should be called from a coroutine");
   assert((reinterpret_cast<uint64_t>(buf) & (512 - 1)) == 0 &&
          "Buffer must be aligned to 512 bytes for O_DIRECT");
@@ -77,7 +78,7 @@ void CoroIo::Write(int32_t fd, const void* buf, size_t count, uint64_t offset) {
 }
 
 void CoroIo::Fsync(int32_t fd) {
-  Coroutine* self = Thread::CurrentCoro();
+  Coroutine* self = CoroExecutor::CurrentCoro();
   assert(self != nullptr && "CoroIo::Fsync() should be called from a coroutine");
 
   // prepare the iocb for fsync
@@ -103,7 +104,8 @@ void CoroIo::Fsync(int32_t fd) {
 }
 
 void CoroIo::Poll() {
-  assert(Thread::CurrentCoro() != nullptr && "CoroIo::Poll() should be called from a coroutine");
+  assert(CoroExecutor::CurrentCoro() != nullptr &&
+         "CoroIo::Poll() should be called from a coroutine");
 
   // skip if there are no pending requests
   if (num_reqs_ == 0) {
@@ -126,15 +128,15 @@ void CoroIo::Poll() {
 }
 
 void CoroRead(int32_t fd, void* buf, size_t count, uint64_t offset) {
-  Thread::CurrentCoroIo()->Read(fd, buf, count, offset);
+  CoroExecutor::CurrentCoroIo()->Read(fd, buf, count, offset);
 }
 
 void CoroWrite(int32_t fd, const void* buf, size_t count, uint64_t offset) {
-  Thread::CurrentCoroIo()->Write(fd, buf, count, offset);
+  CoroExecutor::CurrentCoroIo()->Write(fd, buf, count, offset);
 }
 
 void CoroFsync(int32_t fd) {
-  Thread::CurrentCoroIo()->Fsync(fd);
+  CoroExecutor::CurrentCoroIo()->Fsync(fd);
 }
 
 } // namespace leanstore

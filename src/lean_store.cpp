@@ -10,9 +10,11 @@
 #include "leanstore/utils/error.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/misc.hpp"
+#include "leanstore/utils/parallelize.hpp"
 #include "leanstore/utils/result.hpp"
 #include "leanstore/utils/user_thread.hpp"
 #include "utils/json.hpp"
+#include "utils/scoped_timer.hpp"
 
 #include <cassert>
 #include <cstdint>
@@ -38,16 +40,13 @@ Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption* option) {
   if (option == nullptr) {
     return std::unexpected(leanstore::utils::Error::General("StoreOption should not be null"));
   }
-
-  Log::Init(option);
-
   if (option->create_from_scratch_) {
-    Log::Info("Create store from scratch, clean store dir: {}", option->store_dir_);
+    Log::Info("Create store from scratch, store_dir={}", option->store_dir_);
     std::filesystem::path dir_path(option->store_dir_);
     std::filesystem::remove_all(dir_path);
     std::filesystem::create_directories(dir_path);
   }
-
+  Log::Init(option);
   return std::make_unique<LeanStore>(option);
 }
 
@@ -64,13 +63,17 @@ LeanStore::LeanStore(StoreOption* option) : store_option_(option) {
 
   // create global buffer manager and page evictors
   buffer_manager_ = std::make_unique<storage::BufferManager>(this);
-  buffer_manager_->StartPageEvictors();
 
-  // create global transaction worker and group committer
-  //
-  // TODO(jian.z): Deserialize buffer manager before creating CRManager. We need to initialize
-  // nextPageId for each buffer partition before creating history tree in CRManager
+#ifdef ENABLE_COROUTINE
+  coro_scheduler_ = new CoroScheduler(this, store_option_->worker_threads_);
+  coro_scheduler_->Init();
+  buffer_manager_->InitFreeBfLists();
+  crmanager_ = nullptr;
+#else
+  buffer_manager_->InitFreeBfLists();
+  buffer_manager_->StartPageEvictors();
   crmanager_ = new cr::CRManager(this);
+#endif
 
   // recover from disk
   if (!store_option_->create_from_scratch_) {
@@ -147,13 +150,15 @@ LeanStore::~LeanStore() {
       auto tree_id = it.first;
       auto& [tree_ptr, tree_name] = it.second;
       auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(tree_ptr.get());
-      Log::Info("leanstore/btreeName={}, btreeId={}, btreeType={}, btreeSummary={}", tree_name,
-                tree_id, static_cast<uint8_t>(btree->tree_type_), btree->Summary());
+      Log::Info("btree: name={}, id={}, type={}, summary={}", tree_name, tree_id,
+                static_cast<uint8_t>(btree->tree_type_), btree->Summary());
     }
   });
 
   // Stop transaction workers and group committer
-  crmanager_->Stop();
+  if (crmanager_) {
+    crmanager_->Stop();
+  }
 
   // persist all the metadata and pages before exit
   bool all_pages_up_to_date = true;
@@ -164,14 +169,8 @@ LeanStore::~LeanStore() {
 
   buffer_manager_->SyncAllPageWrites();
 
-  // destroy and Stop all foreground workers
-  if (crmanager_ != nullptr) {
-    delete crmanager_;
-    crmanager_ = nullptr;
-  }
+  StopBackgroundThreads();
 
-  // destroy buffer manager (buffer frame providers)
-  buffer_manager_->StopPageEvictors();
   buffer_manager_ = nullptr;
 
   // destroy global btree catalog
@@ -198,6 +197,35 @@ LeanStore::~LeanStore() {
   }
 }
 
+void LeanStore::StartBackgroundThreads() {
+#ifdef ENABLE_COROUTINE
+  coro_scheduler_ = new CoroScheduler(this, store_option_->worker_threads_);
+  coro_scheduler_->Init();
+#else
+  buffer_manager_->StartPageEvictors();
+  crmanager_ = new cr::CRManager(this);
+#endif
+}
+
+void LeanStore::StopBackgroundThreads() {
+#ifdef ENABLE_COROUTINE
+  // destroy coro scheduler
+  if (coro_scheduler_ != nullptr) {
+    coro_scheduler_->Deinit();
+    delete coro_scheduler_;
+    coro_scheduler_ = nullptr;
+  }
+#else
+  // destroy and Stop all foreground workers
+  if (crmanager_ != nullptr) {
+    delete crmanager_;
+    crmanager_ = nullptr;
+  }
+  // destroy buffer manager (buffer frame providers)
+  buffer_manager_->StopPageEvictors();
+#endif
+}
+
 void LeanStore::ExecSync(uint64_t worker_id, std::function<void()> job) {
   crmanager_->worker_threads_[worker_id]->SetJob(std::move(job));
   crmanager_->worker_threads_[worker_id]->Wait();
@@ -217,6 +245,15 @@ void LeanStore::WaitAll() {
   }
 }
 
+void LeanStore::ParallelRange(
+    uint64_t num_jobs, std::function<void(uint64_t job_begin, uint64_t job_end)>&& job_handler) {
+#ifdef ENABLE_COROUTINE
+  coro_scheduler_->ParallelRange(num_jobs, std::move(job_handler));
+#else
+  utils::Parallelize::ParallelRange(num_jobs, std::move(job_handler));
+#endif
+}
+
 constexpr char kMetaKeyCrManager[] = "cr_manager";
 constexpr char kMetaKeyBufferManager[] = "buffer_manager";
 constexpr char kMetaKeyBTrees[] = "leanstore/btrees";
@@ -231,7 +268,9 @@ constexpr char kPagesUpToDate[] = "pages_up_to_date";
 
 void LeanStore::SerializeMeta(bool all_pages_up_to_date) {
   Log::Info("serializeMeta started");
-  SCOPED_DEFER(Log::Info("serializeMeta ended"));
+  ScopedTimer timer([](double elapsed_ms) {
+    Log::Info("SerializeMeta finished, timeElapsed={:.2f}ms", elapsed_ms);
+  });
 
   // serialize data structure instances
   utils::JsonObj meta_json_obj;
@@ -239,24 +278,12 @@ void LeanStore::SerializeMeta(bool all_pages_up_to_date) {
   meta_file.open(GetMetaFilePath(), std::ios::trunc);
 
   // cr_manager
-  {
-    utils::JsonObj cr_json_obj;
-    auto cr_meta_map = crmanager_->Serialize();
-    for (const auto& [key, val] : cr_meta_map) {
-      cr_json_obj.AddString(key, val);
-    }
-    meta_json_obj.AddJsonObj(kMetaKeyCrManager, cr_json_obj);
+  if (crmanager_) {
+    meta_json_obj.AddJsonObj(kMetaKeyCrManager, crmanager_->Serialize());
   }
 
   // buffer_manager
-  {
-    utils::JsonObj bm_json_obj;
-    auto bm_meta_map = buffer_manager_->Serialize();
-    for (const auto& [key, val] : bm_meta_map) {
-      bm_json_obj.AddString(key, val);
-    }
-    meta_json_obj.AddJsonObj(kMetaKeyBufferManager, bm_json_obj);
-  }
+  meta_json_obj.AddJsonObj(kMetaKeyBufferManager, buffer_manager_->Serialize());
 
   // registered_datastructures, i.e. btrees
   {
@@ -271,7 +298,7 @@ void LeanStore::SerializeMeta(bool all_pages_up_to_date) {
 
         auto* btree = dynamic_cast<storage::btree::BTreeGeneric*>(tree_ptr.get());
         utils::JsonObj btree_meta_json_obj;
-        auto btree_meta_map = tree_registry_->Serialize(btree_id);
+        auto btree_meta_map = btree->Serialize();
         for (const auto& [key, val] : btree_meta_map) {
           btree_meta_json_obj.AddString(key, val);
         }
@@ -299,7 +326,9 @@ void LeanStore::SerializeMeta(bool all_pages_up_to_date) {
 
 bool LeanStore::DeserializeMeta() {
   Log::Info("deserializeMeta started");
-  SCOPED_DEFER(Log::Info("deserializeMeta ended"));
+  ScopedTimer timer([](double elapsed_ms) {
+    Log::Info("DeserializeMeta finished, timeElapsed={:.2f}ms", elapsed_ms);
+  });
 
   std::ifstream meta_file;
   meta_file.open(GetMetaFilePath());
@@ -309,33 +338,14 @@ bool LeanStore::DeserializeMeta() {
       std::string(std::istreambuf_iterator<char>(meta_file), std::istreambuf_iterator<char>()));
 
   // Deserialize concurrent resource manager
-  {
+  if (crmanager_) {
     assert(meta_json_obj.HasMember(kMetaKeyCrManager));
-    auto cr_json_obj = meta_json_obj.GetJsonObj(kMetaKeyCrManager).value();
-    StringMap cr_meta_map;
-    cr_json_obj.Foreach([&](const std::string_view& key, const utils::JsonValue& value) {
-      assert(value.IsString());
-      auto meta_key = std::string(key.data(), key.size());
-      auto meta_val = std::string(value.GetString(), value.GetStringLength());
-      cr_meta_map[meta_key] = meta_val;
-    });
-
-    crmanager_->Deserialize(cr_meta_map);
+    crmanager_->Deserialize(meta_json_obj.GetJsonObj(kMetaKeyCrManager).value());
   }
 
   // Deserialize buffer manager
-  {
-    assert(meta_json_obj.HasMember(kMetaKeyBufferManager));
-    auto bm_json_obj = meta_json_obj.GetJsonObj(kMetaKeyBufferManager).value();
-    StringMap bm_meta_map;
-    bm_json_obj.Foreach([&](const std::string_view& key, const utils::JsonValue& value) {
-      assert(value.IsString());
-      auto meta_key = std::string(key.data(), key.size());
-      auto meta_val = std::string(value.GetString(), value.GetStringLength());
-      bm_meta_map[meta_key] = meta_val;
-    });
-    buffer_manager_->Deserialize(bm_meta_map);
-  }
+  assert(meta_json_obj.HasMember(kMetaKeyBufferManager));
+  buffer_manager_->Deserialize(meta_json_obj.GetJsonObj(kMetaKeyBufferManager).value());
 
   assert(meta_json_obj.HasMember(kMetaKeyBTrees));
   auto all_pages_up_to_date = meta_json_obj.GetBool("pages_up_to_date").value();

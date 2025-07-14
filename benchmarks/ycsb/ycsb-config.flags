@@ -3,8 +3,9 @@
 --ycsb_val_size=200
 --ycsb_record_count=1000000
 --ycsb_mem_gb=1
---ycsb_run_for_seconds=30
+--ycsb_run_for_seconds=360000
 --ycsb_target=basickv
 --ycsb_workload=c
 --ycsb_threads=4
 --ycsb_cmd=run
+--ycsb_clients=4

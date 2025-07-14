@@ -39,7 +39,7 @@ void Parallelize::Range(
 }
 
 void Parallelize::ParallelRange(
-    uint64_t num_jobs, std::function<void(uint64_t job_begin, uint64_t job_end)> job_handler) {
+    uint64_t num_jobs, std::function<void(uint64_t job_begin, uint64_t job_end)>&& job_handler) {
   auto* store = tls_store;
   std::vector<std::thread> threads;
   uint64_t num_thread = std::thread::hardware_concurrency();
