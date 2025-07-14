@@ -1,6 +1,14 @@
 #pragma once
 
-#include <atomic>
+#include "utils/coroutine/futex_waiter.hpp"
+
+#include <cassert>
+#include <cerrno>
+
+#include <linux/futex.h>
+#include <sys/syscall.h>
+#include <sys/time.h>
+#include <unistd.h>
 
 namespace leanstore {
 
@@ -11,6 +19,7 @@ template <typename T>
 class CoroFuture {
 public:
   CoroFuture() = default;
+  ~CoroFuture() = default;
 
   // Disable copy and move semantics
   CoroFuture(const CoroFuture&) = delete;
@@ -18,12 +27,9 @@ public:
   CoroFuture(CoroFuture&&) = delete;
   CoroFuture& operator=(CoroFuture&&) = delete;
 
-  /// Destructor
-  ~CoroFuture() = default;
-
   /// Wait for the future to be ready, blocks until the result is set.
   void Wait() {
-    ready_.wait(false);
+    waiter_.wait(kNotReady);
   }
 
   /// Get the result of the future, should be called after Wait().
@@ -32,23 +38,27 @@ public:
   }
 
 private:
-  /// Set the result of the future, should be called by the Coroutine.
-  void SetResult(T&& value) {
-    result_ = std::move(value);
-    ready_.store(true, std::memory_order_release);
-    ready_.notify_one();
-  }
+  static constexpr auto kNotReady = 0;
+  static constexpr auto kReady = 1;
 
   friend class CoroScheduler;
 
-  std::atomic<bool> ready_{false};
+  /// Set the result of the future, should be called by the Coroutine.
+  void SetResult(T&& value) {
+    result_ = std::move(value);
+    waiter_.store(kReady);
+    waiter_.notify_one();
+  }
+
   T result_;
+  FutexWaiter waiter_{kNotReady};
 };
 
 template <>
 class CoroFuture<void> {
 public:
   CoroFuture() = default;
+  ~CoroFuture() = default;
 
   // Disable copy and move semantics
   CoroFuture(const CoroFuture&) = delete;
@@ -56,29 +66,29 @@ public:
   CoroFuture(CoroFuture&&) = delete;
   CoroFuture& operator=(CoroFuture&&) = delete;
 
-  /// Destructor
-  ~CoroFuture() = default;
-
   /// Wait for the future to be ready, blocks until the result is set.
   void Wait() {
-    ready_.wait(false);
+    waiter_.wait(kNotReady);
   }
 
   /// Get the result of the future, should be called after Wait().
+  /// No result to return for void futures.
   void GetResult() {
-    // No result to return for void futures
   }
 
 private:
-  /// Set the result of the future, should be called by the Coroutine.
-  void SetResult() {
-    ready_.store(true, std::memory_order_release);
-    ready_.notify_one();
-  }
+  static constexpr auto kNotReady = 0;
+  static constexpr auto kReady = 1;
 
   friend class CoroScheduler;
 
-  std::atomic<bool> ready_{false};
+  /// Set the result of the future, should be called by the Coroutine.
+  void SetResult() {
+    waiter_.store(kReady);
+    waiter_.notify_one();
+  }
+
+  FutexWaiter waiter_{kNotReady};
 };
 
 } //  namespace leanstore

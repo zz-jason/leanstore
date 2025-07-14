@@ -68,8 +68,8 @@ private:
 
 class CoroHybridLock {
 public:
-  constexpr static uint64_t kVersionUnlocked = 0ull;
-  constexpr static uint64_t kLatchExclusiveBit = 1ull;
+  static constexpr uint64_t kVersionUnlocked = 0ull;
+  static constexpr uint64_t kLatchExclusiveBit = 1ull;
 
   enum class State : uint8_t {
     kUninitialized = 0,

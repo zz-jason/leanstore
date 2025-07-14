@@ -11,14 +11,13 @@
 #include "leanstore/units.hpp"
 #include "leanstore/utils/async_io.hpp"
 #include "leanstore/utils/debug_flags.hpp"
-#include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/error.hpp"
 #include "leanstore/utils/jump_mu.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/parallelize.hpp"
 #include "leanstore/utils/user_thread.hpp"
+#include "utils/coroutine/coro_executor.hpp"
 #include "utils/coroutine/lean_mutex.hpp"
-#include "utils/coroutine/thread.hpp"
 #include "utils/scoped_timer.hpp"
 #include "utils/small_vector.hpp"
 
@@ -27,6 +26,7 @@
 #include <cstring>
 #include <expected>
 #include <format>
+#include <utility>
 #include <vector>
 
 #include <fcntl.h>
@@ -68,9 +68,10 @@ BufferManager::BufferManager(leanstore::LeanStore* store) : store_(store) {
   }
   Log::Info("Init buffer manager, IO partitions={}, freeBfsLimitPerPartition={}", num_partitions_,
             free_bfs_limit_per_partition);
+}
 
-  // spread these buffer frames to all the partitions
-  utils::Parallelize::ParallelRange(num_bfs_, [&](uint64_t begin, uint64_t end) {
+void BufferManager::InitFreeBfLists() {
+  auto spread_free_bfs = [&](uint64_t begin, uint64_t end) {
     uint64_t partition_id = 0;
     for (uint64_t i = begin; i < end; i++) {
       auto& partition = GetPartition(partition_id);
@@ -78,7 +79,13 @@ BufferManager::BufferManager(leanstore::LeanStore* store) : store_(store) {
       partition.AddFreeBf(*new (bf_addr) BufferFrame());
       partition_id = (partition_id + 1) % num_partitions_;
     }
-  });
+  };
+
+#ifdef ENABLE_COROUTINE
+  store_->ParallelRange(num_bfs_, std::move(spread_free_bfs));
+#else
+  utils::Parallelize::ParallelRange(num_bfs_, std::move(spread_free_bfs));
+#endif
 }
 
 void BufferManager::StartPageEvictors() {
@@ -107,19 +114,24 @@ void BufferManager::StartPageEvictors() {
   }
 }
 
-StringMap BufferManager::Serialize() {
+namespace {
+constexpr auto kMaxPageId = "max_pid";
+}; // namespace
+
+utils::JsonObj BufferManager::Serialize() {
   // TODO: correctly serialize ranges of used pages
-  StringMap map;
   PID max_page_id = 0;
   for (uint64_t i = 0; i < num_partitions_; i++) {
     max_page_id = std::max<PID>(GetPartition(i).GetNextPageId(), max_page_id);
   }
-  map["max_pid"] = std::to_string(max_page_id);
-  return map;
+
+  utils::JsonObj json_obj;
+  json_obj.AddUint64(kMaxPageId, max_page_id);
+  return json_obj;
 }
 
-void BufferManager::Deserialize(StringMap map) {
-  PID max_page_id = std::stoull(map["max_pid"]);
+void BufferManager::Deserialize(const utils::JsonObj& json_obj) {
+  PID max_page_id = json_obj.GetUint64(kMaxPageId).value();
   max_page_id = (max_page_id + (num_partitions_ - 1)) & ~(num_partitions_ - 1);
   for (uint64_t i = 0; i < num_partitions_; i++) {
     GetPartition(i).SetNextPageId(max_page_id + i);
@@ -130,7 +142,6 @@ Result<void> BufferManager::CheckpointAllBufferFrames() {
   ScopedTimer timer([](double elapsed_ms) {
     Log::Info("CheckpointAllBufferFrames finished, timeElasped={:.6f}ms", elapsed_ms);
   });
-
   Log::Info("CheckpointAllBufferFrames, num_bfs_={}", num_bfs_);
 
   LS_DEBUG_EXECUTE(store_, "skip_CheckpointAllBufferFrames", {
@@ -138,9 +149,7 @@ Result<void> BufferManager::CheckpointAllBufferFrames() {
     return std::unexpected(utils::Error::General("skipped due to debug flag"));
   });
 
-  StopPageEvictors();
-
-  utils::Parallelize::ParallelRange(num_bfs_, [&](uint64_t begin, uint64_t end) {
+  auto checkpoint_func = [&](uint64_t begin, uint64_t end) {
     const auto buffer_frame_size = store_->store_option_->buffer_frame_size_;
     const auto page_size = store_->store_option_->page_size_;
 
@@ -178,7 +187,14 @@ Result<void> BufferManager::CheckpointAllBufferFrames() {
       // reset batch size
       batch_size = 0;
     }
-  });
+  };
+
+#ifdef ENABLE_COROUTINE
+  store_->ParallelRange(num_bfs_, std::move(checkpoint_func));
+#else
+  StopPageEvictors();
+  utils::Parallelize::ParallelRange(num_bfs_, std::move(checkpoint_func));
+#endif
 
   return {};
 }
@@ -460,7 +476,7 @@ BufferFrame& BufferManager::ReadPageSync(PID page_id) {
       JUMPMU_RETURN swip.AsBufferFrame();
     }
     JUMPMU_CATCH() {
-      Thread::CurrentCoro()->Yield(CoroState::kRunning);
+      CoroExecutor::CurrentCoro()->Yield(CoroState::kRunning);
     }
   }
 }
@@ -493,7 +509,7 @@ BufferManager::~BufferManager() {
 
 void BufferManager::DoWithBufferFrameIf(std::function<bool(BufferFrame& bf)> condition,
                                         std::function<void(BufferFrame& bf)> action) {
-  utils::Parallelize::ParallelRange(num_bfs_, [&](uint64_t begin, uint64_t end) {
+  auto work = [&](uint64_t begin, uint64_t end) {
     LS_DCHECK(condition != nullptr);
     LS_DCHECK(action != nullptr);
     for (uint64_t i = begin; i < end; i++) {
@@ -505,7 +521,13 @@ void BufferManager::DoWithBufferFrameIf(std::function<bool(BufferFrame& bf)> con
       }
       bf.header_.latch_.UnlockExclusively();
     }
-  });
+  };
+
+#ifdef ENABLE_COROUTINE
+  store_->ParallelRange(num_bfs_, std::move(work));
+#else
+  utils::Parallelize::ParallelRange(num_bfs_, std::move(work));
+#endif
 }
 
 } // namespace leanstore::storage

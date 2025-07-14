@@ -1,9 +1,9 @@
 #include "leanstore/utils/misc.hpp"
 #include "leanstore/utils/random_generator.hpp"
+#include "utils/coroutine/coro_executor.hpp"
 #include "utils/coroutine/coro_mutex.hpp"
 #include "utils/coroutine/coro_scheduler.hpp"
 #include "utils/coroutine/coroutine.hpp"
-#include "utils/coroutine/thread.hpp"
 
 #include <gtest/gtest.h>
 
@@ -51,24 +51,24 @@ TEST_F(CoroTest, Mutex) {
     auto future1 = coro_scheduler.Submit(
         [&]() {
           mutex.lock();
-          EXPECT_EQ(Thread::CurrentCoro()->GetState(), CoroState::kRunning);
+          EXPECT_EQ(CoroExecutor::CurrentCoro()->GetState(), CoroState::kRunning);
           value_x -= 50;
           value_y += 50;
           EXPECT_EQ(value_x + value_y, 100);
           mutex.unlock();
-          EXPECT_EQ(Thread::CurrentCoro()->GetState(), CoroState::kRunning);
+          EXPECT_EQ(CoroExecutor::CurrentCoro()->GetState(), CoroState::kRunning);
         },
         0);
 
     auto future2 = coro_scheduler.Submit(
         [&]() {
           mutex.lock();
-          EXPECT_EQ(Thread::CurrentCoro()->GetState(), CoroState::kRunning);
+          EXPECT_EQ(CoroExecutor::CurrentCoro()->GetState(), CoroState::kRunning);
           value_x -= 30;
           value_y += 30;
           EXPECT_EQ(value_x + value_y, 100);
           mutex.unlock();
-          EXPECT_EQ(Thread::CurrentCoro()->GetState(), CoroState::kRunning);
+          EXPECT_EQ(CoroExecutor::CurrentCoro()->GetState(), CoroState::kRunning);
         },
         1);
 
@@ -99,7 +99,7 @@ TEST_F(CoroTest, SharedMutex) {
           EXPECT_EQ(value_x + value_y, 100);
 
           shared_mutex.unlock();
-          EXPECT_EQ(Thread::CurrentCoro()->GetState(), CoroState::kRunning);
+          EXPECT_EQ(CoroExecutor::CurrentCoro()->GetState(), CoroState::kRunning);
         },
         i % 2));
 
@@ -109,7 +109,7 @@ TEST_F(CoroTest, SharedMutex) {
           EXPECT_EQ(value_x + value_y, 100);
 
           shared_mutex.unlock_shared();
-          EXPECT_EQ(Thread::CurrentCoro()->GetState(), CoroState::kRunning);
+          EXPECT_EQ(CoroExecutor::CurrentCoro()->GetState(), CoroState::kRunning);
         },
         i % 2));
   }
@@ -150,7 +150,7 @@ TEST_F(CoroTest, Io) {
       [&]() {
         CoroWrite(fd, write_buf, buf_size, 0);
         CoroFsync(fd);
-        EXPECT_EQ(Thread::CurrentCoro()->GetState(), CoroState::kRunning);
+        EXPECT_EQ(CoroExecutor::CurrentCoro()->GetState(), CoroState::kRunning);
       },
       0);
   future_write->Wait();
@@ -167,7 +167,7 @@ TEST_F(CoroTest, Io) {
           memset(read_buf, 0, buf_size);
 
           CoroRead(fd, read_buf, buf_size, 0);
-          EXPECT_EQ(Thread::CurrentCoro()->GetState(), CoroState::kRunning);
+          EXPECT_EQ(CoroExecutor::CurrentCoro()->GetState(), CoroState::kRunning);
           EXPECT_EQ(std::string((char*)read_buf, 10), std::string((char*)write_buf, 10));
         },
         i % 2);
@@ -194,18 +194,18 @@ TEST_F(CoroTest, ChildCoro) {
 
       value = 42;
 
-      Thread::CurrentCoro()->Yield(CoroState::kDone);
+      CoroExecutor::CurrentCoro()->Yield(CoroState::kDone);
 
       // this will not be executed
       value = 43;
       messages.push_back("Child coroutine finished");
     });
 
-    Thread::CurrentThread()->RunCoroutine(&child_coro);
+    CoroExecutor::CurrentThread()->RunCoroutine(&child_coro);
 
     // after child coroutine finishes
     EXPECT_EQ(value, 42);
-    EXPECT_NE(Thread::CurrentCoro(), &child_coro);
+    EXPECT_NE(CoroExecutor::CurrentCoro(), &child_coro);
     messages.push_back("Parent coroutine finished");
   });
 
@@ -231,7 +231,7 @@ TEST_F(CoroTest, JumpContext) {
   int64_t value = 0;
 
   Coroutine coro1([&]() {
-    EXPECT_EQ(JumpContext::Current(), Thread::CurrentCoro()->GetJumpContext());
+    EXPECT_EQ(JumpContext::Current(), CoroExecutor::CurrentCoro()->GetJumpContext());
 
     while (true) {
       JUMPMU_TRY() {
@@ -262,7 +262,8 @@ TEST_F(CoroTest, JumpContext) {
     }
   });
 
-  auto future1 = coro_scheduler.Submit([&]() { Thread::CurrentThread()->RunCoroutine(&coro1); });
+  auto future1 =
+      coro_scheduler.Submit([&]() { CoroExecutor::CurrentThread()->RunCoroutine(&coro1); });
 
   while (!conflicted.load(std::memory_order_acquire)) {
   }

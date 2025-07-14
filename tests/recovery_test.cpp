@@ -48,9 +48,9 @@ TEST_F(RecoveryTest, SerializeAndDeserialize) {
   TransactionKV* btree;
 
   // prepare key-value pairs to insert
-  size_t num_k_vs(100);
+  size_t num_keys(100);
   std::vector<std::tuple<std::string, std::string>> kv_to_test;
-  for (size_t i = 0; i < num_k_vs; ++i) {
+  for (size_t i = 0; i < num_keys; ++i) {
     std::string key("key_xxxxxxxxxxxx_" + std::to_string(i));
     std::string val("VAL_YYYYYYYYYYYY_" + std::to_string(i));
     kv_to_test.push_back(std::make_tuple(key, val));
@@ -70,7 +70,7 @@ TEST_F(RecoveryTest, SerializeAndDeserialize) {
   store_->ExecSync(0, [&]() {
     cr::WorkerContext::My().StartTx();
     SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
       EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
     }
@@ -104,7 +104,7 @@ TEST_F(RecoveryTest, SerializeAndDeserialize) {
     auto copy_value_out = [&](Slice val) {
       copied_value = std::string((const char*)val.data(), val.size());
     };
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, expected_val] = kv_to_test[i];
       auto op_code = btree->Lookup(key, copy_value_out);
       EXPECT_EQ(op_code, OpCode::kOK);
@@ -129,9 +129,9 @@ TEST_F(RecoveryTest, RecoverAfterInsert) {
   TransactionKV* btree;
 
   // prepare key-value pairs to insert
-  size_t num_k_vs(100);
+  size_t num_keys(100);
   std::vector<std::tuple<std::string, std::string>> kv_to_test;
-  for (size_t i = 0; i < num_k_vs; ++i) {
+  for (size_t i = 0; i < num_keys; ++i) {
     std::string key("key_xxxxxxxxxxxx_" + std::to_string(i));
     std::string val("VAL_YYYYYYYYYYYY_" + std::to_string(i));
     kv_to_test.push_back(std::make_tuple(key, val));
@@ -147,7 +147,7 @@ TEST_F(RecoveryTest, RecoverAfterInsert) {
 
     // insert some values
     cr::WorkerContext::My().StartTx();
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
       EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
     }
@@ -178,7 +178,7 @@ TEST_F(RecoveryTest, RecoverAfterInsert) {
     auto copy_value_out = [&](Slice val) {
       copied_value = std::string((const char*)val.data(), val.size());
     };
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, expected_val] = kv_to_test[i];
       EXPECT_EQ(btree->Lookup(key, copy_value_out), OpCode::kOK);
       EXPECT_EQ(copied_value, expected_val);
@@ -205,9 +205,9 @@ TEST_F(RecoveryTest, RecoverAfterUpdate) {
 
   // prepare key-value pairs to insert
   auto val_size = 120u;
-  size_t num_k_vs(20);
+  size_t num_keys(20);
   std::vector<std::tuple<std::string, std::string>> kv_to_test;
-  for (size_t i = 0; i < num_k_vs; ++i) {
+  for (size_t i = 0; i < num_keys; ++i) {
     std::string key("key_xxxxxxxxxxxx_" + std::to_string(i));
     std::string val = GenerateValue(0, val_size);
     kv_to_test.push_back(std::make_tuple(key, val));
@@ -231,7 +231,7 @@ TEST_F(RecoveryTest, RecoverAfterUpdate) {
     EXPECT_NE(btree, nullptr);
 
     // insert some values
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
       cr::WorkerContext::My().StartTx();
       EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
@@ -239,7 +239,7 @@ TEST_F(RecoveryTest, RecoverAfterUpdate) {
     }
 
     // update all the values
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       auto& [key, val] = kv_to_test[i];
       auto update_call_back = [&](MutableSlice mut_raw_val) {
         std::memcpy(mut_raw_val.Data(), val.data(), mut_raw_val.Size());
@@ -276,7 +276,7 @@ TEST_F(RecoveryTest, RecoverAfterUpdate) {
     SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
     std::string copied_value;
     auto copy_value_out = [&](Slice val) { copied_value = val.ToString(); };
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, expected_val] = kv_to_test[i];
       auto ret_code = btree->Lookup(key, copy_value_out);
       EXPECT_EQ(ret_code, OpCode::kOK);
@@ -295,9 +295,9 @@ TEST_F(RecoveryTest, RecoverAfterRemove) {
 
   // prepare key-value pairs to insert
   auto val_size = 120u;
-  size_t num_k_vs(10);
+  size_t num_keys(10);
   std::vector<std::tuple<std::string, std::string>> kv_to_test;
-  for (size_t i = 0; i < num_k_vs; ++i) {
+  for (size_t i = 0; i < num_keys; ++i) {
     std::string key("key_xxxxxxxxxxxx_" + std::to_string(i));
     std::string val = utils::RandomGenerator::RandAlphString(val_size);
     kv_to_test.push_back(std::make_tuple(key, val));
@@ -310,7 +310,7 @@ TEST_F(RecoveryTest, RecoverAfterRemove) {
     EXPECT_NE(btree, nullptr);
 
     // insert some values
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
       cr::WorkerContext::My().StartTx();
       EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
@@ -318,7 +318,7 @@ TEST_F(RecoveryTest, RecoverAfterRemove) {
     }
 
     // remove all the values
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       auto& [key, val] = kv_to_test[i];
       cr::WorkerContext::My().StartTx();
       EXPECT_EQ(btree->Remove(key), OpCode::kOK);
@@ -350,7 +350,7 @@ TEST_F(RecoveryTest, RecoverAfterRemove) {
     auto copy_value_out = [&](Slice val) {
       copied_value = std::string((const char*)val.data(), val.size());
     };
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, expected_val] = kv_to_test[i];
       EXPECT_EQ(btree->Lookup(key, copy_value_out), OpCode::kNotFound);
     }

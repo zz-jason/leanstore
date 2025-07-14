@@ -67,12 +67,12 @@ public:
 
   // This undo implementation works only for rollback and not for undo
   // operations during recovery
-  void undo(const uint8_t* wal_entry_ptr, const uint64_t) override;
+  void Undo(const uint8_t* wal_entry_ptr, const uint64_t) override;
 
   void GarbageCollect(const uint8_t* entry_ptr, WORKERID version_worker_id, TXID version_tx_id,
                       bool called_before) override;
 
-  void unlock(const uint8_t* wal_entry_ptr) override;
+  void Unlock(const uint8_t* wal_entry_ptr) override;
 
 private:
   OpCode LookupOptimistic(Slice key, ValCallback val_callback);

@@ -84,9 +84,9 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
   storage::btree::TransactionKV* btree;
 
   // prepare key-value pairs to insert
-  size_t num_k_vs(10);
+  size_t num_keys(10);
   std::vector<std::tuple<std::string, std::string>> kv_to_test;
-  for (size_t i = 0; i < num_k_vs; ++i) {
+  for (size_t i = 0; i < num_keys; ++i) {
     std::string key("key_btree_VI_xxxxxxxxxxxx_" + std::to_string(i));
     std::string val("VAL_BTREE_VI_YYYYYYYYYYYY_" + std::to_string(i));
     kv_to_test.push_back(std::make_tuple(key, val));
@@ -101,7 +101,7 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
 
     // insert some values
     cr::WorkerContext::My().StartTx();
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
       EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
                               Slice((const uint8_t*)val.data(), val.size())),
@@ -118,7 +118,7 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
     auto copy_value_out = [&](Slice val) {
       copied_value = std::string((const char*)val.data(), val.size());
     };
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, expected_val] = kv_to_test[i];
       EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copy_value_out),
                 OpCode::kOK);
@@ -134,7 +134,7 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
     auto copy_value_out = [&](Slice val) {
       copied_value = std::string((const char*)val.data(), val.size());
     };
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, expected_val] = kv_to_test[i];
       EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copy_value_out),
                 OpCode::kOK);
@@ -162,9 +162,9 @@ TEST_F(TransactionKVTest, Insert1000KVs) {
 
     // insert numKVs tuples
     std::set<std::string> unique_keys;
-    ssize_t num_k_vs(1000);
+    ssize_t num_keys(1000);
     cr::WorkerContext::My().StartTx();
-    for (ssize_t i = 0; i < num_k_vs; ++i) {
+    for (ssize_t i = 0; i < num_keys; ++i) {
       auto key = RandomGenerator::RandAlphString(24);
       if (unique_keys.find(key) != unique_keys.end()) {
         i--;
@@ -197,8 +197,8 @@ TEST_F(TransactionKVTest, InsertDuplicates) {
 
     // insert numKVs tuples
     std::set<std::string> unique_keys;
-    ssize_t num_k_vs(100);
-    for (ssize_t i = 0; i < num_k_vs; ++i) {
+    ssize_t num_keys(100);
+    for (ssize_t i = 0; i < num_keys; ++i) {
       auto key = RandomGenerator::RandAlphString(24);
       if (unique_keys.find(key) != unique_keys.end()) {
         i--;
@@ -240,8 +240,8 @@ TEST_F(TransactionKVTest, Remove) {
 
     // insert numKVs tuples
     std::set<std::string> unique_keys;
-    ssize_t num_k_vs(100);
-    for (ssize_t i = 0; i < num_k_vs; ++i) {
+    ssize_t num_keys(100);
+    for (ssize_t i = 0; i < num_keys; ++i) {
       auto key = RandomGenerator::RandAlphString(24);
       if (unique_keys.find(key) != unique_keys.end()) {
         i--;
@@ -289,8 +289,8 @@ TEST_F(TransactionKVTest, RemoveNotExisted) {
 
     // insert numKVs tuples
     std::set<std::string> unique_keys;
-    ssize_t num_k_vs(100);
-    for (ssize_t i = 0; i < num_k_vs; ++i) {
+    ssize_t num_keys(100);
+    for (ssize_t i = 0; i < num_keys; ++i) {
       auto key = RandomGenerator::RandAlphString(24);
       if (unique_keys.find(key) != unique_keys.end()) {
         i--;
@@ -307,7 +307,7 @@ TEST_F(TransactionKVTest, RemoveNotExisted) {
     }
 
     // remove keys not existed
-    for (ssize_t i = 0; i < num_k_vs; ++i) {
+    for (ssize_t i = 0; i < num_keys; ++i) {
       auto key = RandomGenerator::RandAlphString(24);
       if (unique_keys.find(key) != unique_keys.end()) {
         i--;
@@ -339,8 +339,8 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
     EXPECT_NE(btree, nullptr);
 
     // insert numKVs tuples
-    ssize_t num_k_vs(100);
-    for (ssize_t i = 0; i < num_k_vs; ++i) {
+    ssize_t num_keys(100);
+    for (ssize_t i = 0; i < num_keys; ++i) {
       auto key = RandomGenerator::RandAlphString(24);
       if (unique_keys.find(key) != unique_keys.end()) {
         i--;
@@ -396,10 +396,10 @@ TEST_F(TransactionKVTest, Update) {
   storage::btree::TransactionKV* btree;
 
   // prepare key-value pairs to insert
-  const size_t num_k_vs(100);
+  const size_t num_keys(100);
   const size_t val_size = 120;
   std::vector<std::tuple<std::string, std::string>> kv_to_test;
-  for (size_t i = 0; i < num_k_vs; ++i) {
+  for (size_t i = 0; i < num_keys; ++i) {
     auto key = RandomGenerator::RandAlphString(24);
     auto val = RandomGenerator::RandAlphString(val_size);
     kv_to_test.push_back(std::make_tuple(key, val));
@@ -414,7 +414,7 @@ TEST_F(TransactionKVTest, Update) {
     EXPECT_NE(btree, nullptr);
 
     // insert values
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
       cr::WorkerContext::My().StartTx();
       auto res = btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
@@ -436,7 +436,7 @@ TEST_F(TransactionKVTest, Update) {
     update_desc->num_slots_ = 1;
     update_desc->update_slots_[0].offset_ = 0;
     update_desc->update_slots_[0].size_ = val_size;
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
       cr::WorkerContext::My().StartTx();
       auto res = btree->UpdatePartial(Slice((const uint8_t*)key.data(), key.size()),
@@ -450,7 +450,7 @@ TEST_F(TransactionKVTest, Update) {
     auto copy_value_out = [&](Slice val) {
       copied_value = std::string((const char*)val.data(), val.size());
     };
-    for (size_t i = 0; i < num_k_vs; ++i) {
+    for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
       cr::WorkerContext::My().StartTx();
       EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copy_value_out),
@@ -469,12 +469,12 @@ TEST_F(TransactionKVTest, ScanAsc) {
   storage::btree::TransactionKV* btree;
 
   // prepare key-value pairs to insert
-  const size_t num_k_vs(100);
+  const size_t num_keys(100);
   const size_t val_size = 120;
   std::unordered_map<std::string, std::string> kv_to_test;
   std::string smallest;
   std::string bigest;
-  for (size_t i = 0; i < num_k_vs; ++i) {
+  for (size_t i = 0; i < num_keys; ++i) {
     auto key = RandomGenerator::RandAlphString(24);
     auto val = RandomGenerator::RandAlphString(val_size);
     if (kv_to_test.find(key) != kv_to_test.end()) {
@@ -522,7 +522,7 @@ TEST_F(TransactionKVTest, ScanAsc) {
         btree->ScanAsc(Slice((const uint8_t*)smallest.data(), smallest.size()), scan_call_back),
         OpCode::kOK);
     cr::WorkerContext::My().CommitTx();
-    EXPECT_EQ(copied_k_vs.size(), num_k_vs);
+    EXPECT_EQ(copied_k_vs.size(), num_keys);
     for (const auto& [key, val] : copied_k_vs) {
       EXPECT_EQ(val, kv_to_test[key]);
     }
@@ -547,12 +547,12 @@ TEST_F(TransactionKVTest, ScanDesc) {
   storage::btree::TransactionKV* btree;
 
   // prepare key-value pairs to insert
-  const size_t num_k_vs(100);
+  const size_t num_keys(100);
   const size_t val_size = 120;
   std::unordered_map<std::string, std::string> kv_to_test;
   std::string smallest;
   std::string bigest;
-  for (size_t i = 0; i < num_k_vs; ++i) {
+  for (size_t i = 0; i < num_keys; ++i) {
     auto key = RandomGenerator::RandAlphString(24);
     auto val = RandomGenerator::RandAlphString(val_size);
     if (kv_to_test.find(key) != kv_to_test.end()) {
@@ -599,7 +599,7 @@ TEST_F(TransactionKVTest, ScanDesc) {
     EXPECT_EQ(btree->ScanDesc(Slice((const uint8_t*)bigest.data(), bigest.size()), scan_call_back),
               OpCode::kOK);
     cr::WorkerContext::My().CommitTx();
-    EXPECT_EQ(copied_k_vs.size(), num_k_vs);
+    EXPECT_EQ(copied_k_vs.size(), num_keys);
     for (const auto& [key, val] : copied_k_vs) {
       EXPECT_EQ(val, kv_to_test[key]);
     }
@@ -625,12 +625,12 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
   storage::btree::TransactionKV* btree;
 
   // prepare key-value pairs to insert
-  const size_t num_k_vs(1);
+  const size_t num_keys(1);
   const size_t val_size = 120;
   std::unordered_map<std::string, std::string> kv_to_test;
   std::string smallest;
   std::string bigest;
-  for (size_t i = 0; i < num_k_vs; ++i) {
+  for (size_t i = 0; i < num_keys; ++i) {
     auto key = RandomGenerator::RandAlphString(24);
     auto val = RandomGenerator::RandAlphString(val_size);
     if (kv_to_test.find(key) != kv_to_test.end()) {
@@ -727,12 +727,12 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
   storage::btree::TransactionKV* btree;
 
   // prepare key-value pairs to insert
-  const size_t num_k_vs(1);
+  const size_t num_keys(1);
   const size_t val_size = 120;
   std::unordered_map<std::string, std::string> kv_to_test;
   std::string smallest;
   std::string bigest;
-  for (size_t i = 0; i < num_k_vs; ++i) {
+  for (size_t i = 0; i < num_keys; ++i) {
     auto key = RandomGenerator::RandAlphString(24);
     auto val = RandomGenerator::RandAlphString(val_size);
     if (kv_to_test.find(key) != kv_to_test.end()) {

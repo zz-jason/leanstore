@@ -1,5 +1,7 @@
 #pragma once
 
+#include "utils/coroutine/coro_env.hpp"
+
 #include <cassert>
 #include <cstdint>
 #include <functional>
@@ -7,6 +9,8 @@
 #define BOOST_NAMESPACE leanstore::boost
 #include <boost/context/continuation.hpp>
 #include <boost/context/continuation_fcontext.hpp>
+#include <boost/context/fixedsize_stack.hpp>
+#include <boost/context/pooled_fixedsize_stack.hpp>
 #undef BOOST_NAMESPACE
 
 #include "leanstore/utils/jump_mu.hpp"
@@ -25,7 +29,6 @@ enum class CoroState : uint8_t {
 
 class Coroutine {
 public:
-  constexpr static int64_t kStackSize = 8 << 20; // 8 MB stack size
   using CoroFunc = std::function<void()>;
 
   Coroutine(CoroFunc func) : func_(std::move(func)) {
@@ -48,15 +51,15 @@ public:
   /// Executes the coroutine function.
   void Start() {
     assert(!IsStarted());
-    context_ =
-        boost::context::callcc(std::allocator_arg, boost::context::fixedsize_stack(kStackSize),
-                               [this](boost::context::continuation&& sink) {
-                                 sink_context_ = std::move(sink);
-                                 state_ = CoroState::kRunning;
-                                 func_();
-                                 state_ = CoroState::kDone;
-                                 return std::move(sink_context_);
-                               });
+    auto fn = [this](boost::context::continuation&& sink) {
+      sink_context_ = std::move(sink);
+      state_ = CoroState::kRunning;
+      func_();
+      state_ = CoroState::kDone;
+      return std::move(sink_context_);
+    };
+
+    context_ = boost::context::callcc(std::allocator_arg, s_pooled_salloc, std::move(fn));
   }
 
   /// Resumes the coroutine from its current state.
@@ -123,6 +126,9 @@ public:
   }
 
 private:
+  inline static thread_local boost::context::pooled_fixedsize_stack s_pooled_salloc{
+      CoroEnv::kStackSize, CoroEnv::kMaxCoroutinesPerThread};
+
   /// Continuation for the coroutine's execution context.
   boost::context::continuation context_;
 

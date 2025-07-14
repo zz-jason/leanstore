@@ -21,6 +21,9 @@ if(POLICY CMP0167)
 endif()
 find_package(Boost REQUIRED COMPONENTS context)
 
+find_package(unofficial-concurrentqueue CONFIG REQUIRED)
+  # target_link_libraries(main PRIVATE unofficial::concurrentqueue::concurrentqueue)
+
 set(leanstore_deps
   aio
   Boost::context
@@ -28,6 +31,7 @@ set(leanstore_deps
   rapidjson
   spdlog::spdlog_header_only
   Crc32c::crc32c
+  unofficial::concurrentqueue::concurrentqueue
   httplib::httplib
   PkgConfig::libunwind
 )
@@ -92,7 +96,7 @@ elseif(CHECKS_LEVEL STREQUAL "benchmark")
   target_compile_definitions(leanstore PUBLIC MACRO_CHECK_BENCHMARK)
 endif()
 
-option(ENABLE_COROUTINE "Enable coroutine support" ON)
+option(ENABLE_COROUTINE "Enable coroutine support" OFF)
 if(ENABLE_COROUTINE)
   target_compile_definitions(leanstore PUBLIC ENABLE_COROUTINE)
 endif()

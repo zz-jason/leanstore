@@ -1,7 +1,10 @@
 #pragma once
 
 #include "leanstore//utils/jump_mu.hpp"
+#include "leanstore/utils/log.hpp"
+#include "leanstore/utils/user_thread.hpp"
 #include "utils/coroutine/blocking_queue_mpsc.hpp"
+#include "utils/coroutine/coro_env.hpp"
 #include "utils/coroutine/coro_io.hpp"
 #include "utils/coroutine/coroutine.hpp"
 
@@ -24,23 +27,21 @@ namespace storage {
 class PageEvictor;
 } // namespace storage
 
-class Thread {
+class CoroExecutor {
 public:
-  static constexpr int64_t kMaxCoroutinesPerThread = 256;
+  CoroExecutor(LeanStore* store, int64_t thread_id = -1);
 
-  Thread(LeanStore* store, int64_t thread_id = -1);
+  ~CoroExecutor();
 
-  ~Thread();
-
-  Thread(const Thread&) = delete;
-  Thread& operator=(const Thread&) = delete;
-  Thread(Thread&&) = delete;
-  Thread& operator=(Thread&&) = delete;
+  CoroExecutor(const CoroExecutor&) = delete;
+  CoroExecutor& operator=(const CoroExecutor&) = delete;
+  CoroExecutor(CoroExecutor&&) = delete;
+  CoroExecutor& operator=(CoroExecutor&&) = delete;
 
   /// Starts the worker thread.
   void Start() {
     keep_running_ = true;
-    thread_ = std::thread(&Thread::ThreadMain, this);
+    thread_ = std::thread(&CoroExecutor::ThreadMain, this);
   }
 
   bool IsReady() {
@@ -50,7 +51,6 @@ public:
   /// Stops the worker thread.
   void Stop() {
     keep_running_ = false;
-    user_task_queue_.Shutdown();
   }
 
   void Join() {
@@ -63,12 +63,12 @@ public:
     return keep_running_.load(std::memory_order_acquire);
   }
 
-  void PushBack(std::unique_ptr<Coroutine> coroutine) {
+  void EnqueueCoro(std::unique_ptr<Coroutine> coroutine) {
     user_task_queue_.PushBack(std::move(coroutine));
   }
 
-  bool PopFront(std::unique_ptr<Coroutine>& coroutine) {
-    return user_task_queue_.PopFront(coroutine);
+  void DequeueCoro(std::unique_ptr<Coroutine>& coroutine) {
+    user_task_queue_.PopFront(coroutine);
   }
 
   void RunCoroutine(Coroutine* coroutine) {
@@ -92,7 +92,7 @@ public:
     return &CurrentThread()->coro_io_;
   }
 
-  static Thread* CurrentThread() {
+  static CoroExecutor* CurrentThread() {
     assert(s_current_thread != nullptr);
     return s_current_thread;
   }
@@ -110,16 +110,19 @@ private:
   }
 
   void ThreadInit() {
+    static constexpr auto kCoroExecNamePattern = "coro_exec_{}";
     if (thread_id_ == -1) {
       static std::atomic<int64_t> thread_count{0};
       thread_id_ = thread_count.fetch_add(1, std::memory_order_relaxed);
     }
-    std::string thread_name = std::format("worker_{}", thread_id_);
+    std::string thread_name = std::format(kCoroExecNamePattern, thread_id_);
     pthread_setname_np(pthread_self(), thread_name.c_str());
     s_current_thread = this;
     JumpContext::SetCurrent(&def_jump_context_);
+    utils::tls_store = store_;
 
     ready_ = true;
+    Log::Info("Coro executor inited, thread_name={}", thread_name);
   }
 
   void ThreadLoop();
@@ -131,13 +134,12 @@ private:
   /// Pointer to the currently running coroutine.
   Coroutine* current_coroutine_ = nullptr;
 
-  /// Ring buffer to hold coroutines that are ready to run.
-  BlockingQueueMpsc<std::unique_ptr<Coroutine>> user_task_queue_{kMaxCoroutinesPerThread};
+  BlockingQueueMpsc<std::unique_ptr<Coroutine>> user_task_queue_{CoroEnv::kMaxCoroutinesPerThread};
 
   /// Task queue for system tasks, e.g. IO operations.
   std::vector<std::unique_ptr<Coroutine>> sys_tasks_;
 
-  CoroIo coro_io_{kMaxCoroutinesPerThread};
+  CoroIo coro_io_{CoroEnv::kMaxCoroutinesPerThread};
 
   std::unordered_set<uint64_t> eviction_pending_partitions_;
   std::unique_ptr<leanstore::storage::PageEvictor> page_evictor_;
@@ -153,7 +155,7 @@ private:
   /// Jump context for the thread, used for setjmp/longjmp operations.
   JumpContext def_jump_context_;
 
-  inline static thread_local Thread* s_current_thread = nullptr;
+  inline static thread_local CoroExecutor* s_current_thread = nullptr;
 };
 
 } // namespace leanstore

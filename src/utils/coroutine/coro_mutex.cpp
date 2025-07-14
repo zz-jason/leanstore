@@ -1,6 +1,6 @@
 #include "utils/coroutine/coro_mutex.hpp"
 
-#include "utils/coroutine/thread.hpp"
+#include "utils/coroutine/coro_executor.hpp"
 
 #include <cassert>
 
@@ -12,7 +12,7 @@ namespace leanstore {
 
 void CoroMutex::lock() {
   if (!try_lock()) {
-    auto* current_coro = Thread::CurrentCoro();
+    auto* current_coro = CoroExecutor::CurrentCoro();
     current_coro->SetTryLockFunc([this]() { return this->try_lock(); });
     current_coro->Yield(CoroState::kWaitingMutex);
 
@@ -27,7 +27,7 @@ void CoroMutex::lock() {
 
 void CoroSharedMutex::lock() {
   if (!try_lock()) {
-    auto* current_coro = Thread::CurrentCoro();
+    auto* current_coro = CoroExecutor::CurrentCoro();
     current_coro->SetTryLockFunc([this]() { return this->try_lock(); });
     current_coro->Yield(CoroState::kWaitingMutex);
 
@@ -40,7 +40,7 @@ void CoroSharedMutex::lock() {
 
 void CoroSharedMutex::lock_shared() {
   if (!try_lock_shared()) {
-    auto* current_coro = Thread::CurrentCoro();
+    auto* current_coro = CoroExecutor::CurrentCoro();
     current_coro->SetTryLockFunc([this]() { return this->try_lock_shared(); });
     current_coro->Yield(CoroState::kWaitingMutex);
 

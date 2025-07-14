@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <format>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -21,6 +22,7 @@ DECLARE_string(ycsb_target);
 DECLARE_string(ycsb_cmd);
 DECLARE_string(ycsb_workload);
 DECLARE_uint32(ycsb_threads);
+DECLARE_uint32(ycsb_clients);
 DECLARE_uint64(ycsb_mem_gb);
 DECLARE_uint64(ycsb_run_for_seconds);
 
@@ -66,9 +68,9 @@ public:
   }
 
 protected:
-  void print_tps_summary(uint64_t report_period, uint64_t run_for_seconds, uint64_t num_threads,
-                         std::vector<std::atomic<uint64_t>>& thread_committed,
-                         std::vector<std::atomic<uint64_t>>& thread_aborted) {
+  void PrintTpsSummary(uint64_t report_period, uint64_t run_for_seconds, uint64_t num_threads,
+                       std::vector<std::atomic<uint64_t>>& thread_committed,
+                       std::vector<std::atomic<uint64_t>>& thread_aborted) {
     for (uint64_t i = 0; i < run_for_seconds; i += report_period) {
       sleep(report_period);
       auto committed = 0;
@@ -79,20 +81,36 @@ protected:
       for (auto& a : thread_aborted) {
         aborted += a.exchange(0);
       }
-      print_tps(num_threads, i, committed, aborted, report_period);
+      PrintTps(num_threads, i, committed, aborted, report_period);
     }
   }
 
-private:
-  void print_tps(uint64_t num_threads, uint64_t time_elasped_sec, uint64_t committed,
-                 uint64_t aborted, uint64_t report_period) {
+  void PrintTps(uint64_t num_threads, uint64_t time_elasped_sec, uint64_t committed,
+                uint64_t aborted, uint64_t report_period) {
     auto abort_rate = (aborted) * 1.0 / (committed + aborted);
-    auto summary =
-        std::format("[{} thds] [{}s] [tps={:.2f}] [committed={}] "
-                    "[conflicted={}] [conflict rate={:.2f}]",
-                    num_threads, time_elasped_sec, (committed + aborted) * 1.0 / report_period,
-                    committed, aborted, abort_rate);
-    std::cout << summary << std::endl;
+    std::cout << std::format(
+                     "[{} thds] [{}s] [tps={}] [committed={}] [conflicted={}] [conflict rate={}]",
+                     num_threads, time_elasped_sec,
+                     FormatWithSpaces((committed + aborted) / report_period),
+                     FormatWithSpaces(committed), FormatWithSpaces(aborted), abort_rate)
+              << std::endl;
+  }
+
+  std::string FormatWithSpaces(uint64_t n) {
+    std::string num = std::to_string(n);
+    int len = num.length();
+    std::ostringstream oss;
+
+    int first_group = len % 3;
+    if (first_group == 0) {
+      first_group = 3;
+    }
+
+    oss << num.substr(0, first_group);
+    for (int i = first_group; i < len; i += 3) {
+      oss << ' ' << num.substr(i, 3);
+    }
+    return oss.str();
   }
 };
 

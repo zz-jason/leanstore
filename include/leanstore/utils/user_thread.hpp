@@ -41,7 +41,7 @@ public:
         thread_name_(name),
         running_cpu_(running_cpu) {
     if (thread_name_.size() > 15) {
-      Log::Error("Thread name should be restricted to 15 characters, name={}, size={}", name,
+      Log::Error("thread_name_ should be restricted to 15 characters, name={}, size={}", name,
                  name.size());
     }
   }

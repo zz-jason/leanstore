@@ -4,8 +4,8 @@
 #include "leanstore/buffer-manager/free_list.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/misc.hpp"
+#include "utils/coroutine/coro_executor.hpp"
 #include "utils/coroutine/lean_mutex.hpp"
-#include "utils/coroutine/thread.hpp"
 
 #include <atomic>
 #include <cassert>
@@ -199,7 +199,7 @@ public:
     auto* free_bf = free_bf_list_.TryPopFront();
     if (free_bf == nullptr) {
 #ifdef ENABLE_COROUTINE
-      Thread::CurrentThread()->AddEvictionPendingPartition(partition_id_);
+      CoroExecutor::CurrentThread()->AddEvictionPendingPartition(partition_id_);
 #endif
       JumpContext::Jump(JumpContext::JumpReason::kWaitingBufferframe);
     }

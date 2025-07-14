@@ -75,7 +75,6 @@ private:
   }
 
   void HandleProfileRequest(const httplib::Request& req [[maybe_unused]], httplib::Response& res) {
-
 #ifdef ENABLE_PROFILING
     // get the profiling time in seconds from the query
     auto seconds_str = req.get_param_value(kQuerySeconds);

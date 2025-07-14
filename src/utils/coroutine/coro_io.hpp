@@ -27,7 +27,7 @@ public:
         num_reqs_(0),
         io_events_(max_batch_size) {
     ScopedTimer timer([this](double elapsed_ms) {
-      Log::Info("CoroIo initialized, max_reqs={}, elapsed={}ms", max_reqs_, elapsed_ms);
+      Log::Info("CoroIo created, max_reqs={}, elapsed={}ms", max_reqs_, elapsed_ms);
     });
 
     std::memset(&aio_ctx_, 0, sizeof(aio_ctx_));
@@ -40,7 +40,7 @@ public:
   ~CoroIo() {
     ScopedTimer timer([](double elapsed_ms) {
       // Log the elapsed time for deinitialization
-      Log::Info("CoroIo deinitialized, elapsed={}ms", elapsed_ms);
+      Log::Info("CoroIo destroyed, elapsed={}ms", elapsed_ms);
     });
 
     auto ret = io_destroy(aio_ctx_);

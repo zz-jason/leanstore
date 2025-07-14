@@ -1,8 +1,8 @@
 #pragma once
 
 #include "leanstore/utils/portable.hpp"
+#include "utils/coroutine/coro_executor.hpp"
 #include "utils/coroutine/coroutine.hpp"
-#include "utils/coroutine/thread.hpp"
 
 #include <atomic>
 #include <cassert>
@@ -125,7 +125,7 @@ private:
 /// All the APIs are designed to be used together with CoroHybridLock.
 class ALIGNAS(64) CoroHybridMutex {
 public:
-  constexpr static uint64_t kLatchExclusiveBit = 1ull;
+  static constexpr uint64_t kLatchExclusiveBit = 1ull;
 
   CoroHybridMutex() = default;
 
@@ -158,7 +158,7 @@ public:
   uint64_t LockSharedOptimistic() {
     auto version_on_lock = GetVersion();
     while (version_on_lock & kLatchExclusiveBit) {
-      Thread::CurrentCoro()->Yield(CoroState::kRunning);
+      CoroExecutor::CurrentCoro()->Yield(CoroState::kRunning);
       version_on_lock = GetVersion();
     }
     return version_on_lock;

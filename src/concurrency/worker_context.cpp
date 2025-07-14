@@ -194,7 +194,7 @@ void WorkerContext::AbortTx() {
   const uint64_t tx_id = active_tx_.start_ts_;
   std::for_each(entries.rbegin(), entries.rend(), [&](const WalEntry* entry) {
     const auto& complex_entry = *reinterpret_cast<const WalEntryComplex*>(entry);
-    store_->tree_registry_->undo(complex_entry.tree_id_, complex_entry.payload_, tx_id);
+    store_->tree_registry_->Undo(complex_entry.tree_id_, complex_entry.payload_, tx_id);
   });
 
   cc_.history_storage_.PurgeVersions(

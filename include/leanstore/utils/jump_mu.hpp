@@ -120,8 +120,8 @@ private:
     assert(stack_obj_counter_ == stack_obj_counter_after_jump);
   }
 
-  constexpr static int kJumpEnvsLimit = 20;
-  constexpr static int kStackObjectsLimit = 20;
+  static constexpr int kJumpEnvsLimit = 20;
+  static constexpr int kStackObjectsLimit = 20;
 
   int stack_obj_counter_ = 0;
   void* stack_objs_[kStackObjectsLimit];
