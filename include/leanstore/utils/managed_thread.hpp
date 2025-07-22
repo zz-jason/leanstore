@@ -23,7 +23,7 @@ inline thread_local LeanStore* tls_store = nullptr;
 inline thread_local std::string tls_thread_name = "";
 
 /// User thread with custom thread name.
-class UserThread {
+class ManagedThread {
 protected:
   LeanStore* store_ = nullptr;
 
@@ -36,7 +36,7 @@ protected:
   std::atomic<bool> keep_running_ = false;
 
 public:
-  UserThread(LeanStore* store, const std::string& name, int running_cpu = -1)
+  ManagedThread(LeanStore* store, const std::string& name, int running_cpu = -1)
       : store_(store),
         thread_name_(name),
         running_cpu_(running_cpu) {
@@ -46,7 +46,7 @@ public:
     }
   }
 
-  virtual ~UserThread() {
+  virtual ~ManagedThread() {
     Stop();
   }
 
@@ -55,7 +55,7 @@ public:
   void Start() {
     if (thread_ == nullptr) {
       keep_running_ = true;
-      thread_ = std::make_unique<std::thread>(&UserThread::Run, this);
+      thread_ = std::make_unique<std::thread>(&ManagedThread::Run, this);
     }
   }
 

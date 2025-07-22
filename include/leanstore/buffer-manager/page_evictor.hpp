@@ -6,7 +6,7 @@
 #include "leanstore/buffer-manager/partition.hpp"
 #include "leanstore/buffer-manager/swip.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/utils/user_thread.hpp"
+#include "leanstore/utils/managed_thread.hpp"
 #include "utils/scoped_timer.hpp"
 
 #include <cstdint>
@@ -54,12 +54,12 @@ public:
 };
 
 /// Evicts in-memory pages, provides free BufferFrames for partitions.
-class PageEvictor : public utils::UserThread {
+class PageEvictor : public utils::ManagedThread {
 public:
   PageEvictor(leanstore::LeanStore* store, const std::string& thread_name, uint64_t running_cpu,
               uint64_t num_bfs, uint8_t* bfs, uint64_t num_partitions,
               std::vector<std::unique_ptr<Partition>>& partitions)
-      : utils::UserThread(store, thread_name, running_cpu),
+      : utils::ManagedThread(store, thread_name, running_cpu),
         store_(store),
         num_bfs_(num_bfs),
         buffer_pool_(bfs),

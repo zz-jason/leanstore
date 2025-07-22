@@ -4,8 +4,8 @@
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/utils/counter_util.hpp"
 #include "leanstore/utils/log.hpp"
+#include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/random_generator.hpp"
-#include "leanstore/utils/user_thread.hpp"
 
 #include <memory>
 

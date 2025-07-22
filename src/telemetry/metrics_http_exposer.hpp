@@ -1,7 +1,7 @@
 #pragma once
 
+#include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/random_generator.hpp"
-#include "leanstore/utils/user_thread.hpp"
 
 #ifdef ENABLE_PROFILING
 #include <gperftools/heap-profiler.h>
@@ -15,7 +15,7 @@
 
 namespace leanstore::telemetry {
 
-class MetricsHttpExposer : public utils::UserThread {
+class MetricsHttpExposer : public utils::ManagedThread {
 private:
   static constexpr char kListenAddress[] = "0.0.0.0";
   static constexpr char kThreadName[] = "MetricsExposer";
