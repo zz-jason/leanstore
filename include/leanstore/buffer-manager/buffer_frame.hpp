@@ -5,9 +5,9 @@
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/log.hpp"
+#include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
 #include "leanstore/utils/portable.hpp"
-#include "leanstore/utils/user_thread.hpp"
 
 #include <atomic>
 #include <cstdint>

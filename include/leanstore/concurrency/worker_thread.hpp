@@ -2,7 +2,7 @@
 
 #include "leanstore/lean_store.hpp"
 #include "leanstore/units.hpp"
-#include "leanstore/utils/user_thread.hpp"
+#include "leanstore/utils/managed_thread.hpp"
 
 #include <condition_variable>
 #include <cstdint>
@@ -20,7 +20,7 @@ namespace leanstore::cr {
 ///                         original job sender
 /// -> ( jobSet,  jobDone): the original job sender is wake up, clear the job, notify other
 ///                         job senders.
-class WorkerThread : public utils::UserThread {
+class WorkerThread : public utils::ManagedThread {
 public:
   enum JobStatus : uint8_t {
     kJobIsEmpty = 0,
@@ -46,7 +46,7 @@ public:
 public:
   /// Constructor.
   WorkerThread(LeanStore* store, WORKERID worker_id, int cpu)
-      : utils::UserThread(store, "Worker" + std::to_string(worker_id), cpu),
+      : utils::ManagedThread(store, "Worker" + std::to_string(worker_id), cpu),
         worker_id_(worker_id),
         job_(nullptr),
         job_status_(kJobIsEmpty) {

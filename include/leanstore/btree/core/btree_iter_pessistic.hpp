@@ -8,7 +8,7 @@
 #include "leanstore/slice.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/utils/log.hpp"
-#include "leanstore/utils/user_thread.hpp"
+#include "leanstore/utils/managed_thread.hpp"
 
 #include <functional>
 

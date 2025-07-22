@@ -1,7 +1,7 @@
 #include "leanstore/utils/parallelize.hpp"
 
 #include "leanstore/utils/log.hpp"
-#include "leanstore/utils/user_thread.hpp"
+#include "leanstore/utils/managed_thread.hpp"
 
 #include <functional>
 #include <thread>

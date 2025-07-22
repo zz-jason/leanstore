@@ -8,9 +8,9 @@
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/log.hpp"
+#include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/random_generator.hpp"
 #include "leanstore/utils/scrambled_zipf_generator.hpp"
-#include "leanstore/utils/user_thread.hpp"
 #include "utils/small_vector.hpp"
 
 #include <gflags/gflags.h>
@@ -28,7 +28,7 @@
 
 namespace leanstore::ycsb {
 
-class YcsbLeanStoreClient : public utils::UserThread {
+class YcsbLeanStoreClient : public utils::ManagedThread {
 public:
   static constexpr auto kThreadNamePattern = "ycsb_cli_{}";
   inline static std::atomic<uint64_t> s_client_id_counter = 0;
@@ -44,7 +44,7 @@ public:
 protected:
   YcsbLeanStoreClient(uint64_t client_id, LeanStore* store, KVInterface* btree,
                       Workload workload_type)
-      : utils::UserThread(nullptr, std::format(kThreadNamePattern, client_id)),
+      : utils::ManagedThread(nullptr, std::format(kThreadNamePattern, client_id)),
         client_id_(client_id),
         store_(store),
         btree_(btree),

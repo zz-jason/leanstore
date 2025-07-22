@@ -3,7 +3,7 @@
 #include "leanstore/lean_store.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/async_io.hpp"
-#include "leanstore/utils/user_thread.hpp"
+#include "leanstore/utils/managed_thread.hpp"
 
 #include <atomic>
 #include <string>
@@ -21,7 +21,7 @@ class WalFlushReq;
 /// The group committer thread is responsible for committing transactions in batches. It collects
 /// wal records from all the worker threads, writes them to the wal file with libaio, and determines
 /// the commitable transactions based on the min flushed GSN and min flushed transaction ID.
-class GroupCommitter : public leanstore::utils::UserThread {
+class GroupCommitter : public leanstore::utils::ManagedThread {
 public:
   leanstore::LeanStore* store_;
 
@@ -43,7 +43,7 @@ public:
 
 public:
   GroupCommitter(leanstore::LeanStore* store, std::vector<WorkerContext*>& worker_ctxs, int cpu)
-      : UserThread(store, "GroupCommitter", cpu),
+      : ManagedThread(store, "GroupCommitter", cpu),
         store_(store),
         wal_fd_(store->wal_fd_),
         wal_size_(0),

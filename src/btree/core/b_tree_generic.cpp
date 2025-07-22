@@ -11,8 +11,8 @@
 #include "leanstore/units.hpp"
 #include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/log.hpp"
+#include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
-#include "leanstore/utils/user_thread.hpp"
 #include "utils/to_json.hpp"
 
 #include <cstdint>

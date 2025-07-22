@@ -2,7 +2,7 @@
 
 #include "leanstore//utils/jump_mu.hpp"
 #include "leanstore/utils/log.hpp"
-#include "leanstore/utils/user_thread.hpp"
+#include "leanstore/utils/managed_thread.hpp"
 #include "utils/coroutine/blocking_queue_mpsc.hpp"
 #include "utils/coroutine/coro_env.hpp"
 #include "utils/coroutine/coro_io.hpp"

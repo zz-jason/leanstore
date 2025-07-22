@@ -3,7 +3,7 @@
 namespace leanstore::telemetry {
 
 MetricsHttpExposer::MetricsHttpExposer(int32_t port)
-    : UserThread(nullptr, kThreadName),
+    : ManagedThread(nullptr, kThreadName),
       port_(port) {
   server_.new_task_queue = [] { return new httplib::ThreadPool(1); };
 

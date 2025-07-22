@@ -43,7 +43,7 @@ public:
   /// Updates the given attribute of the value. Only one thread can call this
   /// function at a time.
   template <typename Ta>
-  void UpdateAttribute(Ta T::*a, const Ta& new_val);
+  void UpdateAttribute(Ta T::* a, const Ta& new_val);
 };
 
 template <typename T>
@@ -72,7 +72,7 @@ inline void OptimisticGuarded<T>::Set(const T& new_val) {
 template <typename T>
   requires std::is_trivially_copy_assignable_v<T>
 template <typename Ta>
-inline void OptimisticGuarded<T>::UpdateAttribute(Ta T::*a, const Ta& new_val) {
+inline void OptimisticGuarded<T>::UpdateAttribute(Ta T::* a, const Ta& new_val) {
   version_.store(version_ + 1, std::memory_order_release);
   value_.*a = new_val;
   version_.store(version_ + 1, std::memory_order_release);
