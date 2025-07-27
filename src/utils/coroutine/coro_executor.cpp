@@ -15,6 +15,7 @@ CoroExecutor::CoroExecutor(LeanStore* store, int64_t thread_id)
     : store_(store),
       thread_id_(thread_id) {
   if (store_ != nullptr) {
+    // init page evictor
     auto* buffer_manager = store_->buffer_manager_.get();
     page_evictor_ = std::make_unique<leanstore::storage::PageEvictor>(
         store_, "PageEvictor", 0, buffer_manager->num_bfs_, buffer_manager->buffer_pool_,
@@ -64,39 +65,45 @@ void CoroExecutor::ThreadLoop() {
   int user_task_runs = 0;
 
   while (keep_running_) {
-    user_task_runs = 0;
-    while (user_task_runs < kCoroutineRunsLimit) {
-      DequeueCoro(coro);
+    DequeueCoro(coro);
+    if (!keep_running_) {
+      // May dequeue succeed but the system is shutting down
+      break;
+    }
 
-      // Mutex is not available, push back to the queue
-      if (coro->GetState() == CoroState::kWaitingMutex) {
-        if (!coro->TryLock()) {
-          EnqueueCoro(std::move(coro));
-          break;
-        }
-      }
-
-      if (coro->GetState() == CoroState::kWaitingIo && !coro->IsIoCompleted()) {
+    // Mutex is not available, push back to the queue
+    if (coro->GetState() == CoroState::kWaitingMutex) {
+      if (!coro->TryLock()) {
         EnqueueCoro(std::move(coro));
-        break;
+        continue;
       }
+    }
 
-      // Run the coro
-      RunCoroutine(coro.get());
+    if (coro->GetState() == CoroState::kWaitingIo && !coro->IsIoCompleted()) {
+      EnqueueCoro(std::move(coro));
+      continue;
+    }
 
-      // Check coro status after ThreadLoop is resuming
-      assert(coro->IsWaiting() || coro->IsDone());
-      if (coro->IsWaiting()) {
-        EnqueueCoro(std::move(coro));
-      }
+    // Run the coro
+    RunCoroutine(coro.get());
 
-      user_task_runs++;
+    // Check coro status after ThreadLoop is resuming
+    assert(coro->IsWaiting() || coro->IsDone());
+    if (coro->IsWaiting()) {
+      EnqueueCoro(std::move(coro));
     }
 
     // Run system tasks if any
-    for (auto& sys_task : sys_tasks_) {
-      RunCoroutine(sys_task.get());
+    if (++user_task_runs >= kCoroutineRunsLimit) {
+      RunSystemCoros();
+      user_task_runs = 0;
     }
+  }
+}
+
+void CoroExecutor::RunSystemCoros() {
+  for (auto& sys_task : sys_tasks_) {
+    RunCoroutine(sys_task.get());
   }
 }
 

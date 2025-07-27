@@ -95,11 +95,12 @@ public:
   /// The maximum writtern system transaction ID in the worker.
   TXID sys_tx_writtern_ = 0;
 
-  /// The written offset of the wal ring buffer.
+  /// Written offset of the wal ring buffer.
   uint64_t wal_buffered_ = 0;
 
-  /// Represents the flushed offset in the wal ring buffer.  The wal ring buffer is firstly written
-  /// by the worker thread then flushed to disk file by the group commit thread.
+  /// Flushed offset in the wal ring buffer. The wal ring buffer is firstly
+  /// written by the worker thread then flushed to disk file by the group commit
+  /// thread.
   std::atomic<uint64_t> wal_flushed_ = 0;
 
   /// The first WAL record of the current active transaction.

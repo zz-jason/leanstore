@@ -31,7 +31,7 @@ class Coroutine {
 public:
   using CoroFunc = std::function<void()>;
 
-  Coroutine(CoroFunc func) : func_(std::move(func)) {
+  Coroutine(CoroFunc&& func) : func_(std::move(func)) {
   }
   ~Coroutine() = default;
 
