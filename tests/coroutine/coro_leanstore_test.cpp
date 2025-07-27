@@ -34,7 +34,7 @@ protected:
 TEST_F(CoroLeanStoreTest, BasicKv) {
   StoreOption* option = CreateStoreOption(GetTestDataDir().c_str());
   option->create_from_scratch_ = true;
-  option->enable_wal_ = false;
+  option->enable_wal_ = true;
   option->worker_threads_ = 2;
   auto res = LeanStore::Open(option);
   ASSERT_TRUE(res);
@@ -54,7 +54,7 @@ TEST_F(CoroLeanStoreTest, BasicKv) {
   // create leanstore btree for table records
   storage::btree::BasicKV* btree;
   const auto* btree_name = "testTree1";
-  BTreeConfig btree_config{.enable_wal_ = false, .use_bulk_insert_ = false};
+  BTreeConfig btree_config{.enable_wal_ = true, .use_bulk_insert_ = false};
   auto future1 = store->Submit(
       [&]() {
         auto res = store->CreateBasicKv(btree_name, btree_config);

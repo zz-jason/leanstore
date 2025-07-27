@@ -79,7 +79,7 @@ public:
     // create table with transaction kv
     if (bench_transaction_kv_) {
       leanstore::storage::btree::TransactionKV* table;
-      BTreeConfig config{.enable_wal_ = false, .use_bulk_insert_ = false};
+      BTreeConfig config{.enable_wal_ = true, .use_bulk_insert_ = false};
       auto job = [&]() {
         auto res = store_->CreateTransactionKV(kTableName, config);
         if (!res) {
@@ -102,7 +102,7 @@ public:
     leanstore::storage::btree::BasicKV* table;
 
     auto job = [&]() {
-      BTreeConfig config{.enable_wal_ = false, .use_bulk_insert_ = false};
+      BTreeConfig config{.enable_wal_ = true, .use_bulk_insert_ = false};
       auto res = store_->CreateBasicKv(kTableName, config);
       if (!res) {
         Log::Fatal("Failed to create table: name={}, error={}", kTableName, res.error().ToString());

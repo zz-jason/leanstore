@@ -43,19 +43,19 @@ void GroupCommitter::CollectWalRecords(TXID& min_flushed_sys_tx, TXID& min_flush
   min_flushed_sys_tx = std::numeric_limits<TXID>::max();
   min_flushed_usr_tx = std::numeric_limits<TXID>::max();
 
-  for (auto worker_id = 0u; worker_id < worker_ctxs_.size(); worker_id++) {
-    auto& logging = worker_ctxs_[worker_id]->logging_;
+  for (auto i = 0u; i < worker_ctxs_.size(); i++) {
+    auto& logging = worker_ctxs_[i]->logging_;
 
     // collect logging info
     {
       LEAN_UNIQUE_LOCK(logging.rfa_tx_to_commit_mutex_);
-      num_rfa_txs[worker_id] = logging.rfa_tx_to_commit_.size();
+      num_rfa_txs[i] = logging.rfa_tx_to_commit_.size();
     }
 
-    auto last_req_version = wal_flush_req_copies[worker_id].version_;
-    auto version = logging.wal_flush_req_.Get(wal_flush_req_copies[worker_id]);
-    wal_flush_req_copies[worker_id].version_ = version;
-    const auto& req_copy = wal_flush_req_copies[worker_id];
+    auto last_req_version = wal_flush_req_copies[i].version_;
+    auto version = logging.wal_flush_req_.Get(wal_flush_req_copies[i]);
+    wal_flush_req_copies[i].version_ = version;
+    const auto& req_copy = wal_flush_req_copies[i];
 
     if (req_copy.version_ == last_req_version) {
       // no transaction log write since last round group commit, skip.

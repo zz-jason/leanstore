@@ -21,11 +21,18 @@
 #include <unistd.h>
 
 namespace leanstore {
-
 class LeanStore;
-namespace storage {
+} // namespace leanstore
+
+namespace leanstore::storage {
 class PageEvictor;
-} // namespace storage
+} // namespace leanstore::storage
+
+namespace leanstore::cr {
+class Logging;
+} // namespace leanstore::cr
+
+namespace leanstore {
 
 class CoroExecutor {
 public:
@@ -51,6 +58,7 @@ public:
   /// Stops the worker thread.
   void Stop() {
     keep_running_ = false;
+    user_task_queue_.Shutdown();
   }
 
   void Join() {
@@ -127,7 +135,8 @@ private:
 
   void ThreadLoop();
 
-private:
+  void RunSystemCoros();
+
   /// The LeanStore instance.
   LeanStore* store_ = nullptr;
 
