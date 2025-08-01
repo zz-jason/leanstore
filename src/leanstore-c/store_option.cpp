@@ -13,13 +13,12 @@ static constexpr StoreOption kDefaultStoreOption = {
 
     // Worker thread related options
     .worker_threads_ = 4,
-    .wal_buffer_size_ = 10 * 1024 * 1024,
 
     // Buffer pool related options
-    .page_size_ = 4 * 1024,
-    .buffer_frame_size_ = 512 + 4 * 1024,
+    .page_size_ = 4 << 10,                // 4KB
+    .buffer_frame_size_ = 512 + 4 * 1024, // 4KB + 512B
     .num_partitions_ = 64,
-    .buffer_pool_size_ = 1ull * 1024 * 1024 * 1024,
+    .buffer_pool_size_ = 1ull << 30, // 1 GB
     .free_pct_ = 1,
     .num_buffer_providers_ = 1,
     .buffer_write_batch_size_ = 1024,
@@ -30,6 +29,9 @@ static constexpr StoreOption kDefaultStoreOption = {
     // Logging and recovery related options
     .enable_wal_ = true,
     .enable_wal_fsync_ = false,
+    .commit_group_size_ = 4,
+    .wal_buffer_bytes_ = 10u << 20,    // 10 MB
+    .wal_flush_unit_bytes_ = 4u << 10, // 4KB
 
     // Generic BTree related options
     .enable_bulk_insert_ = false,

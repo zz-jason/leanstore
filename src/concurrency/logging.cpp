@@ -13,7 +13,7 @@ namespace leanstore::cr {
 uint32_t Logging::WalContiguousFreeSpace() {
   const auto flushed = wal_flushed_.load();
   if (flushed <= wal_buffered_) {
-    return wal_buffer_size_ - wal_buffered_;
+    return wal_buffer_bytes_ - wal_buffered_;
   }
   return flushed - wal_buffered_;
 }
@@ -25,7 +25,7 @@ void Logging::ReserveContiguousBuffer(uint32_t bytes_required) {
     const auto flushed = wal_flushed_.load();
     if (flushed <= wal_buffered_) {
       // carraige return, consume the last bytes from wal_buffered_ to the end
-      if (wal_buffer_size_ - wal_buffered_ < bytes_required) {
+      if (wal_buffer_bytes_ - wal_buffered_ < bytes_required) {
         WriteWalCarriageReturn();
         continue;
       }
@@ -80,7 +80,7 @@ void Logging::WriteWalTxFinish() {
 void Logging::WriteWalCarriageReturn() {
   LS_DCHECK(wal_flushed_ <= wal_buffered_,
             "CarriageReturn should only used for the last bytes in the wal buffer");
-  auto entry_size = wal_buffer_size_ - wal_buffered_;
+  auto entry_size = wal_buffer_bytes_ - wal_buffered_;
   auto* entry_ptr = wal_buffer_ + wal_buffered_;
   new (entry_ptr) WalCarriageReturn(entry_size);
   wal_buffered_ = 0;

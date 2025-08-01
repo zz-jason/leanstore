@@ -3,6 +3,7 @@
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/buffer-manager/page_evictor.hpp"
 #include "leanstore/utils/log.hpp"
+#include "utils/coroutine/auto_commit_protocol.hpp"
 #include "utils/coroutine/coroutine.hpp"
 
 #include <cassert>
@@ -11,8 +12,9 @@
 
 namespace leanstore {
 
-CoroExecutor::CoroExecutor(LeanStore* store, int64_t thread_id)
+CoroExecutor::CoroExecutor(LeanStore* store, AutoCommitProtocol* commit_protocol, int64_t thread_id)
     : store_(store),
+      commit_protocol_(commit_protocol),
       thread_id_(thread_id) {
   if (store_ != nullptr) {
     // init page evictor
@@ -28,6 +30,18 @@ CoroExecutor::CoroExecutor(LeanStore* store, int64_t thread_id)
 }
 
 void CoroExecutor::CreateSysCoros() {
+  // System coroutine for autonomous transaction commit
+  if (commit_protocol_ != nullptr) {
+    auto sys_coro = std::make_unique<Coroutine>([this]() {
+      while (keep_running_) {
+        commit_protocol_->Run();
+        CurrentCoro()->Yield(CoroState::kRunning);
+      }
+    });
+    Log::Info("Creating system coroutine for transaction commit");
+    sys_tasks_.emplace_back(std::move(sys_coro));
+  }
+
   // System coroutine for page eviction
   if (page_evictor_ != nullptr) {
     auto sys_coro = std::make_unique<Coroutine>([this]() {
