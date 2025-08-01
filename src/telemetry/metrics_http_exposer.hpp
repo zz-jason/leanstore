@@ -10,6 +10,8 @@
 
 #include <httplib.h>
 
+#include <fstream>
+
 #include <fcntl.h>
 #include <unistd.h>
 
