@@ -9,47 +9,15 @@ on:
 jobs:
   ut_coverage:
     runs-on: ubuntu-24.04
+    container:
+      image: zzjason/leanstore-dev:latest
     name: Unit Tests - Coverage
     steps:
-
     - name: Check out repository
       uses: actions/checkout@v3
 
-    - name: Install dependencies
-      run: |
-        cat /etc/lsb-release;
-        sudo apt update;
-        sudo apt install -y build-essential git cmake make gcc-13 g++-13;
-        sudo apt install -y libaio-dev python3-pip cppcheck ninja-build;
-        sudo apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu;
-        sudo apt install -y curl zip unzip tar pkg-config;
-        sudo apt install -y autoconf libtool;
-        sudo apt install -y clang-format-18;
-        sudo ln -sf /usr/bin/cpp-13          /usr/bin/cpp;
-        sudo ln -sf /usr/bin/g++-13          /usr/bin/g++;
-        sudo ln -sf /usr/bin/gcc-13          /usr/bin/gcc;
-        sudo ln -sf /usr/bin/gcc-ar-13       /usr/bin/gcc-ar;
-        sudo ln -sf /usr/bin/gcc-nm-13       /usr/bin/gcc-nm;
-        sudo ln -sf /usr/bin/gcc-ranlib-13   /usr/bin/gcc-ranlib;
-        sudo ln -sf /usr/bin/gcov-13         /usr/bin/gcov;
-        sudo ln -sf /usr/bin/gcov-dump-13    /usr/bin/gcov-dump;
-        sudo ln -sf /usr/bin/gcov-tool-13    /usr/bin/gcov-tool;
-        sudo ln -sf /usr/bin/lto-dump-13     /usr/bin/lto-dump;
-        sudo ln -sf /usr/bin/g++-13          /usr/bin/c++;
-        sudo ln -sf /usr/bin/gcc-13          /usr/bin/cc;
-        sudo ln -sf /usr/bin/clang-format-18 /usr/bin/clang-format;
-        pip3 install gcovr==6.0 --break-system-packages;
-        sudo git clone https://github.com/Microsoft/vcpkg.git /opt/vcpkg;
-        echo 'export VCPKG_ROOT=/opt/vcpkg' >> ~/.bashrc;
-        echo 'export PATH=$VCPKG_ROOT:$PATH' >> ~/.bashrc;
-        echo 'export VCPKG_FORCE_SYSTEM_BINARIES=1' >> ~/.bashrc;
-        sudo rm -rf /var/lib/apt/lists/*;
-
     - name: Config project
       run: |
-        export VCPKG_ROOT=/opt/vcpkg;
-        export PATH=$VCPKG_ROOT:$PATH;
-        export VCPKG_FORCE_SYSTEM_BINARIES=1;
         which vcpkg;
         cmake --preset debug_tsan;
 

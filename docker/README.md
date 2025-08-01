@@ -4,22 +4,22 @@ This is the Dockerfile to construct the build image for LeanStore.
 
 ## How to use
 
-Build the docker image:
+Build and update image in dockerhub:
 
 ```sh
-docker build -t leanstore-dev .
+docker build --tag zzjason/leanstore-dev:latest .
+docker push zzjason/leanstore-dev:latest
 ```
 
-Run a container based on the image:
+Build leanstore inside a container:
 
 ```sh
-docker run -it --privileged --network=host -v /path/to/leanstore/on/host:/path/to/leanstore/on/container leanstore-dev bash
-```
+# Run a container based on the image:
+export LEANSTORE_HOME=/path/to/leanstore/on/host
+docker run -it --privileged --network=host -v ${LEANSTORE_HOME}:/root/code/leanstore zzjason/leanstore-dev:latest bash
 
-Build and test LeanStore in the running container:
-
-```sh
-cd /path/to/leanstore/on/container
+# Build and test LeanStore in the running container:
+cd /root/code/leanstore
 cmake --preset debug
 cmake --build build/debug -j `nproc`
 ctest --test-dir build/debug
