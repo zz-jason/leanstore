@@ -42,9 +42,6 @@ typedef struct StoreOption {
   /// The number of worker threads.
   uint64_t worker_threads_;
 
-  /// The WAL buffer size for each worker (bytes).
-  uint64_t wal_buffer_size_;
-
   // ---------------------------------------------------------------------------
   // Buffer pool related options
   // ---------------------------------------------------------------------------
@@ -88,6 +85,16 @@ typedef struct StoreOption {
 
   /// Whether to execute fsync after each WAL write.
   bool enable_wal_fsync_;
+
+  /// Size of the autonomous commit group.
+  uint64_t commit_group_size_;
+
+  /// The WAL buffer size for each worker (bytes).
+  uint64_t wal_buffer_bytes_;
+
+  /// The threshold (bytes) for flushing WAL entries to disk. Log buffer is flushed when
+  /// the pending flush wal size reaches this threshold.
+  uint32_t wal_flush_unit_bytes_;
 
   // ---------------------------------------------------------------------------
   // Generic BTree related options

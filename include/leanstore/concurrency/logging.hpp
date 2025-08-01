@@ -5,12 +5,15 @@
 #include "leanstore/sync/optimistic_guarded.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/counter_util.hpp"
+#include "leanstore/utils/misc.hpp"
 #include "leanstore/utils/portable.hpp"
+#include "utils/coroutine/coro_io.hpp"
 #include "utils/coroutine/lean_mutex.hpp"
 
 #include <algorithm>
 #include <atomic>
 #include <functional>
+#include <string_view>
 #include <vector>
 
 namespace leanstore::cr {
@@ -87,7 +90,7 @@ public:
   ALIGNAS(512) uint8_t* wal_buffer_;
 
   /// The size of the wal ring buffer.
-  uint64_t wal_buffer_size_;
+  uint64_t wal_buffer_bytes_;
 
   /// Used to track the write order of wal entries.
   LID lsn_clock_ = 0;
@@ -105,6 +108,12 @@ public:
 
   /// The first WAL record of the current active transaction.
   uint64_t tx_wal_begin_;
+
+  /// File descriptor for the write-ahead log.
+  int32_t wal_fd_ = -1;
+
+  /// Start offset of the next WalEntry.
+  uint64_t wal_size_ = 0;
 
 public:
   void UpdateSignaledCommitTs(const LID signaled_commit_ts) {
@@ -138,7 +147,53 @@ public:
     sys_tx_writtern_ = std::max(sys_tx_writtern_, sys_tx_id);
   }
 
+  void InitWalFd(std::string_view file_path) {
+    wal_fd_ = open(file_path.data(), kFlags, kFileMode);
+    if (wal_fd_ < 0) {
+      Log::Fatal("Failed to init wal, file_path={}, error={}", file_path, strerror(errno));
+    }
+    Log::Info("Init wal succeed, file_path={}, fd={}", file_path, wal_fd_);
+  }
+
+  bool CoroFlush() {
+    if (wal_buffered_ == wal_flushed_) {
+      return false; // nothing to flush
+    }
+
+    if (wal_buffered_ > wal_flushed_) {
+      CoroFlush(wal_flushed_, wal_buffered_);
+    } else if (wal_buffered_ < wal_flushed_) {
+      CoroFlush(wal_flushed_, wal_buffer_bytes_);
+      CoroFlush(0, wal_buffered_);
+    }
+    wal_flushed_.store(wal_buffered_, std::memory_order_release);
+    return true;
+  }
+
 private:
+  static constexpr auto kFlags = O_DIRECT | O_RDWR | O_CREAT | O_TRUNC;
+  static constexpr auto kFileMode = 0666;
+  static constexpr auto kAligment = 4096u;
+
+  void CoroFlush(uint64_t lower, uint64_t upper) {
+
+    auto lower_aligned = utils::AlignDown(lower, kAligment);
+    auto upper_aligned = utils::AlignUp(upper, kAligment);
+    auto* buf_aligned = wal_buffer_ + lower_aligned;
+    auto count_aligned = upper_aligned - lower_aligned;
+    auto offset_aligned = utils::AlignDown(wal_size_, kAligment);
+
+    CoroWrite(wal_fd_, buf_aligned, count_aligned, offset_aligned);
+    wal_size_ += upper - lower;
+  }
+
+  // uint64_t PendingFlushBytes() const {
+  //   if (wal_buffered_ >= wal_flushed_) {
+  //     return wal_flushed_ - wal_flushed_;
+  //   }
+  //   return wal_buffered_ + (wal_buffer_bytes_ - wal_flushed_);
+  // }
+
   void PublishWalBufferedOffset();
 
   void PublishWalFlushReq();

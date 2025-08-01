@@ -31,9 +31,9 @@ WorkerContext::WorkerContext(uint64_t worker_id, std::vector<WorkerContext*>& al
       all_workers_(all_workers) {
 
   // init wal buffer
-  logging_.wal_buffer_size_ = store_->store_option_->wal_buffer_size_;
-  logging_.wal_buffer_ = (uint8_t*)(std::aligned_alloc(512, logging_.wal_buffer_size_));
-  std::memset(logging_.wal_buffer_, 0, logging_.wal_buffer_size_);
+  logging_.wal_buffer_bytes_ = store_->store_option_->wal_buffer_bytes_;
+  logging_.wal_buffer_ = (uint8_t*)(std::aligned_alloc(512, logging_.wal_buffer_bytes_));
+  std::memset(logging_.wal_buffer_, 0, logging_.wal_buffer_bytes_);
 
   cc_.lcb_cache_val_ = std::make_unique<uint64_t[]>(all_workers_.size());
   cc_.lcb_cache_key_ = std::make_unique<uint64_t[]>(all_workers_.size());

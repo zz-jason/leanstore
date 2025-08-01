@@ -16,6 +16,8 @@ class WorkerContext;
 
 namespace leanstore {
 
+class AutoCommitProtocol;
+
 /// The CoroScheduler is expected to be run on user threads, where each thread
 /// can submit coroutines to be executed. It manages a pool of threads, each
 /// capable of running coroutines concurrently. The scheduler ensures that
@@ -23,16 +25,7 @@ namespace leanstore {
 /// parallel execution of user tasks.
 class CoroScheduler {
 public:
-  CoroScheduler(LeanStore* store, int64_t num_threads)
-      : store_(store),
-        num_threads_(num_threads),
-        coro_executors_(num_threads),
-        worker_ctxs_(num_threads, nullptr) {
-    assert(num_threads > 0 && "Number of threads must be greater than zero");
-    for (int64_t i = 0; i < num_threads; ++i) {
-      coro_executors_[i] = std::make_unique<CoroExecutor>(store, i);
-    }
-  }
+  CoroScheduler(LeanStore* store, int64_t num_threads);
   ~CoroScheduler() = default;
 
   // No copy or move semantics
@@ -48,6 +41,7 @@ public:
 
     InitCoroExecutors();
     InitWorkerCtxs();
+    InitLogging();
   }
 
   /// Deinitializes the CoroScheduler, stopping all CoroExecutors and worker contexts.
@@ -76,6 +70,9 @@ private:
   /// Initializes worker contexts for each CoroExecutor.
   void InitWorkerCtxs();
 
+  /// Initializes logging for each CoroExecutor.
+  void InitLogging();
+
   /// Pointer to the LeanStore instance.
   LeanStore* store_ = nullptr;
 
@@ -87,6 +84,9 @@ private:
 
   /// All the thread-local worker references
   std::vector<cr::WorkerContext*> worker_ctxs_;
+
+  /// All the AutoCommitProtocol instances for each commit group.
+  std::vector<std::unique_ptr<AutoCommitProtocol>> commit_protocols_;
 };
 
 template <typename F, typename R>

@@ -74,7 +74,10 @@ public:
   /// Get the PerfCounters of the current worker.
   PerfCounters* GetPerfCounters();
 
-public:
+  Logging& GetLogging() {
+    return logging_;
+  }
+
   /// thread-local storage for WorkerContext.
   static thread_local std::unique_ptr<WorkerContext> s_tls_worker_ctx;
 

@@ -3,6 +3,7 @@
 #include "leanstore//utils/jump_mu.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
+#include "utils/coroutine/auto_commit_protocol.hpp"
 #include "utils/coroutine/blocking_queue_mpsc.hpp"
 #include "utils/coroutine/coro_env.hpp"
 #include "utils/coroutine/coro_io.hpp"
@@ -36,14 +37,14 @@ namespace leanstore {
 
 class CoroExecutor {
 public:
-  CoroExecutor(LeanStore* store, int64_t thread_id = -1);
+  static constexpr auto kCoroExecNamePattern = "coro_exec_{}";
 
+  CoroExecutor(LeanStore* store, AutoCommitProtocol* commit_protocol, int64_t thread_id = -1);
   ~CoroExecutor();
 
+  // No copy or move semantics
   CoroExecutor(const CoroExecutor&) = delete;
   CoroExecutor& operator=(const CoroExecutor&) = delete;
-  CoroExecutor(CoroExecutor&&) = delete;
-  CoroExecutor& operator=(CoroExecutor&&) = delete;
 
   /// Starts the worker thread.
   void Start() {
@@ -118,7 +119,6 @@ private:
   }
 
   void ThreadInit() {
-    static constexpr auto kCoroExecNamePattern = "coro_exec_{}";
     if (thread_id_ == -1) {
       static std::atomic<int64_t> thread_count{0};
       thread_id_ = thread_count.fetch_add(1, std::memory_order_relaxed);
@@ -139,6 +139,8 @@ private:
 
   /// The LeanStore instance.
   LeanStore* store_ = nullptr;
+
+  AutoCommitProtocol* commit_protocol_;
 
   /// Pointer to the currently running coroutine.
   Coroutine* current_coroutine_ = nullptr;

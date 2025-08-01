@@ -4,7 +4,6 @@
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/utils/log.hpp"
 #include "utils/coroutine/coro_executor.hpp"
 
 #include <gtest/gtest.h>
@@ -32,9 +31,19 @@ protected:
 };
 
 TEST_F(CoroLeanStoreTest, BasicKv) {
+  static constexpr auto kBtreeName = "test_btree";
+  static constexpr auto kNumKeys = 100;
+  static constexpr auto kKeyPattern = "key_btree_LL_xxxxxxxxxxxx_{}";
+  static constexpr auto kValPattern = "VAL_BTREE_LL_YYYYYYYYYYYY_{}";
+  static constexpr auto kEnableWal = true;
+  static constexpr auto kBtreeConfig = BTreeConfig{
+      .enable_wal_ = kEnableWal,
+      .use_bulk_insert_ = false,
+  };
+
   StoreOption* option = CreateStoreOption(GetTestDataDir().c_str());
   option->create_from_scratch_ = true;
-  option->enable_wal_ = true;
+  option->enable_wal_ = kEnableWal;
   option->worker_threads_ = 2;
   auto res = LeanStore::Open(option);
   ASSERT_TRUE(res);
@@ -43,49 +52,41 @@ TEST_F(CoroLeanStoreTest, BasicKv) {
   ASSERT_NE(store, nullptr);
 
   // prepare key-value pairs to insert
-  static constexpr size_t kNumKeys = 10;
   std::vector<std::tuple<std::string, std::string>> kv_to_test;
   for (size_t i = 0; i < kNumKeys; ++i) {
-    std::string key("key_btree_LL_xxxxxxxxxxxx_" + std::to_string(i));
-    std::string val("VAL_BTREE_LL_YYYYYYYYYYYY_" + std::to_string(i));
+    std::string key(std::format(kKeyPattern, i));
+    std::string val(std::format(kValPattern, i));
     kv_to_test.push_back(std::make_tuple(key, val));
   }
 
   // create leanstore btree for table records
   storage::btree::BasicKV* btree;
-  const auto* btree_name = "testTree1";
-  BTreeConfig btree_config{.enable_wal_ = true, .use_bulk_insert_ = false};
-  auto future1 = store->Submit(
-      [&]() {
-        auto res = store->CreateBasicKv(btree_name, btree_config);
-        EXPECT_TRUE(res);
-        EXPECT_NE(res.value(), nullptr);
-        Log::Info("Created BasicKV btree, name={}", btree_name);
+  auto job_init_btree = [&]() {
+    // create btree
+    auto res = store->CreateBasicKv(kBtreeName, kBtreeConfig);
+    EXPECT_TRUE(res);
+    EXPECT_NE(res.value(), nullptr);
 
-        // insert some values
-        btree = res.value();
-        for (const auto& [key, val] : kv_to_test) {
-          EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
-        }
-        Log::Info("Inserted {} key-value pairs into BasicKV btree, name={}", kv_to_test.size(),
-                  btree_name);
-      },
-      0);
-  future1->Wait();
+    // insert some values
+    btree = res.value();
+    for (const auto& [key, val] : kv_to_test) {
+      EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
+    }
+  };
+  store->Submit(job_init_btree, 0)->Wait();
 
-  auto future2 = store->Submit(
-      [&]() {
-        std::string copied_value;
-        auto copy_value_out = [&](Slice val) {
-          copied_value = std::string((const char*)val.data(), val.size());
-        };
-        for (const auto& [key, expected_val] : kv_to_test) {
-          EXPECT_EQ(btree->Lookup(key, copy_value_out), OpCode::kOK);
-          EXPECT_EQ(copied_value, expected_val);
-        }
-      },
-      1);
-  future2->Wait();
+  // read back the values
+  auto job_lookup = [&]() {
+    std::string copied_value;
+    auto copy_value_out = [&](Slice val) {
+      copied_value = std::string((const char*)val.data(), val.size());
+    };
+    for (const auto& [key, expected_val] : kv_to_test) {
+      EXPECT_EQ(btree->Lookup(key, copy_value_out), OpCode::kOK);
+      EXPECT_EQ(copied_value, expected_val);
+    }
+  };
+  store->Submit(job_lookup, 1)->Wait();
 }
 
 } // namespace leanstore::test

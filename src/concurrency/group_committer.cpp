@@ -72,7 +72,7 @@ void GroupCommitter::CollectWalRecords(TXID& min_flushed_sys_tx, TXID& min_flush
     // prepare IOCBs on demand
     const uint64_t buffered = req_copy.wal_buffered_;
     const uint64_t flushed = logging.wal_flushed_;
-    const uint64_t buffer_end = store_->store_option_->wal_buffer_size_;
+    const uint64_t buffer_end = store_->store_option_->wal_buffer_bytes_;
     if (buffered > flushed) {
       Append(logging.wal_buffer_, flushed, buffered);
     } else if (buffered < flushed) {
@@ -184,6 +184,6 @@ void GroupCommitter::Append(uint8_t* buf, uint64_t lower, uint64_t upper) {
 
   aio_.PrepareWrite(wal_fd_, buf_aligned, count_aligned, offset_aligned);
   wal_size_ += upper - lower;
-};
+}
 
 } // namespace leanstore::cr

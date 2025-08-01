@@ -166,6 +166,10 @@ public:
     return std::string(store_option_->store_dir_) + "/db.wal";
   }
 
+  std::string GetWalDir() const {
+    return std::string(store_option_->store_dir_) + "/wal";
+  }
+
 private:
   void StartBackgroundThreads();
   void StopBackgroundThreads();
