@@ -20,9 +20,11 @@ RUN rm -rf /opt/env.sh \
 # install vcpkg
 RUN git clone --depth 1 https://github.com/Microsoft/vcpkg.git /opt/vcpkg \
  && mv /opt/vcpkg/triplets/x64-linux.cmake /opt/vcpkg/triplets/x64-linux-static.cmake \
+ && mkdir -p /opt/vcpkg_cache \
  && echo 'export VCPKG_ROOT=/opt/vcpkg' >> /opt/env.sh \
  && echo 'export PATH=$VCPKG_ROOT:$PATH' >> /opt/env.sh \
- && echo 'export VCPKG_FORCE_SYSTEM_BINARIES=1' >> /opt/env.sh
+ && echo 'export VCPKG_FORCE_SYSTEM_BINARIES=1' >> /opt/env.sh \
+ && echo 'export VCPKG_DEFAULT_BINARY_CACHE=/opt/vcpkg_cache' > /opt/env.sh
 
 COPY vcpkg-triplets/x64-linux.cmake /opt/vcpkg/triplets/x64-linux.cmake
 COPY vcpkg-triplets/arm64-linux.cmake /opt/vcpkg/triplets/arm64-linux.cmake
@@ -30,6 +32,7 @@ COPY vcpkg-triplets/arm64-linux.cmake /opt/vcpkg/triplets/arm64-linux.cmake
 ENV VCPKG_ROOT="/opt/vcpkg"
 ENV PATH="$VCPKG_ROOT:$PATH"
 ENV VCPKG_FORCE_SYSTEM_BINARIES=1
+ENV VCPKG_DEFAULT_BINARY_CACHE=/opt/vcpkg_cache
 
 
 # install vcpkg packages
