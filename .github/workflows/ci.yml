@@ -8,10 +8,10 @@ on:
 
 jobs:
   ut_coverage:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     container:
       image: zzjason/leanstore-dev:latest
-    name: Unit Tests - Coverage
+    name: Unit Tests && Code Coverage
     steps:
     - name: Check out repository
       uses: actions/checkout@v3
