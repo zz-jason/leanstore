@@ -53,7 +53,7 @@ public:
     StoreOption* option = CreateStoreOption(datadir_str.c_str());
     option->create_from_scratch_ = create_from_scratch;
     option->enable_eager_gc_ = true;
-    option->enable_wal_ = false;
+    option->enable_wal_ = true;
     option->worker_threads_ = FLAGS_ycsb_threads;
     option->buffer_pool_size_ = FLAGS_ycsb_mem_gb << 30;
 
