@@ -4,6 +4,8 @@
 #include "leanstore/concurrency/worker_context.hpp"
 #include "leanstore/exceptions.hpp"
 #include "leanstore/utils/log.hpp"
+#include "utils/coroutine/coro_env.hpp"
+#include "utils/coroutine/coroutine.hpp"
 #include "utils/to_json.hpp"
 
 #include <cstring>
@@ -27,6 +29,9 @@ void Logging::ReserveContiguousBuffer(uint32_t bytes_required) {
       // carraige return, consume the last bytes from wal_buffered_ to the end
       if (wal_buffer_bytes_ - wal_buffered_ < bytes_required) {
         WriteWalCarriageReturn();
+#ifdef ENABLE_COROUTINE
+        CoroEnv::CurCoro()->Yield(CoroState::kWaitingIo);
+#endif
         continue;
       }
       // Have enough space from wal_buffered_ to the end
@@ -35,6 +40,9 @@ void Logging::ReserveContiguousBuffer(uint32_t bytes_required) {
 
     if (flushed - wal_buffered_ < bytes_required) {
       // wait for group commit thread to commit the written wal entries
+#ifdef ENABLE_COROUTINE
+      CoroEnv::CurCoro()->Yield(CoroState::kWaitingIo);
+#endif
       continue;
     }
     return;

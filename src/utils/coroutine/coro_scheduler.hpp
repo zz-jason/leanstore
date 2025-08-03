@@ -107,8 +107,8 @@ inline std::shared_ptr<CoroFuture<R>> CoroScheduler::Submit(F&& coro_func, int64
       future->SetResult(std::move(result));
     }
   };
-
   coro_executors_[thread_id]->EnqueueCoro(std::make_unique<Coroutine>(std::move(coro_job)));
+
   return coro_future;
 }
 

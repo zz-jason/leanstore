@@ -4,6 +4,7 @@
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/utils/jump_mu.hpp"
 #include "leanstore/utils/log.hpp"
+#include "utils/coroutine/coro_env.hpp"
 
 #include <atomic>
 
@@ -99,12 +100,22 @@ public:
               state_ == GuardState::kSharedOptimistic);
   }
 
-  inline void ToOptimisticSpin() {
-    LS_DCHECK(state_ == GuardState::kUninitialized && latch_ != nullptr);
+  bool TryLockOptimistic() {
     version_ = latch_->GetVersion();
-    while (HasExclusiveMark(version_)) {
+    if (HasExclusiveMark(version_)) {
       contented_ = true;
-      version_ = latch_->GetVersion();
+      return false;
+    }
+    return true;
+  }
+
+  void ToOptimisticSpin() {
+    LS_DCHECK(state_ == GuardState::kUninitialized && latch_ != nullptr);
+    while (!TryLockOptimistic()) {
+#ifdef ENABLE_COROUTINE
+      CoroEnv::CurCoro()->SetTryLockFunc([this]() { return TryLockOptimistic(); });
+      CoroEnv::CurCoro()->Yield(CoroState::kWaitingMutex);
+#endif
     }
     state_ = GuardState::kSharedOptimistic;
   }
