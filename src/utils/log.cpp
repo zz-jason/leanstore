@@ -20,6 +20,7 @@ static constexpr int kFlushIntervalSeconds = 3;
 namespace {
 std::mutex logger_mutex;
 std::shared_ptr<spdlog::logger> logger = nullptr;
+std::shared_ptr<spdlog::logger> origin_default_logger = spdlog::default_logger();
 
 spdlog::level::level_enum LogLevelToSpdlogLevel(LogLevel level) {
   switch (level) {
@@ -65,7 +66,7 @@ void Log::Deinit() {
 
   spdlog::info("Logger deinited");
   spdlog::drop(kLoggerName);
-  spdlog::set_default_logger(nullptr);
+  spdlog::set_default_logger(origin_default_logger);
   spdlog::flush_every(std::chrono::seconds(0));
   logger = nullptr;
 }

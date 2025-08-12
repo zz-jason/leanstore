@@ -11,7 +11,7 @@
 #include <vector>
 
 namespace leanstore::cr {
-class WorkerContext;
+class TxManager;
 } // namespace leanstore::cr
 
 namespace leanstore {
@@ -26,7 +26,7 @@ class AutoCommitProtocol;
 class CoroScheduler {
 public:
   CoroScheduler(LeanStore* store, int64_t num_threads);
-  ~CoroScheduler() = default;
+  ~CoroScheduler();
 
   // No copy or move semantics
   CoroScheduler(const CoroScheduler&) = delete;
@@ -83,7 +83,7 @@ private:
   std::vector<std::unique_ptr<CoroExecutor>> coro_executors_;
 
   /// All the thread-local worker references
-  std::vector<cr::WorkerContext*> worker_ctxs_;
+  std::vector<std::unique_ptr<cr::TxManager>> tx_mgrs_;
 
   /// All the AutoCommitProtocol instances for each commit group.
   std::vector<std::unique_ptr<AutoCommitProtocol>> commit_protocols_;

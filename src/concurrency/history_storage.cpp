@@ -3,6 +3,7 @@
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/core/b_tree_node.hpp"
 #include "leanstore/btree/core/btree_iter_mut.hpp"
+#include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/sync/scoped_hybrid_guard.hpp"
 #include "leanstore/units.hpp"
@@ -10,6 +11,7 @@
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
+#include "utils/coroutine/mvcc_manager.hpp"
 
 #include <functional>
 
@@ -146,7 +148,7 @@ void HistoryStorage::PurgeVersions(TXID from_tx_id, TXID to_tx_id,
           if (guarded_leaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
             x_iter->SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
               JUMPMU_TRY() {
-                TXID sys_tx_id = btree->store_->AllocSysTxTs();
+                TXID sys_tx_id = btree->store_->MvccManager()->AllocSysTxTs();
                 btree->TryMergeMayJump(sys_tx_id, *to_merge);
               }
               JUMPMU_CATCH() {
@@ -238,7 +240,7 @@ void HistoryStorage::PurgeVersions(TXID from_tx_id, TXID to_tx_id,
             if (guarded_leaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
               x_iter->SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
                 JUMPMU_TRY() {
-                  TXID sys_tx_id = btree->store_->AllocSysTxTs();
+                  TXID sys_tx_id = btree->store_->MvccManager()->AllocSysTxTs();
                   btree->TryMergeMayJump(sys_tx_id, *to_merge);
                 }
                 JUMPMU_CATCH() {
@@ -320,9 +322,9 @@ void HistoryStorage::VisitRemovedVersions(TXID from_tx_id, TXID to_tx_id,
       auto& version_container = *VersionMeta::From(x_iter->MutableVal().Data());
       const TREEID tree_id = version_container.tree_id_;
       const bool called_before = version_container.called_before_;
-      LS_DCHECK(called_before == false,
-                "Each remove version should be visited only once, treeId={}, txId={}", tree_id,
-                cur_tx_id);
+      LEAN_DCHECK(called_before == false,
+                  "Each remove version should be visited only once, treeId={}, txId={}", tree_id,
+                  cur_tx_id);
 
       version_container.called_before_ = true;
 

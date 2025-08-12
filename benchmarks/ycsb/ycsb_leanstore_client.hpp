@@ -4,7 +4,7 @@
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/concurrency/cr_manager.hpp"
-#include "leanstore/concurrency/worker_context.hpp"
+#include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/log.hpp"

@@ -72,12 +72,12 @@ public:
   }
 
   void JumpIfModifiedByOthers() {
-    LS_DCHECK(state_ == GuardState::kSharedOptimistic || version_ == latch_->GetVersion());
+    LEAN_DCHECK(state_ == GuardState::kSharedOptimistic || version_ == latch_->GetVersion());
 
     if (state_ == GuardState::kSharedOptimistic && version_ != latch_->GetVersion()) {
-      LS_DLOG("JumpIfModifiedByOthers, version_(expected)={}, "
-              "latch_->GetVersion()(actual)={}",
-              version_, latch_->GetVersion());
+      LEAN_DLOG("JumpIfModifiedByOthers, version_(expected)={}, "
+                "latch_->GetVersion()(actual)={}",
+                version_, latch_->GetVersion());
       leanstore::JumpContext::Jump();
     }
   }
@@ -96,8 +96,8 @@ public:
       break;
     }
     }
-    LS_DCHECK(state_ == GuardState::kMoved || state_ == GuardState::kUninitialized ||
-              state_ == GuardState::kSharedOptimistic);
+    LEAN_DCHECK(state_ == GuardState::kMoved || state_ == GuardState::kUninitialized ||
+                state_ == GuardState::kSharedOptimistic);
   }
 
   bool TryLockOptimistic() {
@@ -110,7 +110,7 @@ public:
   }
 
   void ToOptimisticSpin() {
-    LS_DCHECK(state_ == GuardState::kUninitialized && latch_ != nullptr);
+    LEAN_DCHECK(state_ == GuardState::kUninitialized && latch_ != nullptr);
     while (!TryLockOptimistic()) {
 #ifdef ENABLE_COROUTINE
       CoroEnv::CurCoro()->SetTryLockFunc([this]() { return TryLockOptimistic(); });
@@ -121,7 +121,7 @@ public:
   }
 
   inline void ToOptimisticOrJump() {
-    LS_DCHECK(state_ == GuardState::kUninitialized && latch_ != nullptr);
+    LEAN_DCHECK(state_ == GuardState::kUninitialized && latch_ != nullptr);
     version_ = latch_->GetVersion();
     if (HasExclusiveMark(version_)) {
       contented_ = true;
@@ -134,7 +134,7 @@ public:
     if (state_ == GuardState::kSharedOptimistic || state_ == GuardState::kSharedPessimistic) {
       return;
     }
-    LS_DCHECK(state_ == GuardState::kUninitialized || latch_ != nullptr);
+    LEAN_DCHECK(state_ == GuardState::kUninitialized || latch_ != nullptr);
     version_ = latch_->GetVersion();
     if (HasExclusiveMark(version_)) {
       lock_shared();
@@ -145,7 +145,7 @@ public:
   }
 
   inline void ToOptimisticOrExclusive() {
-    LS_DCHECK(state_ == GuardState::kUninitialized && latch_ != nullptr);
+    LEAN_DCHECK(state_ == GuardState::kUninitialized && latch_ != nullptr);
     version_ = latch_->GetVersion();
     if (HasExclusiveMark(version_)) {
       lock_exclusive();
@@ -156,7 +156,7 @@ public:
   }
 
   inline void ToExclusiveMayJump() {
-    LS_DCHECK(state_ != GuardState::kSharedPessimistic);
+    LEAN_DCHECK(state_ != GuardState::kSharedPessimistic);
     if (state_ == GuardState::kExclusivePessimistic) {
       return;
     }
@@ -178,7 +178,8 @@ public:
   }
 
   inline void ToSharedMayJump() {
-    LS_DCHECK(state_ == GuardState::kSharedOptimistic || state_ == GuardState::kSharedPessimistic);
+    LEAN_DCHECK(state_ == GuardState::kSharedOptimistic ||
+                state_ == GuardState::kSharedPessimistic);
     if (state_ == GuardState::kSharedPessimistic) {
       return;
     }
@@ -196,7 +197,7 @@ public:
 
   // For buffer management
   inline void TryToExclusiveMayJump() {
-    LS_DCHECK(state_ == GuardState::kSharedOptimistic);
+    LEAN_DCHECK(state_ == GuardState::kSharedOptimistic);
     const uint64_t new_version = version_ + kLatchExclusiveBit;
     uint64_t expected = version_;
 
@@ -214,7 +215,7 @@ public:
   }
 
   inline void TryToSharedMayJump() {
-    LS_DCHECK(state_ == GuardState::kSharedOptimistic);
+    LEAN_DCHECK(state_ == GuardState::kSharedOptimistic);
     if (!latch_->shared_mutex_.try_lock_shared()) {
       leanstore::JumpContext::Jump();
     }
@@ -230,30 +231,30 @@ private:
 
   inline void lock_exclusive() {
     latch_->shared_mutex_.lock();
-    LS_DCHECK(!HasExclusiveMark(latch_->GetVersion()));
+    LEAN_DCHECK(!HasExclusiveMark(latch_->GetVersion()));
     version_ = latch_->GetVersion() + kLatchExclusiveBit;
     latch_->version_.store(version_, std::memory_order_release);
     state_ = GuardState::kExclusivePessimistic;
   }
 
   inline void unlock_exclusive() {
-    LS_DCHECK(HasExclusiveMark(latch_->GetVersion()));
+    LEAN_DCHECK(HasExclusiveMark(latch_->GetVersion()));
     version_ += kLatchExclusiveBit;
     latch_->version_.store(version_, std::memory_order_release);
-    LS_DCHECK(!HasExclusiveMark(latch_->GetVersion()));
+    LEAN_DCHECK(!HasExclusiveMark(latch_->GetVersion()));
     latch_->shared_mutex_.unlock();
     state_ = GuardState::kSharedOptimistic;
   }
 
   inline void lock_shared() {
     latch_->shared_mutex_.lock_shared();
-    LS_DCHECK(!HasExclusiveMark(latch_->GetVersion()));
+    LEAN_DCHECK(!HasExclusiveMark(latch_->GetVersion()));
     version_ = latch_->GetVersion();
     state_ = GuardState::kSharedPessimistic;
   }
 
   inline void unlock_shared() {
-    LS_DCHECK(!HasExclusiveMark(latch_->GetVersion()));
+    LEAN_DCHECK(!HasExclusiveMark(latch_->GetVersion()));
     latch_->shared_mutex_.unlock_shared();
     state_ = GuardState::kSharedOptimistic;
   }

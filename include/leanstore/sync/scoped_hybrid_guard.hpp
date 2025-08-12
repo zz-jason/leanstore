@@ -139,7 +139,8 @@ private:
 
 inline void ScopedHybridGuard::GetOptimistic(HybridMutex& latch, LatchMode latch_mode,
                                              std::function<void()> copier) {
-  LS_DCHECK(latch_mode == LatchMode::kOptimisticOrJump || latch_mode == LatchMode::kOptimisticSpin);
+  LEAN_DCHECK(latch_mode == LatchMode::kOptimisticOrJump ||
+              latch_mode == LatchMode::kOptimisticSpin);
   while (true) {
     JUMPMU_TRY() {
       auto guard = ScopedHybridGuard(latch, latch_mode);
@@ -229,18 +230,18 @@ inline void ScopedHybridGuard::Unlock() {
 }
 
 inline void ScopedHybridGuard::lock_optimistic_or_jump() {
-  LS_DCHECK(latch_mode_ == LatchMode::kOptimisticOrJump && latch_ != nullptr);
+  LEAN_DCHECK(latch_mode_ == LatchMode::kOptimisticOrJump && latch_ != nullptr);
   version_on_lock_ = latch_->version_.load();
   if (HasExclusiveMark(version_on_lock_)) {
     contented_ = true;
-    LS_DLOG("lockOptimisticOrJump() failed, target latch, latch={}, version={}", (void*)&latch_,
-            version_on_lock_);
+    LEAN_DLOG("lockOptimisticOrJump() failed, target latch, latch={}, version={}", (void*)&latch_,
+              version_on_lock_);
     leanstore::JumpContext::Jump();
   }
 }
 
 inline void ScopedHybridGuard::lock_optimistic_spin() {
-  LS_DCHECK(latch_mode_ == LatchMode::kOptimisticSpin && latch_ != nullptr);
+  LEAN_DCHECK(latch_mode_ == LatchMode::kOptimisticSpin && latch_ != nullptr);
   version_on_lock_ = latch_->version_.load();
   while (HasExclusiveMark(version_on_lock_)) {
     contented_ = true;
@@ -249,7 +250,7 @@ inline void ScopedHybridGuard::lock_optimistic_spin() {
 }
 
 inline void ScopedHybridGuard::unlock_optimistic_or_jump() {
-  LS_DCHECK(
+  LEAN_DCHECK(
       (latch_mode_ == LatchMode::kOptimisticOrJump || latch_mode_ == LatchMode::kOptimisticSpin) &&
       latch_ != nullptr);
   jump_if_modified_by_others();
@@ -259,30 +260,30 @@ inline void ScopedHybridGuard::jump_if_modified_by_others() {
   auto cur_version = latch_->version_.load();
   if (version_on_lock_ != cur_version) {
     contented_ = true;
-    LS_DLOG("jumpIfModifiedByOthers() failed, target latch, latch={}, "
-            "version(expected)={}, version(actual)={}",
-            (void*)&latch_, version_on_lock_, cur_version);
+    LEAN_DLOG("jumpIfModifiedByOthers() failed, target latch, latch={}, "
+              "version(expected)={}, version(actual)={}",
+              (void*)&latch_, version_on_lock_, cur_version);
     leanstore::JumpContext::Jump();
   }
 }
 
 inline void ScopedHybridGuard::lock_pessimistic_shared() {
-  LS_DCHECK(latch_mode_ == LatchMode::kSharedPessimistic && latch_ != nullptr);
+  LEAN_DCHECK(latch_mode_ == LatchMode::kSharedPessimistic && latch_ != nullptr);
   latch_->shared_mutex_.lock_shared();
 }
 
 inline void ScopedHybridGuard::unlock_pessimistic_shared() {
-  LS_DCHECK(latch_mode_ == LatchMode::kSharedPessimistic && latch_ != nullptr);
+  LEAN_DCHECK(latch_mode_ == LatchMode::kSharedPessimistic && latch_ != nullptr);
   latch_->shared_mutex_.unlock_shared();
 }
 
 inline void ScopedHybridGuard::lock_pessimistic_exclusive() {
-  LS_DCHECK(latch_mode_ == LatchMode::kExclusivePessimistic && latch_ != nullptr);
+  LEAN_DCHECK(latch_mode_ == LatchMode::kExclusivePessimistic && latch_ != nullptr);
   latch_->LockExclusively();
 }
 
 inline void ScopedHybridGuard::unlock_pessimistic_exclusive() {
-  LS_DCHECK(latch_mode_ == LatchMode::kExclusivePessimistic && latch_ != nullptr);
+  LEAN_DCHECK(latch_mode_ == LatchMode::kExclusivePessimistic && latch_ != nullptr);
   latch_->UnlockExclusively();
 }
 

@@ -13,6 +13,7 @@
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
+#include "utils/coroutine/mvcc_manager.hpp"
 #include "utils/to_json.hpp"
 
 #include <cstdint>
@@ -30,7 +31,7 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btree_id, BTreeConfi
 
   meta_node_swip_ = &store_->buffer_manager_->AllocNewPage(btree_id);
   meta_node_swip_.AsBufferFrame().header_.keep_in_memory_ = true;
-  LS_DCHECK(meta_node_swip_.AsBufferFrame().header_.latch_.GetVersion() == 0);
+  LEAN_DCHECK(meta_node_swip_.AsBufferFrame().header_.latch_.GetVersion() == 0);
 
   auto guarded_root = GuardedBufferFrame<BTreeNode>(
       store_->buffer_manager_.get(), &store_->buffer_manager_->AllocNewPage(btree_id));
@@ -44,8 +45,7 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btree_id, BTreeConfi
 
   // Record WAL
   if (config_.enable_wal_) {
-    TXID sys_tx_id = store_->AllocSysTxTs();
-
+    TXID sys_tx_id = store_->MvccManager()->AllocSysTxTs();
     auto root_wal_handler = x_guarded_root.ReserveWALPayload<WalInitPage>(0, sys_tx_id, tree_id_,
                                                                           x_guarded_root->is_leaf_);
     root_wal_handler.SubmitWal();
@@ -148,8 +148,8 @@ void BTreeGeneric::split_root_may_jump(TXID sys_tx_id, GuardedBufferFrame<BTreeN
   auto x_guarded_old_root = ExclusiveGuardedBufferFrame(std::move(guarded_old_root));
   auto* bm = store_->buffer_manager_.get();
 
-  LS_DCHECK(is_meta_node(guarded_meta), "Parent should be meta node");
-  LS_DCHECK(height_ == 1 || !x_guarded_old_root->is_leaf_);
+  LEAN_DCHECK(is_meta_node(guarded_meta), "Parent should be meta node");
+  LEAN_DCHECK(height_ == 1 || !x_guarded_old_root->is_leaf_);
 
   // 1. create new left, lock it exclusively, write wal on demand
   auto* new_left_bf = &bm->AllocNewPageMayJump(tree_id_);
@@ -204,8 +204,8 @@ void BTreeGeneric::split_non_root_may_jump(TXID sys_tx_id,
   auto x_guarded_parent = ExclusiveGuardedBufferFrame(std::move(guarded_parent));
   auto x_guarded_child = ExclusiveGuardedBufferFrame(std::move(guarded_child));
 
-  LS_DCHECK(!is_meta_node(guarded_parent), "Parent should not be meta node");
-  LS_DCHECK(!x_guarded_parent->is_leaf_, "Parent should not be leaf node");
+  LEAN_DCHECK(!is_meta_node(guarded_parent), "Parent should not be meta node");
+  LEAN_DCHECK(!x_guarded_parent->is_leaf_, "Parent should not be leaf node");
 
   // 1. create new left, lock it exclusively, write wal on demand
   auto* new_left_bf = &store_->buffer_manager_->AllocNewPageMayJump(tree_id_);
@@ -251,9 +251,9 @@ bool BTreeGeneric::TryMergeMayJump(TXID sys_tx_id, BufferFrame& to_merge, bool s
     return false;
   }
 
-  LS_DCHECK(pos_in_parent <= guarded_parent->num_slots_,
-            "Invalid position in parent, posInParent={}, childSizeOfParent={}", pos_in_parent,
-            guarded_parent->num_slots_);
+  LEAN_DCHECK(pos_in_parent <= guarded_parent->num_slots_,
+              "Invalid position in parent, posInParent={}, childSizeOfParent={}", pos_in_parent,
+              guarded_parent->num_slots_);
   guarded_parent.JumpIfModifiedByOthers();
   guarded_child.JumpIfModifiedByOthers();
 
@@ -269,7 +269,7 @@ bool BTreeGeneric::TryMergeMayJump(TXID sys_tx_id, BufferFrame& to_merge, bool s
     auto x_guarded_child = ExclusiveGuardedBufferFrame(std::move(guarded_child));
     auto x_guarded_left = ExclusiveGuardedBufferFrame(std::move(guarded_left));
 
-    LS_DCHECK(x_guarded_child->is_leaf_ == x_guarded_left->is_leaf_);
+    LEAN_DCHECK(x_guarded_child->is_leaf_ == x_guarded_left->is_leaf_);
 
     if (!x_guarded_left->merge(pos_in_parent - 1, x_guarded_parent, x_guarded_child)) {
       guarded_parent = std::move(x_guarded_parent);
@@ -302,7 +302,7 @@ bool BTreeGeneric::TryMergeMayJump(TXID sys_tx_id, BufferFrame& to_merge, bool s
     auto x_guarded_child = ExclusiveGuardedBufferFrame(std::move(guarded_child));
     auto x_guarded_right = ExclusiveGuardedBufferFrame(std::move(guarded_right));
 
-    LS_DCHECK(x_guarded_child->is_leaf_ == x_guarded_right->is_leaf_);
+    LEAN_DCHECK(x_guarded_child->is_leaf_ == x_guarded_right->is_leaf_);
 
     if (!x_guarded_child->merge(pos_in_parent, x_guarded_parent, x_guarded_right)) {
       guarded_parent = std::move(x_guarded_parent);
@@ -484,7 +484,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(GuardedBufferFrame<BTreeNode
 
   ExclusiveGuardedBufferFrame<BTreeNode> x_guarded_parent = std::move(guarded_parent);
   // TODO(zz-jason): support wal and sync system tx id
-  // TXID sysTxId = utils::tlsStore->AllocSysTxTs();
+  // TXID sysTxId = utils::tlsStore->MvccManager()->AllocSysTxTs();
   // xGuardedParent.SyncSystemTxId(sysTxId);
 
   XMergeReturnCode ret_code = XMergeReturnCode::kPartialMerge;
@@ -586,7 +586,7 @@ std::string BTreeGeneric::Summary() {
 }
 
 StringMap BTreeGeneric::Serialize() {
-  LS_DCHECK(meta_node_swip_.AsBufferFrame().page_.btree_id_ == tree_id_);
+  LEAN_DCHECK(meta_node_swip_.AsBufferFrame().page_.btree_id_ == tree_id_);
   auto& meta_bf = meta_node_swip_.AsBufferFrame();
   auto meta_page_id = meta_bf.header_.page_id_;
   auto res = store_->buffer_manager_->CheckpointBufferFrame(meta_bf);
@@ -616,10 +616,10 @@ void BTreeGeneric::Deserialize(StringMap map) {
     }
   }
   meta_node_swip_.AsBufferFrame().header_.keep_in_memory_ = true;
-  LS_DCHECK(meta_node_swip_.AsBufferFrame().page_.btree_id_ == tree_id_,
-            "MetaNode has wrong BTreeId, pageId={}, expected={}, actual={}",
-            meta_node_swip_.AsBufferFrame().header_.page_id_, tree_id_,
-            meta_node_swip_.AsBufferFrame().page_.btree_id_);
+  LEAN_DCHECK(meta_node_swip_.AsBufferFrame().page_.btree_id_ == tree_id_,
+              "MetaNode has wrong BTreeId, pageId={}, expected={}, actual={}",
+              meta_node_swip_.AsBufferFrame().header_.page_id_, tree_id_,
+              meta_node_swip_.AsBufferFrame().page_.btree_id_);
 }
 
 void BTreeGeneric::ToJson(BTreeGeneric& btree, utils::JsonObj* btree_json_obj) {

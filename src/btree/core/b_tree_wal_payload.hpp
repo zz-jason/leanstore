@@ -179,10 +179,10 @@ public:
 
   inline const UpdateDesc* GetUpdateDesc() const {
     auto* update_desc = UpdateDesc::From(payload_ + key_size_);
-    LS_DCHECK(update_desc->Size() == update_desc_size_,
-              "Malformed WalTxUpdate: updateDesc->Size() != update_desc_size_, "
-              "updateDesc->Size()={}, update_desc_size_={}",
-              update_desc->Size(), update_desc_size_);
+    LEAN_DCHECK(update_desc->Size() == update_desc_size_,
+                "Malformed WalTxUpdate: updateDesc->Size() != update_desc_size_, "
+                "updateDesc->Size()={}, update_desc_size_={}",
+                update_desc->Size(), update_desc_size_);
     return update_desc;
   }
 

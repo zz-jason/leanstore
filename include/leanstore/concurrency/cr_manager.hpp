@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore/concurrency/worker_context.hpp"
+#include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/concurrency/worker_thread.hpp"
 #include "utils/json.hpp"
 
@@ -24,9 +24,6 @@ public:
 
   /// All the worker threads
   std::vector<std::unique_ptr<WorkerThread>> worker_threads_;
-
-  /// All the thread-local worker references
-  std::vector<WorkerContext*> worker_ctxs_;
 
   WatermarkInfo global_wmk_info_;
 

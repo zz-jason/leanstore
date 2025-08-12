@@ -3,8 +3,8 @@
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/concurrency/logging_impl.hpp"
+#include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/concurrency/wal_payload_handler.hpp"
-#include "leanstore/concurrency/worker_context.hpp"
 #include "leanstore/sync/hybrid_guard.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/utils/log.hpp"
@@ -64,7 +64,7 @@ public:
         bf_(bf),
         guard_(bf_->header_.latch_, GuardState::kUninitialized),
         keep_alive_(keep_alive) {
-    LS_DCHECK(!HasExclusiveMark(bf_->header_.latch_.GetVersion()));
+    LEAN_DCHECK(!HasExclusiveMark(bf_->header_.latch_.GetVersion()));
     JUMPMU_REGISTER_STACK_OBJECT(this);
   }
 
@@ -143,34 +143,34 @@ public:
 public:
   /// Mark the page as dirty after modification by a user or system transaction.
   void MarkPageAsDirty() {
-    LS_DCHECK(bf_ != nullptr);
+    LEAN_DCHECK(bf_ != nullptr);
     bf_->page_.psn_++;
   }
 
   /// Sync the system transaction id to the page. Page system transaction id is updated during the
   /// execution of a system transaction.
   void SyncSystemTxId(TXID sys_tx_id) {
-    LS_DCHECK(bf_ != nullptr);
+    LEAN_DCHECK(bf_ != nullptr);
 
     // update last writer worker
-    bf_->header_.last_writer_worker_ = cr::WorkerContext::My().worker_id_;
+    bf_->header_.last_writer_worker_ = cr::TxManager::My().worker_id_;
 
     // update system transaction id
     bf_->page_.sys_tx_id_ = sys_tx_id;
 
     // update the maximum system transaction id written by the worker
-    cr::WorkerContext::My().logging_.UpdateSysTxWrittern(sys_tx_id);
+    cr::TxManager::My().logging_.UpdateSysTxToHarden(sys_tx_id);
   }
 
   /// Check remote dependency
   /// TODO: don't sync on temporary table pages like history trees
   void CheckRemoteDependency() {
     // skip if not running inside a worker
-    if (!cr::WorkerContext::InWorker()) {
+    if (!cr::TxManager::InWorker()) {
       return;
     }
 
-    if (bf_->header_.last_writer_worker_ != cr::WorkerContext::My().worker_id_ &&
+    if (bf_->header_.last_writer_worker_ != cr::TxManager::My().worker_id_ &&
         bf_->page_.sys_tx_id_ > cr::ActiveTx().max_observed_sys_tx_id_) {
       cr::ActiveTx().max_observed_sys_tx_id_ = bf_->page_.sys_tx_id_;
       cr::ActiveTx().has_remote_dependency_ = true;
@@ -179,13 +179,13 @@ public:
 
   template <typename WT, typename... Args>
   cr::WalPayloadHandler<WT> ReserveWALPayload(uint64_t wal_size, Args&&... args) {
-    LS_DCHECK(cr::ActiveTx().is_durable_);
-    LS_DCHECK(guard_.state_ == GuardState::kExclusivePessimistic);
+    LEAN_DCHECK(cr::ActiveTx().is_durable_);
+    LEAN_DCHECK(guard_.state_ == GuardState::kExclusivePessimistic);
 
     const auto page_id = bf_->header_.page_id_;
     const auto tree_id = bf_->page_.btree_id_;
     wal_size = ((wal_size - 1) / 8 + 1) * 8;
-    auto handler = cr::WorkerContext::My().logging_.ReserveWALEntryComplex<WT, Args...>(
+    auto handler = cr::TxManager::My().logging_.ReserveWALEntryComplex<WT, Args...>(
         sizeof(WT) + wal_size, page_id, bf_->page_.psn_, tree_id, std::forward<Args>(args)...);
 
     return handler;
@@ -273,8 +273,8 @@ protected:
       break;
     }
     default: {
-      LS_DCHECK(false, "Unhandled LatchMode: {}",
-                std::to_string(static_cast<uint64_t>(latch_mode)));
+      LEAN_DCHECK(false, "Unhandled LatchMode: {}",
+                  std::to_string(static_cast<uint64_t>(latch_mode)));
     }
     }
   }
@@ -302,10 +302,6 @@ public:
     auto wal_payload_handler =
         ref_guard_.template ReserveWALPayload<WT>(payload_size, std::forward<Args>(args)...);
     wal_payload_handler.SubmitWal();
-  }
-
-  void keep_alive() {
-    ref_guard_.keep_alive_ = true;
   }
 
   void SyncSystemTxId(TXID sys_tx_id) {

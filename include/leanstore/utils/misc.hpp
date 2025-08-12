@@ -11,7 +11,7 @@ namespace leanstore {
 
 template <typename T1, typename T2>
 T1 DownCast(T2 ptr) {
-  LS_DCHECK(dynamic_cast<T1>(ptr) != nullptr);
+  LEAN_DCHECK(dynamic_cast<T1>(ptr) != nullptr);
   return static_cast<T1>(ptr);
 }
 

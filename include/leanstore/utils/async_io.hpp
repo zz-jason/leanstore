@@ -57,16 +57,16 @@ public:
   }
 
   void PrepareRead(int32_t fd, void* buf, size_t count, uint64_t offset) {
-    LS_DCHECK((reinterpret_cast<uint64_t>(buf) & (kAlignment - 1)) == 0);
-    LS_DCHECK(!IsFull());
+    LEAN_DCHECK((reinterpret_cast<uint64_t>(buf) & (kAlignment - 1)) == 0);
+    LEAN_DCHECK(!IsFull());
     auto slot = num_reqs_++;
     io_prep_pread(&iocbs_[slot], fd, buf, count, offset);
     iocbs_[slot].data = buf;
   }
 
   void PrepareWrite(int32_t fd, void* buf, size_t count, uint64_t offset) {
-    LS_DCHECK((reinterpret_cast<uint64_t>(buf) & (kAlignment - 1)) == 0);
-    LS_DCHECK(!IsFull());
+    LEAN_DCHECK((reinterpret_cast<uint64_t>(buf) & (kAlignment - 1)) == 0);
+    LEAN_DCHECK(!IsFull());
     auto slot = num_reqs_++;
     io_prep_pwrite(&iocbs_[slot], fd, buf, count, offset);
     iocbs_[slot].data = buf;
@@ -74,7 +74,7 @@ public:
 
   // Even for direct IO, fsync is still needed to flush file metadata.
   void PrepareFsync(int32_t fd) {
-    LS_DCHECK(!IsFull());
+    LEAN_DCHECK(!IsFull());
     auto slot = num_reqs_++;
     io_prep_fsync(&iocbs_[slot], fd);
   }

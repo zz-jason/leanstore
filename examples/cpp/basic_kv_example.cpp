@@ -1,7 +1,7 @@
 #include <leanstore-c/store_option.h>
 #include <leanstore/LeanStore.hpp>
 #include <leanstore/btree/BasicKV.hpp>
-#include <leanstore/concurrency/WorkerContext.hpp>
+#include <leanstore/concurrency/TxManager.hpp>
 
 #include <iostream>
 #include <memory>

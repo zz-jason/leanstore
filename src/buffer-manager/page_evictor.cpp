@@ -28,9 +28,9 @@ void PageEvictor::RunImpl() {
 }
 
 void PageEvictor::PickBufferFramesToCool(Partition& target_partition) {
-  LS_DLOG("Phase1: PickBufferFramesToCool begins");
-  SCOPED_DEFER(LS_DLOG("Phase1: PickBufferFramesToCool ended, evict_candidate_bfs_.size={}",
-                       evict_candidate_bfs_.size()));
+  LEAN_DLOG("Phase1: PickBufferFramesToCool begins");
+  SCOPED_DEFER(LEAN_DLOG("Phase1: PickBufferFramesToCool ended, evict_candidate_bfs_.size={}",
+                         evict_candidate_bfs_.size()));
 
   // [corner cases]: prevent starving when free list is empty and cooling to
   // the required level can not be achieved
@@ -44,28 +44,28 @@ void PageEvictor::PickBufferFramesToCool(Partition& target_partition) {
         BMOptimisticGuard read_guard(cool_candidate->header_.latch_);
         if (cool_candidate->ShouldRemainInMem()) {
           failed_attempts = failed_attempts + 1;
-          LS_DLOG("Cool candidate discarded, should remain in memory, pageId={}",
-                  cool_candidate->header_.page_id_);
+          LEAN_DLOG("Cool candidate discarded, should remain in memory, pageId={}",
+                    cool_candidate->header_.page_id_);
           JUMPMU_CONTINUE;
         }
         read_guard.JumpIfModifiedByOthers();
 
         if (cool_candidate->header_.state_ == State::kCool) {
           evict_candidate_bfs_.push_back(cool_candidate);
-          LS_DLOG("Find a cool buffer frame, added to evict_candidate_bfs_, "
-                  "pageId={}",
-                  cool_candidate->header_.page_id_);
+          LEAN_DLOG("Find a cool buffer frame, added to evict_candidate_bfs_, "
+                    "pageId={}",
+                    cool_candidate->header_.page_id_);
           // TODO: maybe without failedAttempts?
           failed_attempts = failed_attempts + 1;
-          LS_DLOG("Cool candidate discarded, it's already cool, pageId={}",
-                  cool_candidate->header_.page_id_);
+          LEAN_DLOG("Cool candidate discarded, it's already cool, pageId={}",
+                    cool_candidate->header_.page_id_);
           JUMPMU_CONTINUE;
         }
 
         if (cool_candidate->header_.state_ != State::kHot) {
           failed_attempts = failed_attempts + 1;
-          LS_DLOG("Cool candidate discarded, it's not hot, pageId={}",
-                  cool_candidate->header_.page_id_);
+          LEAN_DLOG("Cool candidate discarded, it's not hot, pageId={}",
+                    cool_candidate->header_.page_id_);
           JUMPMU_CONTINUE;
         }
         read_guard.JumpIfModifiedByOthers();
@@ -87,10 +87,10 @@ void PageEvictor::PickBufferFramesToCool(Partition& target_partition) {
                 read_guard.JumpIfModifiedByOthers();
                 picked_a_child = true;
                 cool_candidate_bfs_.push_back(child_bf);
-                LS_DLOG("Cool candidate discarded, one of its child is hot, "
-                        "pageId={}, hotChildPageId={}, the hot child is "
-                        "picked as the next cool candidate",
-                        cool_candidate->header_.page_id_, child_bf->header_.page_id_);
+                LEAN_DLOG("Cool candidate discarded, one of its child is hot, "
+                          "pageId={}, hotChildPageId={}, the hot child is "
+                          "picked as the next cool candidate",
+                          cool_candidate->header_.page_id_, child_bf->header_.page_id_);
                 return false;
               }
               read_guard.JumpIfModifiedByOthers();
@@ -98,9 +98,9 @@ void PageEvictor::PickBufferFramesToCool(Partition& target_partition) {
             });
 
         if (!all_children_evicted || picked_a_child) {
-          LS_DLOG("Cool candidate discarded, not all the children are "
-                  "evicted, pageId={}, allChildrenEvicted={}, pickedAChild={}",
-                  cool_candidate->header_.page_id_, all_children_evicted, picked_a_child);
+          LEAN_DLOG("Cool candidate discarded, not all the children are "
+                    "evicted, pageId={}, allChildrenEvicted={}, pickedAChild={}",
+                    cool_candidate->header_.page_id_, all_children_evicted, picked_a_child);
           failed_attempts = failed_attempts + 1;
           JUMPMU_CONTINUE;
         }
@@ -111,16 +111,16 @@ void PageEvictor::PickBufferFramesToCool(Partition& target_partition) {
         read_guard.JumpIfModifiedByOthers();
         auto parent_handler = store_->tree_registry_->FindParent(btree_id, *cool_candidate);
 
-        LS_DCHECK(parent_handler.parent_guard_.state_ == GuardState::kSharedOptimistic);
-        LS_DCHECK(parent_handler.parent_guard_.latch_ != reinterpret_cast<HybridMutex*>(0x99));
+        LEAN_DCHECK(parent_handler.parent_guard_.state_ == GuardState::kSharedOptimistic);
+        LEAN_DCHECK(parent_handler.parent_guard_.latch_ != reinterpret_cast<HybridMutex*>(0x99));
         read_guard.JumpIfModifiedByOthers();
         auto check_result = store_->tree_registry_->CheckSpaceUtilization(
             cool_candidate->page_.btree_id_, *cool_candidate);
         if (check_result == SpaceCheckResult::kRestartSameBf ||
             check_result == SpaceCheckResult::kPickAnotherBf) {
-          LS_DLOG("Cool candidate discarded, space check failed, "
-                  "pageId={}, checkResult={}",
-                  cool_candidate->header_.page_id_, (uint64_t)check_result);
+          LEAN_DLOG("Cool candidate discarded, space check failed, "
+                    "pageId={}, checkResult={}",
+                    cool_candidate->header_.page_id_, (uint64_t)check_result);
           JUMPMU_CONTINUE;
         }
         read_guard.JumpIfModifiedByOthers();
@@ -133,28 +133,28 @@ void PageEvictor::PickBufferFramesToCool(Partition& target_partition) {
           BMExclusiveUpgradeIfNeeded parent_write_guard(parent_handler.parent_guard_);
           BMExclusiveGuard write_guard(read_guard);
 
-          LS_DCHECK(cool_candidate->header_.page_id_ == page_id);
-          LS_DCHECK(cool_candidate->header_.state_ == State::kHot);
-          LS_DCHECK(cool_candidate->header_.is_being_written_back_ == false);
-          LS_DCHECK(parent_handler.parent_guard_.version_ ==
-                    parent_handler.parent_guard_.latch_->GetVersion());
-          LS_DCHECK(parent_handler.child_swip_.bf_ == cool_candidate);
+          LEAN_DCHECK(cool_candidate->header_.page_id_ == page_id);
+          LEAN_DCHECK(cool_candidate->header_.state_ == State::kHot);
+          LEAN_DCHECK(cool_candidate->header_.is_being_written_back_ == false);
+          LEAN_DCHECK(parent_handler.parent_guard_.version_ ==
+                      parent_handler.parent_guard_.latch_->GetVersion());
+          LEAN_DCHECK(parent_handler.child_swip_.bf_ == cool_candidate);
 
           // mark the buffer frame in cool state
           cool_candidate->header_.state_ = State::kCool;
           // mark the swip to the buffer frame to cool state
           parent_handler.child_swip_.Cool();
-          LS_DLOG("Cool candidate find, state changed to cool, pageId={}",
-                  cool_candidate->header_.page_id_);
+          LEAN_DLOG("Cool candidate find, state changed to cool, pageId={}",
+                    cool_candidate->header_.page_id_);
         }
 
         failed_attempts = 0;
       }
       JUMPMU_CATCH() {
-        LS_DLOG("Cool candidate discarded, optimistic latch failed, "
-                "someone has modified the buffer frame during cool "
-                "validation, pageId={}",
-                cool_candidate->header_.page_id_);
+        LEAN_DLOG("Cool candidate discarded, optimistic latch failed, "
+                  "someone has modified the buffer frame during cool "
+                  "validation, pageId={}",
+                  cool_candidate->header_.page_id_);
       }
     }
   }
@@ -170,10 +170,10 @@ void PageEvictor::RandomBufferFrames2CoolOrEvict() {
 }
 
 void PageEvictor::PrepareAsyncWriteBuffer(Partition& target_partition) {
-  LS_DLOG("Phase2: PrepareAsyncWriteBuffer begins");
-  SCOPED_DEFER(LS_DLOG("Phase2: PrepareAsyncWriteBuffer ended, "
-                       "async_write_buffer_.PendingRequests={}",
-                       async_write_buffer_.GetPendingRequests()));
+  LEAN_DLOG("Phase2: PrepareAsyncWriteBuffer begins");
+  SCOPED_DEFER(LEAN_DLOG("Phase2: PrepareAsyncWriteBuffer ended, "
+                         "async_write_buffer_.PendingRequests={}",
+                         async_write_buffer_.GetPendingRequests()));
 
   free_bf_list_.Reset();
   for (auto* cooled_bf : evict_candidate_bfs_) {
@@ -182,10 +182,10 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& target_partition) {
       // Check if the BF got swizzled in or unswizzle another time in another
       // partition
       if (cooled_bf->header_.state_ != State::kCool || cooled_bf->header_.is_being_written_back_) {
-        LS_DLOG("COOLed buffer frame discarded, pageId={}, IsCool={}, "
-                "isBeingWrittenBack={}",
-                cooled_bf->header_.page_id_, cooled_bf->header_.state_ == State::kCool,
-                cooled_bf->header_.is_being_written_back_.load());
+        LEAN_DLOG("COOLed buffer frame discarded, pageId={}, IsCool={}, "
+                  "isBeingWrittenBack={}",
+                  cooled_bf->header_.page_id_, cooled_bf->header_.state_ == State::kCool,
+                  cooled_bf->header_.is_being_written_back_.load());
         JUMPMU_CONTINUE;
       }
 
@@ -196,8 +196,8 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& target_partition) {
         auto partition_id = store_->buffer_manager_->GetPartitionID(cooled_page_id);
         Partition& partition = *partitions_[partition_id];
         if (partition.IsBeingReadBack(cooled_page_id)) {
-          LS_DLOG("COOLed buffer frame discarded, is being read back, pageId={}, partitionId={}",
-                  cooled_page_id, partition_id);
+          LEAN_DLOG("COOLed buffer frame discarded, is being read back, pageId={}, partitionId={}",
+                    cooled_page_id, partition_id);
           JUMPMU_CONTINUE;
         }
       }
@@ -206,8 +206,8 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& target_partition) {
       // writing any bytes back to the underlying disk.
       if (!cooled_bf->IsDirty()) {
         EvictFlushedBufferFrame(*cooled_bf, optimistic_guard, target_partition);
-        LS_DLOG("COOLed buffer frame is not dirty, reclaim directly, pageId={}",
-                cooled_bf->header_.page_id_);
+        LEAN_DLOG("COOLed buffer frame is not dirty, reclaim directly, pageId={}",
+                  cooled_bf->header_.page_id_);
         JUMPMU_CONTINUE;
       }
 
@@ -215,13 +215,13 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& target_partition) {
       // cooling stage until all the contents are written back to the
       // underlying disk.
       if (async_write_buffer_.IsFull()) {
-        LS_DLOG("Async write buffer is full, bufferSize={}",
-                async_write_buffer_.GetPendingRequests());
+        LEAN_DLOG("Async write buffer is full, bufferSize={}",
+                  async_write_buffer_.GetPendingRequests());
         JUMPMU_BREAK;
       }
 
       BMExclusiveGuard exclusive_guard(optimistic_guard);
-      LS_DCHECK(!cooled_bf->header_.is_being_written_back_);
+      LEAN_DCHECK(!cooled_bf->header_.is_being_written_back_);
       cooled_bf->header_.is_being_written_back_.store(true, std::memory_order_release);
 
       // performs crc check if necessary
@@ -231,15 +231,15 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& target_partition) {
 
       // TODO: preEviction callback according to TREEID
       async_write_buffer_.Add(*cooled_bf);
-      LS_DLOG("COOLed buffer frame is added to async write buffer, "
-              "pageId={}, bufferSize={}",
-              cooled_bf->header_.page_id_, async_write_buffer_.GetPendingRequests());
+      LEAN_DLOG("COOLed buffer frame is added to async write buffer, "
+                "pageId={}, bufferSize={}",
+                cooled_bf->header_.page_id_, async_write_buffer_.GetPendingRequests());
     }
     JUMPMU_CATCH() {
-      LS_DLOG("COOLed buffer frame discarded, optimistic latch failed, "
-              "someone has modified the buffer frame during cool validation, "
-              "pageId={}",
-              cooled_bf->header_.page_id_);
+      LEAN_DLOG("COOLed buffer frame discarded, optimistic latch failed, "
+                "someone has modified the buffer frame during cool validation, "
+                "pageId={}",
+                cooled_bf->header_.page_id_);
     }
   }
 
@@ -247,8 +247,8 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& target_partition) {
 }
 
 void PageEvictor::FlushAndRecycleBufferFrames(Partition& target_partition) {
-  LS_DLOG("Phase3: FlushAndRecycleBufferFrames begins");
-  SCOPED_DEFER(LS_DLOG("Phase3: FlushAndRecycleBufferFrames ended"));
+  LEAN_DLOG("Phase3: FlushAndRecycleBufferFrames begins");
+  SCOPED_DEFER(LEAN_DLOG("Phase3: FlushAndRecycleBufferFrames ended"));
 
   auto result = async_write_buffer_.SubmitAll();
   if (!result) {
@@ -273,8 +273,8 @@ void PageEvictor::FlushAndRecycleBufferFrames(Partition& target_partition) {
           // while trying to acquire a new page
           BMOptimisticGuard optimistic_guard(written_bf.header_.latch_);
           BMExclusiveGuard exclusive_guard(optimistic_guard);
-          LS_DCHECK(written_bf.header_.is_being_written_back_);
-          LS_DCHECK(written_bf.header_.flushed_psn_ < flushed_psn);
+          LEAN_DCHECK(written_bf.header_.is_being_written_back_);
+          LEAN_DCHECK(written_bf.header_.flushed_psn_ < flushed_psn);
 
           // For recovery, so much has to be done here...
           written_bf.header_.flushed_psn_ = flushed_psn;
@@ -309,17 +309,17 @@ void PageEvictor::EvictFlushedBufferFrame(BufferFrame& cooled_bf,
   optimistic_guard.JumpIfModifiedByOthers();
   ParentSwipHandler parent_handler = store_->tree_registry_->FindParent(btree_id, cooled_bf);
 
-  LS_DCHECK(parent_handler.parent_guard_.state_ == GuardState::kSharedOptimistic);
+  LEAN_DCHECK(parent_handler.parent_guard_.state_ == GuardState::kSharedOptimistic);
   BMExclusiveUpgradeIfNeeded parent_write_guard(parent_handler.parent_guard_);
   optimistic_guard.guard_.ToExclusiveMayJump();
 
   if (store_->store_option_->enable_buffer_crc_check_ && cooled_bf.header_.crc_) {
-    LS_DCHECK(cooled_bf.page_.CRC() == cooled_bf.header_.crc_);
+    LEAN_DCHECK(cooled_bf.page_.CRC() == cooled_bf.header_.crc_);
   }
-  LS_DCHECK(!cooled_bf.IsDirty());
-  LS_DCHECK(!cooled_bf.header_.is_being_written_back_);
-  LS_DCHECK(cooled_bf.header_.state_ == State::kCool);
-  LS_DCHECK(parent_handler.child_swip_.IsCool());
+  LEAN_DCHECK(!cooled_bf.IsDirty());
+  LEAN_DCHECK(!cooled_bf.header_.is_being_written_back_);
+  LEAN_DCHECK(cooled_bf.header_.state_ == State::kCool);
+  LEAN_DCHECK(parent_handler.child_swip_.IsCool());
 
   parent_handler.child_swip_.Evict(cooled_bf.header_.page_id_);
 

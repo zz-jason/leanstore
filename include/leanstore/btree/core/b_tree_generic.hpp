@@ -316,7 +316,7 @@ inline void BTreeGeneric::FindLeafCanJump(Slice key, GuardedBufferFrame<BTreeNod
   volatile uint16_t level = 0;
   while (!guarded_target->is_leaf_) {
     auto& child_swip = guarded_target->LookupInner(key);
-    LS_DCHECK(!child_swip.IsEmpty());
+    LEAN_DCHECK(!child_swip.IsEmpty());
     guarded_parent = std::move(guarded_target);
     if (level == height_ - 1) {
       guarded_target =
@@ -352,7 +352,7 @@ inline void BTreeGeneric::FindLeafCanJump(Slice key, GuardedBufferFrame<BTreeNod
 //   auto level = 0u;
 //   while (!child_node->is_leaf_) {
 //     auto& child_swip = child_node->LookupInner(key);
-//     LS_DCHECK(!child_swip.IsEmpty());
+//     LEAN_DCHECK(!child_swip.IsEmpty());
 //
 //     // TODO: yield and retry from the begining
 //     if (locked_parent.IsConflicted()) {
@@ -441,8 +441,8 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree, BufferFra
     leanstore::JumpContext::Jump();
   }
 
-  LS_DCHECK(pos_in_parent != std::numeric_limits<uint32_t>::max(), "Invalid posInParent={}",
-            pos_in_parent);
+  LEAN_DCHECK(pos_in_parent != std::numeric_limits<uint32_t>::max(), "Invalid posInParent={}",
+              pos_in_parent);
   ParentSwipHandler parent_handler = {.parent_guard_ = std::move(guarded_child.guard_),
                                       .parent_bf_ = guarded_child.bf_,
                                       .child_swip_ = *child_swip,

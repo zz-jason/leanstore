@@ -1,0 +1,82 @@
+#include "leanstore-c/store_option.h"
+#include "leanstore/btree/basic_kv.hpp"
+#include "leanstore/btree/transaction_kv.hpp"
+#include "leanstore/buffer-manager/buffer_manager.hpp"
+#include "leanstore/concurrency/cr_manager.hpp"
+#include "leanstore/lean_store.hpp"
+#include "utils/coroutine/coro_executor.hpp"
+
+#include <gtest/gtest.h>
+
+#include <cassert>
+#include <cstddef>
+#include <cstring>
+#include <format>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include <sys/types.h>
+
+namespace leanstore::test {
+
+class CoroTxnTest : public ::testing::Test {
+protected:
+  static constexpr auto kTestDirPattern = "/tmp/leanstore/{}/{}";
+  static constexpr auto kBtreeName = "coro_txn_test";
+  static constexpr auto kNumKeys = 100;
+  static constexpr auto kKeyPattern = "key_btree_LL_xxxxxxxxxxxx_{}";
+  static constexpr auto kValPattern = "VAL_BTREE_LL_YYYYYYYYYYYY_{}";
+  static constexpr auto kEnableWal = true;
+  static constexpr auto kBtreeConfig = BTreeConfig{
+      .enable_wal_ = kEnableWal,
+      .use_bulk_insert_ = false,
+  };
+
+  std::string GetTestDataDir() {
+    auto* cur_test = ::testing::UnitTest::GetInstance()->current_test_info();
+    return std::format(kTestDirPattern, cur_test->test_case_name(), cur_test->name());
+  }
+};
+
+TEST_F(CoroTxnTest, BasicCommit) {
+  StoreOption* option = CreateStoreOption(GetTestDataDir().c_str());
+  option->create_from_scratch_ = true;
+  option->enable_wal_ = kEnableWal;
+  option->worker_threads_ = 2;
+  auto res = LeanStore::Open(option);
+  ASSERT_TRUE(res);
+  auto store = std::move(res.value());
+  ASSERT_NE(store, nullptr);
+
+  // prepare key-value pairs to insert
+  std::vector<std::tuple<std::string, std::string>> kv_to_test;
+  for (size_t i = 0; i < kNumKeys; ++i) {
+    std::string key(std::format(kKeyPattern, i));
+    std::string val(std::format(kValPattern, i));
+    kv_to_test.push_back(std::make_tuple(key, val));
+  }
+
+  // create leanstore btree for table records
+  storage::btree::TransactionKV* btree = nullptr;
+  auto job_create_btree = [&]() {
+    auto res = store->CreateTransactionKV(kBtreeName, kBtreeConfig);
+    EXPECT_TRUE(res);
+    EXPECT_NE(res.value(), nullptr);
+    btree = res.value();
+  };
+  store->Submit(job_create_btree, 0)->Wait();
+
+  // insert key-value pairs in worker 0
+  auto job_insert = [&]() {
+    for (const auto& [key, val] : kv_to_test) {
+      cr::TxManager::My().StartTx();
+      EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
+      cr::TxManager::My().CommitTx();
+    }
+  };
+  store->Submit(job_insert, 0)->Wait();
+}
+
+} // namespace leanstore::test

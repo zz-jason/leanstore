@@ -5,7 +5,7 @@
 #include "leanstore/utils/async_io.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 
-#include <atomic>
+#include <memory>
 #include <string>
 
 #include <libaio.h>
@@ -15,7 +15,7 @@
 
 namespace leanstore::cr {
 
-class WorkerContext;
+class TxManager;
 class WalFlushReq;
 
 /// The group committer thread is responsible for committing transactions in batches. It collects
@@ -31,25 +31,21 @@ public:
   /// Start file offset of the next WalEntry.
   uint64_t wal_size_;
 
-  /// The minimum flushed system transaction ID among all worker threads. User transactions whose
-  /// max observed system transaction ID not larger than it can be committed safely.
-  std::atomic<TXID> global_min_flushed_sys_tx_;
-
   /// All the workers.
-  std::vector<WorkerContext*>& worker_ctxs_;
+  std::vector<std::unique_ptr<TxManager>>& tx_mgrs_;
 
   /// The libaio wrapper.
   utils::AsyncIo aio_;
 
 public:
-  GroupCommitter(leanstore::LeanStore* store, std::vector<WorkerContext*>& worker_ctxs, int cpu)
+  GroupCommitter(leanstore::LeanStore* store, std::vector<std::unique_ptr<TxManager>>& tx_mgrs,
+                 int cpu)
       : ManagedThread(store, "GroupCommitter", cpu),
         store_(store),
         wal_fd_(store->wal_fd_),
         wal_size_(0),
-        global_min_flushed_sys_tx_(0),
-        worker_ctxs_(worker_ctxs),
-        aio_(worker_ctxs.size() * 2 + 2) {
+        tx_mgrs_(tx_mgrs),
+        aio_(tx_mgrs.size() * 2 + 2) {
   }
 
   virtual ~GroupCommitter() override = default;

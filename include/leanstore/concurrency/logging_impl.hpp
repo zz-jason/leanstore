@@ -1,7 +1,7 @@
 #include "leanstore/concurrency/logging.hpp"
+#include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/concurrency/wal_entry.hpp"
 #include "leanstore/concurrency/wal_payload_handler.hpp"
-#include "leanstore/concurrency/worker_context.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/defer.hpp"
 
@@ -26,9 +26,9 @@ WalPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payload_size, PID 
   auto entry_size = sizeof(WalEntryComplex) + payload_size;
   ReserveContiguousBuffer(entry_size);
 
-  active_walentry_complex_ = new (entry_ptr)
-      WalEntryComplex(entry_lsn, prev_lsn, entry_size, WorkerContext::My().worker_id_,
-                      ActiveTx().start_ts_, psn, page_id, tree_id);
+  active_walentry_complex_ =
+      new (entry_ptr) WalEntryComplex(entry_lsn, prev_lsn, entry_size, TxManager::My().worker_id_,
+                                      ActiveTx().start_ts_, psn, page_id, tree_id);
 
   auto* payload_ptr = active_walentry_complex_->payload_;
   auto wal_payload = new (payload_ptr) T(std::forward<Args>(args)...);

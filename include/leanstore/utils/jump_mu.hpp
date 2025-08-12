@@ -49,9 +49,9 @@ public:
   }
 
   jmp_buf& AllocJumpEnv() {
-    LS_DCHECK(jump_env_counter_ < kJumpEnvsLimit,
-              "Jump envs limit exceeded, jump_env_counter_={}, kJumpEnvsLimit={}",
-              jump_env_counter_, kJumpEnvsLimit);
+    LEAN_DCHECK(jump_env_counter_ < kJumpEnvsLimit,
+                "Jump envs limit exceeded, jump_env_counter_={}, kJumpEnvsLimit={}",
+                jump_env_counter_, kJumpEnvsLimit);
 
     stack_obj_counter_snapshot_[jump_env_counter_] = stack_obj_counter_;
     return jump_envs_[jump_env_counter_++];
@@ -83,8 +83,8 @@ public:
   /// object destructor
   void UnregisterObject(void* obj [[maybe_unused]]) {
     assert(stack_obj_counter_ > 0);
-    LS_DCHECK(stack_objs_[stack_obj_counter_ - 1] == obj &&
-              "Unregistering an object that is not the last registered one");
+    LEAN_DCHECK(stack_objs_[stack_obj_counter_ - 1] == obj &&
+                "Unregistering an object that is not the last registered one");
 
     stack_obj_counter_--;
     stack_objs_[stack_obj_counter_] = nullptr;

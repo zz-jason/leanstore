@@ -1,7 +1,6 @@
 #pragma once
 
-namespace leanstore {
-namespace utils {
+namespace leanstore::utils {
 
 #ifndef SCOPED_DEFER
 
@@ -34,5 +33,4 @@ ScopedDeferrer<F> MakeScopedDeferrer(F f) {
 
 #endif // SCOPED_DEFER
 
-} // namespace utils
-} // namespace leanstore
+} // namespace leanstore::utils

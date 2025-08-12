@@ -1,3 +1,4 @@
+#include "lean_test_suite.hpp"
 #include "leanstore/utils/random_generator.hpp"
 #include "tx_kv.hpp"
 
@@ -10,7 +11,7 @@ using namespace leanstore::storage::btree;
 
 namespace leanstore::test {
 
-class AnomaliesTest : public ::testing::Test {
+class AnomaliesTest : public LeanTestSuite {
 protected:
   std::unique_ptr<Store> store_;
   std::string tbl_name_;
@@ -22,12 +23,8 @@ protected:
   ~AnomaliesTest() = default;
 
   void SetUp() override {
-    auto* cur_test = ::testing::UnitTest::GetInstance()->current_test_info();
-    auto cur_test_name =
-        std::string(cur_test->test_case_name()) + "_" + std::string(cur_test->name());
-    std::string store_dir = "/tmp/leanstore/" + cur_test_name;
     uint32_t session_limit = 4;
-    store_ = StoreFactory::NewLeanStoreMVCC(store_dir, session_limit);
+    store_ = StoreFactory::NewLeanStoreMVCC(TestCaseStoreDir(), session_limit);
     ASSERT_NE(store_, nullptr);
 
     // Set transaction isolation to SI before transaction tests, get ride of

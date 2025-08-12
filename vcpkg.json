@@ -11,6 +11,7 @@
     "libunwind",
     "cpptrace",
     "concurrentqueue",
-    "boost-context"
+    "boost-context",
+    "rocksdb"
   ]
 }

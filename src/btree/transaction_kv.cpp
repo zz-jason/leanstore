@@ -6,7 +6,7 @@
 #include "leanstore/btree/core/b_tree_generic.hpp"
 #include "leanstore/btree/core/btree_iter.hpp"
 #include "leanstore/btree/tuple.hpp"
-#include "leanstore/concurrency/worker_context.hpp"
+#include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_guard.hpp"
@@ -17,6 +17,7 @@
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
 #include "leanstore/utils/result.hpp"
+#include "utils/coroutine/mvcc_manager.hpp"
 
 #include <cstring>
 #include <format>
@@ -70,9 +71,9 @@ OpCode TransactionKV::LookupOptimistic(Slice key, ValCallback val_callback) {
 }
 
 OpCode TransactionKV::Lookup(Slice key, ValCallback val_callback) {
-  LS_DCHECK(cr::WorkerContext::My().IsTxStarted(),
-            "WorkerContext is not in a transaction, workerId={}, startTs={}",
-            cr::WorkerContext::My().worker_id_, cr::WorkerContext::My().active_tx_.start_ts_);
+  LEAN_DCHECK(cr::TxManager::My().IsTxStarted(),
+              "TxManager is not in a transaction, workerId={}, startTs={}",
+              cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_);
   auto lookup_in_graveyard = [&]() {
     auto g_iter = graveyard_->NewBTreeIter();
     if (g_iter->SeekToEqual(key); !g_iter->Valid()) {
@@ -109,7 +110,7 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback val_callback) {
 
 OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback update_call_back,
                                     UpdateDesc& update_desc) {
-  LS_DCHECK(cr::WorkerContext::My().IsTxStarted());
+  LEAN_DCHECK(cr::TxManager::My().IsTxStarted());
   JUMPMU_TRY() {
     auto x_iter = NewBTreeIterMut();
     if (x_iter->SeekToEqual(key); !x_iter->Valid()) {
@@ -127,8 +128,7 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback update_call_back,
     while (true) {
       auto mut_raw_val = x_iter->MutableVal();
       auto& tuple = *Tuple::From(mut_raw_val.Data());
-      auto visible_for_me =
-          cr::WorkerContext::My().cc_.VisibleForMe(tuple.worker_id_, tuple.tx_id_);
+      auto visible_for_me = cr::TxManager::My().cc_.VisibleForMe(tuple.worker_id_, tuple.tx_id_);
       if (tuple.IsWriteLocked() || !visible_for_me) {
         // conflict detected, the tuple is write locked by other worker or not
         // visible for me
@@ -138,8 +138,8 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback update_call_back,
       // write lock the tuple
       tuple.WriteLock();
       SCOPED_DEFER({
-        LS_DCHECK(!Tuple::From(mut_raw_val.Data())->IsWriteLocked(),
-                  "Tuple should be write unlocked after update");
+        LEAN_DCHECK(!Tuple::From(mut_raw_val.Data())->IsWriteLocked(),
+                    "Tuple should be write unlocked after update");
       });
 
       switch (tuple.format_) {
@@ -189,7 +189,7 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback update_call_back,
 }
 
 OpCode TransactionKV::Insert(Slice key, Slice val) {
-  LS_DCHECK(cr::WorkerContext::My().IsTxStarted());
+  LEAN_DCHECK(cr::TxManager::My().IsTxStarted());
   uint16_t payload_size = val.size() + sizeof(ChainedTuple);
 
   while (true) {
@@ -202,14 +202,14 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
       auto last_worker_id = chained_tuple->worker_id_;
       auto last_tx_id = chained_tuple->tx_id_;
       auto is_write_locked = chained_tuple->IsWriteLocked();
-      LS_DCHECK(!chained_tuple->write_locked_,
-                "Duplicate tuple should not be write locked, workerId={}, startTs={}, key={}, "
-                "tupleLastWriter={}, tupleLastStartTs={}, tupleWriteLocked={}",
-                cr::WorkerContext::My().worker_id_, cr::WorkerContext::My().active_tx_.start_ts_,
-                key.ToString(), last_worker_id, last_tx_id, is_write_locked);
+      LEAN_DCHECK(!chained_tuple->write_locked_,
+                  "Duplicate tuple should not be write locked, workerId={}, startTs={}, key={}, "
+                  "tupleLastWriter={}, tupleLastStartTs={}, tupleWriteLocked={}",
+                  cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                  key.ToString(), last_worker_id, last_tx_id, is_write_locked);
 
-      auto visible_for_me = cr::WorkerContext::My().cc_.VisibleForMe(chained_tuple->worker_id_,
-                                                                     chained_tuple->tx_id_);
+      auto visible_for_me =
+          cr::TxManager::My().cc_.VisibleForMe(chained_tuple->worker_id_, chained_tuple->tx_id_);
 
       if (chained_tuple->is_tombstone_ && visible_for_me) {
         InsertAfterRemove(x_iter.get(), key, val);
@@ -225,7 +225,7 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
         Log::Info("Insert conflicted, current transaction should be aborted, workerId={}, "
                   "startTs={}, key={}, tupleLastWriter={}, tupleLastTxId={}, "
                   "tupleIsWriteLocked={}, tupleIsRemoved={}, tupleVisibleForMe={}",
-                  cr::WorkerContext::My().worker_id_, cr::WorkerContext::My().active_tx_.start_ts_,
+                  cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
                   ToString(key), last_worker_id, last_tx_id, is_write_locked, is_tombsone,
                   visible_for_me);
         return OpCode::kAbortTx;
@@ -235,7 +235,7 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
       auto is_tombsone = chained_tuple->is_tombstone_;
       Log::Info("Insert duplicated, workerId={}, startTs={}, key={}, tupleLastWriter={}, "
                 "tupleLastTxId={}, tupleIsWriteLocked={}, tupleIsRemoved={}, tupleVisibleForMe={}",
-                cr::WorkerContext::My().worker_id_, cr::WorkerContext::My().active_tx_.start_ts_,
+                cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
                 key.ToString(), last_worker_id, last_tx_id, is_write_locked, is_tombsone,
                 visible_for_me);
       return OpCode::kDuplicated;
@@ -251,7 +251,7 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
                                                 kInvalidCommandid);
 
     // insert
-    TransactionKV::InsertToNode(x_iter->guarded_leaf_, key, val, cr::WorkerContext::My().worker_id_,
+    TransactionKV::InsertToNode(x_iter->guarded_leaf_, key, val, cr::TxManager::My().worker_id_,
                                 cr::ActiveTx().start_ts_, x_iter->slot_id_);
     return OpCode::kOK;
   }
@@ -290,17 +290,17 @@ void TransactionKV::InsertAfterRemove(BTreeIterMut* x_iter, Slice key, Slice val
   auto last_tx_id = chained_tuple->tx_id_;
   auto last_command_id = chained_tuple->command_id_;
   auto is_write_locked [[maybe_unused]] = chained_tuple->IsWriteLocked();
-  LS_DCHECK(chained_tuple->is_tombstone_,
-            "Tuple should be removed before insert, workerId={}, "
-            "startTs={}, key={}, tupleLastWriter={}, "
-            "tupleLastStartTs={}, tupleWriteLocked={}",
-            cr::WorkerContext::My().worker_id_, cr::WorkerContext::My().active_tx_.start_ts_,
-            key.ToString(), last_worker_id, last_tx_id, is_write_locked);
+  LEAN_DCHECK(chained_tuple->is_tombstone_,
+              "Tuple should be removed before insert, workerId={}, "
+              "startTs={}, key={}, tupleLastWriter={}, "
+              "tupleLastStartTs={}, tupleWriteLocked={}",
+              cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+              key.ToString(), last_worker_id, last_tx_id, is_write_locked);
 
   // create an insert version
   auto version_size = sizeof(InsertVersion) + val.size() + key.size();
-  auto command_id = cr::WorkerContext::My().cc_.PutVersion(
-      tree_id_, false, version_size, [&](uint8_t* version_buf) {
+  auto command_id =
+      cr::TxManager::My().cc_.PutVersion(tree_id_, false, version_size, [&](uint8_t* version_buf) {
         new (version_buf) InsertVersion(last_worker_id, last_tx_id, last_command_id, key, val);
       });
 
@@ -319,12 +319,12 @@ void TransactionKV::InsertAfterRemove(BTreeIterMut* x_iter, Slice key, Slice val
   auto chained_tuple_size = val.size() + sizeof(ChainedTuple);
   if (mut_raw_val.Size() < chained_tuple_size) {
     auto succeed [[maybe_unused]] = x_iter->ExtendPayload(chained_tuple_size);
-    LS_DCHECK(succeed,
-              "Failed to extend btree node slot to store the expanded "
-              "chained tuple, workerId={}, startTs={}, key={}, "
-              "curRawValSize={}, chainedTupleSize={}",
-              cr::WorkerContext::My().worker_id_, cr::WorkerContext::My().active_tx_.start_ts_,
-              key.ToString(), mut_raw_val.Size(), chained_tuple_size);
+    LEAN_DCHECK(succeed,
+                "Failed to extend btree node slot to store the expanded "
+                "chained tuple, workerId={}, startTs={}, key={}, "
+                "curRawValSize={}, chainedTupleSize={}",
+                cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                key.ToString(), mut_raw_val.Size(), chained_tuple_size);
 
   } else if (mut_raw_val.Size() > chained_tuple_size) {
     x_iter->ShortenWithoutCompaction(chained_tuple_size);
@@ -333,14 +333,14 @@ void TransactionKV::InsertAfterRemove(BTreeIterMut* x_iter, Slice key, Slice val
   // get the new value place and recreate a new chained tuple there
   auto new_mut_raw_val = x_iter->MutableVal();
   auto* new_chained_tuple = new (new_mut_raw_val.Data())
-      ChainedTuple(cr::WorkerContext::My().worker_id_, cr::ActiveTx().start_ts_, command_id, val);
+      ChainedTuple(cr::TxManager::My().worker_id_, cr::ActiveTx().start_ts_, command_id, val);
   new_chained_tuple->total_updates_ = total_updates_copy;
   new_chained_tuple->oldest_tx_ = oldest_tx_copy;
   new_chained_tuple->UpdateStats();
 }
 
 OpCode TransactionKV::Remove(Slice key) {
-  LS_DCHECK(cr::WorkerContext::My().IsTxStarted());
+  LEAN_DCHECK(cr::TxManager::My().IsTxStarted());
   JUMPMU_TRY() {
     auto x_iter = NewBTreeIterMut();
     if (x_iter->SeekToEqual(key); !x_iter->Valid()) {
@@ -366,12 +366,12 @@ OpCode TransactionKV::Remove(Slice key) {
     auto last_worker_id = chained_tuple.worker_id_;
     auto last_tx_id = chained_tuple.tx_id_;
     if (chained_tuple.IsWriteLocked() ||
-        !cr::WorkerContext::My().cc_.VisibleForMe(last_worker_id, last_tx_id)) {
+        !cr::TxManager::My().cc_.VisibleForMe(last_worker_id, last_tx_id)) {
       Log::Info("Remove conflicted, current transaction should be aborted, workerId={}, "
                 "startTs={}, key={}, tupleLastWriter={}, tupleLastStartTs={}, tupleVisibleForMe={}",
-                cr::WorkerContext::My().worker_id_, cr::WorkerContext::My().active_tx_.start_ts_,
+                cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
                 key.ToString(), last_worker_id, last_tx_id,
-                cr::WorkerContext::My().cc_.VisibleForMe(last_worker_id, last_tx_id));
+                cr::TxManager::My().cc_.VisibleForMe(last_worker_id, last_tx_id));
       JUMPMU_RETURN OpCode::kAbortTx;
     }
 
@@ -381,8 +381,8 @@ OpCode TransactionKV::Remove(Slice key) {
 
     chained_tuple.WriteLock();
     SCOPED_DEFER({
-      LS_DCHECK(!Tuple::From(mut_raw_val.Data())->IsWriteLocked(),
-                "Tuple should be write unlocked after remove");
+      LEAN_DCHECK(!Tuple::From(mut_raw_val.Data())->IsWriteLocked(),
+                  "Tuple should be write unlocked after remove");
     });
 
     // 1. move current (key, value) pair to the version storage
@@ -390,8 +390,8 @@ OpCode TransactionKV::Remove(Slice key) {
     auto val_size = x_iter->Val().size() - sizeof(ChainedTuple);
     auto val = chained_tuple.GetValue(val_size);
     auto version_size = sizeof(RemoveVersion) + val.size() + key.size();
-    auto command_id = cr::WorkerContext::My().cc_.PutVersion(
-        tree_id_, true, version_size, [&](uint8_t* version_buf) {
+    auto command_id =
+        cr::TxManager::My().cc_.PutVersion(tree_id_, true, version_size, [&](uint8_t* version_buf) {
           new (version_buf) RemoveVersion(chained_tuple.worker_id_, chained_tuple.tx_id_,
                                           chained_tuple.command_id_, key, val, dangling_pointer);
         });
@@ -408,7 +408,7 @@ OpCode TransactionKV::Remove(Slice key) {
       x_iter->ShortenWithoutCompaction(sizeof(ChainedTuple));
     }
     chained_tuple.is_tombstone_ = true;
-    chained_tuple.worker_id_ = cr::WorkerContext::My().worker_id_;
+    chained_tuple.worker_id_ = cr::TxManager::My().worker_id_;
     chained_tuple.tx_id_ = cr::ActiveTx().start_ts_;
     chained_tuple.command_id_ = command_id;
 
@@ -422,7 +422,7 @@ OpCode TransactionKV::Remove(Slice key) {
 }
 
 OpCode TransactionKV::ScanDesc(Slice start_key, ScanCallback callback) {
-  LS_DCHECK(cr::WorkerContext::My().IsTxStarted());
+  LEAN_DCHECK(cr::TxManager::My().IsTxStarted());
   if (cr::ActiveTx().IsLongRunning()) {
     TODOException();
     return OpCode::kAbortTx;
@@ -431,7 +431,7 @@ OpCode TransactionKV::ScanDesc(Slice start_key, ScanCallback callback) {
 }
 
 OpCode TransactionKV::ScanAsc(Slice start_key, ScanCallback callback) {
-  LS_DCHECK(cr::WorkerContext::My().IsTxStarted());
+  LEAN_DCHECK(cr::TxManager::My().IsTxStarted());
   if (cr::ActiveTx().IsLongRunning()) {
     return scan4LongRunningTx(start_key, callback);
   }
@@ -463,11 +463,11 @@ void TransactionKV::undo_last_insert(const WalTxInsert* wal_insert) {
     JUMPMU_TRY() {
       auto x_iter = NewBTreeIterMut();
       x_iter->SeekToEqual(key);
-      LS_DCHECK(x_iter->Valid(),
-                "Cannot find the inserted key in btree, workerId={}, "
-                "startTs={}, key={}",
-                cr::WorkerContext::My().worker_id_, cr::WorkerContext::My().active_tx_.start_ts_,
-                key.ToString());
+      LEAN_DCHECK(x_iter->Valid(),
+                  "Cannot find the inserted key in btree, workerId={}, "
+                  "startTs={}, key={}",
+                  cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                  key.ToString());
       // TODO(jian.z): write compensation wal entry
       if (wal_insert->prev_command_id_ != kInvalidCommandid) {
         // only remove the inserted value and mark the chained tuple as
@@ -491,8 +491,8 @@ void TransactionKV::undo_last_insert(const WalTxInsert* wal_insert) {
         if (ret != OpCode::kOK) {
           Log::Error("Undo last insert failed, failed to remove current key, "
                      "workerId={}, startTs={}, key={}, ret={}",
-                     cr::WorkerContext::My().worker_id_,
-                     cr::WorkerContext::My().active_tx_.start_ts_, key.ToString(), ToString(ret));
+                     cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                     key.ToString(), ToString(ret));
         }
       }
 
@@ -500,8 +500,8 @@ void TransactionKV::undo_last_insert(const WalTxInsert* wal_insert) {
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
-      Log::Warn("Undo insert failed, workerId={}, startTs={}", cr::WorkerContext::My().worker_id_,
-                cr::WorkerContext::My().active_tx_.start_ts_);
+      Log::Warn("Undo insert failed, workerId={}, startTs={}", cr::TxManager::My().worker_id_,
+                cr::TxManager::My().active_tx_.start_ts_);
     }
   }
 }
@@ -512,17 +512,17 @@ void TransactionKV::undo_last_update(const WalTxUpdate* wal_update) {
     JUMPMU_TRY() {
       auto x_iter = NewBTreeIterMut();
       x_iter->SeekToEqual(key);
-      LS_DCHECK(x_iter->Valid(),
-                "Cannot find the updated key in btree, workerId={}, "
-                "startTs={}, key={}",
-                cr::WorkerContext::My().worker_id_, cr::WorkerContext::My().active_tx_.start_ts_,
-                key.ToString());
+      LEAN_DCHECK(x_iter->Valid(),
+                  "Cannot find the updated key in btree, workerId={}, "
+                  "startTs={}, key={}",
+                  cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                  key.ToString());
 
       auto mut_raw_val = x_iter->MutableVal();
       auto& tuple = *Tuple::From(mut_raw_val.Data());
-      LS_DCHECK(!tuple.IsWriteLocked(), "Tuple is write locked, workerId={}, startTs={}, key={}",
-                cr::WorkerContext::My().worker_id_, cr::WorkerContext::My().active_tx_.start_ts_,
-                key.ToString());
+      LEAN_DCHECK(!tuple.IsWriteLocked(), "Tuple is write locked, workerId={}, startTs={}, key={}",
+                  cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                  key.ToString());
       if (tuple.format_ == TupleFormat::kFat) {
         FatTuple::From(mut_raw_val.Data())->UndoLastUpdate();
       } else {
@@ -547,8 +547,8 @@ void TransactionKV::undo_last_update(const WalTxUpdate* wal_update) {
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
-      Log::Warn("Undo update failed, workerId={}, startTs={}", cr::WorkerContext::My().worker_id_,
-                cr::WorkerContext::My().active_tx_.start_ts_);
+      Log::Warn("Undo update failed, workerId={}, startTs={}", cr::TxManager::My().worker_id_,
+                cr::TxManager::My().active_tx_.start_ts_);
     }
   }
 }
@@ -559,23 +559,23 @@ void TransactionKV::undo_last_remove(const WalTxRemove* wal_remove) {
     JUMPMU_TRY() {
       auto x_iter = NewBTreeIterMut();
       x_iter->SeekToEqual(removed_key);
-      LS_DCHECK(x_iter->Valid(),
-                "Cannot find the tombstone of removed key, workerId={}, "
-                "startTs={}, removedKey={}",
-                cr::WorkerContext::My().worker_id_, cr::WorkerContext::My().active_tx_.start_ts_,
-                removed_key.ToString());
+      LEAN_DCHECK(x_iter->Valid(),
+                  "Cannot find the tombstone of removed key, workerId={}, "
+                  "startTs={}, removedKey={}",
+                  cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                  removed_key.ToString());
 
       // resize the current slot to store the removed tuple
       auto chained_tuple_size = wal_remove->val_size_ + sizeof(ChainedTuple);
       auto cur_raw_val = x_iter->Val();
       if (cur_raw_val.size() < chained_tuple_size) {
         auto succeed [[maybe_unused]] = x_iter->ExtendPayload(chained_tuple_size);
-        LS_DCHECK(succeed,
-                  "Failed to extend btree node slot to store the "
-                  "recovered chained tuple, workerId={}, startTs={}, "
-                  "removedKey={}, curRawValSize={}, chainedTupleSize={}",
-                  cr::WorkerContext::My().worker_id_, cr::WorkerContext::My().active_tx_.start_ts_,
-                  removed_key.ToString(), cur_raw_val.size(), chained_tuple_size);
+        LEAN_DCHECK(succeed,
+                    "Failed to extend btree node slot to store the "
+                    "recovered chained tuple, workerId={}, startTs={}, "
+                    "removedKey={}, curRawValSize={}, chainedTupleSize={}",
+                    cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                    removed_key.ToString(), cur_raw_val.size(), chained_tuple_size);
       } else if (cur_raw_val.size() > chained_tuple_size) {
         x_iter->ShortenWithoutCompaction(chained_tuple_size);
       }
@@ -588,8 +588,8 @@ void TransactionKV::undo_last_remove(const WalTxRemove* wal_remove) {
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
-      Log::Warn("Undo remove failed, workerId={}, startTs={}", cr::WorkerContext::My().worker_id_,
-                cr::WorkerContext::My().active_tx_.start_ts_);
+      Log::Warn("Undo remove failed, workerId={}, startTs={}", cr::TxManager::My().worker_id_,
+                cr::TxManager::My().active_tx_.start_ts_);
     }
   }
 }
@@ -598,7 +598,7 @@ bool TransactionKV::UpdateInFatTuple(BTreeIterMut* x_iter, Slice key,
                                      MutValCallback update_call_back, UpdateDesc& update_desc) {
   while (true) {
     auto* fat_tuple = reinterpret_cast<FatTuple*>(x_iter->MutableVal().Data());
-    LS_DCHECK(fat_tuple->IsWriteLocked(), "Tuple should be write locked");
+    LEAN_DCHECK(fat_tuple->IsWriteLocked(), "Tuple should be write locked");
 
     if (!fat_tuple->HasSpaceFor(update_desc)) {
       fat_tuple->GarbageCollection();
@@ -608,7 +608,7 @@ bool TransactionKV::UpdateInFatTuple(BTreeIterMut* x_iter, Slice key,
 
       // Not enough space to store the fat tuple, convert to chained
       auto chained_tuple_size = fat_tuple->val_size_ + sizeof(ChainedTuple);
-      LS_DCHECK(chained_tuple_size < x_iter->Val().length());
+      LEAN_DCHECK(chained_tuple_size < x_iter->Val().length());
       fat_tuple->ConvertToChained(x_iter->btree_.tree_id_);
       x_iter->ShortenWithoutCompaction(chained_tuple_size);
       return false;
@@ -616,11 +616,11 @@ bool TransactionKV::UpdateInFatTuple(BTreeIterMut* x_iter, Slice key,
 
     auto perform_update = [&]() {
       fat_tuple->Append(update_desc);
-      fat_tuple->worker_id_ = cr::WorkerContext::My().worker_id_;
+      fat_tuple->worker_id_ = cr::TxManager::My().worker_id_;
       fat_tuple->tx_id_ = cr::ActiveTx().start_ts_;
-      fat_tuple->command_id_ = cr::WorkerContext::My().command_id_++;
+      fat_tuple->command_id_ = cr::TxManager::My().command_id_++;
       update_call_back(fat_tuple->GetMutableValue());
-      LS_DCHECK(fat_tuple->payload_capacity_ >= fat_tuple->payload_size_);
+      LEAN_DCHECK(fat_tuple->payload_capacity_ >= fat_tuple->payload_size_);
     };
 
     if (!x_iter->btree_.config_.enable_wal_) {
@@ -668,7 +668,7 @@ SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
   }
 
   guarded_node.ToExclusiveMayJump();
-  TXID sys_tx_id = utils::tls_store->AllocSysTxTs();
+  TXID sys_tx_id = utils::tls_store->MvccManager()->AllocSysTxTs();
   guarded_node.SyncSystemTxId(sys_tx_id);
 
   for (uint16_t i = 0; i < guarded_node->num_slots_; i++) {
@@ -677,9 +677,9 @@ SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
       auto& fat_tuple = *FatTuple::From(guarded_node->ValData(i));
       const uint32_t new_length = fat_tuple.val_size_ + sizeof(ChainedTuple);
       fat_tuple.ConvertToChained(tree_id_);
-      LS_DCHECK(new_length < guarded_node->ValSize(i));
+      LEAN_DCHECK(new_length < guarded_node->ValSize(i));
       guarded_node->ShortenPayload(i, new_length);
-      LS_DCHECK(tuple.format_ == TupleFormat::kChained);
+      LEAN_DCHECK(tuple.format_ == TupleFormat::kChained);
     }
   }
   guarded_node->has_garbage_ = false;
@@ -698,27 +698,27 @@ void TransactionKV::GarbageCollect(const uint8_t* version_data, WORKERID version
   const auto& version = *RemoveVersion::From(version_data);
 
   // Delete tombstones caused by transactions below cc_.local_wmk_of_all_tx_.
-  if (version_tx_id <= cr::WorkerContext::My().cc_.local_wmk_of_all_tx_) {
-    LS_DLOG("Delete tombstones caused by transactions below "
-            "cc_.local_wmk_of_all_tx_, versionWorkerId={}, versionTxId={}",
-            version_worker_id, version_tx_id);
-    LS_DCHECK(version.dangling_pointer_.bf_ != nullptr);
+  if (version_tx_id <= cr::TxManager::My().cc_.local_wmk_of_all_tx_) {
+    LEAN_DLOG("Delete tombstones caused by transactions below "
+              "cc_.local_wmk_of_all_tx_, versionWorkerId={}, versionTxId={}",
+              version_worker_id, version_tx_id);
+    LEAN_DCHECK(version.dangling_pointer_.bf_ != nullptr);
     JUMPMU_TRY() {
       BTreeIterMut x_iter(*static_cast<BTreeGeneric*>(this), version.dangling_pointer_.bf_,
                           version.dangling_pointer_.latch_version_should_be_);
       auto& node = x_iter.guarded_leaf_;
       auto& chained_tuple [[maybe_unused]] =
           *ChainedTuple::From(node->ValData(version.dangling_pointer_.head_slot_));
-      LS_DCHECK(chained_tuple.format_ == TupleFormat::kChained && !chained_tuple.IsWriteLocked() &&
-                chained_tuple.worker_id_ == version_worker_id &&
-                chained_tuple.tx_id_ == version_tx_id && chained_tuple.is_tombstone_);
+      LEAN_DCHECK(chained_tuple.format_ == TupleFormat::kChained &&
+                  !chained_tuple.IsWriteLocked() && chained_tuple.worker_id_ == version_worker_id &&
+                  chained_tuple.tx_id_ == version_tx_id && chained_tuple.is_tombstone_);
       node->RemoveSlot(version.dangling_pointer_.head_slot_);
       x_iter.TryMergeIfNeeded();
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
-      LS_DLOG("Delete tombstones caused by transactions below cc_.local_wmk_of_all_tx_ "
-              "page has been modified since last delete");
+      LEAN_DLOG("Delete tombstones caused by transactions below cc_.local_wmk_of_all_tx_ "
+                "page has been modified since last delete");
     }
     return;
   }
@@ -727,17 +727,17 @@ void TransactionKV::GarbageCollect(const uint8_t* version_data, WORKERID version
 
   // Delete the removedKey from graveyard since no transaction needs it
   if (called_before) {
-    LS_DLOG("Meet the removedKey again, delete it from graveyard, "
-            "versionWorkerId={}, versionTxId={}, removedKey={}",
-            version_worker_id, version_tx_id, removed_key.ToString());
+    LEAN_DLOG("Meet the removedKey again, delete it from graveyard, "
+              "versionWorkerId={}, versionTxId={}, removedKey={}",
+              version_worker_id, version_tx_id, removed_key.ToString());
     JUMPMU_TRY() {
       auto x_iter = graveyard_->NewBTreeIterMut();
       if (x_iter->SeekToEqual(removed_key); x_iter->Valid()) {
         auto ret [[maybe_unused]] = x_iter->RemoveCurrent();
-        LS_DCHECK(ret == OpCode::kOK,
-                  "Failed to delete the removedKey from graveyard, ret={}, "
-                  "versionWorkerId={}, versionTxId={}, removedKey={}",
-                  ToString(ret), version_worker_id, version_tx_id, removed_key.ToString());
+        LEAN_DCHECK(ret == OpCode::kOK,
+                    "Failed to delete the removedKey from graveyard, ret={}, "
+                    "versionWorkerId={}, versionTxId={}, removedKey={}",
+                    ToString(ret), version_worker_id, version_tx_id, removed_key.ToString());
       } else {
         Log::Fatal("Cannot find the removedKey in graveyard, "
                    "versionWorkerId={}, versionTxId={}, removedKey={}",
@@ -765,9 +765,9 @@ void TransactionKV::GarbageCollect(const uint8_t* version_data, WORKERID version
     MutableSlice mut_raw_val = x_iter->MutableVal();
     auto& tuple = *Tuple::From(mut_raw_val.Data());
     if (tuple.format_ == TupleFormat::kFat) {
-      LS_DLOG("Skip moving removedKey to graveyard for FatTuple, "
-              "versionWorkerId={}, versionTxId={}, removedKey={}",
-              version_worker_id, version_tx_id, removed_key.ToString());
+      LEAN_DLOG("Skip moving removedKey to graveyard for FatTuple, "
+                "versionWorkerId={}, versionTxId={}, removedKey={}",
+                version_worker_id, version_tx_id, removed_key.ToString());
       JUMPMU_RETURN;
     }
 
@@ -782,16 +782,16 @@ void TransactionKV::GarbageCollect(const uint8_t* version_data, WORKERID version
     if (chained_tuple.worker_id_ == version_worker_id && chained_tuple.tx_id_ == version_tx_id &&
         chained_tuple.is_tombstone_) {
 
-      LS_DCHECK(chained_tuple.tx_id_ > cr::WorkerContext::My().cc_.local_wmk_of_all_tx_,
-                "The removedKey is under cc_.local_wmk_of_all_tx_, should "
-                "not happen, cc_.local_wmk_of_all_tx_={}, "
-                "versionWorkerId={}, versionTxId={}, removedKey={}",
-                cr::WorkerContext::My().cc_.local_wmk_of_all_tx_, version_worker_id, version_tx_id,
-                removed_key.ToString());
-      if (chained_tuple.tx_id_ <= cr::WorkerContext::My().cc_.local_wmk_of_short_tx_) {
-        LS_DLOG("Move the removedKey to graveyard, versionWorkerId={}, "
-                "versionTxId={}, removedKey={}",
-                version_worker_id, version_tx_id, removed_key.ToString());
+      LEAN_DCHECK(chained_tuple.tx_id_ > cr::TxManager::My().cc_.local_wmk_of_all_tx_,
+                  "The removedKey is under cc_.local_wmk_of_all_tx_, should "
+                  "not happen, cc_.local_wmk_of_all_tx_={}, "
+                  "versionWorkerId={}, versionTxId={}, removedKey={}",
+                  cr::TxManager::My().cc_.local_wmk_of_all_tx_, version_worker_id, version_tx_id,
+                  removed_key.ToString());
+      if (chained_tuple.tx_id_ <= cr::TxManager::My().cc_.local_wmk_of_short_tx_) {
+        LEAN_DLOG("Move the removedKey to graveyard, versionWorkerId={}, "
+                  "versionTxId={}, removedKey={}",
+                  version_worker_id, version_tx_id, removed_key.ToString());
         // insert the removed key value to graveyard
         auto graveyard_x_iter = graveyard_->NewBTreeIterMut();
         auto g_ret = graveyard_x_iter->InsertKV(removed_key, x_iter->Val());
@@ -805,28 +805,28 @@ void TransactionKV::GarbageCollect(const uint8_t* version_data, WORKERID version
 
         // remove the tombsone from main tree
         auto ret [[maybe_unused]] = x_iter->RemoveCurrent();
-        LS_DCHECK(ret == OpCode::kOK,
-                  "Failed to delete the removedKey tombstone from main tree, ret={}, "
-                  "versionWorkerId={}, versionTxId={}, removedKey={}",
-                  ToString(ret), version_worker_id, version_tx_id, removed_key.ToString());
+        LEAN_DCHECK(ret == OpCode::kOK,
+                    "Failed to delete the removedKey tombstone from main tree, ret={}, "
+                    "versionWorkerId={}, versionTxId={}, removedKey={}",
+                    ToString(ret), version_worker_id, version_tx_id, removed_key.ToString());
         x_iter->TryMergeIfNeeded();
       } else {
         Log::Fatal("Meet a remove version upper than cc_.local_wmk_of_short_tx_, "
                    "should not happen, cc_.local_wmk_of_short_tx_={}, "
                    "versionWorkerId={}, versionTxId={}, removedKey={}",
-                   cr::WorkerContext::My().cc_.local_wmk_of_short_tx_, version_worker_id,
-                   version_tx_id, removed_key.ToString());
+                   cr::TxManager::My().cc_.local_wmk_of_short_tx_, version_worker_id, version_tx_id,
+                   removed_key.ToString());
       }
     } else {
-      LS_DLOG("Skip moving removedKey to graveyard, tuple changed after "
-              "remove, versionWorkerId={}, versionTxId={}, removedKey={}",
-              version_worker_id, version_tx_id, removed_key.ToString());
+      LEAN_DLOG("Skip moving removedKey to graveyard, tuple changed after "
+                "remove, versionWorkerId={}, versionTxId={}, removedKey={}",
+                version_worker_id, version_tx_id, removed_key.ToString());
     }
   }
   JUMPMU_CATCH() {
-    LS_DLOG("GarbageCollect failed, try for next round, "
-            "versionWorkerId={}, versionTxId={}, removedKey={}",
-            version_worker_id, version_tx_id, removed_key.ToString());
+    LEAN_DLOG("GarbageCollect failed, try for next round, "
+              "versionWorkerId={}, versionTxId={}, removedKey={}",
+              version_worker_id, version_tx_id, removed_key.ToString());
   }
 }
 
@@ -859,9 +859,9 @@ void TransactionKV::Unlock(const uint8_t* wal_entry_ptr) {
   JUMPMU_TRY() {
     auto x_iter = NewBTreeIterMut();
     x_iter->SeekToEqual(key);
-    LS_DCHECK(x_iter->Valid(), "Cannot find the key in btree, workerId={}, startTs={}, key={}",
-              cr::WorkerContext::My().worker_id_, cr::WorkerContext::My().active_tx_.start_ts_,
-              key.ToString());
+    LEAN_DCHECK(x_iter->Valid(), "Cannot find the key in btree, workerId={}, startTs={}, key={}",
+                cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                key.ToString());
     auto& tuple = *Tuple::From(x_iter->MutableVal().Data());
     ENSURE(tuple.format_ == TupleFormat::kChained);
   }
@@ -901,7 +901,7 @@ OpCode TransactionKV::scan4ShortRunningTx(Slice key, ScanCallback callback) {
     JUMPMU_RETURN OpCode::kOK;
   }
   JUMPMU_CATCH() {
-    LS_DCHECK(false, "Scan failed, key={}", key.ToString());
+    LEAN_DCHECK(false, "Scan failed, key={}", key.ToString());
   }
   JUMPMU_RETURN OpCode::kOther;
 }
@@ -1014,7 +1014,7 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
     }
   }
   JUMPMU_CATCH() {
-    LS_DCHECK(false);
+    LEAN_DCHECK(false);
   }
   JUMPMU_RETURN OpCode::kOther;
 }

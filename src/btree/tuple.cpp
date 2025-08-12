@@ -5,7 +5,7 @@
 #include "leanstore/btree/core/b_tree_node.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/concurrency/cr_manager.hpp"
-#include "leanstore/concurrency/worker_context.hpp"
+#include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/misc.hpp"
 
@@ -44,8 +44,8 @@ bool Tuple::ToFat(BTreeIterMut* x_iter) {
   // Process the chain tuple
   MutableSlice mut_raw_val = x_iter->MutableVal();
   auto& chained_tuple = *ChainedTuple::From(mut_raw_val.Data());
-  LS_DCHECK(chained_tuple.IsWriteLocked());
-  LS_DCHECK(chained_tuple.format_ == TupleFormat::kChained);
+  LEAN_DCHECK(chained_tuple.IsWriteLocked());
+  LEAN_DCHECK(chained_tuple.format_ == TupleFormat::kChained);
 
   auto tmp_buf_size = MaxFatTupleLength();
   auto tmp_buf = utils::JumpScopedArray<uint8_t>(tmp_buf_size);
@@ -61,18 +61,18 @@ bool Tuple::ToFat(BTreeIterMut* x_iter) {
   bool abort_conversion = false;
   uint16_t num_deltas_to_replace = 0;
   while (!abort_conversion) {
-    if (cr::WorkerContext::My().cc_.VisibleForAll(newer_tx_id)) {
+    if (cr::TxManager::My().cc_.VisibleForAll(newer_tx_id)) {
       // No need to convert versions that are visible for all to the FatTuple,
       // these old version can be GCed. Pruning versions space might get delayed
       break;
     }
 
-    if (!cr::WorkerContext::My().cc_.GetVersion(
+    if (!cr::TxManager::My().cc_.GetVersion(
             newer_worker_id, newer_tx_id, newer_command_id, [&](const uint8_t* version, uint64_t) {
               num_deltas_to_replace++;
               const auto& chained_delta = *UpdateVersion::From(version);
-              LS_DCHECK(chained_delta.type_ == VersionType::kUpdate);
-              LS_DCHECK(chained_delta.is_delta_);
+              LEAN_DCHECK(chained_delta.type_ == VersionType::kUpdate);
+              LEAN_DCHECK(chained_delta.is_delta_);
 
               auto& update_desc = *UpdateDesc::From(chained_delta.payload_);
               auto size_of_desc_and_delta = update_desc.SizeWithDelta();
@@ -120,7 +120,7 @@ bool Tuple::ToFat(BTreeIterMut* x_iter) {
     return false;
   }
 
-  LS_DCHECK(fat_tuple->payload_capacity_ >= fat_tuple->payload_size_);
+  LEAN_DCHECK(fat_tuple->payload_capacity_ >= fat_tuple->payload_size_);
 
   // Finalize the new FatTuple
   // TODO: corner cases, more careful about space usage
@@ -190,7 +190,7 @@ void FatTuple::GarbageCollection() {
   };
 
   // Delete for all visible deltas, atm using cheap visibility check
-  if (cr::WorkerContext::My().cc_.VisibleForAll(tx_id_)) {
+  if (cr::TxManager::My().cc_.VisibleForAll(tx_id_)) {
     num_deltas_ = 0;
     data_offset_ = payload_capacity_;
     payload_size_ = val_size_;
@@ -200,16 +200,16 @@ void FatTuple::GarbageCollection() {
   uint16_t deltas_visible_for_all = 0;
   for (int32_t i = num_deltas_ - 1; i >= 1; i--) {
     auto& delta = get_delta(i);
-    if (cr::WorkerContext::My().cc_.VisibleForAll(delta.tx_id_)) {
+    if (cr::TxManager::My().cc_.VisibleForAll(delta.tx_id_)) {
       deltas_visible_for_all = i - 1;
       break;
     }
   }
 
   const TXID local_oldest_oltp =
-      cr::WorkerContext::My().store_->crmanager_->global_wmk_info_.oldest_active_short_tx_.load();
+      cr::TxManager::My().store_->MvccManager()->GlobalWmkInfo().oldest_active_short_tx_.load();
   const TXID local_newest_olap =
-      cr::WorkerContext::My().store_->crmanager_->global_wmk_info_.newest_active_long_tx_.load();
+      cr::TxManager::My().store_->MvccManager()->GlobalWmkInfo().newest_active_long_tx_.load();
   if (deltas_visible_for_all == 0 && local_newest_olap > local_oldest_oltp) {
     return; // Nothing to do here
   }
@@ -309,14 +309,14 @@ void FatTuple::GarbageCollection() {
   }
 
   std::memcpy(this, buffer->get(), buffer_size);
-  LS_DCHECK(payload_capacity_ >= payload_size_);
+  LEAN_DCHECK(payload_capacity_ >= payload_size_);
 
   DEBUG_BLOCK() {
     uint32_t space_used [[maybe_unused]] = val_size_;
     for (uint32_t i = 0; i < num_deltas_; i++) {
       space_used += sizeof(uint16_t) + get_delta(i).TotalSize();
     }
-    LS_DCHECK(payload_size_ == space_used);
+    LEAN_DCHECK(payload_size_ == space_used);
   }
 }
 
@@ -330,7 +330,7 @@ bool FatTuple::HasSpaceFor(const UpdateDesc& update_desc) {
 
 template <typename... Args>
 FatTupleDelta& FatTuple::NewDelta(uint32_t total_delta_size, Args&&... args) {
-  LS_DCHECK((payload_capacity_ - payload_size_) >= (total_delta_size + sizeof(uint16_t)));
+  LEAN_DCHECK((payload_capacity_ - payload_size_) >= (total_delta_size + sizeof(uint16_t)));
   payload_size_ += total_delta_size + sizeof(uint16_t);
   data_offset_ -= total_delta_size;
   const uint32_t delta_id = num_deltas_++;
@@ -353,12 +353,12 @@ void FatTuple::Append(UpdateDesc& update_desc) {
 std::tuple<OpCode, uint16_t> FatTuple::GetVisibleTuple(ValCallback val_callback) const {
 
   // Latest version is visible
-  if (cr::WorkerContext::My().cc_.VisibleForMe(worker_id_, tx_id_)) {
+  if (cr::TxManager::My().cc_.VisibleForMe(worker_id_, tx_id_)) {
     val_callback(GetValue());
     return {OpCode::kOK, 1};
   }
 
-  LS_DCHECK(cr::ActiveTx().IsLongRunning());
+  LEAN_DCHECK(cr::ActiveTx().IsLongRunning());
 
   if (num_deltas_ > 0) {
     auto copied_val = utils::JumpScopedArray<uint8_t>(val_size_);
@@ -370,7 +370,7 @@ std::tuple<OpCode, uint16_t> FatTuple::GetVisibleTuple(ValCallback val_callback)
       const auto& update_desc = delta.GetUpdateDesc();
       auto* xor_data = delta.GetDeltaPtr();
       BasicKV::CopyToValue(update_desc, xor_data, copied_val->get());
-      if (cr::WorkerContext::My().cc_.VisibleForMe(delta.worker_id_, delta.tx_id_)) {
+      if (cr::TxManager::My().cc_.VisibleForMe(delta.worker_id_, delta.tx_id_)) {
         val_callback(Slice(copied_val->get(), val_size_));
         return {OpCode::kOK, num_visited_versions};
       }
@@ -395,8 +395,8 @@ void FatTuple::resize(const uint32_t new_size) {
   new_fat_tuple.val_size_ = val_size_;
   std::memcpy(new_fat_tuple.payload_, payload_, val_size_); // Copy value
   auto append_delta = [](FatTuple& fat_tuple, uint8_t* delta, uint16_t delta_size) {
-    LS_DCHECK(fat_tuple.payload_capacity_ >=
-              (fat_tuple.payload_size_ + delta_size + sizeof(uint16_t)));
+    LEAN_DCHECK(fat_tuple.payload_capacity_ >=
+                (fat_tuple.payload_size_ + delta_size + sizeof(uint16_t)));
     const uint16_t i = fat_tuple.num_deltas_++;
     fat_tuple.payload_size_ += delta_size + sizeof(uint16_t);
     fat_tuple.data_offset_ -= delta_size;
@@ -408,7 +408,7 @@ void FatTuple::resize(const uint32_t new_size) {
                  get_delta(i).TotalSize());
   }
   std::memcpy(this, tmp_page->get(), tmp_page_size);
-  LS_DCHECK(payload_capacity_ >= payload_size_);
+  LEAN_DCHECK(payload_capacity_ >= payload_size_);
 }
 
 void FatTuple::ConvertToChained(TREEID tree_id) {
@@ -420,7 +420,7 @@ void FatTuple::ConvertToChained(TREEID tree_id) {
     auto& update_desc = delta.GetUpdateDesc();
     auto size_of_desc_and_delta = update_desc.SizeWithDelta();
     auto version_size = size_of_desc_and_delta + sizeof(UpdateVersion);
-    cr::WorkerContext::My()
+    cr::TxManager::My()
         .cc_.Other(prev_worker_id)
         .history_storage_.PutVersion(
             prev_tx_id, prev_command_id, tree_id, false, version_size,

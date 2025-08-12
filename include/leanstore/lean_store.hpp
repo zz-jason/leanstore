@@ -7,7 +7,6 @@
 #include "utils/coroutine/coro_future.hpp"
 #include "utils/coroutine/coro_scheduler.hpp"
 
-#include <atomic>
 #include <cassert>
 #include <cstdint>
 #include <expected>
@@ -46,6 +45,8 @@ class JsonObj;
 
 namespace leanstore {
 
+class MvccManager;
+
 class LeanStore {
 public:
   /// Opens a LeanStore instance with the provided options.
@@ -68,19 +69,14 @@ public:
   /// The Buffer manager
   std::unique_ptr<storage::BufferManager> buffer_manager_;
 
+  /// The concurrency control protocol used by the store.
+  std::unique_ptr<leanstore::MvccManager> mvcc_mgr_;
+
   /// The concurrent resource manager
   /// NOTE: Ownerd by LeanStore instance, should be destroyed together with it
   cr::CRManager* crmanager_;
 
   CoroScheduler* coro_scheduler_;
-
-  /// The global timestamp oracle for user transactions. Used to generate start and commit
-  /// timestamps for user transactions. Start from a positive number, 0 indicates invalid timestamp
-  std::atomic<uint64_t> usr_tso_ = 1;
-
-  /// The global timestamp oracle for system transactions. Used to generate timestamps for system
-  /// transactions. Start from a positive number, 0 indicates invalid timestamp
-  std::atomic<uint64_t> sys_tso_ = 1;
 
 #ifdef DEBUG
   utils::DebugFlagsRegistry debug_flags_registry_;
@@ -116,21 +112,8 @@ public:
   /// Unregister a TransactionKV
   void DropTransactionKV(const std::string& name);
 
-  uint64_t GetUsrTxTs() {
-    return usr_tso_.load();
-  }
-
-  uint64_t GetSysTxTs() {
-    return sys_tso_.load();
-  }
-
-  /// Alloc a new timestamp from the timestamp oracle
-  uint64_t AllocUsrTxTs() {
-    return usr_tso_.fetch_add(1);
-  }
-
-  uint64_t AllocSysTxTs() {
-    return sys_tso_.fetch_add(1);
+  std::unique_ptr<leanstore::MvccManager>& MvccManager() {
+    return mvcc_mgr_;
   }
 
   template <typename F, typename R = std::invoke_result_t<F>>

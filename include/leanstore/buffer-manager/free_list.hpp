@@ -27,8 +27,8 @@ private:
 };
 
 inline void FreeList::PushFront(BufferFrame& bf) {
-  LS_DCHECK(bf.header_.state_ == State::kFree);
-  LS_DCHECK(!bf.header_.latch_.IsLockedExclusively());
+  LEAN_DCHECK(bf.header_.state_ == State::kFree);
+  LEAN_DCHECK(!bf.header_.latch_.IsLockedExclusively());
 
   LEAN_UNIQUE_LOCK(mutex_);
 
@@ -55,7 +55,7 @@ inline BufferFrame* FreeList::TryPopFront() {
 
   head_ = head_->header_.next_free_bf_;
   size_--;
-  LS_DCHECK(free_bf->header_.state_ == State::kFree);
+  LEAN_DCHECK(free_bf->header_.state_ == State::kFree);
   return free_bf;
 }
 

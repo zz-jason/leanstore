@@ -1,4 +1,4 @@
-#include "leanstore/concurrency/worker_context.hpp"
+#include "leanstore/concurrency/tx_manager.hpp"
 
 #include "leanstore-c/perf_counters.h"
 #include "leanstore/buffer-manager/tree_registry.hpp"
@@ -12,47 +12,36 @@
 #include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/log.hpp"
 #include "utils/coroutine/lean_mutex.hpp"
+#include "utils/coroutine/mvcc_manager.hpp"
 
 #include <algorithm>
 #include <cstdlib>
 
 namespace leanstore::cr {
 
-thread_local std::unique_ptr<WorkerContext> WorkerContext::s_tls_worker_ctx = nullptr;
-thread_local WorkerContext* WorkerContext::s_tls_worker_ctx_ptr = nullptr;
+thread_local TxManager* TxManager::s_tls_tx_manager = nullptr;
 thread_local PerfCounters tls_perf_counters;
 
-WorkerContext::WorkerContext(uint64_t worker_id, std::vector<WorkerContext*>& all_workers,
-                             leanstore::LeanStore* store)
+TxManager::TxManager(uint64_t worker_id, std::vector<std::unique_ptr<TxManager>>& tx_mgrs,
+                     leanstore::LeanStore* store)
     : store_(store),
-      cc_(store, all_workers.size()),
+      logging_(store_->store_option_->wal_buffer_bytes_),
+      cc_(store, store->store_option_->worker_threads_),
       active_tx_id_(0),
       worker_id_(worker_id),
-      all_workers_(all_workers) {
-
-  // init wal buffer
-  logging_.wal_buffer_bytes_ = store_->store_option_->wal_buffer_bytes_;
-  logging_.wal_buffer_ = (uint8_t*)(std::aligned_alloc(512, logging_.wal_buffer_bytes_));
-  std::memset(logging_.wal_buffer_, 0, logging_.wal_buffer_bytes_);
-
-  cc_.lcb_cache_val_ = std::make_unique<uint64_t[]>(all_workers_.size());
-  cc_.lcb_cache_key_ = std::make_unique<uint64_t[]>(all_workers_.size());
+      tx_mgrs_(tx_mgrs) {
 }
 
-WorkerContext::~WorkerContext() {
-  free(logging_.wal_buffer_);
-  logging_.wal_buffer_ = nullptr;
-}
+TxManager::~TxManager() = default;
 
-void WorkerContext::StartTx(TxMode mode, IsolationLevel level, bool is_read_only) {
+void TxManager::StartTx(TxMode mode, IsolationLevel level, bool is_read_only) {
   Transaction prev_tx [[maybe_unused]] = active_tx_;
-  LS_DCHECK(prev_tx.state_ != TxState::kStarted,
-            "Previous transaction not ended, workerId={}, startTs={}, txState={}", worker_id_,
-            prev_tx.start_ts_, TxStatUtil::ToString(prev_tx.state_));
+  LEAN_DCHECK(prev_tx.state_ != TxState::kStarted,
+              "Previous transaction not ended, workerId={}, startTs={}, txState={}", worker_id_,
+              prev_tx.start_ts_, TxStatUtil::ToString(prev_tx.state_));
   SCOPED_DEFER({
-    LS_DLOG("Start transaction, workerId={}, startTs={}, globalMinFlushedSysTx={}", worker_id_,
-            active_tx_.start_ts_,
-            store_->crmanager_->group_committer_->global_min_flushed_sys_tx_.load());
+    LEAN_DLOG("Start transaction, workerId={}, startTs={}, min_global_committed_sys_tx={}",
+              worker_id_, active_tx_.start_ts_, store_->MvccManager()->GetMinCommittedSysTx());
   });
 
   active_tx_.Start(mode, level);
@@ -62,8 +51,7 @@ void WorkerContext::StartTx(TxMode mode, IsolationLevel level, bool is_read_only
   }
 
   /// Reset the max observed system transaction id
-  active_tx_.max_observed_sys_tx_id_ =
-      store_->crmanager_->group_committer_->global_min_flushed_sys_tx_;
+  active_tx_.max_observed_sys_tx_id_ = store_->MvccManager()->GetMinCommittedSysTx();
 
   // Init wal and group commit related transaction information
   logging_.tx_wal_begin_ = logging_.wal_buffered_;
@@ -77,9 +65,9 @@ void WorkerContext::StartTx(TxMode mode, IsolationLevel level, bool is_read_only
   // short-running) We have to acquire a transaction id and use it for locking in ANY isolation
   // level
   if (is_read_only) {
-    active_tx_.start_ts_ = store_->GetUsrTxTs();
+    active_tx_.start_ts_ = store_->MvccManager()->GetUsrTxTs();
   } else {
-    active_tx_.start_ts_ = store_->AllocUsrTxTs();
+    active_tx_.start_ts_ = store_->MvccManager()->AllocUsrTxTs();
   }
   auto cur_tx_id = active_tx_.start_ts_;
   if (store_->store_option_->enable_long_running_tx_ && active_tx_.IsLongRunning()) {
@@ -89,13 +77,13 @@ void WorkerContext::StartTx(TxMode mode, IsolationLevel level, bool is_read_only
 
   // Publish the transaction id
   active_tx_id_.store(cur_tx_id, std::memory_order_release);
-  cc_.global_wmk_of_all_tx_ = store_->crmanager_->global_wmk_info_.wmk_of_all_tx_.load();
+  cc_.global_wmk_of_all_tx_ = store_->MvccManager()->GlobalWmkInfo().wmk_of_all_tx_.load();
 
   // Cleanup commit log if necessary
   cc_.commit_tree_.CompactCommitLog();
 }
 
-void WorkerContext::CommitTx() {
+void TxManager::CommitTx() {
   SCOPED_DEFER({
     COUNTER_INC(&tls_perf_counters.tx_committed_);
     if (active_tx_.has_remote_dependency_) {
@@ -113,13 +101,13 @@ void WorkerContext::CommitTx() {
   // Reset command_id_ on commit
   command_id_ = 0;
   if (active_tx_.has_wrote_) {
-    active_tx_.commit_ts_ = store_->AllocUsrTxTs();
+    active_tx_.commit_ts_ = store_->MvccManager()->AllocUsrTxTs();
     cc_.commit_tree_.AppendCommitLog(active_tx_.start_ts_, active_tx_.commit_ts_);
     cc_.latest_commit_ts_.store(active_tx_.commit_ts_, std::memory_order_release);
   } else {
-    LS_DLOG("Transaction has no writes, skip assigning commitTs, append log to "
-            "commit tree, and group commit, workerId={}, actual startTs={}",
-            worker_id_, active_tx_.start_ts_);
+    LEAN_DLOG("Transaction has no writes, skip assigning commitTs, append log to "
+              "commit tree, and group commit, workerId={}, actual startTs={}",
+              worker_id_, active_tx_.start_ts_);
   }
 
   // Reset startTs so that other transactions can safely update the global
@@ -147,10 +135,10 @@ void WorkerContext::CommitTx() {
   cc_.GarbageCollection();
 
   // Wait logs to be flushed
-  LS_DLOG("Wait transaction to commit, workerId={}, startTs={}, commitTs={}, maxObseredSysTx={}, "
-          "hasRemoteDep={}",
-          worker_id_, active_tx_.start_ts_, active_tx_.commit_ts_,
-          active_tx_.max_observed_sys_tx_id_, active_tx_.has_remote_dependency_);
+  LEAN_DLOG("Wait transaction to commit, workerId={}, startTs={}, commitTs={}, maxObseredSysTx={}, "
+            "hasRemoteDep={}",
+            worker_id_, active_tx_.start_ts_, active_tx_.commit_ts_,
+            active_tx_.max_observed_sys_tx_id_, active_tx_.has_remote_dependency_);
 
   logging_.WaitToCommit(active_tx_.commit_ts_);
 }
@@ -163,7 +151,7 @@ void WorkerContext::CommitTx() {
 /// 4. Purge versions in history tree, clean garbages made by the aborted transaction
 ///
 /// It may share the same code with the recovery process?
-void WorkerContext::AbortTx() {
+void TxManager::AbortTx() {
   SCOPED_DEFER({
     active_tx_.state_ = TxState::kAborted;
     COUNTER_INC(&tls_perf_counters.tx_aborted_);
@@ -183,7 +171,7 @@ void WorkerContext::AbortTx() {
   }
 
   // TODO(jian.z): support reading from WAL file once
-  LS_DCHECK(!active_tx_.wal_exceed_buffer_, "Aborting from WAL file is not supported yet");
+  LEAN_DCHECK(!active_tx_.wal_exceed_buffer_, "Aborting from WAL file is not supported yet");
   std::vector<const WalEntry*> entries;
   logging_.IterateCurrentTxWALs([&](const WalEntry& entry) {
     if (entry.type_ == WalEntry::Type::kComplex) {
@@ -208,7 +196,7 @@ void WorkerContext::AbortTx() {
   }
 }
 
-PerfCounters* WorkerContext::GetPerfCounters() {
+PerfCounters* TxManager::GetPerfCounters() {
   return &tls_perf_counters;
 }
 

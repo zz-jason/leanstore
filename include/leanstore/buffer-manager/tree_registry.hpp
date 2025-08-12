@@ -254,9 +254,9 @@ public:
     LEAN_SHARED_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {
-      LS_DLOG("Skip GarbageCollect on non-existing tree, it is probably that "
-              "the tree is already dropped, treeId={}",
-              tree_id);
+      LEAN_DLOG("Skip GarbageCollect on non-existing tree, it is probably that "
+                "the tree is already dropped, treeId={}",
+                tree_id);
       return;
     }
     auto& [tree, tree_name] = it->second;

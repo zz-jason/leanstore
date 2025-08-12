@@ -73,7 +73,7 @@ void BTreeNode::SearchHint(HeadType key_head, uint16_t& lower_out, uint16_t& upp
 }
 
 int16_t BTreeNode::InsertDoNotCopyPayload(Slice key, uint16_t val_size, int32_t pos) {
-  LS_DCHECK(CanInsert(key.size(), val_size));
+  LEAN_DCHECK(CanInsert(key.size(), val_size));
   PrepareInsert(key.size(), val_size);
 
   // calculate taret slotId for insertion
@@ -128,7 +128,7 @@ void BTreeNode::Compactify() {
   DEBUG_BLOCK() {
     space_after_compaction = FreeSpaceAfterCompaction();
   }
-  SCOPED_DEFER(DEBUG_BLOCK() { LS_DCHECK(space_after_compaction == FreeSpace()); });
+  SCOPED_DEFER(DEBUG_BLOCK() { LEAN_DCHECK(space_after_compaction == FreeSpace()); });
 
   // generate a temp node to store the compacted data
   auto tmp_node_buf = utils::JumpScopedArray<uint8_t>(BTreeNode::Size());
@@ -146,7 +146,7 @@ void BTreeNode::Compactify() {
 }
 
 uint32_t BTreeNode::MergeSpaceUpperBound(ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_right) {
-  LS_DCHECK(x_guarded_right->is_leaf_);
+  LEAN_DCHECK(x_guarded_right->is_leaf_);
 
   auto tmp_node_buf = utils::JumpScopedArray<uint8_t>(BTreeNode::Size());
   auto* tmp =
@@ -195,8 +195,8 @@ bool BTreeNode::merge(uint16_t slot_id, ExclusiveGuardedBufferFrame<BTreeNode>& 
   }
 
   // Inner node
-  LS_DCHECK(!x_guarded_right->is_leaf_);
-  LS_DCHECK(x_guarded_parent->IsInner());
+  LEAN_DCHECK(!x_guarded_right->is_leaf_);
+  LEAN_DCHECK(x_guarded_parent->IsInner());
 
   auto tmp_node_buf = utils::JumpScopedArray<uint8_t>(BTreeNode::Size());
   auto* tmp = BTreeNode::New(tmp_node_buf->get(), is_leaf_, GetLowerFence(),
@@ -304,7 +304,7 @@ uint16_t BTreeNode::CommonPrefix(uint16_t slot_a, uint16_t slot_b) {
 }
 
 BTreeNode::SeparatorInfo BTreeNode::FindSep() {
-  LS_DCHECK(num_slots_ > 1);
+  LEAN_DCHECK(num_slots_ > 1);
 
   // Inner nodes are split in the middle
   if (IsInner()) {
@@ -358,11 +358,11 @@ int32_t BTreeNode::CompareKeyWithBoundaries(Slice key) {
 Swip& BTreeNode::LookupInner(Slice key) {
   int32_t slot_id = LowerBound<false>(key);
   if (slot_id == num_slots_) {
-    LS_DCHECK(!right_most_child_swip_.IsEmpty());
+    LEAN_DCHECK(!right_most_child_swip_.IsEmpty());
     return right_most_child_swip_;
   }
   auto* child_swip = ChildSwip(slot_id);
-  LS_DCHECK(!child_swip->IsEmpty(), "childSwip is empty, slotId={}", slot_id);
+  LEAN_DCHECK(!child_swip->IsEmpty(), "childSwip is empty, slotId={}", slot_id);
   return *child_swip;
 }
 
@@ -373,7 +373,7 @@ Swip& BTreeNode::LookupInner(Slice key) {
 void BTreeNode::Split(ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_parent,
                       ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_new_left,
                       const BTreeNode::SeparatorInfo& sep_info) {
-  LS_DCHECK(x_guarded_parent->CanInsert(sep_info.size_, sizeof(Swip)));
+  LEAN_DCHECK(x_guarded_parent->CanInsert(sep_info.size_, sizeof(Swip)));
 
   // generate separator key
   uint8_t sep_key[sep_info.size_];
