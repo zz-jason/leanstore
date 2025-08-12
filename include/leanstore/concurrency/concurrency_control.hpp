@@ -1,7 +1,6 @@
 #pragma once
 
 #include "leanstore/concurrency/history_storage.hpp"
-#include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/log.hpp"
@@ -94,10 +93,10 @@ struct WatermarkInfo {
     oldest_active_tx_.store(oldest_tx, std::memory_order_release);
     oldest_active_short_tx_.store(oldest_short_tx, std::memory_order_release);
     newest_active_long_tx_.store(newest_long_tx, std::memory_order_release);
-    LS_DLOG("Global watermark updated, oldestActiveTx={}, "
-            "oldestActiveShortTx={}, netestActiveLongTx={}",
-            oldest_active_tx_.load(), oldest_active_short_tx_.load(),
-            newest_active_long_tx_.load());
+    LEAN_DLOG("Global watermark updated, oldestActiveTx={}, "
+              "oldestActiveShortTx={}, netestActiveLongTx={}",
+              oldest_active_tx_.load(), oldest_active_short_tx_.load(),
+              newest_active_long_tx_.load());
   }
 
   /// Update the global watermarks.
@@ -105,8 +104,8 @@ struct WatermarkInfo {
   void UpdateWmks(TXID wmk_of_all, TXID wmk_of_short) {
     wmk_of_all_tx_.store(wmk_of_all, std::memory_order_release);
     wmk_of_short_tx_.store(wmk_of_short, std::memory_order_release);
-    LS_DLOG("Global watermarks updated, wmkOfAllTx={}, wmkOfShortTx={}", wmk_of_all_tx_.load(),
-            wmk_of_short_tx_.load());
+    LEAN_DLOG("Global watermarks updated, wmkOfAllTx={}, wmkOfShortTx={}", wmk_of_all_tx_.load(),
+              wmk_of_short_tx_.load());
   }
 
   /// Whether there is any active long-running transaction.
@@ -122,6 +121,8 @@ public:
   ConcurrencyControl(leanstore::LeanStore* store, uint64_t num_workers)
       : store_(store),
         commit_tree_(num_workers) {
+    lcb_cache_val_ = std::make_unique<uint64_t[]>(num_workers);
+    lcb_cache_key_ = std::make_unique<uint64_t[]>(num_workers);
   }
 
 public:

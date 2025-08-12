@@ -1,6 +1,6 @@
 #include "utils/coroutine/coro_scheduler.hpp"
 
-#include "leanstore/concurrency/worker_context.hpp"
+#include "leanstore/concurrency/tx_manager.hpp"
 #include "utils/coroutine/auto_commit_protocol.hpp"
 #include "utils/coroutine/coro_future.hpp"
 
@@ -16,12 +16,13 @@ CoroScheduler::CoroScheduler(LeanStore* store, int64_t num_threads)
     : store_(store),
       num_threads_(num_threads),
       coro_executors_(num_threads),
-      worker_ctxs_(num_threads, nullptr) {
+      tx_mgrs_() {
 
   // create commit protocols for each commit group
   auto commit_group_size = store ? store->store_option_->commit_group_size_ : 0;
   for (auto i = 0u; i < commit_group_size; i++) {
-    commit_protocols_.emplace_back(std::make_unique<AutoCommitProtocol>(i));
+    commit_protocols_.emplace_back(
+        std::make_unique<AutoCommitProtocol>(i, store->store_option_->worker_threads_));
   }
 
   // create coroutine executors
@@ -31,6 +32,9 @@ CoroScheduler::CoroScheduler(LeanStore* store, int64_t num_threads)
         commit_group_size == 0 ? nullptr : commit_protocols_[i % commit_group_size].get();
     coro_executors_[i] = std::make_unique<CoroExecutor>(store, commit_protocol, i);
   }
+}
+
+CoroScheduler::~CoroScheduler() {
 }
 
 void CoroScheduler::InitCoroExecutors() {
@@ -76,15 +80,15 @@ void CoroScheduler::InitWorkerCtxs() {
     Log::Info("WorkerContexts inited, num_threads={}, elapsed={}ms", num_threads_, elapsed_ms);
   });
 
+  tx_mgrs_.reserve(coro_executors_.size());
+  for (auto i = 0u; i < coro_executors_.size(); i++) {
+    tx_mgrs_.emplace_back(std::make_unique<cr::TxManager>(i, tx_mgrs_, store_));
+  }
+
   std::vector<std::shared_ptr<CoroFuture<void>>> futures;
   for (auto i = 0u; i < coro_executors_.size(); i++) {
-    auto coro_ctx_init_job = [i, this]() {
-      cr::WorkerContext::s_tls_worker_ctx =
-          std::make_unique<cr::WorkerContext>(i, worker_ctxs_, store_);
-      cr::WorkerContext::s_tls_worker_ctx_ptr = cr::WorkerContext::s_tls_worker_ctx.get();
-      worker_ctxs_[i] = cr::WorkerContext::s_tls_worker_ctx_ptr;
-    };
-    futures.emplace_back(Submit(std::move(coro_ctx_init_job), i));
+    auto coro_job = [i, this]() { cr::TxManager::s_tls_tx_manager = tx_mgrs_[i].get(); };
+    futures.emplace_back(Submit(std::move(coro_job), i));
   }
   for (auto& future : futures) {
     future->Wait();
@@ -116,7 +120,7 @@ void CoroScheduler::InitLogging() {
     auto logging_init_job = [i, &wal_dir]() {
       std::string file_name = std::format(CoroExecutor::kCoroExecNamePattern, i);
       std::string file_path = std::format("{}/{}.wal", wal_dir, file_name);
-      cr::WorkerContext::My().GetLogging().InitWalFd(file_path);
+      cr::TxManager::My().GetLogging().InitWalFd(file_path);
     };
     futures.emplace_back(Submit(std::move(logging_init_job), i));
   }

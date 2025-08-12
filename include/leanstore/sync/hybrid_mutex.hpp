@@ -49,11 +49,11 @@ public:
   void LockExclusively() {
     shared_mutex_.lock();
     version_.fetch_add(kLatchExclusiveBit, std::memory_order_release);
-    LS_DCHECK(IsLockedExclusively());
+    LEAN_DCHECK(IsLockedExclusively());
   }
 
   void UnlockExclusively() {
-    LS_DCHECK(IsLockedExclusively());
+    LEAN_DCHECK(IsLockedExclusively());
     version_.fetch_add(kLatchExclusiveBit, std::memory_order_release);
     shared_mutex_.unlock();
   }

@@ -158,7 +158,7 @@ private:
     const auto page_size = store_->store_option_->page_size_;
     DEBUG_BLOCK() {
       auto* page [[maybe_unused]] = reinterpret_cast<Page*>(buffer);
-      LS_DLOG("page write, pageId={}, btreeId={}", page_id, page->btree_id_);
+      LEAN_DLOG("page write, pageId={}, btreeId={}", page_id, page->btree_id_);
     }
     aio.PrepareWrite(store_->page_fd_, buffer, page_size, page_id * page_size);
     if (auto res = aio.SubmitAll(); !res) {

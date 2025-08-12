@@ -49,8 +49,8 @@ protected:
 
   void TearDown() override {
     store_->ExecSync(1, [&]() {
-      cr::WorkerContext::My().StartTx();
-      SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
+      cr::TxManager::My().StartTx();
+      SCOPED_DEFER(cr::TxManager::My().CommitTx());
       store_->DropTransactionKV(tree_name_);
     });
   }
@@ -63,8 +63,8 @@ TEST_F(BTreeGenericTest, GetSummary) {
       auto key = RandomGenerator::RandAlphString(24) + std::to_string(i);
       auto val = RandomGenerator::RandAlphString(176);
 
-      cr::WorkerContext::My().StartTx();
-      SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
+      cr::TxManager::My().StartTx();
+      SCOPED_DEFER(cr::TxManager::My().CommitTx());
       btree_->Insert(key, val);
     });
   }

@@ -9,6 +9,7 @@
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/misc.hpp"
+#include "utils/coroutine/mvcc_manager.hpp"
 
 #include <format>
 #include <string>
@@ -84,7 +85,7 @@ bool BasicKV::IsRangeEmpty(Slice start_key, Slice end_key) {
       FindLeafCanJump(start_key, guarded_leaf);
 
       Slice upper_fence = guarded_leaf->GetUpperFence();
-      LS_DCHECK(start_key >= guarded_leaf->GetLowerFence());
+      LEAN_DCHECK(start_key >= guarded_leaf->GetLowerFence());
 
       if ((guarded_leaf->upper_fence_.IsInfinity() || end_key <= upper_fence) &&
           guarded_leaf->num_slots_ == 0) {
@@ -160,13 +161,13 @@ OpCode BasicKV::Insert(Slice key, Slice val) {
     auto ret = x_iter->InsertKV(key, val);
 
     if (ret == OpCode::kDuplicated) {
-      Log::Info("Insert duplicated, workerId={}, key={}, treeId={}",
-                cr::WorkerContext::My().worker_id_, key.ToString(), tree_id_);
+      Log::Info("Insert duplicated, workerId={}, key={}, treeId={}", cr::TxManager::My().worker_id_,
+                key.ToString(), tree_id_);
       JUMPMU_RETURN OpCode::kDuplicated;
     }
 
     if (ret != OpCode::kOK) {
-      Log::Info("Insert failed, workerId={}, key={}, ret={}", cr::WorkerContext::My().worker_id_,
+      Log::Info("Insert failed, workerId={}, key={}, ret={}", cr::TxManager::My().worker_id_,
                 key.ToString(), ToString(ret));
       JUMPMU_RETURN ret;
     }
@@ -259,7 +260,7 @@ OpCode BasicKV::UpdatePartial(Slice key, MutValCallback update_call_back, Update
     }
     auto current_val = x_iter->MutableVal();
     if (config_.enable_wal_) {
-      LS_DCHECK(update_desc.num_slots_ > 0);
+      LEAN_DCHECK(update_desc.num_slots_ > 0);
       auto size_of_desc_and_delta = update_desc.SizeWithDelta();
       auto wal_handler =
           x_iter->guarded_leaf_.ReserveWALPayload<WalUpdate>(key.length() + size_of_desc_and_delta);
@@ -326,7 +327,7 @@ OpCode BasicKV::RangeRemove(Slice start_key, Slice end_key, bool page_wise) {
       if (guarded_leaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
         x_iter->SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
           JUMPMU_TRY() {
-            TXID sys_tx_id = store_->AllocSysTxTs();
+            TXID sys_tx_id = store_->MvccManager()->AllocSysTxTs();
             this->TryMergeMayJump(sys_tx_id, *to_merge);
           }
           JUMPMU_CATCH() {

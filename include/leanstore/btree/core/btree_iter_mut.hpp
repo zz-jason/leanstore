@@ -6,6 +6,7 @@
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/random_generator.hpp"
+#include "utils/coroutine/mvcc_manager.hpp"
 
 #include <memory>
 
@@ -28,7 +29,7 @@ public:
   void IntoBtreeIter(BTreeIter* iter);
 
   OpCode SeekToInsertWithHint(Slice key, bool higher = true) {
-    LS_DCHECK(Valid());
+    LEAN_DCHECK(Valid());
     slot_id_ = guarded_leaf_->LinearSearchWithBias(key, slot_id_, higher);
     if (slot_id_ == -1) {
       return SeekToInsert(key);
@@ -52,21 +53,21 @@ public:
   }
 
   void InsertToCurrentNode(Slice key, uint16_t val_size) {
-    LS_DCHECK(KeyInCurrentNode(key));
-    LS_DCHECK(HasEnoughSpaceFor(key.size(), val_size));
+    LEAN_DCHECK(KeyInCurrentNode(key));
+    LEAN_DCHECK(HasEnoughSpaceFor(key.size(), val_size));
     slot_id_ = guarded_leaf_->InsertDoNotCopyPayload(key, val_size, slot_id_);
   }
 
   void InsertToCurrentNode(Slice key, Slice val) {
-    LS_DCHECK(KeyInCurrentNode(key));
-    LS_DCHECK(HasEnoughSpaceFor(key.size(), val.size()));
-    LS_DCHECK(Valid());
+    LEAN_DCHECK(KeyInCurrentNode(key));
+    LEAN_DCHECK(HasEnoughSpaceFor(key.size(), val.size()));
+    LEAN_DCHECK(Valid());
     slot_id_ = guarded_leaf_->InsertDoNotCopyPayload(key, val.size(), slot_id_);
     std::memcpy(guarded_leaf_->ValData(slot_id_), val.data(), val.size());
   }
 
   void SplitForKey(Slice key) {
-    auto sys_tx_id = btree_.store_->AllocSysTxTs();
+    auto sys_tx_id = btree_.store_->MvccManager()->AllocSysTxTs();
     while (true) {
       JUMPMU_TRY() {
         if (!Valid() || !KeyInCurrentNode(key)) {
@@ -92,7 +93,7 @@ public:
       if (ret != OpCode::kOK) {
         return ret;
       }
-      LS_DCHECK(KeyInCurrentNode(key));
+      LEAN_DCHECK(KeyInCurrentNode(key));
       if (!HasEnoughSpaceFor(key.size(), val.length())) {
         SplitForKey(key);
         continue;
@@ -112,7 +113,7 @@ public:
     if (target_size >= BTreeNode::Size()) {
       return false;
     }
-    LS_DCHECK(slot_id_ != -1 && target_size > guarded_leaf_->ValSize(slot_id_));
+    LEAN_DCHECK(slot_id_ != -1 && target_size > guarded_leaf_->ValSize(slot_id_));
     while (!guarded_leaf_->CanExtendPayload(slot_id_, target_size)) {
       if (guarded_leaf_->num_slots_ == 1) {
         return false;
@@ -121,9 +122,9 @@ public:
       Slice key = this->Key();
       SplitForKey(key);
       SeekToEqual(key);
-      LS_DCHECK(Valid());
+      LEAN_DCHECK(Valid());
     }
-    LS_DCHECK(slot_id_ != -1);
+    LEAN_DCHECK(slot_id_ != -1);
     guarded_leaf_->ExtendPayload(slot_id_, target_size);
     return true;
   }
@@ -148,9 +149,9 @@ public:
     auto& contention_stats = guarded_leaf_.bf_->header_.contention_stats_;
     auto last_updated_slot = contention_stats.last_updated_slot_;
     contention_stats.Update(guarded_leaf_.EncounteredContention(), slot_id_);
-    LS_DLOG("[Contention Split] ContentionStats updated, pageId={}, slot={}, "
-            "encountered contention={}",
-            guarded_leaf_.bf_->header_.page_id_, slot_id_, guarded_leaf_.EncounteredContention());
+    LEAN_DLOG("[Contention Split] ContentionStats updated, pageId={}, slot={}, "
+              "encountered contention={}",
+              guarded_leaf_.bf_->header_.page_id_, slot_id_, guarded_leaf_.EncounteredContention());
 
     // haven't met the contention split validation probability
     if ((random_number &
@@ -167,13 +168,13 @@ public:
 
       slot_id_ = -1;
       JUMPMU_TRY() {
-        TXID sys_tx_id = btree_.store_->AllocSysTxTs();
+        TXID sys_tx_id = btree_.store_->MvccManager()->AllocSysTxTs();
         btree_.TrySplitMayJump(sys_tx_id, *guarded_leaf_.bf_, split_slot);
 
         COUNTER_INC(&leanstore::cr::tls_perf_counters.contention_split_succeed_);
-        LS_DLOG("[Contention Split] succeed, pageId={}, contention pct={}, split "
-                "slot={}",
-                guarded_leaf_.bf_->header_.page_id_, contention_pct, split_slot);
+        LEAN_DLOG("[Contention Split] succeed, pageId={}, contention pct={}, split "
+                  "slot={}",
+                  guarded_leaf_.bf_->header_.page_id_, contention_pct, split_slot);
       }
       JUMPMU_CATCH() {
         COUNTER_INC(&leanstore::cr::tls_perf_counters.contention_split_failed_);
@@ -186,8 +187,8 @@ public:
 
   OpCode RemoveCurrent() {
     if (!(guarded_leaf_.bf_ != nullptr && slot_id_ >= 0 && slot_id_ < guarded_leaf_->num_slots_)) {
-      LS_DCHECK(false, "RemoveCurrent failed, pageId={}, slotId={}",
-                guarded_leaf_.bf_->header_.page_id_, slot_id_);
+      LEAN_DCHECK(false, "RemoveCurrent failed, pageId={}, slotId={}",
+                  guarded_leaf_.bf_->header_.page_id_, slot_id_);
       return OpCode::kOther;
     }
     guarded_leaf_->RemoveSlot(slot_id_);
@@ -200,11 +201,11 @@ public:
       guarded_leaf_.unlock();
       slot_id_ = -1;
       JUMPMU_TRY() {
-        TXID sys_tx_id = btree_.store_->AllocSysTxTs();
+        TXID sys_tx_id = btree_.store_->MvccManager()->AllocSysTxTs();
         btree_.TryMergeMayJump(sys_tx_id, *guarded_leaf_.bf_);
       }
       JUMPMU_CATCH() {
-        LS_DLOG("TryMergeIfNeeded failed, pageId={}", guarded_leaf_.bf_->header_.page_id_);
+        LEAN_DLOG("TryMergeIfNeeded failed, pageId={}", guarded_leaf_.bf_->header_.page_id_);
       }
       return true;
     }

@@ -29,21 +29,21 @@ bool Recovery::Run() {
     if (it->second->IsFree()) {
       continue;
     }
-    LS_DLOG("Resolved page after analysis"
-            ", address={}, pageId={}, btreeId={}",
-            (void*)it->second, it->first, it->second->page_.btree_id_);
+    LEAN_DLOG("Resolved page after analysis"
+              ", address={}, pageId={}, btreeId={}",
+              (void*)it->second, it->first, it->second->page_.btree_id_);
   }
 
   // print resulting active transaction table
   Log::Info("[Recovery] active transaction table size: {}", active_tx_table_.size());
   for (auto it = active_tx_table_.begin(); it != active_tx_table_.end(); ++it) {
-    LS_DLOG("Active transaction table after analysis, txId={}, offset={}", it->first, it->second);
+    LEAN_DLOG("Active transaction table after analysis, txId={}, offset={}", it->first, it->second);
   }
 
   // print dirty page table
   Log::Info("[Recovery] dirty page table size: {}", dirty_page_table_.size());
   for (auto it = dirty_page_table_.begin(); it != dirty_page_table_.end(); ++it) {
-    LS_DLOG("Dirty page table after analysis, pageId: {}, offset: {}", it->first, it->second);
+    LEAN_DLOG("Dirty page table after analysis, pageId: {}, offset: {}", it->first, it->second);
   }
 
   redo();
@@ -69,13 +69,13 @@ Result<void> Recovery::analysis() {
     switch (wal_entry->type_) {
     case WalEntry::Type::kTxAbort: {
       auto* wal = reinterpret_cast<WalTxAbort*>(wal_entry_ptr);
-      LS_DCHECK(active_tx_table_.find(wal->tx_id_) != active_tx_table_.end());
+      LEAN_DCHECK(active_tx_table_.find(wal->tx_id_) != active_tx_table_.end());
       active_tx_table_[wal->tx_id_] = offset;
       continue;
     }
     case WalEntry::Type::kTxFinish: {
       auto* wal = reinterpret_cast<WalTxFinish*>(wal_entry_ptr);
-      LS_DCHECK(active_tx_table_.find(wal->tx_id_) != active_tx_table_.end());
+      LEAN_DCHECK(active_tx_table_.find(wal->tx_id_) != active_tx_table_.end());
       active_tx_table_.erase(wal->tx_id_);
       continue;
     }
@@ -170,8 +170,8 @@ Result<void> Recovery::redo() {
       break;
     }
     default: {
-      LS_DCHECK(false, "Unhandled WalPayload::Type: {}",
-                std::to_string(static_cast<uint64_t>(wal_payload->type_)));
+      LEAN_DCHECK(false, "Unhandled WalPayload::Type: {}",
+                  std::to_string(static_cast<uint64_t>(wal_payload->type_)));
     }
     }
   }
@@ -247,11 +247,11 @@ void Recovery::redo_tx_update(storage::BufferFrame& bf, WalEntryComplex* complex
   auto* update_desc = wal->GetUpdateDesc();
   auto key = wal->GetKey();
   auto slot_id = guarded_node->LowerBound<true>(key);
-  LS_DCHECK(slot_id != -1, "Key not found in WalTxUpdate");
+  LEAN_DCHECK(slot_id != -1, "Key not found in WalTxUpdate");
 
   auto* mut_raw_val = guarded_node->ValData(slot_id);
-  LS_DCHECK(Tuple::From(mut_raw_val)->format_ == TupleFormat::kChained,
-            "Only chained tuple is supported");
+  LEAN_DCHECK(Tuple::From(mut_raw_val)->format_ == TupleFormat::kChained,
+              "Only chained tuple is supported");
   auto* chained_tuple = ChainedTuple::From(mut_raw_val);
 
   // update the chained tuple
@@ -282,11 +282,11 @@ void Recovery::redo_tx_remove(storage::BufferFrame& bf, WalEntryComplex* complex
   GuardedBufferFrame<BTreeNode> guarded_node(store_->buffer_manager_.get(), std::move(guard), &bf);
   auto key = wal->RemovedKey();
   auto slot_id = guarded_node->LowerBound<true>(key);
-  LS_DCHECK(slot_id != -1, "Key not found, key={}", key.ToString());
+  LEAN_DCHECK(slot_id != -1, "Key not found, key={}", key.ToString());
 
   auto* mut_raw_val = guarded_node->ValData(slot_id);
-  LS_DCHECK(Tuple::From(mut_raw_val)->format_ == TupleFormat::kChained,
-            "Only chained tuple is supported");
+  LEAN_DCHECK(Tuple::From(mut_raw_val)->format_ == TupleFormat::kChained,
+              "Only chained tuple is supported");
   auto* chained_tuple = ChainedTuple::From(mut_raw_val);
 
   // remove the chained tuple

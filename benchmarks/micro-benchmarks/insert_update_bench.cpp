@@ -39,7 +39,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
   std::unordered_set<std::string> dedup;
   for (auto _ : state) {
     leanstore->ExecSync(0, [&]() {
-      cr::WorkerContext::My().StartTx();
+      cr::TxManager::My().StartTx();
       std::string key;
       std::string val;
       for (size_t i = 0; i < 16; i++) {
@@ -48,13 +48,13 @@ static void BenchUpdateInsert(benchmark::State& state) {
         btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
                       Slice((const uint8_t*)val.data(), val.size()));
       }
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
     });
   }
 
   leanstore->ExecSync(0, [&]() {
-    cr::WorkerContext::My().StartTx();
-    SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
+    cr::TxManager::My().StartTx();
+    SCOPED_DEFER(cr::TxManager::My().CommitTx());
     leanstore->DropTransactionKV(btree_name);
   });
 }

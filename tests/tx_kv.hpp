@@ -167,7 +167,7 @@ inline Session* LeanStoreMVCC::GetSession(WORKERID session_id) {
     sessions_.emplace(session_id, LeanStoreMVCCSession(session_id, this));
   }
   auto it = sessions_.find(session_id);
-  LS_DCHECK(it != sessions_.end());
+  LEAN_DCHECK(it != sessions_.end());
   return &it->second;
 }
 
@@ -183,16 +183,16 @@ inline void LeanStoreMVCCSession::SetTxMode(TxMode tx_mode) {
 }
 
 inline void LeanStoreMVCCSession::StartTx() {
-  store_->lean_store_->ExecSync(
-      worker_id_, [&]() { cr::WorkerContext::My().StartTx(tx_mode_, isolation_level_); });
+  store_->lean_store_->ExecSync(worker_id_,
+                                [&]() { cr::TxManager::My().StartTx(tx_mode_, isolation_level_); });
 }
 
 inline void LeanStoreMVCCSession::CommitTx() {
-  store_->lean_store_->ExecSync(worker_id_, [&]() { cr::WorkerContext::My().CommitTx(); });
+  store_->lean_store_->ExecSync(worker_id_, [&]() { cr::TxManager::My().CommitTx(); });
 }
 
 inline void LeanStoreMVCCSession::AbortTx() {
-  store_->lean_store_->ExecSync(worker_id_, [&]() { cr::WorkerContext::My().AbortTx(); });
+  store_->lean_store_->ExecSync(worker_id_, [&]() { cr::TxManager::My().AbortTx(); });
 }
 
 // DDL operations
@@ -214,11 +214,11 @@ inline Result<TableRef*> LeanStoreMVCCSession::CreateTable(const std::string& tb
 inline Result<void> LeanStoreMVCCSession::DropTable(const std::string& tbl_name, bool implicit_tx) {
   store_->lean_store_->ExecSync(worker_id_, [&]() {
     if (implicit_tx) {
-      cr::WorkerContext::My().StartTx(tx_mode_, isolation_level_);
+      cr::TxManager::My().StartTx(tx_mode_, isolation_level_);
     }
     store_->lean_store_->DropTransactionKV(tbl_name);
     if (implicit_tx) {
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
     }
   });
   return {};
@@ -231,13 +231,13 @@ inline Result<void> LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice va
   OpCode res;
   store_->lean_store_->ExecSync(worker_id_, [&]() {
     if (implicit_tx) {
-      cr::WorkerContext::My().StartTx(tx_mode_, isolation_level_);
+      cr::TxManager::My().StartTx(tx_mode_, isolation_level_);
     }
     SCOPED_DEFER(if (implicit_tx) {
       if (res == OpCode::kOK) {
-        cr::WorkerContext::My().CommitTx();
+        cr::TxManager::My().CommitTx();
       } else {
-        cr::WorkerContext::My().AbortTx();
+        cr::TxManager::My().AbortTx();
       }
     });
 
@@ -261,13 +261,13 @@ inline Result<uint64_t> LeanStoreMVCCSession::Get(TableRef* tbl, Slice key, std:
 
   store_->lean_store_->ExecSync(worker_id_, [&]() {
     if (implicit_tx) {
-      cr::WorkerContext::My().StartTx(tx_mode_, isolation_level_);
+      cr::TxManager::My().StartTx(tx_mode_, isolation_level_);
     }
     SCOPED_DEFER(if (implicit_tx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
-        cr::WorkerContext::My().CommitTx();
+        cr::TxManager::My().CommitTx();
       } else {
-        cr::WorkerContext::My().AbortTx();
+        cr::TxManager::My().AbortTx();
       }
     });
 
@@ -291,13 +291,13 @@ inline Result<uint64_t> LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, S
   };
   store_->lean_store_->ExecSync(worker_id_, [&]() {
     if (implicit_tx) {
-      cr::WorkerContext::My().StartTx(tx_mode_, isolation_level_);
+      cr::TxManager::My().StartTx(tx_mode_, isolation_level_);
     }
     SCOPED_DEFER(if (implicit_tx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
-        cr::WorkerContext::My().CommitTx();
+        cr::TxManager::My().CommitTx();
       } else {
-        cr::WorkerContext::My().AbortTx();
+        cr::TxManager::My().AbortTx();
       }
     });
 
@@ -324,13 +324,13 @@ inline Result<uint64_t> LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key, b
   OpCode res;
   store_->lean_store_->ExecSync(worker_id_, [&]() {
     if (implicit_tx) {
-      cr::WorkerContext::My().StartTx(tx_mode_, isolation_level_);
+      cr::TxManager::My().StartTx(tx_mode_, isolation_level_);
     }
     SCOPED_DEFER(if (implicit_tx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
-        cr::WorkerContext::My().CommitTx();
+        cr::TxManager::My().CommitTx();
       } else {
-        cr::WorkerContext::My().AbortTx();
+        cr::TxManager::My().AbortTx();
       }
     });
 

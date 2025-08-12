@@ -15,7 +15,7 @@ void Parallelize::Range(
   auto* store = tls_store;
   std::vector<std::thread> threads;
   const uint64_t jobs_per_thread = num_jobs / num_threads;
-  LS_DCHECK(jobs_per_thread > 0, "Jobs per thread must be > 0");
+  LEAN_DCHECK(jobs_per_thread > 0, "Jobs per thread must be > 0");
 
   for (uint64_t thread_id = 0; thread_id < num_threads; thread_id++) {
     uint64_t begin = (thread_id * jobs_per_thread);

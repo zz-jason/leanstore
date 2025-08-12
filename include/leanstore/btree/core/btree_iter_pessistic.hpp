@@ -9,6 +9,7 @@
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
+#include "utils/coroutine/mvcc_manager.hpp"
 
 #include <functional>
 
@@ -201,7 +202,7 @@ public:
   /// NOTE: AssembleKey() should be called before calling this function to make sure the key is
   ///       copied to the buffer.
   Slice Key() override {
-    LS_DCHECK(buffer_.size() >= guarded_leaf_->GetFullKeyLen(slot_id_));
+    LEAN_DCHECK(buffer_.size() >= guarded_leaf_->GetFullKeyLen(slot_id_));
     return Slice(&buffer_[0], guarded_leaf_->GetFullKeyLen(slot_id_));
   }
 
@@ -261,8 +262,8 @@ public:
   }
 
   bool IsLastOne() {
-    LS_DCHECK(slot_id_ != -1);
-    LS_DCHECK(slot_id_ != guarded_leaf_->num_slots_);
+    LEAN_DCHECK(slot_id_ != -1);
+    LEAN_DCHECK(slot_id_ != guarded_leaf_->num_slots_);
     return (slot_id_ + 1) == guarded_leaf_->num_slots_;
   }
 
@@ -298,7 +299,7 @@ protected:
   }
 
   Slice AssembedFence() {
-    LS_DCHECK(buffer_.size() >= fence_size_);
+    LEAN_DCHECK(buffer_.size() >= fence_size_);
     return Slice(&buffer_[0], fence_size_);
   }
 };
@@ -379,7 +380,7 @@ inline void BTreeIterPessistic::Next() {
     if (guarded_leaf_->num_slots_ == 0) {
       SetCleanUpCallback([&, to_merge = guarded_leaf_.bf_]() {
         JUMPMU_TRY() {
-          TXID sys_tx_id = btree_.store_->AllocSysTxTs();
+          TXID sys_tx_id = btree_.store_->MvccManager()->AllocSysTxTs();
           btree_.TryMergeMayJump(sys_tx_id, *to_merge, true);
         }
         JUMPMU_CATCH() {
@@ -492,8 +493,8 @@ inline void BTreeIterPessistic::Prev() {
 
 inline void BTreeIterPessistic::SeekTargetPage(
     std::function<int32_t(GuardedBufferFrame<BTreeNode>&)> child_pos_getter) {
-  LS_DCHECK(mode_ == LatchMode::kSharedPessimistic || mode_ == LatchMode::kExclusivePessimistic,
-            "Unsupported latch mode: {}", uint64_t(mode_));
+  LEAN_DCHECK(mode_ == LatchMode::kSharedPessimistic || mode_ == LatchMode::kExclusivePessimistic,
+              "Unsupported latch mode: {}", uint64_t(mode_));
 
   while (true) {
     leaf_pos_in_parent_ = -1;

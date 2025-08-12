@@ -4,10 +4,11 @@
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/concurrency/group_committer.hpp"
 #include "leanstore/concurrency/history_storage.hpp"
-#include "leanstore/concurrency/worker_context.hpp"
+#include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/concurrency/worker_thread.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/log.hpp"
+#include "utils/coroutine/mvcc_manager.hpp"
 #include "utils/json.hpp"
 
 #include <cassert>
@@ -38,18 +39,13 @@ CRManager::CRManager(leanstore::LeanStore* store) : store_(store), group_committ
 }
 
 void CRManager::StartWorkerThreads(uint64_t num_worker_threads) {
-  worker_ctxs_.resize(num_worker_threads);
   worker_threads_.reserve(num_worker_threads);
-
+  auto& tx_mgrs = store_->MvccManager()->TxMgrs();
   for (auto i = 0u; i < num_worker_threads; i++) {
     auto worker_thread = std::make_unique<WorkerThread>(store_, i, i);
     worker_thread->Start();
-
-    worker_thread->SetJob([&]() {
-      WorkerContext::s_tls_worker_ctx = std::make_unique<WorkerContext>(i, worker_ctxs_, store_);
-      WorkerContext::s_tls_worker_ctx_ptr = WorkerContext::s_tls_worker_ctx.get();
-      worker_ctxs_[i] = WorkerContext::s_tls_worker_ctx_ptr;
-    });
+    auto* tx_mgr = tx_mgrs[i].get();
+    worker_thread->SetJob([tx_mgr]() { TxManager::s_tls_tx_manager = tx_mgr; });
     worker_thread->Wait();
     worker_threads_.emplace_back(std::move(worker_thread));
   }
@@ -61,7 +57,8 @@ void CRManager::StartGroupCommitter(int cpu) {
     return;
   }
 
-  group_committer_ = std::make_unique<GroupCommitter>(store_, worker_ctxs_, cpu);
+  auto& tx_mgrs = store_->MvccManager()->TxMgrs();
+  group_committer_ = std::make_unique<GroupCommitter>(store_, tx_mgrs, cpu);
   group_committer_->Start();
 }
 
@@ -94,11 +91,12 @@ void CRManager::CreateWorkerHistories() {
   };
 
   worker_threads_[0]->SetJob([&]() {
+    auto& tx_mgrs = store_->MvccManager()->TxMgrs();
     for (uint64_t i = 0; i < store_->store_option_->worker_threads_; i++) {
       std::string update_btree_name = std::format(kUpdateNameFormat, i);
       std::string remove_btree_name = std::format(kRemoveNameFormat, i);
-      worker_ctxs_[i]->cc_.history_storage_.SetUpdateIndex(create_btree(update_btree_name));
-      worker_ctxs_[i]->cc_.history_storage_.SetRemoveIndex(create_btree(remove_btree_name));
+      tx_mgrs[i]->cc_.history_storage_.SetUpdateIndex(create_btree(update_btree_name));
+      tx_mgrs[i]->cc_.history_storage_.SetRemoveIndex(create_btree(remove_btree_name));
     }
   });
   worker_threads_[0]->Wait();
@@ -109,8 +107,6 @@ utils::JsonObj CRManager::Serialize() const {
   if (group_committer_ != nullptr) {
     json_obj.AddUint64(kKeyWalSize, group_committer_->wal_size_);
   }
-  json_obj.AddUint64(kKeyGlobalUsrTso, store_->usr_tso_.load());
-  json_obj.AddUint64(kKeyGlobalSysTso, store_->sys_tso_.load());
   return json_obj;
 }
 
@@ -118,9 +114,6 @@ void CRManager::Deserialize(const utils::JsonObj& json_obj) {
   if (group_committer_ != nullptr && json_obj.HasMember(kKeyWalSize)) {
     group_committer_->wal_size_ = json_obj.GetUint64(kKeyWalSize).value();
   }
-  store_->usr_tso_.store(json_obj.GetUint64(kKeyGlobalUsrTso).value());
-  store_->sys_tso_.store(json_obj.GetUint64(kKeyGlobalSysTso).value());
-  global_wmk_info_.wmk_of_all_tx_ = store_->usr_tso_.load();
 }
 
 } // namespace leanstore::cr

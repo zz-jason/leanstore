@@ -237,7 +237,7 @@ public:
   }
 
   Swip* ChildSwip(uint16_t slot_id) {
-    LS_DCHECK(slot_id < num_slots_);
+    LEAN_DCHECK(slot_id < num_slots_);
     return reinterpret_cast<Swip*>(ValData(slot_id));
   }
 
@@ -247,17 +247,17 @@ public:
 
   // Attention: the caller has to hold a copy of the existing payload
   void ShortenPayload(uint16_t slot_id, uint16_t target_size) {
-    LS_DCHECK(target_size <= slot_[slot_id].val_size_);
+    LEAN_DCHECK(target_size <= slot_[slot_id].val_size_);
     const uint16_t free_space = slot_[slot_id].val_size_ - target_size;
     space_used_ -= free_space;
     slot_[slot_id].val_size_ = target_size;
   }
 
   bool CanExtendPayload(uint16_t slot_id, uint16_t target_size) {
-    LS_DCHECK(target_size > ValSize(slot_id),
-              "Target size must be larger than current size, "
-              "targetSize={}, currentSize={}",
-              target_size, ValSize(slot_id));
+    LEAN_DCHECK(target_size > ValSize(slot_id),
+                "Target size must be larger than current size, "
+                "targetSize={}, currentSize={}",
+                target_size, ValSize(slot_id));
 
     const uint16_t extra_space_needed = target_size - ValSize(slot_id);
     return FreeSpaceAfterCompaction() >= extra_space_needed;
@@ -265,10 +265,10 @@ public:
 
   /// Move key-value pair to a new location
   void ExtendPayload(uint16_t slot_id, uint16_t target_size) {
-    LS_DCHECK(CanExtendPayload(slot_id, target_size),
-              "ExtendPayload failed, not enough space in the current node, "
-              "slotId={}, targetSize={}, FreeSpace={}, currentSize={}",
-              slot_id, target_size, FreeSpaceAfterCompaction(), ValSize(slot_id));
+    LEAN_DCHECK(CanExtendPayload(slot_id, target_size),
+                "ExtendPayload failed, not enough space in the current node, "
+                "slotId={}, targetSize={}, FreeSpace={}, currentSize={}",
+                slot_id, target_size, FreeSpaceAfterCompaction(), ValSize(slot_id));
     auto key_size_without_prefix = KeySizeWithoutPrefix(slot_id);
     const uint16_t old_total_size = key_size_without_prefix + ValSize(slot_id);
     const uint16_t new_total_size = key_size_without_prefix + target_size;
@@ -285,7 +285,7 @@ public:
     if (FreeSpace() < new_total_size) {
       Compactify();
     }
-    LS_DCHECK(FreeSpace() >= new_total_size);
+    LEAN_DCHECK(FreeSpace() >= new_total_size);
     advance_data_offset(new_total_size);
     slot_[slot_id].offset_ = data_offset_;
     slot_[slot_id].key_size_without_prefix_ = key_size_without_prefix;
@@ -498,7 +498,7 @@ inline int16_t BTreeNode::LinearSearchWithBias(Slice key, uint16_t start_pos, bo
     return -1;
   }
 
-  LS_DCHECK(key.size() >= prefix_size_ && bcmp(key.data(), LowerFenceAddr(), prefix_size_) == 0);
+  LEAN_DCHECK(key.size() >= prefix_size_ && bcmp(key.data(), LowerFenceAddr(), prefix_size_) == 0);
 
   // the compared key has the same prefix
   key.remove_prefix(prefix_size_);
@@ -575,8 +575,8 @@ inline int16_t BTreeNode::LowerBound(Slice key, bool* is_equal) {
 inline void BTreeNode::set_fences(Slice lower_key, Slice upper_key) {
   InsertFence(lower_fence_, lower_key);
   InsertFence(upper_fence_, upper_key);
-  LS_DCHECK(LowerFenceAddr() == nullptr || UpperFenceAddr() == nullptr ||
-            *LowerFenceAddr() <= *UpperFenceAddr());
+  LEAN_DCHECK(LowerFenceAddr() == nullptr || UpperFenceAddr() == nullptr ||
+              *LowerFenceAddr() <= *UpperFenceAddr());
 
   // prefix compression
   for (prefix_size_ = 0; (prefix_size_ < std::min(lower_key.size(), upper_key.size())) &&

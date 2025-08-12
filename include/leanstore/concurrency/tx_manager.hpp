@@ -21,7 +21,7 @@ namespace leanstore::cr {
 class Logging;
 class ConcurrencyControl;
 
-class WorkerContext {
+class TxManager {
 public:
   /// The store it belongs to.
   leanstore::LeanStore* store_ = nullptr;
@@ -38,6 +38,12 @@ public:
   /// The current running transaction.
   Transaction active_tx_;
 
+  /// Last committed system transaction ID in the worker.
+  std::atomic<TXID> last_committed_sys_tx_ = 0;
+
+  /// Last committed user transaction ID in the worker.
+  std::atomic<TXID> last_committed_usr_tx_ = 0;
+
   /// The ID of the current transaction. It's set by the current worker thread and read by the
   /// garbage collection process to determine the lower watermarks of the transactions.
   std::atomic<TXID> active_tx_id_ = 0;
@@ -46,14 +52,14 @@ public:
   const uint64_t worker_id_;
 
   /// All the workers.
-  std::vector<WorkerContext*>& all_workers_;
+  std::vector<std::unique_ptr<TxManager>>& tx_mgrs_;
 
-  /// Construct a WorkerContext.
-  WorkerContext(uint64_t worker_id, std::vector<WorkerContext*>& all_workers,
-                leanstore::LeanStore* store);
+  /// Construct a TxManager.
+  TxManager(uint64_t worker_id, std::vector<std::unique_ptr<TxManager>>& tx_mgrs,
+            leanstore::LeanStore* store);
 
-  /// Destruct a WorkerContext.
-  ~WorkerContext();
+  /// Destruct a TxManager.
+  ~TxManager();
 
   /// Whether a user transaction is started.
   bool IsTxStarted() {
@@ -78,28 +84,41 @@ public:
     return logging_;
   }
 
-  /// thread-local storage for WorkerContext.
-  static thread_local std::unique_ptr<WorkerContext> s_tls_worker_ctx;
+  TXID GetLastCommittedSysTx() const {
+    return last_committed_sys_tx_.load(std::memory_order_acquire);
+  }
 
-  /// Raw pointer to s_tls_worker_ctx to avoid the overhead of std::unique_ptr.
-  static thread_local WorkerContext* s_tls_worker_ctx_ptr;
+  TXID GetLastCommittedUsrTx() const {
+    return last_committed_usr_tx_.load(std::memory_order_acquire);
+  }
+
+  void UpdateLastCommittedSysTx(TXID sys_tx_id) {
+    last_committed_sys_tx_.store(sys_tx_id, std::memory_order_release);
+  }
+
+  void UpdateLastCommittedUsrTx(TXID usr_tx_id) {
+    last_committed_usr_tx_.store(usr_tx_id, std::memory_order_release);
+  }
+
+  /// Raw pointer to avoid the overhead of std::unique_ptr.
+  static thread_local TxManager* s_tls_tx_manager;
 
   static constexpr uint64_t kRcBit = (1ull << 63);
   static constexpr uint64_t kLongRunningBit = (1ull << 62);
   static constexpr uint64_t kCleanBitsMask = ~(kRcBit | kLongRunningBit);
 
-  static WorkerContext& My() {
-    return *WorkerContext::s_tls_worker_ctx_ptr;
+  static TxManager& My() {
+    return *TxManager::s_tls_tx_manager;
   }
 
   static bool InWorker() {
-    return WorkerContext::s_tls_worker_ctx_ptr != nullptr;
+    return TxManager::s_tls_tx_manager != nullptr;
   }
 };
 
 // Shortcuts
 inline Transaction& ActiveTx() {
-  return cr::WorkerContext::My().active_tx_;
+  return cr::TxManager::My().active_tx_;
 }
 
 } // namespace leanstore::cr

@@ -95,7 +95,7 @@ void BufferManager::StartPageEvictors() {
     return;
   }
 
-  LS_DCHECK(num_buffer_providers <= num_partitions_);
+  LEAN_DCHECK(num_buffer_providers <= num_partitions_);
   page_evictors_.reserve(num_buffer_providers);
   for (auto i = 0u; i < num_buffer_providers; ++i) {
     std::string thread_name = "PageEvictor";
@@ -243,8 +243,8 @@ BufferFrame& BufferManager::AllocNewPageMayJump(TREEID tree_id) {
 
   free_bf->page_.btree_id_ = tree_id;
   free_bf->page_.psn_++; // mark the page as dirty
-  LS_DLOG("Alloc new page, pageId={}, btreeId={}", free_bf->header_.page_id_,
-          free_bf->page_.btree_id_);
+  LEAN_DLOG("Alloc new page, pageId={}, btreeId={}", free_bf->header_.page_id_,
+            free_bf->page_.btree_id_);
   return *free_bf;
 }
 
@@ -276,7 +276,7 @@ void BufferManager::ReclaimPage(BufferFrame& bf) {
 }
 
 BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& swip_in_node) {
-  LS_DCHECK(node_guard.state_ == GuardState::kSharedOptimistic);
+  LEAN_DCHECK(node_guard.state_ == GuardState::kSharedOptimistic);
   if (swip_in_node.IsHot()) {
     // Resolve swip from hot state
     auto* bf = &swip_in_node.AsBufferFrame();
@@ -319,8 +319,8 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
     auto* free_bf = partition.GetFreeBfMayJump();
     BufferFrame& bf = *free_bf;
 
-    LS_DCHECK(!bf.header_.latch_.IsLockedExclusively());
-    LS_DCHECK(bf.header_.state_ == State::kFree);
+    LEAN_DCHECK(!bf.header_.latch_.IsLockedExclusively());
+    LEAN_DCHECK(bf.header_.state_ == State::kFree);
 
     // 2. Create an IO frame in the current partition
     IOFrame& io_frame = partition.inflight_ios_.Insert(page_id);
@@ -331,10 +331,10 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
 
     // 3. Read page at pageId to the target buffer frame
     ReadPageSync(page_id, &bf.page_);
-    LS_DLOG("Read page from disk, pageId={}, btreeId={}", page_id, bf.page_.btree_id_);
+    LEAN_DLOG("Read page from disk, pageId={}, btreeId={}", page_id, bf.page_.btree_id_);
 
     // 4. Intialize the buffer frame header
-    LS_DCHECK(!bf.header_.is_being_written_back_);
+    LEAN_DCHECK(!bf.header_.is_being_written_back_);
     bf.header_.flushed_psn_ = bf.page_.psn_;
     bf.header_.state_ = State::kLoaded;
     bf.header_.page_id_ = page_id;
@@ -395,16 +395,16 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
     {
       // We have to exclusively lock the bf because the page evictor thread will
       // try to evict them when its IO is done
-      LS_DCHECK(!bf->header_.latch_.IsLockedExclusively());
-      LS_DCHECK(bf->header_.state_ == State::kLoaded);
+      LEAN_DCHECK(!bf->header_.latch_.IsLockedExclusively());
+      LEAN_DCHECK(bf->header_.state_ == State::kLoaded);
       BMOptimisticGuard bf_guard(bf->header_.latch_);
       BMExclusiveUpgradeIfNeeded swip_x_guard(node_guard);
       BMExclusiveGuard bf_x_guard(bf_guard);
       io_frame.bf_ = nullptr;
       swip_in_node.MarkHOT(bf);
-      LS_DCHECK(bf->header_.page_id_ == page_id);
-      LS_DCHECK(swip_in_node.IsHot());
-      LS_DCHECK(bf->header_.state_ == State::kLoaded);
+      LEAN_DCHECK(bf->header_.page_id_ == page_id);
+      LEAN_DCHECK(swip_in_node.IsHot());
+      LEAN_DCHECK(bf->header_.state_ == State::kLoaded);
       bf->header_.state_ = State::kHot;
 
       if (io_frame.num_readers_.fetch_add(-1) == 1) {
@@ -425,7 +425,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
     break;
   }
   default: {
-    LS_DCHECK(false);
+    LEAN_DCHECK(false);
   }
   }
   assert(false);
@@ -433,7 +433,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
 }
 
 void BufferManager::ReadPageSync(PID page_id, void* page_buffer) {
-  LS_DCHECK(uint64_t(page_buffer) % 512 == 0);
+  LEAN_DCHECK(uint64_t(page_buffer) % 512 == 0);
   int64_t bytes_left = store_->store_option_->page_size_;
   while (bytes_left > 0) {
     auto total_read = store_->store_option_->page_size_ - bytes_left;
@@ -510,8 +510,8 @@ BufferManager::~BufferManager() {
 void BufferManager::DoWithBufferFrameIf(std::function<bool(BufferFrame& bf)> condition,
                                         std::function<void(BufferFrame& bf)> action) {
   auto work = [&](uint64_t begin, uint64_t end) {
-    LS_DCHECK(condition != nullptr);
-    LS_DCHECK(action != nullptr);
+    LEAN_DCHECK(condition != nullptr);
+    LEAN_DCHECK(action != nullptr);
     for (uint64_t i = begin; i < end; i++) {
       auto* bf_addr = &buffer_pool_[i * store_->store_option_->buffer_frame_size_];
       auto& bf = *reinterpret_cast<BufferFrame*>(bf_addr);

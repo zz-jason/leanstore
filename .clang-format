@@ -21,6 +21,8 @@ Cpp11BracedListStyle: true
 PackConstructorInitializers: CurrentLine
 
 # arguments
+BinPackArguments: true
+AllowAllArgumentsOnNextLine: true
 AlignAfterOpenBracket: Align
 QualifierAlignment: Custom
 QualifierOrder: ['inline', 'static', 'const', 'constexpr', 'volatile', 'type']

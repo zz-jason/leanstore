@@ -116,6 +116,19 @@ public:
   uint64_t wal_size_ = 0;
 
 public:
+  Logging(uint64_t wal_buffer_bytes)
+      : wal_buffer_((uint8_t*)(std::aligned_alloc(512, wal_buffer_bytes))),
+        wal_buffer_bytes_(wal_buffer_bytes) {
+    std::memset(wal_buffer_, 0, wal_buffer_bytes);
+  }
+
+  ~Logging() {
+    if (wal_buffer_ != nullptr) {
+      free(wal_buffer_);
+      wal_buffer_ = nullptr;
+    }
+  }
+
   void UpdateSignaledCommitTs(const LID signaled_commit_ts) {
     signaled_commit_ts_.store(signaled_commit_ts, std::memory_order_release);
   }
@@ -143,7 +156,11 @@ public:
   /// @param totalSize size of the wal record to be flush.
   void SubmitWALEntryComplex(uint64_t total_size);
 
-  void UpdateSysTxWrittern(TXID sys_tx_id) {
+  TXID GetSysTxWrittern() const {
+    return sys_tx_writtern_;
+  }
+
+  void UpdateSysTxToHarden(TXID sys_tx_id) {
     sys_tx_writtern_ = std::max(sys_tx_writtern_, sys_tx_id);
   }
 
@@ -176,7 +193,6 @@ private:
   static constexpr auto kAligment = 4096u;
 
   void CoroFlush(uint64_t lower, uint64_t upper) {
-
     auto lower_aligned = utils::AlignDown(lower, kAligment);
     auto upper_aligned = utils::AlignUp(upper, kAligment);
     auto* buf_aligned = wal_buffer_ + lower_aligned;
@@ -186,13 +202,6 @@ private:
     CoroWrite(wal_fd_, buf_aligned, count_aligned, offset_aligned);
     wal_size_ += upper - lower;
   }
-
-  // uint64_t PendingFlushBytes() const {
-  //   if (wal_buffered_ >= wal_flushed_) {
-  //     return wal_flushed_ - wal_flushed_;
-  //   }
-  //   return wal_buffered_ + (wal_buffer_bytes_ - wal_flushed_);
-  // }
 
   void PublishWalBufferedOffset();
 

@@ -13,6 +13,7 @@
 #include "leanstore/utils/misc.hpp"
 #include "leanstore/utils/parallelize.hpp"
 #include "leanstore/utils/result.hpp"
+#include "utils/coroutine/mvcc_manager.hpp"
 #include "utils/json.hpp"
 #include "utils/scoped_timer.hpp"
 
@@ -64,6 +65,8 @@ LeanStore::LeanStore(StoreOption* option) : store_option_(option) {
   // create global buffer manager and page evictors
   buffer_manager_ = std::make_unique<storage::BufferManager>(this);
 
+  mvcc_mgr_ = std::make_unique<leanstore::MvccManager>(store_option_->worker_threads_, this);
+
 #ifdef ENABLE_COROUTINE
   coro_scheduler_ = new CoroScheduler(this, store_option_->worker_threads_);
   coro_scheduler_->Init();
@@ -90,8 +93,8 @@ LeanStore::LeanStore(StoreOption* option) : store_option_(option) {
 
 void LeanStore::InitDbFiles() {
   SCOPED_DEFER({
-    LS_DCHECK(fcntl(page_fd_, F_GETFL) != -1);
-    LS_DCHECK(fcntl(wal_fd_, F_GETFL) != -1);
+    LEAN_DCHECK(fcntl(page_fd_, F_GETFL) != -1);
+    LEAN_DCHECK(fcntl(wal_fd_, F_GETFL) != -1);
   });
 
   // Create a new instance on the specified DB file
@@ -187,7 +190,7 @@ LeanStore::~LeanStore() {
     auto wal_file_path = GetWalFilePath();
     struct stat st;
     if (stat(wal_file_path.c_str(), &st) == 0) {
-      LS_DLOG("The size of {} is {} bytes", wal_file_path, st.st_size);
+      LEAN_DLOG("The size of {} is {} bytes", wal_file_path, st.st_size);
     }
   }
   if (close(wal_fd_) == -1) {
@@ -255,6 +258,7 @@ void LeanStore::ParallelRange(
 }
 
 constexpr char kMetaKeyCrManager[] = "cr_manager";
+constexpr char kMetaKeyMvcc[] = "mvcc";
 constexpr char kMetaKeyBufferManager[] = "buffer_manager";
 constexpr char kMetaKeyBTrees[] = "leanstore/btrees";
 constexpr char kMetaKeyFlags[] = "flags";
@@ -281,6 +285,8 @@ void LeanStore::SerializeMeta(bool all_pages_up_to_date) {
   if (crmanager_) {
     meta_json_obj.AddJsonObj(kMetaKeyCrManager, crmanager_->Serialize());
   }
+
+  meta_json_obj.AddJsonObj(kMetaKeyMvcc, mvcc_mgr_->Serialize());
 
   // buffer_manager
   meta_json_obj.AddJsonObj(kMetaKeyBufferManager, buffer_manager_->Serialize());
@@ -342,6 +348,8 @@ bool LeanStore::DeserializeMeta() {
     assert(meta_json_obj.HasMember(kMetaKeyCrManager));
     crmanager_->Deserialize(meta_json_obj.GetJsonObj(kMetaKeyCrManager).value());
   }
+
+  mvcc_mgr_->Deserialize(meta_json_obj.GetJsonObj(kMetaKeyMvcc).value());
 
   // Deserialize buffer manager
   assert(meta_json_obj.HasMember(kMetaKeyBufferManager));
@@ -426,7 +434,7 @@ void LeanStore::GetBasicKV(const std::string& name, storage::btree::BasicKV** bt
 }
 
 void LeanStore::DropBasicKV(const std::string& name) {
-  LS_DCHECK(cr::WorkerContext::My().IsTxStarted());
+  LEAN_DCHECK(cr::TxManager::My().IsTxStarted());
   auto* btree =
       dynamic_cast<leanstore::storage::btree::BTreeGeneric*>(tree_registry_->GetTree(name));
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
@@ -472,7 +480,7 @@ void LeanStore::GetTransactionKV(const std::string& name, storage::btree::Transa
 }
 
 void LeanStore::DropTransactionKV(const std::string& name) {
-  LS_DCHECK(cr::WorkerContext::My().IsTxStarted());
+  LEAN_DCHECK(cr::TxManager::My().IsTxStarted());
   auto* btree = DownCast<storage::btree::BTreeGeneric*>(tree_registry_->GetTree(name));
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
   auto res = tree_registry_->UnregisterTree(name);
@@ -482,7 +490,7 @@ void LeanStore::DropTransactionKV(const std::string& name) {
 
   auto graveyard_name = "_" + name + "_graveyard";
   btree = DownCast<storage::btree::BTreeGeneric*>(tree_registry_->GetTree(graveyard_name));
-  LS_DCHECK(btree != nullptr, "graveyard not found");
+  LEAN_DCHECK(btree != nullptr, "graveyard not found");
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
   res = tree_registry_->UnregisterTree(graveyard_name);
   if (!res) {

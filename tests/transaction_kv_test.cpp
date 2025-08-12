@@ -73,8 +73,8 @@ TEST_F(TransactionKVTest, Create) {
   });
 
   store_->ExecSync(1, [&]() {
-    cr::WorkerContext::My().StartTx();
-    SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
+    cr::TxManager::My().StartTx();
+    SCOPED_DEFER(cr::TxManager::My().CommitTx());
     store_->DropTransactionKV(btree_name);
     store_->DropTransactionKV(btree_name2);
   });
@@ -100,20 +100,20 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
     EXPECT_NE(btree, nullptr);
 
     // insert some values
-    cr::WorkerContext::My().StartTx();
+    cr::TxManager::My().StartTx();
     for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
       EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
                               Slice((const uint8_t*)val.data(), val.size())),
                 OpCode::kOK);
     }
-    cr::WorkerContext::My().CommitTx();
+    cr::TxManager::My().CommitTx();
   });
 
   // query on the created btree in the same worker
   store_->ExecSync(0, [&]() {
-    cr::WorkerContext::My().StartTx();
-    SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
+    cr::TxManager::My().StartTx();
+    SCOPED_DEFER(cr::TxManager::My().CommitTx());
     std::string copied_value;
     auto copy_value_out = [&](Slice val) {
       copied_value = std::string((const char*)val.data(), val.size());
@@ -128,8 +128,8 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
 
   // query on the created btree in another worker
   store_->ExecSync(1, [&]() {
-    cr::WorkerContext::My().StartTx();
-    SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
+    cr::TxManager::My().StartTx();
+    SCOPED_DEFER(cr::TxManager::My().CommitTx());
     std::string copied_value;
     auto copy_value_out = [&](Slice val) {
       copied_value = std::string((const char*)val.data(), val.size());
@@ -143,8 +143,8 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
   });
 
   store_->ExecSync(1, [&]() {
-    cr::WorkerContext::My().StartTx();
-    SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
+    cr::TxManager::My().StartTx();
+    SCOPED_DEFER(cr::TxManager::My().CommitTx());
     store_->DropTransactionKV(btree_name);
   });
 }
@@ -163,7 +163,7 @@ TEST_F(TransactionKVTest, Insert1000KVs) {
     // insert numKVs tuples
     std::set<std::string> unique_keys;
     ssize_t num_keys(1000);
-    cr::WorkerContext::My().StartTx();
+    cr::TxManager::My().StartTx();
     for (ssize_t i = 0; i < num_keys; ++i) {
       auto key = RandomGenerator::RandAlphString(24);
       if (unique_keys.find(key) != unique_keys.end()) {
@@ -176,11 +176,11 @@ TEST_F(TransactionKVTest, Insert1000KVs) {
                               Slice((const uint8_t*)val.data(), val.size())),
                 OpCode::kOK);
     }
-    cr::WorkerContext::My().CommitTx();
+    cr::TxManager::My().CommitTx();
 
-    cr::WorkerContext::My().StartTx();
+    cr::TxManager::My().StartTx();
     store_->DropTransactionKV(btree_name);
-    cr::WorkerContext::My().CommitTx();
+    cr::TxManager::My().CommitTx();
   });
 }
 
@@ -206,24 +206,24 @@ TEST_F(TransactionKVTest, InsertDuplicates) {
       }
       unique_keys.insert(key);
       auto val = RandomGenerator::RandAlphString(128);
-      cr::WorkerContext::My().StartTx();
+      cr::TxManager::My().StartTx();
       EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
                               Slice((const uint8_t*)val.data(), val.size())),
                 OpCode::kOK);
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
     }
 
     // insert duplicated keys
     for (auto& key : unique_keys) {
       auto val = RandomGenerator::RandAlphString(128);
-      cr::WorkerContext::My().StartTx();
+      cr::TxManager::My().StartTx();
       EXPECT_EQ(btree->Insert(ToSlice(key), ToSlice(val)), OpCode::kDuplicated);
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
     }
 
-    cr::WorkerContext::My().StartTx();
+    cr::TxManager::My().StartTx();
     store_->DropTransactionKV(btree_name);
-    cr::WorkerContext::My().CommitTx();
+    cr::TxManager::My().CommitTx();
   });
 }
 
@@ -250,29 +250,29 @@ TEST_F(TransactionKVTest, Remove) {
       unique_keys.insert(key);
       auto val = RandomGenerator::RandAlphString(128);
 
-      cr::WorkerContext::My().StartTx();
+      cr::TxManager::My().StartTx();
       EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
                               Slice((const uint8_t*)val.data(), val.size())),
                 OpCode::kOK);
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
     }
 
     for (auto& key : unique_keys) {
-      cr::WorkerContext::My().StartTx();
+      cr::TxManager::My().StartTx();
       EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())), OpCode::kOK);
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
     }
 
     for (auto& key : unique_keys) {
-      cr::WorkerContext::My().StartTx();
+      cr::TxManager::My().StartTx();
       EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), [](Slice) {}),
                 OpCode::kNotFound);
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
     }
 
-    cr::WorkerContext::My().StartTx();
+    cr::TxManager::My().StartTx();
     store_->DropTransactionKV(btree_name);
-    cr::WorkerContext::My().CommitTx();
+    cr::TxManager::My().CommitTx();
   });
 }
 
@@ -299,11 +299,11 @@ TEST_F(TransactionKVTest, RemoveNotExisted) {
       unique_keys.insert(key);
       auto val = RandomGenerator::RandAlphString(128);
 
-      cr::WorkerContext::My().StartTx();
+      cr::TxManager::My().StartTx();
       EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
                               Slice((const uint8_t*)val.data(), val.size())),
                 OpCode::kOK);
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
     }
 
     // remove keys not existed
@@ -315,14 +315,14 @@ TEST_F(TransactionKVTest, RemoveNotExisted) {
       }
       unique_keys.insert(key);
 
-      cr::WorkerContext::My().StartTx();
+      cr::TxManager::My().StartTx();
       EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())), OpCode::kNotFound);
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
     }
 
-    cr::WorkerContext::My().StartTx();
+    cr::TxManager::My().StartTx();
     store_->DropTransactionKV(btree_name);
-    cr::WorkerContext::My().CommitTx();
+    cr::TxManager::My().CommitTx();
   });
 }
 
@@ -349,46 +349,46 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
       unique_keys.insert(key);
       auto val = RandomGenerator::RandAlphString(128);
 
-      cr::WorkerContext::My().StartTx();
+      cr::TxManager::My().StartTx();
       EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
                               Slice((const uint8_t*)val.data(), val.size())),
                 OpCode::kOK);
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
     }
   });
 
   store_->ExecSync(1, [&]() {
     // remove from another worker
     for (auto& key : unique_keys) {
-      cr::WorkerContext::My().StartTx();
+      cr::TxManager::My().StartTx();
       EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())), OpCode::kOK);
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
     }
 
     // should not found any keys
     for (auto& key : unique_keys) {
-      cr::WorkerContext::My().StartTx();
+      cr::TxManager::My().StartTx();
       EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), [](Slice) {}),
                 OpCode::kNotFound);
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
     }
   });
 
   store_->ExecSync(0, [&]() {
     // lookup from another worker, should not found any keys
     for (auto& key : unique_keys) {
-      cr::WorkerContext::My().StartTx();
+      cr::TxManager::My().StartTx();
       EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), [](Slice) {}),
                 OpCode::kNotFound);
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
     }
   });
 
   store_->ExecSync(1, [&]() {
     // unregister the tree from another worker
-    cr::WorkerContext::My().StartTx();
+    cr::TxManager::My().StartTx();
     store_->DropTransactionKV(btree_name);
-    cr::WorkerContext::My().CommitTx();
+    cr::TxManager::My().CommitTx();
   });
 }
 
@@ -416,10 +416,10 @@ TEST_F(TransactionKVTest, Update) {
     // insert values
     for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
-      cr::WorkerContext::My().StartTx();
+      cr::TxManager::My().StartTx();
       auto res = btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
                                Slice((const uint8_t*)val.data(), val.size()));
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
     }
 
@@ -438,10 +438,10 @@ TEST_F(TransactionKVTest, Update) {
     update_desc->update_slots_[0].size_ = val_size;
     for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
-      cr::WorkerContext::My().StartTx();
+      cr::TxManager::My().StartTx();
       auto res = btree->UpdatePartial(Slice((const uint8_t*)key.data(), key.size()),
                                       update_call_back, *update_desc);
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
     }
 
@@ -452,16 +452,16 @@ TEST_F(TransactionKVTest, Update) {
     };
     for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
-      cr::WorkerContext::My().StartTx();
+      cr::TxManager::My().StartTx();
       EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copy_value_out),
                 OpCode::kOK);
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
       EXPECT_EQ(copied_value, new_val);
     }
 
-    cr::WorkerContext::My().StartTx();
+    cr::TxManager::My().StartTx();
     store_->DropTransactionKV(btree_name);
-    cr::WorkerContext::My().CommitTx();
+    cr::TxManager::My().CommitTx();
   });
 }
 
@@ -500,10 +500,10 @@ TEST_F(TransactionKVTest, ScanAsc) {
 
     // insert values
     for (const auto& [key, val] : kv_to_test) {
-      cr::WorkerContext::My().StartTx();
+      cr::TxManager::My().StartTx();
       auto res = btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
                                Slice((const uint8_t*)val.data(), val.size()));
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
     }
 
@@ -517,11 +517,11 @@ TEST_F(TransactionKVTest, ScanAsc) {
 
     // scan from the smallest key
     copied_k_vs.clear();
-    cr::WorkerContext::My().StartTx();
+    cr::TxManager::My().StartTx();
     EXPECT_EQ(
         btree->ScanAsc(Slice((const uint8_t*)smallest.data(), smallest.size()), scan_call_back),
         OpCode::kOK);
-    cr::WorkerContext::My().CommitTx();
+    cr::TxManager::My().CommitTx();
     EXPECT_EQ(copied_k_vs.size(), num_keys);
     for (const auto& [key, val] : copied_k_vs) {
       EXPECT_EQ(val, kv_to_test[key]);
@@ -529,17 +529,17 @@ TEST_F(TransactionKVTest, ScanAsc) {
 
     // scan from the bigest key
     copied_k_vs.clear();
-    cr::WorkerContext::My().StartTx();
+    cr::TxManager::My().StartTx();
     EXPECT_EQ(btree->ScanAsc(Slice((const uint8_t*)bigest.data(), bigest.size()), scan_call_back),
               OpCode::kOK);
-    cr::WorkerContext::My().CommitTx();
+    cr::TxManager::My().CommitTx();
     EXPECT_EQ(copied_k_vs.size(), 1u);
     EXPECT_EQ(copied_k_vs[bigest], kv_to_test[bigest]);
 
     // destroy the tree
-    cr::WorkerContext::My().StartTx();
+    cr::TxManager::My().StartTx();
     store_->DropTransactionKV(btree_name);
-    cr::WorkerContext::My().CommitTx();
+    cr::TxManager::My().CommitTx();
   });
 }
 
@@ -578,10 +578,10 @@ TEST_F(TransactionKVTest, ScanDesc) {
 
     // insert values
     for (const auto& [key, val] : kv_to_test) {
-      cr::WorkerContext::My().StartTx();
+      cr::TxManager::My().StartTx();
       auto res = btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
                                Slice((const uint8_t*)val.data(), val.size()));
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
     }
 
@@ -595,10 +595,10 @@ TEST_F(TransactionKVTest, ScanDesc) {
 
     // scan from the bigest key
     copied_k_vs.clear();
-    cr::WorkerContext::My().StartTx();
+    cr::TxManager::My().StartTx();
     EXPECT_EQ(btree->ScanDesc(Slice((const uint8_t*)bigest.data(), bigest.size()), scan_call_back),
               OpCode::kOK);
-    cr::WorkerContext::My().CommitTx();
+    cr::TxManager::My().CommitTx();
     EXPECT_EQ(copied_k_vs.size(), num_keys);
     for (const auto& [key, val] : copied_k_vs) {
       EXPECT_EQ(val, kv_to_test[key]);
@@ -606,18 +606,18 @@ TEST_F(TransactionKVTest, ScanDesc) {
 
     // scan from the smallest key
     copied_k_vs.clear();
-    cr::WorkerContext::My().StartTx();
+    cr::TxManager::My().StartTx();
     EXPECT_EQ(
         btree->ScanDesc(Slice((const uint8_t*)smallest.data(), smallest.size()), scan_call_back),
         OpCode::kOK);
-    cr::WorkerContext::My().CommitTx();
+    cr::TxManager::My().CommitTx();
     EXPECT_EQ(copied_k_vs.size(), 1u);
     EXPECT_EQ(copied_k_vs[smallest], kv_to_test[smallest]);
 
     // destroy the tree
-    cr::WorkerContext::My().StartTx();
+    cr::TxManager::My().StartTx();
     store_->DropTransactionKV(btree_name);
-    cr::WorkerContext::My().CommitTx();
+    cr::TxManager::My().CommitTx();
   });
 }
 
@@ -661,18 +661,18 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
 
     // insert values
     for (const auto& [key, val] : kv_to_test) {
-      cr::WorkerContext::My().StartTx();
+      cr::TxManager::My().StartTx();
       auto res = btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
                                Slice((const uint8_t*)val.data(), val.size()));
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
     }
 
     // remove, insert, and lookup
     for (const auto& [key, val] : kv_to_test) {
       // remove
-      cr::WorkerContext::My().StartTx();
-      SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
+      cr::TxManager::My().StartTx();
+      SCOPED_DEFER(cr::TxManager::My().CommitTx());
 
       EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())), OpCode::kOK);
 
@@ -709,17 +709,17 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
     }
   });
 
-  LS_DLOG("InsertAfterRemoveDifferentWorkers, key={}, val={}, newVal={}", kv_to_test.begin()->first,
-          kv_to_test.begin()->second, new_val);
+  LEAN_DLOG("InsertAfterRemoveDifferentWorkers, key={}, val={}, newVal={}",
+            kv_to_test.begin()->first, kv_to_test.begin()->second, new_val);
   store_->ExecSync(1, [&]() {
     // lookup the new value
-    cr::WorkerContext::My().StartTx();
+    cr::TxManager::My().StartTx();
     for (const auto& [key, val] : kv_to_test) {
       EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copy_value_out),
                 OpCode::kOK);
       EXPECT_EQ(copied_value, new_val);
     }
-    cr::WorkerContext::My().CommitTx();
+    cr::TxManager::My().CommitTx();
   });
 }
 
@@ -763,25 +763,25 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
 
     // insert values
     for (const auto& [key, val] : kv_to_test) {
-      cr::WorkerContext::My().StartTx();
+      cr::TxManager::My().StartTx();
       auto res = btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
                                Slice((const uint8_t*)val.data(), val.size()));
-      cr::WorkerContext::My().CommitTx();
+      cr::TxManager::My().CommitTx();
       EXPECT_EQ(res, OpCode::kOK);
     }
 
     // remove
     for (const auto& [key, val] : kv_to_test) {
-      cr::WorkerContext::My().StartTx();
-      SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
+      cr::TxManager::My().StartTx();
+      SCOPED_DEFER(cr::TxManager::My().CommitTx());
       EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())), OpCode::kOK);
     }
   });
 
   store_->ExecSync(1, [&]() {
     for (const auto& [key, val] : kv_to_test) {
-      cr::WorkerContext::My().StartTx();
-      SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
+      cr::TxManager::My().StartTx();
+      SCOPED_DEFER(cr::TxManager::My().CommitTx());
 
       // remove twice should got not found error
       EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())), OpCode::kNotFound);
@@ -834,8 +834,8 @@ TEST_F(TransactionKVTest, ConcurrentInsertWithSplit) {
   // insert in worker 0 asynchorously
   store_->ExecAsync(0, [&]() {
     for (auto i = 0; !stop; i++) {
-      cr::WorkerContext::My().StartTx();
-      SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
+      cr::TxManager::My().StartTx();
+      SCOPED_DEFER(cr::TxManager::My().CommitTx());
       auto key = std::format("{}_{}_{}", RandomGenerator::RandAlphString(key_size), 0, i);
       auto val = RandomGenerator::RandAlphString(val_size);
       auto res = btree->Insert(key, val);
@@ -846,8 +846,8 @@ TEST_F(TransactionKVTest, ConcurrentInsertWithSplit) {
   // insert in worker 1 asynchorously
   store_->ExecAsync(1, [&]() {
     for (auto i = 0; !stop; i++) {
-      cr::WorkerContext::My().StartTx();
-      SCOPED_DEFER(cr::WorkerContext::My().CommitTx());
+      cr::TxManager::My().StartTx();
+      SCOPED_DEFER(cr::TxManager::My().CommitTx());
       auto key = std::format("{}_{}_{}", RandomGenerator::RandAlphString(key_size), 1, i);
       auto val = RandomGenerator::RandAlphString(val_size);
       auto res = btree->Insert(key, val);

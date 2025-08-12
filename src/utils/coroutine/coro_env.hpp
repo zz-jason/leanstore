@@ -2,9 +2,11 @@
 
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 namespace leanstore::cr {
 class Logging;
+class TxManager;
 } // namespace leanstore::cr
 
 namespace leanstore {
@@ -19,7 +21,7 @@ public:
 
   static Coroutine* CurCoro();
   static CoroExecutor* CurCoroExec();
-  // static std::unique_ptr<cr::Logging>& CurWalWriter();
+  static std::vector<std::unique_ptr<cr::TxManager>>& AllWorkerCtxs();
 };
 
 } // namespace leanstore

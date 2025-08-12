@@ -6,7 +6,7 @@
 #include "leanstore/btree/core/btree_iter_mut.hpp"
 #include "leanstore/btree/tuple.hpp"
 #include "leanstore/buffer-manager/guarded_buffer_frame.hpp"
-#include "leanstore/concurrency/worker_context.hpp"
+#include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/result.hpp"
@@ -111,7 +111,7 @@ public:
   }
 
   inline static uint64_t ConvertToFatTupleThreshold() {
-    return cr::WorkerContext::My().store_->store_option_->worker_threads_;
+    return cr::TxManager::My().store_->store_option_->worker_threads_;
   }
 
   /// Updates the value stored in FatTuple. The former newest version value is

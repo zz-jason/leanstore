@@ -6,7 +6,7 @@
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/concurrency/cr_manager.hpp"
-#include "leanstore/concurrency/worker_context.hpp"
+#include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/jump_mu.hpp"
@@ -162,7 +162,7 @@ public:
           utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
 
           if (bench_transaction_kv_) {
-            cr::WorkerContext::My().StartTx();
+            cr::TxManager::My().StartTx();
           }
 
           auto op_code =
@@ -172,7 +172,7 @@ public:
           }
 
           if (bench_transaction_kv_) {
-            cr::WorkerContext::My().CommitTx();
+            cr::TxManager::My().CommitTx();
           }
         }
       };
@@ -252,10 +252,10 @@ public:
                 // generate key for read
                 GenYcsbKey(zipf_random, key);
                 if (bench_transaction_kv_) {
-                  cr::WorkerContext::My().StartTx(TxMode::kShortRunning,
-                                                  IsolationLevel::kSnapshotIsolation, true);
+                  cr::TxManager::My().StartTx(TxMode::kShortRunning,
+                                              IsolationLevel::kSnapshotIsolation, true);
                   table->Lookup(Slice(key, FLAGS_ycsb_key_size), copy_value);
-                  cr::WorkerContext::My().CommitTx();
+                  cr::TxManager::My().CommitTx();
                 } else {
                   table->Lookup(Slice(key, FLAGS_ycsb_key_size), copy_value);
                 }
@@ -264,10 +264,10 @@ public:
                 GenYcsbKey(zipf_random, key);
                 // generate val for update
                 if (bench_transaction_kv_) {
-                  cr::WorkerContext::My().StartTx();
+                  cr::TxManager::My().StartTx();
                   table->UpdatePartial(Slice(key, FLAGS_ycsb_key_size), update_call_back,
                                        *update_desc);
-                  cr::WorkerContext::My().CommitTx();
+                  cr::TxManager::My().CommitTx();
                 } else {
                   table->UpdatePartial(Slice(key, FLAGS_ycsb_key_size), update_call_back,
                                        *update_desc);

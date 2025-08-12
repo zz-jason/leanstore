@@ -259,12 +259,12 @@ private:
   void resize(uint32_t new_size);
 
   inline FatTupleDelta& get_delta(uint16_t i) {
-    LS_DCHECK(i < num_deltas_);
+    LEAN_DCHECK(i < num_deltas_);
     return *reinterpret_cast<FatTupleDelta*>(payload_ + get_delta_offsets()[i]);
   }
 
   inline const FatTupleDelta& get_delta(uint16_t i) const {
-    LS_DCHECK(i < num_deltas_);
+    LEAN_DCHECK(i < num_deltas_);
     return *reinterpret_cast<const FatTupleDelta*>(payload_ + get_delta_offsets()[i]);
   }
 

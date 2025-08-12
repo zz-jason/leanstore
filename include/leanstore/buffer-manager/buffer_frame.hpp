@@ -90,8 +90,8 @@ public:
 public:
   // Prerequisite: the buffer frame is exclusively locked
   void Reset() {
-    LS_DCHECK(!is_being_written_back_);
-    LS_DCHECK(latch_.IsLockedExclusively());
+    LEAN_DCHECK(!is_being_written_back_);
+    LEAN_DCHECK(latch_.IsLockedExclusively());
 
     state_ = State::kFree;
     keep_in_memory_ = false;
@@ -197,7 +197,7 @@ public:
   }
 
   void Init(PID page_id) {
-    LS_DCHECK(header_.state_ == State::kFree);
+    LEAN_DCHECK(header_.state_ == State::kFree);
     header_.page_id_ = page_id;
     header_.state_ = State::kHot;
     header_.flushed_psn_ = 0;

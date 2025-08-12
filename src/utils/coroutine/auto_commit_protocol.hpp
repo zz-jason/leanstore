@@ -8,13 +8,19 @@ namespace leanstore {
 
 class AutoCommitProtocol {
 public:
-  AutoCommitProtocol(uint32_t commit_group) : commit_group_(commit_group) {};
+  AutoCommitProtocol(uint32_t commit_group, uint64_t num_workers) : group_id_(commit_group) {
+    last_committed_sys_tx_.resize(num_workers, 0);
+    last_committed_usr_tx_.resize(num_workers, 0);
+  };
+
   ~AutoCommitProtocol() = default;
 
   // No copy and assignment
   AutoCommitProtocol(const AutoCommitProtocol&) = delete;
   AutoCommitProtocol& operator=(const AutoCommitProtocol&) = delete;
 
+  /// Commit Phase 1: auto log flush
+  /// Commit Phase 2: auto commit ack
   void Run() {
     if (LogFlush()) {
       CommitAck();
@@ -22,16 +28,12 @@ public:
   }
 
 private:
-  /// Commit Phase 1.
-  ///
   /// Performs the autonomous log flush phase for decentralized logging. All
-  /// logging state is recorded in the Logging component of each WorkerContext.
+  /// logging state is recorded in the Logging component of each TxManager.
   ///
   /// Return true if any log flush is performed successfully, false otherwise.
   static bool LogFlush();
 
-  /// Commit Phase 2.
-  ///
   /// Performs the commit acknowledgment phase. Syncs the last committed
   /// transaction ID for all workers in the system, only when all the dependent
   /// transactions are committed the pending ack transaction can be committed.
@@ -39,19 +41,30 @@ private:
   /// The synced last committed transaction ID is shared for all workers in the
   /// same commit group.
   void CommitAck() {
+    CommitSysTx();
+    CommitUsrTx();
   }
 
-  /// Sync last committed transaction ID of all workers.
-  void TrySyncLastCommittedTx() {
-  }
+  void CommitSysTx();
 
+  void CommitUsrTx();
+
+  void TrySyncLastCommittedTx();
+
+  TXID DetermineCommitableUsrTx();
+
+  TXID DetermineCommitableUsrTxRfA();
+
+private:
   /// Commit group id, identifies the group of workers that are committing
   /// together.  All workers in the same commit group shares the same
   /// AutoCommitProtocol instance and the same commit acknowledgment.
-  const uint32_t commit_group_;
+  const uint32_t group_id_;
 
-  /// TXID of the last committed transaction for each worker
-  std::vector<TXID> last_committed_tx_;
+  std::vector<TXID> last_committed_usr_tx_;
+  std::vector<TXID> last_committed_sys_tx_;
+  TXID min_committed_usr_tx_ = 0;
+  TXID min_committed_sys_tx_ = 0;
 };
 
 } // namespace leanstore

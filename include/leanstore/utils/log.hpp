@@ -5,11 +5,11 @@
 #include <format>
 
 #ifdef DEBUG
-#define LS_DLOG(...) leanstore::Log::Debug(__VA_ARGS__);
-#define LS_DCHECK(...) leanstore::Log::DebugCheck(__VA_ARGS__);
+#define LEAN_DLOG(...) leanstore::Log::Debug(__VA_ARGS__);
+#define LEAN_DCHECK(...) leanstore::Log::DebugCheck(__VA_ARGS__);
 #else
-#define LS_DLOG(...) (void)0;
-#define LS_DCHECK(...) (void)0;
+#define LEAN_DLOG(...) (void)0;
+#define LEAN_DCHECK(...) (void)0;
 #endif
 
 namespace leanstore {

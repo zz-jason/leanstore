@@ -1,8 +1,9 @@
 #include "leanstore/concurrency/group_committer.hpp"
 
 #include "leanstore/concurrency/cr_manager.hpp"
-#include "leanstore/concurrency/worker_context.hpp"
+#include "leanstore/concurrency/tx_manager.hpp"
 #include "utils/coroutine/lean_mutex.hpp"
+#include "utils/coroutine/mvcc_manager.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -19,8 +20,8 @@ constexpr size_t kAligment = 4096;
 void GroupCommitter::RunImpl() {
   TXID min_flushed_sys_tx = std::numeric_limits<TXID>::max();
   TXID min_flushed_usr_tx = std::numeric_limits<TXID>::max();
-  std::vector<uint64_t> num_rfa_txs(worker_ctxs_.size(), 0);
-  std::vector<WalFlushReq> wal_flush_req_copies(worker_ctxs_.size());
+  std::vector<uint64_t> num_rfa_txs(tx_mgrs_.size(), 0);
+  std::vector<WalFlushReq> wal_flush_req_copies(tx_mgrs_.size());
 
   while (keep_running_) {
     // phase 1
@@ -43,8 +44,8 @@ void GroupCommitter::CollectWalRecords(TXID& min_flushed_sys_tx, TXID& min_flush
   min_flushed_sys_tx = std::numeric_limits<TXID>::max();
   min_flushed_usr_tx = std::numeric_limits<TXID>::max();
 
-  for (auto i = 0u; i < worker_ctxs_.size(); i++) {
-    auto& logging = worker_ctxs_[i]->logging_;
+  for (auto i = 0u; i < tx_mgrs_.size(); i++) {
+    auto& logging = tx_mgrs_[i]->logging_;
 
     // collect logging info
     {
@@ -110,8 +111,8 @@ void GroupCommitter::FlushWalRecords() {
 void GroupCommitter::DetermineCommitableTx(TXID min_flushed_sys_tx, TXID min_flushed_usr_tx,
                                            const std::vector<uint64_t>& num_rfa_txs,
                                            const std::vector<WalFlushReq>& wal_flush_req_copies) {
-  for (WORKERID worker_id = 0; worker_id < worker_ctxs_.size(); worker_id++) {
-    auto& logging = worker_ctxs_[worker_id]->logging_;
+  for (WORKERID worker_id = 0; worker_id < tx_mgrs_.size(); worker_id++) {
+    auto& logging = tx_mgrs_[worker_id]->logging_;
     const auto& req_copy = wal_flush_req_copies[worker_id];
 
     // update the flushed commit TS info
@@ -129,9 +130,9 @@ void GroupCommitter::DetermineCommitableTx(TXID min_flushed_sys_tx, TXID min_flu
         }
         max_commit_ts = std::max<TXID>(max_commit_ts, tx.commit_ts_);
         tx.state_ = TxState::kCommitted;
-        LS_DLOG("Transaction with remote dependency committed, workerId={}, startTs={}, "
-                "commitTs={}, minFlushedSysTx={}, minFlushedUsrTx={}",
-                worker_id, tx.start_ts_, tx.commit_ts_, min_flushed_sys_tx, min_flushed_usr_tx);
+        LEAN_DLOG("Transaction with remote dependency committed, workerId={}, startTs={}, "
+                  "commitTs={}, minFlushedSysTx={}, minFlushedUsrTx={}",
+                  worker_id, tx.start_ts_, tx.commit_ts_, min_flushed_sys_tx, min_flushed_usr_tx);
       }
       if (i > 0) {
         logging.tx_to_commit_.erase(logging.tx_to_commit_.begin(),
@@ -148,9 +149,9 @@ void GroupCommitter::DetermineCommitableTx(TXID min_flushed_sys_tx, TXID min_flu
         auto& tx = logging.rfa_tx_to_commit_[i];
         max_commit_ts_rfa = std::max<TXID>(max_commit_ts_rfa, tx.commit_ts_);
         tx.state_ = TxState::kCommitted;
-        LS_DLOG("Transaction without remote dependency committed, workerId={}, startTs={}, "
-                "commitTs={}",
-                worker_id, tx.start_ts_, tx.commit_ts_);
+        LEAN_DLOG("Transaction without remote dependency committed, workerId={}, startTs={}, "
+                  "commitTs={}",
+                  worker_id, tx.start_ts_, tx.commit_ts_);
       }
       if (i > 0) {
         logging.rfa_tx_to_commit_.erase(logging.rfa_tx_to_commit_.begin(),
@@ -172,7 +173,7 @@ void GroupCommitter::DetermineCommitableTx(TXID min_flushed_sys_tx, TXID min_flu
     }
   }
 
-  global_min_flushed_sys_tx_.store(min_flushed_sys_tx, std::memory_order_release);
+  store_->MvccManager()->UpdateMinCommittedSysTx(min_flushed_sys_tx);
 }
 
 void GroupCommitter::Append(uint8_t* buf, uint64_t lower, uint64_t upper) {

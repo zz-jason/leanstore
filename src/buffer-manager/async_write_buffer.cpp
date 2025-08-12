@@ -22,7 +22,7 @@ bool AsyncWriteBuffer::IsFull() {
 }
 
 void AsyncWriteBuffer::Add(const BufferFrame& bf) {
-  LS_DCHECK(uint64_t(&bf) % 512 == 0, "BufferFrame is not aligned to 512 bytes");
+  LEAN_DCHECK(uint64_t(&bf) % 512 == 0, "BufferFrame is not aligned to 512 bytes");
 
   // record the written buffer frame and page id for later use
   auto page_id = bf.header_.page_id_;
