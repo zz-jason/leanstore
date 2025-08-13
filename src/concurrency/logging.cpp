@@ -63,8 +63,8 @@ void Logging::WriteWalTxAbort() {
   wal_buffered_ += size;
   PublishWalFlushReq();
 
-  LEAN_DLOG("WriteWalTxAbort, workerId={}, startTs={}, walJson={}", TxManager::My().worker_id_,
-            TxManager::My().active_tx_.start_ts_, utils::ToJsonString(entry));
+  LEAN_DLOG("WriteWalTxAbort, workerId={}, startTs={}, walJson={}", CoroEnv::CurTxMgr().worker_id_,
+            CoroEnv::CurTxMgr().ActiveTx().start_ts_, utils::ToJsonString(entry));
 }
 
 void Logging::WriteWalTxFinish() {
@@ -75,14 +75,14 @@ void Logging::WriteWalTxFinish() {
   // Initialize a WalTxFinish
   auto* data = wal_buffer_ + wal_buffered_;
   std::memset(data, 0, size);
-  auto* entry [[maybe_unused]] = new (data) WalTxFinish(TxManager::My().active_tx_.start_ts_);
+  auto* entry [[maybe_unused]] = new (data) WalTxFinish(CoroEnv::CurTxMgr().ActiveTx().start_ts_);
 
   // Submit the WalTxAbort to group committer
   wal_buffered_ += size;
   PublishWalFlushReq();
 
-  LEAN_DLOG("WriteWalTxFinish, workerId={}, startTs={}, walJson={}", TxManager::My().worker_id_,
-            TxManager::My().active_tx_.start_ts_, utils::ToJsonString(entry));
+  LEAN_DLOG("WriteWalTxFinish, workerId={}, startTs={}, walJson={}", CoroEnv::CurTxMgr().worker_id_,
+            CoroEnv::CurTxMgr().ActiveTx().start_ts_, utils::ToJsonString(entry));
 }
 
 void Logging::WriteWalCarriageReturn() {
@@ -100,8 +100,9 @@ void Logging::SubmitWALEntryComplex(uint64_t total_size) {
   wal_buffered_ += total_size;
   PublishWalFlushReq();
 
-  LEAN_DLOG("SubmitWal, workerId={}, startTs={}, walJson={}", TxManager::My().worker_id_,
-            TxManager::My().active_tx_.start_ts_, utils::ToJsonString(active_walentry_complex_));
+  LEAN_DLOG("SubmitWal, workerId={}, startTs={}, walJson={}", CoroEnv::CurTxMgr().worker_id_,
+            CoroEnv::CurTxMgr().ActiveTx().start_ts_,
+            utils::ToJsonString(active_walentry_complex_));
 }
 
 void Logging::PublishWalBufferedOffset() {
@@ -109,7 +110,7 @@ void Logging::PublishWalBufferedOffset() {
 }
 
 void Logging::PublishWalFlushReq() {
-  WalFlushReq current(wal_buffered_, sys_tx_writtern_, TxManager::My().active_tx_.start_ts_);
+  WalFlushReq current(wal_buffered_, sys_tx_writtern_, CoroEnv::CurTxMgr().ActiveTx().start_ts_);
   wal_flush_req_.Set(current);
 }
 

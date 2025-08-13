@@ -1,21 +1,58 @@
 #include "utils/coroutine/coro_env.hpp"
 
 #include "leanstore/concurrency/tx_manager.hpp"
+#include "leanstore/utils/managed_thread.hpp"
 #include "utils/coroutine/coro_executor.hpp"
 #include "utils/coroutine/coro_scheduler.hpp"
 
 namespace leanstore {
 
-Coroutine* CoroEnv::CurCoro() {
-  return CoroExecutor::CurrentCoro();
+namespace {
+thread_local LeanStore* tls_store = nullptr;
+
+#ifndef ENABLE_COROUTINE
+thread_local cr::TxManager* tls_tx_mgr = nullptr;
+#endif
+} // namespace
+
+void CoroEnv::SetCurStore(LeanStore* store) {
+  tls_store = store;
+}
+
+LeanStore* CoroEnv::CurStore() {
+  return tls_store;
 }
 
 CoroExecutor* CoroEnv::CurCoroExec() {
   return CoroExecutor::CurrentThread();
 }
 
-std::vector<std::unique_ptr<cr::TxManager>>& CoroEnv::AllWorkerCtxs() {
-  return cr::TxManager::My().tx_mgrs_;
+Coroutine* CoroEnv::CurCoro() {
+  return CoroExecutor::CurrentCoro();
+}
+
+void CoroEnv::SetCurTxMgr(cr::TxManager* tx_mgr) {
+#if ENABLE_COROUTINE
+  CoroEnv::CurCoro()->SetTxMgr(tx_mgr);
+#else
+  tls_tx_mgr = tx_mgr;
+#endif
+}
+
+cr::TxManager& CoroEnv::CurTxMgr() {
+#if ENABLE_COROUTINE
+  return *CurCoro()->GetTxMgr();
+#else
+  return *tls_tx_mgr;
+#endif
+}
+
+bool CoroEnv::HasTxMgr() {
+#if ENABLE_COROUTINE
+  return CurCoro()->GetTxMgr() != nullptr;
+#else
+  return tls_tx_mgr != nullptr;
+#endif
 }
 
 } // namespace leanstore

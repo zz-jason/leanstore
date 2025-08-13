@@ -88,7 +88,7 @@ public:
     tx_mode_ = mode;
     tx_isolation_level_ = level;
     has_wrote_ = false;
-    is_durable_ = utils::tls_store->store_option_->enable_wal_;
+    is_durable_ = CoroEnv::CurStore()->store_option_->enable_wal_;
     wal_exceed_buffer_ = false;
   }
 

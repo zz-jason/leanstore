@@ -184,15 +184,15 @@ inline void LeanStoreMVCCSession::SetTxMode(TxMode tx_mode) {
 
 inline void LeanStoreMVCCSession::StartTx() {
   store_->lean_store_->ExecSync(worker_id_,
-                                [&]() { cr::TxManager::My().StartTx(tx_mode_, isolation_level_); });
+                                [&]() { CoroEnv::CurTxMgr().StartTx(tx_mode_, isolation_level_); });
 }
 
 inline void LeanStoreMVCCSession::CommitTx() {
-  store_->lean_store_->ExecSync(worker_id_, [&]() { cr::TxManager::My().CommitTx(); });
+  store_->lean_store_->ExecSync(worker_id_, [&]() { CoroEnv::CurTxMgr().CommitTx(); });
 }
 
 inline void LeanStoreMVCCSession::AbortTx() {
-  store_->lean_store_->ExecSync(worker_id_, [&]() { cr::TxManager::My().AbortTx(); });
+  store_->lean_store_->ExecSync(worker_id_, [&]() { CoroEnv::CurTxMgr().AbortTx(); });
 }
 
 // DDL operations
@@ -214,11 +214,11 @@ inline Result<TableRef*> LeanStoreMVCCSession::CreateTable(const std::string& tb
 inline Result<void> LeanStoreMVCCSession::DropTable(const std::string& tbl_name, bool implicit_tx) {
   store_->lean_store_->ExecSync(worker_id_, [&]() {
     if (implicit_tx) {
-      cr::TxManager::My().StartTx(tx_mode_, isolation_level_);
+      CoroEnv::CurTxMgr().StartTx(tx_mode_, isolation_level_);
     }
     store_->lean_store_->DropTransactionKV(tbl_name);
     if (implicit_tx) {
-      cr::TxManager::My().CommitTx();
+      CoroEnv::CurTxMgr().CommitTx();
     }
   });
   return {};
@@ -231,13 +231,13 @@ inline Result<void> LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice va
   OpCode res;
   store_->lean_store_->ExecSync(worker_id_, [&]() {
     if (implicit_tx) {
-      cr::TxManager::My().StartTx(tx_mode_, isolation_level_);
+      CoroEnv::CurTxMgr().StartTx(tx_mode_, isolation_level_);
     }
     SCOPED_DEFER(if (implicit_tx) {
       if (res == OpCode::kOK) {
-        cr::TxManager::My().CommitTx();
+        CoroEnv::CurTxMgr().CommitTx();
       } else {
-        cr::TxManager::My().AbortTx();
+        CoroEnv::CurTxMgr().AbortTx();
       }
     });
 
@@ -261,13 +261,13 @@ inline Result<uint64_t> LeanStoreMVCCSession::Get(TableRef* tbl, Slice key, std:
 
   store_->lean_store_->ExecSync(worker_id_, [&]() {
     if (implicit_tx) {
-      cr::TxManager::My().StartTx(tx_mode_, isolation_level_);
+      CoroEnv::CurTxMgr().StartTx(tx_mode_, isolation_level_);
     }
     SCOPED_DEFER(if (implicit_tx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
-        cr::TxManager::My().CommitTx();
+        CoroEnv::CurTxMgr().CommitTx();
       } else {
-        cr::TxManager::My().AbortTx();
+        CoroEnv::CurTxMgr().AbortTx();
       }
     });
 
@@ -291,13 +291,13 @@ inline Result<uint64_t> LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, S
   };
   store_->lean_store_->ExecSync(worker_id_, [&]() {
     if (implicit_tx) {
-      cr::TxManager::My().StartTx(tx_mode_, isolation_level_);
+      CoroEnv::CurTxMgr().StartTx(tx_mode_, isolation_level_);
     }
     SCOPED_DEFER(if (implicit_tx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
-        cr::TxManager::My().CommitTx();
+        CoroEnv::CurTxMgr().CommitTx();
       } else {
-        cr::TxManager::My().AbortTx();
+        CoroEnv::CurTxMgr().AbortTx();
       }
     });
 
@@ -324,13 +324,13 @@ inline Result<uint64_t> LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key, b
   OpCode res;
   store_->lean_store_->ExecSync(worker_id_, [&]() {
     if (implicit_tx) {
-      cr::TxManager::My().StartTx(tx_mode_, isolation_level_);
+      CoroEnv::CurTxMgr().StartTx(tx_mode_, isolation_level_);
     }
     SCOPED_DEFER(if (implicit_tx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
-        cr::TxManager::My().CommitTx();
+        CoroEnv::CurTxMgr().CommitTx();
       } else {
-        cr::TxManager::My().AbortTx();
+        CoroEnv::CurTxMgr().AbortTx();
       }
     });
 

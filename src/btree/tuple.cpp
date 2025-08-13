@@ -61,13 +61,13 @@ bool Tuple::ToFat(BTreeIterMut* x_iter) {
   bool abort_conversion = false;
   uint16_t num_deltas_to_replace = 0;
   while (!abort_conversion) {
-    if (cr::TxManager::My().cc_.VisibleForAll(newer_tx_id)) {
+    if (CoroEnv::CurTxMgr().cc_.VisibleForAll(newer_tx_id)) {
       // No need to convert versions that are visible for all to the FatTuple,
       // these old version can be GCed. Pruning versions space might get delayed
       break;
     }
 
-    if (!cr::TxManager::My().cc_.GetVersion(
+    if (!CoroEnv::CurTxMgr().cc_.GetVersion(
             newer_worker_id, newer_tx_id, newer_command_id, [&](const uint8_t* version, uint64_t) {
               num_deltas_to_replace++;
               const auto& chained_delta = *UpdateVersion::From(version);
@@ -190,7 +190,7 @@ void FatTuple::GarbageCollection() {
   };
 
   // Delete for all visible deltas, atm using cheap visibility check
-  if (cr::TxManager::My().cc_.VisibleForAll(tx_id_)) {
+  if (CoroEnv::CurTxMgr().cc_.VisibleForAll(tx_id_)) {
     num_deltas_ = 0;
     data_offset_ = payload_capacity_;
     payload_size_ = val_size_;
@@ -200,16 +200,16 @@ void FatTuple::GarbageCollection() {
   uint16_t deltas_visible_for_all = 0;
   for (int32_t i = num_deltas_ - 1; i >= 1; i--) {
     auto& delta = get_delta(i);
-    if (cr::TxManager::My().cc_.VisibleForAll(delta.tx_id_)) {
+    if (CoroEnv::CurTxMgr().cc_.VisibleForAll(delta.tx_id_)) {
       deltas_visible_for_all = i - 1;
       break;
     }
   }
 
   const TXID local_oldest_oltp =
-      cr::TxManager::My().store_->MvccManager()->GlobalWmkInfo().oldest_active_short_tx_.load();
+      CoroEnv::CurTxMgr().store_->MvccManager()->GlobalWmkInfo().oldest_active_short_tx_.load();
   const TXID local_newest_olap =
-      cr::TxManager::My().store_->MvccManager()->GlobalWmkInfo().newest_active_long_tx_.load();
+      CoroEnv::CurTxMgr().store_->MvccManager()->GlobalWmkInfo().newest_active_long_tx_.load();
   if (deltas_visible_for_all == 0 && local_newest_olap > local_oldest_oltp) {
     return; // Nothing to do here
   }
@@ -353,12 +353,12 @@ void FatTuple::Append(UpdateDesc& update_desc) {
 std::tuple<OpCode, uint16_t> FatTuple::GetVisibleTuple(ValCallback val_callback) const {
 
   // Latest version is visible
-  if (cr::TxManager::My().cc_.VisibleForMe(worker_id_, tx_id_)) {
+  if (CoroEnv::CurTxMgr().cc_.VisibleForMe(worker_id_, tx_id_)) {
     val_callback(GetValue());
     return {OpCode::kOK, 1};
   }
 
-  LEAN_DCHECK(cr::ActiveTx().IsLongRunning());
+  LEAN_DCHECK(CoroEnv::CurTxMgr().ActiveTx().IsLongRunning());
 
   if (num_deltas_ > 0) {
     auto copied_val = utils::JumpScopedArray<uint8_t>(val_size_);
@@ -370,7 +370,7 @@ std::tuple<OpCode, uint16_t> FatTuple::GetVisibleTuple(ValCallback val_callback)
       const auto& update_desc = delta.GetUpdateDesc();
       auto* xor_data = delta.GetDeltaPtr();
       BasicKV::CopyToValue(update_desc, xor_data, copied_val->get());
-      if (cr::TxManager::My().cc_.VisibleForMe(delta.worker_id_, delta.tx_id_)) {
+      if (CoroEnv::CurTxMgr().cc_.VisibleForMe(delta.worker_id_, delta.tx_id_)) {
         val_callback(Slice(copied_val->get(), val_size_));
         return {OpCode::kOK, num_visited_versions};
       }
@@ -420,7 +420,7 @@ void FatTuple::ConvertToChained(TREEID tree_id) {
     auto& update_desc = delta.GetUpdateDesc();
     auto size_of_desc_and_delta = update_desc.SizeWithDelta();
     auto version_size = size_of_desc_and_delta + sizeof(UpdateVersion);
-    cr::TxManager::My()
+    CoroEnv::CurTxMgr()
         .cc_.Other(prev_worker_id)
         .history_storage_.PutVersion(
             prev_tx_id, prev_command_id, tree_id, false, version_size,

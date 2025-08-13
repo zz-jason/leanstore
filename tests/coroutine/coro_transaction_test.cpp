@@ -71,9 +71,9 @@ TEST_F(CoroTxnTest, BasicCommit) {
   // insert key-value pairs in worker 0
   auto job_insert = [&]() {
     for (const auto& [key, val] : kv_to_test) {
-      cr::TxManager::My().StartTx();
+      CoroEnv::CurTxMgr().StartTx();
       EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
-      cr::TxManager::My().CommitTx();
+      CoroEnv::CurTxMgr().CommitTx();
     }
   };
   store->Submit(job_insert, 0)->Wait();

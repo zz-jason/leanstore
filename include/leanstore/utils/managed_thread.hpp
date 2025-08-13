@@ -3,6 +3,7 @@
 #include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/misc.hpp"
+#include "utils/coroutine/coro_env.hpp"
 
 #include <atomic>
 #include <memory>
@@ -19,7 +20,6 @@ class LeanStore;
 
 namespace leanstore::utils {
 
-inline thread_local LeanStore* tls_store = nullptr;
 inline thread_local std::string tls_thread_name = "";
 
 /// User thread with custom thread name.
@@ -74,7 +74,7 @@ public:
 
 protected:
   void Run() {
-    tls_store = store_;
+    CoroEnv::SetCurStore(store_);
 
     // set thread-local thread name at the very beging so that logs printed by
     // the thread can get it.

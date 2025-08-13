@@ -1,16 +1,16 @@
 #pragma once
 
 #include <cstdint>
-#include <memory>
-#include <vector>
 
 namespace leanstore::cr {
 class Logging;
 class TxManager;
+class Transaction;
 } // namespace leanstore::cr
 
 namespace leanstore {
 
+class LeanStore;
 class Coroutine;
 class CoroExecutor;
 
@@ -19,9 +19,15 @@ public:
   static constexpr int64_t kMaxCoroutinesPerThread = 256;
   static constexpr int64_t kStackSize = 8 << 20; // 8 MB
 
-  static Coroutine* CurCoro();
+  static void SetCurStore(LeanStore* store);
+  static LeanStore* CurStore();
+
   static CoroExecutor* CurCoroExec();
-  static std::vector<std::unique_ptr<cr::TxManager>>& AllWorkerCtxs();
+  static Coroutine* CurCoro();
+
+  static void SetCurTxMgr(cr::TxManager* tx_mgr);
+  static cr::TxManager& CurTxMgr();
+  static bool HasTxMgr();
 };
 
 } // namespace leanstore

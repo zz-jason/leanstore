@@ -5,6 +5,7 @@
 #include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/transaction.hpp"
 #include "leanstore/units.hpp"
+#include "utils/coroutine/coro_env.hpp"
 
 #include <atomic>
 #include <memory>
@@ -61,6 +62,10 @@ public:
   /// Destruct a TxManager.
   ~TxManager();
 
+  Transaction& ActiveTx() {
+    return active_tx_;
+  }
+
   /// Whether a user transaction is started.
   bool IsTxStarted() {
     return active_tx_.state_ == TxState::kStarted;
@@ -100,25 +105,9 @@ public:
     last_committed_usr_tx_.store(usr_tx_id, std::memory_order_release);
   }
 
-  /// Raw pointer to avoid the overhead of std::unique_ptr.
-  static thread_local TxManager* s_tls_tx_manager;
-
   static constexpr uint64_t kRcBit = (1ull << 63);
   static constexpr uint64_t kLongRunningBit = (1ull << 62);
   static constexpr uint64_t kCleanBitsMask = ~(kRcBit | kLongRunningBit);
-
-  static TxManager& My() {
-    return *TxManager::s_tls_tx_manager;
-  }
-
-  static bool InWorker() {
-    return TxManager::s_tls_tx_manager != nullptr;
-  }
 };
-
-// Shortcuts
-inline Transaction& ActiveTx() {
-  return cr::TxManager::My().active_tx_;
-}
 
 } // namespace leanstore::cr

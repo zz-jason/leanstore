@@ -12,10 +12,10 @@ WalPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payload_size, PID 
                                                      TREEID tree_id, Args&&... args) {
   // write transaction start on demand
   auto prev_lsn = prev_lsn_;
-  if (!ActiveTx().has_wrote_) {
+  if (!CoroEnv::CurTxMgr().ActiveTx().has_wrote_) {
     // no prevLsn for the first wal entry in a transaction
     prev_lsn = 0;
-    ActiveTx().has_wrote_ = true;
+    CoroEnv::CurTxMgr().ActiveTx().has_wrote_ = true;
   }
 
   // update prev lsn in the end
@@ -26,9 +26,9 @@ WalPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payload_size, PID 
   auto entry_size = sizeof(WalEntryComplex) + payload_size;
   ReserveContiguousBuffer(entry_size);
 
-  active_walentry_complex_ =
-      new (entry_ptr) WalEntryComplex(entry_lsn, prev_lsn, entry_size, TxManager::My().worker_id_,
-                                      ActiveTx().start_ts_, psn, page_id, tree_id);
+  active_walentry_complex_ = new (entry_ptr)
+      WalEntryComplex(entry_lsn, prev_lsn, entry_size, CoroEnv::CurTxMgr().worker_id_,
+                      CoroEnv::CurTxMgr().ActiveTx().start_ts_, psn, page_id, tree_id);
 
   auto* payload_ptr = active_walentry_complex_->payload_;
   auto wal_payload = new (payload_ptr) T(std::forward<Args>(args)...);

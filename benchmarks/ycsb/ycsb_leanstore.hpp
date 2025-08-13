@@ -162,7 +162,7 @@ public:
           utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
 
           if (bench_transaction_kv_) {
-            cr::TxManager::My().StartTx();
+            CoroEnv::CurTxMgr().StartTx();
           }
 
           auto op_code =
@@ -172,7 +172,7 @@ public:
           }
 
           if (bench_transaction_kv_) {
-            cr::TxManager::My().CommitTx();
+            CoroEnv::CurTxMgr().CommitTx();
           }
         }
       };
@@ -252,10 +252,10 @@ public:
                 // generate key for read
                 GenYcsbKey(zipf_random, key);
                 if (bench_transaction_kv_) {
-                  cr::TxManager::My().StartTx(TxMode::kShortRunning,
+                  CoroEnv::CurTxMgr().StartTx(TxMode::kShortRunning,
                                               IsolationLevel::kSnapshotIsolation, true);
                   table->Lookup(Slice(key, FLAGS_ycsb_key_size), copy_value);
-                  cr::TxManager::My().CommitTx();
+                  CoroEnv::CurTxMgr().CommitTx();
                 } else {
                   table->Lookup(Slice(key, FLAGS_ycsb_key_size), copy_value);
                 }
@@ -264,10 +264,10 @@ public:
                 GenYcsbKey(zipf_random, key);
                 // generate val for update
                 if (bench_transaction_kv_) {
-                  cr::TxManager::My().StartTx();
+                  CoroEnv::CurTxMgr().StartTx();
                   table->UpdatePartial(Slice(key, FLAGS_ycsb_key_size), update_call_back,
                                        *update_desc);
-                  cr::TxManager::My().CommitTx();
+                  CoroEnv::CurTxMgr().CommitTx();
                 } else {
                   table->UpdatePartial(Slice(key, FLAGS_ycsb_key_size), update_call_back,
                                        *update_desc);

@@ -12,6 +12,7 @@
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
 #include "utils/coroutine/mvcc_manager.hpp"
+#include "utils/small_vector.hpp"
 
 #include <functional>
 
@@ -130,11 +131,14 @@ void HistoryStorage::PurgeVersions(TXID from_tx_id, TXID to_tx_id,
                                    RemoveVersionCallback on_remove_version,
                                    [[maybe_unused]] const uint64_t limit) {
   auto key_size = sizeof(to_tx_id);
-  uint8_t key_buffer[utils::tls_store->store_option_->page_size_];
+  SmallBuffer256 key_buffer_holder(CoroEnv::CurStore()->store_option_->page_size_);
+  auto* key_buffer = key_buffer_holder.Data();
+
   utils::Fold(key_buffer, from_tx_id);
   Slice key(key_buffer, key_size);
 
-  uint8_t payload[utils::tls_store->store_option_->page_size_];
+  SmallBuffer<4096> pl_holder(CoroEnv::CurStore()->store_option_->page_size_);
+  auto* payload = pl_holder.Data();
   uint16_t payload_size;
   uint64_t versions_removed = 0;
 
@@ -298,12 +302,12 @@ void HistoryStorage::VisitRemovedVersions(TXID from_tx_id, TXID to_tx_id,
                                           RemoveVersionCallback on_remove_version) {
   auto* remove_tree = remove_index_;
   auto key_size = sizeof(to_tx_id);
-  uint8_t key_buffer[utils::tls_store->store_option_->page_size_];
+  uint8_t key_buffer[CoroEnv::CurStore()->store_option_->page_size_];
 
   uint64_t offset = 0;
   offset += utils::Fold(key_buffer + offset, from_tx_id);
   Slice key(key_buffer, key_size);
-  uint8_t payload[utils::tls_store->store_option_->page_size_];
+  uint8_t payload[CoroEnv::CurStore()->store_option_->page_size_];
   uint16_t payload_size;
 
   JUMPMU_TRY() {

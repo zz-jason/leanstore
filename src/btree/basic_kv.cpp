@@ -161,13 +161,13 @@ OpCode BasicKV::Insert(Slice key, Slice val) {
     auto ret = x_iter->InsertKV(key, val);
 
     if (ret == OpCode::kDuplicated) {
-      Log::Info("Insert duplicated, workerId={}, key={}, treeId={}", cr::TxManager::My().worker_id_,
+      Log::Info("Insert duplicated, workerId={}, key={}, treeId={}", CoroEnv::CurTxMgr().worker_id_,
                 key.ToString(), tree_id_);
       JUMPMU_RETURN OpCode::kDuplicated;
     }
 
     if (ret != OpCode::kOK) {
-      Log::Info("Insert failed, workerId={}, key={}, ret={}", cr::TxManager::My().worker_id_,
+      Log::Info("Insert failed, workerId={}, key={}, ret={}", CoroEnv::CurTxMgr().worker_id_,
                 key.ToString(), ToString(ret));
       JUMPMU_RETURN ret;
     }

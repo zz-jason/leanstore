@@ -18,6 +18,7 @@
 #include "leanstore/utils/misc.hpp"
 #include "leanstore/utils/result.hpp"
 #include "utils/coroutine/mvcc_manager.hpp"
+#include "utils/small_vector.hpp"
 
 #include <cstring>
 #include <format>
@@ -71,9 +72,9 @@ OpCode TransactionKV::LookupOptimistic(Slice key, ValCallback val_callback) {
 }
 
 OpCode TransactionKV::Lookup(Slice key, ValCallback val_callback) {
-  LEAN_DCHECK(cr::TxManager::My().IsTxStarted(),
+  LEAN_DCHECK(CoroEnv::CurTxMgr().IsTxStarted(),
               "TxManager is not in a transaction, workerId={}, startTs={}",
-              cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_);
+              CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_);
   auto lookup_in_graveyard = [&]() {
     auto g_iter = graveyard_->NewBTreeIter();
     if (g_iter->SeekToEqual(key); !g_iter->Valid()) {
@@ -90,7 +91,8 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback val_callback) {
   if (optimistic_ret == OpCode::kNotFound) {
     // In a lookup-after-remove(other worker) scenario, the tuple may be garbage
     // collected and moved to the graveyard, check the graveyard for the key.
-    return cr::ActiveTx().IsLongRunning() ? lookup_in_graveyard() : OpCode::kNotFound;
+    return CoroEnv::CurTxMgr().ActiveTx().IsLongRunning() ? lookup_in_graveyard()
+                                                          : OpCode::kNotFound;
   }
 
   // lookup pessimistically
@@ -98,11 +100,12 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback val_callback) {
   if (iter->SeekToEqual(key); !iter->Valid()) {
     // In a lookup-after-remove(other worker) scenario, the tuple may be garbage
     // collected and moved to the graveyard, check the graveyard for the key.
-    return cr::ActiveTx().IsLongRunning() ? lookup_in_graveyard() : OpCode::kNotFound;
+    return CoroEnv::CurTxMgr().ActiveTx().IsLongRunning() ? lookup_in_graveyard()
+                                                          : OpCode::kNotFound;
   }
 
   auto [ret, versions_read] = get_visible_tuple(iter->Val(), val_callback);
-  if (cr::ActiveTx().IsLongRunning() && ret == OpCode::kNotFound) {
+  if (CoroEnv::CurTxMgr().ActiveTx().IsLongRunning() && ret == OpCode::kNotFound) {
     ret = lookup_in_graveyard();
   }
   return ret;
@@ -110,17 +113,18 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback val_callback) {
 
 OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback update_call_back,
                                     UpdateDesc& update_desc) {
-  LEAN_DCHECK(cr::TxManager::My().IsTxStarted());
+  LEAN_DCHECK(CoroEnv::CurTxMgr().IsTxStarted());
   JUMPMU_TRY() {
     auto x_iter = NewBTreeIterMut();
     if (x_iter->SeekToEqual(key); !x_iter->Valid()) {
       // Conflict detected, the tuple to be updated by the long-running
       // transaction is removed by newer transactions, abort it.
-      if (cr::ActiveTx().IsLongRunning() && graveyard_->Lookup(key, [&](Slice) {}) == OpCode::kOK) {
+      if (CoroEnv::CurTxMgr().ActiveTx().IsLongRunning() &&
+          graveyard_->Lookup(key, [&](Slice) {}) == OpCode::kOK) {
         JUMPMU_RETURN OpCode::kAbortTx;
       }
       Log::Error("Update failed, key not found, key={}, txMode={}", key.ToString(),
-                 ToString(cr::ActiveTx().tx_mode_));
+                 ToString(CoroEnv::CurTxMgr().ActiveTx().tx_mode_));
       JUMPMU_RETURN OpCode::kNotFound;
     }
 
@@ -128,7 +132,7 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback update_call_back,
     while (true) {
       auto mut_raw_val = x_iter->MutableVal();
       auto& tuple = *Tuple::From(mut_raw_val.Data());
-      auto visible_for_me = cr::TxManager::My().cc_.VisibleForMe(tuple.worker_id_, tuple.tx_id_);
+      auto visible_for_me = CoroEnv::CurTxMgr().cc_.VisibleForMe(tuple.worker_id_, tuple.tx_id_);
       if (tuple.IsWriteLocked() || !visible_for_me) {
         // conflict detected, the tuple is write locked by other worker or not
         // visible for me
@@ -189,7 +193,7 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback update_call_back,
 }
 
 OpCode TransactionKV::Insert(Slice key, Slice val) {
-  LEAN_DCHECK(cr::TxManager::My().IsTxStarted());
+  LEAN_DCHECK(CoroEnv::CurTxMgr().IsTxStarted());
   uint16_t payload_size = val.size() + sizeof(ChainedTuple);
 
   while (true) {
@@ -205,11 +209,11 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
       LEAN_DCHECK(!chained_tuple->write_locked_,
                   "Duplicate tuple should not be write locked, workerId={}, startTs={}, key={}, "
                   "tupleLastWriter={}, tupleLastStartTs={}, tupleWriteLocked={}",
-                  cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                  CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_,
                   key.ToString(), last_worker_id, last_tx_id, is_write_locked);
 
       auto visible_for_me =
-          cr::TxManager::My().cc_.VisibleForMe(chained_tuple->worker_id_, chained_tuple->tx_id_);
+          CoroEnv::CurTxMgr().cc_.VisibleForMe(chained_tuple->worker_id_, chained_tuple->tx_id_);
 
       if (chained_tuple->is_tombstone_ && visible_for_me) {
         InsertAfterRemove(x_iter.get(), key, val);
@@ -225,7 +229,7 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
         Log::Info("Insert conflicted, current transaction should be aborted, workerId={}, "
                   "startTs={}, key={}, tupleLastWriter={}, tupleLastTxId={}, "
                   "tupleIsWriteLocked={}, tupleIsRemoved={}, tupleVisibleForMe={}",
-                  cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                  CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_,
                   ToString(key), last_worker_id, last_tx_id, is_write_locked, is_tombsone,
                   visible_for_me);
         return OpCode::kAbortTx;
@@ -235,7 +239,7 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
       auto is_tombsone = chained_tuple->is_tombstone_;
       Log::Info("Insert duplicated, workerId={}, startTs={}, key={}, tupleLastWriter={}, "
                 "tupleLastTxId={}, tupleIsWriteLocked={}, tupleIsRemoved={}, tupleVisibleForMe={}",
-                cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_,
                 key.ToString(), last_worker_id, last_tx_id, is_write_locked, is_tombsone,
                 visible_for_me);
       return OpCode::kDuplicated;
@@ -251,8 +255,8 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
                                                 kInvalidCommandid);
 
     // insert
-    TransactionKV::InsertToNode(x_iter->guarded_leaf_, key, val, cr::TxManager::My().worker_id_,
-                                cr::ActiveTx().start_ts_, x_iter->slot_id_);
+    TransactionKV::InsertToNode(x_iter->guarded_leaf_, key, val, CoroEnv::CurTxMgr().worker_id_,
+                                CoroEnv::CurTxMgr().ActiveTx().start_ts_, x_iter->slot_id_);
     return OpCode::kOK;
   }
 }
@@ -294,13 +298,13 @@ void TransactionKV::InsertAfterRemove(BTreeIterMut* x_iter, Slice key, Slice val
               "Tuple should be removed before insert, workerId={}, "
               "startTs={}, key={}, tupleLastWriter={}, "
               "tupleLastStartTs={}, tupleWriteLocked={}",
-              cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+              CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_,
               key.ToString(), last_worker_id, last_tx_id, is_write_locked);
 
   // create an insert version
   auto version_size = sizeof(InsertVersion) + val.size() + key.size();
   auto command_id =
-      cr::TxManager::My().cc_.PutVersion(tree_id_, false, version_size, [&](uint8_t* version_buf) {
+      CoroEnv::CurTxMgr().cc_.PutVersion(tree_id_, false, version_size, [&](uint8_t* version_buf) {
         new (version_buf) InsertVersion(last_worker_id, last_tx_id, last_command_id, key, val);
       });
 
@@ -323,7 +327,7 @@ void TransactionKV::InsertAfterRemove(BTreeIterMut* x_iter, Slice key, Slice val
                 "Failed to extend btree node slot to store the expanded "
                 "chained tuple, workerId={}, startTs={}, key={}, "
                 "curRawValSize={}, chainedTupleSize={}",
-                cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_,
                 key.ToString(), mut_raw_val.Size(), chained_tuple_size);
 
   } else if (mut_raw_val.Size() > chained_tuple_size) {
@@ -332,21 +336,22 @@ void TransactionKV::InsertAfterRemove(BTreeIterMut* x_iter, Slice key, Slice val
 
   // get the new value place and recreate a new chained tuple there
   auto new_mut_raw_val = x_iter->MutableVal();
-  auto* new_chained_tuple = new (new_mut_raw_val.Data())
-      ChainedTuple(cr::TxManager::My().worker_id_, cr::ActiveTx().start_ts_, command_id, val);
+  auto* new_chained_tuple = new (new_mut_raw_val.Data()) ChainedTuple(
+      CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_, command_id, val);
   new_chained_tuple->total_updates_ = total_updates_copy;
   new_chained_tuple->oldest_tx_ = oldest_tx_copy;
   new_chained_tuple->UpdateStats();
 }
 
 OpCode TransactionKV::Remove(Slice key) {
-  LEAN_DCHECK(cr::TxManager::My().IsTxStarted());
+  LEAN_DCHECK(CoroEnv::CurTxMgr().IsTxStarted());
   JUMPMU_TRY() {
     auto x_iter = NewBTreeIterMut();
     if (x_iter->SeekToEqual(key); !x_iter->Valid()) {
       // Conflict detected, the tuple to be removed by the long-running transaction is removed by
       // newer transactions, abort it.
-      if (cr::ActiveTx().IsLongRunning() && graveyard_->Lookup(key, [&](Slice) {}) == OpCode::kOK) {
+      if (CoroEnv::CurTxMgr().ActiveTx().IsLongRunning() &&
+          graveyard_->Lookup(key, [&](Slice) {}) == OpCode::kOK) {
         JUMPMU_RETURN OpCode::kAbortTx;
       }
       JUMPMU_RETURN OpCode::kNotFound;
@@ -366,12 +371,12 @@ OpCode TransactionKV::Remove(Slice key) {
     auto last_worker_id = chained_tuple.worker_id_;
     auto last_tx_id = chained_tuple.tx_id_;
     if (chained_tuple.IsWriteLocked() ||
-        !cr::TxManager::My().cc_.VisibleForMe(last_worker_id, last_tx_id)) {
+        !CoroEnv::CurTxMgr().cc_.VisibleForMe(last_worker_id, last_tx_id)) {
       Log::Info("Remove conflicted, current transaction should be aborted, workerId={}, "
                 "startTs={}, key={}, tupleLastWriter={}, tupleLastStartTs={}, tupleVisibleForMe={}",
-                cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_,
                 key.ToString(), last_worker_id, last_tx_id,
-                cr::TxManager::My().cc_.VisibleForMe(last_worker_id, last_tx_id));
+                CoroEnv::CurTxMgr().cc_.VisibleForMe(last_worker_id, last_tx_id));
       JUMPMU_RETURN OpCode::kAbortTx;
     }
 
@@ -391,7 +396,7 @@ OpCode TransactionKV::Remove(Slice key) {
     auto val = chained_tuple.GetValue(val_size);
     auto version_size = sizeof(RemoveVersion) + val.size() + key.size();
     auto command_id =
-        cr::TxManager::My().cc_.PutVersion(tree_id_, true, version_size, [&](uint8_t* version_buf) {
+        CoroEnv::CurTxMgr().cc_.PutVersion(tree_id_, true, version_size, [&](uint8_t* version_buf) {
           new (version_buf) RemoveVersion(chained_tuple.worker_id_, chained_tuple.tx_id_,
                                           chained_tuple.command_id_, key, val, dangling_pointer);
         });
@@ -408,8 +413,8 @@ OpCode TransactionKV::Remove(Slice key) {
       x_iter->ShortenWithoutCompaction(sizeof(ChainedTuple));
     }
     chained_tuple.is_tombstone_ = true;
-    chained_tuple.worker_id_ = cr::TxManager::My().worker_id_;
-    chained_tuple.tx_id_ = cr::ActiveTx().start_ts_;
+    chained_tuple.worker_id_ = CoroEnv::CurTxMgr().worker_id_;
+    chained_tuple.tx_id_ = CoroEnv::CurTxMgr().ActiveTx().start_ts_;
     chained_tuple.command_id_ = command_id;
 
     chained_tuple.WriteUnlock();
@@ -422,8 +427,8 @@ OpCode TransactionKV::Remove(Slice key) {
 }
 
 OpCode TransactionKV::ScanDesc(Slice start_key, ScanCallback callback) {
-  LEAN_DCHECK(cr::TxManager::My().IsTxStarted());
-  if (cr::ActiveTx().IsLongRunning()) {
+  LEAN_DCHECK(CoroEnv::CurTxMgr().IsTxStarted());
+  if (CoroEnv::CurTxMgr().ActiveTx().IsLongRunning()) {
     TODOException();
     return OpCode::kAbortTx;
   }
@@ -431,8 +436,8 @@ OpCode TransactionKV::ScanDesc(Slice start_key, ScanCallback callback) {
 }
 
 OpCode TransactionKV::ScanAsc(Slice start_key, ScanCallback callback) {
-  LEAN_DCHECK(cr::TxManager::My().IsTxStarted());
-  if (cr::ActiveTx().IsLongRunning()) {
+  LEAN_DCHECK(CoroEnv::CurTxMgr().IsTxStarted());
+  if (CoroEnv::CurTxMgr().ActiveTx().IsLongRunning()) {
     return scan4LongRunningTx(start_key, callback);
   }
   return scan4ShortRunningTx<true>(start_key, callback);
@@ -466,7 +471,7 @@ void TransactionKV::undo_last_insert(const WalTxInsert* wal_insert) {
       LEAN_DCHECK(x_iter->Valid(),
                   "Cannot find the inserted key in btree, workerId={}, "
                   "startTs={}, key={}",
-                  cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                  CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_,
                   key.ToString());
       // TODO(jian.z): write compensation wal entry
       if (wal_insert->prev_command_id_ != kInvalidCommandid) {
@@ -491,7 +496,7 @@ void TransactionKV::undo_last_insert(const WalTxInsert* wal_insert) {
         if (ret != OpCode::kOK) {
           Log::Error("Undo last insert failed, failed to remove current key, "
                      "workerId={}, startTs={}, key={}, ret={}",
-                     cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                     CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_,
                      key.ToString(), ToString(ret));
         }
       }
@@ -500,8 +505,8 @@ void TransactionKV::undo_last_insert(const WalTxInsert* wal_insert) {
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
-      Log::Warn("Undo insert failed, workerId={}, startTs={}", cr::TxManager::My().worker_id_,
-                cr::TxManager::My().active_tx_.start_ts_);
+      Log::Warn("Undo insert failed, workerId={}, startTs={}", CoroEnv::CurTxMgr().worker_id_,
+                CoroEnv::CurTxMgr().ActiveTx().start_ts_);
     }
   }
 }
@@ -515,13 +520,13 @@ void TransactionKV::undo_last_update(const WalTxUpdate* wal_update) {
       LEAN_DCHECK(x_iter->Valid(),
                   "Cannot find the updated key in btree, workerId={}, "
                   "startTs={}, key={}",
-                  cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                  CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_,
                   key.ToString());
 
       auto mut_raw_val = x_iter->MutableVal();
       auto& tuple = *Tuple::From(mut_raw_val.Data());
       LEAN_DCHECK(!tuple.IsWriteLocked(), "Tuple is write locked, workerId={}, startTs={}, key={}",
-                  cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                  CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_,
                   key.ToString());
       if (tuple.format_ == TupleFormat::kFat) {
         FatTuple::From(mut_raw_val.Data())->UndoLastUpdate();
@@ -535,7 +540,8 @@ void TransactionKV::undo_last_update(const WalTxUpdate* wal_update) {
 
         // 1. copy the new value to buffer
         auto delta_size = wal_update->GetDeltaSize();
-        uint8_t buff[delta_size];
+        SmallBuffer256 tmp_buf(delta_size);
+        auto* buff = tmp_buf.Data();
         std::memcpy(buff, xor_data, delta_size);
 
         // 2. calculate the old value based on xor result and old value
@@ -547,8 +553,8 @@ void TransactionKV::undo_last_update(const WalTxUpdate* wal_update) {
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
-      Log::Warn("Undo update failed, workerId={}, startTs={}", cr::TxManager::My().worker_id_,
-                cr::TxManager::My().active_tx_.start_ts_);
+      Log::Warn("Undo update failed, workerId={}, startTs={}", CoroEnv::CurTxMgr().worker_id_,
+                CoroEnv::CurTxMgr().ActiveTx().start_ts_);
     }
   }
 }
@@ -562,7 +568,7 @@ void TransactionKV::undo_last_remove(const WalTxRemove* wal_remove) {
       LEAN_DCHECK(x_iter->Valid(),
                   "Cannot find the tombstone of removed key, workerId={}, "
                   "startTs={}, removedKey={}",
-                  cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                  CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_,
                   removed_key.ToString());
 
       // resize the current slot to store the removed tuple
@@ -574,7 +580,7 @@ void TransactionKV::undo_last_remove(const WalTxRemove* wal_remove) {
                     "Failed to extend btree node slot to store the "
                     "recovered chained tuple, workerId={}, startTs={}, "
                     "removedKey={}, curRawValSize={}, chainedTupleSize={}",
-                    cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                    CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_,
                     removed_key.ToString(), cur_raw_val.size(), chained_tuple_size);
       } else if (cur_raw_val.size() > chained_tuple_size) {
         x_iter->ShortenWithoutCompaction(chained_tuple_size);
@@ -588,8 +594,8 @@ void TransactionKV::undo_last_remove(const WalTxRemove* wal_remove) {
       JUMPMU_RETURN;
     }
     JUMPMU_CATCH() {
-      Log::Warn("Undo remove failed, workerId={}, startTs={}", cr::TxManager::My().worker_id_,
-                cr::TxManager::My().active_tx_.start_ts_);
+      Log::Warn("Undo remove failed, workerId={}, startTs={}", CoroEnv::CurTxMgr().worker_id_,
+                CoroEnv::CurTxMgr().ActiveTx().start_ts_);
     }
   }
 }
@@ -616,9 +622,9 @@ bool TransactionKV::UpdateInFatTuple(BTreeIterMut* x_iter, Slice key,
 
     auto perform_update = [&]() {
       fat_tuple->Append(update_desc);
-      fat_tuple->worker_id_ = cr::TxManager::My().worker_id_;
-      fat_tuple->tx_id_ = cr::ActiveTx().start_ts_;
-      fat_tuple->command_id_ = cr::TxManager::My().command_id_++;
+      fat_tuple->worker_id_ = CoroEnv::CurTxMgr().worker_id_;
+      fat_tuple->tx_id_ = CoroEnv::CurTxMgr().ActiveTx().start_ts_;
+      fat_tuple->command_id_ = CoroEnv::CurTxMgr().command_id_++;
       update_call_back(fat_tuple->GetMutableValue());
       LEAN_DCHECK(fat_tuple->payload_capacity_ >= fat_tuple->payload_size_);
     };
@@ -668,7 +674,7 @@ SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
   }
 
   guarded_node.ToExclusiveMayJump();
-  TXID sys_tx_id = utils::tls_store->MvccManager()->AllocSysTxTs();
+  TXID sys_tx_id = CoroEnv::CurStore()->MvccManager()->AllocSysTxTs();
   guarded_node.SyncSystemTxId(sys_tx_id);
 
   for (uint16_t i = 0; i < guarded_node->num_slots_; i++) {
@@ -698,7 +704,7 @@ void TransactionKV::GarbageCollect(const uint8_t* version_data, WORKERID version
   const auto& version = *RemoveVersion::From(version_data);
 
   // Delete tombstones caused by transactions below cc_.local_wmk_of_all_tx_.
-  if (version_tx_id <= cr::TxManager::My().cc_.local_wmk_of_all_tx_) {
+  if (version_tx_id <= CoroEnv::CurTxMgr().cc_.local_wmk_of_all_tx_) {
     LEAN_DLOG("Delete tombstones caused by transactions below "
               "cc_.local_wmk_of_all_tx_, versionWorkerId={}, versionTxId={}",
               version_worker_id, version_tx_id);
@@ -782,13 +788,13 @@ void TransactionKV::GarbageCollect(const uint8_t* version_data, WORKERID version
     if (chained_tuple.worker_id_ == version_worker_id && chained_tuple.tx_id_ == version_tx_id &&
         chained_tuple.is_tombstone_) {
 
-      LEAN_DCHECK(chained_tuple.tx_id_ > cr::TxManager::My().cc_.local_wmk_of_all_tx_,
+      LEAN_DCHECK(chained_tuple.tx_id_ > CoroEnv::CurTxMgr().cc_.local_wmk_of_all_tx_,
                   "The removedKey is under cc_.local_wmk_of_all_tx_, should "
                   "not happen, cc_.local_wmk_of_all_tx_={}, "
                   "versionWorkerId={}, versionTxId={}, removedKey={}",
-                  cr::TxManager::My().cc_.local_wmk_of_all_tx_, version_worker_id, version_tx_id,
+                  CoroEnv::CurTxMgr().cc_.local_wmk_of_all_tx_, version_worker_id, version_tx_id,
                   removed_key.ToString());
-      if (chained_tuple.tx_id_ <= cr::TxManager::My().cc_.local_wmk_of_short_tx_) {
+      if (chained_tuple.tx_id_ <= CoroEnv::CurTxMgr().cc_.local_wmk_of_short_tx_) {
         LEAN_DLOG("Move the removedKey to graveyard, versionWorkerId={}, "
                   "versionTxId={}, removedKey={}",
                   version_worker_id, version_tx_id, removed_key.ToString());
@@ -814,7 +820,7 @@ void TransactionKV::GarbageCollect(const uint8_t* version_data, WORKERID version
         Log::Fatal("Meet a remove version upper than cc_.local_wmk_of_short_tx_, "
                    "should not happen, cc_.local_wmk_of_short_tx_={}, "
                    "versionWorkerId={}, versionTxId={}, removedKey={}",
-                   cr::TxManager::My().cc_.local_wmk_of_short_tx_, version_worker_id, version_tx_id,
+                   CoroEnv::CurTxMgr().cc_.local_wmk_of_short_tx_, version_worker_id, version_tx_id,
                    removed_key.ToString());
       }
     } else {
@@ -860,7 +866,7 @@ void TransactionKV::Unlock(const uint8_t* wal_entry_ptr) {
     auto x_iter = NewBTreeIterMut();
     x_iter->SeekToEqual(key);
     LEAN_DCHECK(x_iter->Valid(), "Cannot find the key in btree, workerId={}, startTs={}, key={}",
-                cr::TxManager::My().worker_id_, cr::TxManager::My().active_tx_.start_ts_,
+                CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_,
                 key.ToString());
     auto& tuple = *Tuple::From(x_iter->MutableVal().Data());
     ENSURE(tuple.format_ == TupleFormat::kChained);
