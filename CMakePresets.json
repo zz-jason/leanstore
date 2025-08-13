@@ -46,7 +46,17 @@
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/debug_tsan",
                 "ENABLE_TSAN": "ON",
+                "ENABLE_COROUTINE": "OFF",
                 "ENABLE_COVERAGE": "ON"
+            }
+        },
+        {
+            "name": "debug_coro",
+            "inherits": "base_debug",
+            "binaryDir": "${sourceDir}/build/debug_coro",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/debug_coro",
+                "ENABLE_COROUTINE": "ON"
             }
         },
         {

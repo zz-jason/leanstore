@@ -25,6 +25,9 @@ public:
   static CoroExecutor* CurCoroExec();
   static Coroutine* CurCoro();
 
+  static void SetCurLogging(cr::Logging* logging);
+  static cr::Logging& CurLogging();
+
   static void SetCurTxMgr(cr::TxManager* tx_mgr);
   static cr::TxManager& CurTxMgr();
   static bool HasTxMgr();

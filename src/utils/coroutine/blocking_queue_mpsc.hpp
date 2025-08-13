@@ -17,7 +17,7 @@ public:
   BlockingQueueMpsc(const BlockingQueueMpsc&) = delete;
   BlockingQueueMpsc& operator=(const BlockingQueueMpsc&) = delete;
 
-  void PushBack(T value) {
+  void PushBack(T&& value) {
     std::unique_lock<std::mutex> lock(mutex_);
     not_full_.wait(lock, [this]() { return size_ < capacity_ || stopped_; });
 

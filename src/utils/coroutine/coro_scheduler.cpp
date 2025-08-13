@@ -1,13 +1,13 @@
 #include "utils/coroutine/coro_scheduler.hpp"
 
 #include "leanstore/concurrency/tx_manager.hpp"
+#include "leanstore/utils/log.hpp"
 #include "utils/coroutine/auto_commit_protocol.hpp"
 #include "utils/coroutine/coro_future.hpp"
+#include "utils/coroutine/mvcc_manager.hpp"
 
-#include <filesystem>
 #include <format>
 #include <memory>
-#include <utility>
 #include <vector>
 
 namespace leanstore {
@@ -15,8 +15,7 @@ namespace leanstore {
 CoroScheduler::CoroScheduler(LeanStore* store, int64_t num_threads)
     : store_(store),
       num_threads_(num_threads),
-      coro_executors_(num_threads),
-      tx_mgrs_() {
+      coro_executors_(num_threads) {
 
   // create commit protocols for each commit group
   auto commit_group_size = store ? store->store_option_->commit_group_size_ : 0;
@@ -52,6 +51,17 @@ void CoroScheduler::InitCoroExecutors() {
     while (!executor->IsReady()) {
     }
   }
+
+  // set thread-local logging for each executor
+  if (store_ != nullptr) {
+    auto& loggings = store_->MvccManager()->Loggings();
+    LEAN_DCHECK(loggings.size() == coro_executors_.size(),
+                "Number of loggings must match number of executors");
+    for (auto i = 0u; i < loggings.size(); i++) {
+      auto* logging = loggings[i].get();
+      Submit([logging]() { CoroEnv::SetCurLogging(logging); }, i)->Wait();
+    }
+  }
 }
 
 void CoroScheduler::DeinitCoroExecutors() {
@@ -67,67 +77,6 @@ void CoroScheduler::DeinitCoroExecutors() {
   // Wait for all threads to finish
   for (auto& executor : coro_executors_) {
     executor->Join();
-  }
-}
-
-void CoroScheduler::InitWorkerCtxs() {
-  if (!store_->store_option_->enable_wal_) {
-    Log::Info("Skipping worker context initialization, WAL is disabled");
-    return;
-  }
-
-  ScopedTimer timer([this](double elapsed_ms) {
-    Log::Info("WorkerContexts inited, num_threads={}, elapsed={}ms", num_threads_, elapsed_ms);
-  });
-
-  tx_mgrs_.reserve(coro_executors_.size());
-  for (auto i = 0u; i < coro_executors_.size(); i++) {
-    tx_mgrs_.emplace_back(std::make_unique<cr::TxManager>(i, tx_mgrs_, store_));
-  }
-
-  std::vector<std::shared_ptr<CoroFuture<void>>> futures;
-  for (auto i = 0u; i < coro_executors_.size(); i++) {
-    auto* tx_mgr = tx_mgrs_[i].get();
-    auto coro_job = [tx_mgr]() { CoroEnv::SetCurTxMgr(tx_mgr); };
-    futures.emplace_back(Submit(std::move(coro_job), i));
-  }
-
-  for (auto& future : futures) {
-    future->Wait();
-  }
-}
-
-void CoroScheduler::InitLogging() {
-  if (!store_->store_option_->enable_wal_) {
-    Log::Info("Skipping logging initialization, WAL is disabled");
-    return;
-  }
-
-  std::string wal_dir = store_->GetWalDir();
-  ScopedTimer timer([&](double elapsed_ms) {
-    Log::Info("Logging inited, num_threads={}, dir={}, elapsed={}ms", num_threads_, wal_dir,
-              elapsed_ms);
-  });
-
-  // create wal dir if not exists
-  if (!std::filesystem::exists(wal_dir)) {
-    std::filesystem::create_directories(wal_dir);
-    Log::Info("Created WAL directory: {}", wal_dir);
-  } else {
-    Log::Info("WAL directory already exists: {}", wal_dir);
-  }
-
-  std::vector<std::shared_ptr<CoroFuture<void>>> futures;
-  for (auto i = 0u; i < coro_executors_.size(); i++) {
-    auto logging_init_job = [i, &wal_dir]() {
-      std::string file_name = std::format(CoroExecutor::kCoroExecNamePattern, i);
-      std::string file_path = std::format("{}/{}.wal", wal_dir, file_name);
-      CoroEnv::CurTxMgr().GetLogging().InitWalFd(file_path);
-    };
-    futures.emplace_back(Submit(std::move(logging_init_job), i));
-  }
-  for (auto& future : futures) {
-    future->Wait();
   }
 }
 

@@ -10,12 +10,12 @@
 namespace leanstore {
 
 bool AutoCommitProtocol::LogFlush() {
-  return CoroEnv::CurTxMgr().GetLogging().CoroFlush();
+  return CoroEnv::CurLogging().CoroFlush();
 }
 
 void AutoCommitProtocol::CommitSysTx() {
   auto& cur_worker_ctx = CoroEnv::CurTxMgr();
-  auto sys_tx_written = cur_worker_ctx.GetLogging().GetSysTxWrittern();
+  auto sys_tx_written = CoroEnv::CurLogging().GetSysTxWrittern();
   cur_worker_ctx.UpdateLastCommittedSysTx(sys_tx_written);
 }
 
@@ -68,7 +68,7 @@ void AutoCommitProtocol::TrySyncLastCommittedTx() {
 
 TXID AutoCommitProtocol::DetermineCommitableUsrTx() {
   TXID max_commit_ts = 0;
-  auto& logging = CoroEnv::CurTxMgr().GetLogging();
+  auto& logging = CoroEnv::CurLogging();
   auto& tx_queue = logging.tx_to_commit_;
 
   auto i = 0u;
@@ -90,11 +90,11 @@ TXID AutoCommitProtocol::DetermineCommitableUsrTx() {
 
 TXID AutoCommitProtocol::DetermineCommitableUsrTxRfA() {
   TXID max_commit_ts = 0;
-  for (auto& tx : CoroEnv::CurTxMgr().GetLogging().rfa_tx_to_commit_) {
+  for (auto& tx : CoroEnv::CurLogging().rfa_tx_to_commit_) {
     max_commit_ts = std::max<TXID>(max_commit_ts, tx.commit_ts_);
     LEAN_DLOG("RFA Transaction committed, startTs={}, commitTs={}", tx.start_ts_, tx.commit_ts_);
   }
-  CoroEnv::CurTxMgr().GetLogging().rfa_tx_to_commit_.clear();
+  CoroEnv::CurLogging().rfa_tx_to_commit_.clear();
   return max_commit_ts;
 }
 

@@ -74,7 +74,7 @@ CoroExecutor::~CoroExecutor() {
 }
 
 void CoroExecutor::ThreadLoop() {
-  constexpr int kCoroutineRunsLimit = 1;
+  static constexpr int kCoroutineRunsLimit = 1;
   std::unique_ptr<Coroutine> coro{nullptr};
   int user_task_runs = 0;
 
@@ -95,16 +95,15 @@ void CoroExecutor::ThreadLoop() {
 
     if (coro->GetState() == CoroState::kWaitingIo && !coro->IsIoCompleted()) {
       EnqueueCoro(std::move(coro));
-      continue;
-    }
+    } else {
+      // Run the coro
+      RunCoroutine(coro.get());
 
-    // Run the coro
-    RunCoroutine(coro.get());
-
-    // Check coro status after ThreadLoop is resuming
-    assert(coro->IsWaiting() || coro->IsDone());
-    if (coro->IsWaiting()) {
-      EnqueueCoro(std::move(coro));
+      // Check coro status after ThreadLoop is resuming
+      assert(coro->IsWaiting() || coro->IsDone());
+      if (coro->IsWaiting()) {
+        EnqueueCoro(std::move(coro));
+      }
     }
 
     // Run system tasks if any
