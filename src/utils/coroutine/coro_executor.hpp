@@ -127,7 +127,7 @@ private:
     pthread_setname_np(pthread_self(), thread_name.c_str());
     s_current_thread = this;
     JumpContext::SetCurrent(&def_jump_context_);
-    utils::tls_store = store_;
+    CoroEnv::SetCurStore(store_);
 
     ready_ = true;
     Log::Info("Coro executor inited, thread_name={}", thread_name);

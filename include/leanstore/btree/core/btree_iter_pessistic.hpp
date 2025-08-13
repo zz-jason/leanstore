@@ -337,7 +337,7 @@ inline void BTreeIterPessistic::Next() {
       func_clean_up_ = nullptr;
     }
 
-    if (utils::tls_store->store_option_->enable_optimistic_scan_ && leaf_pos_in_parent_ != -1) {
+    if (CoroEnv::CurStore()->store_option_->enable_optimistic_scan_ && leaf_pos_in_parent_ != -1) {
       JUMPMU_TRY() {
         if ((leaf_pos_in_parent_ + 1) <= guarded_parent_->num_slots_) {
           int32_t next_leaf_pos = leaf_pos_in_parent_ + 1;
@@ -435,7 +435,7 @@ inline void BTreeIterPessistic::Prev() {
       func_clean_up_ = nullptr;
     }
 
-    if (utils::tls_store->store_option_->enable_optimistic_scan_ && leaf_pos_in_parent_ != -1) {
+    if (CoroEnv::CurStore()->store_option_->enable_optimistic_scan_ && leaf_pos_in_parent_ != -1) {
       JUMPMU_TRY() {
         if ((leaf_pos_in_parent_ - 1) >= 0) {
           int32_t next_leaf_pos = leaf_pos_in_parent_ - 1;

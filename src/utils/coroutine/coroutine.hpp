@@ -83,6 +83,14 @@ public:
     return state_;
   }
 
+  void SetTxMgr(cr::TxManager* tx_mgr) {
+    tx_mgr_ = tx_mgr;
+  }
+
+  cr::TxManager* GetTxMgr() const {
+    return tx_mgr_;
+  }
+
   void SetTryLockFunc(std::function<bool()> try_lock_func) {
     try_lock_func_ = std::move(try_lock_func);
   }
@@ -140,6 +148,9 @@ private:
   /// Function to be executed by the coroutine.
   /// This is a callable object that contains the logic of the coroutine.
   CoroFunc func_ = nullptr;
+
+  /// Pointer to the transaction manager associated with this coroutine.
+  cr::TxManager* tx_mgr_ = nullptr;
 
   /// Try lock function for the coroutine.
   std::function<bool()> try_lock_func_ = nullptr;

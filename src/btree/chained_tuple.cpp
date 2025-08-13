@@ -7,7 +7,7 @@ namespace leanstore::storage::btree {
 
 std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(Slice payload,
                                                            ValCallback callback) const {
-  if (cr::TxManager::My().cc_.VisibleForMe(worker_id_, tx_id_)) {
+  if (CoroEnv::CurTxMgr().cc_.VisibleForMe(worker_id_, tx_id_)) {
     if (is_tombstone_) {
       return {OpCode::kNotFound, 1};
     }
@@ -32,7 +32,7 @@ std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(Slice payload,
 
   uint16_t versions_read = 1;
   while (true) {
-    bool found = cr::TxManager::My().cc_.GetVersion(
+    bool found = CoroEnv::CurTxMgr().cc_.GetVersion(
         newer_worker_id, newer_tx_id, newer_command_id,
         [&](const uint8_t* version_buf, uint64_t version_size) {
           auto& version = *reinterpret_cast<const Version*>(version_buf);
@@ -76,12 +76,12 @@ std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(Slice payload,
       Log::Error("Not found in the version tree, workerId={}, startTs={}, "
                  "versionsRead={}, newerWorkerId={}, newerTxId={}, "
                  "newerCommandId={}",
-                 cr::TxManager::My().worker_id_, cr::ActiveTx().start_ts_, versions_read,
-                 newer_worker_id, newer_tx_id, newer_command_id);
+                 CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_,
+                 versions_read, newer_worker_id, newer_tx_id, newer_command_id);
       return {OpCode::kNotFound, versions_read};
     }
 
-    if (cr::TxManager::My().cc_.VisibleForMe(newer_worker_id, newer_tx_id)) {
+    if (CoroEnv::CurTxMgr().cc_.VisibleForMe(newer_worker_id, newer_tx_id)) {
       callback(Slice(value_buf.get(), value_size));
       return {OpCode::kOK, versions_read};
     }
@@ -98,7 +98,7 @@ void ChainedTuple::Update(BTreeIterMut* x_iter, Slice key, MutValCallback update
   // Move the newest tuple to the history version tree.
   auto tree_id = x_iter->btree_.tree_id_;
   auto curr_command_id =
-      cr::TxManager::My().cc_.PutVersion(tree_id, false, version_size, [&](uint8_t* version_buf) {
+      CoroEnv::CurTxMgr().cc_.PutVersion(tree_id, false, version_size, [&](uint8_t* version_buf) {
         auto& update_version =
             *new (version_buf) UpdateVersion(worker_id_, tx_id_, command_id_, true);
         std::memcpy(update_version.payload_, &update_desc, update_desc.Size());
@@ -110,8 +110,8 @@ void ChainedTuple::Update(BTreeIterMut* x_iter, Slice key, MutValCallback update
     auto mut_raw_val = x_iter->MutableVal();
     auto user_val_size = mut_raw_val.Size() - sizeof(ChainedTuple);
     update_call_back(MutableSlice(payload_, user_val_size));
-    worker_id_ = cr::TxManager::My().worker_id_;
-    tx_id_ = cr::ActiveTx().start_ts_;
+    worker_id_ = CoroEnv::CurTxMgr().worker_id_;
+    tx_id_ = CoroEnv::CurTxMgr().ActiveTx().start_ts_;
     command_id_ = curr_command_id;
   };
 

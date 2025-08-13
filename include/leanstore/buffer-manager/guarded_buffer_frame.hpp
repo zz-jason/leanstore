@@ -8,6 +8,7 @@
 #include "leanstore/sync/hybrid_guard.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/utils/log.hpp"
+#include "utils/coroutine/coro_env.hpp"
 
 #include <utility>
 
@@ -153,39 +154,39 @@ public:
     LEAN_DCHECK(bf_ != nullptr);
 
     // update last writer worker
-    bf_->header_.last_writer_worker_ = cr::TxManager::My().worker_id_;
+    bf_->header_.last_writer_worker_ = CoroEnv::CurTxMgr().worker_id_;
 
     // update system transaction id
     bf_->page_.sys_tx_id_ = sys_tx_id;
 
     // update the maximum system transaction id written by the worker
-    cr::TxManager::My().logging_.UpdateSysTxToHarden(sys_tx_id);
+    CoroEnv::CurTxMgr().logging_.UpdateSysTxToHarden(sys_tx_id);
   }
 
   /// Check remote dependency
   /// TODO: don't sync on temporary table pages like history trees
   void CheckRemoteDependency() {
     // skip if not running inside a worker
-    if (!cr::TxManager::InWorker()) {
+    if (!CoroEnv::HasTxMgr()) {
       return;
     }
 
-    if (bf_->header_.last_writer_worker_ != cr::TxManager::My().worker_id_ &&
-        bf_->page_.sys_tx_id_ > cr::ActiveTx().max_observed_sys_tx_id_) {
-      cr::ActiveTx().max_observed_sys_tx_id_ = bf_->page_.sys_tx_id_;
-      cr::ActiveTx().has_remote_dependency_ = true;
+    if (bf_->header_.last_writer_worker_ != CoroEnv::CurTxMgr().worker_id_ &&
+        bf_->page_.sys_tx_id_ > CoroEnv::CurTxMgr().ActiveTx().max_observed_sys_tx_id_) {
+      CoroEnv::CurTxMgr().ActiveTx().max_observed_sys_tx_id_ = bf_->page_.sys_tx_id_;
+      CoroEnv::CurTxMgr().ActiveTx().has_remote_dependency_ = true;
     }
   }
 
   template <typename WT, typename... Args>
   cr::WalPayloadHandler<WT> ReserveWALPayload(uint64_t wal_size, Args&&... args) {
-    LEAN_DCHECK(cr::ActiveTx().is_durable_);
+    LEAN_DCHECK(CoroEnv::CurTxMgr().ActiveTx().is_durable_);
     LEAN_DCHECK(guard_.state_ == GuardState::kExclusivePessimistic);
 
     const auto page_id = bf_->header_.page_id_;
     const auto tree_id = bf_->page_.btree_id_;
     wal_size = ((wal_size - 1) / 8 + 1) * 8;
-    auto handler = cr::TxManager::My().logging_.ReserveWALEntryComplex<WT, Args...>(
+    auto handler = CoroEnv::CurTxMgr().logging_.ReserveWALEntryComplex<WT, Args...>(
         sizeof(WT) + wal_size, page_id, bf_->page_.psn_, tree_id, std::forward<Args>(args)...);
 
     return handler;

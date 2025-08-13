@@ -7,6 +7,7 @@
 #include "leanstore/units.hpp"
 #include "leanstore/utils/portable.hpp"
 #include "tuple.hpp"
+#include "utils/coroutine/coro_env.hpp"
 #include "utils/coroutine/mvcc_manager.hpp"
 
 namespace leanstore::storage::btree {
@@ -63,10 +64,10 @@ public:
   std::tuple<OpCode, uint16_t> GetVisibleTuple(Slice payload, ValCallback callback) const;
 
   void UpdateStats() {
-    if (cr::TxManager::My().cc_.VisibleForAll(tx_id_) ||
+    if (CoroEnv::CurTxMgr().cc_.VisibleForAll(tx_id_) ||
         oldest_tx_ !=
             static_cast<uint16_t>(
-                cr::TxManager::My().store_->MvccManager()->GlobalWmkInfo().oldest_active_tx_ &
+                CoroEnv::CurTxMgr().store_->MvccManager()->GlobalWmkInfo().oldest_active_tx_ &
                 0xFFFF)) {
       oldest_tx_ = 0;
       total_updates_ = 0;
@@ -76,13 +77,14 @@ public:
   }
 
   bool ShouldConvertToFatTuple() {
+    auto& tx_mgr = CoroEnv::CurTxMgr();
+    auto* store = tx_mgr.store_;
+
     bool command_valid = command_id_ != kInvalidCommandid;
-    bool has_long_running_olap =
-        cr::TxManager::My().store_->MvccManager()->GlobalWmkInfo().HasActiveLongRunningTx();
-    bool frequently_updated =
-        total_updates_ > cr::TxManager::My().store_->store_option_->worker_threads_;
+    bool has_long_running_olap = store->MvccManager()->GlobalWmkInfo().HasActiveLongRunningTx();
+    bool frequently_updated = total_updates_ > store->store_option_->worker_threads_;
     bool recent_updated_by_others =
-        worker_id_ != cr::TxManager::My().worker_id_ || tx_id_ != cr::ActiveTx().start_ts_;
+        worker_id_ != tx_mgr.worker_id_ || tx_id_ != tx_mgr.ActiveTx().start_ts_;
     return command_valid && has_long_running_olap && recent_updated_by_others && frequently_updated;
   }
 

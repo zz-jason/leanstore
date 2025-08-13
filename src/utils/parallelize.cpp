@@ -2,6 +2,7 @@
 
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
+#include "utils/coroutine/coro_env.hpp"
 
 #include <functional>
 #include <thread>
@@ -12,7 +13,7 @@ namespace leanstore::utils {
 void Parallelize::Range(
     uint64_t num_threads, uint64_t num_jobs,
     std::function<void(uint64_t thread_id, uint64_t job_begin, uint64_t job_end)> job_handler) {
-  auto* store = tls_store;
+  auto* store = CoroEnv::CurStore();
   std::vector<std::thread> threads;
   const uint64_t jobs_per_thread = num_jobs / num_threads;
   LEAN_DCHECK(jobs_per_thread > 0, "Jobs per thread must be > 0");
@@ -26,7 +27,7 @@ void Parallelize::Range(
 
     threads.emplace_back(
         [&](uint64_t begin, uint64_t end) {
-          tls_store = store;
+          CoroEnv::SetCurStore(store);
           job_handler(thread_id, begin, end);
         },
         begin, end);
@@ -40,7 +41,7 @@ void Parallelize::Range(
 
 void Parallelize::ParallelRange(
     uint64_t num_jobs, std::function<void(uint64_t job_begin, uint64_t job_end)>&& job_handler) {
-  auto* store = tls_store;
+  auto* store = CoroEnv::CurStore();
   std::vector<std::thread> threads;
   uint64_t num_thread = std::thread::hardware_concurrency();
   uint64_t jobs_per_thread = num_jobs / num_thread;
@@ -63,7 +64,7 @@ void Parallelize::ParallelRange(
     num_proceed_tasks = end;
     threads.emplace_back(
         [&](uint64_t begin, uint64_t end) {
-          tls_store = store;
+          CoroEnv::SetCurStore(store);
           job_handler(begin, end);
         },
         begin, end);

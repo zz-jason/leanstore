@@ -30,8 +30,8 @@ void CommitTree::AppendCommitLog(TXID start_ts, TXID commit_ts) {
                           commit_log_.size(), capacity_));
   storage::ScopedHybridGuard x_guard(latch_, storage::LatchMode::kExclusivePessimistic);
   commit_log_.push_back({commit_ts, start_ts});
-  LEAN_DLOG("Commit log appended, workerId={}, startTs={}, commitTs={}", TxManager::My().worker_id_,
-            start_ts, commit_ts);
+  LEAN_DLOG("Commit log appended, workerId={}, startTs={}, commitTs={}",
+            CoroEnv::CurTxMgr().worker_id_, start_ts, commit_ts);
 }
 
 void CommitTree::CompactCommitLog() {
@@ -46,9 +46,9 @@ void CommitTree::CompactCommitLog() {
   // workers can see the latest commitTs of this worker.
   set.insert(commit_log_[commit_log_.size() - 1]);
 
-  const WORKERID my_worker_id = TxManager::My().worker_id_;
-  auto& tx_mgrs = TxManager::My().tx_mgrs_;
-  for (WORKERID i = 0; i < TxManager::My().tx_mgrs_.size(); i++) {
+  const WORKERID my_worker_id = CoroEnv::CurTxMgr().worker_id_;
+  auto& tx_mgrs = CoroEnv::CurTxMgr().tx_mgrs_;
+  for (WORKERID i = 0; i < CoroEnv::CurTxMgr().tx_mgrs_.size(); i++) {
     if (i == my_worker_id) {
       continue;
     }
@@ -75,7 +75,7 @@ void CommitTree::CompactCommitLog() {
 
   DEBUG_BLOCK() {
     LEAN_DLOG("Commit log cleaned up, workerId={}, commit_log_.size()={}",
-              TxManager::My().worker_id_, commit_log_.size());
+              CoroEnv::CurTxMgr().worker_id_, commit_log_.size());
   }
 }
 
@@ -116,23 +116,23 @@ std::optional<std::pair<TXID, TXID>> CommitTree::LcbUnlocked(TXID start_ts) {
 COMMANDID ConcurrencyControl::PutVersion(TREEID tree_id, bool is_remove_command,
                                          uint64_t version_size,
                                          std::function<void(uint8_t*)> put_call_back) {
-  auto& cur_worker = TxManager::My();
-  auto command_id = cur_worker.command_id_++;
+  auto& tx_mgr = CoroEnv::CurTxMgr();
+  auto command_id = tx_mgr.command_id_++;
   if (is_remove_command) {
     command_id |= kRemoveCommandMark;
   }
-  history_storage_.PutVersion(cur_worker.active_tx_.start_ts_, command_id, tree_id,
-                              is_remove_command, version_size, put_call_back);
+  history_storage_.PutVersion(tx_mgr.ActiveTx().start_ts_, command_id, tree_id, is_remove_command,
+                              version_size, put_call_back);
   return command_id;
 }
 
 bool ConcurrencyControl::VisibleForMe(WORKERID worker_id, TXID tx_id) {
   // visible if writtern by me
-  if (TxManager::My().worker_id_ == worker_id) {
+  if (CoroEnv::CurTxMgr().worker_id_ == worker_id) {
     return true;
   }
 
-  switch (ActiveTx().tx_isolation_level_) {
+  switch (CoroEnv::CurTxMgr().ActiveTx().tx_isolation_level_) {
   case IsolationLevel::kSnapshotIsolation:
   case IsolationLevel::kSerializable: {
     // global_wmk_of_all_tx_ is copied from global watermark info at the beginning of each
@@ -145,7 +145,7 @@ bool ConcurrencyControl::VisibleForMe(WORKERID worker_id, TXID tx_id) {
 
     // If we have queried the LCB on the target worker and cached the value in lcb_cache_val_, we
     // can use it to check the visibility directly.
-    if (lcb_cache_key_[worker_id] == ActiveTx().start_ts_) {
+    if (lcb_cache_key_[worker_id] == CoroEnv::CurTxMgr().ActiveTx().start_ts_) {
       return lcb_cache_val_[worker_id] >= tx_id;
     }
 
@@ -156,9 +156,10 @@ bool ConcurrencyControl::VisibleForMe(WORKERID worker_id, TXID tx_id) {
     }
 
     // Now we need to query LCB on the target worker and update the local cache.
-    TXID largest_visible_tx_id = Other(worker_id).commit_tree_.Lcb(ActiveTx().start_ts_);
+    TXID largest_visible_tx_id =
+        Other(worker_id).commit_tree_.Lcb(CoroEnv::CurTxMgr().ActiveTx().start_ts_);
     if (largest_visible_tx_id) {
-      lcb_cache_key_[worker_id] = ActiveTx().start_ts_;
+      lcb_cache_key_[worker_id] = CoroEnv::CurTxMgr().ActiveTx().start_ts_;
       lcb_cache_val_[worker_id] = largest_visible_tx_id;
       return largest_visible_tx_id >= tx_id;
     }
@@ -167,7 +168,7 @@ bool ConcurrencyControl::VisibleForMe(WORKERID worker_id, TXID tx_id) {
   }
   default: {
     Log::Fatal("Unsupported isolation level: {}",
-               static_cast<uint64_t>(ActiveTx().tx_isolation_level_));
+               static_cast<uint64_t>(CoroEnv::CurTxMgr().ActiveTx().tx_isolation_level_));
   }
   }
 
@@ -195,20 +196,20 @@ void ConcurrencyControl::GarbageCollection() {
   if (cleaned_wmk_of_short_tx_ <= local_wmk_of_all_tx_) {
     LEAN_DLOG(
         "Garbage collect history tree, workerId={}, fromTxId={}, toTxId(local_wmk_of_all_tx_)={}",
-        TxManager::My().worker_id_, 0, local_wmk_of_all_tx_);
+        CoroEnv::CurTxMgr().worker_id_, 0, local_wmk_of_all_tx_);
     history_storage_.PurgeVersions(
         0, local_wmk_of_all_tx_,
         [&](const TXID version_tx_id, const TREEID tree_id, const uint8_t* version_data,
             uint64_t version_size [[maybe_unused]], const bool called_before) {
-          store_->tree_registry_->GarbageCollect(tree_id, version_data, TxManager::My().worker_id_,
-                                                 version_tx_id, called_before);
+          store_->tree_registry_->GarbageCollect(
+              tree_id, version_data, CoroEnv::CurTxMgr().worker_id_, version_tx_id, called_before);
         },
         0);
     cleaned_wmk_of_short_tx_ = local_wmk_of_all_tx_ + 1;
   } else {
     LEAN_DLOG("Skip garbage collect history tree, workerId={}, "
               "cleaned_wmk_of_short_tx_={}, local_wmk_of_all_tx_={}",
-              TxManager::My().worker_id_, cleaned_wmk_of_short_tx_, local_wmk_of_all_tx_);
+              CoroEnv::CurTxMgr().worker_id_, cleaned_wmk_of_short_tx_, local_wmk_of_all_tx_);
   }
 
   // move tombstones to graveyard
@@ -217,24 +218,24 @@ void ConcurrencyControl::GarbageCollection() {
       cleaned_wmk_of_short_tx_ <= local_wmk_of_short_tx_) {
     LEAN_DLOG("Garbage collect graveyard, workerId={}, fromTxId={}, "
               "toTxId(local_wmk_of_short_tx_)={}",
-              TxManager::My().worker_id_, cleaned_wmk_of_short_tx_, local_wmk_of_short_tx_);
+              CoroEnv::CurTxMgr().worker_id_, cleaned_wmk_of_short_tx_, local_wmk_of_short_tx_);
     history_storage_.VisitRemovedVersions(
         cleaned_wmk_of_short_tx_, local_wmk_of_short_tx_,
         [&](const TXID version_tx_id, const TREEID tree_id, const uint8_t* version_data, uint64_t,
             const bool called_before) {
-          store_->tree_registry_->GarbageCollect(tree_id, version_data, TxManager::My().worker_id_,
-                                                 version_tx_id, called_before);
+          store_->tree_registry_->GarbageCollect(
+              tree_id, version_data, CoroEnv::CurTxMgr().worker_id_, version_tx_id, called_before);
         });
     cleaned_wmk_of_short_tx_ = local_wmk_of_short_tx_ + 1;
   } else {
     LEAN_DLOG("Skip garbage collect graveyard, workerId={}, "
               "cleaned_wmk_of_short_tx_={}, local_wmk_of_short_tx_={}",
-              TxManager::My().worker_id_, cleaned_wmk_of_short_tx_, local_wmk_of_short_tx_);
+              CoroEnv::CurTxMgr().worker_id_, cleaned_wmk_of_short_tx_, local_wmk_of_short_tx_);
   }
 }
 
 ConcurrencyControl& ConcurrencyControl::Other(WORKERID other_worker_id) {
-  return TxManager::My().tx_mgrs_[other_worker_id]->cc_;
+  return CoroEnv::CurTxMgr().tx_mgrs_[other_worker_id]->cc_;
 }
 
 // It calculates and updates the global oldest running transaction id and the
@@ -254,7 +255,7 @@ void ConcurrencyControl::UpdateGlobalWmks() {
 
   auto meet_gc_probability =
       store_->store_option_->enable_eager_gc_ ||
-      utils::RandomGenerator::RandU64(0, TxManager::My().tx_mgrs_.size()) == 0;
+      utils::RandomGenerator::RandU64(0, CoroEnv::CurTxMgr().tx_mgrs_.size()) == 0;
   auto perform_gc =
       meet_gc_probability && store_->MvccManager()->GlobalWmkInfo().global_mutex_.try_lock();
   if (!perform_gc) {
@@ -274,8 +275,8 @@ void ConcurrencyControl::UpdateGlobalWmks() {
   TXID oldest_tx_id = std::numeric_limits<TXID>::max();
   TXID newest_long_tx_id = std::numeric_limits<TXID>::min();
   TXID oldest_short_tx_id = std::numeric_limits<TXID>::max();
-  auto& tx_mgrs = TxManager::My().tx_mgrs_;
-  for (WORKERID i = 0; i < TxManager::My().tx_mgrs_.size(); i++) {
+  auto& tx_mgrs = CoroEnv::CurTxMgr().tx_mgrs_;
+  for (WORKERID i = 0; i < CoroEnv::CurTxMgr().tx_mgrs_.size(); i++) {
     auto active_tx_id = tx_mgrs[i]->active_tx_id_.load();
     // Skip transactions not running.
     if (active_tx_id == 0) {
@@ -311,7 +312,7 @@ void ConcurrencyControl::UpdateGlobalWmks() {
   // Update global lower watermarks based on the three transaction ids
   TXID global_wmk_of_all_tx = std::numeric_limits<TXID>::max();
   TXID global_wmk_of_short_tx = std::numeric_limits<TXID>::max();
-  for (WORKERID i = 0; i < TxManager::My().tx_mgrs_.size(); i++) {
+  for (WORKERID i = 0; i < CoroEnv::CurTxMgr().tx_mgrs_.size(); i++) {
     ConcurrencyControl& cc = Other(i);
     if (cc.updated_latest_commit_ts_ == cc.latest_commit_ts_) {
       LEAN_DLOG("Skip updating watermarks for worker {}, no transaction "
@@ -378,7 +379,8 @@ void ConcurrencyControl::UpdateGlobalWmks() {
 void ConcurrencyControl::UpdateLocalWmks() {
   SCOPED_DEFER(LEAN_DLOG("Local watermarks updated, workerId={}, "
                          "local_wmk_of_all_tx_={}, local_wmk_of_short_tx_={}",
-                         TxManager::My().worker_id_, local_wmk_of_all_tx_, local_wmk_of_short_tx_));
+                         CoroEnv::CurTxMgr().worker_id_, local_wmk_of_all_tx_,
+                         local_wmk_of_short_tx_));
   while (true) {
     uint64_t version = wmk_version_.load();
 
@@ -401,7 +403,7 @@ void ConcurrencyControl::UpdateLocalWmks() {
               "Lower watermark of all transactions should be no higher than the lower "
               "watermark of short-running transactions, workerId={}, "
               "local_wmk_of_all_tx_={}, local_wmk_of_short_tx_={}",
-              TxManager::My().worker_id_, local_wmk_of_all_tx_, local_wmk_of_short_tx_);
+              CoroEnv::CurTxMgr().worker_id_, local_wmk_of_all_tx_, local_wmk_of_short_tx_);
 }
 
 } // namespace leanstore::cr

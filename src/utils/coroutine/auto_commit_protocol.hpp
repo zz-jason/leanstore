@@ -6,9 +6,13 @@
 
 namespace leanstore {
 
+class LeanStore;
+
 class AutoCommitProtocol {
 public:
-  AutoCommitProtocol(uint32_t commit_group, uint64_t num_workers) : group_id_(commit_group) {
+  AutoCommitProtocol(LeanStore* store, uint32_t commit_group, uint64_t num_workers)
+      : store_(store),
+        group_id_(commit_group) {
     last_committed_sys_tx_.resize(num_workers, 0);
     last_committed_usr_tx_.resize(num_workers, 0);
   };
@@ -56,6 +60,8 @@ private:
   TXID DetermineCommitableUsrTxRfA();
 
 private:
+  LeanStore* store_;
+
   /// Commit group id, identifies the group of workers that are committing
   /// together.  All workers in the same commit group shares the same
   /// AutoCommitProtocol instance and the same commit acknowledgment.

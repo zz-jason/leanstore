@@ -68,8 +68,8 @@ TEST_F(RecoveryTest, SerializeAndDeserialize) {
 
   // insert some values
   store_->ExecSync(0, [&]() {
-    cr::TxManager::My().StartTx();
-    SCOPED_DEFER(cr::TxManager::My().CommitTx());
+    CoroEnv::CurTxMgr().StartTx();
+    SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
     for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
       EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
@@ -98,8 +98,8 @@ TEST_F(RecoveryTest, SerializeAndDeserialize) {
 
   // lookup the restored btree
   store_->ExecSync(0, [&]() {
-    cr::TxManager::My().StartTx();
-    SCOPED_DEFER(cr::TxManager::My().CommitTx());
+    CoroEnv::CurTxMgr().StartTx();
+    SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
     std::string copied_value;
     auto copy_value_out = [&](Slice val) {
       copied_value = std::string((const char*)val.data(), val.size());
@@ -113,8 +113,8 @@ TEST_F(RecoveryTest, SerializeAndDeserialize) {
   });
 
   store_->ExecSync(1, [&]() {
-    cr::TxManager::My().StartTx();
-    SCOPED_DEFER(cr::TxManager::My().CommitTx());
+    CoroEnv::CurTxMgr().StartTx();
+    SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
     store_->DropTransactionKV(btree_name);
   });
 
@@ -146,12 +146,12 @@ TEST_F(RecoveryTest, RecoverAfterInsert) {
     EXPECT_NE(btree, nullptr);
 
     // insert some values
-    cr::TxManager::My().StartTx();
+    CoroEnv::CurTxMgr().StartTx();
     for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
       EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
     }
-    cr::TxManager::My().CommitTx();
+    CoroEnv::CurTxMgr().CommitTx();
   });
 
   // skip dumpping buffer frames on exit
@@ -172,8 +172,8 @@ TEST_F(RecoveryTest, RecoverAfterInsert) {
 
   // lookup the restored btree
   store_->ExecSync(0, [&]() {
-    cr::TxManager::My().StartTx();
-    SCOPED_DEFER(cr::TxManager::My().CommitTx());
+    CoroEnv::CurTxMgr().StartTx();
+    SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
     std::string copied_value;
     auto copy_value_out = [&](Slice val) {
       copied_value = std::string((const char*)val.data(), val.size());
@@ -233,9 +233,9 @@ TEST_F(RecoveryTest, RecoverAfterUpdate) {
     // insert some values
     for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
-      cr::TxManager::My().StartTx();
+      CoroEnv::CurTxMgr().StartTx();
       EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
-      cr::TxManager::My().CommitTx();
+      CoroEnv::CurTxMgr().CommitTx();
     }
 
     // update all the values
@@ -247,9 +247,9 @@ TEST_F(RecoveryTest, RecoverAfterUpdate) {
       // update each key 3 times
       for (auto j = 1u; j <= 3; j++) {
         val = GenerateValue(j, val_size);
-        cr::TxManager::My().StartTx();
+        CoroEnv::CurTxMgr().StartTx();
         EXPECT_EQ(btree->UpdatePartial(key, update_call_back, *update_desc), OpCode::kOK);
-        cr::TxManager::My().CommitTx();
+        CoroEnv::CurTxMgr().CommitTx();
       }
     }
   });
@@ -272,8 +272,8 @@ TEST_F(RecoveryTest, RecoverAfterUpdate) {
 
   // lookup the restored btree
   store_->ExecSync(0, [&]() {
-    cr::TxManager::My().StartTx();
-    SCOPED_DEFER(cr::TxManager::My().CommitTx());
+    CoroEnv::CurTxMgr().StartTx();
+    SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
     std::string copied_value;
     auto copy_value_out = [&](Slice val) { copied_value = val.ToString(); };
     for (size_t i = 0; i < num_keys; ++i) {
@@ -312,17 +312,17 @@ TEST_F(RecoveryTest, RecoverAfterRemove) {
     // insert some values
     for (size_t i = 0; i < num_keys; ++i) {
       const auto& [key, val] = kv_to_test[i];
-      cr::TxManager::My().StartTx();
+      CoroEnv::CurTxMgr().StartTx();
       EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
-      cr::TxManager::My().CommitTx();
+      CoroEnv::CurTxMgr().CommitTx();
     }
 
     // remove all the values
     for (size_t i = 0; i < num_keys; ++i) {
       auto& [key, val] = kv_to_test[i];
-      cr::TxManager::My().StartTx();
+      CoroEnv::CurTxMgr().StartTx();
       EXPECT_EQ(btree->Remove(key), OpCode::kOK);
-      cr::TxManager::My().CommitTx();
+      CoroEnv::CurTxMgr().CommitTx();
     }
   });
 
@@ -344,8 +344,8 @@ TEST_F(RecoveryTest, RecoverAfterRemove) {
 
   // lookup the restored btree
   store_->ExecSync(0, [&]() {
-    cr::TxManager::My().StartTx();
-    SCOPED_DEFER(cr::TxManager::My().CommitTx());
+    CoroEnv::CurTxMgr().StartTx();
+    SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
     std::string copied_value;
     auto copy_value_out = [&](Slice val) {
       copied_value = std::string((const char*)val.data(), val.size());

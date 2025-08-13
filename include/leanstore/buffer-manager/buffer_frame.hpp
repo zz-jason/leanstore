@@ -152,7 +152,7 @@ public:
 
 public:
   uint64_t CRC() {
-    return utils::CRC(payload_, utils::tls_store->store_option_->page_size_ - sizeof(Page));
+    return utils::CRC(payload_, CoroEnv::CurStore()->store_option_->page_size_ - sizeof(Page));
   }
 };
 

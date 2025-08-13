@@ -8,6 +8,7 @@
 #include "leanstore/concurrency/worker_thread.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/log.hpp"
+#include "utils/coroutine/coro_env.hpp"
 #include "utils/coroutine/mvcc_manager.hpp"
 #include "utils/json.hpp"
 
@@ -45,7 +46,7 @@ void CRManager::StartWorkerThreads(uint64_t num_worker_threads) {
     auto worker_thread = std::make_unique<WorkerThread>(store_, i, i);
     worker_thread->Start();
     auto* tx_mgr = tx_mgrs[i].get();
-    worker_thread->SetJob([tx_mgr]() { TxManager::s_tls_tx_manager = tx_mgr; });
+    worker_thread->SetJob([tx_mgr]() { CoroEnv::SetCurTxMgr(tx_mgr); });
     worker_thread->Wait();
     worker_threads_.emplace_back(std::move(worker_thread));
   }

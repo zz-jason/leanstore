@@ -5,6 +5,7 @@
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/random_generator.hpp"
+#include "utils/coroutine/coro_env.hpp"
 
 #include <benchmark/benchmark.h>
 
@@ -39,7 +40,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
   std::unordered_set<std::string> dedup;
   for (auto _ : state) {
     leanstore->ExecSync(0, [&]() {
-      cr::TxManager::My().StartTx();
+      CoroEnv::CurTxMgr().StartTx();
       std::string key;
       std::string val;
       for (size_t i = 0; i < 16; i++) {
@@ -48,13 +49,13 @@ static void BenchUpdateInsert(benchmark::State& state) {
         btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
                       Slice((const uint8_t*)val.data(), val.size()));
       }
-      cr::TxManager::My().CommitTx();
+      CoroEnv::CurTxMgr().CommitTx();
     });
   }
 
   leanstore->ExecSync(0, [&]() {
-    cr::TxManager::My().StartTx();
-    SCOPED_DEFER(cr::TxManager::My().CommitTx());
+    CoroEnv::CurTxMgr().StartTx();
+    SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
     leanstore->DropTransactionKV(btree_name);
   });
 }

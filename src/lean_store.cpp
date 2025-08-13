@@ -52,7 +52,7 @@ Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption* option) {
 }
 
 LeanStore::LeanStore(StoreOption* option) : store_option_(option) {
-  utils::tls_store = this;
+  CoroEnv::SetCurStore(this);
 
   Log::Info("LeanStore starting ...");
   SCOPED_DEFER(Log::Info("LeanStore started"));
@@ -65,7 +65,8 @@ LeanStore::LeanStore(StoreOption* option) : store_option_(option) {
   // create global buffer manager and page evictors
   buffer_manager_ = std::make_unique<storage::BufferManager>(this);
 
-  mvcc_mgr_ = std::make_unique<leanstore::MvccManager>(store_option_->worker_threads_, this);
+  auto num_tx_mgrs = store_option_->worker_threads_ * store_option_->max_concurrent_tx_per_worker_;
+  mvcc_mgr_ = std::make_unique<leanstore::MvccManager>(num_tx_mgrs, this);
 
 #ifdef ENABLE_COROUTINE
   coro_scheduler_ = new CoroScheduler(this, store_option_->worker_threads_);
@@ -434,7 +435,7 @@ void LeanStore::GetBasicKV(const std::string& name, storage::btree::BasicKV** bt
 }
 
 void LeanStore::DropBasicKV(const std::string& name) {
-  LEAN_DCHECK(cr::TxManager::My().IsTxStarted());
+  LEAN_DCHECK(CoroEnv::CurTxMgr().IsTxStarted());
   auto* btree =
       dynamic_cast<leanstore::storage::btree::BTreeGeneric*>(tree_registry_->GetTree(name));
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
@@ -480,7 +481,7 @@ void LeanStore::GetTransactionKV(const std::string& name, storage::btree::Transa
 }
 
 void LeanStore::DropTransactionKV(const std::string& name) {
-  LEAN_DCHECK(cr::TxManager::My().IsTxStarted());
+  LEAN_DCHECK(CoroEnv::CurTxMgr().IsTxStarted());
   auto* btree = DownCast<storage::btree::BTreeGeneric*>(tree_registry_->GetTree(name));
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
   auto res = tree_registry_->UnregisterTree(name);

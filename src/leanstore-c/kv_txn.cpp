@@ -21,19 +21,19 @@
 
 void LsStartTx(LeanStoreHandle* handle, uint64_t worker_id) {
   auto* store = reinterpret_cast<leanstore::LeanStore*>(GetLeanStore(handle));
-  store->ExecSync(worker_id, [&]() { leanstore::cr::TxManager::My().StartTx(); });
+  store->ExecSync(worker_id, [&]() { leanstore::CoroEnv::CurTxMgr().StartTx(); });
 }
 
 /// Commit a transaction in a leanstore worker
 void LsCommitTx(LeanStoreHandle* handle, uint64_t worker_id) {
   auto* store = reinterpret_cast<leanstore::LeanStore*>(GetLeanStore(handle));
-  store->ExecSync(worker_id, [&]() { leanstore::cr::TxManager::My().CommitTx(); });
+  store->ExecSync(worker_id, [&]() { leanstore::CoroEnv::CurTxMgr().CommitTx(); });
 }
 
 /// Abort a transaction in a leanstore worker
 void LsAbortTx(LeanStoreHandle* handle, uint64_t worker_id) {
   auto* store = reinterpret_cast<leanstore::LeanStore*>(GetLeanStore(handle));
-  store->ExecSync(worker_id, [&]() { leanstore::cr::TxManager::My().AbortTx(); });
+  store->ExecSync(worker_id, [&]() { leanstore::CoroEnv::CurTxMgr().AbortTx(); });
 }
 
 //------------------------------------------------------------------------------

@@ -22,7 +22,7 @@ CoroScheduler::CoroScheduler(LeanStore* store, int64_t num_threads)
   auto commit_group_size = store ? store->store_option_->commit_group_size_ : 0;
   for (auto i = 0u; i < commit_group_size; i++) {
     commit_protocols_.emplace_back(
-        std::make_unique<AutoCommitProtocol>(i, store->store_option_->worker_threads_));
+        std::make_unique<AutoCommitProtocol>(store, i, store->store_option_->worker_threads_));
   }
 
   // create coroutine executors
@@ -87,9 +87,11 @@ void CoroScheduler::InitWorkerCtxs() {
 
   std::vector<std::shared_ptr<CoroFuture<void>>> futures;
   for (auto i = 0u; i < coro_executors_.size(); i++) {
-    auto coro_job = [i, this]() { cr::TxManager::s_tls_tx_manager = tx_mgrs_[i].get(); };
+    auto* tx_mgr = tx_mgrs_[i].get();
+    auto coro_job = [tx_mgr]() { CoroEnv::SetCurTxMgr(tx_mgr); };
     futures.emplace_back(Submit(std::move(coro_job), i));
   }
+
   for (auto& future : futures) {
     future->Wait();
   }
@@ -120,7 +122,7 @@ void CoroScheduler::InitLogging() {
     auto logging_init_job = [i, &wal_dir]() {
       std::string file_name = std::format(CoroExecutor::kCoroExecNamePattern, i);
       std::string file_path = std::format("{}/{}.wal", wal_dir, file_name);
-      cr::TxManager::My().GetLogging().InitWalFd(file_path);
+      CoroEnv::CurTxMgr().GetLogging().InitWalFd(file_path);
     };
     futures.emplace_back(Submit(std::move(logging_init_job), i));
   }

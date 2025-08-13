@@ -111,7 +111,7 @@ public:
   }
 
   inline static uint64_t ConvertToFatTupleThreshold() {
-    return cr::TxManager::My().store_->store_option_->worker_threads_;
+    return CoroEnv::CurTxMgr().store_->store_option_->worker_threads_;
   }
 
   /// Updates the value stored in FatTuple. The former newest version value is

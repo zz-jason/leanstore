@@ -96,6 +96,8 @@ private:
 template <size_t stack_limit>
 using SmallBuffer = SmallVector<uint8_t, stack_limit>;
 
+using SmallBuffer256 = SmallBuffer<256>;
+
 template <size_t stack_limit>
 using SmallBuffer512Aligned = SmallVectorAligned<uint8_t, stack_limit, 512>;
 

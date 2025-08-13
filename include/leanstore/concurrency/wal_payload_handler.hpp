@@ -37,7 +37,7 @@ public:
 
 template <typename T>
 inline void WalPayloadHandler<T>::SubmitWal() {
-  cr::TxManager::My().logging_.SubmitWALEntryComplex(total_size_);
+  CoroEnv::CurTxMgr().logging_.SubmitWALEntryComplex(total_size_);
 }
 
 } // namespace leanstore::cr
