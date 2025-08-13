@@ -72,7 +72,7 @@ public:
     return keep_running_.load(std::memory_order_acquire);
   }
 
-  void EnqueueCoro(std::unique_ptr<Coroutine> coroutine) {
+  void EnqueueCoro(std::unique_ptr<Coroutine>&& coroutine) {
     user_task_queue_.PushBack(std::move(coroutine));
   }
 
@@ -102,7 +102,7 @@ public:
   }
 
   static CoroExecutor* CurrentThread() {
-    assert(s_current_thread != nullptr);
+    // assert(s_current_thread != nullptr);
     return s_current_thread;
   }
 

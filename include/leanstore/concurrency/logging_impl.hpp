@@ -4,6 +4,7 @@
 #include "leanstore/concurrency/wal_payload_handler.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/defer.hpp"
+#include "utils/coroutine/coro_env.hpp"
 
 namespace leanstore::cr {
 
@@ -26,9 +27,11 @@ WalPayloadHandler<T> Logging::ReserveWALEntryComplex(uint64_t payload_size, PID 
   auto entry_size = sizeof(WalEntryComplex) + payload_size;
   ReserveContiguousBuffer(entry_size);
 
+  auto worker_id = CoroEnv::CurTxMgr().worker_id_;
+  auto start_ts = CoroEnv::CurTxMgr().ActiveTx().start_ts_;
+
   active_walentry_complex_ = new (entry_ptr)
-      WalEntryComplex(entry_lsn, prev_lsn, entry_size, CoroEnv::CurTxMgr().worker_id_,
-                      CoroEnv::CurTxMgr().ActiveTx().start_ts_, psn, page_id, tree_id);
+      WalEntryComplex(entry_lsn, prev_lsn, entry_size, worker_id, start_ts, psn, page_id, tree_id);
 
   auto* payload_ptr = active_walentry_complex_->payload_;
   auto wal_payload = new (payload_ptr) T(std::forward<Args>(args)...);

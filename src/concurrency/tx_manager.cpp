@@ -11,6 +11,7 @@
 #include "leanstore/utils/counter_util.hpp"
 #include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/log.hpp"
+#include "utils/coroutine/coro_env.hpp"
 #include "utils/coroutine/lean_mutex.hpp"
 #include "utils/coroutine/mvcc_manager.hpp"
 
@@ -24,7 +25,6 @@ thread_local PerfCounters tls_perf_counters;
 TxManager::TxManager(uint64_t worker_id, std::vector<std::unique_ptr<TxManager>>& tx_mgrs,
                      leanstore::LeanStore* store)
     : store_(store),
-      logging_(store_->store_option_->wal_buffer_bytes_),
       cc_(store, store->store_option_->worker_threads_),
       active_tx_id_(0),
       worker_id_(worker_id),
@@ -53,7 +53,7 @@ void TxManager::StartTx(TxMode mode, IsolationLevel level, bool is_read_only) {
   active_tx_.max_observed_sys_tx_id_ = store_->MvccManager()->GetMinCommittedSysTx();
 
   // Init wal and group commit related transaction information
-  logging_.tx_wal_begin_ = logging_.wal_buffered_;
+  CoroEnv::CurLogging().tx_wal_begin_ = CoroEnv::CurLogging().wal_buffered_;
 
   // For now, we only support SI and SSI
   if (level < IsolationLevel::kSnapshotIsolation) {
@@ -118,16 +118,16 @@ void TxManager::CommitTx() {
   }
 
   if (active_tx_.is_durable_) {
-    logging_.WriteWalTxFinish();
+    CoroEnv::CurLogging().WriteWalTxFinish();
   }
 
   // for group commit
   if (active_tx_.has_remote_dependency_) {
-    LEAN_UNIQUE_LOCK(logging_.tx_to_commit_mutex_);
-    logging_.tx_to_commit_.push_back(active_tx_);
+    LEAN_UNIQUE_LOCK(CoroEnv::CurLogging().tx_to_commit_mutex_);
+    CoroEnv::CurLogging().tx_to_commit_.push_back(active_tx_);
   } else {
-    LEAN_UNIQUE_LOCK(logging_.rfa_tx_to_commit_mutex_);
-    logging_.rfa_tx_to_commit_.push_back(active_tx_);
+    LEAN_UNIQUE_LOCK(CoroEnv::CurLogging().rfa_tx_to_commit_mutex_);
+    CoroEnv::CurLogging().rfa_tx_to_commit_.push_back(active_tx_);
   }
 
   // Cleanup versions in history tree
@@ -139,7 +139,7 @@ void TxManager::CommitTx() {
             worker_id_, active_tx_.start_ts_, active_tx_.commit_ts_,
             active_tx_.max_observed_sys_tx_id_, active_tx_.has_remote_dependency_);
 
-  logging_.WaitToCommit(active_tx_.commit_ts_);
+  CoroEnv::CurLogging().WaitToCommit(active_tx_.commit_ts_);
 }
 
 /// TODO(jian.z): revert changes made in-place on the btree process of a transaction abort:
@@ -172,7 +172,7 @@ void TxManager::AbortTx() {
   // TODO(jian.z): support reading from WAL file once
   LEAN_DCHECK(!active_tx_.wal_exceed_buffer_, "Aborting from WAL file is not supported yet");
   std::vector<const WalEntry*> entries;
-  logging_.IterateCurrentTxWALs([&](const WalEntry& entry) {
+  CoroEnv::CurLogging().IterateCurrentTxWALs([&](const WalEntry& entry) {
     if (entry.type_ == WalEntry::Type::kComplex) {
       entries.push_back(&entry);
     }
@@ -190,8 +190,8 @@ void TxManager::AbortTx() {
 
   if (active_tx_.has_wrote_ && active_tx_.is_durable_) {
     // TODO: write compensation wal records between abort and finish
-    logging_.WriteWalTxAbort();
-    logging_.WriteWalTxFinish();
+    CoroEnv::CurLogging().WriteWalTxAbort();
+    CoroEnv::CurLogging().WriteWalTxFinish();
   }
 }
 

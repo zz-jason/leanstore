@@ -27,9 +27,6 @@ public:
   /// The store it belongs to.
   leanstore::LeanStore* store_ = nullptr;
 
-  /// The write-ahead logging component.
-  Logging logging_;
-
   /// The concurrent control component.
   ConcurrencyControl cc_;
 
@@ -84,10 +81,6 @@ public:
 
   /// Get the PerfCounters of the current worker.
   PerfCounters* GetPerfCounters();
-
-  Logging& GetLogging() {
-    return logging_;
-  }
 
   TXID GetLastCommittedSysTx() const {
     return last_committed_sys_tx_.load(std::memory_order_acquire);

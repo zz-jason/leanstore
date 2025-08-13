@@ -36,28 +36,29 @@ function(leanstore_add_test_in_dir TARGET_DIR)
       GTest::gtest_main
       leanstore
     )
+    target_include_directories(${TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     gtest_discover_tests(${TEST_NAME})
     list(APPEND TEST_EXECUTABLES ${TEST_NAME})
   endforeach()
 endfunction(leanstore_add_test_in_dir)
 
 
-# Add tests
-leanstore_add_test(recovery_test)
-leanstore_add_test(optimistic_guarded_test)
-leanstore_add_test(transaction_kv_test)
-leanstore_add_test(mvcc_test)
-leanstore_add_test(anomalies_test)
-leanstore_add_test(abort_test)
-leanstore_add_test(long_running_tx_test)
-
-# tests in sub-directories
-leanstore_add_test_in_dir(btree)
-leanstore_add_test_in_dir(buffer-manager)
-leanstore_add_test_in_dir(concurrency)
-leanstore_add_test_in_dir(sync)
-leanstore_add_test_in_dir(telemetry)
-
 if(${ENABLE_COROUTINE})
   leanstore_add_test_in_dir(coroutine)
+else()
+  # Add tests
+  leanstore_add_test(recovery_test)
+  leanstore_add_test(optimistic_guarded_test)
+  leanstore_add_test(transaction_kv_test)
+  leanstore_add_test(mvcc_test)
+  leanstore_add_test(anomalies_test)
+  leanstore_add_test(abort_test)
+  leanstore_add_test(long_running_tx_test)
+
+  # tests in sub-directories
+  leanstore_add_test_in_dir(btree)
+  leanstore_add_test_in_dir(buffer-manager)
+  leanstore_add_test_in_dir(concurrency)
+  leanstore_add_test_in_dir(sync)
+  leanstore_add_test_in_dir(telemetry)
 endif()

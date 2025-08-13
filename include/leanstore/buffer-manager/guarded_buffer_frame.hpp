@@ -160,7 +160,7 @@ public:
     bf_->page_.sys_tx_id_ = sys_tx_id;
 
     // update the maximum system transaction id written by the worker
-    CoroEnv::CurTxMgr().logging_.UpdateSysTxToHarden(sys_tx_id);
+    CoroEnv::CurLogging().UpdateSysTxToHarden(sys_tx_id);
   }
 
   /// Check remote dependency
@@ -186,7 +186,7 @@ public:
     const auto page_id = bf_->header_.page_id_;
     const auto tree_id = bf_->page_.btree_id_;
     wal_size = ((wal_size - 1) / 8 + 1) * 8;
-    auto handler = CoroEnv::CurTxMgr().logging_.ReserveWALEntryComplex<WT, Args...>(
+    auto handler = CoroEnv::CurLogging().ReserveWALEntryComplex<WT, Args...>(
         sizeof(WT) + wal_size, page_id, bf_->page_.psn_, tree_id, std::forward<Args>(args)...);
 
     return handler;

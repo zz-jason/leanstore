@@ -110,7 +110,8 @@ void Logging::PublishWalBufferedOffset() {
 }
 
 void Logging::PublishWalFlushReq() {
-  WalFlushReq current(wal_buffered_, sys_tx_writtern_, CoroEnv::CurTxMgr().ActiveTx().start_ts_);
+  auto start_ts = CoroEnv::CurTxMgr().ActiveTx().start_ts_;
+  WalFlushReq current(wal_buffered_, sys_tx_writtern_, start_ts);
   wal_flush_req_.Set(current);
 }
 

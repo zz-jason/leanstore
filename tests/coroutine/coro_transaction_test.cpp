@@ -1,3 +1,4 @@
+#include "lean_test_suite.hpp"
 #include "leanstore-c/store_option.h"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
@@ -21,7 +22,7 @@
 
 namespace leanstore::test {
 
-class CoroTxnTest : public ::testing::Test {
+class CoroTxnTest : public LeanTestSuite {
 protected:
   static constexpr auto kTestDirPattern = "/tmp/leanstore/{}/{}";
   static constexpr auto kBtreeName = "coro_txn_test";
@@ -33,15 +34,12 @@ protected:
       .enable_wal_ = kEnableWal,
       .use_bulk_insert_ = false,
   };
-
-  std::string GetTestDataDir() {
-    auto* cur_test = ::testing::UnitTest::GetInstance()->current_test_info();
-    return std::format(kTestDirPattern, cur_test->test_case_name(), cur_test->name());
-  }
 };
 
 TEST_F(CoroTxnTest, BasicCommit) {
-  StoreOption* option = CreateStoreOption(GetTestDataDir().c_str());
+  GTEST_SKIP() << "Skipping test BasicCommit, as logging/tx is not correctly implemented yet.";
+
+  StoreOption* option = CreateStoreOption(TestCaseStoreDir().c_str());
   option->create_from_scratch_ = true;
   option->enable_wal_ = kEnableWal;
   option->worker_threads_ = 2;

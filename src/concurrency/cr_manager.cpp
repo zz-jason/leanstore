@@ -42,11 +42,16 @@ CRManager::CRManager(leanstore::LeanStore* store) : store_(store), group_committ
 void CRManager::StartWorkerThreads(uint64_t num_worker_threads) {
   worker_threads_.reserve(num_worker_threads);
   auto& tx_mgrs = store_->MvccManager()->TxMgrs();
+  auto& loggings = store_->MvccManager()->Loggings();
   for (auto i = 0u; i < num_worker_threads; i++) {
     auto worker_thread = std::make_unique<WorkerThread>(store_, i, i);
     worker_thread->Start();
     auto* tx_mgr = tx_mgrs[i].get();
-    worker_thread->SetJob([tx_mgr]() { CoroEnv::SetCurTxMgr(tx_mgr); });
+    auto* logging = loggings[i].get();
+    worker_thread->SetJob([logging, tx_mgr]() {
+      CoroEnv::SetCurLogging(logging);
+      CoroEnv::SetCurTxMgr(tx_mgr);
+    });
     worker_thread->Wait();
     worker_threads_.emplace_back(std::move(worker_thread));
   }
@@ -58,8 +63,7 @@ void CRManager::StartGroupCommitter(int cpu) {
     return;
   }
 
-  auto& tx_mgrs = store_->MvccManager()->TxMgrs();
-  group_committer_ = std::make_unique<GroupCommitter>(store_, tx_mgrs, cpu);
+  group_committer_ = std::make_unique<GroupCommitter>(store_, cpu);
   group_committer_->Start();
 }
 

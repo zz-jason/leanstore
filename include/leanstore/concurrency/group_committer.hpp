@@ -5,7 +5,6 @@
 #include "leanstore/utils/async_io.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 
-#include <memory>
 #include <string>
 
 #include <libaio.h>
@@ -31,21 +30,16 @@ public:
   /// Start file offset of the next WalEntry.
   uint64_t wal_size_;
 
-  /// All the workers.
-  std::vector<std::unique_ptr<TxManager>>& tx_mgrs_;
-
   /// The libaio wrapper.
   utils::AsyncIo aio_;
 
 public:
-  GroupCommitter(leanstore::LeanStore* store, std::vector<std::unique_ptr<TxManager>>& tx_mgrs,
-                 int cpu)
+  GroupCommitter(leanstore::LeanStore* store, int cpu)
       : ManagedThread(store, "GroupCommitter", cpu),
         store_(store),
         wal_fd_(store->wal_fd_),
         wal_size_(0),
-        tx_mgrs_(tx_mgrs),
-        aio_(tx_mgrs.size() * 2 + 2) {
+        aio_(store->store_option_->worker_threads_ * 2 + 2) {
   }
 
   virtual ~GroupCommitter() override = default;

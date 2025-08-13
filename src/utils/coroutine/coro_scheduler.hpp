@@ -40,8 +40,6 @@ public:
         [](double elapsed_ms) { Log::Info("CoroScheduler inited, elapsed={}ms", elapsed_ms); });
 
     InitCoroExecutors();
-    InitWorkerCtxs();
-    InitLogging();
   }
 
   /// Deinitializes the CoroScheduler, stopping all CoroExecutors and worker contexts.
@@ -67,12 +65,6 @@ private:
   /// Deinitializes the CoroExecutor background threads.
   void DeinitCoroExecutors();
 
-  /// Initializes worker contexts for each CoroExecutor.
-  void InitWorkerCtxs();
-
-  /// Initializes logging for each CoroExecutor.
-  void InitLogging();
-
   /// Pointer to the LeanStore instance.
   LeanStore* store_ = nullptr;
 
@@ -81,9 +73,6 @@ private:
 
   /// CoroExecutor pool, responsible for executing coroutines on different threads.
   std::vector<std::unique_ptr<CoroExecutor>> coro_executors_;
-
-  /// All the thread-local worker references
-  std::vector<std::unique_ptr<cr::TxManager>> tx_mgrs_;
 
   /// All the AutoCommitProtocol instances for each commit group.
   std::vector<std::unique_ptr<AutoCommitProtocol>> commit_protocols_;

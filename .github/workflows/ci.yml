@@ -7,11 +7,11 @@ on:
     branches: [ "main" ]
 
 jobs:
-  ut_coverage:
+  thread-mode:
     runs-on: ubuntu-latest
     container:
       image: zzjason/leanstore-dev:latest
-    name: Unit Tests && Code Coverage
+    name: UT [Thread-Mode]
     steps:
     - name: Check out repository
       uses: actions/checkout@v3
@@ -19,15 +19,15 @@ jobs:
     - name: Config project
       run: |
         which vcpkg;
-        cmake --preset debug_tsan;
+        cmake --preset debug_tsan
 
     - name: Cppcheck
       run: cppcheck --project=build/debug_tsan/compile_commands.json -i tests --error-exitcode=1 --check-level=exhaustive
 
-    - name: Check clang-format
+    - name: Clang-format
       run: cmake --build build/debug_tsan --target=check-format
 
-    - name: Build project
+    - name: Build
       run: cmake --build build/debug_tsan -j `nproc`
 
     - name: Unit test with tsan
@@ -44,3 +44,29 @@ jobs:
         verbose: true
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  coro-mode:
+    runs-on: ubuntu-latest
+    container:
+      image: zzjason/leanstore-dev:latest
+    name: UT [Coroutine-Mode]
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v3
+
+    - name: Config project
+      run: |
+        which vcpkg;
+        cmake --preset debug_coro
+
+    - name: Cppcheck
+      run: cppcheck --project=build/debug_coro/compile_commands.json -i tests --error-exitcode=1 --check-level=exhaustive
+
+    - name: Clang-format
+      run: cmake --build build/debug_coro --target=check-format
+
+    - name: Build
+      run: cmake --build build/debug_coro -j `nproc`
+
+    - name: Unit test with coroutine enabled
+      run: ctest --test-dir build/debug_coro --output-on-failure -j 2
