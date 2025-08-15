@@ -5,9 +5,7 @@
 #include "leanstore/units.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 
-namespace leanstore {
-namespace cr {
-
+namespace leanstore ::cr {
 enum class TxState { kIdle, kStarted, kCommitted, kAborted };
 
 struct TxStatUtil {
@@ -59,6 +57,13 @@ public:
   /// tx_isolation_level_ is the isolation level for the current transaction.
   IsolationLevel tx_isolation_level_ = IsolationLevel::kSnapshotIsolation;
 
+  /// The first WAL record of the current active transaction.
+  uint64_t first_wal_ = 0;
+
+  /// The previous WAL record of the current active transaction, 0 for the first
+  /// WAL record. Used when writing compensation log records for tx abort.
+  uint64_t prev_wal_lsn_ = 0;
+
   /// Whether the transaction has any data writes. Transaction writes can be
   /// detected once it generates a WAL entry.
   bool has_wrote_ = false;
@@ -80,16 +85,13 @@ public:
 
   // Start a new transaction, initialize all fields
   void Start(TxMode mode, IsolationLevel level) {
+    Transaction tx_inited;
+    *this = tx_inited;
+
     state_ = TxState::kStarted;
-    start_ts_ = 0;
-    commit_ts_ = 0;
-    max_observed_sys_tx_id_ = 0;
-    has_remote_dependency_ = false;
     tx_mode_ = mode;
     tx_isolation_level_ = level;
-    has_wrote_ = false;
     is_durable_ = CoroEnv::CurStore()->store_option_->enable_wal_;
-    wal_exceed_buffer_ = false;
   }
 
   /// Check whether a user transaction with remote dependencies can be committed.
@@ -98,5 +100,4 @@ public:
   }
 };
 
-} // namespace cr
-} // namespace leanstore
+} // namespace leanstore::cr

@@ -14,6 +14,7 @@
 #include "utils/coroutine/coro_env.hpp"
 #include "utils/coroutine/lean_mutex.hpp"
 #include "utils/coroutine/mvcc_manager.hpp"
+#include "utils/to_json.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -53,7 +54,7 @@ void TxManager::StartTx(TxMode mode, IsolationLevel level, bool is_read_only) {
   active_tx_.max_observed_sys_tx_id_ = store_->MvccManager()->GetMinCommittedSysTx();
 
   // Init wal and group commit related transaction information
-  CoroEnv::CurLogging().tx_wal_begin_ = CoroEnv::CurLogging().wal_buffered_;
+  active_tx_.first_wal_ = CoroEnv::CurLogging().wal_buffered_;
 
   // For now, we only support SI and SSI
   if (level < IsolationLevel::kSnapshotIsolation) {
@@ -118,7 +119,7 @@ void TxManager::CommitTx() {
   }
 
   if (active_tx_.is_durable_) {
-    CoroEnv::CurLogging().WriteWalTxFinish();
+    WriteWalTxFinish();
   }
 
   // for group commit
@@ -172,7 +173,7 @@ void TxManager::AbortTx() {
   // TODO(jian.z): support reading from WAL file once
   LEAN_DCHECK(!active_tx_.wal_exceed_buffer_, "Aborting from WAL file is not supported yet");
   std::vector<const WalEntry*> entries;
-  CoroEnv::CurLogging().IterateCurrentTxWALs([&](const WalEntry& entry) {
+  CoroEnv::CurLogging().IterateCurrentTxWALs(active_tx_.first_wal_, [&](const WalEntry& entry) {
     if (entry.type_ == WalEntry::Type::kComplex) {
       entries.push_back(&entry);
     }
@@ -190,9 +191,61 @@ void TxManager::AbortTx() {
 
   if (active_tx_.has_wrote_ && active_tx_.is_durable_) {
     // TODO: write compensation wal records between abort and finish
-    CoroEnv::CurLogging().WriteWalTxAbort();
-    CoroEnv::CurLogging().WriteWalTxFinish();
+    WriteWalTxAbort();
+    WriteWalTxFinish();
   }
+}
+
+void TxManager::WriteWalTxAbort() {
+  auto& logging = CoroEnv::CurLogging();
+
+  // Reserve space
+  auto size = sizeof(WalTxAbort);
+  logging.ReserveWalBuffer(size);
+
+  // Initialize a WalTxAbort
+  auto* data = logging.wal_buffer_ + logging.wal_buffered_;
+  std::memset(data, 0, size);
+  auto* entry [[maybe_unused]] = new (data) WalTxAbort(size);
+
+  // Submit the WalTxAbort to group committer
+  logging.wal_buffered_ += size;
+  logging.PublishWalFlushReq(active_tx_.start_ts_);
+
+  LEAN_DLOG("WriteWalTxAbort, workerId={}, startTs={}, walJson={}", worker_id_,
+            active_tx_.start_ts_, utils::ToJsonString(entry));
+}
+
+void TxManager::WriteWalTxFinish() {
+  auto& logging = CoroEnv::CurLogging();
+
+  // Reserve space
+  auto size = sizeof(WalTxFinish);
+  logging.ReserveWalBuffer(size);
+
+  // Initialize a WalTxFinish
+  auto* data = logging.wal_buffer_ + logging.wal_buffered_;
+  std::memset(data, 0, size);
+  auto* entry [[maybe_unused]] = new (data) WalTxFinish(active_tx_.start_ts_);
+
+  // Submit the WalTxAbort to group committer
+  logging.wal_buffered_ += size;
+  logging.PublishWalFlushReq(active_tx_.start_ts_);
+
+  LEAN_DLOG("WriteWalTxFinish, workerId={}, startTs={}, walJson={}", worker_id_,
+            active_tx_.start_ts_, utils::ToJsonString(entry));
+}
+
+void TxManager::SubmitWALEntryComplex(uint64_t total_size) {
+  auto& logging = CoroEnv::CurLogging();
+
+  active_walentry_complex_->crc32_ = active_walentry_complex_->ComputeCRC32();
+  logging.wal_buffered_ += total_size;
+  logging.PublishWalFlushReq(active_tx_.start_ts_);
+
+  LEAN_DLOG("SubmitWal, workerId={}, startTs={}, walJson={}", CoroEnv::CurTxMgr().worker_id_,
+            CoroEnv::CurTxMgr().ActiveTx().start_ts_,
+            utils::ToJsonString(active_walentry_complex_));
 }
 
 PerfCounters* TxManager::GetPerfCounters() {

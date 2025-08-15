@@ -132,8 +132,8 @@ public:
 
   uint32_t ComputeCRC32() const {
     auto type_field_size = sizeof(Type);
-    auto crc32FieldSize = sizeof(uint32_t);
-    auto crc_skip_size = type_field_size + crc32FieldSize;
+    auto crc_field_size = sizeof(uint32_t);
+    auto crc_skip_size = type_field_size + crc_field_size;
     const auto* src = reinterpret_cast<const uint8_t*>(this) + crc_skip_size;
     auto src_size = size_ - crc_skip_size;
     return utils::CRC(src, src_size);

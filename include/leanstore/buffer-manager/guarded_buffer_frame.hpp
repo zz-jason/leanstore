@@ -2,7 +2,6 @@
 
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/buffer-manager/buffer_manager.hpp"
-#include "leanstore/concurrency/logging_impl.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/concurrency/wal_payload_handler.hpp"
 #include "leanstore/sync/hybrid_guard.hpp"
@@ -180,13 +179,12 @@ public:
 
   template <typename WT, typename... Args>
   cr::WalPayloadHandler<WT> ReserveWALPayload(uint64_t wal_size, Args&&... args) {
-    LEAN_DCHECK(CoroEnv::CurTxMgr().ActiveTx().is_durable_);
     LEAN_DCHECK(guard_.state_ == GuardState::kExclusivePessimistic);
 
     const auto page_id = bf_->header_.page_id_;
     const auto tree_id = bf_->page_.btree_id_;
     wal_size = ((wal_size - 1) / 8 + 1) * 8;
-    auto handler = CoroEnv::CurLogging().ReserveWALEntryComplex<WT, Args...>(
+    auto handler = CoroEnv::CurTxMgr().ReserveWALEntryComplex<WT, Args...>(
         sizeof(WT) + wal_size, page_id, bf_->page_.psn_, tree_id, std::forward<Args>(args)...);
 
     return handler;

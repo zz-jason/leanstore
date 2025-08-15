@@ -1,6 +1,5 @@
 #pragma once
 
-#include "leanstore/concurrency/group_committer.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 
 namespace leanstore::cr {
@@ -32,12 +31,9 @@ public:
     return *wal_payload_;
   }
 
-  void SubmitWal();
+  void SubmitWal() {
+    CoroEnv::CurTxMgr().SubmitWALEntryComplex(total_size_);
+  }
 };
-
-template <typename T>
-inline void WalPayloadHandler<T>::SubmitWal() {
-  CoroEnv::CurLogging().SubmitWALEntryComplex(total_size_);
-}
 
 } // namespace leanstore::cr
