@@ -2,7 +2,13 @@
 
 #include "leanstore/units.hpp"
 
+#include <unordered_set>
 #include <vector>
+
+namespace leanstore::cr {
+class TxManager;
+class Transaction;
+} // namespace leanstore::cr
 
 namespace leanstore {
 
@@ -13,8 +19,8 @@ public:
   AutoCommitProtocol(LeanStore* store, uint32_t commit_group, uint64_t num_workers)
       : store_(store),
         group_id_(commit_group) {
-    last_committed_sys_tx_.resize(num_workers, 0);
-    last_committed_usr_tx_.resize(num_workers, 0);
+    synced_last_committed_sys_tx_.resize(num_workers, 0);
+    synced_last_committed_usr_tx_.resize(num_workers, 0);
   };
 
   ~AutoCommitProtocol() = default;
@@ -31,6 +37,14 @@ public:
     }
   }
 
+  void RegisterTxMgr(cr::TxManager* tx_mgr) {
+    active_tx_mgrs_.insert(tx_mgr);
+  }
+
+  void UnregisterTxMgr(cr::TxManager* tx_mgr) {
+    active_tx_mgrs_.erase(tx_mgr);
+  }
+
 private:
   /// Performs the autonomous log flush phase for decentralized logging. All
   /// logging state is recorded in the Logging component of each TxManager.
@@ -44,20 +58,13 @@ private:
   ///
   /// The synced last committed transaction ID is shared for all workers in the
   /// same commit group.
-  void CommitAck() {
-    CommitSysTx();
-    CommitUsrTx();
-  }
-
-  void CommitSysTx();
-
-  void CommitUsrTx();
+  void CommitAck();
 
   void TrySyncLastCommittedTx();
 
-  TXID DetermineCommitableUsrTx();
+  TXID DetermineCommitableUsrTx(std::vector<cr::Transaction>& tx_queue);
 
-  TXID DetermineCommitableUsrTxRfA();
+  TXID DetermineCommitableUsrTxRfA(std::vector<cr::Transaction>& tx_queue_rfa);
 
 private:
   LeanStore* store_;
@@ -67,8 +74,11 @@ private:
   /// AutoCommitProtocol instance and the same commit acknowledgment.
   const uint32_t group_id_;
 
-  std::vector<TXID> last_committed_usr_tx_;
-  std::vector<TXID> last_committed_sys_tx_;
+  std::unordered_set<cr::TxManager*> active_tx_mgrs_;
+
+  std::vector<TXID> synced_last_committed_usr_tx_;
+  std::vector<TXID> synced_last_committed_sys_tx_;
+
   TXID min_committed_usr_tx_ = 0;
   TXID min_committed_sys_tx_ = 0;
 };

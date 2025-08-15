@@ -34,6 +34,20 @@ public:
   /// The current running transaction.
   Transaction active_tx_;
 
+  /// Protects tx_to_commit_
+  LeanMutex tx_to_commit_mutex_;
+
+  /// The queue for each worker thread to store pending-to-commit transactions which have remote
+  /// dependencies.
+  std::vector<Transaction> tx_to_commit_;
+
+  /// Protects rfa_tx_to_commit_
+  LeanMutex rfa_tx_to_commit_mutex_;
+
+  /// The queue for each worker thread to store pending-to-commit transactions which doesn't have
+  /// any remote dependencies.
+  std::vector<Transaction> rfa_tx_to_commit_;
+
   /// Last committed system transaction ID in the worker.
   std::atomic<TXID> last_committed_sys_tx_ = 0;
 
@@ -114,9 +128,8 @@ public:
     SCOPED_DEFER(active_tx_.prev_wal_lsn_ = active_walentry_complex_->lsn_);
 
     auto entry_lsn = logging.ReserveLsn();
-    auto* entry_ptr = logging.wal_buffer_ + logging.wal_buffered_;
     auto entry_size = sizeof(WalEntryComplex) + payload_size;
-    logging.ReserveWalBuffer(entry_size);
+    auto* entry_ptr = logging.ReserveWalBuffer(entry_size);
 
     active_walentry_complex_ = new (entry_ptr) WalEntryComplex(
         entry_lsn, prev_lsn, entry_size, worker_id_, active_tx_.start_ts_, psn, page_id, tree_id);
@@ -133,6 +146,12 @@ public:
   static constexpr uint64_t kRcBit = (1ull << 63);
   static constexpr uint64_t kLongRunningBit = (1ull << 62);
   static constexpr uint64_t kCleanBitsMask = ~(kRcBit | kLongRunningBit);
+
+private:
+  void WaitToCommit(const TXID commit_ts) {
+    while (!(commit_ts <= GetLastCommittedUsrTx())) {
+    }
+  }
 };
 
 } // namespace leanstore::cr

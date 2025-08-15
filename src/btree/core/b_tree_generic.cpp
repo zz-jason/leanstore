@@ -7,12 +7,14 @@
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/buffer-manager/guarded_buffer_frame.hpp"
+#include "leanstore/concurrency/wal_builder.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
+#include "utils/coroutine/coro_env.hpp"
 #include "utils/coroutine/mvcc_manager.hpp"
 #include "utils/to_json.hpp"
 
@@ -46,13 +48,20 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btree_id, BTreeConfi
   // Record WAL
   if (config_.enable_wal_) {
     TXID sys_tx_id = store_->MvccManager()->AllocSysTxTs();
-    auto root_wal_handler = x_guarded_root.ReserveWALPayload<WalInitPage>(0, sys_tx_id, tree_id_,
-                                                                          x_guarded_root->is_leaf_);
-    root_wal_handler.SubmitWal();
 
-    auto meta_wal_handler = x_guarded_meta.ReserveWALPayload<WalInitPage>(0, sys_tx_id, tree_id_,
-                                                                          x_guarded_meta->is_leaf_);
-    meta_wal_handler.SubmitWal();
+    // wal for meta node
+    auto* meta_bf = x_guarded_meta.bf();
+    WalBuilder<WalInitPage>{}
+        .InitHeader(0, 0, 0, meta_bf->page_.psn_, meta_bf->header_.page_id_, tree_id_)
+        .InitData(sys_tx_id, tree_id_, x_guarded_meta->is_leaf_)
+        .Submit();
+
+    // wal for root node
+    auto* root_bf = x_guarded_root.bf();
+    WalBuilder<WalInitPage>{}
+        .InitHeader(0, 0, 0, root_bf->page_.psn_, root_bf->header_.page_id_, tree_id_)
+        .InitData(sys_tx_id, tree_id_, x_guarded_root->is_leaf_)
+        .Submit();
 
     x_guarded_meta.SyncSystemTxId(sys_tx_id);
     x_guarded_root.SyncSystemTxId(sys_tx_id);
@@ -156,8 +165,12 @@ void BTreeGeneric::split_root_may_jump(TXID sys_tx_id, GuardedBufferFrame<BTreeN
   auto guarded_new_left = GuardedBufferFrame<BTreeNode>(bm, new_left_bf);
   auto x_guarded_new_left = ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guarded_new_left));
   if (config_.enable_wal_) {
+    auto* new_left_bf = x_guarded_new_left.bf();
+    WalBuilder<WalInitPage>{}
+        .InitHeader(0, 0, 0, new_left_bf->page_.psn_, new_left_bf->header_.page_id_, tree_id_)
+        .InitData(sys_tx_id, tree_id_, x_guarded_old_root->is_leaf_)
+        .Submit();
     x_guarded_new_left.SyncSystemTxId(sys_tx_id);
-    x_guarded_new_left.WriteWal<WalInitPage>(0, sys_tx_id, tree_id_, x_guarded_old_root->is_leaf_);
   }
   x_guarded_new_left.InitPayload(x_guarded_old_root->is_leaf_);
 
@@ -166,17 +179,25 @@ void BTreeGeneric::split_root_may_jump(TXID sys_tx_id, GuardedBufferFrame<BTreeN
   auto guarded_new_root = GuardedBufferFrame<BTreeNode>(bm, new_root_bf);
   auto x_guarded_new_root = ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guarded_new_root));
   if (config_.enable_wal_) {
+    auto* new_root_bf = x_guarded_new_root.bf();
+    WalBuilder<WalInitPage>{}
+        .InitHeader(0, 0, 0, new_root_bf->page_.psn_, new_root_bf->header_.page_id_, tree_id_)
+        .InitData(sys_tx_id, tree_id_, false)
+        .Submit();
     x_guarded_new_root.SyncSystemTxId(sys_tx_id);
-    x_guarded_new_root.WriteWal<WalInitPage>(0, sys_tx_id, tree_id_, false);
   }
   x_guarded_new_root.InitPayload(false);
 
   // 3.1. write wal on demand
   if (config_.enable_wal_) {
+    auto* old_root_bf = x_guarded_old_root.bf();
+    WalBuilder<WalSplitRoot>{}
+        .InitHeader(0, 0, 0, old_root_bf->page_.psn_, old_root_bf->header_.page_id_, tree_id_)
+        .InitData(sys_tx_id, x_guarded_new_left.bf()->header_.page_id_,
+                  x_guarded_new_root.bf()->header_.page_id_, x_guarded_meta.bf()->header_.page_id_,
+                  sep_info)
+        .Submit();
     x_guarded_old_root.SyncSystemTxId(sys_tx_id);
-    x_guarded_old_root.WriteWal<WalSplitRoot>(
-        0, sys_tx_id, x_guarded_new_left.bf()->header_.page_id_,
-        x_guarded_new_root.bf()->header_.page_id_, x_guarded_meta.bf()->header_.page_id_, sep_info);
   }
 
   // 3.2. move half of the old root to the new left,
@@ -212,17 +233,25 @@ void BTreeGeneric::split_non_root_may_jump(TXID sys_tx_id,
   auto guarded_new_left = GuardedBufferFrame<BTreeNode>(store_->buffer_manager_.get(), new_left_bf);
   auto x_guarded_new_left = ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guarded_new_left));
   if (config_.enable_wal_) {
+    auto* new_left_bf = x_guarded_new_left.bf();
+    WalBuilder<WalInitPage>{}
+        .InitHeader(0, 0, 0, new_left_bf->page_.psn_, new_left_bf->header_.page_id_, tree_id_)
+        .InitData(sys_tx_id, tree_id_, x_guarded_child->is_leaf_)
+        .Submit();
     x_guarded_new_left.SyncSystemTxId(sys_tx_id);
-    x_guarded_new_left.WriteWal<WalInitPage>(0, sys_tx_id, tree_id_, x_guarded_child->is_leaf_);
   }
   x_guarded_new_left.InitPayload(x_guarded_child->is_leaf_);
 
   // 2.1. write wal on demand or simply mark as dirty
   if (config_.enable_wal_) {
+    auto* child_bf = x_guarded_child.bf();
+    WalBuilder<WalSplitNonRoot>{}
+        .InitHeader(0, 0, 0, child_bf->page_.psn_, child_bf->header_.page_id_, tree_id_)
+        .InitData(sys_tx_id, x_guarded_parent.bf()->header_.page_id_,
+                  x_guarded_new_left.bf()->header_.page_id_, sep_info)
+        .Submit();
     x_guarded_parent.SyncSystemTxId(sys_tx_id);
     x_guarded_child.SyncSystemTxId(sys_tx_id);
-    x_guarded_child.WriteWal<WalSplitNonRoot>(0, sys_tx_id, x_guarded_parent.bf()->header_.page_id_,
-                                              x_guarded_new_left.bf()->header_.page_id_, sep_info);
   }
 
   // 2.2. make room for separator key in parent node

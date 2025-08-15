@@ -1,3 +1,5 @@
+#pragma once
+
 #include "btree/core/b_tree_wal_payload.hpp"
 #include "leanstore/btree/core/b_tree_node.hpp"
 #include "leanstore/buffer-manager/buffer_frame.hpp"

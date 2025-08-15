@@ -46,14 +46,16 @@ void GroupCommitter::CollectWalRecords(TXID& min_flushed_sys_tx, TXID& min_flush
   min_flushed_sys_tx = std::numeric_limits<TXID>::max();
   min_flushed_usr_tx = std::numeric_limits<TXID>::max();
   auto& loggings = store_->MvccManager()->Loggings();
+  auto& tx_mgrs = store_->MvccManager()->TxMgrs();
   LEAN_DCHECK(loggings.size() == num_rfa_txs.size());
 
   for (auto worker_id = 0u; worker_id < loggings.size(); worker_id++) {
+    auto& tx_mgr = tx_mgrs[worker_id];
     auto& logging = loggings[worker_id];
     // collect logging info
     {
-      LEAN_UNIQUE_LOCK(logging->rfa_tx_to_commit_mutex_);
-      num_rfa_txs[worker_id] = logging->rfa_tx_to_commit_.size();
+      LEAN_UNIQUE_LOCK(tx_mgr->rfa_tx_to_commit_mutex_);
+      num_rfa_txs[worker_id] = tx_mgr->rfa_tx_to_commit_.size();
     }
 
     auto last_req_version = wal_flush_req_copies[worker_id].version_;
@@ -115,20 +117,22 @@ void GroupCommitter::DetermineCommitableTx(TXID min_flushed_sys_tx, TXID min_flu
                                            const std::vector<uint64_t>& num_rfa_txs,
                                            const std::vector<WalFlushReq>& wal_flush_req_copies) {
   auto& loggings = store_->MvccManager()->Loggings();
+  auto& tx_mgrs = store_->MvccManager()->TxMgrs();
   for (WORKERID worker_id = 0; worker_id < loggings.size(); worker_id++) {
-    auto& logging = loggings[worker_id];
+    auto& tx_mgr = tx_mgrs[worker_id];
     const auto& req_copy = wal_flush_req_copies[worker_id];
 
     // update the flushed commit TS info
-    logging->wal_flushed_.store(req_copy.wal_buffered_, std::memory_order_release);
+    loggings[worker_id]->wal_flushed_.store(req_copy.wal_buffered_, std::memory_order_release);
 
     // commit transactions with remote dependency
     TXID max_commit_ts = 0;
     {
-      LEAN_UNIQUE_LOCK(logging->tx_to_commit_mutex_);
+      LEAN_UNIQUE_LOCK(tx_mgr->tx_to_commit_mutex_);
+      auto& tx_to_commit = tx_mgr->tx_to_commit_;
       uint64_t i = 0;
-      for (; i < logging->tx_to_commit_.size(); ++i) {
-        auto& tx = logging->tx_to_commit_[i];
+      for (; i < tx_to_commit.size(); ++i) {
+        auto& tx = tx_to_commit[i];
         if (!tx.CanCommit(min_flushed_sys_tx, min_flushed_usr_tx)) {
           break;
         }
@@ -139,18 +143,18 @@ void GroupCommitter::DetermineCommitableTx(TXID min_flushed_sys_tx, TXID min_flu
                   worker_id, tx.start_ts_, tx.commit_ts_, min_flushed_sys_tx, min_flushed_usr_tx);
       }
       if (i > 0) {
-        logging->tx_to_commit_.erase(logging->tx_to_commit_.begin(),
-                                     logging->tx_to_commit_.begin() + i);
+        tx_to_commit.erase(tx_to_commit.begin(), tx_to_commit.begin() + i);
       }
     }
 
     // commit transactions without remote dependency
     TXID max_commit_ts_rfa = 0;
     {
-      LEAN_UNIQUE_LOCK(logging->rfa_tx_to_commit_mutex_);
+      LEAN_UNIQUE_LOCK(tx_mgr->rfa_tx_to_commit_mutex_);
+      auto& tx_to_commit_rfa = tx_mgr->rfa_tx_to_commit_;
       uint64_t i = 0;
       for (; i < num_rfa_txs[worker_id]; ++i) {
-        auto& tx = logging->rfa_tx_to_commit_[i];
+        auto& tx = tx_to_commit_rfa[i];
         max_commit_ts_rfa = std::max<TXID>(max_commit_ts_rfa, tx.commit_ts_);
         tx.state_ = TxState::kCommitted;
         LEAN_DLOG("Transaction without remote dependency committed, workerId={}, startTs={}, "
@@ -158,8 +162,7 @@ void GroupCommitter::DetermineCommitableTx(TXID min_flushed_sys_tx, TXID min_flu
                   worker_id, tx.start_ts_, tx.commit_ts_);
       }
       if (i > 0) {
-        logging->rfa_tx_to_commit_.erase(logging->rfa_tx_to_commit_.begin(),
-                                         logging->rfa_tx_to_commit_.begin() + i);
+        tx_to_commit_rfa.erase(tx_to_commit_rfa.begin(), tx_to_commit_rfa.begin() + i);
       }
     }
 
@@ -173,7 +176,7 @@ void GroupCommitter::DetermineCommitableTx(TXID min_flushed_sys_tx, TXID min_flu
       signaled_up_to = std::min<TXID>(max_commit_ts, max_commit_ts_rfa);
     }
     if (signaled_up_to > 0) {
-      logging->UpdateSignaledCommitTs(signaled_up_to);
+      tx_mgr->UpdateLastCommittedUsrTx(signaled_up_to);
     }
   }
 

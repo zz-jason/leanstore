@@ -81,6 +81,10 @@ void TxManager::StartTx(TxMode mode, IsolationLevel level, bool is_read_only) {
 
   // Cleanup commit log if necessary
   cc_.commit_tree_.CompactCommitLog();
+
+#ifdef ENABLE_COROUTINE
+  CoroEnv::CurCoroExec()->AutoCommitter()->RegisterTxMgr(this);
+#endif
 }
 
 void TxManager::CommitTx() {
@@ -124,11 +128,11 @@ void TxManager::CommitTx() {
 
   // for group commit
   if (active_tx_.has_remote_dependency_) {
-    LEAN_UNIQUE_LOCK(CoroEnv::CurLogging().tx_to_commit_mutex_);
-    CoroEnv::CurLogging().tx_to_commit_.push_back(active_tx_);
+    LEAN_UNIQUE_LOCK(tx_to_commit_mutex_);
+    tx_to_commit_.push_back(active_tx_);
   } else {
-    LEAN_UNIQUE_LOCK(CoroEnv::CurLogging().rfa_tx_to_commit_mutex_);
-    CoroEnv::CurLogging().rfa_tx_to_commit_.push_back(active_tx_);
+    LEAN_UNIQUE_LOCK(rfa_tx_to_commit_mutex_);
+    rfa_tx_to_commit_.push_back(active_tx_);
   }
 
   // Cleanup versions in history tree
@@ -140,7 +144,11 @@ void TxManager::CommitTx() {
             worker_id_, active_tx_.start_ts_, active_tx_.commit_ts_,
             active_tx_.max_observed_sys_tx_id_, active_tx_.has_remote_dependency_);
 
-  CoroEnv::CurLogging().WaitToCommit(active_tx_.commit_ts_);
+  WaitToCommit(active_tx_.commit_ts_);
+
+#ifdef ENABLE_COROUTINE
+  CoroEnv::CurCoroExec()->AutoCommitter()->UnregisterTxMgr(this);
+#endif
 }
 
 /// TODO(jian.z): revert changes made in-place on the btree process of a transaction abort:
@@ -194,6 +202,10 @@ void TxManager::AbortTx() {
     WriteWalTxAbort();
     WriteWalTxFinish();
   }
+
+#ifdef ENABLE_COROUTINE
+  CoroEnv::CurCoroExec()->AutoCommitter()->UnregisterTxMgr(this);
+#endif
 }
 
 void TxManager::WriteWalTxAbort() {
@@ -201,10 +213,9 @@ void TxManager::WriteWalTxAbort() {
 
   // Reserve space
   auto size = sizeof(WalTxAbort);
-  logging.ReserveWalBuffer(size);
+  auto* data = logging.ReserveWalBuffer(size);
 
   // Initialize a WalTxAbort
-  auto* data = logging.wal_buffer_ + logging.wal_buffered_;
   std::memset(data, 0, size);
   auto* entry [[maybe_unused]] = new (data) WalTxAbort(size);
 
@@ -221,10 +232,9 @@ void TxManager::WriteWalTxFinish() {
 
   // Reserve space
   auto size = sizeof(WalTxFinish);
-  logging.ReserveWalBuffer(size);
+  auto* data = logging.ReserveWalBuffer(size);
 
   // Initialize a WalTxFinish
-  auto* data = logging.wal_buffer_ + logging.wal_buffered_;
   std::memset(data, 0, size);
   auto* entry [[maybe_unused]] = new (data) WalTxFinish(active_tx_.start_ts_);
 
