@@ -25,13 +25,11 @@ namespace leanstore::test {
 class CoroLeanStoreTest : public LeanTestSuite {};
 
 TEST_F(CoroLeanStoreTest, BasicKv) {
-  // GTEST_SKIP() << "Skipping test BasicKv, as logging is not correctly implemented yet.";
-
   static constexpr auto kBtreeName = "test_btree";
   static constexpr auto kNumKeys = 100;
   static constexpr auto kKeyPattern = "key_btree_LL_xxxxxxxxxxxx_{}";
   static constexpr auto kValPattern = "VAL_BTREE_LL_YYYYYYYYYYYY_{}";
-  static constexpr auto kEnableWal = false;
+  static constexpr auto kEnableWal = true;
   static constexpr auto kBtreeConfig = BTreeConfig{
       .enable_wal_ = kEnableWal,
       .use_bulk_insert_ = false,

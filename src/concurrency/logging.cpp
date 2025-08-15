@@ -5,7 +5,6 @@
 #include "leanstore/exceptions.hpp"
 #include "leanstore/utils/log.hpp"
 #include "utils/coroutine/coro_env.hpp"
-#include "utils/coroutine/coroutine.hpp"
 #include "utils/to_json.hpp"
 
 #include <cstring>
@@ -20,7 +19,7 @@ uint32_t Logging::WalContiguousFreeSpace() {
   return flushed - wal_buffered_;
 }
 
-void Logging::ReserveContiguousBuffer(uint32_t bytes_required) {
+void Logging::ReserveWalBuffer(uint32_t bytes_required) {
   // Spin until there is enough space. The wal ring buffer space is reclaimed
   // when the group commit thread commits the written wal entries.
   while (true) {
@@ -49,42 +48,6 @@ void Logging::ReserveContiguousBuffer(uint32_t bytes_required) {
   }
 }
 
-void Logging::WriteWalTxAbort() {
-  // Reserve space
-  auto size = sizeof(WalTxAbort);
-  ReserveContiguousBuffer(size);
-
-  // Initialize a WalTxAbort
-  auto* data = wal_buffer_ + wal_buffered_;
-  std::memset(data, 0, size);
-  auto* entry [[maybe_unused]] = new (data) WalTxAbort(size);
-
-  // Submit the WalTxAbort to group committer
-  wal_buffered_ += size;
-  PublishWalFlushReq();
-
-  LEAN_DLOG("WriteWalTxAbort, workerId={}, startTs={}, walJson={}", CoroEnv::CurTxMgr().worker_id_,
-            CoroEnv::CurTxMgr().ActiveTx().start_ts_, utils::ToJsonString(entry));
-}
-
-void Logging::WriteWalTxFinish() {
-  // Reserve space
-  auto size = sizeof(WalTxFinish);
-  ReserveContiguousBuffer(size);
-
-  // Initialize a WalTxFinish
-  auto* data = wal_buffer_ + wal_buffered_;
-  std::memset(data, 0, size);
-  auto* entry [[maybe_unused]] = new (data) WalTxFinish(CoroEnv::CurTxMgr().ActiveTx().start_ts_);
-
-  // Submit the WalTxAbort to group committer
-  wal_buffered_ += size;
-  PublishWalFlushReq();
-
-  LEAN_DLOG("WriteWalTxFinish, workerId={}, startTs={}, walJson={}", CoroEnv::CurTxMgr().worker_id_,
-            CoroEnv::CurTxMgr().ActiveTx().start_ts_, utils::ToJsonString(entry));
-}
-
 void Logging::WriteWalCarriageReturn() {
   LEAN_DCHECK(wal_flushed_ <= wal_buffered_,
               "CarriageReturn should only used for the last bytes in the wal buffer");
@@ -95,29 +58,10 @@ void Logging::WriteWalCarriageReturn() {
   PublishWalBufferedOffset();
 }
 
-void Logging::SubmitWALEntryComplex(uint64_t total_size) {
-  active_walentry_complex_->crc32_ = active_walentry_complex_->ComputeCRC32();
-  wal_buffered_ += total_size;
-  PublishWalFlushReq();
-
-  LEAN_DLOG("SubmitWal, workerId={}, startTs={}, walJson={}", CoroEnv::CurTxMgr().worker_id_,
-            CoroEnv::CurTxMgr().ActiveTx().start_ts_,
-            utils::ToJsonString(active_walentry_complex_));
-}
-
-void Logging::PublishWalBufferedOffset() {
-  wal_flush_req_.UpdateAttribute(&WalFlushReq::wal_buffered_, wal_buffered_);
-}
-
-void Logging::PublishWalFlushReq() {
-  auto start_ts = CoroEnv::CurTxMgr().ActiveTx().start_ts_;
-  WalFlushReq current(wal_buffered_, sys_tx_writtern_, start_ts);
-  wal_flush_req_.Set(current);
-}
-
 // Called by worker, so concurrent writes on the buffer
-void Logging::IterateCurrentTxWALs(std::function<void(const WalEntry& entry)> callback) {
-  uint64_t cursor = tx_wal_begin_;
+void Logging::IterateCurrentTxWALs(uint64_t first_wal,
+                                   std::function<void(const WalEntry& entry)> callback) {
+  uint64_t cursor = first_wal;
   while (cursor != wal_buffered_) {
     const WalEntry& entry = *reinterpret_cast<WalEntry*>(wal_buffer_ + cursor);
     DEBUG_BLOCK() {

@@ -2,6 +2,7 @@
 
 #include "leanstore-c/perf_counters.h"
 #include "leanstore/concurrency/transaction.hpp"
+#include "leanstore/concurrency/wal_entry.hpp"
 #include "leanstore/sync/optimistic_guarded.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/counter_util.hpp"
@@ -54,14 +55,11 @@ class WalPayloadHandler;
 /// Helps to transaction concurrenct control and write-ahead logging.
 class Logging {
 public:
-  LID prev_lsn_;
+  /// Logical sequence number, i.e., the unique ID of each WAL.
+  LID lsn_clock_ = 0;
 
-  /// The active complex WalEntry for the current transaction, usually used for insert, update,
-  /// delete, or btree related operations.
-  ///
-  /// NOTE: Either active_walentry_simple_ or active_walentry_complex_ is effective during
-  /// transaction processing.
-  WalEntryComplex* active_walentry_complex_;
+  /// The previous LSN of the current transaction, used to link WAL entries.
+  LID prev_lsn_;
 
   /// Protects tx_to_commit_
   LeanMutex tx_to_commit_mutex_;
@@ -85,18 +83,17 @@ public:
 
   storage::OptimisticGuarded<WalFlushReq> wal_flush_req_;
 
-  /// The ring buffer of the current worker thread. All the wal entries of the current worker are
-  /// writtern to this ring buffer firstly, then flushed to disk by the group commit thread.
-  ALIGNAS(512) uint8_t* wal_buffer_;
+  /// The maximum writtern system transaction ID in the worker.
+  TXID sys_tx_writtern_ = 0;
+
+  /// File descriptor for the write-ahead log.
+  int32_t wal_fd_ = -1;
+
+  /// Start offset of the next WalEntry.
+  uint64_t wal_size_ = 0;
 
   /// The size of the wal ring buffer.
   uint64_t wal_buffer_bytes_;
-
-  /// Used to track the write order of wal entries.
-  LID lsn_clock_ = 0;
-
-  /// The maximum writtern system transaction ID in the worker.
-  TXID sys_tx_writtern_ = 0;
 
   /// Written offset of the wal ring buffer.
   uint64_t wal_buffered_ = 0;
@@ -106,19 +103,14 @@ public:
   /// thread.
   std::atomic<uint64_t> wal_flushed_ = 0;
 
-  /// The first WAL record of the current active transaction.
-  uint64_t tx_wal_begin_;
-
-  /// File descriptor for the write-ahead log.
-  int32_t wal_fd_ = -1;
-
-  /// Start offset of the next WalEntry.
-  uint64_t wal_size_ = 0;
+  /// The ring buffer of the current worker thread. All the wal entries of the current worker are
+  /// writtern to this ring buffer firstly, then flushed to disk by the group commit thread.
+  ALIGNAS(512) uint8_t* wal_buffer_;
 
 public:
   Logging(uint64_t wal_buffer_bytes)
-      : wal_buffer_((uint8_t*)(std::aligned_alloc(512, wal_buffer_bytes))),
-        wal_buffer_bytes_(wal_buffer_bytes) {
+      : wal_buffer_bytes_(wal_buffer_bytes),
+        wal_buffer_((uint8_t*)(std::aligned_alloc(512, wal_buffer_bytes))) {
     std::memset(wal_buffer_, 0, wal_buffer_bytes);
   }
 
@@ -128,6 +120,12 @@ public:
       wal_buffer_ = nullptr;
     }
   }
+
+  LID ReserveLsn() {
+    return lsn_clock_++;
+  }
+
+  void ReserveWalBuffer(uint32_t requested_size);
 
   void UpdateSignaledCommitTs(const LID signaled_commit_ts) {
     signaled_commit_ts_.store(signaled_commit_ts, std::memory_order_release);
@@ -139,22 +137,9 @@ public:
     }
   }
 
-  void ReserveContiguousBuffer(uint32_t requested_size);
-
   /// Iterate over current TX entries
-  void IterateCurrentTxWALs(std::function<void(const WalEntry& entry)> callback);
-
-  void WriteWalTxAbort();
-  void WriteWalTxFinish();
-  void WriteWalCarriageReturn();
-
-  template <typename T, typename... Args>
-  WalPayloadHandler<T> ReserveWALEntryComplex(uint64_t payload_size, PID page_id, LID psn,
-                                              TREEID tree_id, Args&&... args);
-
-  /// Submits wal record to group committer when it is ready to flush to disk.
-  /// @param totalSize size of the wal record to be flush.
-  void SubmitWALEntryComplex(uint64_t total_size);
+  void IterateCurrentTxWALs(uint64_t first_wal,
+                            std::function<void(const WalEntry& entry)> callback);
 
   TXID GetSysTxWrittern() const {
     return sys_tx_writtern_;
@@ -187,6 +172,11 @@ public:
     return true;
   }
 
+  void PublishWalFlushReq(TXID start_ts) {
+    WalFlushReq current(wal_buffered_, sys_tx_writtern_, start_ts);
+    wal_flush_req_.Set(current);
+  }
+
 private:
   static constexpr auto kFlags = O_DIRECT | O_RDWR | O_CREAT | O_TRUNC;
   static constexpr auto kFileMode = 0666;
@@ -203,13 +193,15 @@ private:
     wal_size_ += upper - lower;
   }
 
-  void PublishWalBufferedOffset();
-
-  void PublishWalFlushReq();
+  void PublishWalBufferedOffset() {
+    wal_flush_req_.UpdateAttribute(&WalFlushReq::wal_buffered_, wal_buffered_);
+  }
 
   /// Calculate the continuous free space left in the wal ring buffer. Return
   /// size of the contiguous free space.
   uint32_t WalContiguousFreeSpace();
+
+  void WriteWalCarriageReturn();
 };
 
 } // namespace leanstore::cr

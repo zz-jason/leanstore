@@ -12,9 +12,7 @@
 #include <vector>
 
 namespace leanstore {
-
 class LeanStore;
-
 } // namespace leanstore
 
 namespace leanstore::cr {
@@ -48,6 +46,11 @@ public:
 
   /// ID of the current worker itself.
   const uint64_t worker_id_;
+
+  /// The active complex WalEntry for the current transaction, usually used for insert, update,
+  /// delete, or btree related operations.
+  /// NOTE: Only effective during transaction processing.
+  WalEntryComplex* active_walentry_complex_ = nullptr;
 
   /// All the workers.
   std::vector<std::unique_ptr<TxManager>>& tx_mgrs_;
@@ -97,6 +100,35 @@ public:
   void UpdateLastCommittedUsrTx(TXID usr_tx_id) {
     last_committed_usr_tx_.store(usr_tx_id, std::memory_order_release);
   }
+
+  void WriteWalTxAbort();
+  void WriteWalTxFinish();
+
+  template <typename T, typename... Args>
+  WalPayloadHandler<T> ReserveWALEntryComplex(uint64_t payload_size, PID page_id, LID psn,
+                                              TREEID tree_id, Args&&... args) {
+    auto& logging = CoroEnv::CurLogging();
+
+    auto prev_lsn = active_tx_.prev_wal_lsn_;
+    active_tx_.has_wrote_ = true;
+    SCOPED_DEFER(active_tx_.prev_wal_lsn_ = active_walentry_complex_->lsn_);
+
+    auto entry_lsn = logging.ReserveLsn();
+    auto* entry_ptr = logging.wal_buffer_ + logging.wal_buffered_;
+    auto entry_size = sizeof(WalEntryComplex) + payload_size;
+    logging.ReserveWalBuffer(entry_size);
+
+    active_walentry_complex_ = new (entry_ptr) WalEntryComplex(
+        entry_lsn, prev_lsn, entry_size, worker_id_, active_tx_.start_ts_, psn, page_id, tree_id);
+
+    auto* payload_ptr = active_walentry_complex_->payload_;
+    auto wal_payload = new (payload_ptr) T(std::forward<Args>(args)...);
+    return {wal_payload, entry_size};
+  }
+
+  /// Submits wal record to group committer when it is ready to flush to disk.
+  /// @param totalSize size of the wal record to be flush.
+  void SubmitWALEntryComplex(uint64_t total_size);
 
   static constexpr uint64_t kRcBit = (1ull << 63);
   static constexpr uint64_t kLongRunningBit = (1ull << 62);
