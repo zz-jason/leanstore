@@ -152,9 +152,6 @@ public:
   void SyncSystemTxId(TXID sys_tx_id) {
     LEAN_DCHECK(bf_ != nullptr);
 
-    // update last writer worker
-    bf_->header_.last_writer_worker_ = CoroEnv::CurTxMgr().worker_id_;
-
     // update system transaction id
     bf_->page_.sys_tx_id_ = sys_tx_id;
 

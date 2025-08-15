@@ -435,7 +435,6 @@ void LeanStore::GetBasicKV(const std::string& name, storage::btree::BasicKV** bt
 }
 
 void LeanStore::DropBasicKV(const std::string& name) {
-  LEAN_DCHECK(CoroEnv::CurTxMgr().IsTxStarted());
   auto* btree =
       dynamic_cast<leanstore::storage::btree::BTreeGeneric*>(tree_registry_->GetTree(name));
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
@@ -481,7 +480,6 @@ void LeanStore::GetTransactionKV(const std::string& name, storage::btree::Transa
 }
 
 void LeanStore::DropTransactionKV(const std::string& name) {
-  LEAN_DCHECK(CoroEnv::CurTxMgr().IsTxStarted());
   auto* btree = DownCast<storage::btree::BTreeGeneric*>(tree_registry_->GetTree(name));
   leanstore::storage::btree::BTreeGeneric::FreeAndReclaim(*btree);
   auto res = tree_registry_->UnregisterTree(name);

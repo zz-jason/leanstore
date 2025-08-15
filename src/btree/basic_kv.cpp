@@ -4,6 +4,7 @@
 #include "leanstore/btree/core/b_tree_generic.hpp"
 #include "leanstore/btree/core/btree_iter.hpp"
 #include "leanstore/btree/core/btree_iter_mut.hpp"
+#include "leanstore/concurrency/wal_builder.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
@@ -161,20 +162,21 @@ OpCode BasicKV::Insert(Slice key, Slice val) {
     auto ret = x_iter->InsertKV(key, val);
 
     if (ret == OpCode::kDuplicated) {
-      Log::Info("Insert duplicated, workerId={}, key={}, treeId={}", CoroEnv::CurTxMgr().worker_id_,
-                key.ToString(), tree_id_);
+      Log::Info("Insert duplicated, key={}, treeId={}", key.ToString(), tree_id_);
       JUMPMU_RETURN OpCode::kDuplicated;
     }
 
     if (ret != OpCode::kOK) {
-      Log::Info("Insert failed, workerId={}, key={}, ret={}", CoroEnv::CurTxMgr().worker_id_,
-                key.ToString(), ToString(ret));
+      Log::Info("Insert failed, key={}, ret={}", key.ToString(), ToString(ret));
       JUMPMU_RETURN ret;
     }
 
     if (config_.enable_wal_) {
-      auto wal_size = key.length() + val.length();
-      x_iter->guarded_leaf_.WriteWal<WalInsert>(wal_size, key, val);
+      auto* bf = x_iter->guarded_leaf_.bf_;
+      WalBuilder<WalInsert>{key.length() + val.length()}
+          .InitHeader(0, 0, 0, bf->page_.psn_, bf->header_.page_id_, tree_id_)
+          .InitData(key, val)
+          .Submit();
     }
   }
   JUMPMU_CATCH() {

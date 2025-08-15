@@ -19,7 +19,7 @@ uint32_t Logging::WalContiguousFreeSpace() {
   return flushed - wal_buffered_;
 }
 
-void Logging::ReserveWalBuffer(uint32_t bytes_required) {
+uint8_t* Logging::ReserveWalBuffer(uint32_t bytes_required) {
   // Spin until there is enough space. The wal ring buffer space is reclaimed
   // when the group commit thread commits the written wal entries.
   while (true) {
@@ -34,7 +34,7 @@ void Logging::ReserveWalBuffer(uint32_t bytes_required) {
         continue;
       }
       // Have enough space from wal_buffered_ to the end
-      return;
+      return wal_buffer_ + wal_buffered_;
     }
 
     if (flushed - wal_buffered_ < bytes_required) {
@@ -44,7 +44,7 @@ void Logging::ReserveWalBuffer(uint32_t bytes_required) {
 #endif
       continue;
     }
-    return;
+    return wal_buffer_ + wal_buffered_;
   }
 }
 

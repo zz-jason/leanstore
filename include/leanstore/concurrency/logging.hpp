@@ -1,21 +1,16 @@
 #pragma once
 
-#include "leanstore-c/perf_counters.h"
-#include "leanstore/concurrency/transaction.hpp"
 #include "leanstore/concurrency/wal_entry.hpp"
 #include "leanstore/sync/optimistic_guarded.hpp"
 #include "leanstore/units.hpp"
-#include "leanstore/utils/counter_util.hpp"
 #include "leanstore/utils/misc.hpp"
 #include "leanstore/utils/portable.hpp"
 #include "utils/coroutine/coro_io.hpp"
-#include "utils/coroutine/lean_mutex.hpp"
 
 #include <algorithm>
 #include <atomic>
 #include <functional>
 #include <string_view>
-#include <vector>
 
 namespace leanstore::cr {
 
@@ -61,26 +56,6 @@ public:
   /// The previous LSN of the current transaction, used to link WAL entries.
   LID prev_lsn_;
 
-  /// Protects tx_to_commit_
-  LeanMutex tx_to_commit_mutex_;
-
-  /// The queue for each worker thread to store pending-to-commit transactions which have remote
-  /// dependencies.
-  std::vector<Transaction> tx_to_commit_;
-
-  /// Protects tx_to_commit_
-  LeanMutex rfa_tx_to_commit_mutex_;
-
-  /// The queue for each worker thread to store pending-to-commit transactions which doesn't have
-  /// any remote dependencies.
-  std::vector<Transaction> rfa_tx_to_commit_;
-
-  /// Represents the maximum commit timestamp in the worker. Transactions in the worker are
-  /// committed if their commit timestamps are smaller than it.
-  ///
-  /// Updated by group committer
-  std::atomic<TXID> signaled_commit_ts_ = 0;
-
   storage::OptimisticGuarded<WalFlushReq> wal_flush_req_;
 
   /// The maximum writtern system transaction ID in the worker.
@@ -125,16 +100,12 @@ public:
     return lsn_clock_++;
   }
 
-  void ReserveWalBuffer(uint32_t requested_size);
+  uint8_t* ReserveWalBuffer(uint32_t requested_size);
 
-  void UpdateSignaledCommitTs(const LID signaled_commit_ts) {
-    signaled_commit_ts_.store(signaled_commit_ts, std::memory_order_release);
-  }
-
-  void WaitToCommit(const TXID commit_ts) {
-    COUNTER_INC(&tls_perf_counters.tx_commit_wait_);
-    while (!(commit_ts <= signaled_commit_ts_.load())) {
-    }
+  void AdvanceWalBuffer(uint32_t size) {
+    LEAN_DCHECK(wal_buffered_ + size <= wal_buffer_bytes_);
+    wal_buffered_ += size;
+    wal_flush_req_.UpdateAttribute(&WalFlushReq::wal_buffered_, wal_buffered_);
   }
 
   /// Iterate over current TX entries

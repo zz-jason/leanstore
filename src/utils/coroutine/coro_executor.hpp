@@ -97,6 +97,10 @@ public:
     eviction_pending_partitions_.insert(partition_id);
   }
 
+  AutoCommitProtocol* AutoCommitter() const {
+    return commit_protocol_;
+  }
+
   static CoroIo* CurrentCoroIo() {
     return &CurrentThread()->coro_io_;
   }
