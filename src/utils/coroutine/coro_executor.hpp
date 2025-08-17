@@ -74,10 +74,11 @@ public:
 
   void EnqueueCoro(std::unique_ptr<Coroutine>&& coroutine) {
     user_task_queue_.PushBack(std::move(coroutine));
+    cv_.notify_all();
   }
 
-  void DequeueCoro(std::unique_ptr<Coroutine>& coroutine) {
-    user_task_queue_.PopFront(coroutine);
+  bool DequeueCoro(std::unique_ptr<Coroutine>& coroutine) {
+    return user_task_queue_.TryPopFront(coroutine);
   }
 
   bool IsCoroReadyToRun(std::unique_ptr<Coroutine>& coroutine, bool& sys_coro_required);
@@ -153,6 +154,9 @@ private:
 
   BlockingQueueMpsc<std::unique_ptr<Coroutine>> user_task_queue_{CoroEnv::kMaxCoroutinesPerThread};
 
+  /// Task slots for user tasks.
+  std::vector<std::unique_ptr<Coroutine>> user_tasks_;
+
   /// Task queue for system tasks, e.g. IO operations.
   std::vector<std::unique_ptr<Coroutine>> sys_tasks_;
 
@@ -173,6 +177,10 @@ private:
   JumpContext def_jump_context_;
 
   inline static thread_local CoroExecutor* s_current_thread = nullptr;
+
+  /// conditional variable and mutex to wake up the thread
+  std::condition_variable cv_;
+  std::mutex cv_mutex_;
 };
 
 } // namespace leanstore
