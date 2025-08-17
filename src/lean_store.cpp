@@ -65,18 +65,20 @@ LeanStore::LeanStore(StoreOption* option) : store_option_(option) {
   // create global buffer manager and page evictors
   buffer_manager_ = std::make_unique<storage::BufferManager>(this);
 
-  auto num_tx_mgrs = store_option_->worker_threads_ * store_option_->max_concurrent_tx_per_worker_;
-  mvcc_mgr_ = std::make_unique<leanstore::MvccManager>(num_tx_mgrs, this);
+  mvcc_mgr_ = std::make_unique<leanstore::MvccManager>(this);
 
 #ifdef ENABLE_COROUTINE
   coro_scheduler_ = new CoroScheduler(this, store_option_->worker_threads_);
   coro_scheduler_->Init();
   buffer_manager_->InitFreeBfLists();
   crmanager_ = nullptr;
+  coro_scheduler_->Submit([&]() { mvcc_mgr_->InitHistoryStorage(); })->Wait();
 #else
   buffer_manager_->InitFreeBfLists();
   buffer_manager_->StartPageEvictors();
   crmanager_ = new cr::CRManager(this);
+  crmanager_->worker_threads_[0]->SetJob([&]() { mvcc_mgr_->InitHistoryStorage(); });
+  crmanager_->worker_threads_[0]->Wait();
 #endif
 
   // recover from disk
@@ -452,9 +454,8 @@ Result<storage::btree::TransactionKV*> LeanStore::CreateTransactionKV(const std:
   if (auto res = storage::btree::BasicKV::Create(
           this, graveyard_name, BTreeConfig{.enable_wal_ = false, .use_bulk_insert_ = false});
       !res) {
-    Log::Error("Failed to create TransactionKV graveyard"
-               ", btreeVI={}, graveyardName={}, error={}",
-               name, graveyard_name, res.error().ToString());
+    Log::Error("Create graveyard failed, btree_name={}, graveyard_name={}, error={}", name,
+               graveyard_name, res.error().ToString());
     return std::unexpected(std::move(res.error()));
   } else {
     graveyard = res.value();
@@ -467,8 +468,7 @@ Result<storage::btree::TransactionKV*> LeanStore::CreateTransactionKV(const std:
         *static_cast<leanstore::storage::btree::BTreeGeneric*>(graveyard));
     auto res2 = tree_registry_->UnRegisterTree(graveyard->tree_id_);
     if (!res2) {
-      Log::Error("UnRegister TransactionKV graveyard failed, graveyardName={}, "
-                 "error={}",
+      Log::Error("Unregister graveyard failed, btree_name={}, graveyard_name={}, error={}", name,
                  graveyard_name, res2.error().ToString());
     }
   }

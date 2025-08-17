@@ -18,13 +18,11 @@
 namespace leanstore {
 
 enum class CoroState : uint8_t {
-  kReady = 0,          // Ready to run, not started yet.
-  kRunning,            // Running, not yielded yet.
-  kWaitingBufferFrame, // Waiting for buffer frame.
-  kWaitingMutex,       // Waiting for mutex.
-  kWaitingJumpLock,    // Waiting for jump lock.
-  kWaitingIo,          // Waiting for IO operation, read/write file, etc.
-  kDone,               // Finished execution.
+  kReady = 0,    // Ready to run, not started yet.
+  kRunning,      // Running, not yielded yet.
+  kWaitingMutex, // Waiting for mutex.
+  kWaitingIo,    // Waiting for IO operation, read/write file, etc.
+  kDone,         // Finished execution.
 };
 
 class Coroutine {
@@ -122,7 +120,7 @@ public:
   }
 
   bool IsWaiting() const {
-    return state_ >= CoroState::kWaitingBufferFrame && state_ <= CoroState::kWaitingIo;
+    return state_ > CoroState::kRunning && state_ <= CoroState::kWaitingIo;
   }
 
   bool IsDone() const {

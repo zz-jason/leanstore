@@ -3,7 +3,6 @@
 #include "leanstore-c/store_option.h"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/concurrency/group_committer.hpp"
-#include "leanstore/concurrency/history_storage.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/concurrency/worker_thread.hpp"
 #include "leanstore/lean_store.hpp"
@@ -34,9 +33,6 @@ CRManager::CRManager(leanstore::LeanStore* store) : store_(store), group_committ
 
   // start group commit thread
   StartGroupCommitter(num_worker_threads);
-
-  // create history storage for each worker
-  CreateWorkerHistories();
 }
 
 void CRManager::StartWorkerThreads(uint64_t num_worker_threads) {
@@ -80,31 +76,6 @@ void CRManager::Stop() {
 
 CRManager::~CRManager() {
   Stop();
-}
-
-void CRManager::CreateWorkerHistories() {
-  if (worker_threads_.empty()) {
-    return;
-  }
-
-  auto create_btree = [this](const std::string& name) -> storage::btree::BasicKV* {
-    auto res = storage::btree::BasicKV::Create(store_, name, kBtreeConfig);
-    if (!res) {
-      Log::Fatal("Create btree failed, name={}, error={}", name, res.error().ToString());
-    }
-    return res.value();
-  };
-
-  worker_threads_[0]->SetJob([&]() {
-    auto& tx_mgrs = store_->MvccManager()->TxMgrs();
-    for (uint64_t i = 0; i < store_->store_option_->worker_threads_; i++) {
-      std::string update_btree_name = std::format(kUpdateNameFormat, i);
-      std::string remove_btree_name = std::format(kRemoveNameFormat, i);
-      tx_mgrs[i]->cc_.history_storage_.SetUpdateIndex(create_btree(update_btree_name));
-      tx_mgrs[i]->cc_.history_storage_.SetRemoveIndex(create_btree(remove_btree_name));
-    }
-  });
-  worker_threads_[0]->Wait();
 }
 
 utils::JsonObj CRManager::Serialize() const {

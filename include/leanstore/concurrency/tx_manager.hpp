@@ -6,6 +6,7 @@
 #include "leanstore/concurrency/transaction.hpp"
 #include "leanstore/units.hpp"
 #include "utils/coroutine/coro_env.hpp"
+#include "utils/coroutine/coroutine.hpp"
 
 #include <atomic>
 #include <memory>
@@ -47,9 +48,6 @@ public:
   /// The queue for each worker thread to store pending-to-commit transactions which doesn't have
   /// any remote dependencies.
   std::vector<Transaction> rfa_tx_to_commit_;
-
-  /// Last committed system transaction ID in the worker.
-  std::atomic<TXID> last_committed_sys_tx_ = 0;
 
   /// Last committed user transaction ID in the worker.
   std::atomic<TXID> last_committed_usr_tx_ = 0;
@@ -99,16 +97,8 @@ public:
   /// Get the PerfCounters of the current worker.
   PerfCounters* GetPerfCounters();
 
-  TXID GetLastCommittedSysTx() const {
-    return last_committed_sys_tx_.load(std::memory_order_acquire);
-  }
-
   TXID GetLastCommittedUsrTx() const {
     return last_committed_usr_tx_.load(std::memory_order_acquire);
-  }
-
-  void UpdateLastCommittedSysTx(TXID sys_tx_id) {
-    last_committed_sys_tx_.store(sys_tx_id, std::memory_order_release);
   }
 
   void UpdateLastCommittedUsrTx(TXID usr_tx_id) {
@@ -150,6 +140,9 @@ public:
 private:
   void WaitToCommit(const TXID commit_ts) {
     while (!(commit_ts <= GetLastCommittedUsrTx())) {
+#ifdef ENABLE_COROUTINE
+      CoroEnv::CurCoro()->Yield(CoroState::kRunning);
+#endif
     }
   }
 };

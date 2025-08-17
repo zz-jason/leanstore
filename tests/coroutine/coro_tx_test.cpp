@@ -5,6 +5,7 @@
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/lean_store.hpp"
+#include "utils/coroutine/coro_env.hpp"
 #include "utils/coroutine/coro_executor.hpp"
 
 #include <gtest/gtest.h>
@@ -22,7 +23,7 @@
 
 namespace leanstore::test {
 
-class CoroTxnTest : public LeanTestSuite {
+class CoroTxTest : public LeanTestSuite {
 protected:
   static constexpr auto kTestDirPattern = "/tmp/leanstore/{}/{}";
   static constexpr auto kBtreeName = "coro_txn_test";
@@ -36,9 +37,7 @@ protected:
   };
 };
 
-TEST_F(CoroTxnTest, BasicCommit) {
-  GTEST_SKIP() << "Skipping test BasicCommit, as logging/tx is not correctly implemented yet.";
-
+TEST_F(CoroTxTest, BasicCommit) {
   StoreOption* option = CreateStoreOption(TestCaseStoreDir().c_str());
   option->create_from_scratch_ = true;
   option->enable_wal_ = kEnableWal;
@@ -56,7 +55,11 @@ TEST_F(CoroTxnTest, BasicCommit) {
     kv_to_test.push_back(std::make_tuple(key, val));
   }
 
-  // create leanstore btree for table records
+  auto& tx_mgrs = store->MvccManager()->TxMgrs();
+  [[maybe_unused]] auto* tx_mgr_0 = tx_mgrs[0].get();
+  [[maybe_unused]] auto* tx_mgr_1 = tx_mgrs[1].get();
+
+  // create btree for table records
   storage::btree::TransactionKV* btree = nullptr;
   auto job_create_btree = [&]() {
     auto res = store->CreateTransactionKV(kBtreeName, kBtreeConfig);
@@ -68,6 +71,7 @@ TEST_F(CoroTxnTest, BasicCommit) {
 
   // insert key-value pairs in worker 0
   auto job_insert = [&]() {
+    CoroEnv::SetCurTxMgr(tx_mgr_0);
     for (const auto& [key, val] : kv_to_test) {
       CoroEnv::CurTxMgr().StartTx();
       EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);

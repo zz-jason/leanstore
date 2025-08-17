@@ -7,10 +7,29 @@
 #include "utils/coroutine/mvcc_manager.hpp"
 #include "utils/scoped_timer.hpp"
 
+#include <limits>
+
 namespace leanstore {
 
-bool AutoCommitProtocol::LogFlush() {
-  return CoroEnv::CurLogging().CoroFlush();
+void AutoCommitProtocol::LogFlush() {
+  auto& logging = CoroEnv::CurLogging();
+
+  logging.CoroFlush();
+
+  // All system transactions are hardened after log flush
+  logging.SetLastHardenedSysTx(logging.GetBufferedSysTx());
+
+  // All user transactions are hardened after log flush
+  auto max_hardened_usr_tx = std::numeric_limits<TXID>::min();
+  for (auto* tx_mgr : active_tx_mgrs_) {
+    for (auto& tx : tx_mgr->tx_to_commit_) {
+      max_hardened_usr_tx = std::max<TXID>(max_hardened_usr_tx, tx.start_ts_);
+    }
+    for (auto& tx : tx_mgr->rfa_tx_to_commit_) {
+      max_hardened_usr_tx = std::max<TXID>(max_hardened_usr_tx, tx.start_ts_);
+    }
+  }
+  logging.SetLastHardenedUsrTx(max_hardened_usr_tx);
 }
 
 void AutoCommitProtocol::CommitAck() {
@@ -49,23 +68,30 @@ void AutoCommitProtocol::TrySyncLastCommittedTx() {
   });
 
   // sync last committed sys tx
+  auto min_committed_sys_tx = std::numeric_limits<TXID>::max();
   auto& loggings = store_->MvccManager()->Loggings();
   for (auto i = 0u; i < loggings.size(); i++) {
-    auto last_committed_sys_tx = loggings[i]->GetSysTxWrittern();
+    auto last_committed_sys_tx = loggings[i]->GetLastHardenedSysTx();
     if (last_committed_sys_tx != synced_last_committed_sys_tx_[i]) {
       synced_last_committed_sys_tx_[i] = last_committed_sys_tx;
-      min_committed_sys_tx_ = std::min(min_committed_sys_tx_, last_committed_sys_tx);
+      min_committed_sys_tx = std::min(min_committed_sys_tx, last_committed_sys_tx);
     }
+  }
+  if (min_committed_sys_tx != std::numeric_limits<TXID>::max()) {
+    min_committed_sys_tx_ = min_committed_sys_tx;
   }
 
   // sync last committed user tx
-  auto& tx_mgrs = store_->MvccManager()->TxMgrs();
-  for (auto i = 0u; i < tx_mgrs.size(); i++) {
-    auto last_committed_usr_tx = tx_mgrs[i]->GetLastCommittedUsrTx();
+  auto min_committed_usr_tx = std::numeric_limits<TXID>::max();
+  for (auto i = 0u; i < loggings.size(); i++) {
+    auto last_committed_usr_tx = loggings[i]->GetLastHardenedUsrTx();
     if (last_committed_usr_tx != synced_last_committed_usr_tx_[i]) {
       synced_last_committed_usr_tx_[i] = last_committed_usr_tx;
-      min_committed_usr_tx_ = std::min(min_committed_usr_tx_, last_committed_usr_tx);
+      min_committed_usr_tx = std::min(min_committed_usr_tx, last_committed_usr_tx);
     }
+  }
+  if (min_committed_usr_tx != std::numeric_limits<TXID>::max()) {
+    min_committed_usr_tx_ = min_committed_usr_tx;
   }
 }
 
