@@ -52,6 +52,9 @@ enum class State : uint8_t { kFree = 0, kHot = 1, kCool = 2, kLoaded = 3 };
 
 class BufferFrameHeader {
 public:
+  static constexpr WORKERID kInvalidWorkerId = std::numeric_limits<WORKERID>::max();
+  static constexpr PID kInvalidPageId = std::numeric_limits<PID>::max();
+
   /// The state of the buffer frame.
   State state_ = State::kFree;
 
@@ -66,12 +69,12 @@ public:
   BufferFrame* next_free_bf_ = nullptr;
 
   /// ID of page resides in this buffer frame.
-  PID page_id_ = std::numeric_limits<PID>::max();
+  PID page_id_ = kInvalidPageId;
 
   /// ID of the last worker who has modified the containing page. For remote flush avoidance (RFA),
   /// see "Rethinking Logging, Checkpoints, and Recovery for High-Performance Storage Engines,
   /// SIGMOD 2020" for details.
-  WORKERID last_writer_worker_ = std::numeric_limits<uint8_t>::max();
+  WORKERID last_writer_worker_ = kInvalidWorkerId;
 
   /// The flushed page sequence number of the containing page. Initialized when the containing page
   /// is loaded from disk.
@@ -97,8 +100,8 @@ public:
     keep_in_memory_ = false;
     next_free_bf_ = nullptr;
 
-    page_id_ = std::numeric_limits<PID>::max();
-    last_writer_worker_ = std::numeric_limits<uint8_t>::max();
+    page_id_ = kInvalidPageId;
+    last_writer_worker_ = kInvalidWorkerId;
     flushed_psn_ = 0;
     is_being_written_back_.store(false, std::memory_order_release);
     contention_stats_.Reset();

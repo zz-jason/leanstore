@@ -29,7 +29,7 @@ struct WalFlushReq {
   /// The maximum system transasction ID written by the worker.
   /// NOTE: can only be updated when all the WAL entries belonging to the system transaction are
   /// written to the wal ring buffer.
-  TXID sys_tx_writtern_ = 0;
+  TXID buffered_sys_tx_ = 0;
 
   /// ID of the current transaction.
   /// NOTE: can only be updated when all the WAL entries belonging to the user transaction are
@@ -39,7 +39,7 @@ struct WalFlushReq {
   WalFlushReq(uint64_t wal_buffered = 0, uint64_t sys_tx_writtern = 0, TXID curr_tx_id = 0)
       : version_(0),
         wal_buffered_(wal_buffered),
-        sys_tx_writtern_(sys_tx_writtern),
+        buffered_sys_tx_(sys_tx_writtern),
         curr_tx_id_(curr_tx_id) {
   }
 };
@@ -59,7 +59,11 @@ public:
   storage::OptimisticGuarded<WalFlushReq> wal_flush_req_;
 
   /// The maximum writtern system transaction ID in the worker.
-  TXID sys_tx_writtern_ = 0;
+  TXID buffered_sys_tx_ = 0;
+
+  std::atomic<TXID> last_hardened_sys_tx_ = 0;
+
+  std::atomic<TXID> last_hardened_usr_tx_ = 0;
 
   /// File descriptor for the write-ahead log.
   int32_t wal_fd_ = -1;
@@ -112,12 +116,28 @@ public:
   void IterateCurrentTxWALs(uint64_t first_wal,
                             std::function<void(const WalEntry& entry)> callback);
 
-  TXID GetSysTxWrittern() const {
-    return sys_tx_writtern_;
+  TXID GetBufferedSysTx() const {
+    return buffered_sys_tx_;
   }
 
-  void UpdateSysTxToHarden(TXID sys_tx_id) {
-    sys_tx_writtern_ = std::max(sys_tx_writtern_, sys_tx_id);
+  void UpdateBufferedSysTx(TXID sys_tx_id) {
+    buffered_sys_tx_ = std::max(buffered_sys_tx_, sys_tx_id);
+  }
+
+  TXID GetLastHardenedSysTx() const {
+    return last_hardened_sys_tx_.load(std::memory_order_acquire);
+  }
+
+  void SetLastHardenedSysTx(TXID sys_tx_id) {
+    last_hardened_sys_tx_.store(sys_tx_id, std::memory_order_release);
+  }
+
+  TXID GetLastHardenedUsrTx() const {
+    return last_hardened_usr_tx_.load(std::memory_order_acquire);
+  }
+
+  void SetLastHardenedUsrTx(TXID usr_tx_id) {
+    last_hardened_usr_tx_.store(usr_tx_id, std::memory_order_release);
   }
 
   void InitWalFd(std::string_view file_path) {
@@ -144,7 +164,7 @@ public:
   }
 
   void PublishWalFlushReq(TXID start_ts) {
-    WalFlushReq current(wal_buffered_, sys_tx_writtern_, start_ts);
+    WalFlushReq current(wal_buffered_, buffered_sys_tx_, start_ts);
     wal_flush_req_.Set(current);
   }
 

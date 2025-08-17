@@ -32,7 +32,9 @@ public:
   /// Commit Phase 1: auto log flush
   /// Commit Phase 2: auto commit ack
   void Run() {
-    if (LogFlush()) {
+    LogFlush();
+
+    if (active_tx_mgrs_.size() > 0) {
       CommitAck();
     }
   }
@@ -50,7 +52,7 @@ private:
   /// logging state is recorded in the Logging component of each TxManager.
   ///
   /// Return true if any log flush is performed successfully, false otherwise.
-  static bool LogFlush();
+  void LogFlush();
 
   /// Performs the commit acknowledgment phase. Syncs the last committed
   /// transaction ID for all workers in the system, only when all the dependent

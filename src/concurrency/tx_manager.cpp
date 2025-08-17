@@ -40,8 +40,8 @@ void TxManager::StartTx(TxMode mode, IsolationLevel level, bool is_read_only) {
               "Previous transaction not ended, workerId={}, startTs={}, txState={}", worker_id_,
               prev_tx.start_ts_, TxStatUtil::ToString(prev_tx.state_));
   SCOPED_DEFER({
-    LEAN_DLOG("Start transaction, workerId={}, startTs={}, min_global_committed_sys_tx={}",
-              worker_id_, active_tx_.start_ts_, store_->MvccManager()->GetMinCommittedSysTx());
+    LEAN_DLOG("Start transaction, workerId={}, startTs={}, max_observed_sys_tx={}", worker_id_,
+              active_tx_.start_ts_, active_tx_.max_observed_sys_tx_id_);
   });
 
   active_tx_.Start(mode, level);

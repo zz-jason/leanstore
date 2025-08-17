@@ -80,6 +80,8 @@ public:
     user_task_queue_.PopFront(coroutine);
   }
 
+  bool IsCoroReadyToRun(std::unique_ptr<Coroutine>& coroutine, bool& sys_coro_required);
+
   void RunCoroutine(Coroutine* coroutine) {
     assert(coroutine != nullptr && "Coroutine cannot be null");
     assert(!coroutine->IsDone() && "Coroutine must not be done before running");

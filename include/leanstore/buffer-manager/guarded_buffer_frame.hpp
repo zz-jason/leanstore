@@ -156,7 +156,12 @@ public:
     bf_->page_.sys_tx_id_ = sys_tx_id;
 
     // update the maximum system transaction id written by the worker
-    CoroEnv::CurLogging().UpdateSysTxToHarden(sys_tx_id);
+    CoroEnv::CurLogging().UpdateBufferedSysTx(sys_tx_id);
+    if (CoroEnv::HasTxMgr()) {
+      bf_->header_.last_writer_worker_ = CoroEnv::CurTxMgr().worker_id_;
+    } else {
+      bf_->header_.last_writer_worker_ = BufferFrameHeader::kInvalidWorkerId;
+    }
   }
 
   /// Check remote dependency

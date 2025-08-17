@@ -25,8 +25,6 @@ public:
   /// All the worker threads
   std::vector<std::unique_ptr<WorkerThread>> worker_threads_;
 
-  WatermarkInfo global_wmk_info_;
-
   /// The group committer thread, created and started if WAL is enabled when the
   /// CRManager instance is created.
   ///
@@ -52,8 +50,6 @@ private:
   void StartWorkerThreads(uint64_t num_worker_threads);
 
   void StartGroupCommitter(int cpu);
-
-  void CreateWorkerHistories();
 };
 
 } // namespace leanstore::cr

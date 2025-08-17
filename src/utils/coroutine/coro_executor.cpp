@@ -7,6 +7,7 @@
 #include "utils/coroutine/coroutine.hpp"
 
 #include <cassert>
+#include <format>
 #include <memory>
 #include <utility>
 
@@ -76,42 +77,63 @@ CoroExecutor::~CoroExecutor() {
 void CoroExecutor::ThreadLoop() {
   static constexpr int kCoroutineRunsLimit = 1;
   std::unique_ptr<Coroutine> coro{nullptr};
-  int user_task_runs = 0;
+  int user_coro_runs = 0;
+  bool sys_coro_required = false;
 
   while (keep_running_) {
     DequeueCoro(coro);
+
+    // Shutdown if required
     if (!keep_running_) {
-      // May dequeue succeed but the system is shutting down
       break;
     }
 
-    // Mutex is not available, push back to the queue
-    if (coro->GetState() == CoroState::kWaitingMutex) {
-      if (!coro->TryLock()) {
-        EnqueueCoro(std::move(coro));
-        continue;
-      }
-    }
-
-    if (coro->GetState() == CoroState::kWaitingIo && !coro->IsIoCompleted()) {
-      EnqueueCoro(std::move(coro));
-    } else {
-      // Run the coro
+    // Whether the coroutine is ready to run
+    if (IsCoroReadyToRun(coro, sys_coro_required)) {
       RunCoroutine(coro.get());
-
-      // Check coro status after ThreadLoop is resuming
-      assert(coro->IsWaiting() || coro->IsDone());
-      if (coro->IsWaiting()) {
+      user_coro_runs++;
+      if (coro->GetState() != CoroState::kDone) {
         EnqueueCoro(std::move(coro));
       }
     }
 
-    // Run system tasks if any
-    if (++user_task_runs >= kCoroutineRunsLimit) {
+    // Run system coroutines if needed
+    if (sys_coro_required || user_coro_runs >= kCoroutineRunsLimit) {
       RunSystemCoros();
-      user_task_runs = 0;
+      sys_coro_required = false;
+      user_coro_runs = 0;
     }
   }
+}
+
+bool CoroExecutor::IsCoroReadyToRun(std::unique_ptr<Coroutine>& coro, bool& sys_coro_required) {
+  switch (coro->GetState()) {
+  case CoroState::kReady:
+  case CoroState::kRunning: {
+    return true;
+  }
+  case CoroState::kWaitingMutex: {
+    if (!coro->TryLock()) {
+      EnqueueCoro(std::move(coro));
+      return false;
+    }
+    return true;
+  }
+  case CoroState::kWaitingIo: {
+    if (!coro->IsIoCompleted()) {
+      EnqueueCoro(std::move(coro));
+      sys_coro_required = true;
+      return false;
+    }
+    return true;
+  }
+  case CoroState::kDone:
+  default: {
+    LEAN_DCHECK(false, std::format("Un expected coro state: {}", (int)coro->GetState()));
+    return true;
+  }
+  }
+  return true;
 }
 
 void CoroExecutor::RunSystemCoros() {

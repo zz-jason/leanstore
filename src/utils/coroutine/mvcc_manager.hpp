@@ -1,8 +1,10 @@
 #pragma once
 
+#include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/concurrency/concurrency_control.hpp"
 #include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
+#include "leanstore/utils/log.hpp"
 #include "utils/json.hpp"
 
 #include <filesystem>
@@ -18,38 +20,7 @@ public:
   static constexpr auto kKeyGlobalUsrTso = "global_user_tso";
   static constexpr auto kKeyGlobalSysTso = "global_system_tso";
 
-  MvccManager(uint64_t num_tx_mgrs, LeanStore* store) {
-    auto* store_option = store->store_option_;
-
-    // init logging
-    loggings_.reserve(store_option->worker_threads_);
-    for (auto i = 0u; i < store_option->worker_threads_; i++) {
-      loggings_.emplace_back(std::make_unique<cr::Logging>(store_option->wal_buffer_bytes_));
-
-#ifdef ENABLE_COROUTINE
-      if (!store_option->enable_wal_) {
-        Log::Info("Skipping logging initialization, WAL is disabled");
-        continue;
-      }
-      // create wal dir if not exists
-      std::string wal_dir = std::string(store_option->store_dir_) + "/wal";
-      if (!std::filesystem::exists(wal_dir)) {
-        std::filesystem::create_directories(wal_dir);
-        Log::Info("Created WAL directory: {}", wal_dir);
-      }
-
-      std::string file_name = std::format(CoroExecutor::kCoroExecNamePattern, i);
-      std::string file_path = std::format("{}/{}.wal", wal_dir, file_name);
-      loggings_.back()->InitWalFd(file_path);
-#endif
-    }
-
-    // init transaction managers
-    tx_mgrs_.reserve(num_tx_mgrs);
-    for (auto i = 0u; i < num_tx_mgrs; i++) {
-      tx_mgrs_.emplace_back(std::make_unique<cr::TxManager>(i, tx_mgrs_, store));
-    }
-  }
+  MvccManager(LeanStore* store);
 
   utils::JsonObj Serialize() const {
     utils::JsonObj json_obj;
@@ -64,12 +35,21 @@ public:
     global_wmk_info_.wmk_of_all_tx_ = json_obj.GetUint64(kKeyGlobalUsrTso).value();
   }
 
+  void InitHistoryStorage();
+
   cr::WatermarkInfo& GlobalWmkInfo() {
     return global_wmk_info_;
   }
 
+  /// Update the global minimum committed system transaction ID if the given one is larger.
   void UpdateMinCommittedSysTx(TXID min_committed_sys_tx) {
-    global_min_committed_sys_tx_.store(min_committed_sys_tx, std::memory_order_release);
+    auto cur = GetMinCommittedSysTx();
+    while (cur < min_committed_sys_tx) {
+      if (global_min_committed_sys_tx_.compare_exchange_weak(
+              cur, min_committed_sys_tx, std::memory_order_release, std::memory_order_relaxed)) {
+        break;
+      }
+    }
   }
 
   TXID GetMinCommittedSysTx() {
@@ -101,6 +81,8 @@ public:
   }
 
 private:
+  LeanStore* store_;
+
   cr::WatermarkInfo global_wmk_info_;
 
   /// The minimum flushed system transaction ID among all worker threads. User transactions whose
@@ -123,5 +105,60 @@ private:
   /// transaction manager if it needs to run transactions.
   std::vector<std::unique_ptr<cr::TxManager>> tx_mgrs_;
 };
+
+inline MvccManager::MvccManager(LeanStore* store) : store_(store) {
+  auto* store_option = store->store_option_;
+  auto num_tx_mgrs = store_option->worker_threads_ * store_option->max_concurrent_tx_per_worker_;
+
+  // init logging
+  loggings_.reserve(store_option->worker_threads_);
+  for (auto i = 0u; i < store_option->worker_threads_; i++) {
+    loggings_.emplace_back(std::make_unique<cr::Logging>(store_option->wal_buffer_bytes_));
+
+#ifdef ENABLE_COROUTINE
+    if (!store_option->enable_wal_) {
+      Log::Info("Skipping logging initialization, WAL is disabled");
+      continue;
+    }
+    // create wal dir if not exists
+    std::string wal_dir = std::string(store_option->store_dir_) + "/wal";
+    if (!std::filesystem::exists(wal_dir)) {
+      std::filesystem::create_directories(wal_dir);
+      Log::Info("Created WAL directory: {}", wal_dir);
+    }
+
+    std::string file_name = std::format(CoroExecutor::kCoroExecNamePattern, i);
+    std::string file_path = std::format("{}/{}.wal", wal_dir, file_name);
+    loggings_.back()->InitWalFd(file_path);
+#endif
+  }
+
+  // init transaction managers
+  tx_mgrs_.reserve(num_tx_mgrs);
+  for (auto i = 0u; i < num_tx_mgrs; i++) {
+    tx_mgrs_.emplace_back(std::make_unique<cr::TxManager>(i, tx_mgrs_, store));
+  }
+}
+
+inline void MvccManager::InitHistoryStorage() {
+  static constexpr BTreeConfig kBtreeConfig = {.enable_wal_ = false, .use_bulk_insert_ = true};
+  static constexpr auto kUpdateNameFormat = "_history_updates_{}";
+  static constexpr auto kRemoveNameFormat = "_history_removes_{}";
+
+  auto create_btree = [&](const std::string& name) -> storage::btree::BasicKV* {
+    auto res = storage::btree::BasicKV::Create(store_, name, kBtreeConfig);
+    if (!res) {
+      Log::Fatal("Create btree failed, name={}, error={}", name, res.error().ToString());
+    }
+    return res.value();
+  };
+
+  for (uint64_t i = 0; i < tx_mgrs_.size(); i++) {
+    std::string update_btree_name = std::format(kUpdateNameFormat, i);
+    std::string remove_btree_name = std::format(kRemoveNameFormat, i);
+    tx_mgrs_[i]->cc_.history_storage_.SetUpdateIndex(create_btree(update_btree_name));
+    tx_mgrs_[i]->cc_.history_storage_.SetRemoveIndex(create_btree(remove_btree_name));
+  }
+}
 
 } // namespace leanstore

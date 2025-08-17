@@ -68,8 +68,8 @@ void GroupCommitter::CollectWalRecords(TXID& min_flushed_sys_tx, TXID& min_flush
       continue;
     }
 
-    if (req_copy.sys_tx_writtern_ > 0) {
-      min_flushed_sys_tx = std::min(min_flushed_sys_tx, req_copy.sys_tx_writtern_);
+    if (req_copy.buffered_sys_tx_ > 0) {
+      min_flushed_sys_tx = std::min(min_flushed_sys_tx, req_copy.buffered_sys_tx_);
     }
     if (req_copy.curr_tx_id_ > 0) {
       min_flushed_usr_tx = std::min(min_flushed_usr_tx, req_copy.curr_tx_id_);
