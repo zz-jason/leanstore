@@ -13,11 +13,8 @@ set(YCSB_DEPS
   gflags::gflags
 )
 
-option(ENABLE_ROCKSDB "Enable benchmarking rocksdb" OFF)
-if(ENABLE_ROCKSDB)
-  find_package(RocksDB CONFIG REQUIRED)
-  list(APPEND YCSB_DEPS RocksDB::rocksdb)
-endif(ENABLE_ROCKSDB)
+find_package(RocksDB CONFIG REQUIRED)
+list(APPEND YCSB_DEPS RocksDB::rocksdb)
 
 option(ENABLE_WIRED_TIGER "Enable benchmarking wiredtiger" OFF)
 if(ENABLE_WIRED_TIGER)
@@ -43,10 +40,6 @@ endif (PKG_TCMALLOC_FOUND)
 
 add_executable(ycsb ${YCSB_SRC})
 target_link_libraries(ycsb PRIVATE ${YCSB_DEPS})
-
-if(ENABLE_ROCKSDB)
-  target_compile_definitions(ycsb PUBLIC ENABLE_ROCKSDB)
-endif(ENABLE_ROCKSDB)
 
 if(ENABLE_WIRED_TIGER)
   target_compile_definitions(ycsb PUBLIC ENABLE_WIRED_TIGER)

@@ -7,10 +7,7 @@
 
 #include <gperftools/heap-profiler.h>
 #include <gperftools/profiler.h>
-
-#ifdef ENABLE_ROCKSDB
 #include <rocksdb/db.h>
-#endif
 
 #include <atomic>
 #include <chrono>
@@ -23,13 +20,10 @@ namespace leanstore::ycsb {
 class YcsbRocksDb : public YcsbExecutor {
 
 private:
-#ifdef ENABLE_ROCKSDB
   rocksdb::DB* db_ = nullptr;
-#endif
 
 public:
   YcsbRocksDb() {
-#ifdef ENABLE_ROCKSDB
     rocksdb::Options options;
     options.create_if_missing = true;
     options.error_if_exists = false;
@@ -40,11 +34,9 @@ public:
     if (!status.ok()) {
       Log::Fatal("Failed to open rocksdb: {}", status.ToString());
     }
-#endif
   }
 
   void HandleCmdLoad() override {
-#ifdef ENABLE_ROCKSDB
     // load data with FLAGS_ycsb_threads
     auto start = std::chrono::high_resolution_clock::now();
     std::cout << "Inserting " << FLAGS_ycsb_record_count << " values" << std::endl;
@@ -75,11 +67,9 @@ public:
             }
           }
         });
-#endif
   }
 
   void HandleCmdRun() override {
-#ifdef ENABLE_ROCKSDB
     // Run the benchmark in FLAGS_ycsb_threads
     auto workload_type = static_cast<Workload>(FLAGS_ycsb_workload[0] - 'a');
     auto workload = GetWorkloadSpec(workload_type);
@@ -148,8 +138,6 @@ public:
     for (auto& thread : threads) {
       thread.join();
     }
-
-#endif
   }
 };
 

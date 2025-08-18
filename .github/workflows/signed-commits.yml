@@ -1,4 +1,4 @@
-name: CI
+name: Commit Check
 
 on:
   pull_request:
