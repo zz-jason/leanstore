@@ -98,9 +98,11 @@ void CoroExecutor::ThreadLoop() {
     cur_slot++;
     for (; cur_slot < num_slots; cur_slot++) {
       if (user_tasks_[cur_slot] != nullptr) {
-        coro = std::move(user_tasks_[cur_slot]);
-        user_tasks_[cur_slot] = nullptr;
-        break;
+        if (IsCoroReadyToRun(user_tasks_[cur_slot], sys_coro_required)) {
+          coro = std::move(user_tasks_[cur_slot]);
+          user_tasks_[cur_slot] = nullptr;
+          break;
+        }
       } else if (DequeueCoro(coro)) {
         break;
       }
@@ -109,6 +111,13 @@ void CoroExecutor::ThreadLoop() {
     // Shutdown if required
     if (!keep_running_) {
       break;
+    }
+
+    // Run system coroutines if needed
+    if (sys_coro_required || user_coro_runs >= kCoroutineRunsLimit) {
+      RunSystemCoros();
+      sys_coro_required = false;
+      user_coro_runs = 0;
     }
 
     if (coro == nullptr) {
@@ -120,20 +129,11 @@ void CoroExecutor::ThreadLoop() {
       continue;
     }
 
-    // Whether the coroutine is ready to run
-    if (IsCoroReadyToRun(coro, sys_coro_required)) {
-      RunCoroutine(coro.get());
-      user_coro_runs++;
-      if (coro->GetState() != CoroState::kDone) {
-        user_tasks_[cur_slot] = std::move(coro);
-      }
-    }
-
-    // Run system coroutines if needed
-    if (sys_coro_required || user_coro_runs >= kCoroutineRunsLimit) {
-      RunSystemCoros();
-      sys_coro_required = false;
-      user_coro_runs = 0;
+    // run the coroutine
+    RunCoroutine(coro.get());
+    user_coro_runs++;
+    if (coro->GetState() != CoroState::kDone) {
+      user_tasks_[cur_slot] = std::move(coro);
     }
   }
 }
@@ -146,14 +146,12 @@ bool CoroExecutor::IsCoroReadyToRun(std::unique_ptr<Coroutine>& coro, bool& sys_
   }
   case CoroState::kWaitingMutex: {
     if (!coro->TryLock()) {
-      EnqueueCoro(std::move(coro));
       return false;
     }
     return true;
   }
   case CoroState::kWaitingIo: {
     if (!coro->IsIoCompleted()) {
-      EnqueueCoro(std::move(coro));
       sys_coro_required = true;
       return false;
     }
