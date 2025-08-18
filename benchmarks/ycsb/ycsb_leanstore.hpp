@@ -14,6 +14,7 @@
 #include "leanstore/utils/random_generator.hpp"
 #include "leanstore/utils/scrambled_zipf_generator.hpp"
 #include "utils/coroutine/coro_future.hpp"
+#include "utils/coroutine/coro_session.hpp"
 #include "utils/scoped_timer.hpp"
 #include "utils/small_vector.hpp"
 
@@ -21,6 +22,7 @@
 #include <gperftools/profiler.h>
 
 #include <atomic>
+#include <cassert>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -30,8 +32,10 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
+#include <resolv.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -56,6 +60,8 @@ public:
     option->enable_wal_ = true;
     option->worker_threads_ = FLAGS_ycsb_threads;
     option->buffer_pool_size_ = FLAGS_ycsb_mem_gb << 30;
+    option->max_concurrent_tx_per_worker_ =
+        (FLAGS_ycsb_clients + FLAGS_ycsb_threads - 1) / FLAGS_ycsb_threads;
 
     auto res = LeanStore::Open(option);
     if (!res) {
@@ -68,10 +74,13 @@ public:
 
     // start metrics http exposer for cpu/mem profiling
     StartMetricsHttpExposer(8080);
+    std::cout << std::format("YCSB started, workload={}, threads={}, clients={}",
+                             FLAGS_ycsb_workload, FLAGS_ycsb_threads, FLAGS_ycsb_clients)
+              << std::endl;
   }
 
   ~YcsbLeanStore() override {
-    std::cout << "~YcsbLeanStore" << std::endl;
+    std::cout << "YCSB stopped" << std::endl;
     store_.reset(nullptr);
   }
 
@@ -89,12 +98,7 @@ public:
         table = res.value();
       };
 
-#ifdef ENABLE_COROUTINE
-      store_->Submit(std::move(job), 0)->Wait();
-#else
-      store_->ExecSync(0, std::move(job));
-#endif
-
+      SubmitJobSync(std::move(job), 0);
       return table;
     }
 
@@ -110,12 +114,7 @@ public:
       table = res.value();
     };
 
-#ifdef ENABLE_COROUTINE
-    store_->Submit(std::move(job), 0)->Wait();
-#else
-    store_->ExecSync(0, std::move(job));
-#endif
-
+    SubmitJobSync(std::move(job), 0);
     return table;
   }
 
@@ -148,6 +147,7 @@ public:
     auto rem = FLAGS_ycsb_record_count % num_workers;
 
     std::vector<std::shared_ptr<CoroFuture<void>>> futures;
+    std::vector<CoroSession*> reserved_sessions;
     for (auto i = 0u, begin = 0u; i < num_workers;) {
       auto end = begin + avg + (rem-- > 0 ? 1 : 0);
       auto insert_func = [&, begin, end]() {
@@ -178,7 +178,11 @@ public:
       };
 
 #ifdef ENABLE_COROUTINE
-      futures.emplace_back(store_->Submit(std::move(insert_func), i));
+      reserved_sessions.push_back(store_->GetCoroScheduler()->TryReserveCoroSession(i));
+      assert(reserved_sessions.back() != nullptr &&
+             "Failed to reserve a CoroSession for parallel range execution");
+      futures.emplace_back(
+          store_->GetCoroScheduler()->Submit(reserved_sessions.back(), std::move(insert_func)));
 #else
       store_->ExecAsync(i, std::move(insert_func));
 #endif
@@ -188,6 +192,9 @@ public:
 #ifdef ENABLE_COROUTINE
     for (const auto& future : futures) {
       future->Wait();
+    }
+    for (auto* session : reserved_sessions) {
+      store_->GetCoroScheduler()->ReleaseCoroSession(session);
     }
 #else
     store_->WaitAll();
@@ -209,14 +216,11 @@ public:
     std::vector<PerfCounters*> worker_perf_counters;
     auto job = [&]() { worker_perf_counters.push_back(GetTlsPerfCounters()); };
     for (auto i = 0u; i < store_->store_option_->worker_threads_; i++) {
-#ifdef ENABLE_COROUTINE
-      store_->Submit(std::move(job), i)->Wait();
-#else
-      store_->ExecSync(i, std::move(job));
-#endif
+      SubmitJobSync(std::move(job), i);
     }
 
     std::vector<std::shared_ptr<CoroFuture<void>>> futures;
+    std::vector<CoroSession*> reserved_sessions;
     for (uint64_t worker_id = 0; worker_id < store_->store_option_->worker_threads_; worker_id++) {
       auto job = [&]() {
         SmallBuffer<1024> key_buffer(FLAGS_ycsb_key_size);
@@ -292,7 +296,11 @@ public:
       };
 
 #ifdef ENABLE_COROUTINE
-      futures.emplace_back(store_->Submit(std::move(job), worker_id));
+      reserved_sessions.push_back(store_->GetCoroScheduler()->TryReserveCoroSession(worker_id));
+      assert(reserved_sessions.back() != nullptr &&
+             "Failed to reserve a CoroSession for parallel range execution");
+      futures.emplace_back(
+          store_->GetCoroScheduler()->Submit(reserved_sessions.back(), std::move(job)));
 #else
       store_->ExecAsync(worker_id, std::move(job));
 #endif
@@ -354,6 +362,9 @@ public:
     for (const auto& future : futures) {
       future->Wait();
     }
+    for (auto* session : reserved_sessions) {
+      store_->GetCoroScheduler()->ReleaseCoroSession(session);
+    }
 #else
     store_->WaitAll();
 #endif
@@ -410,7 +421,10 @@ public:
 
   void SubmitJobSync(std::function<void()>&& job, uint64_t worker_id) {
 #ifdef ENABLE_COROUTINE
-    store_->Submit(std::move(job), worker_id)->Wait();
+    auto* coro_session = store_->GetCoroScheduler()->TryReserveCoroSession(worker_id);
+    assert(coro_session != nullptr && "Failed to reserve a CoroSession for coroutine execution");
+    store_->GetCoroScheduler()->Submit(coro_session, std::move(job))->Wait();
+    store_->GetCoroScheduler()->ReleaseCoroSession(coro_session);
 #else
     store_->ExecSync(worker_id, std::move(job));
 #endif

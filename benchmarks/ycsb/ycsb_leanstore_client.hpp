@@ -17,6 +17,7 @@
 #include <gflags/gflags_declare.h>
 
 #include <atomic>
+#include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <format>
@@ -80,7 +81,11 @@ protected:
 
   void SubmitJobSync(std::function<void()>&& job) {
 #ifdef ENABLE_COROUTINE
-    store_->Submit(std::move(job), client_id_ % store_->store_option_->worker_threads_)->Wait();
+    auto* coro_session = store_->GetCoroScheduler()->TryReserveCoroSession(
+        client_id_ % store_->store_option_->worker_threads_);
+    assert(coro_session != nullptr && "Failed to reserve a CoroSession for coroutine execution");
+    store_->GetCoroScheduler()->Submit(coro_session, std::move(job))->Wait();
+    store_->GetCoroScheduler()->ReleaseCoroSession(coro_session);
 #else
     store_->ExecSync(client_id_ % store_->store_option_->worker_threads_, std::move(job));
 #endif

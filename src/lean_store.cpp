@@ -13,6 +13,7 @@
 #include "leanstore/utils/misc.hpp"
 #include "leanstore/utils/parallelize.hpp"
 #include "leanstore/utils/result.hpp"
+#include "utils/coroutine/coro_session.hpp"
 #include "utils/coroutine/mvcc_manager.hpp"
 #include "utils/json.hpp"
 #include "utils/scoped_timer.hpp"
@@ -72,7 +73,10 @@ LeanStore::LeanStore(StoreOption* option) : store_option_(option) {
   coro_scheduler_->Init();
   buffer_manager_->InitFreeBfLists();
   crmanager_ = nullptr;
-  coro_scheduler_->Submit([&]() { mvcc_mgr_->InitHistoryStorage(); })->Wait();
+  auto* coro_session = coro_scheduler_->TryReserveCoroSession(0);
+  assert(coro_session != nullptr && "Failed to reserve a CoroSession for coroutine execution");
+  coro_scheduler_->Submit(coro_session, [&]() { mvcc_mgr_->InitHistoryStorage(); })->Wait();
+  coro_scheduler_->ReleaseCoroSession(coro_session);
 #else
   buffer_manager_->InitFreeBfLists();
   buffer_manager_->StartPageEvictors();
