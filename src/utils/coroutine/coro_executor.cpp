@@ -84,18 +84,19 @@ void CoroExecutor::ThreadLoop() {
   static constexpr int kCoroutineRunsLimit = 1;
   int user_coro_runs = 0;
   bool sys_coro_required = false;
-  size_t cur_slot = -1;
+  int cur_slot = -1;
+  int num_slots = user_tasks_.size();
 
   while (keep_running_) {
     bool restart = false;
-    if (cur_slot >= user_tasks_.size()) {
+    if (cur_slot >= num_slots) {
       cur_slot = 0;
       restart = true;
     }
     std::unique_ptr<Coroutine> coro{nullptr};
     // previous round stop at this slot, so we move to next.
     cur_slot++;
-    for (; cur_slot < user_tasks_.size(); cur_slot++) {
+    for (; cur_slot < num_slots; cur_slot++) {
       if (user_tasks_[cur_slot] != nullptr) {
         coro = std::move(user_tasks_[cur_slot]);
         user_tasks_[cur_slot] = nullptr;
