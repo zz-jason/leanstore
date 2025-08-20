@@ -27,6 +27,12 @@ CoroExecutor::CoroExecutor(LeanStore* store, AutoCommitProtocol* commit_protocol
     page_evictor_ = nullptr;
   }
 
+  if (!store)
+    user_tasks_.resize(4);
+  else {
+    user_tasks_.resize(store->store_option_->max_concurrent_tx_per_worker_);
+  }
+
   CreateSysCoros();
 }
 
@@ -76,31 +82,54 @@ CoroExecutor::~CoroExecutor() {
 
 void CoroExecutor::ThreadLoop() {
   static constexpr int kCoroutineRunsLimit = 1;
-  std::unique_ptr<Coroutine> coro{nullptr};
   int user_coro_runs = 0;
   bool sys_coro_required = false;
+  int cur_slot = -1;
+  int num_slots = user_tasks_.size();
+  int num_yield_slots = 0;
 
   while (keep_running_) {
-    DequeueCoro(coro);
+    std::unique_ptr<Coroutine> coro{nullptr};
+    // previous round stop at this slot, so we move to next.
+    cur_slot++;
+    if (cur_slot >= num_slots) {
+      cur_slot = 0;
+    }
+    if (user_tasks_[cur_slot] != nullptr) {
+      if (IsCoroReadyToRun(user_tasks_[cur_slot], sys_coro_required)) {
+        coro = std::move(user_tasks_[cur_slot]);
+        user_tasks_[cur_slot] = nullptr;
+        num_yield_slots--;
+      } else {
+        if (sys_coro_required) {
+          RunSystemCoros();
+          sys_coro_required = false;
+        }
+        continue;
+      }
+    } else {
+      // only wait for new job if there are no other yield slots.
+      bool wait = (num_yield_slots == 0);
+      if (!DequeueCoro(coro, wait))
+        continue;
+    }
 
     // Shutdown if required
     if (!keep_running_) {
       break;
     }
 
-    // Whether the coroutine is ready to run
-    if (IsCoroReadyToRun(coro, sys_coro_required)) {
-      RunCoroutine(coro.get());
-      user_coro_runs++;
-      if (coro->GetState() != CoroState::kDone) {
-        EnqueueCoro(std::move(coro));
-      }
+    // run the coroutine
+    RunCoroutine(coro.get());
+    user_coro_runs++;
+    if (coro->GetState() != CoroState::kDone) {
+      user_tasks_[cur_slot] = std::move(coro);
+      num_yield_slots++;
     }
 
     // Run system coroutines if needed
-    if (sys_coro_required || user_coro_runs >= kCoroutineRunsLimit) {
+    if (user_coro_runs >= kCoroutineRunsLimit) {
       RunSystemCoros();
-      sys_coro_required = false;
       user_coro_runs = 0;
     }
   }
@@ -114,14 +143,12 @@ bool CoroExecutor::IsCoroReadyToRun(std::unique_ptr<Coroutine>& coro, bool& sys_
   }
   case CoroState::kWaitingMutex: {
     if (!coro->TryLock()) {
-      EnqueueCoro(std::move(coro));
       return false;
     }
     return true;
   }
   case CoroState::kWaitingIo: {
     if (!coro->IsIoCompleted()) {
-      EnqueueCoro(std::move(coro));
       sys_coro_required = true;
       return false;
     }

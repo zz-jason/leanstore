@@ -50,6 +50,20 @@ public:
     return true;
   }
 
+  bool TryPopFront(T& value) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    if (size_ == 0) {
+      return false;
+    }
+    value = std::move(queue_[head_]);
+    head_ = (head_ + 1) % capacity_;
+    size_--;
+
+    lock.unlock();
+    not_full_.notify_one();
+    return true;
+  }
+
   void Shutdown() {
     std::unique_lock<std::mutex> lock(mutex_);
     stopped_ = true;

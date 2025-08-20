@@ -76,8 +76,11 @@ public:
     user_task_queue_.PushBack(std::move(coroutine));
   }
 
-  void DequeueCoro(std::unique_ptr<Coroutine>& coroutine) {
-    user_task_queue_.PopFront(coroutine);
+  bool DequeueCoro(std::unique_ptr<Coroutine>& coroutine, bool wait) {
+    if (wait) {
+      return user_task_queue_.PopFront(coroutine);
+    }
+    return user_task_queue_.TryPopFront(coroutine);
   }
 
   bool IsCoroReadyToRun(std::unique_ptr<Coroutine>& coroutine, bool& sys_coro_required);
@@ -152,6 +155,9 @@ private:
   Coroutine* current_coroutine_ = nullptr;
 
   BlockingQueueMpsc<std::unique_ptr<Coroutine>> user_task_queue_{CoroEnv::kMaxCoroutinesPerThread};
+
+  /// Task slots for user tasks.
+  std::vector<std::unique_ptr<Coroutine>> user_tasks_;
 
   /// Task queue for system tasks, e.g. IO operations.
   std::vector<std::unique_ptr<Coroutine>> sys_tasks_;
