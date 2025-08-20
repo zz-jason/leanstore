@@ -45,9 +45,6 @@ typedef struct StoreOption {
   /// Maximum number of concurrent transactions per worker thread.
   uint64_t max_concurrent_tx_per_worker_;
 
-  /// Maximum number of concurrent coroutines per worker thread.
-  uint64_t coro_slots_per_worker_;
-
   // ---------------------------------------------------------------------------
   // Buffer pool related options
   // ---------------------------------------------------------------------------

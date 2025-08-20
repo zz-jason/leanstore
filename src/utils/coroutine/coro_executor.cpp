@@ -30,7 +30,7 @@ CoroExecutor::CoroExecutor(LeanStore* store, AutoCommitProtocol* commit_protocol
   if (!store)
     user_tasks_.resize(4);
   else {
-    user_tasks_.resize(store->store_option_->coro_slots_per_worker_);
+    user_tasks_.resize(store->store_option_->max_concurrent_tx_per_worker_);
   }
 
   CreateSysCoros();
@@ -86,26 +86,32 @@ void CoroExecutor::ThreadLoop() {
   bool sys_coro_required = false;
   int cur_slot = -1;
   int num_slots = user_tasks_.size();
+  int num_yield_slots = 0;
 
   while (keep_running_) {
-    bool restart = false;
-    if (cur_slot >= num_slots) {
-      cur_slot = 0;
-      restart = true;
-    }
     std::unique_ptr<Coroutine> coro{nullptr};
     // previous round stop at this slot, so we move to next.
     cur_slot++;
-    for (; cur_slot < num_slots; cur_slot++) {
-      if (user_tasks_[cur_slot] != nullptr) {
-        if (IsCoroReadyToRun(user_tasks_[cur_slot], sys_coro_required)) {
-          coro = std::move(user_tasks_[cur_slot]);
-          user_tasks_[cur_slot] = nullptr;
-          break;
+    if (cur_slot >= num_slots) {
+      cur_slot = 0;
+    }
+    if (user_tasks_[cur_slot] != nullptr) {
+      if (IsCoroReadyToRun(user_tasks_[cur_slot], sys_coro_required)) {
+        coro = std::move(user_tasks_[cur_slot]);
+        user_tasks_[cur_slot] = nullptr;
+        num_yield_slots--;
+      } else {
+        if (sys_coro_required) {
+          RunSystemCoros();
+          sys_coro_required = false;
         }
-      } else if (DequeueCoro(coro)) {
-        break;
+        continue;
       }
+    } else {
+      // only wait for new job if there are no other yield slots.
+      bool wait = (num_yield_slots == 0);
+      if (!DequeueCoro(coro, wait))
+        continue;
     }
 
     // Shutdown if required
@@ -113,27 +119,18 @@ void CoroExecutor::ThreadLoop() {
       break;
     }
 
-    // Run system coroutines if needed
-    if (sys_coro_required || user_coro_runs >= kCoroutineRunsLimit) {
-      RunSystemCoros();
-      sys_coro_required = false;
-      user_coro_runs = 0;
-    }
-
-    if (coro == nullptr) {
-      // no ready tasks and no new task, need to wait for new task.
-      if (restart) {
-        std::unique_lock<std::mutex> lk(cv_mutex_);
-        cv_.wait_for(lk, std::chrono::milliseconds(1));
-      }
-      continue;
-    }
-
     // run the coroutine
     RunCoroutine(coro.get());
     user_coro_runs++;
     if (coro->GetState() != CoroState::kDone) {
       user_tasks_[cur_slot] = std::move(coro);
+      num_yield_slots++;
+    }
+
+    // Run system coroutines if needed
+    if (user_coro_runs >= kCoroutineRunsLimit) {
+      RunSystemCoros();
+      user_coro_runs = 0;
     }
   }
 }

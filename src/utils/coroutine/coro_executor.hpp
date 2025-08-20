@@ -74,10 +74,12 @@ public:
 
   void EnqueueCoro(std::unique_ptr<Coroutine>&& coroutine) {
     user_task_queue_.PushBack(std::move(coroutine));
-    cv_.notify_all();
   }
 
-  bool DequeueCoro(std::unique_ptr<Coroutine>& coroutine) {
+  bool DequeueCoro(std::unique_ptr<Coroutine>& coroutine, bool wait) {
+    if (wait) {
+      return user_task_queue_.PopFront(coroutine);
+    }
     return user_task_queue_.TryPopFront(coroutine);
   }
 
@@ -177,10 +179,6 @@ private:
   JumpContext def_jump_context_;
 
   inline static thread_local CoroExecutor* s_current_thread = nullptr;
-
-  /// conditional variable and mutex to wake up the thread
-  std::condition_variable cv_;
-  std::mutex cv_mutex_;
 };
 
 } // namespace leanstore
