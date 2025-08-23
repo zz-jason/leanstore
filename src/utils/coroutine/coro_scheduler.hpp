@@ -129,8 +129,8 @@ inline std::shared_ptr<CoroFuture<R>> CoroScheduler::Submit(CoroSession* session
 
   auto coro_future = std::make_shared<CoroFuture<R>>();
   auto coro_job = [future = coro_future, f = std::forward<F>(coro_func), session]() mutable {
+    CoroEnv::SetCurTxMgr(session->GetTxMgr());
     if constexpr (std::is_void_v<R>) {
-      CoroEnv::SetCurTxMgr(session->GetTxMgr());
       f();
       future->SetResult();
     } else {
