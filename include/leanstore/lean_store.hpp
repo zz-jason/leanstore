@@ -116,10 +116,8 @@ public:
     return mvcc_mgr_;
   }
 
-  template <typename F, typename R = std::invoke_result_t<F>>
-  std::shared_ptr<CoroFuture<R>> Submit(F&& coro_func, int64_t thread_id = -1) {
-    assert(coro_scheduler_ != nullptr && "CoroScheduler is not initialized");
-    return coro_scheduler_->Submit(std::forward<F>(coro_func), thread_id);
+  CoroScheduler* GetCoroScheduler() {
+    return coro_scheduler_;
   }
 
   /// Execute a custom user function on a worker thread.

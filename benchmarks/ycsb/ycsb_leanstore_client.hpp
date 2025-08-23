@@ -11,12 +11,14 @@
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/random_generator.hpp"
 #include "leanstore/utils/scrambled_zipf_generator.hpp"
+#include "utils/coroutine/coro_session.hpp"
 #include "utils/small_vector.hpp"
 
 #include <gflags/gflags.h>
 #include <gflags/gflags_declare.h>
 
 #include <atomic>
+#include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <format>
@@ -39,7 +41,11 @@ public:
     return std::unique_ptr<YcsbLeanStoreClient>(client);
   }
 
-  ~YcsbLeanStoreClient() override = default;
+  ~YcsbLeanStoreClient() override {
+#ifdef ENABLE_COROUTINE
+    store_->GetCoroScheduler()->ReleaseCoroSession(coro_session_);
+#endif
+  }
 
 protected:
   YcsbLeanStoreClient(uint64_t client_id, LeanStore* store, KVInterface* btree,
@@ -49,11 +55,16 @@ protected:
         store_(store),
         btree_(btree),
         workload_type_(workload_type) {
-
     update_desc_ = UpdateDesc::CreateFrom(update_desc_buffer_.Data());
     update_desc_->num_slots_ = 1;
     update_desc_->update_slots_[0].offset_ = 0;
     update_desc_->update_slots_[0].size_ = FLAGS_ycsb_val_size;
+
+#ifdef ENABLE_COROUTINE
+    coro_session_ = store_->GetCoroScheduler()->TryReserveCoroSession(
+        client_id_ % store_->store_option_->worker_threads_);
+    assert(coro_session_ != nullptr && "Failed to reserve a CoroSession for coroutine execution");
+#endif
   }
 
   void RunImpl() override {
@@ -80,7 +91,7 @@ protected:
 
   void SubmitJobSync(std::function<void()>&& job) {
 #ifdef ENABLE_COROUTINE
-    store_->Submit(std::move(job), client_id_ % store_->store_option_->worker_threads_)->Wait();
+    store_->GetCoroScheduler()->Submit(coro_session_, std::move(job))->Wait();
 #else
     store_->ExecSync(client_id_ % store_->store_option_->worker_threads_, std::move(job));
 #endif
@@ -120,6 +131,8 @@ protected:
   }
 
   uint64_t client_id_;
+
+  CoroSession* coro_session_;
 
   LeanStore* store_;
 

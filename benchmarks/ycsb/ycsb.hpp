@@ -89,7 +89,7 @@ protected:
                 uint64_t aborted, uint64_t report_period) {
     auto abort_rate = (aborted) * 1.0 / (committed + aborted);
     std::cout << std::format(
-                     "[{} thds] [{}s] [tps={}] [committed={}] [conflicted={}] [conflict rate={}]",
+                     "[{} thds] [{:2}s] [tps={}] [committed={}] [conflicted={}] [conflict rate={}]",
                      num_threads, time_elasped_sec,
                      FormatWithSpaces((committed + aborted) / report_period),
                      FormatWithSpaces(committed), FormatWithSpaces(aborted), abort_rate)

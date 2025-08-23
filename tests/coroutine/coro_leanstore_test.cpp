@@ -55,6 +55,8 @@ TEST_F(CoroLeanStoreTest, BasicKv) {
 
   // create leanstore btree for table records
   storage::btree::BasicKV* btree;
+  auto* coro_session_0 = store->GetCoroScheduler()->TryReserveCoroSession(0);
+  assert(coro_session_0 != nullptr && "Failed to reserve a CoroSession for coroutine execution");
   auto job_init_btree = [&]() {
     // create btree
     auto res = store->CreateBasicKv(kBtreeName, kBtreeConfig);
@@ -67,9 +69,11 @@ TEST_F(CoroLeanStoreTest, BasicKv) {
       EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
     }
   };
-  store->Submit(job_init_btree, 0)->Wait();
+  store->GetCoroScheduler()->Submit(coro_session_0, std::move(job_init_btree))->Wait();
 
   // read back the values
+  auto* coro_session_1 = store->GetCoroScheduler()->TryReserveCoroSession(1);
+  assert(coro_session_1 != nullptr && "Failed to reserve a CoroSession for coroutine execution");
   auto job_lookup = [&]() {
     std::string copied_value;
     auto copy_value_out = [&](Slice val) {
@@ -80,7 +84,10 @@ TEST_F(CoroLeanStoreTest, BasicKv) {
       EXPECT_EQ(copied_value, expected_val);
     }
   };
-  store->Submit(job_lookup, 1)->Wait();
+  store->GetCoroScheduler()->Submit(coro_session_1, std::move(job_lookup))->Wait();
+
+  store->GetCoroScheduler()->ReleaseCoroSession(coro_session_0);
+  store->GetCoroScheduler()->ReleaseCoroSession(coro_session_1);
 }
 
 } // namespace leanstore::test
