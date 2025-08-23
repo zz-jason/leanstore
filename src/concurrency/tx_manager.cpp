@@ -26,7 +26,8 @@ thread_local PerfCounters tls_perf_counters;
 TxManager::TxManager(uint64_t worker_id, std::vector<std::unique_ptr<TxManager>>& tx_mgrs,
                      leanstore::LeanStore* store)
     : store_(store),
-      cc_(store, store->store_option_->worker_threads_),
+      cc_(store, store->store_option_->worker_threads_ *
+                     store->store_option_->max_concurrent_tx_per_worker_),
       active_tx_id_(0),
       worker_id_(worker_id),
       tx_mgrs_(tx_mgrs) {

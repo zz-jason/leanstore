@@ -20,7 +20,7 @@ namespace leanstore::telemetry {
 class MetricsHttpExposer : public utils::ManagedThread {
 private:
   static constexpr char kListenAddress[] = "0.0.0.0";
-  static constexpr char kThreadName[] = "MetricsExposer";
+  static constexpr char kThreadName[] = "metric_exposer";
   static constexpr char kContentType[] = "text/plain; version=0.0.4; charset=utf-8";
   static constexpr char kHeapEndpoint[] = "/heap";
   static constexpr char kProfileEndpoint[] = "/profile";

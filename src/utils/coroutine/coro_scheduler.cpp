@@ -20,21 +20,26 @@ CoroScheduler::CoroScheduler(LeanStore* store, int64_t num_threads)
       session_pool_mutex_per_exec_(num_threads),
       num_threads_(num_threads),
       coro_executors_(num_threads) {
+  // create coro session pool
   CreateSessionPool();
 
   // create commit protocols for each commit group
-  auto commit_group_size = store ? store->store_option_->commit_group_size_ : 0;
-  for (auto i = 0u; i < commit_group_size; i++) {
-    commit_protocols_.emplace_back(
-        std::make_unique<AutoCommitProtocol>(store, i, store->store_option_->worker_threads_));
+  if (store != nullptr) {
+    for (auto i = 0u; i < store->store_option_->worker_threads_; i++) {
+      assert(store != nullptr && "Store must not be null when commit groups are enabled");
+      commit_protocols_.emplace_back(std::make_unique<AutoCommitProtocol>(store, i));
+    }
   }
 
   // create coroutine executors
   assert(num_threads > 0 && "Number of threads must be greater than zero");
+  auto num_committers = commit_protocols_.size();
   for (int64_t i = 0; i < num_threads; ++i) {
-    auto* commit_protocol =
-        commit_group_size == 0 ? nullptr : commit_protocols_[i % commit_group_size].get();
-    coro_executors_[i] = std::make_unique<CoroExecutor>(store, commit_protocol, i);
+    AutoCommitProtocol* committer = nullptr;
+    if (num_committers > 0) {
+      committer = commit_protocols_[i % num_committers].get();
+    }
+    coro_executors_[i] = std::make_unique<CoroExecutor>(store, committer, i);
   }
 }
 
