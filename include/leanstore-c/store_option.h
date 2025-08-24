@@ -42,8 +42,9 @@ typedef struct StoreOption {
   /// The number of worker threads.
   uint64_t worker_threads_;
 
-  /// Maximum number of concurrent transactions per worker thread.
-  uint64_t max_concurrent_tx_per_worker_;
+  /// Maximum number of concurrent transactions per worker thread, a hard limit.
+  /// Also limits the maximum concurrent sessions in a leanstore worker thread.
+  uint64_t max_concurrent_transaction_per_worker_;
 
   // ---------------------------------------------------------------------------
   // Buffer pool related options

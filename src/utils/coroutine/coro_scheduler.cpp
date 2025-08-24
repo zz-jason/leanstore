@@ -81,7 +81,7 @@ void CoroScheduler::CreateSessionPool() {
   auto num_exec = coro_executors_.size();
   auto num_session_per_exec = (uint64_t)CoroEnv::kMaxCoroutinesPerThread;
   if (store_ != nullptr) {
-    num_session_per_exec = store_->store_option_->max_concurrent_tx_per_worker_;
+    num_session_per_exec = store_->store_option_->max_concurrent_transaction_per_worker_;
   }
 
   // create all coro sessions

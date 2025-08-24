@@ -64,6 +64,13 @@ void DestroyLeanStore(LeanStoreHandle* handle);
 /// Get the LeanStore instance, return NULL if the handle is invalid
 void* GetLeanStore(LeanStoreHandle* handle);
 
+typedef struct LeanStoreSessionHandle LeanStoreSessionHandle;
+LeanStoreSessionHandle* LeanStoreTryConnect(LeanStoreHandle* handle);
+LeanStoreSessionHandle* LeanStoreConnect(LeanStoreHandle* handle);
+void LeanStoreDisconnect(LeanStoreSessionHandle* handle);
+void* GetLeanStoreFromSession(LeanStoreSessionHandle* handle);
+void* GetCoroSessionFromSession(LeanStoreSessionHandle* handle);
+
 //------------------------------------------------------------------------------
 // Interfaces for metrics
 //------------------------------------------------------------------------------

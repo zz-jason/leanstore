@@ -4,7 +4,10 @@
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/lean_store.hpp"
 #include "telemetry/metrics_http_exposer.hpp"
+#include "utils/coroutine/coro_session.hpp"
 
+#include <atomic>
+#include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
@@ -82,6 +85,69 @@ void* GetLeanStore(LeanStoreHandle* handle) {
     return nullptr;
   }
   return handle->store_.get();
+}
+
+struct LeanStoreSessionHandle {
+  leanstore::LeanStore* store_;
+  leanstore::CoroSession* session_;
+};
+
+namespace {
+static std::atomic<uint64_t> runs_on_counter{0};
+} // namespace
+
+LeanStoreSessionHandle* LeanStoreTryConnect(LeanStoreHandle* handle) {
+  if (handle == nullptr || handle->store_ == nullptr) {
+    return nullptr;
+  }
+
+  auto* store = handle->store_.get();
+  auto runs_on = runs_on_counter++ % store->store_option_->worker_threads_;
+
+  assert(store->GetCoroScheduler() != nullptr && "CoroScheduler should be initialized");
+  auto* session = store->GetCoroScheduler()->TryReserveCoroSession(runs_on);
+  if (session == nullptr) {
+    return nullptr;
+  }
+
+  LeanStoreSessionHandle* session_handle = new LeanStoreSessionHandle();
+  session_handle->store_ = store;
+  session_handle->session_ = session;
+  return session_handle;
+}
+
+LeanStoreSessionHandle* LeanStoreConnect(LeanStoreHandle* handle) {
+  if (handle == nullptr || handle->store_ == nullptr) {
+    return nullptr;
+  }
+
+  auto* store = handle->store_.get();
+  auto runs_on = runs_on_counter++ % store->store_option_->worker_threads_;
+  auto* session = store->GetCoroScheduler()->ReserveCoroSession(runs_on);
+  assert(session != nullptr && "ReserveCoroSession should never return nullptr");
+
+  LeanStoreSessionHandle* session_handle = new LeanStoreSessionHandle();
+  session_handle->store_ = store;
+  session_handle->session_ = session;
+  return session_handle;
+}
+
+void LeanStoreDisconnect(LeanStoreSessionHandle* handle) {
+  if (handle == nullptr) {
+    return;
+  }
+
+  handle->store_->GetCoroScheduler()->ReleaseCoroSession(handle->session_);
+  delete handle;
+  handle = nullptr;
+}
+
+void* GetLeanStoreFromSession(LeanStoreSessionHandle* handle) {
+  return handle->store_;
+}
+
+void* GetCoroSessionFromSession(LeanStoreSessionHandle* handle) {
+  return handle->session_;
 }
 
 //------------------------------------------------------------------------------
