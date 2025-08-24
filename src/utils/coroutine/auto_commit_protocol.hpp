@@ -16,13 +16,7 @@ class LeanStore;
 
 class AutoCommitProtocol {
 public:
-  AutoCommitProtocol(LeanStore* store, uint32_t commit_group, uint64_t num_workers)
-      : store_(store),
-        group_id_(commit_group) {
-    synced_last_committed_sys_tx_.resize(num_workers, 0);
-    synced_last_committed_usr_tx_.resize(num_workers, 0);
-  };
-
+  AutoCommitProtocol(LeanStore* store, uint32_t group_id);
   ~AutoCommitProtocol() = default;
 
   // No copy and assignment
@@ -69,6 +63,7 @@ private:
   TXID DetermineCommitableUsrTxRfA(std::vector<cr::Transaction>& tx_queue_rfa);
 
 private:
+  /// Reference to the store instance.
   LeanStore* store_;
 
   /// Commit group id, identifies the group of workers that are committing
@@ -76,13 +71,20 @@ private:
   /// AutoCommitProtocol instance and the same commit acknowledgment.
   const uint32_t group_id_;
 
+  /// All the active transaction managers that are using this commit protocol.
   std::unordered_set<cr::TxManager*> active_tx_mgrs_;
 
+  /// The last committed user transaction ID that has been synced from other coro executors.
   std::vector<TXID> synced_last_committed_usr_tx_;
+
+  /// The last committed system transaction ID that has been synced from other coro executors.
   std::vector<TXID> synced_last_committed_sys_tx_;
 
-  TXID min_committed_usr_tx_ = 0;
-  TXID min_committed_sys_tx_ = 0;
+  /// The minimum committed user transaction ID among all workers in the store.
+  TXID min_committed_usr_tx_;
+
+  /// The minimum committed system transaction ID among all workers in the store.
+  TXID min_committed_sys_tx_;
 };
 
 } // namespace leanstore

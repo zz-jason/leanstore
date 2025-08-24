@@ -379,7 +379,8 @@ public:
     Log::Info("Starting YCSB clients, num_clients={}", FLAGS_ycsb_clients);
     std::vector<std::unique_ptr<YcsbLeanStoreClient>> clients;
     for (auto i = 0u; i < FLAGS_ycsb_clients; i++) {
-      clients.emplace_back(YcsbLeanStoreClient::New(store_.get(), GetTable(), GetWorkloadType()));
+      clients.emplace_back(YcsbLeanStoreClient::New(store_.get(), GetTable(), GetWorkloadType(),
+                                                    bench_transaction_kv_));
     }
     for (auto& client : clients) {
       client->Start();

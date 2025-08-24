@@ -30,9 +30,16 @@ public:
   }
 
   void Deserialize(const utils::JsonObj& json_obj) {
-    usr_tso_.store(json_obj.GetUint64(kKeyGlobalUsrTso).value());
-    sys_tso_.store(json_obj.GetUint64(kKeyGlobalSysTso).value());
-    global_wmk_info_.wmk_of_all_tx_ = json_obj.GetUint64(kKeyGlobalUsrTso).value();
+    auto usr_tx = json_obj.GetUint64(kKeyGlobalUsrTso).value();
+    auto sys_tx = json_obj.GetUint64(kKeyGlobalSysTso).value();
+    usr_tso_.store(usr_tx);
+    sys_tso_.store(sys_tx);
+    global_wmk_info_.wmk_of_all_tx_ = usr_tx;
+
+    for (auto& logging : loggings_) {
+      logging->SetLastHardenedUsrTx(usr_tx);
+      logging->SetLastHardenedSysTx(sys_tx);
+    }
   }
 
   void InitHistoryStorage();

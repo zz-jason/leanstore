@@ -36,8 +36,11 @@ public:
   inline static std::atomic<uint64_t> s_client_id_counter = 0;
 
   static std::unique_ptr<YcsbLeanStoreClient> New(LeanStore* store, KVInterface* btree,
-                                                  Workload workload_type) {
-    auto* client = new YcsbLeanStoreClient(s_client_id_counter++, store, btree, workload_type);
+                                                  Workload workload_type,
+                                                  bool bench_transaction_kv) {
+    assert(btree != nullptr && "BTree must not be null");
+    auto* client = new YcsbLeanStoreClient(s_client_id_counter++, store, btree, workload_type,
+                                           bench_transaction_kv);
     return std::unique_ptr<YcsbLeanStoreClient>(client);
   }
 
@@ -49,11 +52,12 @@ public:
 
 protected:
   YcsbLeanStoreClient(uint64_t client_id, LeanStore* store, KVInterface* btree,
-                      Workload workload_type)
+                      Workload workload_type, bool bench_transaction_kv)
       : utils::ManagedThread(nullptr, std::format(kThreadNamePattern, client_id)),
         client_id_(client_id),
         store_(store),
         btree_(btree),
+        bench_transaction_kv_(bench_transaction_kv),
         workload_type_(workload_type) {
     update_desc_ = UpdateDesc::CreateFrom(update_desc_buffer_.Data());
     update_desc_->num_slots_ = 1;
@@ -102,7 +106,14 @@ protected:
       SmallBuffer<1024> key_buffer(FLAGS_ycsb_key_size);
       uint8_t* key = key_buffer.Data();
       GenYcsbKey(zipf_random_, key);
-      btree_->Lookup(Slice(key, FLAGS_ycsb_key_size), copy_value_);
+
+      if (bench_transaction_kv_) {
+        CoroEnv::CurTxMgr().StartTx();
+        btree_->Lookup(Slice(key, FLAGS_ycsb_key_size), copy_value_);
+        CoroEnv::CurTxMgr().CommitTx();
+      } else {
+        btree_->Lookup(Slice(key, FLAGS_ycsb_key_size), copy_value_);
+      }
 
       GetTlsPerfCounters()->tx_committed_++;
     };
@@ -113,7 +124,15 @@ protected:
       SmallBuffer<1024> key_buffer(FLAGS_ycsb_key_size);
       uint8_t* key = key_buffer.Data();
       GenYcsbKey(zipf_random_, key);
-      btree_->UpdatePartial(Slice(key, FLAGS_ycsb_key_size), update_callback_, *update_desc_);
+
+      if (bench_transaction_kv_) {
+        CoroEnv::CurTxMgr().StartTx();
+        btree_->UpdatePartial(Slice(key, FLAGS_ycsb_key_size), update_callback_, *update_desc_);
+        CoroEnv::CurTxMgr().CommitTx();
+      } else {
+        btree_->UpdatePartial(Slice(key, FLAGS_ycsb_key_size), update_callback_, *update_desc_);
+      }
+
       GetTlsPerfCounters()->tx_committed_++;
     };
   }
@@ -137,6 +156,8 @@ protected:
   LeanStore* store_;
 
   KVInterface* btree_;
+
+  bool bench_transaction_kv_;
 
   Workload workload_type_ = Workload::kA;
 

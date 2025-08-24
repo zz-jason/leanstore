@@ -97,12 +97,12 @@ jobs:
         name: leanstore-release-thread
         path: leanstore-thread-mode.tar.gz
 
-  bench-ycsb-thread-mode:
+  ycsb_b_basickv:
     runs-on: ubuntu-latest
     needs: [build-release-thread-mode]
     container:
       image: zzjason/leanstore-dev:latest
-    name: Bench YCSB
+    name: Bench YCSB B on BasicKV
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -116,24 +116,62 @@ jobs:
         run: |
           ./dist/release_thread/bin/ycsb --ycsb_data_dir=/tmp/leanstore/thread \
             --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
-            --ycsb_target=basickv --ycsb_workload=c \
+            --ycsb_target=basickv --ycsb_workload=b \
             --ycsb_threads=2 --ycsb_clients=6 \
             --ycsb_cmd=load
       - name: YCSB bench
         run: |
           ./dist/release_thread/bin/ycsb --ycsb_data_dir=/tmp/leanstore/thread \
             --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
-            --ycsb_target=basickv --ycsb_workload=c \
+            --ycsb_target=basickv --ycsb_workload=b \
             --ycsb_threads=2 --ycsb_clients=6 --ycsb_run_for_seconds=30 \
-            --ycsb_cmd=run > ycsb_basickv_c.out
-          sed -i '1i**YCSB on BasicKV workload C**\n```txt' ycsb_basickv_c.out
-          echo '```' >> ycsb_basickv_c.out
-          cat ycsb_basickv_c.out
+            --ycsb_cmd=run > ycsb_b_basickv.out
+          sed -i '1i**Bench YCSB B on BasicKV**\n```txt' ycsb_b_basickv.out
+          echo '```' >> ycsb_b_basickv.out
+          cat ycsb_b_basickv.out
       - name: Upload bench result
         uses: actions/upload-artifact@v4
         with:
-          name: ycsb_basickv_c.out
-          path: ycsb_basickv_c.out
+          name: ycsb_b_basickv.out
+          path: ycsb_b_basickv.out
+
+  ycsb_b_transactionkv:
+    runs-on: ubuntu-latest
+    needs: [build-release-thread-mode]
+    container:
+      image: zzjason/leanstore-dev:latest
+    name: Bench YCSB B on TransactionKV
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: leanstore-release-thread
+      - name: Unpack artifact
+        run: |
+          tar -xzf leanstore-thread-mode.tar.gz
+          ldd ./dist/release_thread/bin/ycsb
+      - name: YCSB data load
+        run: |
+          ./dist/release_thread/bin/ycsb --ycsb_data_dir=/tmp/leanstore/thread \
+            --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
+            --ycsb_target=transactionkv --ycsb_workload=b \
+            --ycsb_threads=2 --ycsb_clients=6 \
+            --ycsb_cmd=load
+      - name: YCSB bench
+        run: |
+          ./dist/release_thread/bin/ycsb --ycsb_data_dir=/tmp/leanstore/thread \
+            --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
+            --ycsb_target=transactionkv --ycsb_workload=b \
+            --ycsb_threads=2 --ycsb_clients=6 --ycsb_run_for_seconds=30 \
+            --ycsb_cmd=run > ycsb_b_transactionkv.out
+          sed -i '1i**Bench YCSB B on TransactionKV**\n```txt' ycsb_b_transactionkv.out
+          echo '```' >> ycsb_b_transactionkv.out
+          cat ycsb_b_transactionkv.out
+      - name: Upload bench result
+        uses: actions/upload-artifact@v4
+        with:
+          name: ycsb_b_transactionkv.out
+          path: ycsb_b_transactionkv.out
 
   build-release-coro-mode:
     runs-on: ubuntu-latest
@@ -158,12 +196,12 @@ jobs:
         name: leanstore-release-coro
         path: leanstore-coro-mode.tar.gz
 
-  bench-ycsb-coro-mode:
+  ycsb_b_coro_basickv:
     runs-on: ubuntu-latest
     needs: [build-release-coro-mode]
     container:
       image: zzjason/leanstore-dev:latest
-    name: "[COROUTINE] Bench YCSB"
+    name: "[COROUTINE] Bench YCSB B on BasicKV"
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -177,43 +215,91 @@ jobs:
         run: |
           ./dist/release_coro/bin/ycsb --ycsb_data_dir=/tmp/leanstore/coro \
             --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
-            --ycsb_target=basickv --ycsb_workload=c \
+            --ycsb_target=basickv --ycsb_workload=b \
             --ycsb_threads=2 --ycsb_clients=6 \
             --ycsb_cmd=load
       - name: YCSB bench
         run: |
           ./dist/release_coro/bin/ycsb --ycsb_data_dir=/tmp/leanstore/coro \
             --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
-            --ycsb_target=basickv --ycsb_workload=c \
+            --ycsb_target=basickv --ycsb_workload=b \
             --ycsb_threads=2 --ycsb_clients=6 --ycsb_run_for_seconds=30 \
-            --ycsb_cmd=run > coro_ycsb_basickv_c.out
-          sed -i '1i**[COROUTINE] YCSB on BasicKV workload C**\n```txt' coro_ycsb_basickv_c.out
-          echo '```' >> coro_ycsb_basickv_c.out
-          cat coro_ycsb_basickv_c.out
+            --ycsb_cmd=run > ycsb_b_coro_basickv.out
+          sed -i '1i**[COROUTINE] Bench YCSB B on BasicKV**\n```txt' ycsb_b_coro_basickv.out
+          echo '```' >> ycsb_b_coro_basickv.out
+          cat ycsb_b_coro_basickv.out
       - name: Upload bench result
         uses: actions/upload-artifact@v4
         with:
-          name: coro_ycsb_basickv_c.out
-          path: coro_ycsb_basickv_c.out
+          name: ycsb_b_coro_basickv.out
+          path: ycsb_b_coro_basickv.out
+
+  ycsb_b_coro_transactionkv:
+    runs-on: ubuntu-latest
+    needs: [build-release-coro-mode]
+    container:
+      image: zzjason/leanstore-dev:latest
+    name: "[COROUTINE] Bench YCSB B on TransactionKV"
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: leanstore-release-coro
+      - name: Unpack artifact
+        run: |
+          tar -xzf leanstore-coro-mode.tar.gz
+          ldd ./dist/release_coro/bin/ycsb
+      - name: YCSB data load
+        run: |
+          ./dist/release_coro/bin/ycsb --ycsb_data_dir=/tmp/leanstore/coro \
+            --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
+            --ycsb_target=transactionkv --ycsb_workload=b \
+            --ycsb_threads=2 --ycsb_clients=6 \
+            --ycsb_cmd=load
+      - name: YCSB bench
+        run: |
+          ./dist/release_coro/bin/ycsb --ycsb_data_dir=/tmp/leanstore/coro \
+            --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
+            --ycsb_target=transactionkv --ycsb_workload=b \
+            --ycsb_threads=2 --ycsb_clients=6 --ycsb_run_for_seconds=30 \
+            --ycsb_cmd=run > ycsb_b_coro_transactionkv.out
+          sed -i '1i**[COROUTINE] Bench YCSB B on TransactionKV**\n```txt' ycsb_b_coro_transactionkv.out
+          echo '```' >> ycsb_b_coro_transactionkv.out
+          cat ycsb_b_coro_transactionkv.out
+      - name: Upload bench result
+        uses: actions/upload-artifact@v4
+        with:
+          name: ycsb_b_coro_transactionkv.out
+          path: ycsb_b_coro_transactionkv.out
 
   display-bench-results:
     runs-on: ubuntu-latest
-    needs: [bench-ycsb-thread-mode, bench-ycsb-coro-mode]
+    needs: [ycsb_b_basickv, ycsb_b_transactionkv, ycsb_b_coro_basickv, ycsb_b_coro_transactionkv]
     name: "Display Bench Results"
     steps:
-      - name: Download ycsb_basickv_c.out
+      - name: Download ycsb_b_basickv.out
         uses: actions/download-artifact@v4
         with:
-          name: ycsb_basickv_c.out
-      - name: Download coro_ycsb_basickv_c.out
+          name: ycsb_b_basickv.out
+      - name: Download ycsb_b_transactionkv.out
         uses: actions/download-artifact@v4
         with:
-          name: coro_ycsb_basickv_c.out
+          name: ycsb_b_transactionkv.out
+      - name: Download ycsb_b_coro_basickv.out
+        uses: actions/download-artifact@v4
+        with:
+          name: ycsb_b_coro_basickv.out
+      - name: Download ycsb_b_coro_transactionkv.out
+        uses: actions/download-artifact@v4
+        with:
+          name: ycsb_b_coro_transactionkv.out
       - name: Combine results
         run: |
           touch combined.out
-          cat ycsb_basickv_c.out >> combined.out
-          cat coro_ycsb_basickv_c.out >> combined.out
+          cat ycsb_b_basickv.out >> combined.out
+          cat ycsb_b_coro_basickv.out >> combined.out
+          cat ycsb_b_transactionkv.out >> combined.out
+          cat ycsb_b_coro_transactionkv.out >> combined.out
       - name: Display results in comment
         uses: marocchino/sticky-pull-request-comment@v2
         with:

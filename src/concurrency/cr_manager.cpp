@@ -17,11 +17,6 @@
 
 namespace {
 constexpr auto kKeyWalSize = "wal_size";
-constexpr auto kKeyGlobalUsrTso = "global_user_tso";
-constexpr auto kKeyGlobalSysTso = "global_system_tso";
-constexpr auto kUpdateNameFormat = "_history_tree_{}_updates";
-constexpr auto kRemoveNameFormat = "_history_tree_{}_removes";
-constexpr BTreeConfig kBtreeConfig = {.enable_wal_ = false, .use_bulk_insert_ = true};
 } // namespace
 
 namespace leanstore::cr {

@@ -27,17 +27,6 @@ if(ENABLE_WIRED_TIGER)
   list(APPEND YCSB_DEPS wiredtiger)
 endif(ENABLE_WIRED_TIGER)
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(PKG_PROFILER IMPORTED_TARGET libprofiler)
-pkg_check_modules(PKG_TCMALLOC IMPORTED_TARGET libtcmalloc)
-if (PKG_PROFILER_FOUND)
-  list(APPEND YCSB_DEPS PkgConfig::PKG_PROFILER)
-endif (PKG_PROFILER_FOUND)
-if (PKG_TCMALLOC_FOUND)
-  message(STATUS "libtcmalloc found: ${PKG_TCMALLOC}")
-  list(APPEND YCSB_DEPS PkgConfig::PKG_TCMALLOC)
-endif (PKG_TCMALLOC_FOUND)
-
 add_executable(ycsb ${YCSB_SRC})
 target_link_libraries(ycsb PRIVATE ${YCSB_DEPS})
 
