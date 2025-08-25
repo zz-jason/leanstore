@@ -30,7 +30,7 @@ CoroExecutor::CoroExecutor(LeanStore* store, AutoCommitProtocol* commit_protocol
   if (!store)
     user_tasks_.resize(4);
   else {
-    user_tasks_.resize(store->store_option_->max_concurrent_tx_per_worker_);
+    user_tasks_.resize(store->store_option_->max_concurrent_transaction_per_worker_);
   }
 
   CreateSysCoros();

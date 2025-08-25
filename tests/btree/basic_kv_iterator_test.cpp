@@ -1,3 +1,4 @@
+#include "lean_test_suite.hpp"
 #include "leanstore-c/kv_basic.h"
 #include "leanstore-c/leanstore.h"
 #include "leanstore-c/store_option.h"
@@ -13,13 +14,13 @@
 
 namespace leanstore::test {
 
-class BasicKvIteratorTest : public ::testing::Test {
+class BasicKvIteratorTest : public LeanTestSuite {
 protected:
   LeanStoreHandle* store_handle_;
   BasicKvHandle* kv_handle_;
 
   void SetUp() override {
-    StoreOption* option = CreateStoreOption("/tmp/leanstore/examples/BasicKvExample");
+    StoreOption* option = CreateStoreOption(TestCaseStoreDir().c_str());
     option->create_from_scratch_ = true;
     option->worker_threads_ = 2;
     option->enable_bulk_insert_ = false;
@@ -27,7 +28,7 @@ protected:
     store_handle_ = CreateLeanStore(option);
     ASSERT_NE(store_handle_, nullptr);
 
-    kv_handle_ = CreateBasicKv(store_handle_, 0, "testTree1");
+    kv_handle_ = CreateBasicKv(store_handle_, 0, "test_tree_0");
     ASSERT_NE(kv_handle_, nullptr);
   }
 

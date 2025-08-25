@@ -60,7 +60,7 @@ public:
     option->enable_wal_ = true;
     option->worker_threads_ = FLAGS_ycsb_threads;
     option->buffer_pool_size_ = FLAGS_ycsb_mem_gb << 30;
-    option->max_concurrent_tx_per_worker_ =
+    option->max_concurrent_transaction_per_worker_ =
         (FLAGS_ycsb_clients + FLAGS_ycsb_threads - 1) / FLAGS_ycsb_threads;
 
     auto res = LeanStore::Open(option);

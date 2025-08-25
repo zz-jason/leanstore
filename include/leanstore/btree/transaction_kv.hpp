@@ -112,7 +112,7 @@ public:
 
   inline static uint64_t ConvertToFatTupleThreshold() {
     auto& store_option = CoroEnv::CurTxMgr().store_->store_option_;
-    return store_option->worker_threads_ * store_option->max_concurrent_tx_per_worker_;
+    return store_option->worker_threads_ * store_option->max_concurrent_transaction_per_worker_;
   }
 
   /// Updates the value stored in FatTuple. The former newest version value is

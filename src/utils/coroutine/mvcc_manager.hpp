@@ -115,7 +115,8 @@ private:
 
 inline MvccManager::MvccManager(LeanStore* store) : store_(store) {
   auto* store_option = store->store_option_;
-  auto num_tx_mgrs = store_option->worker_threads_ * store_option->max_concurrent_tx_per_worker_;
+  auto num_tx_mgrs =
+      store_option->worker_threads_ * store_option->max_concurrent_transaction_per_worker_;
 
   // init logging
   loggings_.reserve(store_option->worker_threads_);

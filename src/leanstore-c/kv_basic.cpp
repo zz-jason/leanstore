@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <utility>
 
 #include <stdint.h>
@@ -41,6 +42,34 @@ BasicKvHandle* CreateBasicKv(LeanStoreHandle* handle, uint64_t worker_id, const 
     }
     btree = res.value();
   });
+
+  if (btree == nullptr) {
+    return nullptr;
+  }
+
+  BasicKvHandle* btree_handle = new BasicKvHandle();
+  btree_handle->store_ = store;
+  btree_handle->btree_ = btree;
+  return btree_handle;
+}
+
+BasicKvHandle* CoroCreateBasicKv(LeanStoreSessionHandle* session, const char* btree_name) {
+  leanstore::storage::btree::BasicKV* btree{nullptr};
+  auto* store = (leanstore::LeanStore*)GetLeanStoreFromSession(session);
+  auto* coro_session = (leanstore::CoroSession*)GetCoroSessionFromSession(session);
+  auto* coro_scheduler = store->GetCoroScheduler();
+  assert(coro_scheduler != nullptr && "CoroScheduler should be initialized");
+
+  auto job = [&]() {
+    auto res = store->CreateBasicKv(btree_name);
+    if (!res) {
+      leanstore::Log::Error("Failed to create BasicKV, btreeName={}, error={}", btree_name,
+                            res.error().ToString());
+      return;
+    }
+    btree = res.value();
+  };
+  coro_scheduler->Submit(coro_session, std::move(job))->Wait();
 
   if (btree == nullptr) {
     return nullptr;
@@ -83,6 +112,24 @@ bool BasicKvInsert(BasicKvHandle* handle, uint64_t worker_id, StringSlice key, S
   return succeed;
 }
 
+bool CoroBasicKvInsert(BasicKvHandle* handle, LeanStoreSessionHandle* session, StringSlice key,
+                       StringSlice val) {
+  auto* store = (leanstore::LeanStore*)GetLeanStoreFromSession(session);
+  auto* coro_session = (leanstore::CoroSession*)GetCoroSessionFromSession(session);
+  auto* coro_scheduler = store->GetCoroScheduler();
+  assert(coro_scheduler != nullptr && "CoroScheduler should be initialized");
+
+  bool succeed{false};
+  auto job = [&]() {
+    auto op_code = handle->btree_->Insert(leanstore::Slice(key.data_, key.size_),
+                                          leanstore::Slice(val.data_, val.size_));
+    succeed = (op_code == leanstore::OpCode::kOK);
+  };
+
+  coro_scheduler->Submit(coro_session, std::move(job))->Wait();
+  return succeed;
+}
+
 bool BasicKvLookup(BasicKvHandle* handle, uint64_t worker_id, StringSlice key, OwnedString** val) {
   bool found = false;
   handle->store_->ExecSync(worker_id, [&]() {
@@ -110,6 +157,40 @@ bool BasicKvLookup(BasicKvHandle* handle, uint64_t worker_id, StringSlice key, O
   return found;
 }
 
+bool CoroBasicKvLookup(BasicKvHandle* handle, LeanStoreSessionHandle* session, StringSlice key,
+                       OwnedString** val) {
+  auto* store = (leanstore::LeanStore*)GetLeanStoreFromSession(session);
+  auto* coro_session = (leanstore::CoroSession*)GetCoroSessionFromSession(session);
+  auto* coro_scheduler = store->GetCoroScheduler();
+  assert(coro_scheduler != nullptr && "CoroScheduler should be initialized");
+
+  bool found = false;
+  auto job = [&]() {
+    auto copy_value_out = [&](leanstore::Slice val_slice) {
+      // set the found flag
+      found = true;
+
+      // create a new string if the value is out of the buffer size
+      if ((**val).capacity_ < val_slice.size() + 1) {
+        DestroyOwnedString(*val);
+        *val = CreateOwnedString(reinterpret_cast<const char*>(val_slice.data()), val_slice.size());
+        return;
+      }
+
+      // copy data to the buffer
+      (**val).size_ = val_slice.size();
+      memcpy((**val).data_, val_slice.data(), val_slice.size());
+      (**val).data_[val_slice.size()] = '\0';
+    };
+
+    // lookup the key
+    handle->btree_->Lookup(leanstore::Slice(key.data_, key.size_), std::move(copy_value_out));
+  };
+
+  coro_scheduler->Submit(coro_session, std::move(job))->Wait();
+  return found;
+}
+
 bool BasicKvRemove(BasicKvHandle* handle, uint64_t worker_id, StringSlice key) {
   bool succeed{false};
   handle->store_->ExecSync(worker_id, [&]() {
@@ -119,9 +200,38 @@ bool BasicKvRemove(BasicKvHandle* handle, uint64_t worker_id, StringSlice key) {
   return succeed;
 }
 
+bool CoroBasicKvRemove(BasicKvHandle* handle, LeanStoreSessionHandle* session, StringSlice key) {
+  auto* store = (leanstore::LeanStore*)GetLeanStoreFromSession(session);
+  auto* coro_session = (leanstore::CoroSession*)GetCoroSessionFromSession(session);
+  auto* coro_scheduler = store->GetCoroScheduler();
+  assert(coro_scheduler != nullptr && "CoroScheduler should be initialized");
+
+  bool succeed{false};
+  auto job = [&]() {
+    auto op_code = handle->btree_->Remove(leanstore::Slice(key.data_, key.size_));
+    succeed = (op_code == leanstore::OpCode::kOK);
+  };
+
+  coro_scheduler->Submit(coro_session, std::move(job))->Wait();
+  return succeed;
+}
+
 uint64_t BasicKvNumEntries(BasicKvHandle* handle, uint64_t worker_id) {
   uint64_t ret{0};
   handle->store_->ExecSync(worker_id, [&]() { ret = handle->btree_->CountEntries(); });
+  return ret;
+}
+
+uint64_t CoroBasicKvNumEntries(BasicKvHandle* handle, LeanStoreSessionHandle* session) {
+  auto* store = (leanstore::LeanStore*)GetLeanStoreFromSession(session);
+  auto* coro_session = (leanstore::CoroSession*)GetCoroSessionFromSession(session);
+  auto* coro_scheduler = store->GetCoroScheduler();
+  assert(coro_scheduler != nullptr && "CoroScheduler should be initialized");
+
+  uint64_t ret{0};
+  auto job = [&]() { ret = handle->btree_->CountEntries(); };
+
+  coro_scheduler->Submit(coro_session, std::move(job))->Wait();
   return ret;
 }
 
@@ -131,19 +241,33 @@ uint64_t BasicKvNumEntries(BasicKvHandle* handle, uint64_t worker_id) {
 
 struct BasicKvIterHandle {
   BasicKvIterHandle(std::unique_ptr<leanstore::storage::btree::BTreeIter> iter,
-                    leanstore::LeanStore* store, uint64_t worker_id)
+                    leanstore::LeanStore* store, uint64_t worker_id,
+                    LeanStoreSessionHandle* session)
       : iter_(std::move(iter)),
         store_(store),
-        worker_id_(worker_id) {
+        worker_id_(worker_id),
+        session_(session) {
   }
 
   ~BasicKvIterHandle() {
     // release locks in the target worker
-    store_->ExecSync(worker_id_, [&]() { iter_->Reset(); });
+    ExecuteJob([&]() { iter_->Reset(); });
 
     iter_ = nullptr;
     store_ = nullptr;
     worker_id_ = 0;
+  }
+
+  void ExecuteJob(std::function<void()>&& job) {
+    if (session_ != nullptr) {
+      auto* store = (leanstore::LeanStore*)GetLeanStoreFromSession(session_);
+      auto* coro_session = (leanstore::CoroSession*)GetCoroSessionFromSession(session_);
+      auto* coro_scheduler = store->GetCoroScheduler();
+      assert(coro_scheduler != nullptr && "CoroScheduler should be initialized");
+      coro_scheduler->Submit(coro_session, std::move(job))->Wait();
+      return;
+    }
+    store_->ExecSync(worker_id_, std::move(job));
   }
 
   /// The actual iterator
@@ -154,11 +278,21 @@ struct BasicKvIterHandle {
 
   /// The worker ID that is expected to use this iterator.
   uint64_t worker_id_;
+
+  LeanStoreSessionHandle* session_;
 };
 
 BasicKvIterHandle* CreateBasicKvIter(const BasicKvHandle* handle, uint64_t worker_id) {
   BasicKvIterHandle* iter_handle{nullptr};
-  iter_handle = new BasicKvIterHandle(handle->btree_->NewBTreeIter(), handle->store_, worker_id);
+  iter_handle =
+      new BasicKvIterHandle(handle->btree_->NewBTreeIter(), handle->store_, worker_id, nullptr);
+  return iter_handle;
+}
+
+BasicKvIterHandle* CoroCreateBasicKvIter(const BasicKvHandle* handle,
+                                         LeanStoreSessionHandle* session) {
+  BasicKvIterHandle* iter_handle{nullptr};
+  iter_handle = new BasicKvIterHandle(handle->btree_->NewBTreeIter(), handle->store_, 0, session);
   return iter_handle;
 }
 
@@ -171,19 +305,33 @@ void DestroyBasicKvIter(BasicKvIterHandle* handle) {
 
 struct BasicKvIterMutHandle {
   BasicKvIterMutHandle(std::unique_ptr<leanstore::storage::btree::BTreeIterMut> iter_mut,
-                       leanstore::LeanStore* store, uint64_t worker_id)
+                       leanstore::LeanStore* store, uint64_t worker_id,
+                       LeanStoreSessionHandle* session)
       : iter_mut_(std::move(iter_mut)),
         store_(store),
-        worker_id_(worker_id) {
+        worker_id_(worker_id),
+        session_(session) {
   }
 
   ~BasicKvIterMutHandle() {
     // release locks in the target worker
-    store_->ExecSync(worker_id_, [&]() { iter_mut_->Reset(); });
+    ExecuteJob([&]() { iter_mut_->Reset(); });
 
     iter_mut_ = nullptr;
     store_ = nullptr;
     worker_id_ = 0;
+  }
+
+  void ExecuteJob(std::function<void()>&& job) {
+    if (session_ != nullptr) {
+      auto* store = (leanstore::LeanStore*)GetLeanStoreFromSession(session_);
+      auto* coro_session = (leanstore::CoroSession*)GetCoroSessionFromSession(session_);
+      auto* coro_scheduler = store->GetCoroScheduler();
+      assert(coro_scheduler != nullptr && "CoroScheduler should be initialized");
+      coro_scheduler->Submit(coro_session, std::move(job))->Wait();
+      return;
+    }
+    store_->ExecSync(worker_id_, std::move(job));
   }
 
   /// The actual mutable iterator
@@ -194,12 +342,22 @@ struct BasicKvIterMutHandle {
 
   /// The worker ID that is expected to use this iterator.
   uint64_t worker_id_{0};
+
+  LeanStoreSessionHandle* session_;
 };
 
 BasicKvIterMutHandle* CreateBasicKvIterMut(const BasicKvHandle* btree_handle, uint64_t worker_id) {
   BasicKvIterMutHandle* iter_mut_handle{nullptr};
   iter_mut_handle = new BasicKvIterMutHandle(btree_handle->btree_->NewBTreeIterMut(),
-                                             btree_handle->store_, worker_id);
+                                             btree_handle->store_, worker_id, nullptr);
+  return iter_mut_handle;
+}
+
+BasicKvIterMutHandle* CoroCreateBasicKvIterMut(const BasicKvHandle* handle,
+                                               LeanStoreSessionHandle* session) {
+  BasicKvIterMutHandle* iter_mut_handle{nullptr};
+  iter_mut_handle =
+      new BasicKvIterMutHandle(handle->btree_->NewBTreeIterMut(), handle->store_, 0, session);
   return iter_mut_handle;
 }
 
@@ -215,14 +373,13 @@ BasicKvIterMutHandle* IntoBasicKvIterMut(BasicKvIterHandle* iter_handle) {
   BasicKvIterMutHandle* iter_mut_handle{nullptr};
   auto& btree = iter_handle->iter_->btree_;
   auto iter_mut = std::make_unique<leanstore::storage::btree::BTreeIterMut>(btree);
-
-  iter_handle->store_->ExecSync(iter_handle->worker_id_, [&]() {
+  auto job = [&]() {
     // convert the iterator to a mutable iterator
     iter_handle->iter_->IntoBtreeIterMut(iter_mut.get());
-  });
-
-  iter_mut_handle =
-      new BasicKvIterMutHandle(std::move(iter_mut), iter_handle->store_, iter_handle->worker_id_);
+  };
+  iter_handle->ExecuteJob(std::move(job));
+  iter_mut_handle = new BasicKvIterMutHandle(std::move(iter_mut), iter_handle->store_,
+                                             iter_handle->worker_id_, iter_handle->session_);
   return iter_mut_handle;
 }
 
@@ -232,13 +389,14 @@ BasicKvIterHandle* IntoBasicKvIter(BasicKvIterMutHandle* iter_mut_handle) {
   auto& btree = iter_mut_handle->iter_mut_->btree_;
   auto iter = std::make_unique<leanstore::storage::btree::BTreeIter>(btree);
 
-  iter_mut_handle->store_->ExecSync(iter_mut_handle->worker_id_, [&]() {
+  auto job = [&]() {
     // convert the mutable iterator to a regular iterator
     iter_mut_handle->iter_mut_->IntoBtreeIter(iter.get());
-  });
+  };
+  iter_mut_handle->ExecuteJob(std::move(job));
 
-  iter_handle =
-      new BasicKvIterHandle(std::move(iter), iter_mut_handle->store_, iter_mut_handle->worker_id_);
+  iter_handle = new BasicKvIterHandle(std::move(iter), iter_mut_handle->store_,
+                                      iter_mut_handle->worker_id_, iter_mut_handle->session_);
   return iter_handle;
 }
 
@@ -247,43 +405,47 @@ BasicKvIterHandle* IntoBasicKvIter(BasicKvIterMutHandle* iter_mut_handle) {
 //------------------------------------------------------------------------------
 
 void BasicKvIterSeekToFirst(BasicKvIterHandle* handle) {
-  handle->store_->ExecSync(handle->worker_id_, [&]() { handle->iter_->SeekToFirst(); });
+  auto job = [&]() { handle->iter_->SeekToFirst(); };
+  handle->ExecuteJob(std::move(job));
 }
 
 void BasicKvIterSeekToFirstGreaterEqual(BasicKvIterHandle* handle, StringSlice key) {
-  handle->store_->ExecSync(handle->worker_id_, [&]() {
+  auto job = [&]() {
     handle->iter_->SeekToFirstGreaterEqual(leanstore::Slice(key.data_, key.size_));
-  });
+  };
+  handle->ExecuteJob(std::move(job));
 }
 
 bool BasicKvIterHasNext(BasicKvIterHandle* handle) {
   bool has_next{false};
-  handle->store_->ExecSync(handle->worker_id_, [&]() { has_next = handle->iter_->HasNext(); });
+  auto job = [&]() { has_next = handle->iter_->HasNext(); };
+  handle->ExecuteJob(std::move(job));
   return has_next;
 }
 
 void BasicKvIterNext(BasicKvIterHandle* handle) {
-  handle->store_->ExecSync(handle->worker_id_, [&]() { handle->iter_->Next(); });
+  auto job = [&]() { handle->iter_->Next(); };
+  handle->ExecuteJob(std::move(job));
 }
 
 void BasicKvIterMutSeekToFirst(BasicKvIterMutHandle* handle) {
-  handle->store_->ExecSync(handle->worker_id_, [&]() { handle->iter_mut_->SeekToFirst(); });
+  handle->ExecuteJob([&]() { handle->iter_mut_->SeekToFirst(); });
 }
 
 void BasicKvIterMutSeekToFirstGreaterEqual(BasicKvIterMutHandle* handle, StringSlice key) {
-  handle->store_->ExecSync(handle->worker_id_, [&]() {
+  handle->ExecuteJob([&]() {
     handle->iter_mut_->SeekToFirstGreaterEqual(leanstore::Slice(key.data_, key.size_));
   });
 }
 
 bool BasicKvIterMutHasNext(BasicKvIterMutHandle* handle) {
   bool has_next{false};
-  handle->store_->ExecSync(handle->worker_id_, [&]() { has_next = handle->iter_mut_->HasNext(); });
+  handle->ExecuteJob([&]() { has_next = handle->iter_mut_->HasNext(); });
   return has_next;
 }
 
 void BasicKvIterMutNext(BasicKvIterMutHandle* handle) {
-  handle->store_->ExecSync(handle->worker_id_, [&]() { handle->iter_mut_->Next(); });
+  handle->ExecuteJob([&]() { handle->iter_mut_->Next(); });
 }
 
 //------------------------------------------------------------------------------
@@ -291,43 +453,44 @@ void BasicKvIterMutNext(BasicKvIterMutHandle* handle) {
 //------------------------------------------------------------------------------
 
 void BasicKvIterSeekToLast(BasicKvIterHandle* handle) {
-  handle->store_->ExecSync(handle->worker_id_, [&]() { handle->iter_->SeekToLast(); });
+  auto job = [&]() { handle->iter_->SeekToLast(); };
+  handle->ExecuteJob(std::move(job));
 }
 
 void BasicKvIterSeekToLastLessEqual(BasicKvIterHandle* handle, StringSlice key) {
-  handle->store_->ExecSync(handle->worker_id_, [&]() {
-    handle->iter_->SeekToLastLessEqual(leanstore::Slice(key.data_, key.size_));
-  });
+  auto job = [&]() { handle->iter_->SeekToLastLessEqual(leanstore::Slice(key.data_, key.size_)); };
+  handle->ExecuteJob(std::move(job));
 }
 
 bool BasicKvIterHasPrev(BasicKvIterHandle* handle) {
   bool has_prev{false};
-  handle->store_->ExecSync(handle->worker_id_, [&]() { has_prev = handle->iter_->HasPrev(); });
+  auto job = [&]() { has_prev = handle->iter_->HasPrev(); };
+  handle->ExecuteJob(std::move(job));
   return has_prev;
 }
 
 void BasicKvIterPrev(BasicKvIterHandle* handle) {
-  handle->store_->ExecSync(handle->worker_id_, [&]() { handle->iter_->Prev(); });
+  auto job = [&]() { handle->iter_->Prev(); };
+  handle->ExecuteJob(std::move(job));
 }
 
 void BasicKvIterMutSeekToLast(BasicKvIterMutHandle* handle) {
-  handle->store_->ExecSync(handle->worker_id_, [&]() { handle->iter_mut_->SeekToLast(); });
+  handle->ExecuteJob([&]() { handle->iter_mut_->SeekToLast(); });
 }
 
 void BasicKvIterMutSeekToLastLessEqual(BasicKvIterMutHandle* handle, StringSlice key) {
-  handle->store_->ExecSync(handle->worker_id_, [&]() {
-    handle->iter_mut_->SeekToLastLessEqual(leanstore::Slice(key.data_, key.size_));
-  });
+  handle->ExecuteJob(
+      [&]() { handle->iter_mut_->SeekToLastLessEqual(leanstore::Slice(key.data_, key.size_)); });
 }
 
 bool BasicKvIterMutHasPrev(BasicKvIterMutHandle* handle) {
   bool has_prev{false};
-  handle->store_->ExecSync(handle->worker_id_, [&]() { has_prev = handle->iter_mut_->HasPrev(); });
+  handle->ExecuteJob([&]() { has_prev = handle->iter_mut_->HasPrev(); });
   return has_prev;
 }
 
 void BasicKvIterMutPrev(BasicKvIterMutHandle* handle) {
-  handle->store_->ExecSync(handle->worker_id_, [&]() { handle->iter_mut_->Prev(); });
+  handle->ExecuteJob([&]() { handle->iter_mut_->Prev(); });
 }
 
 //------------------------------------------------------------------------------
@@ -369,7 +532,7 @@ StringSlice BasicKvIterMutVal(BasicKvIterMutHandle* handle) {
 // Interfaces for mutation
 //------------------------------------------------------------------------------
 void BasicKvIterMutRemove(BasicKvIterMutHandle* handle) {
-  handle->store_->ExecSync(handle->worker_id_, [&]() {
+  handle->ExecuteJob([&]() {
     assert(handle->iter_mut_->Valid() &&
            "Iterator is not valid, cannot remove current key-value pair");
     // wal
@@ -393,7 +556,7 @@ void BasicKvIterMutRemove(BasicKvIterMutHandle* handle) {
 
 bool BasicKvIterMutInsert(BasicKvIterMutHandle* handle, StringSlice key, StringSlice val) {
   auto succeed = true;
-  handle->store_->ExecSync(handle->worker_id_, [&]() {
+  handle->ExecuteJob([&]() {
     // insert
     auto op_code = handle->iter_mut_->InsertKV(leanstore::Slice(key.data_, key.size_),
                                                leanstore::Slice(val.data_, val.size_));

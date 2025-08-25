@@ -20,6 +20,7 @@ typedef struct BasicKvHandle BasicKvHandle;
 /// @return the basic key-value store handle, or nullptr if the creation fails.
 ///         The handle should be destroyed by the caller with DestroyBasicKv()
 BasicKvHandle* CreateBasicKv(LeanStoreHandle* handle, uint64_t worker_id, const char* btree_name);
+BasicKvHandle* CoroCreateBasicKv(LeanStoreSessionHandle* session, const char* btree_name);
 
 /// Get the basic key-value handle for btree name
 /// @return nullptr if not found
@@ -31,18 +32,24 @@ void DestroyBasicKv(BasicKvHandle* handle);
 /// Insert a key-value pair into a basic key-value store at workerId
 /// @return true if the insert is successful, false otherwise
 bool BasicKvInsert(BasicKvHandle* handle, uint64_t worker_id, StringSlice key, StringSlice val);
+bool CoroBasicKvInsert(BasicKvHandle* handle, LeanStoreSessionHandle* session, StringSlice key,
+                       StringSlice val);
 
 /// Lookup a key in a basic key-value store at workerId
 /// @return whether the value exists, The input val is untouched if the key is not found
 bool BasicKvLookup(BasicKvHandle* handle, uint64_t worker_id, StringSlice key, OwnedString** val);
+bool CoroBasicKvLookup(BasicKvHandle* handle, LeanStoreSessionHandle* session, StringSlice key,
+                       OwnedString** val);
 
 /// Remove a key in a basic key-value store at workerId
 /// @return true if the key is found and removed, false otherwise
 bool BasicKvRemove(BasicKvHandle* handle, uint64_t worker_id, StringSlice key);
+bool CoroBasicKvRemove(BasicKvHandle* handle, LeanStoreSessionHandle* session, StringSlice key);
 
 /// Get the size of a basic key-value store at workerId
 /// @return the number of entries in the basic key-value store
 uint64_t BasicKvNumEntries(BasicKvHandle* handle, uint64_t worker_id);
+uint64_t CoroBasicKvNumEntries(BasicKvHandle* handle, LeanStoreSessionHandle* session);
 
 //------------------------------------------------------------------------------
 // Iterator API for BasicKv
@@ -52,6 +59,8 @@ uint64_t BasicKvNumEntries(BasicKvHandle* handle, uint64_t worker_id);
 /// key-value store. The iterator should be destroyed by the caller after use.
 typedef struct BasicKvIterHandle BasicKvIterHandle;
 BasicKvIterHandle* CreateBasicKvIter(const BasicKvHandle* handle, uint64_t worker_id);
+BasicKvIterHandle* CoroCreateBasicKvIter(const BasicKvHandle* handle,
+                                         LeanStoreSessionHandle* session);
 void DestroyBasicKvIter(BasicKvIterHandle* handle);
 
 /// The BasicKvIterMutHandle is an opaque handle to a mutable iterator for a
@@ -59,6 +68,8 @@ void DestroyBasicKvIter(BasicKvIterHandle* handle);
 /// iterating. The iterator should be destroyed by the caller after use.
 typedef struct BasicKvIterMutHandle BasicKvIterMutHandle;
 BasicKvIterMutHandle* CreateBasicKvIterMut(const BasicKvHandle* handle, uint64_t worker_id);
+BasicKvIterMutHandle* CoroCreateBasicKvIterMut(const BasicKvHandle* handle,
+                                               LeanStoreSessionHandle* session);
 void DestroyBasicKvIterMut(BasicKvIterMutHandle* handle);
 
 /// Convert a BasicKvIterHandle to a BasicKvIterMutHandle and vice versa. The
