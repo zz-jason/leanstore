@@ -21,13 +21,13 @@ namespace leanstore {
 /// a stack of destructors that will be called before longjmp().
 class JumpContext {
 public:
+  static thread_local JumpContext* s_current_context;
+
   enum class JumpReason : uint8_t {
     kNormal = 0,
     kWaitingLock,
     kWaitingBufferframe,
   };
-
-  static thread_local JumpContext* s_current_context;
 
   static JumpContext* Current() {
     return s_current_context;

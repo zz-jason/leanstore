@@ -31,8 +31,8 @@ public:
 } // namespace utils
 } // namespace leanstore
 
-static thread_local leanstore::utils::MersenneTwister tls_mt_generator;
-static thread_local std::mt19937 tls_std_generator;
+inline thread_local leanstore::utils::MersenneTwister tls_mt_generator;
+inline thread_local std::mt19937 tls_std_generator;
 
 namespace leanstore {
 namespace utils {

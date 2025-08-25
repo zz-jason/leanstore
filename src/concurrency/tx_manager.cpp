@@ -21,8 +21,6 @@
 
 namespace leanstore::cr {
 
-thread_local PerfCounters tls_perf_counters;
-
 TxManager::TxManager(uint64_t worker_id, std::vector<std::unique_ptr<TxManager>>& tx_mgrs,
                      leanstore::LeanStore* store)
     : store_(store),

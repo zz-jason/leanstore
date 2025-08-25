@@ -111,8 +111,8 @@ public:
   }
 
   static CoroExecutor* CurrentThread() {
-    // assert(s_current_thread != nullptr);
-    return s_current_thread;
+    // assert(s_tls_current_coro_exec != nullptr);
+    return s_tls_current_coro_exec;
   }
 
   static Coroutine* CurrentCoro() {
@@ -134,7 +134,7 @@ private:
     }
     std::string thread_name = std::format(kCoroExecNamePattern, thread_id_);
     pthread_setname_np(pthread_self(), thread_name.c_str());
-    s_current_thread = this;
+    s_tls_current_coro_exec = this;
     JumpContext::SetCurrent(&def_jump_context_);
     CoroEnv::SetCurStore(store_);
 
@@ -178,7 +178,7 @@ private:
   /// Jump context for the thread, used for setjmp/longjmp operations.
   JumpContext def_jump_context_;
 
-  inline static thread_local CoroExecutor* s_current_thread = nullptr;
+  inline static thread_local CoroExecutor* s_tls_current_coro_exec = nullptr;
 };
 
 } // namespace leanstore
