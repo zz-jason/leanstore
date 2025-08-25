@@ -14,6 +14,7 @@ enable_language(ASM)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+add_compile_options(-ftls-model=global-dynamic)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -Wextra -rdynamic -fno-omit-frame-pointer -pthread -Wno-error=clobbered")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftls-model=local-exec")

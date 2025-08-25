@@ -1,9 +1,7 @@
 #include "leanstore-c/perf_counters.h"
 
-namespace {
-thread_local PerfCounters tls_perf_counters;
-} // namespace
+#include "leanstore/utils/counter_util.hpp"
 
 PerfCounters* GetTlsPerfCounters() {
-  return &tls_perf_counters;
+  return &leanstore::cr::tls_perf_counters;
 }

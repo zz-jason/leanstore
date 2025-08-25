@@ -67,6 +67,7 @@
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/release_coro",
                 "ENABLE_PROFILING": "ON",
                 "ENABLE_WIRED_TIGER": "OFF",
+                "BUILD_SHARED_LIBS": "ON",
                 "ENABLE_COROUTINE": "ON"
             }
         },

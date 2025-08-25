@@ -210,17 +210,17 @@ jobs:
       - name: Unpack artifact
         run: |
           tar -xzf leanstore-coro-mode.tar.gz
-          ldd ./dist/release_coro/bin/ycsb
+          LD_LIBRARY_PATH=./dist/release_coro/lib ldd ./dist/release_coro/bin/ycsb
       - name: YCSB data load
         run: |
-          ./dist/release_coro/bin/ycsb --ycsb_data_dir=/tmp/leanstore/coro \
+          LD_LIBRARY_PATH=./dist/release_coro/lib ./dist/release_coro/bin/ycsb --ycsb_data_dir=/tmp/leanstore/coro \
             --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
             --ycsb_target=basickv --ycsb_workload=b \
             --ycsb_threads=2 --ycsb_clients=6 \
             --ycsb_cmd=load
       - name: YCSB bench
         run: |
-          ./dist/release_coro/bin/ycsb --ycsb_data_dir=/tmp/leanstore/coro \
+          LD_LIBRARY_PATH=./dist/release_coro/lib ./dist/release_coro/bin/ycsb --ycsb_data_dir=/tmp/leanstore/coro \
             --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
             --ycsb_target=basickv --ycsb_workload=b \
             --ycsb_threads=2 --ycsb_clients=6 --ycsb_run_for_seconds=30 \
@@ -248,17 +248,17 @@ jobs:
       - name: Unpack artifact
         run: |
           tar -xzf leanstore-coro-mode.tar.gz
-          ldd ./dist/release_coro/bin/ycsb
+          LD_LIBRARY_PATH=./dist/release_coro/lib ldd ./dist/release_coro/bin/ycsb
       - name: YCSB data load
         run: |
-          ./dist/release_coro/bin/ycsb --ycsb_data_dir=/tmp/leanstore/coro \
+          LD_LIBRARY_PATH=./dist/release_coro/lib ./dist/release_coro/bin/ycsb --ycsb_data_dir=/tmp/leanstore/coro \
             --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
             --ycsb_target=transactionkv --ycsb_workload=b \
             --ycsb_threads=2 --ycsb_clients=6 \
             --ycsb_cmd=load
       - name: YCSB bench
         run: |
-          ./dist/release_coro/bin/ycsb --ycsb_data_dir=/tmp/leanstore/coro \
+          LD_LIBRARY_PATH=./dist/release_coro/lib ./dist/release_coro/bin/ycsb --ycsb_data_dir=/tmp/leanstore/coro \
             --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
             --ycsb_target=transactionkv --ycsb_workload=b \
             --ycsb_threads=2 --ycsb_clients=6 --ycsb_run_for_seconds=30 \
@@ -306,3 +306,28 @@ jobs:
           header: "YCSB Bench Results"
           path: combined.out
 
+
+  example_coro_release:
+    runs-on: ubuntu-latest
+    needs: [build-release-coro-mode]
+    container:
+      image: zzjason/leanstore-dev:latest
+    name: "[COROUTINE] Example C"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: leanstore-release-coro
+      - name: Unpack artifact
+        run: |
+          tar -xzf leanstore-coro-mode.tar.gz
+      - name: Build and run C example
+        run: |
+          cd examples/c
+          cmake -B build -S . \
+            -DLEANSTORE_INCLUDE_DIR=../../dist/release_coro/include \
+            -DLEANSTORE_LIBRARY_DIR=../../dist/release_coro/lib
+          cmake --build build -j `nproc`
+          ./build/kv_basic_example

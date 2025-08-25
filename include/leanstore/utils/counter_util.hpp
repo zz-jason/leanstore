@@ -9,7 +9,7 @@
 namespace leanstore {
 
 namespace cr {
-extern thread_local PerfCounters tls_perf_counters;
+inline thread_local PerfCounters tls_perf_counters;
 } // namespace cr
 
 /// ScopedCounterTimer for perf counters

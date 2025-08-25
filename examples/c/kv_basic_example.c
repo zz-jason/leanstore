@@ -2,6 +2,7 @@
 #include "leanstore-c/leanstore.h"
 #include "leanstore-c/store_option.h"
 
+#include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,10 +12,23 @@ int main() {
   struct StoreOption* option = CreateStoreOption("/tmp/leanstore/examples/BasicKvExample");
   option->create_from_scratch_ = 1;
   option->worker_threads_ = 2;
+  option->max_concurrent_transaction_per_worker_ = 4;
   option->enable_bulk_insert_ = 0;
   option->enable_eager_gc_ = 1;
   LeanStoreHandle* store_handle = CreateLeanStore(option);
-  BasicKvHandle* kv_handle = CreateBasicKv(store_handle, 0, "testTree1");
+  assert(store_handle != NULL);
+
+  // connect to leanstore
+  LeanStoreSessionHandle* session_0 = LeanStoreTryConnect(store_handle);
+  LeanStoreSessionHandle* session_1 = LeanStoreTryConnect(store_handle);
+  if (session_0 == NULL) {
+    DestroyLeanStore(store_handle);
+    printf("connect to leanstore failed\n");
+    return -1;
+  }
+
+  // create a basic btree key-value store
+  BasicKvHandle* kv_handle = CoroCreateBasicKv(session_0, "test_tree_0");
   if (kv_handle == NULL) {
     DestroyStoreOption(option);
     printf("create basic kv failed\n");
@@ -39,19 +53,19 @@ int main() {
   val_slice2.data_ = "World2";
   val_slice2.size_ = strlen(val_slice2.data_);
 
+  // insert a key value in session 0
   {
-    // insert a key value
-    if (!BasicKvInsert(kv_handle, 0, key_slice, val_slice)) {
+    if (!CoroBasicKvInsert(kv_handle, session_0, key_slice, val_slice)) {
       printf("insert value failed, key=%.*s, val=%.*s\n", (int)key_slice.size_, key_slice.data_,
              (int)val_slice.size_, val_slice.data_);
       return -1;
     }
   }
 
-  // lookup a key
+  // lookup in session 1
   {
     OwnedString* val = CreateOwnedString(NULL, 0);
-    bool found = BasicKvLookup(kv_handle, 1, key_slice, &val);
+    bool found = CoroBasicKvLookup(kv_handle, session_1, key_slice, &val);
     if (!found) {
       printf("lookup value failed, value may not exist, key=%.*s\n", (int)key_slice.size_,
              key_slice.data_);
@@ -62,25 +76,25 @@ int main() {
     DestroyOwnedString(val);
   }
 
-  // insert more key-values
+  // insert more key-values in session 0
   {
-    if (!BasicKvInsert(kv_handle, 0, key_slice2, val_slice2)) {
+    if (!CoroBasicKvInsert(kv_handle, session_0, key_slice2, val_slice2)) {
       printf("insert value failed, key=%.*s, val=%.*s\n", (int)key_slice2.size_, key_slice2.data_,
              (int)val_slice2.size_, val_slice2.data_);
       return -1;
     }
   }
 
-  // assending iteration
+  // assending iteration in session 1
   {
-    BasicKvIterHandle* iter_handle = CreateBasicKvIter(kv_handle);
+    BasicKvIterHandle* iter_handle = CoroCreateBasicKvIter(kv_handle, session_1);
     if (iter_handle == NULL) {
       printf("create iterator failed\n");
       return -1;
     }
 
-    for (BasicKvIterSeekToFirst(iter_handle, 0); BasicKvIterValid(iter_handle);
-         BasicKvIterNext(iter_handle, 0)) {
+    for (BasicKvIterSeekToFirst(iter_handle); BasicKvIterValid(iter_handle);
+         BasicKvIterNext(iter_handle)) {
       StringSlice key = BasicKvIterKey(iter_handle);
       StringSlice val = BasicKvIterVal(iter_handle);
       printf("%.*s, %.*s\n", (int)key.size_, key.data_, (int)val.size_, val.data_);
@@ -90,16 +104,16 @@ int main() {
     DestroyBasicKvIter(iter_handle);
   }
 
-  // descending iteration
+  // descending iteration in session 0
   {
-    BasicKvIterHandle* iter_handle = CreateBasicKvIter(kv_handle);
+    BasicKvIterHandle* iter_handle = CoroCreateBasicKvIter(kv_handle, session_0);
     if (iter_handle == NULL) {
       printf("create iterator failed\n");
       return -1;
     }
 
-    for (BasicKvIterSeekToLast(iter_handle, 0); BasicKvIterValid(iter_handle);
-         BasicKvIterPrev(iter_handle, 0)) {
+    for (BasicKvIterSeekToLast(iter_handle); BasicKvIterValid(iter_handle);
+         BasicKvIterPrev(iter_handle)) {
       StringSlice key = BasicKvIterKey(iter_handle);
       StringSlice val = BasicKvIterVal(iter_handle);
       printf("%.*s, %.*s\n", (int)key.size_, key.data_, (int)val.size_, val.data_);
@@ -109,14 +123,14 @@ int main() {
     DestroyBasicKvIter(iter_handle);
   }
 
-  // remove key-values
+  // remove key-values in session 1
   {
-    if (!BasicKvRemove(kv_handle, 0, key_slice)) {
+    if (!CoroBasicKvRemove(kv_handle, session_1, key_slice)) {
       printf("remove value failed, key=%.*s\n", (int)key_slice.size_, key_slice.data_);
       return -1;
     }
 
-    if (!BasicKvRemove(kv_handle, 0, key_slice2)) {
+    if (!CoroBasicKvRemove(kv_handle, session_1, key_slice2)) {
       printf("remove value failed, key=%.*s\n", (int)key_slice2.size_, key_slice2.data_);
       return -1;
     }

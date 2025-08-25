@@ -22,7 +22,7 @@ add_executable(kv_basic_example kv_basic_example.c)
 target_link_libraries(kv_basic_example leanstore)
 target_include_directories(kv_basic_example PUBLIC ${LEANSTORE_INCLUDE_DIR})
 
-add_executable(kv_txn_example kv_txn_example.c)
-target_link_libraries(kv_txn_example leanstore)
-target_include_directories(kv_txn_example PUBLIC ${LEANSTORE_INCLUDE_DIR})
+# add_executable(kv_txn_example kv_txn_example.c)
+# target_link_libraries(kv_txn_example leanstore)
+# target_include_directories(kv_txn_example PUBLIC ${LEANSTORE_INCLUDE_DIR})
 

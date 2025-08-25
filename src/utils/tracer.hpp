@@ -64,8 +64,8 @@ private:
 
 class Tracer::TraceCtx {
 public:
-  inline thread_local static std::unique_ptr<TraceNode> s_root = nullptr;
-  inline thread_local static std::stack<TraceNode*> s_stack = {};
+  inline static thread_local std::unique_ptr<TraceNode> s_root = nullptr;
+  inline static thread_local std::stack<TraceNode*> s_stack = {};
 
   static void Push(std::unique_ptr<TraceNode>&& node) {
     auto* node_ptr = node.get();
