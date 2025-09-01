@@ -1,5 +1,5 @@
-#ifndef LEANSTORE_C_STORE_OPTION_H
-#define LEANSTORE_C_STORE_OPTION_H
+#ifndef LEANSTORE_COMMON_TYPES_H
+#define LEANSTORE_COMMON_TYPES_H
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -8,16 +8,53 @@
 extern "C" {
 #endif
 
-/// The log level
-typedef enum LogLevel {
-  kDebug = 0,
-  kInfo,
-  kWarn,
-  kError,
-} LogLevel;
+/// NOLINTBEGIN
+
+//------------------------------------------------------------------------------
+// Forward declarations
+//------------------------------------------------------------------------------
+
+struct lean_btree_config;
+struct lean_store_option;
+
+//------------------------------------------------------------------------------
+// Enums
+//------------------------------------------------------------------------------
+
+/// BTree type.
+typedef enum lean_btree_type {
+  LEAN_BTREE_TYPE_ATOMIC = 0,
+  LEAN_BTREE_TYPE_MVCC,
+} lean_btree_type;
+
+/// Log level.
+typedef enum lean_log_level {
+  LEAN_LOG_LEVEL_DEBUG = 0,
+  LEAN_LOG_LEVEL_INFO,
+  LEAN_LOG_LEVEL_WARN,
+  LEAN_LOG_LEVEL_ERROR,
+} lean_log_level;
+
+//------------------------------------------------------------------------------
+// BTree config
+//------------------------------------------------------------------------------
+
+/// The options for creating a new BTree.
+typedef struct lean_btree_config {
+  /// Whether to enable write-ahead log.
+  bool enable_wal_;
+
+  /// Whether to enable bulk insert.
+  bool use_bulk_insert_;
+
+} lean_btree_config;
+
+//------------------------------------------------------------------------------
+// Store option
+//------------------------------------------------------------------------------
 
 /// The options for creating a new store.
-typedef struct StoreOption {
+typedef struct lean_store_option {
   // ---------------------------------------------------------------------------
   // Store related options
   // ---------------------------------------------------------------------------
@@ -33,7 +70,7 @@ typedef struct StoreOption {
   // ---------------------------------------------------------------------------
 
   /// The log level
-  LogLevel log_level_;
+  lean_log_level log_level_;
 
   // ---------------------------------------------------------------------------
   // Worker thread related options
@@ -172,33 +209,21 @@ typedef struct StoreOption {
   /// Whether to enable perf events.
   bool enable_perf_events_;
 
-} StoreOption;
+} lean_store_option;
 
-/// Create a new store option.
-/// @param storeDir the directory for all the database files. The string content is deep copied to
-///                 the created store option.
-StoreOption* CreateStoreOption(const char* store_dir);
+/// Create store option with the given store directory.
+struct lean_store_option* lean_store_option_create(const char* store_dir);
 
-/// Create a new store option from an existing store option.
-/// @param storeDir the existing store option.
-StoreOption* CreateStoreOptionFrom(const StoreOption* store_dir);
+/// Create store option by copying from another option.
+struct lean_store_option* lean_store_option_create_from(const struct lean_store_option* other);
 
-/// Destroy a store option.
-/// @param option the store option to destroy.
-void DestroyStoreOption(const StoreOption* option);
+/// Destroy the store option.
+void lean_store_option_destroy(const struct lean_store_option* option);
 
-/// The options for creating a new BTree.
-typedef struct BTreeConfig {
-  /// Whether to enable write-ahead log.
-  bool enable_wal_;
-
-  /// Whether to enable bulk insert.
-  bool use_bulk_insert_;
-
-} BTreeConfig;
+/// NOLINTEND
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // LEANSTORE_C_STORE_OPTION_H
+#endif

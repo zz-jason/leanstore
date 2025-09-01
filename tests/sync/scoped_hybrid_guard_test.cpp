@@ -1,5 +1,5 @@
-#include "leanstore-c/store_option.h"
 #include "leanstore/buffer-manager/buffer_manager.hpp"
+#include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
@@ -27,7 +27,7 @@ protected:
     auto* cur_test = ::testing::UnitTest::GetInstance()->current_test_info();
     auto cur_test_name =
         std::string(cur_test->test_case_name()) + "_" + std::string(cur_test->name());
-    auto* option = CreateStoreOption(("/tmp/leanstore/" + cur_test_name).c_str());
+    auto* option = lean_store_option_create(("/tmp/leanstore/" + cur_test_name).c_str());
     option->create_from_scratch_ = true;
     option->worker_threads_ = 2;
     option->enable_eager_gc_ = true;

@@ -61,7 +61,8 @@ public:
 
   OpCode Remove(Slice key) override;
 
-  void Init(leanstore::LeanStore* store, TREEID tree_id, BTreeConfig config, BasicKV* graveyard);
+  void Init(leanstore::LeanStore* store, TREEID tree_id, lean_btree_config config,
+            BasicKV* graveyard);
 
   SpaceCheckResult CheckSpaceUtilization(BufferFrame& bf) override;
 
@@ -73,6 +74,8 @@ public:
                       bool called_before) override;
 
   void Unlock(const uint8_t* wal_entry_ptr) override;
+
+  std::tuple<OpCode, uint16_t> GetVisibleTuple(Slice payload, ValCallback callback);
 
 private:
   OpCode LookupOptimistic(Slice key, ValCallback val_callback);
@@ -88,8 +91,6 @@ private:
     return guarded_node->has_garbage_;
   }
 
-  std::tuple<OpCode, uint16_t> get_visible_tuple(Slice payload, ValCallback callback);
-
   void InsertAfterRemove(BTreeIterMut* x_iter, Slice key, Slice val);
 
   void undo_last_insert(const WalTxInsert* wal_insert);
@@ -100,7 +101,7 @@ private:
 
 public:
   static Result<TransactionKV*> Create(leanstore::LeanStore* store, const std::string& tree_name,
-                                       BTreeConfig config, BasicKV* graveyard);
+                                       lean_btree_config config, BasicKV* graveyard);
 
   inline static void InsertToNode(GuardedBufferFrame<BTreeNode>& guarded_node, Slice key, Slice val,
                                   WORKERID worker_id, TXID tx_start_ts, int32_t& slot_id) {

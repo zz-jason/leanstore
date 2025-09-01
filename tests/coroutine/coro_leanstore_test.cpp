@@ -1,8 +1,8 @@
 #include "lean_test_suite.hpp"
-#include "leanstore-c/store_option.h"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/buffer-manager/buffer_manager.hpp"
+#include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/lean_store.hpp"
 #include "utils/coroutine/coro_executor.hpp"
@@ -30,12 +30,12 @@ TEST_F(CoroLeanStoreTest, BasicKv) {
   static constexpr auto kKeyPattern = "key_btree_LL_xxxxxxxxxxxx_{}";
   static constexpr auto kValPattern = "VAL_BTREE_LL_YYYYYYYYYYYY_{}";
   static constexpr auto kEnableWal = true;
-  static constexpr auto kBtreeConfig = BTreeConfig{
+  static constexpr auto kBtreeConfig = lean_btree_config{
       .enable_wal_ = kEnableWal,
       .use_bulk_insert_ = false,
   };
 
-  StoreOption* option = CreateStoreOption(TestCaseStoreDir().c_str());
+  lean_store_option* option = lean_store_option_create(TestCaseStoreDir().c_str());
   option->create_from_scratch_ = true;
   option->enable_wal_ = kEnableWal;
   option->worker_threads_ = 2;

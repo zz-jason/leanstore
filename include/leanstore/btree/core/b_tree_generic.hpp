@@ -34,7 +34,7 @@ public:
 
   BTreeType tree_type_ = BTreeType::kGeneric;
 
-  BTreeConfig config_;
+  lean_btree_config config_;
 
   /// Owns the meta node of the tree. The right-most child of meta node is the root of the tree.
   Swip meta_node_swip_;
@@ -45,7 +45,7 @@ public:
 
   virtual ~BTreeGeneric() override = default;
 
-  void Init(leanstore::LeanStore* store, TREEID tree_id, BTreeConfig config);
+  void Init(leanstore::LeanStore* store, TREEID tree_id, lean_btree_config config);
 
   /// Create an immutable iterator for the BTree.
   std::unique_ptr<BTreeIter> NewBTreeIter();

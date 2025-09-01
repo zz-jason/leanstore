@@ -26,7 +26,7 @@ using namespace leanstore::storage;
 
 namespace leanstore::storage::btree {
 
-void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btree_id, BTreeConfig config) {
+void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btree_id, lean_btree_config config) {
   this->store_ = store;
   this->tree_id_ = btree_id;
   this->config_ = std::move(config);

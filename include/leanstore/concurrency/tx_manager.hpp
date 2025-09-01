@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore-c/perf_counters.h"
+#include "leanstore/common/perf_counters.h"
 #include "leanstore/concurrency/concurrency_control.hpp"
 #include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/transaction.hpp"
@@ -94,8 +94,8 @@ public:
   /// Aborts a user transaction.
   void AbortTx();
 
-  /// Get the PerfCounters of the current worker.
-  PerfCounters* GetPerfCounters();
+  /// Get the lean_perf_counters of the current worker.
+  lean_perf_counters* GetPerfCounters();
 
   TXID GetLastCommittedUsrTx() const {
     return last_committed_usr_tx_.load(std::memory_order_acquire);

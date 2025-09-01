@@ -27,7 +27,7 @@
 namespace leanstore::storage::btree {
 
 Result<TransactionKV*> TransactionKV::Create(leanstore::LeanStore* store,
-                                             const std::string& tree_name, BTreeConfig config,
+                                             const std::string& tree_name, lean_btree_config config,
                                              BasicKV* graveyard) {
   auto [tree_ptr, tree_id] = store->tree_registry_->CreateTree(tree_name, [&]() {
     return std::unique_ptr<BufferManagedTree>(static_cast<BufferManagedTree*>(new TransactionKV()));
@@ -44,7 +44,7 @@ Result<TransactionKV*> TransactionKV::Create(leanstore::LeanStore* store,
   return tree;
 }
 
-void TransactionKV::Init(leanstore::LeanStore* store, TREEID tree_id, BTreeConfig config,
+void TransactionKV::Init(leanstore::LeanStore* store, TREEID tree_id, lean_btree_config config,
                          BasicKV* graveyard) {
   this->graveyard_ = graveyard;
   BasicKV::Init(store, tree_id, std::move(config));
@@ -56,7 +56,7 @@ OpCode TransactionKV::LookupOptimistic(Slice key, ValCallback val_callback) {
     FindLeafCanJump(key, guarded_leaf, LatchMode::kOptimisticOrJump);
     auto slot_id = guarded_leaf->LowerBound<true>(key);
     if (slot_id != -1) {
-      auto [ret, versions_read] = get_visible_tuple(guarded_leaf->Value(slot_id), val_callback);
+      auto [ret, versions_read] = GetVisibleTuple(guarded_leaf->Value(slot_id), val_callback);
       guarded_leaf.JumpIfModifiedByOthers();
       JUMPMU_RETURN ret;
     }
@@ -80,7 +80,7 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback val_callback) {
     if (g_iter->SeekToEqual(key); !g_iter->Valid()) {
       return OpCode::kNotFound;
     }
-    auto [ret, versions_read] = get_visible_tuple(g_iter->Val(), val_callback);
+    auto [ret, versions_read] = GetVisibleTuple(g_iter->Val(), val_callback);
     return ret;
   };
 
@@ -104,7 +104,7 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback val_callback) {
                                                           : OpCode::kNotFound;
   }
 
-  auto [ret, versions_read] = get_visible_tuple(iter->Val(), val_callback);
+  auto [ret, versions_read] = GetVisibleTuple(iter->Val(), val_callback);
   if (CoroEnv::CurTxMgr().ActiveTx().IsLongRunning() && ret == OpCode::kNotFound) {
     ret = lookup_in_graveyard();
   }
@@ -261,7 +261,7 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
   }
 }
 
-std::tuple<OpCode, uint16_t> TransactionKV::get_visible_tuple(Slice payload, ValCallback callback) {
+std::tuple<OpCode, uint16_t> TransactionKV::GetVisibleTuple(Slice payload, ValCallback callback) {
   std::tuple<OpCode, uint16_t> ret;
   while (true) {
     JUMPMU_TRY() {
@@ -891,7 +891,7 @@ OpCode TransactionKV::scan4ShortRunningTx(Slice key, ScanCallback callback) {
     while (iter->Valid()) {
       iter->AssembleKey();
       Slice scanned_key = iter->Key();
-      get_visible_tuple(iter->Val(), [&](Slice scanned_val) {
+      GetVisibleTuple(iter->Val(), [&](Slice scanned_val) {
         keep_scanning = callback(scanned_key, scanned_val);
       });
       if (!keep_scanning) {
@@ -957,8 +957,8 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
 
     g_range();
     auto take_from_oltp = [&]() {
-      get_visible_tuple(iter->Val(),
-                        [&](Slice value) { keep_scanning = callback(iter->Key(), value); });
+      GetVisibleTuple(iter->Val(),
+                      [&](Slice value) { keep_scanning = callback(iter->Key(), value); });
       if (!keep_scanning) {
         return false;
       }
@@ -989,8 +989,8 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
       } else if (g_ret == OpCode::kOK && o_ret != OpCode::kOK) {
         g_iter->AssembleKey();
         Slice g_key = g_iter->Key();
-        get_visible_tuple(g_iter->Val(),
-                          [&](Slice value) { keep_scanning = callback(g_key, value); });
+        GetVisibleTuple(g_iter->Val(),
+                        [&](Slice value) { keep_scanning = callback(g_key, value); });
         if (!keep_scanning) {
           JUMPMU_RETURN OpCode::kOK;
         }
@@ -1006,8 +1006,8 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
             JUMPMU_RETURN OpCode::kOK;
           }
         } else {
-          get_visible_tuple(g_iter->Val(),
-                            [&](Slice value) { keep_scanning = callback(g_key, value); });
+          GetVisibleTuple(g_iter->Val(),
+                          [&](Slice value) { keep_scanning = callback(g_key, value); });
           if (!keep_scanning) {
             JUMPMU_RETURN OpCode::kOK;
           }

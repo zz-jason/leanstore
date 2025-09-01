@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore-c/store_option.h"
+#include "leanstore/common/types.h"
 
 #include <format>
 
@@ -16,7 +16,7 @@ namespace leanstore {
 
 class Log {
 public:
-  static void Init(const StoreOption* option);
+  static void Init(const lean_store_option* option);
   static void Deinit();
 
   static void DebugCheck(bool condition, const std::string& msg = "");

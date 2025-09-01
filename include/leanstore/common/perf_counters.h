@@ -7,76 +7,80 @@
 extern "C" {
 #endif
 
+/// NOLINTBEGIN
+
 /// The counter type.
-typedef atomic_ullong CounterType;
+typedef atomic_ullong lean_counter_t;
 
 /// The performance counters for each worker.
-typedef struct PerfCounters {
+typedef struct lean_perf_counters {
 
   // ---------------------------------------------------------------------------
   // Transaction related counters
   // ---------------------------------------------------------------------------
 
   /// The number of transactions committed.
-  CounterType tx_committed_;
+  lean_counter_t tx_committed_;
 
   /// The number of transactions commit wait.
-  CounterType tx_commit_wait_;
+  lean_counter_t tx_commit_wait_;
 
   /// The number of transactions aborted.
-  CounterType tx_aborted_;
+  lean_counter_t tx_aborted_;
 
   //// The number of transactions with remote dependencies.
-  CounterType tx_with_remote_dependencies_;
+  lean_counter_t tx_with_remote_dependencies_;
 
   /// The number of transactions without remote dependencies.
-  CounterType tx_without_remote_dependencies_;
+  lean_counter_t tx_without_remote_dependencies_;
 
   /// The number of short running transactions.
-  CounterType tx_short_running_;
+  lean_counter_t tx_short_running_;
 
   /// The number of long running transactions.
-  CounterType tx_long_running_;
+  lean_counter_t tx_long_running_;
 
   // ---------------------------------------------------------------------------
   // MVCC concurrency control related counters
   // ---------------------------------------------------------------------------
 
   /// The number of LCB query executed.
-  CounterType lcb_executed_;
+  lean_counter_t lcb_executed_;
 
   /// The total latency of LCB query in nanoseconds.
-  CounterType lcb_total_lat_ns_;
+  lean_counter_t lcb_total_lat_ns_;
 
   // ---------------------------------------------------------------------------
   // MVCC garbage collection related counters
   // ---------------------------------------------------------------------------
 
   /// The number of MVCC garbage collection executed.
-  CounterType gc_executed_;
+  lean_counter_t gc_executed_;
 
   /// The total latency of MVCC garbage collection in nanoseconds.
-  CounterType gc_total_lat_ns_;
+  lean_counter_t gc_total_lat_ns_;
 
   // ---------------------------------------------------------------------------
   // Contention split related counters
   // ---------------------------------------------------------------------------
 
   /// The number of contention split succeed.
-  CounterType contention_split_succeed_;
+  lean_counter_t contention_split_succeed_;
 
   /// The number of contention split failed.
-  CounterType contention_split_failed_;
+  lean_counter_t contention_split_failed_;
 
   /// The number of normal split succeed.
-  CounterType split_succeed_;
+  lean_counter_t split_succeed_;
 
   /// The number of normal split failed.
-  CounterType split_failed_;
+  lean_counter_t split_failed_;
 
-} PerfCounters;
+} lean_perf_counters;
 
-PerfCounters* GetTlsPerfCounters();
+lean_perf_counters* lean_current_perf_counters();
+
+/// NOLINTEND
 
 #ifdef __cplusplus
 }

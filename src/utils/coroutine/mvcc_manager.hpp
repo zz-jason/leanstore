@@ -149,7 +149,8 @@ inline MvccManager::MvccManager(LeanStore* store) : store_(store) {
 }
 
 inline void MvccManager::InitHistoryStorage() {
-  static constexpr BTreeConfig kBtreeConfig = {.enable_wal_ = false, .use_bulk_insert_ = true};
+  static constexpr lean_btree_config kBtreeConfig = {.enable_wal_ = false,
+                                                     .use_bulk_insert_ = true};
   static constexpr auto kUpdateNameFormat = "_history_updates_{}";
   static constexpr auto kRemoveNameFormat = "_history_removes_{}";
 

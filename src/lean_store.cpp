@@ -1,10 +1,10 @@
 #include "leanstore/lean_store.hpp"
 
-#include "leanstore-c/store_option.h"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/core/b_tree_generic.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/buffer-manager/buffer_manager.hpp"
+#include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/error.hpp"
@@ -39,9 +39,10 @@
 
 namespace leanstore {
 
-Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption* option) {
+Result<std::unique_ptr<LeanStore>> LeanStore::Open(lean_store_option* option) {
   if (option == nullptr) {
-    return std::unexpected(leanstore::utils::Error::General("StoreOption should not be null"));
+    return std::unexpected(
+        leanstore::utils::Error::General("lean_store_option should not be null"));
   }
   if (option->create_from_scratch_) {
     Log::Info("Create store from scratch, store_dir={}", option->store_dir_);
@@ -53,7 +54,7 @@ Result<std::unique_ptr<LeanStore>> LeanStore::Open(StoreOption* option) {
   return std::make_unique<LeanStore>(option);
 }
 
-LeanStore::LeanStore(StoreOption* option) : store_option_(option) {
+LeanStore::LeanStore(lean_store_option* option) : store_option_(option) {
   CoroEnv::SetCurStore(this);
 
   Log::Info("LeanStore starting ...");
@@ -150,7 +151,7 @@ void LeanStore::InitDbFiles() {
 LeanStore::~LeanStore() {
   Log::Info("LeanStore stopping ...");
   SCOPED_DEFER({
-    DestroyStoreOption(store_option_);
+    lean_store_option_destroy(store_option_);
     Log::Info("LeanStore stopped");
     Log::Deinit();
   });
@@ -398,21 +399,22 @@ bool LeanStore::DeserializeMeta() {
     case leanstore::storage::btree::BTreeType::kBasicKV: {
       auto btree = std::make_unique<leanstore::storage::btree::BasicKV>();
       btree->store_ = this;
-      btree->config_ =
-          BTreeConfig{.enable_wal_ = btree_enable_wal, .use_bulk_insert_ = btree_use_bulk_insert};
+      btree->config_ = lean_btree_config{.enable_wal_ = btree_enable_wal,
+                                         .use_bulk_insert_ = btree_use_bulk_insert};
       tree_registry_->RegisterTree(btree_id, std::move(btree), btree_name);
       break;
     }
     case leanstore::storage::btree::BTreeType::kTransactionKV: {
       auto btree = std::make_unique<leanstore::storage::btree::TransactionKV>();
       btree->store_ = this;
-      btree->config_ =
-          BTreeConfig{.enable_wal_ = btree_enable_wal, .use_bulk_insert_ = btree_use_bulk_insert};
+      btree->config_ = lean_btree_config{.enable_wal_ = btree_enable_wal,
+                                         .use_bulk_insert_ = btree_use_bulk_insert};
       // create graveyard
       auto job = [&]() {
         auto graveyard_name = std::format(kGraveyardNameFormat, btree_name);
         auto res = storage::btree::BasicKV::Create(
-            this, graveyard_name, BTreeConfig{.enable_wal_ = false, .use_bulk_insert_ = false});
+            this, graveyard_name,
+            lean_btree_config{.enable_wal_ = false, .use_bulk_insert_ = false});
         if (!res) {
           Log::Error("Failed to create TransactionKV graveyard"
                      ", btree_name={}, graveyard_name={}, error={}",
@@ -445,7 +447,7 @@ bool LeanStore::DeserializeMeta() {
 }
 
 Result<storage::btree::BasicKV*> LeanStore::CreateBasicKv(const std::string& name,
-                                                          BTreeConfig config) {
+                                                          lean_btree_config config) {
   return storage::btree::BasicKV::Create(this, name, std::move(config));
 }
 
@@ -464,12 +466,12 @@ void LeanStore::DropBasicKV(const std::string& name) {
 }
 
 Result<storage::btree::TransactionKV*> LeanStore::CreateTransactionKV(const std::string& name,
-                                                                      BTreeConfig config) {
+                                                                      lean_btree_config config) {
   // create btree for graveyard
   auto graveyard_name = std::format(kGraveyardNameFormat, name);
   leanstore::storage::btree::BasicKV* graveyard;
   if (auto res = storage::btree::BasicKV::Create(
-          this, graveyard_name, BTreeConfig{.enable_wal_ = false, .use_bulk_insert_ = false});
+          this, graveyard_name, lean_btree_config{.enable_wal_ = false, .use_bulk_insert_ = false});
       !res) {
     Log::Error("Create graveyard failed, btree_name={}, graveyard_name={}, error={}", name,
                graveyard_name, res.error().ToString());

@@ -1,7 +1,7 @@
-#include "leanstore-c/store_option.h"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/buffer-manager/buffer_manager.hpp"
+#include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/lean_store.hpp"
 
@@ -28,7 +28,7 @@ protected:
 
   void SetUp() override {
     // Create a leanstore instance for the test case
-    StoreOption* option = CreateStoreOption(GetTestDataDir().c_str());
+    lean_store_option* option = lean_store_option_create(GetTestDataDir().c_str());
     option->worker_threads_ = 2;
     auto res = LeanStore::Open(option);
     ASSERT_TRUE(res);
