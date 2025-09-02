@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore-c/perf_counters.h"
+#include "leanstore/common/perf_counters.h"
 
 #ifdef ENABLE_PERF_COUNTERS
 #include <chrono>
@@ -9,7 +9,7 @@
 namespace leanstore {
 
 namespace cr {
-inline thread_local PerfCounters tls_perf_counters;
+inline thread_local lean_perf_counters tls_perf_counters;
 } // namespace cr
 
 /// ScopedCounterTimer for perf counters
@@ -17,14 +17,14 @@ class ScopedCounterTimer {
 private:
 #ifdef ENABLE_PERF_COUNTERS
   /// Counter to cumulate the time elasped
-  CounterType* counter_to_cum_;
+  lean_counter_t* counter_to_cum_;
 
   /// Start timepoint
   std::chrono::steady_clock::time_point started_at_;
 #endif
 
 public:
-  ScopedCounterTimer(CounterType* counter [[maybe_unused]]) {
+  ScopedCounterTimer(lean_counter_t* counter [[maybe_unused]]) {
 #ifdef ENABLE_PERF_COUNTERS
     counter_to_cum_ = counter;
     started_at_ = std::chrono::steady_clock::now();

@@ -1,8 +1,8 @@
 #include "benchmarks/ycsb/ycsb.hpp"
-#include "leanstore-c/perf_counters.h"
-#include "leanstore-c/store_option.h"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
+#include "leanstore/common/perf_counters.h"
+#include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/kv_interface.hpp"
@@ -115,7 +115,7 @@ protected:
         btree_->Lookup(Slice(key, FLAGS_ycsb_key_size), copy_value_);
       }
 
-      GetTlsPerfCounters()->tx_committed_++;
+      lean_current_perf_counters()->tx_committed_++;
     };
   }
 
@@ -133,7 +133,7 @@ protected:
         btree_->UpdatePartial(Slice(key, FLAGS_ycsb_key_size), update_callback_, *update_desc_);
       }
 
-      GetTlsPerfCounters()->tx_committed_++;
+      lean_current_perf_counters()->tx_committed_++;
     };
   }
 

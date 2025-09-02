@@ -1,8 +1,8 @@
-#include "leanstore-c/store_option.h"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/buffer-manager/buffer_manager.hpp"
+#include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
@@ -33,7 +33,7 @@ protected:
     auto cur_test_name =
         std::string(cur_test->test_case_name()) + "_" + std::string(cur_test->name());
     auto store_dir_str = "/tmp/leanstore/" + cur_test_name;
-    auto* option = CreateStoreOption(store_dir_str.c_str());
+    auto* option = lean_store_option_create(store_dir_str.c_str());
     option->create_from_scratch_ = true;
     option->worker_threads_ = 2;
     option->enable_eager_gc_ = true;
@@ -84,7 +84,7 @@ TEST_F(RecoveryTest, SerializeAndDeserialize) {
                   bf.IsDirty());
       });
   // meta file should be serialized during destructor.
-  auto* store_option = CreateStoreOptionFrom(store_->store_option_);
+  auto* store_option = lean_store_option_create_from(store_->store_option_);
   store_option->create_from_scratch_ = false;
   store_.reset(nullptr);
 
@@ -157,7 +157,7 @@ TEST_F(RecoveryTest, RecoverAfterInsert) {
   // skip dumpping buffer frames on exit
   LS_DEBUG_ENABLE(store_, "skip_CheckpointAllBufferFrames");
   SCOPED_DEFER({ LS_DEBUG_DISABLE(store_, "skip_CheckpointAllBufferFrames"); });
-  auto* store_option = CreateStoreOptionFrom(store_->store_option_);
+  auto* store_option = lean_store_option_create_from(store_->store_option_);
   store_option->create_from_scratch_ = false;
   store_.reset(nullptr);
 
@@ -257,7 +257,7 @@ TEST_F(RecoveryTest, RecoverAfterUpdate) {
   // skip dumpping buffer frames on exit
   LS_DEBUG_ENABLE(store_, "skip_CheckpointAllBufferFrames");
   SCOPED_DEFER(LS_DEBUG_DISABLE(store_, "skip_CheckpointAllBufferFrames"));
-  auto* store_option = CreateStoreOptionFrom(store_->store_option_);
+  auto* store_option = lean_store_option_create_from(store_->store_option_);
   store_option->create_from_scratch_ = false;
   store_.reset(nullptr);
 
@@ -329,7 +329,7 @@ TEST_F(RecoveryTest, RecoverAfterRemove) {
   // skip dumpping buffer frames on exit
   LS_DEBUG_ENABLE(store_, "skip_CheckpointAllBufferFrames");
   SCOPED_DEFER(LS_DEBUG_DISABLE(store_, "skip_CheckpointAllBufferFrames"));
-  auto* store_option = CreateStoreOptionFrom(store_->store_option_);
+  auto* store_option = lean_store_option_create_from(store_->store_option_);
   store_.reset(nullptr);
 
   // recreate the store, it's expected that all the meta and pages are rebult

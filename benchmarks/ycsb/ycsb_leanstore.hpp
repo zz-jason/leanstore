@@ -1,10 +1,10 @@
 #include "benchmarks/ycsb/ycsb.hpp"
 #include "benchmarks/ycsb/ycsb_leanstore_client.hpp"
-#include "leanstore-c/leanstore.h"
-#include "leanstore-c/perf_counters.h"
-#include "leanstore-c/store_option.h"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
+#include "leanstore/common/perf_counters.h"
+#include "leanstore/common/types.h"
+#include "leanstore/common/utils.h"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/kv_interface.hpp"
@@ -54,7 +54,7 @@ public:
       : bench_transaction_kv_(bench_transaction_kv) {
 
     auto datadir_str = std::format("{}/{}", FLAGS_ycsb_data_dir, kTableName);
-    StoreOption* option = CreateStoreOption(datadir_str.c_str());
+    lean_store_option* option = lean_store_option_create(datadir_str.c_str());
     option->create_from_scratch_ = create_from_scratch;
     option->enable_eager_gc_ = true;
     option->enable_wal_ = true;
@@ -66,14 +66,14 @@ public:
     auto res = LeanStore::Open(option);
     if (!res) {
       std::cerr << "Failed to open leanstore: " << res.error().ToString() << std::endl;
-      DestroyStoreOption(option);
+      lean_store_option_destroy(option);
       exit(res.error().Code());
     }
 
     store_ = std::move(res.value());
 
     // start metrics http exposer for cpu/mem profiling
-    StartMetricsHttpExposer(8080);
+    lean_metrics_exposer_start(8080);
     std::cout << std::format("YCSB started, workload={}, threads={}, clients={}",
                              FLAGS_ycsb_workload, FLAGS_ycsb_threads, FLAGS_ycsb_clients)
               << std::endl;
@@ -88,7 +88,7 @@ public:
     // create table with transaction kv
     if (bench_transaction_kv_) {
       leanstore::storage::btree::TransactionKV* table;
-      BTreeConfig config{.enable_wal_ = true, .use_bulk_insert_ = false};
+      lean_btree_config config{.enable_wal_ = true, .use_bulk_insert_ = false};
       auto job = [&]() {
         auto res = store_->CreateTransactionKV(kTableName, config);
         if (!res) {
@@ -106,7 +106,7 @@ public:
     leanstore::storage::btree::BasicKV* table;
 
     auto job = [&]() {
-      BTreeConfig config{.enable_wal_ = true, .use_bulk_insert_ = false};
+      lean_btree_config config{.enable_wal_ = true, .use_bulk_insert_ = false};
       auto res = store_->CreateBasicKv(kTableName, config);
       if (!res) {
         Log::Fatal("Failed to create table: name={}, error={}", kTableName, res.error().ToString());
@@ -213,8 +213,8 @@ public:
         utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count, FLAGS_ycsb_zipf_factor);
     std::atomic<bool> keep_running = true;
 
-    std::vector<PerfCounters*> worker_perf_counters;
-    auto job = [&]() { worker_perf_counters.push_back(GetTlsPerfCounters()); };
+    std::vector<lean_perf_counters*> worker_perf_counters;
+    auto job = [&]() { worker_perf_counters.push_back(lean_current_perf_counters()); };
     for (auto i = 0u; i < store_->store_option_->worker_threads_; i++) {
       SubmitJobSync(std::move(job), i);
     }
@@ -284,12 +284,12 @@ public:
             }
             }
             if (!bench_transaction_kv_) {
-              GetTlsPerfCounters()->tx_committed_++;
+              lean_current_perf_counters()->tx_committed_++;
             }
           }
           JUMPMU_CATCH() {
             if (!bench_transaction_kv_) {
-              GetTlsPerfCounters()->tx_aborted_++;
+              lean_current_perf_counters()->tx_aborted_++;
             }
           }
         }
@@ -409,9 +409,9 @@ public:
     return static_cast<Workload>(FLAGS_ycsb_workload[0] - 'a');
   }
 
-  std::vector<PerfCounters*> GetPerfCounters() {
-    std::vector<PerfCounters*> perf_counters;
-    auto job = [&]() { perf_counters.push_back(GetTlsPerfCounters()); };
+  std::vector<lean_perf_counters*> GetPerfCounters() {
+    std::vector<lean_perf_counters*> perf_counters;
+    auto job = [&]() { perf_counters.push_back(lean_current_perf_counters()); };
     for (auto i = 0u; i < store_->store_option_->worker_threads_; i++) {
       SubmitJobSync(std::move(job), i);
     }

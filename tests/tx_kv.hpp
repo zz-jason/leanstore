@@ -1,7 +1,7 @@
 #pragma once
 
-#include "leanstore-c/store_option.h"
 #include "leanstore/btree/transaction_kv.hpp"
+#include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
@@ -89,7 +89,7 @@ public:
 
 public:
   LeanStoreMVCC(const std::string& store_dir, uint32_t session_limit) {
-    StoreOption* option = CreateStoreOption(store_dir.c_str());
+    lean_store_option* option = lean_store_option_create(store_dir.c_str());
     option->worker_threads_ = session_limit;
     auto res = LeanStore::Open(option);
     lean_store_ = std::move(res.value());

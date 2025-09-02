@@ -22,15 +22,15 @@ std::mutex logger_mutex;
 std::shared_ptr<spdlog::logger> logger = nullptr;
 std::shared_ptr<spdlog::logger> origin_default_logger = spdlog::default_logger();
 
-spdlog::level::level_enum LogLevelToSpdlogLevel(LogLevel level) {
+spdlog::level::level_enum LogLevelToSpdlogLevel(lean_log_level level) {
   switch (level) {
-  case LogLevel::kDebug:
+  case lean_log_level::LEAN_LOG_LEVEL_DEBUG:
     return spdlog::level::debug;
-  case LogLevel::kInfo:
+  case lean_log_level::LEAN_LOG_LEVEL_INFO:
     return spdlog::level::info;
-  case LogLevel::kWarn:
+  case lean_log_level::LEAN_LOG_LEVEL_WARN:
     return spdlog::level::warn;
-  case LogLevel::kError:
+  case lean_log_level::LEAN_LOG_LEVEL_ERROR:
     return spdlog::level::err;
   default:
     std::cerr << "Unsupported log level: " << static_cast<uint8_t>(level) << std::endl;
@@ -40,7 +40,7 @@ spdlog::level::level_enum LogLevelToSpdlogLevel(LogLevel level) {
 
 } // namespace
 
-void Log::Init(const StoreOption* option) {
+void Log::Init(const lean_store_option* option) {
   std::lock_guard<std::mutex> lock(logger_mutex);
   if (logger != nullptr) {
     return;

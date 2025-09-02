@@ -41,7 +41,7 @@ public:
   bool IsRangeEmpty(Slice start_key, Slice end_key);
 
   static Result<BasicKV*> Create(leanstore::LeanStore* store, const std::string& tree_name,
-                                 BTreeConfig config);
+                                 lean_btree_config config);
 
   /// Copy the slots from the value to the buffer.
   ///

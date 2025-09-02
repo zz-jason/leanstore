@@ -1,7 +1,7 @@
-#include "leanstore-c/store_option.h"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/buffer-manager/buffer_manager.hpp"
+#include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/random_generator.hpp"
@@ -21,7 +21,7 @@ static void BenchUpdateInsert(benchmark::State& state) {
   std::filesystem::remove_all(dir_path);
   std::filesystem::create_directories(dir_path);
 
-  StoreOption* option = CreateStoreOption("/tmp/leanstore/InsertUpdateBench");
+  lean_store_option* option = lean_store_option_create("/tmp/leanstore/InsertUpdateBench");
   option->create_from_scratch_ = true;
   option->worker_threads_ = 4;
   auto leanstore = std::make_unique<leanstore::LeanStore>(option);

@@ -1,7 +1,6 @@
 #include "lean_test_suite.hpp"
-#include "leanstore-c/kv_basic.h"
-#include "leanstore-c/leanstore.h"
-#include "leanstore-c/store_option.h"
+#include "leanstore/c/leanstore.h"
+#include "leanstore/common/types.h"
 #include "leanstore/utils/defer.hpp"
 
 #include <gtest/gtest.h>
@@ -16,32 +15,30 @@ namespace leanstore::test {
 class CoroBasicKvTest : public LeanTestSuite {
 public:
   void SetUp() override {
-    StoreOption* option = CreateStoreOption(TestCaseStoreDir().c_str());
+    lean_store_option* option = lean_store_option_create(TestCaseStoreDir().c_str());
     option->create_from_scratch_ = true;
     option->worker_threads_ = 2;
     option->max_concurrent_transaction_per_worker_ = 4;
     option->enable_bulk_insert_ = false;
     option->enable_eager_gc_ = true;
-    store_handle_ = CreateLeanStore(option);
-    ASSERT_NE(store_handle_, nullptr);
+    ASSERT_EQ(lean_open_store(option, &store_), lean_status::LEAN_STATUS_OK);
 
     // connect to leanstore
-    auto* session_handle = LeanStoreConnect(store_handle_);
-    assert(session_handle != nullptr);
-    SCOPED_DEFER(LeanStoreDisconnect(session_handle));
+    lean_session* sess = store_->connect(store_);
+    ASSERT_NE(sess, nullptr);
+    SCOPED_DEFER(sess->close(sess));
 
-    kv_handle_ = CoroCreateBasicKv(session_handle, "test_tree_0");
-    ASSERT_NE(kv_handle_, nullptr);
+    auto status = sess->create_btree(sess, btree_name_, lean_btree_type::LEAN_BTREE_TYPE_ATOMIC);
+    ASSERT_EQ(status, lean_status::LEAN_STATUS_OK);
   }
 
   void TearDown() override {
-    DestroyBasicKv(kv_handle_);
-    DestroyLeanStore(store_handle_);
+    store_->close(store_);
   }
 
 protected:
-  LeanStoreHandle* store_handle_;
-  BasicKvHandle* kv_handle_;
+  lean_store* store_;
+  const char* btree_name_ = "test_tree_0";
 };
 
 TEST_F(CoroBasicKvTest, BasicKvIterMut) {
@@ -67,54 +64,84 @@ TEST_F(CoroBasicKvTest, BasicKvIterMut) {
   }
 
   // connect to leanstore
-  auto* session_handle = LeanStoreConnect(store_handle_);
-  assert(session_handle != nullptr);
-  SCOPED_DEFER(LeanStoreDisconnect(session_handle));
+  auto* s0 = store_->connect(store_);
+  ASSERT_NE(s0, nullptr);
+  SCOPED_DEFER(s0->close(s0));
+
+  auto* btree_s0 = s0->get_btree(s0, btree_name_);
+  ASSERT_NE(btree_s0, nullptr);
 
   // insert
   for (auto i = 0; i < num_entries; i++) {
-    auto succeed = CoroBasicKvInsert(kv_handle_, session_handle, {keys[i].data(), keys[i].size()},
-                                     {vals[i].data(), vals[i].size()});
-    ASSERT_TRUE(succeed);
+    auto key = lean_str_view{keys[i].data(), keys[i].size()};
+    auto val = lean_str_view{vals[i].data(), vals[i].size()};
+    ASSERT_EQ(btree_s0->insert(btree_s0, key, val), lean_status::LEAN_STATUS_OK);
   }
 
-  // create iterator handle
-  BasicKvIterHandle* iter_handle = CoroCreateBasicKvIter(kv_handle_, session_handle);
-  ASSERT_NE(iter_handle, nullptr);
-  SCOPED_DEFER(DestroyBasicKvIter(iter_handle));
+  // create cursor
+  auto* cursor_s0 = btree_s0->open_cursor(btree_s0);
+  ASSERT_NE(cursor_s0, nullptr);
+  SCOPED_DEFER(cursor_s0->close(cursor_s0));
 
-  BasicKvIterSeekToFirst(iter_handle);
-  auto key1 = BasicKvIterKey(iter_handle);
-  auto val1 = BasicKvIterVal(iter_handle);
-  EXPECT_TRUE(BasicKvIterValid(iter_handle));
-  EXPECT_TRUE(BasicKvIterHasNext(iter_handle));
+  lean_str key, value;
+  lean_str_init(&key, 8);
+  lean_str_init(&value, 8);
+  SCOPED_DEFER({
+    lean_str_deinit(&key);
+    lean_str_deinit(&value);
+  });
 
-  BasicKvIterMutHandle* iter_mut_handle = IntoBasicKvIterMut(iter_handle);
-  ASSERT_NE(iter_mut_handle, nullptr);
-  ASSERT_FALSE(BasicKvIterValid(iter_handle));
-  ASSERT_TRUE(BasicKvIterMutValid(iter_mut_handle));
-  SCOPED_DEFER(DestroyBasicKvIterMut(iter_mut_handle));
+  cursor_s0->seek_to_first(cursor_s0);
+  ASSERT_TRUE(cursor_s0->is_valid(cursor_s0));
+  cursor_s0->current_key(cursor_s0, &key);
+  cursor_s0->current_value(cursor_s0, &value);
 
-  auto key2 = BasicKvIterMutKey(iter_mut_handle);
-  auto val2 = BasicKvIterMutVal(iter_mut_handle);
-  EXPECT_EQ(key1.size_, key2.size_);
-  EXPECT_EQ(val1.size_, val2.size_);
-  EXPECT_EQ(memcmp(key1.data_, key2.data_, key1.size_), 0);
-  EXPECT_EQ(memcmp(val1.data_, val2.data_, val1.size_), 0);
+  auto* cursor_s0_another = btree_s0->open_cursor(btree_s0);
+  ASSERT_NE(cursor_s0_another, nullptr);
+  SCOPED_DEFER(cursor_s0_another->close(cursor_s0_another));
+
+  lean_str key_another, value_another;
+  lean_str_init(&key_another, 8);
+  lean_str_init(&value_another, 8);
+  SCOPED_DEFER({
+    lean_str_deinit(&key_another);
+    lean_str_deinit(&value_another);
+  });
+
+  cursor_s0_another->seek_to_first(cursor_s0_another);
+  ASSERT_TRUE(cursor_s0_another->is_valid(cursor_s0_another));
+  cursor_s0_another->current_key(cursor_s0_another, &key_another);
+  cursor_s0_another->current_value(cursor_s0_another, &value_another);
+
+  EXPECT_EQ(key.size, key_another.size);
+  EXPECT_EQ(value.size, value_another.size);
+  EXPECT_EQ(memcmp(key.data, key_another.data, key.size), 0);
+  EXPECT_EQ(memcmp(value.data, value_another.data, value.size), 0);
 
   // remove current key
-  BasicKvIterMutRemove(iter_mut_handle);
-  EXPECT_TRUE(BasicKvIterMutValid(iter_mut_handle));
-  auto key3 = BasicKvIterMutKey(iter_mut_handle);
-  EXPECT_EQ(key1.size_, key3.size_);
-  EXPECT_NE(memcmp(key1.data_, key3.data_, key1.size_), 0);
+  cursor_s0_another->remove_current(cursor_s0_another);
+  EXPECT_TRUE(cursor_s0_another->is_valid(cursor_s0_another));
+
+  lean_str key_after_remove, value_after_remove;
+  lean_str_init(&key_after_remove, 8);
+  lean_str_init(&value_after_remove, 8);
+  SCOPED_DEFER({
+    lean_str_deinit(&key_after_remove);
+    lean_str_deinit(&value_after_remove);
+  });
+
+  cursor_s0_another->current_key(cursor_s0_another, &key_after_remove);
+  cursor_s0_another->current_value(cursor_s0_another, &value_after_remove);
+  EXPECT_EQ(key_after_remove.size, key.size);
+  EXPECT_EQ(memcmp(key_after_remove.data, key.data, key.size), 0);
+  EXPECT_EQ(value_after_remove.size, value.size);
+  EXPECT_EQ(memcmp(value_after_remove.data, value.data, value.size), 0);
 
   // insert a new key-value pair
   auto* new_key = "new_key";
   auto* new_val = "new_val";
-  EXPECT_TRUE(BasicKvIterMutInsert(iter_mut_handle, {new_key, strlen(new_key)},
-                                   {new_val, strlen(new_val)}));
-  EXPECT_TRUE(BasicKvIterMutValid(iter_mut_handle));
+  auto status = btree_s0->insert(btree_s0, {new_key, strlen(new_key)}, {new_val, strlen(new_val)});
+  ASSERT_EQ(status, lean_status::LEAN_STATUS_OK);
 }
 
 } // namespace leanstore::test

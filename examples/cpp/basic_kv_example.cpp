@@ -1,6 +1,6 @@
-#include <leanstore-c/store_option.h>
 #include <leanstore/LeanStore.hpp>
 #include <leanstore/btree/BasicKV.hpp>
+#include <leanstore/common/types.h>
 #include <leanstore/concurrency/TxManager.hpp>
 
 #include <iostream>
@@ -10,7 +10,7 @@ using leanstore::LeanStore;
 
 int main() {
   // create store option
-  StoreOption* option = CreateStoreOption("/tmp/leanstore/examples/BasicKvExample");
+  lean_store_option* option = lean_store_option_create("/tmp/leanstore/examples/BasicKvExample");
   option->create_from_scratch_ = true;
   option->worker_threads_ = 2;
   option->enable_bulk_insert_ = false;
@@ -19,7 +19,7 @@ int main() {
   // create store
   auto res = LeanStore::Open(option);
   if (!res) {
-    DestroyStoreOption(option);
+    lean_store_option_destroy(option);
     std::cerr << "open store failed: " << res.error().ToString() << std::endl;
     return 1;
   }

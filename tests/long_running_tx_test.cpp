@@ -1,7 +1,7 @@
-#include "leanstore-c/store_option.h"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/buffer-manager/buffer_manager.hpp"
+#include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/concurrency/history_storage.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
@@ -38,7 +38,7 @@ protected:
         std::string(cur_test->test_case_name()) + "_" + std::string(cur_test->name());
     auto store_dir_str = std::string("/tmp/leanstore/") + cur_test_name;
 
-    StoreOption* option = CreateStoreOption(store_dir_str.c_str());
+    lean_store_option* option = lean_store_option_create(store_dir_str.c_str());
     option->create_from_scratch_ = true;
     option->worker_threads_ = 3;
     option->enable_eager_gc_ = true;

@@ -1,15 +1,15 @@
-#include "leanstore-c/store_option.h"
+#include "leanstore/common/types.h"
 
 #include <string.h>
 
 /// The default store option.
-static constexpr StoreOption kDefaultStoreOption = {
+static constexpr lean_store_option kDefaultStoreOption = {
     // Store related options
     .create_from_scratch_ = true,
     .store_dir_ = "leanstore",
 
     // log related options
-    .log_level_ = LogLevel::kInfo,
+    .log_level_ = lean_log_level::LEAN_LOG_LEVEL_INFO,
 
     // Worker thread related options
     .worker_threads_ = 4,
@@ -59,9 +59,9 @@ static constexpr StoreOption kDefaultStoreOption = {
     .enable_perf_events_ = false,
 };
 
-StoreOption* CreateStoreOption(const char* store_dir) {
+lean_store_option* lean_store_option_create(const char* store_dir) {
   // create a new store option with default values
-  StoreOption* option = new StoreOption();
+  lean_store_option* option = new lean_store_option();
   *option = kDefaultStoreOption;
 
   if (store_dir == nullptr) {
@@ -77,20 +77,20 @@ StoreOption* CreateStoreOption(const char* store_dir) {
   return option;
 }
 
-StoreOption* CreateStoreOptionFrom(const StoreOption* store_dir) {
-  StoreOption* option = new StoreOption();
-  *option = *store_dir;
+lean_store_option* lean_store_option_create_from(const lean_store_option* other) {
+  lean_store_option* option = new lean_store_option();
+  *option = *other;
 
   // deep copy the store directory
-  char* store_dir_copy = new char[strlen(store_dir->store_dir_) + 1];
-  memcpy(store_dir_copy, store_dir->store_dir_, strlen(store_dir->store_dir_));
-  store_dir_copy[strlen(store_dir->store_dir_)] = '\0';
+  char* store_dir_copy = new char[strlen(other->store_dir_) + 1];
+  memcpy(store_dir_copy, other->store_dir_, strlen(other->store_dir_));
+  store_dir_copy[strlen(other->store_dir_)] = '\0';
   option->store_dir_ = store_dir_copy;
 
   return option;
 }
 
-void DestroyStoreOption(const StoreOption* option) {
+void lean_store_option_destroy(const lean_store_option* option) {
   if (option != nullptr) {
     if (option->store_dir_ != nullptr) {
       delete[] option->store_dir_;

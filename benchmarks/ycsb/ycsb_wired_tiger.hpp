@@ -1,6 +1,5 @@
 #pragma once
 
-#include "leanstore-c/leanstore.h"
 #include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/parallelize.hpp"
@@ -27,7 +26,7 @@ class YcsbWiredTiger : public YcsbExecutor {
 
 public:
   YcsbWiredTiger() : conn_(nullptr) {
-    StartMetricsHttpExposer(8080);
+    lean_metrics_exposer_start(8080);
   }
 
   ~YcsbWiredTiger() override {

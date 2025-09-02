@@ -1,7 +1,7 @@
 #include "leanstore/concurrency/cr_manager.hpp"
 
-#include "leanstore-c/store_option.h"
 #include "leanstore/btree/basic_kv.hpp"
+#include "leanstore/common/types.h"
 #include "leanstore/concurrency/group_committer.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/concurrency/worker_thread.hpp"

@@ -1,7 +1,7 @@
 #include "leanstore/concurrency/tx_manager.hpp"
 
-#include "leanstore-c/perf_counters.h"
 #include "leanstore/buffer-manager/tree_registry.hpp"
+#include "leanstore/common/perf_counters.h"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/concurrency/group_committer.hpp"
 #include "leanstore/concurrency/logging.hpp"
@@ -257,7 +257,7 @@ void TxManager::SubmitWALEntryComplex(uint64_t total_size) {
             utils::ToJsonString(active_walentry_complex_));
 }
 
-PerfCounters* TxManager::GetPerfCounters() {
+lean_perf_counters* TxManager::GetPerfCounters() {
   return &tls_perf_counters;
 }
 

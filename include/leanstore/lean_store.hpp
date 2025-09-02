@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore-c/store_option.h"
+#include "leanstore/common/types.h"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/debug_flags.hpp"
 #include "leanstore/utils/result.hpp"
@@ -52,10 +52,10 @@ public:
   /// Opens a LeanStore instance with the provided options.
   /// NOTE: The option is created by LeanStore user, its ownership is transferred to the LeanStore
   ///       instance after the call, it will be destroyed when the LeanStore instance is destroyed.
-  static Result<std::unique_ptr<LeanStore>> Open(StoreOption* option);
+  static Result<std::unique_ptr<LeanStore>> Open(lean_store_option* option);
 
   /// The storage option for leanstore
-  const StoreOption* store_option_;
+  const lean_store_option* store_option_;
 
   /// The file descriptor for pages
   int32_t page_fd_;
@@ -85,7 +85,7 @@ public:
   /// The LeanStore constructor
   /// NOTE: The option is created by LeanStore user, its ownership is transferred to the LeanStore
   ///       instance after the call, it will be destroyed when the LeanStore instance is destroyed.
-  LeanStore(StoreOption* option);
+  LeanStore(lean_store_option* option);
 
   /// The LeanStore destructor
   ~LeanStore();
@@ -93,7 +93,7 @@ public:
   /// Create a BasicKV
   Result<leanstore::storage::btree::BasicKV*> CreateBasicKv(
       const std::string& name,
-      BTreeConfig config = BTreeConfig{.enable_wal_ = true, .use_bulk_insert_ = false});
+      lean_btree_config config = lean_btree_config{.enable_wal_ = true, .use_bulk_insert_ = false});
 
   /// Get a registered BasicKV
   void GetBasicKV(const std::string& name, storage::btree::BasicKV** btree);
@@ -104,7 +104,7 @@ public:
   /// Register a TransactionKV
   Result<leanstore::storage::btree::TransactionKV*> CreateTransactionKV(
       const std::string& name,
-      BTreeConfig config = BTreeConfig{.enable_wal_ = true, .use_bulk_insert_ = false});
+      lean_btree_config config = lean_btree_config{.enable_wal_ = true, .use_bulk_insert_ = false});
 
   /// Get a registered TransactionKV
   void GetTransactionKV(const std::string& name, storage::btree::TransactionKV** btree);
