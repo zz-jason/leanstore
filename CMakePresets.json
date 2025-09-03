@@ -56,7 +56,8 @@
             "binaryDir": "${sourceDir}/build/debug_coro",
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/debug_coro",
-                "ENABLE_COROUTINE": "ON"
+                "ENABLE_COROUTINE": "ON",
+                "ENABLE_COVERAGE": "ON"
             }
         },
         {
