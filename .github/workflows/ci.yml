@@ -74,6 +74,18 @@ jobs:
     - name: Unit test with coroutine enabled
       run: ctest --test-dir build/debug_coro --output-on-failure -j 2
 
+    - name: Generate coverage file
+      run: gcovr -v -r . --xml-pretty --xml=coverage_coro.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*' --verbose
+
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        fail_ci_if_error: true
+        files: coverage_coro.xml
+        verbose: true
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
   build-release-thread-mode:
     runs-on: ubuntu-latest
     container:
