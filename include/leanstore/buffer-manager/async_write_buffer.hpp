@@ -33,9 +33,9 @@ class AsyncWriteBuffer {
 private:
   struct WriteCommand {
     const BufferFrame* bf_;
-    PID page_id_;
+    lean_pid_t page_id_;
 
-    void Reset(const BufferFrame* bf, PID page_id) {
+    void Reset(const BufferFrame* bf, lean_pid_t page_id) {
       bf_ = bf;
       page_id_ = page_id;
     }

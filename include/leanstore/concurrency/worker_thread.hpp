@@ -29,7 +29,7 @@ public:
   };
 
   /// The id of the worker thread.
-  const WORKERID worker_id_;
+  const lean_wid_t worker_id_;
 
   /// The mutex to guard the job.
   std::mutex mutex_;
@@ -45,7 +45,7 @@ public:
 
 public:
   /// Constructor.
-  WorkerThread(LeanStore* store, WORKERID worker_id, int cpu)
+  WorkerThread(LeanStore* store, lean_wid_t worker_id, int cpu)
       : utils::ManagedThread(store, "Worker" + std::to_string(worker_id), cpu),
         worker_id_(worker_id),
         job_(nullptr),

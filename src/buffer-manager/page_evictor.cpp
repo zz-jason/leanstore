@@ -107,7 +107,7 @@ void PageEvictor::PickBufferFramesToCool(Partition& target_partition) {
 
         [[maybe_unused]] Time find_parent_begin;
         [[maybe_unused]] Time find_parent_end;
-        TREEID btree_id = cool_candidate->page_.btree_id_;
+        lean_treeid_t btree_id = cool_candidate->page_.btree_id_;
         read_guard.JumpIfModifiedByOthers();
         auto parent_handler = store_->tree_registry_->FindParent(btree_id, *cool_candidate);
 
@@ -126,7 +126,7 @@ void PageEvictor::PickBufferFramesToCool(Partition& target_partition) {
         read_guard.JumpIfModifiedByOthers();
 
         // Suitable page founds, lets cool
-        const PID page_id [[maybe_unused]] = cool_candidate->header_.page_id_;
+        const lean_pid_t page_id [[maybe_unused]] = cool_candidate->header_.page_id_;
         {
           // writeGuard can only be acquired and released while the partition
           // mutex is locked
@@ -192,7 +192,7 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& target_partition) {
       // Prevent evicting a page that already has an IO Frame with (possibly)
       // threads working on it.
       {
-        PID cooled_page_id = cooled_bf->header_.page_id_;
+        lean_pid_t cooled_page_id = cooled_bf->header_.page_id_;
         auto partition_id = store_->buffer_manager_->GetPartitionID(cooled_page_id);
         Partition& partition = *partitions_[partition_id];
         if (partition.IsBeingReadBack(cooled_page_id)) {
@@ -229,7 +229,7 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& target_partition) {
         cooled_bf->header_.crc_ = cooled_bf->page_.CRC();
       }
 
-      // TODO: preEviction callback according to TREEID
+      // TODO: preEviction callback according to lean_treeid_t
       async_write_buffer_.Add(*cooled_bf);
       LEAN_DLOG("COOLed buffer frame is added to async write buffer, "
                 "pageId={}, bufferSize={}",
@@ -305,7 +305,7 @@ void PageEvictor::FlushAndRecycleBufferFrames(Partition& target_partition) {
 void PageEvictor::EvictFlushedBufferFrame(BufferFrame& cooled_bf,
                                           BMOptimisticGuard& optimistic_guard,
                                           Partition& target_partition) {
-  TREEID btree_id = cooled_bf.page_.btree_id_;
+  lean_treeid_t btree_id = cooled_bf.page_.btree_id_;
   optimistic_guard.JumpIfModifiedByOthers();
   ParentSwipHandler parent_handler = store_->tree_registry_->FindParent(btree_id, cooled_bf);
 

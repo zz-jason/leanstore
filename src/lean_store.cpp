@@ -247,7 +247,7 @@ void LeanStore::ExecAsync(uint64_t worker_id, std::function<void()> job) {
   crmanager_->worker_threads_[worker_id]->SetJob(std::move(job));
 }
 
-void LeanStore::Wait(WORKERID worker_id) {
+void LeanStore::Wait(lean_wid_t worker_id) {
   crmanager_->worker_threads_[worker_id]->Wait();
 }
 
@@ -375,7 +375,7 @@ bool LeanStore::DeserializeMeta() {
     assert(btree_json_array.GetJsonObj(i).has_value());
     auto btree_json_obj = btree_json_array.GetJsonObj(i).value();
 
-    const TREEID btree_id = btree_json_obj.GetInt64("id").value();
+    const lean_treeid_t btree_id = btree_json_obj.GetInt64("id").value();
     const auto btree_type = btree_json_obj.GetInt64("type").value();
     const auto btree_name_ref = btree_json_obj.GetString("name").value();
     const auto btree_enable_wal = btree_json_obj.GetBool("enable_wal").value();

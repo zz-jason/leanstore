@@ -11,6 +11,17 @@ extern "C" {
 /// NOLINTBEGIN
 
 //------------------------------------------------------------------------------
+// Integer type aliases
+//------------------------------------------------------------------------------
+
+typedef uint64_t lean_treeid_t; // Tree ID
+typedef uint64_t lean_pid_t;    // Page ID
+typedef uint64_t lean_lid_t;    // Log ID
+typedef uint64_t lean_txid_t;   // Transaction ID
+typedef uint32_t lean_cmdid_t;  // Command ID
+typedef uint16_t lean_wid_t;    // Worker ID
+
+//------------------------------------------------------------------------------
 // Forward declarations
 //------------------------------------------------------------------------------
 

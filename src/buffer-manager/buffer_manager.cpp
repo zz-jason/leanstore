@@ -120,9 +120,9 @@ constexpr auto kMaxPageId = "max_pid";
 
 utils::JsonObj BufferManager::Serialize() {
   // TODO: correctly serialize ranges of used pages
-  PID max_page_id = 0;
+  lean_pid_t max_page_id = 0;
   for (uint64_t i = 0; i < num_partitions_; i++) {
-    max_page_id = std::max<PID>(GetPartition(i).GetNextPageId(), max_page_id);
+    max_page_id = std::max<lean_pid_t>(GetPartition(i).GetNextPageId(), max_page_id);
   }
 
   utils::JsonObj json_obj;
@@ -131,7 +131,7 @@ utils::JsonObj BufferManager::Serialize() {
 }
 
 void BufferManager::Deserialize(const utils::JsonObj& json_obj) {
-  PID max_page_id = json_obj.GetUint64(kMaxPageId).value();
+  lean_pid_t max_page_id = json_obj.GetUint64(kMaxPageId).value();
   max_page_id = (max_page_id + (num_partitions_ - 1)) & ~(num_partitions_ - 1);
   for (uint64_t i = 0; i < num_partitions_; i++) {
     GetPartition(i).SetNextPageId(max_page_id + i);
@@ -232,7 +232,7 @@ uint64_t BufferManager::ConsumedPages() {
   return total_used_bfs - total_free_bfs;
 }
 
-BufferFrame& BufferManager::AllocNewPageMayJump(TREEID tree_id) {
+BufferFrame& BufferManager::AllocNewPageMayJump(lean_treeid_t tree_id) {
   Partition& partition = RandomPartition();
   auto* free_bf = partition.GetFreeBfMayJump();
 
@@ -248,7 +248,7 @@ BufferFrame& BufferManager::AllocNewPageMayJump(TREEID tree_id) {
   return *free_bf;
 }
 
-BufferFrame& BufferManager::AllocNewPage(TREEID tree_id) {
+BufferFrame& BufferManager::AllocNewPage(lean_treeid_t tree_id) {
   while (true) {
     JUMPMU_TRY() {
       auto& res = AllocNewPageMayJump(tree_id);
@@ -305,7 +305,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
   // unlock the current node firstly to avoid deadlock: P->G, G->P
   node_guard.Unlock();
 
-  const PID page_id = swip_in_node.AsPageId();
+  const lean_pid_t page_id = swip_in_node.AsPageId();
   Partition& partition = GetPartition(page_id);
 
   JumpScoped<LeanUniqueLock<LeanSharedMutex>> inflight_io_guard(partition.inflight_ios_mutex_);
@@ -432,7 +432,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
   return nullptr;
 }
 
-void BufferManager::ReadPageSync(PID page_id, void* page_buffer) {
+void BufferManager::ReadPageSync(lean_pid_t page_id, void* page_buffer) {
   LEAN_DCHECK(uint64_t(page_buffer) % 512 == 0);
   int64_t bytes_left = store_->store_option_->page_size_;
   while (bytes_left > 0) {
@@ -462,7 +462,7 @@ void BufferManager::ReadPageSync(PID page_id, void* page_buffer) {
   }
 }
 
-BufferFrame& BufferManager::ReadPageSync(PID page_id) {
+BufferFrame& BufferManager::ReadPageSync(lean_pid_t page_id) {
   HybridMutex dummy_parent_latch;
   HybridGuard dummy_parent_guard(&dummy_parent_latch);
   dummy_parent_guard.ToOptimisticSpin();

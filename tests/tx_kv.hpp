@@ -43,7 +43,7 @@ public:
   virtual ~Store() = default;
 
 public:
-  virtual Session* GetSession(WORKERID session_id) = 0;
+  virtual Session* GetSession(lean_wid_t session_id) = 0;
 };
 
 class TableRef;
@@ -98,18 +98,18 @@ public:
   ~LeanStoreMVCC() override = default;
 
 public:
-  Session* GetSession(WORKERID session_id) override;
+  Session* GetSession(lean_wid_t session_id) override;
 };
 
 class LeanStoreMVCCSession : public Session {
 private:
-  WORKERID worker_id_;
+  lean_wid_t worker_id_;
   LeanStoreMVCC* store_;
   TxMode tx_mode_ = TxMode::kShortRunning;
   IsolationLevel isolation_level_ = IsolationLevel::kSnapshotIsolation;
 
 public:
-  LeanStoreMVCCSession(WORKERID session_id, LeanStoreMVCC* store)
+  LeanStoreMVCCSession(lean_wid_t session_id, LeanStoreMVCC* store)
       : worker_id_(session_id),
         store_(store),
         isolation_level_(IsolationLevel::kSnapshotIsolation) {
@@ -162,7 +162,7 @@ inline std::unique_ptr<Store> StoreFactory::NewLeanStoreMVCC(const std::string& 
 // LeanStoreMVCC
 //------------------------------------------------------------------------------
 
-inline Session* LeanStoreMVCC::GetSession(WORKERID session_id) {
+inline Session* LeanStoreMVCC::GetSession(lean_wid_t session_id) {
   if (sessions_.find(session_id) == sessions_.end()) {
     sessions_.emplace(session_id, LeanStoreMVCCSession(session_id, this));
   }

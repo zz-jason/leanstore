@@ -149,7 +149,7 @@ public:
 
   /// Sync the system transaction id to the page. Page system transaction id is updated during the
   /// execution of a system transaction.
-  void SyncSystemTxId(TXID sys_tx_id) {
+  void SyncSystemTxId(lean_txid_t sys_tx_id) {
     LEAN_DCHECK(bf_ != nullptr);
 
     // update system transaction id
@@ -305,7 +305,7 @@ public:
     wal_payload_handler.SubmitWal();
   }
 
-  void SyncSystemTxId(TXID sys_tx_id) {
+  void SyncSystemTxId(lean_txid_t sys_tx_id) {
     ref_guard_.SyncSystemTxId(sys_tx_id);
   }
 

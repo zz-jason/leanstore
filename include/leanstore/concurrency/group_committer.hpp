@@ -55,7 +55,7 @@ private:
   /// @param[out] minFlushedUsrTx the min flushed user transaction ID
   /// @param[out] numRfaTxs number of transactions without dependency
   /// @param[out] walFlushReqCopies snapshot of the flush requests
-  void CollectWalRecords(TXID& min_flushed_sys_tx, TXID& min_flushed_usr_tx,
+  void CollectWalRecords(lean_txid_t& min_flushed_sys_tx, lean_txid_t& min_flushed_usr_tx,
                          std::vector<uint64_t>& num_rfa_txs,
                          std::vector<WalFlushReq>& wal_flush_req_copies);
 
@@ -68,7 +68,7 @@ private:
   /// @param[in] minFlushedUsrTx the min flushed user transaction ID
   /// @param[in] numRfaTxs number of transactions without dependency
   /// @param[in] walFlushReqCopies snapshot of the flush requests
-  void DetermineCommitableTx(TXID min_flushed_sys_tx, TXID min_flushed_usr_tx,
+  void DetermineCommitableTx(lean_txid_t min_flushed_sys_tx, lean_txid_t min_flushed_usr_tx,
                              const std::vector<uint64_t>& num_rfa_txs,
                              const std::vector<WalFlushReq>& wal_flush_req_copies);
 

@@ -1,10 +1,10 @@
 #pragma once
 
+#include "leanstore/common/portable.h"
 #include "leanstore/concurrency/wal_entry.hpp"
 #include "leanstore/sync/optimistic_guarded.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/misc.hpp"
-#include "leanstore/utils/portable.hpp"
 #include "utils/coroutine/coro_io.hpp"
 
 #include <algorithm>
@@ -29,14 +29,14 @@ struct WalFlushReq {
   /// The maximum system transasction ID written by the worker.
   /// NOTE: can only be updated when all the WAL entries belonging to the system transaction are
   /// written to the wal ring buffer.
-  TXID buffered_sys_tx_ = 0;
+  lean_txid_t buffered_sys_tx_ = 0;
 
   /// ID of the current transaction.
   /// NOTE: can only be updated when all the WAL entries belonging to the user transaction are
   /// written to the wal ring buffer.
-  TXID curr_tx_id_ = 0;
+  lean_txid_t curr_tx_id_ = 0;
 
-  WalFlushReq(uint64_t wal_buffered = 0, uint64_t sys_tx_writtern = 0, TXID curr_tx_id = 0)
+  WalFlushReq(uint64_t wal_buffered = 0, uint64_t sys_tx_writtern = 0, lean_txid_t curr_tx_id = 0)
       : version_(0),
         wal_buffered_(wal_buffered),
         buffered_sys_tx_(sys_tx_writtern),
@@ -51,19 +51,19 @@ class WalPayloadHandler;
 class Logging {
 public:
   /// Logical sequence number, i.e., the unique ID of each WAL.
-  LID lsn_clock_ = 0;
+  lean_lid_t lsn_clock_ = 0;
 
   /// The previous LSN of the current transaction, used to link WAL entries.
-  LID prev_lsn_;
+  lean_lid_t prev_lsn_;
 
   storage::OptimisticGuarded<WalFlushReq> wal_flush_req_;
 
   /// The maximum writtern system transaction ID in the worker.
-  TXID buffered_sys_tx_ = 0;
+  lean_txid_t buffered_sys_tx_ = 0;
 
-  std::atomic<TXID> last_hardened_sys_tx_ = 0;
+  std::atomic<lean_txid_t> last_hardened_sys_tx_ = 0;
 
-  std::atomic<TXID> last_hardened_usr_tx_ = 0;
+  std::atomic<lean_txid_t> last_hardened_usr_tx_ = 0;
 
   /// File descriptor for the write-ahead log.
   int32_t wal_fd_ = -1;
@@ -100,7 +100,7 @@ public:
     }
   }
 
-  LID ReserveLsn() {
+  lean_lid_t ReserveLsn() {
     return lsn_clock_++;
   }
 
@@ -116,27 +116,27 @@ public:
   void IterateCurrentTxWALs(uint64_t first_wal,
                             std::function<void(const WalEntry& entry)> callback);
 
-  TXID GetBufferedSysTx() const {
+  lean_txid_t GetBufferedSysTx() const {
     return buffered_sys_tx_;
   }
 
-  void UpdateBufferedSysTx(TXID sys_tx_id) {
+  void UpdateBufferedSysTx(lean_txid_t sys_tx_id) {
     buffered_sys_tx_ = std::max(buffered_sys_tx_, sys_tx_id);
   }
 
-  TXID GetLastHardenedSysTx() const {
+  lean_txid_t GetLastHardenedSysTx() const {
     return last_hardened_sys_tx_.load(std::memory_order_acquire);
   }
 
-  void SetLastHardenedSysTx(TXID sys_tx_id) {
+  void SetLastHardenedSysTx(lean_txid_t sys_tx_id) {
     last_hardened_sys_tx_.store(sys_tx_id, std::memory_order_release);
   }
 
-  TXID GetLastHardenedUsrTx() const {
+  lean_txid_t GetLastHardenedUsrTx() const {
     return last_hardened_usr_tx_.load(std::memory_order_acquire);
   }
 
-  void SetLastHardenedUsrTx(TXID usr_tx_id) {
+  void SetLastHardenedUsrTx(lean_txid_t usr_tx_id) {
     last_hardened_usr_tx_.store(usr_tx_id, std::memory_order_release);
   }
 
@@ -163,7 +163,7 @@ public:
     return true;
   }
 
-  void PublishWalFlushReq(TXID start_ts) {
+  void PublishWalFlushReq(lean_txid_t start_ts) {
     WalFlushReq current(wal_buffered_, buffered_sys_tx_, start_ts);
     wal_flush_req_.Set(current);
   }

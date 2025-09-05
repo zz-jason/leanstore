@@ -61,7 +61,7 @@ public:
 
   OpCode Remove(Slice key) override;
 
-  void Init(leanstore::LeanStore* store, TREEID tree_id, lean_btree_config config,
+  void Init(leanstore::LeanStore* store, lean_treeid_t tree_id, lean_btree_config config,
             BasicKV* graveyard);
 
   SpaceCheckResult CheckSpaceUtilization(BufferFrame& bf) override;
@@ -70,8 +70,8 @@ public:
   // operations during recovery
   void Undo(const uint8_t* wal_entry_ptr, const uint64_t) override;
 
-  void GarbageCollect(const uint8_t* entry_ptr, WORKERID version_worker_id, TXID version_tx_id,
-                      bool called_before) override;
+  void GarbageCollect(const uint8_t* entry_ptr, lean_wid_t version_worker_id,
+                      lean_txid_t version_tx_id, bool called_before) override;
 
   void Unlock(const uint8_t* wal_entry_ptr) override;
 
@@ -104,7 +104,7 @@ public:
                                        lean_btree_config config, BasicKV* graveyard);
 
   inline static void InsertToNode(GuardedBufferFrame<BTreeNode>& guarded_node, Slice key, Slice val,
-                                  WORKERID worker_id, TXID tx_start_ts, int32_t& slot_id) {
+                                  lean_wid_t worker_id, lean_txid_t tx_start_ts, int32_t& slot_id) {
     auto total_val_size = sizeof(ChainedTuple) + val.size();
     slot_id = guarded_node->InsertDoNotCopyPayload(key, total_val_size, slot_id);
     auto* tuple_addr = guarded_node->ValData(slot_id);

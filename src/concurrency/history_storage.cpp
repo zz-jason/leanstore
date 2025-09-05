@@ -20,8 +20,8 @@ using namespace leanstore::storage::btree;
 
 namespace leanstore::cr {
 
-void HistoryStorage::PutVersion(TXID tx_id, COMMANDID command_id, TREEID tree_id, bool is_remove,
-                                uint64_t version_size,
+void HistoryStorage::PutVersion(lean_txid_t tx_id, lean_cmdid_t command_id, lean_treeid_t tree_id,
+                                bool is_remove, uint64_t version_size,
                                 std::function<void(uint8_t*)> insert_call_back, bool same_thread) {
   // Compose the key to be inserted
   auto* btree = is_remove ? remove_index_ : update_index_;
@@ -96,7 +96,7 @@ void HistoryStorage::PutVersion(TXID tx_id, COMMANDID command_id, TREEID tree_id
   }
 }
 
-bool HistoryStorage::GetVersion(TXID newer_tx_id, COMMANDID newer_command_id,
+bool HistoryStorage::GetVersion(lean_txid_t newer_tx_id, lean_cmdid_t newer_command_id,
                                 const bool is_remove_command,
                                 std::function<void(const uint8_t*, uint64_t)> cb) {
   volatile BasicKV* btree = (is_remove_command) ? remove_index_ : update_index_;
@@ -127,7 +127,7 @@ bool HistoryStorage::GetVersion(TXID newer_tx_id, COMMANDID newer_command_id,
   return false;
 }
 
-void HistoryStorage::PurgeVersions(TXID from_tx_id, TXID to_tx_id,
+void HistoryStorage::PurgeVersions(lean_txid_t from_tx_id, lean_txid_t to_tx_id,
                                    RemoveVersionCallback on_remove_version,
                                    [[maybe_unused]] const uint64_t limit) {
   auto key_size = sizeof(to_tx_id);
@@ -152,7 +152,7 @@ void HistoryStorage::PurgeVersions(TXID from_tx_id, TXID to_tx_id,
           if (guarded_leaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
             x_iter->SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
               JUMPMU_TRY() {
-                TXID sys_tx_id = btree->store_->MvccManager()->AllocSysTxTs();
+                lean_txid_t sys_tx_id = btree->store_->MvccManager()->AllocSysTxTs();
                 btree->TryMergeMayJump(sys_tx_id, *to_merge);
               }
               JUMPMU_CATCH() {
@@ -164,14 +164,14 @@ void HistoryStorage::PurgeVersions(TXID from_tx_id, TXID to_tx_id,
          x_iter->SeekToFirstGreaterEqual(key)) {
       // finished if we are out of the transaction range
       x_iter->AssembleKey();
-      TXID cur_tx_id;
+      lean_txid_t cur_tx_id;
       utils::Unfold(x_iter->Key().data(), cur_tx_id);
       if (cur_tx_id < from_tx_id || cur_tx_id > to_tx_id) {
         break;
       }
 
       auto& version_container = *reinterpret_cast<VersionMeta*>(x_iter->MutableVal().Data());
-      const TREEID tree_id = version_container.tree_id_;
+      const lean_treeid_t tree_id = version_container.tree_id_;
       const bool called_before = version_container.called_before_;
       version_container.called_before_ = true;
 
@@ -224,7 +224,7 @@ void HistoryStorage::PurgeVersions(TXID from_tx_id, TXID to_tx_id,
         bf_guard.Unlock();
 
         // now we can safely use the copied key
-        TXID tx_id_in_lastkey;
+        lean_txid_t tx_id_in_lastkey;
         utils::Unfold(last_key, tx_id_in_lastkey);
         if (tx_id_in_lastkey > to_tx_id) {
           should_try = false;
@@ -244,7 +244,7 @@ void HistoryStorage::PurgeVersions(TXID from_tx_id, TXID to_tx_id,
             if (guarded_leaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
               x_iter->SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
                 JUMPMU_TRY() {
-                  TXID sys_tx_id = btree->store_->MvccManager()->AllocSysTxTs();
+                  lean_txid_t sys_tx_id = btree->store_->MvccManager()->AllocSysTxTs();
                   btree->TryMergeMayJump(sys_tx_id, *to_merge);
                 }
                 JUMPMU_CATCH() {
@@ -265,14 +265,14 @@ void HistoryStorage::PurgeVersions(TXID from_tx_id, TXID to_tx_id,
             auto first_key_size = guarded_leaf->GetFullKeyLen(0);
             uint8_t first_key[first_key_size];
             guarded_leaf->CopyFullKey(0, first_key);
-            TXID tx_id_in_first_key;
+            lean_txid_t tx_id_in_first_key;
             utils::Unfold(first_key, tx_id_in_first_key);
 
             // get the transaction id in the last key
             auto last_key_size = guarded_leaf->GetFullKeyLen(guarded_leaf->num_slots_ - 1);
             uint8_t last_key[last_key_size];
             guarded_leaf->CopyFullKey(guarded_leaf->num_slots_ - 1, last_key);
-            TXID tx_id_in_last_key;
+            lean_txid_t tx_id_in_last_key;
             utils::Unfold(last_key, tx_id_in_last_key);
 
             // purge the whole page if it is in the range
@@ -298,7 +298,7 @@ void HistoryStorage::PurgeVersions(TXID from_tx_id, TXID to_tx_id,
   }
 }
 
-void HistoryStorage::VisitRemovedVersions(TXID from_tx_id, TXID to_tx_id,
+void HistoryStorage::VisitRemovedVersions(lean_txid_t from_tx_id, lean_txid_t to_tx_id,
                                           RemoveVersionCallback on_remove_version) {
   auto* remove_tree = remove_index_;
   auto key_size = sizeof(to_tx_id);
@@ -317,14 +317,14 @@ void HistoryStorage::VisitRemovedVersions(TXID from_tx_id, TXID to_tx_id,
          x_iter->SeekToFirstGreaterEqual(key)) {
       // skip versions out of the transaction range
       x_iter->AssembleKey();
-      TXID cur_tx_id;
+      lean_txid_t cur_tx_id;
       utils::Unfold(x_iter->Key().data(), cur_tx_id);
       if (cur_tx_id < from_tx_id || cur_tx_id > to_tx_id) {
         break;
       }
 
       auto& version_container = *VersionMeta::From(x_iter->MutableVal().Data());
-      const TREEID tree_id = version_container.tree_id_;
+      const lean_treeid_t tree_id = version_container.tree_id_;
       const bool called_before = version_container.called_before_;
       LEAN_DCHECK(called_before == false,
                   "Each remove version should be visited only once, treeId={}, txId={}", tree_id,

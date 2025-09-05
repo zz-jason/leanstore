@@ -24,7 +24,7 @@ static void* MallocHuge(size_t size) {
   return p;
 }
 
-HashTable::Entry::Entry(PID key) : key_(key) {
+HashTable::Entry::Entry(lean_pid_t key) : key_(key) {
 }
 
 HashTable::HashTable(uint64_t size_in_bits) {
@@ -33,7 +33,7 @@ HashTable::HashTable(uint64_t size_in_bits) {
   entries_ = (Entry**)MallocHuge(size * sizeof(Entry*));
 }
 
-uint64_t HashTable::HashKey(PID k) {
+uint64_t HashTable::HashKey(lean_pid_t k) {
   // MurmurHash64A
   const uint64_t m = 0xc6a4a7935bd1e995ull;
   const int r = 47;
@@ -49,7 +49,7 @@ uint64_t HashTable::HashKey(PID k) {
   return h;
 }
 
-IOFrame& HashTable::Insert(PID key) {
+IOFrame& HashTable::Insert(lean_pid_t key) {
   auto* e = new Entry(key);
   uint64_t pos = HashKey(key) & mask_;
   e->next_ = entries_[pos];
@@ -57,7 +57,7 @@ IOFrame& HashTable::Insert(PID key) {
   return e->value_;
 }
 
-HashTable::Handler HashTable::Lookup(PID key) {
+HashTable::Handler HashTable::Lookup(lean_pid_t key) {
   uint64_t pos = HashKey(key) & mask_;
   Entry** e_ptr = entries_ + pos;
   Entry* e = *e_ptr; // e is only here for readability

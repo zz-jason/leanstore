@@ -2,10 +2,10 @@
 
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/core/btree_iter_mut.hpp"
+#include "leanstore/common/portable.h"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/units.hpp"
-#include "leanstore/utils/portable.hpp"
 #include "tuple.hpp"
 #include "utils/coroutine/coro_env.hpp"
 #include "utils/coroutine/mvcc_manager.hpp"
@@ -31,13 +31,13 @@ public:
   ///
   /// NOTE: Payload space should be allocated in advance. This constructor is
   /// usually called by a placmenet new operator.
-  ChainedTuple(WORKERID worker_id, TXID tx_id, Slice val)
+  ChainedTuple(lean_wid_t worker_id, lean_txid_t tx_id, Slice val)
       : Tuple(TupleFormat::kChained, worker_id, tx_id),
         is_tombstone_(false) {
     std::memcpy(payload_, val.data(), val.size());
   }
 
-  ChainedTuple(WORKERID worker_id, TXID tx_id, COMMANDID command_id, Slice val)
+  ChainedTuple(lean_wid_t worker_id, lean_txid_t tx_id, lean_cmdid_t command_id, Slice val)
       : Tuple(TupleFormat::kChained, worker_id, tx_id, command_id),
         is_tombstone_(false) {
     std::memcpy(payload_, val.data(), val.size());

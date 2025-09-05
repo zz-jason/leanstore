@@ -17,8 +17,8 @@ public:
     wal_ = reinterpret_cast<cr::WalEntryComplex*>(wal_buf);
   }
 
-  WalBuilder& InitHeader(LID prev_lsn, WORKERID worker_id, TXID txid, LID psn, PID page_id,
-                         TREEID tree_id) {
+  WalBuilder& InitHeader(lean_lid_t prev_lsn, lean_wid_t worker_id, lean_txid_t txid,
+                         lean_lid_t psn, lean_pid_t page_id, lean_treeid_t tree_id) {
     new (wal_) cr::WalEntryComplex(CoroEnv::CurLogging().ReserveLsn(), prev_lsn, wal_size_,
                                    worker_id, txid, psn, page_id, tree_id);
     return *this;

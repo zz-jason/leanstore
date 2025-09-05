@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore/utils/portable.hpp"
+#include "leanstore/common/portable.h"
 #include "utils/coroutine/coro_executor.hpp"
 #include "utils/coroutine/coroutine.hpp"
 

@@ -44,8 +44,8 @@ Result<TransactionKV*> TransactionKV::Create(leanstore::LeanStore* store,
   return tree;
 }
 
-void TransactionKV::Init(leanstore::LeanStore* store, TREEID tree_id, lean_btree_config config,
-                         BasicKV* graveyard) {
+void TransactionKV::Init(leanstore::LeanStore* store, lean_treeid_t tree_id,
+                         lean_btree_config config, BasicKV* graveyard) {
   this->graveyard_ = graveyard;
   BasicKV::Init(store, tree_id, std::move(config));
 }
@@ -674,7 +674,7 @@ SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
   }
 
   guarded_node.ToExclusiveMayJump();
-  TXID sys_tx_id = CoroEnv::CurStore()->MvccManager()->AllocSysTxTs();
+  lean_txid_t sys_tx_id = CoroEnv::CurStore()->MvccManager()->AllocSysTxTs();
   guarded_node.SyncSystemTxId(sys_tx_id);
 
   for (uint16_t i = 0; i < guarded_node->num_slots_; i++) {
@@ -699,8 +699,8 @@ SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
 }
 
 // Only point-gc and for removed tuples
-void TransactionKV::GarbageCollect(const uint8_t* version_data, WORKERID version_worker_id,
-                                   TXID version_tx_id, bool called_before) {
+void TransactionKV::GarbageCollect(const uint8_t* version_data, lean_wid_t version_worker_id,
+                                   lean_txid_t version_tx_id, bool called_before) {
   const auto& version = *RemoveVersion::From(version_data);
 
   // Delete tombstones caused by transactions below cc_.local_wmk_of_all_tx_.

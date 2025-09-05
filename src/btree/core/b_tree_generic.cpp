@@ -26,7 +26,8 @@ using namespace leanstore::storage;
 
 namespace leanstore::storage::btree {
 
-void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btree_id, lean_btree_config config) {
+void BTreeGeneric::Init(leanstore::LeanStore* store, lean_treeid_t btree_id,
+                        lean_btree_config config) {
   this->store_ = store;
   this->tree_id_ = btree_id;
   this->config_ = std::move(config);
@@ -47,7 +48,7 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, TREEID btree_id, lean_btree
 
   // Record WAL
   if (config_.enable_wal_) {
-    TXID sys_tx_id = store_->MvccManager()->AllocSysTxTs();
+    lean_txid_t sys_tx_id = store_->MvccManager()->AllocSysTxTs();
 
     // wal for meta node
     auto* meta_bf = x_guarded_meta.bf();
@@ -76,7 +77,7 @@ std::unique_ptr<BTreeIterMut> BTreeGeneric::NewBTreeIterMut() {
   return std::make_unique<BTreeIterMut>(*this);
 }
 
-void BTreeGeneric::TrySplitMayJump(TXID sys_tx_id, BufferFrame& to_split,
+void BTreeGeneric::TrySplitMayJump(lean_txid_t sys_tx_id, BufferFrame& to_split,
                                    int16_t favored_split_pos) {
   auto parent_handler = find_parent_eager(*this, to_split);
   GuardedBufferFrame<BTreeNode> guarded_parent(store_->buffer_manager_.get(),
@@ -150,7 +151,8 @@ void BTreeGeneric::TrySplitMayJump(TXID sys_tx_id, BufferFrame& to_split,
 ///   - insert separator key into new root
 ///   - update meta node to point to new root
 ///
-void BTreeGeneric::split_root_may_jump(TXID sys_tx_id, GuardedBufferFrame<BTreeNode>& guarded_meta,
+void BTreeGeneric::split_root_may_jump(lean_txid_t sys_tx_id,
+                                       GuardedBufferFrame<BTreeNode>& guarded_meta,
                                        GuardedBufferFrame<BTreeNode>& guarded_old_root,
                                        const BTreeNode::SeparatorInfo& sep_info) {
   auto x_guarded_meta = ExclusiveGuardedBufferFrame(std::move(guarded_meta));
@@ -217,7 +219,7 @@ void BTreeGeneric::split_root_may_jump(TXID sys_tx_id, GuardedBufferFrame<BTreeN
 ///   |            |   |
 /// child     newLeft child
 ///
-void BTreeGeneric::split_non_root_may_jump(TXID sys_tx_id,
+void BTreeGeneric::split_non_root_may_jump(lean_txid_t sys_tx_id,
                                            GuardedBufferFrame<BTreeNode>& guarded_parent,
                                            GuardedBufferFrame<BTreeNode>& guarded_child,
                                            const BTreeNode::SeparatorInfo& sep_info,
@@ -261,7 +263,8 @@ void BTreeGeneric::split_non_root_may_jump(TXID sys_tx_id,
   x_guarded_child->Split(x_guarded_parent, x_guarded_new_left, sep_info);
 }
 
-bool BTreeGeneric::TryMergeMayJump(TXID sys_tx_id, BufferFrame& to_merge, bool swizzle_sibling) {
+bool BTreeGeneric::TryMergeMayJump(lean_txid_t sys_tx_id, BufferFrame& to_merge,
+                                   bool swizzle_sibling) {
   auto parent_handler = find_parent_eager(*this, to_merge);
   GuardedBufferFrame<BTreeNode> guarded_parent(store_->buffer_manager_.get(),
                                                std::move(parent_handler.parent_guard_),
@@ -513,7 +516,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(GuardedBufferFrame<BTreeNode
 
   ExclusiveGuardedBufferFrame<BTreeNode> x_guarded_parent = std::move(guarded_parent);
   // TODO(zz-jason): support wal and sync system tx id
-  // TXID sysTxId = utils::tlsStore->MvccManager()->AllocSysTxTs();
+  // lean_txid_t sysTxId = utils::tlsStore->MvccManager()->AllocSysTxTs();
   // xGuardedParent.SyncSystemTxId(sysTxId);
 
   XMergeReturnCode ret_code = XMergeReturnCode::kPartialMerge;

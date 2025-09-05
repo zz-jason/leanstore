@@ -127,7 +127,7 @@ public:
   void ExecAsync(uint64_t worker_id, std::function<void()> fn);
 
   /// Waits for the worker to complete.
-  void Wait(WORKERID worker_id);
+  void Wait(lean_wid_t worker_id);
 
   /// Waits for all Workers to complete.
   void WaitAll();

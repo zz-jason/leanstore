@@ -89,7 +89,7 @@ public:
     this->page_id_ = page_id_ | sCoolBit;
   }
 
-  void Evict(PID page_id) {
+  void Evict(lean_pid_t page_id) {
     this->page_id_ = page_id | sEvictedBit;
   }
 

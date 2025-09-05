@@ -380,7 +380,7 @@ inline void BTreeIterPessistic::Next() {
     if (guarded_leaf_->num_slots_ == 0) {
       SetCleanUpCallback([&, to_merge = guarded_leaf_.bf_]() {
         JUMPMU_TRY() {
-          TXID sys_tx_id = btree_.store_->MvccManager()->AllocSysTxTs();
+          lean_txid_t sys_tx_id = btree_.store_->MvccManager()->AllocSysTxTs();
           btree_.TryMergeMayJump(sys_tx_id, *to_merge, true);
         }
         JUMPMU_CATCH() {

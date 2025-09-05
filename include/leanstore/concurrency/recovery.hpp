@@ -2,8 +2,8 @@
 
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/buffer-manager/buffer_manager.hpp"
+#include "leanstore/common/types.h"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/units.hpp"
 #include "leanstore/utils/result.hpp"
 
 #include <cstring>
@@ -33,13 +33,13 @@ private:
 
   /// Stores the dirty page ID and the offset to the first WalEntry that caused that page to become
   /// dirty.
-  std::map<PID, uint64_t> dirty_page_table_;
+  std::map<lean_pid_t, uint64_t> dirty_page_table_;
 
   /// Stores the active transaction and the offset to the last created WalEntry.
-  std::map<TXID, uint64_t> active_tx_table_;
+  std::map<lean_txid_t, uint64_t> active_tx_table_;
 
   /// Stores all the pages read from disk during the recovery process.
-  std::map<PID, storage::BufferFrame*> resolved_pages_;
+  std::map<lean_pid_t, storage::BufferFrame*> resolved_pages_;
 
 public:
   Recovery(leanstore::LeanStore* store, uint64_t offset, uint64_t size)
@@ -111,7 +111,7 @@ private:
   }
 
   /// Return the buffer frame containing the required dirty page
-  storage::BufferFrame& resolve_page(PID page_id);
+  storage::BufferFrame& resolve_page(lean_pid_t page_id);
 
   /// Read a WalEntry from the WAL file to the destination buffer.
   Result<void> read_wal_entry(uint64_t& offset, uint8_t* dest);

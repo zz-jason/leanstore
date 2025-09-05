@@ -1,6 +1,8 @@
 #include "leanstore/btree/chained_tuple.hpp"
 
 #include "btree/core/b_tree_wal_payload.hpp"
+#include "leanstore/common/types.h"
+#include "leanstore/units.hpp"
 #include "leanstore/utils/log.hpp"
 
 namespace leanstore::storage::btree {
@@ -26,9 +28,9 @@ std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(Slice payload,
   auto value_buf = std::make_unique<uint8_t[]>(value_size);
   std::memcpy(value_buf.get(), this->payload_, value_size);
 
-  WORKERID newer_worker_id = worker_id_;
-  TXID newer_tx_id = tx_id_;
-  COMMANDID newer_command_id = command_id_;
+  lean_wid_t newer_worker_id = worker_id_;
+  lean_txid_t newer_tx_id = tx_id_;
+  lean_cmdid_t newer_command_id = command_id_;
 
   uint16_t versions_read = 1;
   while (true) {

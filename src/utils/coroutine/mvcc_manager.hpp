@@ -49,7 +49,7 @@ public:
   }
 
   /// Update the global minimum committed system transaction ID if the given one is larger.
-  void UpdateMinCommittedSysTx(TXID min_committed_sys_tx) {
+  void UpdateMinCommittedSysTx(lean_txid_t min_committed_sys_tx) {
     auto cur = GetMinCommittedSysTx();
     while (cur < min_committed_sys_tx) {
       if (global_min_committed_sys_tx_.compare_exchange_weak(
@@ -59,7 +59,7 @@ public:
     }
   }
 
-  TXID GetMinCommittedSysTx() {
+  lean_txid_t GetMinCommittedSysTx() {
     return global_min_committed_sys_tx_.load(std::memory_order_acquire);
   }
 
@@ -94,7 +94,7 @@ private:
 
   /// The minimum flushed system transaction ID among all worker threads. User transactions whose
   /// max observed system transaction ID not larger than it can be committed safely.
-  std::atomic<TXID> global_min_committed_sys_tx_ = 0;
+  std::atomic<lean_txid_t> global_min_committed_sys_tx_ = 0;
 
   /// The global timestamp oracle for user transactions. Used to generate start and commit
   /// timestamps for user transactions. Start from a positive number, 0 indicates invalid timestamp
