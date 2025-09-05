@@ -55,7 +55,7 @@ bool Tuple::ToFat(BTreeIterMut* x_iter) {
 
   auto newer_worker_id = chained_tuple.worker_id_;
   auto newer_tx_id = chained_tuple.tx_id_;
-  auto newer_command_id = chained_tuple.command_id_;
+  auto newer_command_id = chained_tuple.cmd_id_;
 
   // TODO: check for payload_size_ overflow
   bool abort_conversion = false;
@@ -87,13 +87,12 @@ bool Tuple::ToFat(BTreeIterMut* x_iter) {
               }
 
               // Add a FatTupleDelta
-              fat_tuple->NewDelta(delta_size, chained_delta.worker_id_, chained_delta.tx_id_,
-                                  chained_delta.command_id_,
-                                  reinterpret_cast<const uint8_t*>(&update_desc),
-                                  size_of_desc_and_delta);
+              fat_tuple->NewDelta(
+                  delta_size, chained_delta.worker_id_, chained_delta.tx_id_, chained_delta.cmd_id_,
+                  reinterpret_cast<const uint8_t*>(&update_desc), size_of_desc_and_delta);
               newer_worker_id = chained_delta.worker_id_;
               newer_tx_id = chained_delta.tx_id_;
-              newer_command_id = chained_delta.command_id_;
+              newer_command_id = chained_delta.cmd_id_;
             })) {
       // no more old versions
       break;
@@ -152,7 +151,7 @@ FatTuple::FatTuple(uint32_t payload_size, uint32_t val_size, const ChainedTuple&
       payload_size_(val_size),
       data_offset_(payload_size) {
   std::memcpy(payload_, chained_tuple.payload_, val_size_);
-  command_id_ = chained_tuple.command_id_;
+  cmd_id_ = chained_tuple.cmd_id_;
 }
 
 void FatTuple::UndoLastUpdate() {
@@ -160,7 +159,7 @@ void FatTuple::UndoLastUpdate() {
   auto& delta = get_delta(num_deltas_ - 1);
   worker_id_ = delta.worker_id_;
   tx_id_ = delta.tx_id_;
-  command_id_ = delta.command_id_;
+  cmd_id_ = delta.cmd_id_;
   num_deltas_ -= 1;
   const uint32_t total_delta_size = delta.TotalSize();
   data_offset_ += total_delta_size;
@@ -256,7 +255,7 @@ void FatTuple::GarbageCollection() {
   auto& new_fat_tuple = *new (buffer->get()) FatTuple(payload_capacity_);
   new_fat_tuple.worker_id_ = worker_id_;
   new_fat_tuple.tx_id_ = tx_id_;
-  new_fat_tuple.command_id_ = command_id_;
+  new_fat_tuple.cmd_id_ = cmd_id_;
   new_fat_tuple.payload_size_ += val_size_;
   new_fat_tuple.val_size_ = val_size_;
   std::memcpy(new_fat_tuple.payload_, payload_, val_size_); // Copy value
@@ -344,7 +343,7 @@ void FatTuple::Append(UpdateDesc& update_desc) {
   auto& new_delta = NewDelta(total_delta_size);
   new_delta.worker_id_ = this->worker_id_;
   new_delta.tx_id_ = this->tx_id_;
-  new_delta.command_id_ = this->command_id_;
+  new_delta.cmd_id_ = this->cmd_id_;
   std::memcpy(new_delta.payload_, &update_desc, update_desc.Size());
   auto* delta_ptr = new_delta.payload_ + update_desc.Size();
   BasicKV::CopyToBuffer(update_desc, this->GetValPtr(), delta_ptr);
@@ -390,7 +389,7 @@ void FatTuple::resize(const uint32_t new_size) {
   auto& new_fat_tuple = *new (tmp_page->get()) FatTuple(new_size);
   new_fat_tuple.worker_id_ = worker_id_;
   new_fat_tuple.tx_id_ = tx_id_;
-  new_fat_tuple.command_id_ = command_id_;
+  new_fat_tuple.cmd_id_ = cmd_id_;
   new_fat_tuple.payload_size_ += val_size_;
   new_fat_tuple.val_size_ = val_size_;
   std::memcpy(new_fat_tuple.payload_, payload_, val_size_); // Copy value
@@ -414,7 +413,7 @@ void FatTuple::resize(const uint32_t new_size) {
 void FatTuple::ConvertToChained(lean_treeid_t tree_id) {
   auto prev_worker_id = worker_id_;
   auto prev_tx_id = tx_id_;
-  auto prev_command_id = command_id_;
+  auto prev_command_id = cmd_id_;
   for (int64_t i = num_deltas_ - 1; i >= 0; i--) {
     auto& delta = get_delta(i);
     auto& update_desc = delta.GetUpdateDesc();
@@ -430,7 +429,7 @@ void FatTuple::ConvertToChained(lean_treeid_t tree_id) {
             false);
     prev_worker_id = delta.worker_id_;
     prev_tx_id = delta.tx_id_;
-    prev_command_id = delta.command_id_;
+    prev_command_id = delta.cmd_id_;
   }
 
   new (this) ChainedTuple(*this);

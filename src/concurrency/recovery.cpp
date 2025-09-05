@@ -10,6 +10,7 @@
 #include "leanstore/sync/hybrid_guard.hpp"
 #include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/log.hpp"
+#include "utils/small_vector.hpp"
 
 #include <cstdint>
 #include <expected>
@@ -24,7 +25,7 @@ using namespace leanstore::storage::btree;
 bool Recovery::Run() {
   bool error(false);
 
-  analysis();
+  Analysis();
   Log::Info("[Recovery] resolved page size: {}", resolved_pages_.size());
   for (auto it = resolved_pages_.begin(); it != resolved_pages_.end(); ++it) {
     if (it->second->IsFree()) {
@@ -47,14 +48,14 @@ bool Recovery::Run() {
     LEAN_DLOG("Dirty page table after analysis, pageId: {}, offset: {}", it->first, it->second);
   }
 
-  redo();
+  Redo();
 
-  undo();
+  Undo();
 
   return error;
 }
 
-Result<void> Recovery::analysis() {
+Result<void> Recovery::Analysis() {
   Log::Info("[Recovery] analysis phase begins");
   SCOPED_DEFER(Log::Info("[Recovery] analysis phase ends"))
 
@@ -63,7 +64,7 @@ Result<void> Recovery::analysis() {
   uint8_t* wal_entry_ptr = aligned_buffer.Get();
   for (auto offset = wal_start_offset_; offset < wal_size_;) {
     auto start_offset = offset;
-    if (auto res = read_wal_entry(offset, wal_entry_ptr); !res) {
+    if (auto res = ReadWalEntry(offset, wal_entry_ptr); !res) {
       return std::unexpected(std::move(res.error()));
     }
     auto* wal_entry = reinterpret_cast<WalEntry*>(wal_entry_ptr);
@@ -87,7 +88,7 @@ Result<void> Recovery::analysis() {
     case WalEntry::Type::kComplex: {
       auto* wal = reinterpret_cast<WalEntryComplex*>(wal_entry_ptr);
       active_tx_table_[wal->tx_id_] = offset;
-      auto& bf = resolve_page(wal->page_id_);
+      auto& bf = ResolvePage(wal->page_id_);
       if (wal->psn_ >= bf.page_.psn_ &&
           dirty_page_table_.find(wal->page_id_) == dirty_page_table_.end()) {
         // record the first WalEntry that makes the page dirty
@@ -105,7 +106,7 @@ Result<void> Recovery::analysis() {
   return {};
 }
 
-Result<void> Recovery::redo() {
+Result<void> Recovery::Redo() {
   Log::Info("[Recovery] redo phase begins");
   SCOPED_DEFER(Log::Info("[Recovery] redo phase ends"))
 
@@ -115,7 +116,7 @@ Result<void> Recovery::redo() {
 
   for (auto offset = wal_start_offset_; offset < wal_size_;) {
     auto start_offset = offset;
-    auto res = next_wal_complex_to_redo(offset, complex_entry);
+    auto res = NextWalComplexToRedo(offset, complex_entry);
     if (!res) {
       // met error
       Log::Error("[Recovery] failed to get next WalComplex, offset={}, error={}", start_offset,
@@ -129,45 +130,45 @@ Result<void> Recovery::redo() {
     }
 
     // get a buffer frame for the corresponding dirty page
-    auto& bf = resolve_page(complex_entry->page_id_);
+    auto& bf = ResolvePage(complex_entry->page_id_);
     SCOPED_DEFER(bf.header_.keep_in_memory_ = false);
 
     auto* wal_payload = reinterpret_cast<WalPayload*>(complex_entry->payload_);
     switch (wal_payload->type_) {
     case WalPayload::Type::kWalInsert: {
-      redo_insert(bf, complex_entry);
+      RedoInsert(bf, complex_entry);
       break;
     }
     case WalPayload::Type::kWalTxInsert: {
-      redo_tx_insert(bf, complex_entry);
+      RedoTxInsert(bf, complex_entry);
       break;
     }
     case WalPayload::Type::kWalUpdate: {
-      redo_update(bf, complex_entry);
+      RedoUpdate(bf, complex_entry);
       break;
     }
     case WalPayload::Type::kWalTxUpdate: {
-      redo_tx_update(bf, complex_entry);
+      RedoTxUpdate(bf, complex_entry);
       break;
     }
     case WalPayload::Type::kWalRemove: {
-      redo_remove(bf, complex_entry);
+      RedoRemove(bf, complex_entry);
       break;
     }
     case WalPayload::Type::kWalTxRemove: {
-      redo_tx_remove(bf, complex_entry);
+      RedoTxRemove(bf, complex_entry);
       break;
     }
     case WalPayload::Type::kWalInitPage: {
-      redo_init_page(bf, complex_entry);
+      RedoInitPage(bf, complex_entry);
       break;
     }
     case WalPayload::Type::kWalSplitRoot: {
-      redo_split_root(bf, complex_entry);
+      RedoSplitRoot(bf, complex_entry);
       break;
     }
     case WalPayload::Type::kWalSplitNonRoot: {
-      redo_split_non_root(bf, complex_entry);
+      RedoSplitNonRoot(bf, complex_entry);
       break;
     }
     default: {
@@ -188,11 +189,11 @@ Result<void> Recovery::redo() {
   return {};
 }
 
-Result<bool> Recovery::next_wal_complex_to_redo(uint64_t& offset, WalEntryComplex* complex_entry) {
+Result<bool> Recovery::NextWalComplexToRedo(uint64_t& offset, WalEntryComplex* complex_entry) {
   auto* buff = reinterpret_cast<uint8_t*>(complex_entry);
   while (offset < wal_size_) {
     // read a WalEntry
-    if (auto res = read_wal_entry(offset, buff); !res) {
+    if (auto res = ReadWalEntry(offset, buff); !res) {
       return std::unexpected(res.error());
     }
 
@@ -216,7 +217,7 @@ Result<bool> Recovery::next_wal_complex_to_redo(uint64_t& offset, WalEntryComple
   return false;
 }
 
-void Recovery::redo_insert(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
+void Recovery::RedoInsert(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
   auto* wal_insert = reinterpret_cast<WalInsert*>(complex_entry->payload_);
   HybridGuard guard(&bf.header_.latch_);
   GuardedBufferFrame<BTreeNode> guarded_node(store_->buffer_manager_.get(), std::move(guard), &bf);
@@ -226,7 +227,7 @@ void Recovery::redo_insert(storage::BufferFrame& bf, WalEntryComplex* complex_en
                               complex_entry->worker_id_, complex_entry->tx_id_, slot_id);
 }
 
-void Recovery::redo_tx_insert(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
+void Recovery::RedoTxInsert(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
   auto* wal_insert = reinterpret_cast<WalTxInsert*>(complex_entry->payload_);
   HybridGuard guard(&bf.header_.latch_);
   GuardedBufferFrame<BTreeNode> guarded_node(store_->buffer_manager_.get(), std::move(guard), &bf);
@@ -236,12 +237,12 @@ void Recovery::redo_tx_insert(storage::BufferFrame& bf, WalEntryComplex* complex
                               complex_entry->worker_id_, complex_entry->tx_id_, slot_id);
 }
 
-void Recovery::redo_update(storage::BufferFrame& bf [[maybe_unused]],
-                           WalEntryComplex* complex_entry [[maybe_unused]]) {
+void Recovery::RedoUpdate(storage::BufferFrame& bf [[maybe_unused]],
+                          WalEntryComplex* complex_entry [[maybe_unused]]) {
   Log::Fatal("Unsupported");
 }
 
-void Recovery::redo_tx_update(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
+void Recovery::RedoTxUpdate(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
   auto* wal = reinterpret_cast<WalTxUpdate*>(complex_entry->payload_);
   HybridGuard guard(&bf.header_.latch_);
   GuardedBufferFrame<BTreeNode> guarded_node(store_->buffer_manager_.get(), std::move(guard), &bf);
@@ -258,11 +259,12 @@ void Recovery::redo_tx_update(storage::BufferFrame& bf, WalEntryComplex* complex
   // update the chained tuple
   chained_tuple->worker_id_ = complex_entry->worker_id_;
   chained_tuple->tx_id_ = complex_entry->tx_id_;
-  chained_tuple->command_id_ ^= wal->xor_command_id_;
+  chained_tuple->cmd_id_ ^= wal->xor_cmd_id_;
 
   // 1. copy xor result to buff
   auto delta_size = wal->GetDeltaSize();
-  uint8_t buff[delta_size];
+  SmallBuffer<256> buff_holder(delta_size);
+  auto* buff = buff_holder.Data();
   std::memcpy(buff, wal->GetDeltaPtr(), delta_size);
 
   // 2. calculate new value based on xor result and old value
@@ -272,12 +274,12 @@ void Recovery::redo_tx_update(storage::BufferFrame& bf, WalEntryComplex* complex
   BasicKV::CopyToValue(*update_desc, buff, chained_tuple->payload_);
 }
 
-void Recovery::redo_remove(storage::BufferFrame& bf [[maybe_unused]],
-                           WalEntryComplex* complex_entry [[maybe_unused]]) {
+void Recovery::RedoRemove(storage::BufferFrame& bf [[maybe_unused]],
+                          WalEntryComplex* complex_entry [[maybe_unused]]) {
   Log::Fatal("Unsupported");
 }
 
-void Recovery::redo_tx_remove(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
+void Recovery::RedoTxRemove(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
   auto* wal = reinterpret_cast<WalTxRemove*>(complex_entry->payload_);
   HybridGuard guard(&bf.header_.latch_);
   GuardedBufferFrame<BTreeNode> guarded_node(store_->buffer_manager_.get(), std::move(guard), &bf);
@@ -296,11 +298,11 @@ void Recovery::redo_tx_remove(storage::BufferFrame& bf, WalEntryComplex* complex
   }
   chained_tuple->worker_id_ = complex_entry->worker_id_;
   chained_tuple->tx_id_ = complex_entry->tx_id_;
-  chained_tuple->command_id_ ^= wal->prev_command_id_;
+  chained_tuple->cmd_id_ ^= wal->prev_cmd_id_;
   chained_tuple->is_tombstone_ = true;
 }
 
-void Recovery::redo_init_page(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
+void Recovery::RedoInitPage(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
   auto* wal_init_page = reinterpret_cast<WalInitPage*>(complex_entry->payload_);
   HybridGuard guard(&bf.header_.latch_);
   GuardedBufferFrame<BTreeNode> guarded_node(store_->buffer_manager_.get(), std::move(guard), &bf);
@@ -309,7 +311,7 @@ void Recovery::redo_init_page(storage::BufferFrame& bf, WalEntryComplex* complex
   bf.page_.btree_id_ = complex_entry->tree_id_;
 }
 
-void Recovery::redo_split_root(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
+void Recovery::RedoSplitRoot(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
   auto* wal = reinterpret_cast<WalSplitRoot*>(complex_entry->payload_);
 
   // Resolve the old root
@@ -320,7 +322,7 @@ void Recovery::redo_split_root(storage::BufferFrame& bf, WalEntryComplex* comple
 
   // Resolve the new left
   auto new_left_page_id = wal->new_left_;
-  auto& new_left_bf = resolve_page(new_left_page_id);
+  auto& new_left_bf = ResolvePage(new_left_page_id);
   auto new_left_guard = HybridGuard(&new_left_bf.header_.latch_);
   auto guarded_new_left = GuardedBufferFrame<BTreeNode>(store_->buffer_manager_.get(),
                                                         std::move(new_left_guard), &new_left_bf);
@@ -328,7 +330,7 @@ void Recovery::redo_split_root(storage::BufferFrame& bf, WalEntryComplex* comple
 
   // Resolve the new root
   auto new_root_page_id = wal->new_root_;
-  auto& new_root_bf = resolve_page(new_root_page_id);
+  auto& new_root_bf = ResolvePage(new_root_page_id);
   auto new_root_guard = HybridGuard(&new_root_bf.header_.latch_);
   auto guarded_new_root = GuardedBufferFrame<BTreeNode>(store_->buffer_manager_.get(),
                                                         std::move(new_root_guard), &new_root_bf);
@@ -336,7 +338,7 @@ void Recovery::redo_split_root(storage::BufferFrame& bf, WalEntryComplex* comple
 
   // Resolve the meta node
   auto meta_page_id = wal->meta_node_;
-  auto& meta_bf = resolve_page(meta_page_id);
+  auto& meta_bf = ResolvePage(meta_page_id);
   auto meta_guard = HybridGuard(&meta_bf.header_.latch_);
   auto guarded_meta =
       GuardedBufferFrame<BTreeNode>(store_->buffer_manager_.get(), std::move(meta_guard), &meta_bf);
@@ -354,7 +356,7 @@ void Recovery::redo_split_root(storage::BufferFrame& bf, WalEntryComplex* comple
   x_guarded_meta->right_most_child_swip_ = x_guarded_new_root.bf();
 }
 
-void Recovery::redo_split_non_root(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
+void Recovery::RedoSplitNonRoot(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
   auto* wal = reinterpret_cast<WalSplitNonRoot*>(complex_entry->payload_);
 
   // Resolve the old root
@@ -365,7 +367,7 @@ void Recovery::redo_split_non_root(storage::BufferFrame& bf, WalEntryComplex* co
 
   // Resolve the new left
   auto new_left_page_id = wal->new_left_;
-  auto& new_left_bf = resolve_page(new_left_page_id);
+  auto& new_left_bf = ResolvePage(new_left_page_id);
   auto new_left_guard = HybridGuard(&new_left_bf.header_.latch_);
   auto guarded_new_left = GuardedBufferFrame<BTreeNode>(store_->buffer_manager_.get(),
                                                         std::move(new_left_guard), &new_left_bf);
@@ -373,7 +375,7 @@ void Recovery::redo_split_non_root(storage::BufferFrame& bf, WalEntryComplex* co
 
   // Resolve the parent node
   auto parent_page_id = wal->parent_page_id_;
-  auto& parent_bf = resolve_page(parent_page_id);
+  auto& parent_bf = ResolvePage(parent_page_id);
   auto parent_guard = HybridGuard(&parent_bf.header_.latch_);
   auto guarded_parent = GuardedBufferFrame<BTreeNode>(store_->buffer_manager_.get(),
                                                       std::move(parent_guard), &parent_bf);
@@ -390,17 +392,17 @@ void Recovery::redo_split_non_root(storage::BufferFrame& bf, WalEntryComplex* co
 }
 
 /// Read a WalEntry from the WAL file
-Result<void> Recovery::read_wal_entry(uint64_t& offset, uint8_t* dest) {
+Result<void> Recovery::ReadWalEntry(uint64_t& offset, uint8_t* dest) {
   // read the WalEntry
   auto wal_entry_size = sizeof(WalEntry);
-  if (auto res = read_from_wal_file(offset, wal_entry_size, dest); !res) {
+  if (auto res = ReadFromWalFile(offset, wal_entry_size, dest); !res) {
     return std::unexpected(res.error());
   }
 
   switch (reinterpret_cast<WalEntry*>(dest)->type_) {
   case leanstore::cr::WalEntry::Type::kTxAbort: {
     auto left = sizeof(WalTxAbort) - wal_entry_size;
-    auto res = read_from_wal_file(offset + wal_entry_size, left, dest + wal_entry_size);
+    auto res = ReadFromWalFile(offset + wal_entry_size, left, dest + wal_entry_size);
     if (!res) {
       return std::unexpected(res.error());
     }
@@ -409,7 +411,7 @@ Result<void> Recovery::read_wal_entry(uint64_t& offset, uint8_t* dest) {
   }
   case leanstore::cr::WalEntry::Type::kTxFinish: {
     auto left = sizeof(WalTxFinish) - wal_entry_size;
-    auto res = read_from_wal_file(offset + wal_entry_size, left, dest + wal_entry_size);
+    auto res = ReadFromWalFile(offset + wal_entry_size, left, dest + wal_entry_size);
     if (!res) {
       return std::unexpected(res.error());
     }
@@ -418,7 +420,7 @@ Result<void> Recovery::read_wal_entry(uint64_t& offset, uint8_t* dest) {
   }
   case leanstore::cr::WalEntry::Type::kCarriageReturn: {
     auto left = sizeof(WalCarriageReturn) - wal_entry_size;
-    auto res = read_from_wal_file(offset + wal_entry_size, left, dest + wal_entry_size);
+    auto res = ReadFromWalFile(offset + wal_entry_size, left, dest + wal_entry_size);
     if (!res) {
       return std::unexpected(res.error());
     }
@@ -428,15 +430,14 @@ Result<void> Recovery::read_wal_entry(uint64_t& offset, uint8_t* dest) {
   case leanstore::cr::WalEntry::Type::kComplex: {
     // read the body of WalEntryComplex
     auto left = sizeof(WalEntryComplex) - wal_entry_size;
-    auto res = read_from_wal_file(offset + wal_entry_size, left, dest + wal_entry_size);
+    auto res = ReadFromWalFile(offset + wal_entry_size, left, dest + wal_entry_size);
     if (!res) {
       return std::unexpected(res.error());
     }
 
     // read the payload of WalEntryComplex
     left = reinterpret_cast<WalEntryComplex*>(dest)->size_ - sizeof(WalEntryComplex);
-    res =
-        read_from_wal_file(offset + sizeof(WalEntryComplex), left, dest + sizeof(WalEntryComplex));
+    res = ReadFromWalFile(offset + sizeof(WalEntryComplex), left, dest + sizeof(WalEntryComplex));
     if (!res) {
       return std::unexpected(res.error());
     }
@@ -449,7 +450,7 @@ Result<void> Recovery::read_wal_entry(uint64_t& offset, uint8_t* dest) {
   return {};
 }
 
-storage::BufferFrame& Recovery::resolve_page(lean_pid_t page_id) {
+storage::BufferFrame& Recovery::ResolvePage(lean_pid_t page_id) {
   auto it = resolved_pages_.find(page_id);
   if (it != resolved_pages_.end()) {
     return *it->second;
@@ -463,7 +464,7 @@ storage::BufferFrame& Recovery::resolve_page(lean_pid_t page_id) {
 }
 
 // TODO(zz-jason): refactor with aio
-Result<void> Recovery::read_from_wal_file(int64_t offset, size_t nbytes, void* destination) {
+Result<void> Recovery::ReadFromWalFile(int64_t offset, size_t nbytes, void* destination) {
   auto file_name = store_->GetWalFilePath();
   FILE* fp = fopen(file_name.c_str(), "rb");
   if (fp == nullptr) {

@@ -3,7 +3,6 @@
 #include "leanstore/common/portable.h"
 #include "leanstore/concurrency/wal_entry.hpp"
 #include "leanstore/sync/optimistic_guarded.hpp"
-#include "leanstore/units.hpp"
 #include "leanstore/utils/misc.hpp"
 #include "utils/coroutine/coro_io.hpp"
 
@@ -43,9 +42,6 @@ struct WalFlushReq {
         curr_tx_id_(curr_tx_id) {
   }
 };
-
-template <typename T>
-class WalPayloadHandler;
 
 /// Helps to transaction concurrenct control and write-ahead logging.
 class Logging {
@@ -108,7 +104,7 @@ public:
 
   void AdvanceWalBuffer(uint32_t size) {
     LEAN_DCHECK(wal_buffered_ + size <= wal_buffer_bytes_);
-    wal_buffered_ += size;
+    wal_buffered_ = (wal_buffered_ + size) % wal_buffer_bytes_;
     wal_flush_req_.UpdateAttribute(&WalFlushReq::wal_buffered_, wal_buffered_);
   }
 
