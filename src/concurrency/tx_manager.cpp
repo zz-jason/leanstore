@@ -60,7 +60,7 @@ void TxManager::StartTx(TxMode mode, IsolationLevel level, bool is_read_only) {
     Log::Fatal("Unsupported isolation level: {}", static_cast<uint64_t>(level));
   }
 
-  // Draw TXID from global counter and publish it with the TX type (i.e.  long-running or
+  // Draw lean_txid_t from global counter and publish it with the TX type (i.e.  long-running or
   // short-running) We have to acquire a transaction id and use it for locking in ANY isolation
   // level
   if (is_read_only) {
@@ -194,7 +194,7 @@ void TxManager::AbortTx() {
 
   cc_.history_storage_.PurgeVersions(
       active_tx_.start_ts_, active_tx_.start_ts_,
-      [&](const TXID, const TREEID, const uint8_t*, uint64_t, const bool) {}, 0);
+      [&](const lean_txid_t, const lean_treeid_t, const uint8_t*, uint64_t, const bool) {}, 0);
 
   if (active_tx_.has_wrote_ && active_tx_.is_durable_) {
     // TODO: write compensation wal records between abort and finish

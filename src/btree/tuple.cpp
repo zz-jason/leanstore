@@ -206,21 +206,21 @@ void FatTuple::GarbageCollection() {
     }
   }
 
-  const TXID local_oldest_oltp =
+  const lean_txid_t local_oldest_oltp =
       CoroEnv::CurTxMgr().store_->MvccManager()->GlobalWmkInfo().oldest_active_short_tx_.load();
-  const TXID local_newest_olap =
+  const lean_txid_t local_newest_olap =
       CoroEnv::CurTxMgr().store_->MvccManager()->GlobalWmkInfo().newest_active_long_tx_.load();
   if (deltas_visible_for_all == 0 && local_newest_olap > local_oldest_oltp) {
     return; // Nothing to do here
   }
 
-  auto bin_search = [&](TXID upper_bound) {
+  auto bin_search = [&](lean_txid_t upper_bound) {
     int64_t l = deltas_visible_for_all;
     int64_t r = num_deltas_ - 1;
     int64_t m = -1;
     while (l <= r) {
       m = l + (r - l) / 2;
-      TXID it = get_delta(m).tx_id_;
+      lean_txid_t it = get_delta(m).tx_id_;
       if (it == upper_bound) {
         return m;
       }
@@ -411,7 +411,7 @@ void FatTuple::resize(const uint32_t new_size) {
   LEAN_DCHECK(payload_capacity_ >= payload_size_);
 }
 
-void FatTuple::ConvertToChained(TREEID tree_id) {
+void FatTuple::ConvertToChained(lean_treeid_t tree_id) {
   auto prev_worker_id = worker_id_;
   auto prev_tx_id = tx_id_;
   auto prev_command_id = command_id_;

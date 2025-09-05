@@ -168,7 +168,7 @@ public:
 
       slot_id_ = -1;
       JUMPMU_TRY() {
-        TXID sys_tx_id = btree_.store_->MvccManager()->AllocSysTxTs();
+        lean_txid_t sys_tx_id = btree_.store_->MvccManager()->AllocSysTxTs();
         btree_.TrySplitMayJump(sys_tx_id, *guarded_leaf_.bf_, split_slot);
 
         COUNTER_INC(&leanstore::cr::tls_perf_counters.contention_split_succeed_);
@@ -201,7 +201,7 @@ public:
       guarded_leaf_.unlock();
       slot_id_ = -1;
       JUMPMU_TRY() {
-        TXID sys_tx_id = btree_.store_->MvccManager()->AllocSysTxTs();
+        lean_txid_t sys_tx_id = btree_.store_->MvccManager()->AllocSysTxTs();
         btree_.TryMergeMayJump(sys_tx_id, *guarded_leaf_.bf_);
       }
       JUMPMU_CATCH() {

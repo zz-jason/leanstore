@@ -30,7 +30,7 @@ public:
   ConcurrencyControl cc_;
 
   /// The ID of the current command in the current transaction.
-  COMMANDID command_id_ = 0;
+  lean_cmdid_t command_id_ = 0;
 
   /// The current running transaction.
   Transaction active_tx_;
@@ -50,11 +50,11 @@ public:
   std::vector<Transaction> rfa_tx_to_commit_;
 
   /// Last committed user transaction ID in the worker.
-  std::atomic<TXID> last_committed_usr_tx_ = 0;
+  std::atomic<lean_txid_t> last_committed_usr_tx_ = 0;
 
   /// The ID of the current transaction. It's set by the current worker thread and read by the
   /// garbage collection process to determine the lower watermarks of the transactions.
-  std::atomic<TXID> active_tx_id_ = 0;
+  std::atomic<lean_txid_t> active_tx_id_ = 0;
 
   /// ID of the current worker itself.
   const uint64_t worker_id_;
@@ -97,11 +97,11 @@ public:
   /// Get the lean_perf_counters of the current worker.
   lean_perf_counters* GetPerfCounters();
 
-  TXID GetLastCommittedUsrTx() const {
+  lean_txid_t GetLastCommittedUsrTx() const {
     return last_committed_usr_tx_.load(std::memory_order_acquire);
   }
 
-  void UpdateLastCommittedUsrTx(TXID usr_tx_id) {
+  void UpdateLastCommittedUsrTx(lean_txid_t usr_tx_id) {
     last_committed_usr_tx_.store(usr_tx_id, std::memory_order_release);
   }
 
@@ -109,8 +109,9 @@ public:
   void WriteWalTxFinish();
 
   template <typename T, typename... Args>
-  WalPayloadHandler<T> ReserveWALEntryComplex(uint64_t payload_size, PID page_id, LID psn,
-                                              TREEID tree_id, Args&&... args) {
+  WalPayloadHandler<T> ReserveWALEntryComplex(uint64_t payload_size, lean_pid_t page_id,
+                                              lean_lid_t psn, lean_treeid_t tree_id,
+                                              Args&&... args) {
     auto& logging = CoroEnv::CurLogging();
 
     auto prev_lsn = active_tx_.prev_wal_lsn_;
@@ -138,7 +139,7 @@ public:
   static constexpr uint64_t kCleanBitsMask = ~(kRcBit | kLongRunningBit);
 
 private:
-  void WaitToCommit(const TXID commit_ts) {
+  void WaitToCommit(const lean_txid_t commit_ts) {
     while (!(commit_ts <= GetLastCommittedUsrTx())) {
 #ifdef ENABLE_COROUTINE
       CoroEnv::CurCoro()->Yield(CoroState::kRunning);

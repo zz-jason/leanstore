@@ -4,6 +4,7 @@
 #include "leanstore/btree/core/b_tree_node.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/buffer-manager/guarded_buffer_frame.hpp"
+#include "leanstore/common/types.h"
 #include "leanstore/concurrency/wal_entry.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_guard.hpp"
@@ -448,7 +449,7 @@ Result<void> Recovery::read_wal_entry(uint64_t& offset, uint8_t* dest) {
   return {};
 }
 
-storage::BufferFrame& Recovery::resolve_page(PID page_id) {
+storage::BufferFrame& Recovery::resolve_page(lean_pid_t page_id) {
   auto it = resolved_pages_.find(page_id);
   if (it != resolved_pages_.end()) {
     return *it->second;

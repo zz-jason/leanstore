@@ -1,8 +1,8 @@
 #pragma once
 
 #include "leanstore/btree/core/b_tree_node.hpp"
+#include "leanstore/common/types.h"
 #include "leanstore/kv_interface.hpp"
-#include "leanstore/units.hpp"
 #include "leanstore/utils/log.hpp"
 
 #include <string>
@@ -99,16 +99,16 @@ public:
 
   uint16_t val_size_;
 
-  WORKERID prev_worker_id_;
+  lean_wid_t prev_worker_id_;
 
-  TXID prev_tx_id_;
+  lean_txid_t prev_tx_id_;
 
-  COMMANDID prev_command_id_;
+  lean_cmdid_t prev_command_id_;
 
   uint8_t payload_[];
 
-  WalTxInsert(Slice key, Slice val, WORKERID prev_worker_id, TXID prev_tx_id,
-              COMMANDID prev_command_id)
+  WalTxInsert(Slice key, Slice val, lean_wid_t prev_worker_id, lean_txid_t prev_tx_id,
+              lean_cmdid_t prev_command_id)
       : WalPayload(Type::kWalTxInsert),
         key_size_(key.size()),
         val_size_(val.size()),
@@ -148,18 +148,18 @@ public:
 
   uint64_t delta_size_;
 
-  WORKERID prev_worker_id_;
+  lean_wid_t prev_worker_id_;
 
-  TXID prev_tx_id_;
+  lean_txid_t prev_tx_id_;
 
   // Xor result of old and new command id
-  COMMANDID xor_command_id_;
+  lean_cmdid_t xor_command_id_;
 
   // Stores key, UpdateDesc, and Delta in order
   uint8_t payload_[];
 
   WalTxUpdate(Slice key, UpdateDesc& update_desc, uint64_t size_of_update_desc_and_delta,
-              WORKERID prev_worker_id, TXID prev_tx_id, COMMANDID xor_command_id)
+              lean_wid_t prev_worker_id, lean_txid_t prev_tx_id, lean_cmdid_t xor_command_id)
       : WalPayload(Type::kWalTxUpdate),
         key_size_(key.size()),
         update_desc_size_(update_desc.Size()),
@@ -222,16 +222,16 @@ public:
 
   uint16_t val_size_;
 
-  WORKERID prev_worker_id_;
+  lean_wid_t prev_worker_id_;
 
-  TXID prev_tx_id_;
+  lean_txid_t prev_tx_id_;
 
-  COMMANDID prev_command_id_;
+  lean_cmdid_t prev_command_id_;
 
   uint8_t payload_[];
 
-  WalTxRemove(Slice key, Slice val, WORKERID prev_worker_id, TXID prev_tx_id,
-              COMMANDID prev_command_id)
+  WalTxRemove(Slice key, Slice val, lean_wid_t prev_worker_id, lean_txid_t prev_tx_id,
+              lean_cmdid_t prev_command_id)
       : WalPayload(Type::kWalTxRemove),
         key_size_(key.size()),
         val_size_(val.size()),
@@ -253,13 +253,13 @@ public:
 
 class WalInitPage : public WalPayload {
 public:
-  TXID sys_tx_id_;
+  lean_txid_t sys_tx_id_;
 
-  TREEID tree_id_;
+  lean_treeid_t tree_id_;
 
   bool is_leaf_;
 
-  WalInitPage(TXID sys_tx_id, TREEID tree_id, bool is_leaf)
+  WalInitPage(lean_txid_t sys_tx_id, lean_treeid_t tree_id, bool is_leaf)
       : WalPayload(Type::kWalInitPage),
         sys_tx_id_(sys_tx_id),
         tree_id_(tree_id),
@@ -269,13 +269,13 @@ public:
 
 class WalSplitRoot : public WalPayload {
 public:
-  TXID sys_tx_id_;
+  lean_txid_t sys_tx_id_;
 
-  PID new_left_;
+  lean_pid_t new_left_;
 
-  PID new_root_;
+  lean_pid_t new_root_;
 
-  PID meta_node_;
+  lean_pid_t meta_node_;
 
   uint16_t split_slot_;
 
@@ -283,8 +283,8 @@ public:
 
   bool separator_truncated_;
 
-  WalSplitRoot(TXID sys_tx_id, PID new_left, PID new_root, PID meta_node,
-               const BTreeNode::SeparatorInfo& sep_info)
+  WalSplitRoot(lean_txid_t sys_tx_id, lean_pid_t new_left, lean_pid_t new_root,
+               lean_pid_t meta_node, const BTreeNode::SeparatorInfo& sep_info)
       : WalPayload(Type::kWalSplitRoot),
         sys_tx_id_(sys_tx_id),
         new_left_(new_left),
@@ -298,11 +298,11 @@ public:
 
 class WalSplitNonRoot : public WalPayload {
 public:
-  TXID sys_tx_id_;
+  lean_txid_t sys_tx_id_;
 
-  PID parent_page_id_;
+  lean_pid_t parent_page_id_;
 
-  PID new_left_;
+  lean_pid_t new_left_;
 
   uint16_t split_slot_;
 
@@ -313,7 +313,7 @@ public:
   WalSplitNonRoot() : WalPayload(Type::kWalSplitNonRoot) {
   }
 
-  WalSplitNonRoot(TXID sys_tx_id, PID parent, PID new_left,
+  WalSplitNonRoot(lean_txid_t sys_tx_id, lean_pid_t parent, lean_pid_t new_left,
                   const BTreeNode::SeparatorInfo& sep_info)
       : WalPayload(Type::kWalSplitNonRoot),
         sys_tx_id_(sys_tx_id),

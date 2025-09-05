@@ -1,9 +1,9 @@
 #pragma once
 
 #include "leanstore/btree/core/btree_iter_mut.hpp"
+#include "leanstore/common/portable.h"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/log.hpp"
-#include "leanstore/utils/portable.hpp"
 
 namespace leanstore::storage::btree {
 /// Plan: we should handle frequently and infrequently updated tuples
@@ -28,8 +28,6 @@ namespace leanstore::storage::btree {
 // Forward declaration
 class FatTuple;
 class ChainedTuple;
-
-static constexpr COMMANDID kInvalidCommandid = std::numeric_limits<COMMANDID>::max();
 
 // -----------------------------------------------------------------------------
 // TupleFormat
@@ -65,21 +63,21 @@ public:
   TupleFormat format_;
 
   /// ID of the worker who created this tuple.
-  WORKERID worker_id_;
+  lean_wid_t worker_id_;
 
   /// ID of the transaction who created this tuple, it's the start timestamp of
   /// the transaction.
-  TXID tx_id_;
+  lean_txid_t tx_id_;
 
   /// ID of the command who created this tuple.
-  COMMANDID command_id_;
+  lean_cmdid_t command_id_;
 
   /// Whether the tuple is locked for write.
   bool write_locked_;
 
 public:
-  Tuple(TupleFormat format, WORKERID worker_id, TXID tx_id,
-        COMMANDID command_id = kInvalidCommandid, bool write_locked = false)
+  Tuple(TupleFormat format, lean_wid_t worker_id, lean_txid_t tx_id,
+        lean_cmdid_t command_id = kInvalidCommandid, bool write_locked = false)
       : format_(format),
         worker_id_(worker_id),
         tx_id_(tx_id),
@@ -128,14 +126,14 @@ public:
 struct PACKED FatTupleDelta {
 public:
   /// ID of the worker who creates this delta.
-  WORKERID worker_id_;
+  lean_wid_t worker_id_;
 
   /// ID of the transaction who creates this delta.
-  TXID tx_id_;
+  lean_txid_t tx_id_;
 
   /// ID of the command who creates this delta.
   /// NOTE: Take care, otherwise we would overwrite another undo version
-  COMMANDID command_id_ = kInvalidCommandid;
+  lean_cmdid_t command_id_ = kInvalidCommandid;
 
   /// Descriptor + Delta
   uint8_t payload_[];
@@ -143,8 +141,8 @@ public:
 public:
   FatTupleDelta() = default;
 
-  FatTupleDelta(WORKERID worker_id, TXID tx_id, COMMANDID command_id, const uint8_t* buf,
-                uint32_t size)
+  FatTupleDelta(lean_wid_t worker_id, lean_txid_t tx_id, lean_cmdid_t command_id,
+                const uint8_t* buf, uint32_t size)
       : worker_id_(worker_id),
         tx_id_(tx_id),
         command_id_(command_id) {
@@ -242,7 +240,7 @@ public:
   /// @return whether the tuple is found, and the number of visited versions
   std::tuple<OpCode, uint16_t> GetVisibleTuple(ValCallback val_callback) const;
 
-  void ConvertToChained(TREEID tree_id);
+  void ConvertToChained(lean_treeid_t tree_id);
 
   /// Used when converting to chained tuple. Deltas in chained tuple are
   /// stored N2O (from newest to oldest), but are stored O2N (from oldest to
@@ -317,13 +315,13 @@ struct PACKED Version {
 public:
   VersionType type_;
 
-  WORKERID worker_id_;
+  lean_wid_t worker_id_;
 
-  TXID tx_id_;
+  lean_txid_t tx_id_;
 
-  COMMANDID command_id_;
+  lean_cmdid_t command_id_;
 
-  Version(VersionType type, WORKERID worker_id, TXID tx_id, COMMANDID command_id)
+  Version(VersionType type, lean_wid_t worker_id, lean_txid_t tx_id, lean_cmdid_t command_id)
       : type_(type),
         worker_id_(worker_id),
         tx_id_(tx_id),
@@ -341,7 +339,7 @@ struct PACKED UpdateVersion : Version {
   uint8_t payload_[]; // UpdateDescriptor + Delta
 
 public:
-  UpdateVersion(WORKERID worker_id, TXID tx_id, COMMANDID command_id, bool is_delta)
+  UpdateVersion(lean_wid_t worker_id, lean_txid_t tx_id, lean_cmdid_t command_id, bool is_delta)
       : Version(VersionType::kUpdate, worker_id, tx_id, command_id),
         is_delta_(is_delta) {
   }
@@ -368,14 +366,15 @@ public:
   uint8_t payload_[];
 
 public:
-  InsertVersion(WORKERID worker_id, TXID tx_id, COMMANDID command_id, uint16_t key_size,
+  InsertVersion(lean_wid_t worker_id, lean_txid_t tx_id, lean_cmdid_t command_id, uint16_t key_size,
                 uint16_t val_size)
       : Version(VersionType::kInsert, worker_id, tx_id, command_id),
         key_size_(key_size),
         val_size_(val_size) {
   }
 
-  InsertVersion(WORKERID worker_id, TXID tx_id, COMMANDID command_id, Slice key, Slice val)
+  InsertVersion(lean_wid_t worker_id, lean_txid_t tx_id, lean_cmdid_t command_id, Slice key,
+                Slice val)
       : Version(VersionType::kInsert, worker_id, tx_id, command_id),
         key_size_(key.size()),
         val_size_(val.size()) {
@@ -413,15 +412,15 @@ public:
   uint8_t payload_[];
 
 public:
-  RemoveVersion(WORKERID worker_id, TXID tx_id, COMMANDID command_id, uint16_t key_size,
+  RemoveVersion(lean_wid_t worker_id, lean_txid_t tx_id, lean_cmdid_t command_id, uint16_t key_size,
                 uint16_t val_size)
       : Version(VersionType::kRemove, worker_id, tx_id, command_id),
         key_size_(key_size),
         val_size_(val_size) {
   }
 
-  RemoveVersion(WORKERID worker_id, TXID tx_id, COMMANDID command_id, Slice key, Slice val,
-                const DanglingPointer& dangling_pointer)
+  RemoveVersion(lean_wid_t worker_id, lean_txid_t tx_id, lean_cmdid_t command_id, Slice key,
+                Slice val, const DanglingPointer& dangling_pointer)
       : Version(VersionType::kRemove, worker_id, tx_id, command_id),
         key_size_(key.size()),
         val_size_(val.size()),

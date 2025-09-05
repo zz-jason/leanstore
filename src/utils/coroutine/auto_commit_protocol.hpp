@@ -58,9 +58,9 @@ private:
 
   void TrySyncLastCommittedTx();
 
-  TXID DetermineCommitableUsrTx(std::vector<cr::Transaction>& tx_queue);
+  lean_txid_t DetermineCommitableUsrTx(std::vector<cr::Transaction>& tx_queue);
 
-  TXID DetermineCommitableUsrTxRfA(std::vector<cr::Transaction>& tx_queue_rfa);
+  lean_txid_t DetermineCommitableUsrTxRfA(std::vector<cr::Transaction>& tx_queue_rfa);
 
 private:
   /// Reference to the store instance.
@@ -75,16 +75,16 @@ private:
   std::unordered_set<cr::TxManager*> active_tx_mgrs_;
 
   /// The last committed user transaction ID that has been synced from other coro executors.
-  std::vector<TXID> synced_last_committed_usr_tx_;
+  std::vector<lean_txid_t> synced_last_committed_usr_tx_;
 
   /// The last committed system transaction ID that has been synced from other coro executors.
-  std::vector<TXID> synced_last_committed_sys_tx_;
+  std::vector<lean_txid_t> synced_last_committed_sys_tx_;
 
   /// The minimum committed user transaction ID among all workers in the store.
-  TXID min_committed_usr_tx_;
+  lean_txid_t min_committed_usr_tx_;
 
   /// The minimum committed system transaction ID among all workers in the store.
-  TXID min_committed_sys_tx_;
+  lean_txid_t min_committed_sys_tx_;
 };
 
 } // namespace leanstore

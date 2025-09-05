@@ -103,7 +103,7 @@ private:
   /// Stores all the reclaimed page ids in the partition. Page id is reclaimed
   /// when the page is removed. The reclaimed page id can be reused when a new
   /// page is allocated.
-  std::vector<PID> reclaimed_page_ids_;
+  std::vector<lean_pid_t> reclaimed_page_ids_;
 
   /// The next page id to be allocated.
   uint64_t next_page_id_;
@@ -128,7 +128,7 @@ public:
   ///
   /// Returns true if the insertion was successful, false if the page id is
   /// already in the inflight IOs.
-  bool IsBeingReadBack(PID cooled_page_id) {
+  bool IsBeingReadBack(lean_pid_t cooled_page_id) {
     LEAN_SHARED_LOCK(inflight_ios_mutex_);
     return inflight_ios_.Lookup(cooled_page_id);
   }
@@ -148,7 +148,7 @@ public:
   }
 
   /// Allocates a new page id.
-  PID NextPageId() {
+  lean_pid_t NextPageId() {
     LEAN_UNIQUE_LOCK(reclaimed_page_ids_mutex_);
     if (reclaimed_page_ids_.size()) {
       const uint64_t page_id = reclaimed_page_ids_.back();
@@ -162,7 +162,7 @@ public:
   }
 
   /// Reclaims a freed page id.
-  void ReclaimPageId(PID page_id) {
+  void ReclaimPageId(lean_pid_t page_id) {
     LEAN_UNIQUE_LOCK(reclaimed_page_ids_mutex_);
     reclaimed_page_ids_.push_back(page_id);
   }

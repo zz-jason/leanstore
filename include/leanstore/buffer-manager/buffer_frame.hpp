@@ -1,13 +1,12 @@
 #pragma once
 
 #include "leanstore/buffer-manager/swip.hpp"
+#include "leanstore/common/portable.h"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
-#include "leanstore/units.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
-#include "leanstore/utils/portable.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -52,8 +51,8 @@ enum class State : uint8_t { kFree = 0, kHot = 1, kCool = 2, kLoaded = 3 };
 
 class BufferFrameHeader {
 public:
-  static constexpr WORKERID kInvalidWorkerId = std::numeric_limits<WORKERID>::max();
-  static constexpr PID kInvalidPageId = std::numeric_limits<PID>::max();
+  static constexpr lean_wid_t kInvalidWorkerId = std::numeric_limits<lean_wid_t>::max();
+  static constexpr lean_pid_t kInvalidPageId = std::numeric_limits<lean_pid_t>::max();
 
   /// The state of the buffer frame.
   State state_ = State::kFree;
@@ -69,12 +68,12 @@ public:
   BufferFrame* next_free_bf_ = nullptr;
 
   /// ID of page resides in this buffer frame.
-  PID page_id_ = kInvalidPageId;
+  lean_pid_t page_id_ = kInvalidPageId;
 
   /// ID of the last worker who has modified the containing page. For remote flush avoidance (RFA),
   /// see "Rethinking Logging, Checkpoints, and Recovery for High-Performance Storage Engines,
   /// SIGMOD 2020" for details.
-  WORKERID last_writer_worker_ = kInvalidWorkerId;
+  lean_wid_t last_writer_worker_ = kInvalidWorkerId;
 
   /// The flushed page sequence number of the containing page. Initialized when the containing page
   /// is loaded from disk.
@@ -145,7 +144,7 @@ public:
   uint64_t psn_ = 0;
 
   /// The btree ID it belongs to.
-  TREEID btree_id_ = std::numeric_limits<TREEID>::max();
+  lean_treeid_t btree_id_ = std::numeric_limits<lean_treeid_t>::max();
 
   /// Used for debug, page id is stored in it when evicted to disk.
   uint64_t magic_debugging_;
@@ -199,7 +198,7 @@ public:
            header_.latch_.IsLockedExclusively();
   }
 
-  void Init(PID page_id) {
+  void Init(lean_pid_t page_id) {
     LEAN_DCHECK(header_.state_ == State::kFree);
     header_.page_id_ = page_id;
     header_.state_ = State::kHot;

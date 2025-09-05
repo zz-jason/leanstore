@@ -1,4 +1,9 @@
-#pragma once
+#ifndef LEANSTORE_COMMON_PORTABLE_H
+#define LEANSTORE_COMMON_PORTABLE_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /// Portable packed attribute definition.
 ///
@@ -29,4 +34,10 @@
 #define ALIGNAS(x) alignas(x)
 #else
 #define ALIGNAS(x)
+#endif
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

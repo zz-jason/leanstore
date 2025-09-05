@@ -30,7 +30,7 @@ public:
 
   leanstore::LeanStore* store_;
 
-  TREEID tree_id_;
+  lean_treeid_t tree_id_;
 
   BTreeType tree_type_ = BTreeType::kGeneric;
 
@@ -45,7 +45,7 @@ public:
 
   virtual ~BTreeGeneric() override = default;
 
-  void Init(leanstore::LeanStore* store, TREEID tree_id, lean_btree_config config);
+  void Init(leanstore::LeanStore* store, lean_treeid_t tree_id, lean_btree_config config);
 
   /// Create an immutable iterator for the BTree.
   std::unique_ptr<BTreeIter> NewBTreeIter();
@@ -55,9 +55,9 @@ public:
 
   /// Try to merge the current node with its left or right sibling, reclaim the merged left or right
   /// sibling if successful.
-  bool TryMergeMayJump(TXID sys_tx_id, BufferFrame& to_merge, bool swizzle_sibling = true);
+  bool TryMergeMayJump(lean_txid_t sys_tx_id, BufferFrame& to_merge, bool swizzle_sibling = true);
 
-  void TrySplitMayJump(TXID sys_tx_id, BufferFrame& to_split, int16_t pos = -1);
+  void TrySplitMayJump(lean_txid_t sys_tx_id, BufferFrame& to_split, int16_t pos = -1);
 
   XMergeReturnCode XMerge(GuardedBufferFrame<BTreeNode>& guarded_parent,
                           GuardedBufferFrame<BTreeNode>& guarded_child,
@@ -111,7 +111,7 @@ public:
     Log::Fatal("undo is unsupported");
   }
 
-  virtual void GarbageCollect(const uint8_t*, WORKERID, TXID, bool) override {
+  virtual void GarbageCollect(const uint8_t*, lean_wid_t, lean_txid_t, bool) override {
     Log::Fatal("GarbageCollect is unsupported");
   }
 
@@ -141,7 +141,7 @@ private:
   ///              |     |
   ///           newLeft toSplit
   ///
-  void split_root_may_jump(TXID sys_tx_id, GuardedBufferFrame<BTreeNode>& guarded_parent,
+  void split_root_may_jump(lean_txid_t sys_tx_id, GuardedBufferFrame<BTreeNode>& guarded_parent,
                            GuardedBufferFrame<BTreeNode>& guarded_child,
                            const BTreeNode::SeparatorInfo& sep_info);
 
@@ -152,7 +152,7 @@ private:
   ///   |            |   |
   /// toSplit   newLeft toSplit
   ///
-  void split_non_root_may_jump(TXID sys_tx_id, GuardedBufferFrame<BTreeNode>& guarded_parent,
+  void split_non_root_may_jump(lean_txid_t sys_tx_id, GuardedBufferFrame<BTreeNode>& guarded_parent,
                                GuardedBufferFrame<BTreeNode>& guarded_child,
                                const BTreeNode::SeparatorInfo& sep_info,
                                uint16_t space_needed_for_separator);

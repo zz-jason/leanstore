@@ -1,9 +1,9 @@
 #pragma once
 
-#include "leanstore/units.hpp"
+#include "leanstore/common/portable.h"
+#include "leanstore/common/types.h"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/misc.hpp"
-#include "leanstore/utils/portable.hpp"
 
 #include <cstdint>
 #include <string>
@@ -55,17 +55,17 @@ public:
 // indicate transaction abort
 class PACKED WalTxAbort : public WalEntry {
 public:
-  TXID tx_id_;
+  lean_txid_t tx_id_;
 
-  explicit WalTxAbort(TXID tx_id) : WalEntry(Type::kTxAbort), tx_id_(tx_id) {
+  explicit WalTxAbort(lean_txid_t tx_id) : WalEntry(Type::kTxAbort), tx_id_(tx_id) {
   }
 };
 
 class PACKED WalTxFinish : public WalEntry {
 public:
-  TXID tx_id_;
+  lean_txid_t tx_id_;
 
-  explicit WalTxFinish(TXID tx_id) : WalEntry(Type::kTxFinish), tx_id_(tx_id) {
+  explicit WalTxFinish(lean_txid_t tx_id) : WalEntry(Type::kTxFinish), tx_id_(tx_id) {
   }
 };
 
@@ -83,32 +83,32 @@ public:
   uint32_t crc32_;
 
   /// The log sequence number of this WalEntry. The number is globally and monotonically increased.
-  LID lsn_;
+  lean_lid_t lsn_;
 
   /// Log sequence number for the previous WalEntry of the same transaction. 0 if it's the first WAL
   /// entry in the transaction.
-  LID prev_lsn_;
+  lean_lid_t prev_lsn_;
 
   // Size of the whole WalEntry, including all the payloads. The entire WAL entry stays in the WAL
   // ring buffer of the current worker thread.
   uint16_t size_;
 
   /// ID of the worker who executes the transaction and records the WalEntry.
-  WORKERID worker_id_;
+  lean_wid_t worker_id_;
 
   /// ID of the transaction who creates this WalEntry.
-  TXID tx_id_;
+  lean_txid_t tx_id_;
 
   /// Page sequence number of the WalEntry.
   uint64_t psn_;
 
   /// The page ID of the WalEntry, used to identify the btree node together with
   /// btree ID
-  PID page_id_;
+  lean_pid_t page_id_;
 
   /// The btree ID of the WalEntry, used to identify the btree node together
   /// with page ID.
-  TREEID tree_id_;
+  lean_treeid_t tree_id_;
 
   /// Payload of the operation on the btree node, for example, insert,
   /// remove, update, etc.
@@ -116,8 +116,8 @@ public:
 
   WalEntryComplex() = default;
 
-  WalEntryComplex(LID lsn, LID prev_lsn, uint64_t size, WORKERID worker_id, TXID txid, LID psn,
-                  PID page_id, TREEID tree_id)
+  WalEntryComplex(lean_lid_t lsn, lean_lid_t prev_lsn, uint64_t size, lean_wid_t worker_id,
+                  lean_txid_t txid, lean_lid_t psn, lean_pid_t page_id, lean_treeid_t tree_id)
       : WalEntry(Type::kComplex),
         crc32_(0),
         lsn_(lsn),

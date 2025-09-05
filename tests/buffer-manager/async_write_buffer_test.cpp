@@ -26,7 +26,7 @@ protected:
     utils::AlignedBuffer<512> buffer_;
     BufferFrame* bf_;
 
-    BufferFrameHolder(size_t page_size, PID page_id)
+    BufferFrameHolder(size_t page_size, lean_pid_t page_id)
         : buffer_(512 + page_size),
           bf_(new(buffer_.Get()) BufferFrame()) {
       bf_->Init(page_id);

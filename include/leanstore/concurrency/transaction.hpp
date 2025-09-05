@@ -37,14 +37,14 @@ public:
 
   /// start_ts_ is the start timestamp of the transaction. Also used as
   /// teansaction ID.
-  TXID start_ts_ = 0;
+  lean_txid_t start_ts_ = 0;
 
   /// commit_ts_ is the commit timestamp of the transaction.
-  TXID commit_ts_ = 0;
+  lean_txid_t commit_ts_ = 0;
 
   /// Maximum observed system transaction id during transaction processing. Used to track
   /// transaction dependencies.
-  TXID max_observed_sys_tx_id_ = 0;
+  lean_txid_t max_observed_sys_tx_id_ = 0;
 
   /// Whether the transaction has any remote dependencies. Currently, we only support SI isolation
   /// level, a user transaction can only depend on a system transaction executed in a remote worker
@@ -95,7 +95,7 @@ public:
   }
 
   /// Check whether a user transaction with remote dependencies can be committed.
-  bool CanCommit(TXID min_flushed_sys_tx, TXID min_flushed_usr_tx) {
+  bool CanCommit(lean_txid_t min_flushed_sys_tx, lean_txid_t min_flushed_usr_tx) {
     return max_observed_sys_tx_id_ <= min_flushed_sys_tx && start_ts_ <= min_flushed_usr_tx;
   }
 };

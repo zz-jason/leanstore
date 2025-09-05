@@ -24,7 +24,7 @@ namespace leanstore::cr {
 // CommitTree
 //------------------------------------------------------------------------------
 
-void CommitTree::AppendCommitLog(TXID start_ts, TXID commit_ts) {
+void CommitTree::AppendCommitLog(lean_txid_t start_ts, lean_txid_t commit_ts) {
   LEAN_DCHECK(commit_log_.size() < capacity_,
               std::format("Commit log is full, commit_log_.size()={}, capacity_={}",
                           commit_log_.size(), capacity_));
@@ -40,15 +40,15 @@ void CommitTree::CompactCommitLog() {
   }
 
   // Calculate the compacted commit log.
-  std::set<std::pair<TXID, TXID>> set;
+  std::set<std::pair<lean_txid_t, lean_txid_t>> set;
 
   // Keep the latest (commitTs, startTs) in the commit log, so that other
   // workers can see the latest commitTs of this worker.
   set.insert(commit_log_[commit_log_.size() - 1]);
 
-  const WORKERID my_worker_id = CoroEnv::CurTxMgr().worker_id_;
+  const lean_wid_t my_worker_id = CoroEnv::CurTxMgr().worker_id_;
   auto& tx_mgrs = CoroEnv::CurTxMgr().tx_mgrs_;
-  for (WORKERID i = 0; i < CoroEnv::CurTxMgr().tx_mgrs_.size(); i++) {
+  for (lean_wid_t i = 0; i < CoroEnv::CurTxMgr().tx_mgrs_.size(); i++) {
     if (i == my_worker_id) {
       continue;
     }
@@ -79,7 +79,7 @@ void CommitTree::CompactCommitLog() {
   }
 }
 
-TXID CommitTree::Lcb(TXID start_ts) {
+lean_txid_t CommitTree::Lcb(lean_txid_t start_ts) {
   COUNTER_INC(&tls_perf_counters.lcb_executed_);
   COUNTER_TIMER_SCOPED(&tls_perf_counters.lcb_total_lat_ns_);
 
@@ -98,8 +98,8 @@ TXID CommitTree::Lcb(TXID start_ts) {
   }
 }
 
-std::optional<std::pair<TXID, TXID>> CommitTree::LcbUnlocked(TXID start_ts) {
-  auto comp = [&](const auto& pair, TXID start_ts) { return start_ts > pair.first; };
+std::optional<std::pair<lean_txid_t, lean_txid_t>> CommitTree::LcbUnlocked(lean_txid_t start_ts) {
+  auto comp = [&](const auto& pair, lean_txid_t start_ts) { return start_ts > pair.first; };
   auto it = std::lower_bound(commit_log_.begin(), commit_log_.end(), start_ts, comp);
   if (it == commit_log_.begin()) {
     return {};
@@ -113,9 +113,9 @@ std::optional<std::pair<TXID, TXID>> CommitTree::LcbUnlocked(TXID start_ts) {
 // ConcurrencyControl
 //------------------------------------------------------------------------------
 
-COMMANDID ConcurrencyControl::PutVersion(TREEID tree_id, bool is_remove_command,
-                                         uint64_t version_size,
-                                         std::function<void(uint8_t*)> put_call_back) {
+lean_cmdid_t ConcurrencyControl::PutVersion(lean_treeid_t tree_id, bool is_remove_command,
+                                            uint64_t version_size,
+                                            std::function<void(uint8_t*)> put_call_back) {
   auto& tx_mgr = CoroEnv::CurTxMgr();
   auto command_id = tx_mgr.command_id_++;
   if (is_remove_command) {
@@ -126,7 +126,7 @@ COMMANDID ConcurrencyControl::PutVersion(TREEID tree_id, bool is_remove_command,
   return command_id;
 }
 
-bool ConcurrencyControl::VisibleForMe(WORKERID worker_id, TXID tx_id) {
+bool ConcurrencyControl::VisibleForMe(lean_wid_t worker_id, lean_txid_t tx_id) {
   // visible if writtern by me
   if (CoroEnv::CurTxMgr().worker_id_ == worker_id) {
     return true;
@@ -156,7 +156,7 @@ bool ConcurrencyControl::VisibleForMe(WORKERID worker_id, TXID tx_id) {
     }
 
     // Now we need to query LCB on the target worker and update the local cache.
-    TXID largest_visible_tx_id =
+    lean_txid_t largest_visible_tx_id =
         Other(worker_id).commit_tree_.Lcb(CoroEnv::CurTxMgr().ActiveTx().start_ts_);
     if (largest_visible_tx_id) {
       lcb_cache_key_[worker_id] = CoroEnv::CurTxMgr().ActiveTx().start_ts_;
@@ -175,7 +175,7 @@ bool ConcurrencyControl::VisibleForMe(WORKERID worker_id, TXID tx_id) {
   return false;
 }
 
-bool ConcurrencyControl::VisibleForAll(TXID tx_id) {
+bool ConcurrencyControl::VisibleForAll(lean_txid_t tx_id) {
   return tx_id < store_->MvccManager()->GlobalWmkInfo().wmk_of_all_tx_.load();
 }
 
@@ -199,8 +199,9 @@ void ConcurrencyControl::GarbageCollection() {
         CoroEnv::CurTxMgr().worker_id_, 0, local_wmk_of_all_tx_);
     history_storage_.PurgeVersions(
         0, local_wmk_of_all_tx_,
-        [&](const TXID version_tx_id, const TREEID tree_id, const uint8_t* version_data,
-            uint64_t version_size [[maybe_unused]], const bool called_before) {
+        [&](const lean_txid_t version_tx_id, const lean_treeid_t tree_id,
+            const uint8_t* version_data, uint64_t version_size [[maybe_unused]],
+            const bool called_before) {
           store_->tree_registry_->GarbageCollect(
               tree_id, version_data, CoroEnv::CurTxMgr().worker_id_, version_tx_id, called_before);
         },
@@ -221,8 +222,8 @@ void ConcurrencyControl::GarbageCollection() {
               CoroEnv::CurTxMgr().worker_id_, cleaned_wmk_of_short_tx_, local_wmk_of_short_tx_);
     history_storage_.VisitRemovedVersions(
         cleaned_wmk_of_short_tx_, local_wmk_of_short_tx_,
-        [&](const TXID version_tx_id, const TREEID tree_id, const uint8_t* version_data, uint64_t,
-            const bool called_before) {
+        [&](const lean_txid_t version_tx_id, const lean_treeid_t tree_id,
+            const uint8_t* version_data, uint64_t, const bool called_before) {
           store_->tree_registry_->GarbageCollect(
               tree_id, version_data, CoroEnv::CurTxMgr().worker_id_, version_tx_id, called_before);
         });
@@ -234,7 +235,7 @@ void ConcurrencyControl::GarbageCollection() {
   }
 }
 
-ConcurrencyControl& ConcurrencyControl::Other(WORKERID other_worker_id) {
+ConcurrencyControl& ConcurrencyControl::Other(lean_wid_t other_worker_id) {
   return CoroEnv::CurTxMgr().tx_mgrs_[other_worker_id]->cc_;
 }
 
@@ -268,15 +269,15 @@ void ConcurrencyControl::UpdateGlobalWmks() {
   SCOPED_DEFER(store_->MvccManager()->GlobalWmkInfo().global_mutex_.unlock());
 
   // There is a chance that oldestTxId or oldestShortTxId is
-  // std::numeric_limits<TXID>::max(). It is ok because LCB(+oo) returns the id
+  // std::numeric_limits<lean_txid_t>::max(). It is ok because LCB(+oo) returns the id
   // of latest committed transaction. Under this condition, all the tombstones
   // or update versions generated by the previous transactions can be garbage
   // collected, i.e. removed or moved to graveyard.
-  TXID oldest_tx_id = std::numeric_limits<TXID>::max();
-  TXID newest_long_tx_id = std::numeric_limits<TXID>::min();
-  TXID oldest_short_tx_id = std::numeric_limits<TXID>::max();
+  lean_txid_t oldest_tx_id = std::numeric_limits<lean_txid_t>::max();
+  lean_txid_t newest_long_tx_id = std::numeric_limits<lean_txid_t>::min();
+  lean_txid_t oldest_short_tx_id = std::numeric_limits<lean_txid_t>::max();
   auto& tx_mgrs = CoroEnv::CurTxMgr().tx_mgrs_;
-  for (WORKERID i = 0; i < CoroEnv::CurTxMgr().tx_mgrs_.size(); i++) {
+  for (lean_wid_t i = 0; i < CoroEnv::CurTxMgr().tx_mgrs_.size(); i++) {
     auto active_tx_id = tx_mgrs[i]->active_tx_id_.load();
     // Skip transactions not running.
     if (active_tx_id == 0) {
@@ -310,16 +311,16 @@ void ConcurrencyControl::UpdateGlobalWmks() {
   }
 
   // Update global lower watermarks based on the three transaction ids
-  TXID global_wmk_of_all_tx = std::numeric_limits<TXID>::max();
-  TXID global_wmk_of_short_tx = std::numeric_limits<TXID>::max();
-  for (WORKERID i = 0; i < CoroEnv::CurTxMgr().tx_mgrs_.size(); i++) {
+  lean_txid_t global_wmk_of_all_tx = std::numeric_limits<lean_txid_t>::max();
+  lean_txid_t global_wmk_of_short_tx = std::numeric_limits<lean_txid_t>::max();
+  for (lean_wid_t i = 0; i < CoroEnv::CurTxMgr().tx_mgrs_.size(); i++) {
     ConcurrencyControl& cc = Other(i);
     if (cc.updated_latest_commit_ts_ == cc.latest_commit_ts_) {
       LEAN_DLOG("Skip updating watermarks for worker {}, no transaction "
                 "committed since last round, latest_commit_ts_={}",
                 i, cc.latest_commit_ts_.load());
-      TXID wmk_of_all_tx = cc.wmk_of_all_tx_;
-      TXID wmk_of_short_tx = cc.wmk_of_short_tx_;
+      lean_txid_t wmk_of_all_tx = cc.wmk_of_all_tx_;
+      lean_txid_t wmk_of_short_tx = cc.wmk_of_short_tx_;
       if (wmk_of_all_tx > 0 || wmk_of_short_tx > 0) {
         global_wmk_of_all_tx = std::min(wmk_of_all_tx, global_wmk_of_all_tx);
         global_wmk_of_short_tx = std::min(wmk_of_short_tx, global_wmk_of_short_tx);
@@ -327,9 +328,9 @@ void ConcurrencyControl::UpdateGlobalWmks() {
       continue;
     }
 
-    TXID wmk_of_all_tx =
+    lean_txid_t wmk_of_all_tx =
         cc.commit_tree_.Lcb(store_->MvccManager()->GlobalWmkInfo().oldest_active_tx_);
-    TXID wmk_of_short_tx =
+    lean_txid_t wmk_of_short_tx =
         cc.commit_tree_.Lcb(store_->MvccManager()->GlobalWmkInfo().oldest_active_short_tx_);
 
     cc.wmk_version_.store(cc.wmk_version_.load() + 1, std::memory_order_release);
@@ -363,10 +364,10 @@ void ConcurrencyControl::UpdateGlobalWmks() {
     return;
   }
 
-  // TXID globalWmkOfAllTx = std::numeric_limits<TXID>::max();
-  // TXID globalWmkOfShortTx = std::numeric_limits<TXID>::max();
-  if (global_wmk_of_all_tx == std::numeric_limits<TXID>::max() ||
-      global_wmk_of_short_tx == std::numeric_limits<TXID>::max()) {
+  // lean_txid_t globalWmkOfAllTx = std::numeric_limits<lean_txid_t>::max();
+  // lean_txid_t globalWmkOfShortTx = std::numeric_limits<lean_txid_t>::max();
+  if (global_wmk_of_all_tx == std::numeric_limits<lean_txid_t>::max() ||
+      global_wmk_of_short_tx == std::numeric_limits<lean_txid_t>::max()) {
     LEAN_DLOG("Skip updating global watermarks, can not find any valid lower "
               "watermarks, globalWmkOfAllTx={}, globalWmkOfShortTx={}",
               global_wmk_of_all_tx, global_wmk_of_short_tx);

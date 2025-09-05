@@ -70,12 +70,12 @@ public:
   ~BufferManager();
 
   /// Get the partition ID of the page.
-  uint64_t GetPartitionID(PID page_id) {
+  uint64_t GetPartitionID(lean_pid_t page_id) {
     return page_id & partitions_mask_;
   }
 
   /// Get the partition of the page.
-  Partition& GetPartition(PID page_id) {
+  Partition& GetPartition(lean_pid_t page_id) {
     const uint64_t partition_id = GetPartitionID(page_id);
     return *partitions_[partition_id];
   }
@@ -95,9 +95,9 @@ public:
 
   /// Get a buffer frame from a random partition for the new page. The buffer
   /// frame is initialized with an unused page ID, and is exclusively locked.
-  BufferFrame& AllocNewPageMayJump(TREEID tree_id);
+  BufferFrame& AllocNewPageMayJump(lean_treeid_t tree_id);
 
-  BufferFrame& AllocNewPage(TREEID tree_id);
+  BufferFrame& AllocNewPage(lean_treeid_t tree_id);
 
   /// Resolve the swip to get the underlying buffer frame. Target page is read
   /// from disk if the swip is evicted. Called by worker threads.
@@ -111,11 +111,11 @@ public:
   /// stored in one file (page_fd_), page id (pageId) determines the offset of
   /// the pageId-th page in the underlying file:
   ///   - offset of pageId-th page: pageId * pageSize
-  void ReadPageSync(PID page_id, void* destination);
+  void ReadPageSync(lean_pid_t page_id, void* destination);
 
   /// Reads the page at pageId, returns the buffer frame containing that page.
   /// Usually called by recovery.
-  BufferFrame& ReadPageSync(PID page_id);
+  BufferFrame& ReadPageSync(lean_pid_t page_id);
 
   /// Write page to disk.
   /// usually called by recovery.
@@ -153,7 +153,7 @@ public:
                            std::function<void(BufferFrame& bf)> action);
 
 private:
-  Result<void> WritePageSync(PID page_id, void* buffer) {
+  Result<void> WritePageSync(lean_pid_t page_id, void* buffer) {
     utils::AsyncIo aio(1);
     const auto page_size = store_->store_option_->page_size_;
     DEBUG_BLOCK() {
