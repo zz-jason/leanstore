@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore/units.hpp"
+#include "leanstore/common/types.h"
 
 #include <unordered_set>
 #include <vector>

@@ -1,6 +1,6 @@
 #include "leanstore/buffer-manager/partition.hpp"
 
-#include "leanstore/units.hpp"
+#include "leanstore/common/types.h"
 
 #include <cerrno>
 #include <cstdint>

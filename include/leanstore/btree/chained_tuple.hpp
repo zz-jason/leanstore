@@ -3,6 +3,7 @@
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/core/btree_iter_mut.hpp"
 #include "leanstore/common/portable.h"
+#include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/units.hpp"
@@ -51,7 +52,7 @@ public:
   /// the address of the FatTuple
   ChainedTuple(FatTuple& old_fat_tuple)
       : Tuple(TupleFormat::kChained, old_fat_tuple.worker_id_, old_fat_tuple.tx_id_,
-              old_fat_tuple.command_id_),
+              old_fat_tuple.cmd_id_),
         is_tombstone_(false) {
     std::memmove(payload_, old_fat_tuple.payload_, old_fat_tuple.val_size_);
   }
@@ -80,7 +81,7 @@ public:
     auto& tx_mgr = CoroEnv::CurTxMgr();
     auto* store = tx_mgr.store_;
 
-    bool command_valid = command_id_ != kInvalidCommandid;
+    bool command_valid = cmd_id_ != kCmdInvalid;
     bool has_long_running_olap = store->MvccManager()->GlobalWmkInfo().HasActiveLongRunningTx();
     bool frequently_updated = total_updates_ > store->store_option_->worker_threads_;
     bool recent_updated_by_others =
