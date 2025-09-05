@@ -2,13 +2,12 @@
 
 #include <atomic>
 
-namespace leanstore {
-namespace utils {
+namespace leanstore::utils {
 
-static std::atomic<uint64_t> sMtCounter = 0;
+static std::atomic<uint64_t> mt_counter = 0;
 
 MersenneTwister::MersenneTwister(uint64_t seed) : mti_(sNn + 1) {
-  init(seed + (sMtCounter++));
+  init(seed + (mt_counter++));
 }
 
 void MersenneTwister::init(uint64_t seed) {
@@ -47,5 +46,4 @@ uint64_t MersenneTwister::Rand() {
   return x;
 }
 
-} // namespace utils
-} // namespace leanstore
+} // namespace leanstore::utils

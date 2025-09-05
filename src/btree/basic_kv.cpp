@@ -1,16 +1,16 @@
 #include "leanstore/btree/basic_kv.hpp"
 
-#include "btree/core/b_tree_wal_payload.hpp"
 #include "leanstore/btree/core/b_tree_generic.hpp"
 #include "leanstore/btree/core/btree_iter.hpp"
 #include "leanstore/btree/core/btree_iter_mut.hpp"
-#include "leanstore/concurrency/wal_builder.hpp"
+#include "leanstore/common/wal_record.h"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/misc.hpp"
 #include "utils/coroutine/mvcc_manager.hpp"
+#include "wal/wal_builder.hpp"
 
 #include <format>
 #include <string>
@@ -172,10 +172,9 @@ OpCode BasicKV::Insert(Slice key, Slice val) {
     }
 
     if (config_.enable_wal_) {
-      auto* bf = x_iter->guarded_leaf_.bf_;
-      WalBuilder<WalInsert>{key.length() + val.length()}
-          .InitHeader(0, 0, 0, bf->page_.psn_, bf->header_.page_id_, tree_id_)
-          .InitData(key, val)
+      WalBuilder<lean_wal_insert>(this->tree_id_, key.length() + val.length())
+          .SetPageInfo(x_iter->guarded_leaf_.bf_)
+          .BuildInsert(key, val)
           .Submit();
     }
   }
@@ -264,26 +263,22 @@ OpCode BasicKV::UpdatePartial(Slice key, MutValCallback update_call_back, Update
     if (config_.enable_wal_) {
       LEAN_DCHECK(update_desc.num_slots_ > 0);
       auto size_of_desc_and_delta = update_desc.SizeWithDelta();
-      auto wal_handler =
-          x_iter->guarded_leaf_.ReserveWALPayload<WalUpdate>(key.length() + size_of_desc_and_delta);
-      wal_handler->type_ = WalPayload::Type::kWalUpdate;
-      wal_handler->key_size_ = key.length();
-      wal_handler->delta_length_ = size_of_desc_and_delta;
-      auto* wal_ptr = wal_handler->payload_;
-      std::memcpy(wal_ptr, key.data(), key.length());
-      wal_ptr += key.length();
-      std::memcpy(wal_ptr, &update_desc, update_desc.Size());
-      wal_ptr += update_desc.Size();
+      auto builder =
+          WalBuilder<lean_wal_update>(this->tree_id_, key.size() + size_of_desc_and_delta)
+              .SetPageInfo(x_iter->guarded_leaf_.bf_)
+              .BuildUpdate(key, update_desc);
+      auto* delta_ptr = lean_wal_update_get_delta(builder.GetWal());
 
       // 1. copy old value to wal buffer
-      BasicKV::CopyToBuffer(update_desc, current_val.Data(), wal_ptr);
+      BasicKV::CopyToBuffer(update_desc, current_val.Data(), delta_ptr);
 
       // 2. update with the new value
       update_call_back(current_val);
 
       // 3. xor with new value, store the result in wal buffer
-      BasicKV::XorToBuffer(update_desc, current_val.Data(), wal_ptr);
-      wal_handler.SubmitWal();
+      BasicKV::XorToBuffer(update_desc, current_val.Data(), delta_ptr);
+
+      builder.Submit();
     } else {
       // The actual update by the client
       update_call_back(current_val);
@@ -307,9 +302,10 @@ OpCode BasicKV::Remove(Slice key) {
 
     Slice value = x_iter->Val();
     if (config_.enable_wal_) {
-      auto wal_handler =
-          x_iter->guarded_leaf_.ReserveWALPayload<WalRemove>(key.size() + value.size(), key, value);
-      wal_handler.SubmitWal();
+      WalBuilder<lean_wal_remove>(this->tree_id_, key.size() + value.size())
+          .SetPageInfo(x_iter->guarded_leaf_.bf_)
+          .BuildRemove(key, value)
+          .Submit();
     }
     auto ret = x_iter->RemoveCurrent();
     ENSURE(ret == OpCode::kOK);

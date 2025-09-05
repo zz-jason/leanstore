@@ -99,11 +99,11 @@ public:
 
   uint16_t val_size_;
 
-  lean_wid_t prev_worker_id_;
+  lean_wid_t prev_wid_;
 
   lean_txid_t prev_tx_id_;
 
-  lean_cmdid_t prev_command_id_;
+  lean_cmdid_t prev_cmd_id_;
 
   uint8_t payload_[];
 
@@ -112,9 +112,9 @@ public:
       : WalPayload(Type::kWalTxInsert),
         key_size_(key.size()),
         val_size_(val.size()),
-        prev_worker_id_(prev_worker_id),
+        prev_wid_(prev_worker_id),
         prev_tx_id_(prev_tx_id),
-        prev_command_id_(prev_command_id) {
+        prev_cmd_id_(prev_command_id) {
     std::memcpy(payload_, key.data(), key_size_);
     std::memcpy(payload_ + key_size_, val.data(), val_size_);
   }
@@ -148,12 +148,12 @@ public:
 
   uint64_t delta_size_;
 
-  lean_wid_t prev_worker_id_;
+  lean_wid_t prev_wid_;
 
   lean_txid_t prev_tx_id_;
 
   // Xor result of old and new command id
-  lean_cmdid_t xor_command_id_;
+  lean_cmdid_t xor_cmd_id_;
 
   // Stores key, UpdateDesc, and Delta in order
   uint8_t payload_[];
@@ -164,9 +164,9 @@ public:
         key_size_(key.size()),
         update_desc_size_(update_desc.Size()),
         delta_size_(size_of_update_desc_and_delta - update_desc.Size()),
-        prev_worker_id_(prev_worker_id),
+        prev_wid_(prev_worker_id),
         prev_tx_id_(prev_tx_id),
-        xor_command_id_(xor_command_id) {
+        xor_cmd_id_(xor_command_id) {
     // key
     std::memcpy(payload_, key.data(), key.size());
     // updateDesc
@@ -222,11 +222,11 @@ public:
 
   uint16_t val_size_;
 
-  lean_wid_t prev_worker_id_;
+  lean_wid_t prev_wid_;
 
   lean_txid_t prev_tx_id_;
 
-  lean_cmdid_t prev_command_id_;
+  lean_cmdid_t prev_cmd_id_;
 
   uint8_t payload_[];
 
@@ -235,9 +235,9 @@ public:
       : WalPayload(Type::kWalTxRemove),
         key_size_(key.size()),
         val_size_(val.size()),
-        prev_worker_id_(prev_worker_id),
+        prev_wid_(prev_worker_id),
         prev_tx_id_(prev_tx_id),
-        prev_command_id_(prev_command_id) {
+        prev_cmd_id_(prev_command_id) {
     std::memcpy(payload_, key.data(), key.size());
     std::memcpy(payload_ + key.size(), val.data(), val.size());
   }

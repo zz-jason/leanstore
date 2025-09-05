@@ -6,11 +6,11 @@
 #include <chrono>
 #endif
 
-namespace leanstore {
-
-namespace cr {
+namespace leanstore::cr {
 inline thread_local lean_perf_counters tls_perf_counters;
-} // namespace cr
+} // namespace leanstore::cr
+
+namespace leanstore {
 
 /// ScopedCounterTimer for perf counters
 class ScopedCounterTimer {

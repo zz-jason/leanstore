@@ -2,6 +2,7 @@
 
 #include "leanstore/buffer-manager/tree_registry.hpp"
 #include "leanstore/common/perf_counters.h"
+#include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/exceptions.hpp"
@@ -118,9 +119,9 @@ lean_cmdid_t ConcurrencyControl::PutVersion(lean_treeid_t tree_id, bool is_remov
                                             uint64_t version_size,
                                             std::function<void(uint8_t*)> put_call_back) {
   auto& tx_mgr = CoroEnv::CurTxMgr();
-  auto command_id = tx_mgr.command_id_++;
+  auto command_id = tx_mgr.cmd_id_++;
   if (is_remove_command) {
-    command_id |= kRemoveCommandMark;
+    command_id |= kCmdRemoveMark;
   }
   history_storage_.PutVersion(tx_mgr.ActiveTx().start_ts_, command_id, tree_id, is_remove_command,
                               version_size, put_call_back);

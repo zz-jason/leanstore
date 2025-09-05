@@ -1,7 +1,7 @@
 #pragma once
 
 #include "leanstore/buffer-manager/buffer_frame.hpp"
-#include "leanstore/units.hpp"
+#include "leanstore/common/types.h"
 #include "leanstore/utils/async_io.hpp"
 #include "leanstore/utils/misc.hpp"
 #include "leanstore/utils/result.hpp"

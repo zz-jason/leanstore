@@ -1,5 +1,6 @@
 #pragma once
 
+#include "leanstore/common/types.h"
 #include "leanstore/concurrency/history_storage.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/units.hpp"
@@ -196,7 +197,7 @@ public:
   inline bool GetVersion(lean_wid_t newer_worker_id, lean_txid_t newer_tx_id,
                          lean_cmdid_t newer_command_id,
                          std::function<void(const uint8_t*, uint64_t version_size)> get_callback) {
-    auto is_remove_command = newer_command_id & kRemoveCommandMark;
+    auto is_remove_command = newer_command_id & kCmdRemoveMark;
     return Other(newer_worker_id)
         .history_storage_.GetVersion(newer_tx_id, newer_command_id, is_remove_command,
                                      get_callback);

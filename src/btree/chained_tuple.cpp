@@ -1,9 +1,10 @@
 #include "leanstore/btree/chained_tuple.hpp"
 
-#include "btree/core/b_tree_wal_payload.hpp"
 #include "leanstore/common/types.h"
+#include "leanstore/common/wal_record.h"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/log.hpp"
+#include "wal/wal_builder.hpp"
 
 namespace leanstore::storage::btree {
 
@@ -19,7 +20,7 @@ std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(Slice payload,
     return {OpCode::kOK, 1};
   }
 
-  if (command_id_ == kInvalidCommandid) {
+  if (cmd_id_ == kCmdInvalid) {
     return {OpCode::kNotFound, 1};
   }
 
@@ -30,7 +31,7 @@ std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(Slice payload,
 
   lean_wid_t newer_worker_id = worker_id_;
   lean_txid_t newer_tx_id = tx_id_;
-  lean_cmdid_t newer_command_id = command_id_;
+  lean_cmdid_t newer_command_id = cmd_id_;
 
   uint16_t versions_read = 1;
   while (true) {
@@ -72,7 +73,7 @@ std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(Slice payload,
 
           newer_worker_id = version.worker_id_;
           newer_tx_id = version.tx_id_;
-          newer_command_id = version.command_id_;
+          newer_command_id = version.cmd_id_;
         });
     if (!found) {
       Log::Error("Not found in the version tree, workerId={}, startTs={}, "
@@ -101,8 +102,7 @@ void ChainedTuple::Update(BTreeIterMut* x_iter, Slice key, MutValCallback update
   auto tree_id = x_iter->btree_.tree_id_;
   auto curr_command_id =
       CoroEnv::CurTxMgr().cc_.PutVersion(tree_id, false, version_size, [&](uint8_t* version_buf) {
-        auto& update_version =
-            *new (version_buf) UpdateVersion(worker_id_, tx_id_, command_id_, true);
+        auto& update_version = *new (version_buf) UpdateVersion(worker_id_, tx_id_, cmd_id_, true);
         std::memcpy(update_version.payload_, &update_desc, update_desc.Size());
         auto* dest = update_version.payload_ + update_desc.Size();
         BasicKV::CopyToBuffer(update_desc, payload_, dest);
@@ -114,7 +114,7 @@ void ChainedTuple::Update(BTreeIterMut* x_iter, Slice key, MutValCallback update
     update_call_back(MutableSlice(payload_, user_val_size));
     worker_id_ = CoroEnv::CurTxMgr().worker_id_;
     tx_id_ = CoroEnv::CurTxMgr().ActiveTx().start_ts_;
-    command_id_ = curr_command_id;
+    cmd_id_ = curr_command_id;
   };
 
   SCOPED_DEFER({
@@ -129,22 +129,26 @@ void ChainedTuple::Update(BTreeIterMut* x_iter, Slice key, MutValCallback update
 
   auto prev_worker_id = worker_id_;
   auto prev_tx_id = tx_id_;
-  auto prev_command_id = command_id_;
-  auto wal_handler = x_iter->guarded_leaf_.ReserveWALPayload<WalTxUpdate>(
-      key.size() + size_of_desc_and_delta, key, update_desc, size_of_desc_and_delta, prev_worker_id,
-      prev_tx_id, prev_command_id ^ curr_command_id);
-  auto* wal_buf = wal_handler->GetDeltaPtr();
+  auto prev_command_id = cmd_id_;
+
+  WalTxBuilder<lean_wal_tx_update> builder(tree_id, key.size() + size_of_desc_and_delta);
+  builder.SetPageInfo(x_iter->guarded_leaf_.bf_)
+      .SetPrevVersion(prev_worker_id, prev_tx_id, prev_command_id ^ curr_command_id)
+      .BuildTxUpdate(key, update_desc);
+  auto* delta_ptr = reinterpret_cast<uint8_t*>(lean_wal_tx_update_get_delta(builder.GetWal()));
 
   // 1. copy old value to wal buffer
-  BasicKV::CopyToBuffer(update_desc, payload_, wal_buf);
+  BasicKV::CopyToBuffer(update_desc, payload_, delta_ptr);
 
   // 2. update the value in-place
   perform_update();
 
   // 3. xor with the updated new value and store to wal buffer
-  BasicKV::XorToBuffer(update_desc, payload_, wal_buf);
+  BasicKV::XorToBuffer(update_desc, payload_, delta_ptr);
 
-  wal_handler.SubmitWal();
+  builder.Submit();
+
+  CoroEnv::CurTxMgr().ActiveTx().has_wrote_ = true;
 }
 
 } // namespace leanstore::storage::btree

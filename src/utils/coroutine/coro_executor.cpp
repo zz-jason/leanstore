@@ -74,6 +74,9 @@ void CoroExecutor::CreateSysCoros() {
 }
 
 CoroExecutor::~CoroExecutor() {
+  std::string thread_name = std::format(kCoroExecNamePattern, thread_id_);
+  Log::Info("Destroying coro executor, thread_name={}", thread_name);
+
   Stop();
   if (thread_.joinable()) {
     thread_.join();
@@ -133,6 +136,9 @@ void CoroExecutor::ThreadLoop() {
       user_coro_runs = 0;
     }
   }
+
+  std::string thread_name = std::format(kCoroExecNamePattern, thread_id_);
+  Log::Info("Coro executor stopped, thread_name={}", thread_name);
 }
 
 bool CoroExecutor::IsCoroReadyToRun(std::unique_ptr<Coroutine>& coro, bool& sys_coro_required) {

@@ -1,5 +1,6 @@
 #include "utils/coroutine/coro_env.hpp"
 
+#include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
@@ -30,6 +31,9 @@ CoroExecutor* CoroEnv::CurCoroExec() {
 }
 
 Coroutine* CoroEnv::CurCoro() {
+  if (CoroExecutor::CurrentThread() == nullptr) {
+    return nullptr;
+  }
   return CoroExecutor::CurrentCoro();
 }
 

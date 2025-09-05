@@ -1,6 +1,8 @@
 #pragma once
 
 #include "leanstore/buffer-manager/buffer_frame.hpp"
+#include "leanstore/common/types.h"
+#include "leanstore/common/wal_record.h"
 #include "leanstore/sync/hybrid_guard.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/defer.hpp"
@@ -64,7 +66,7 @@ public:
     Log::Fatal("BufferManagedTree::Checkpoint is unimplemented");
   }
 
-  virtual void Undo(const uint8_t*, const uint64_t) {
+  virtual void Undo(const lean_wal_record*) {
     Log::Fatal("BufferManagedTree::undo is unimplemented");
   }
 
@@ -239,14 +241,17 @@ public:
     return tree->Checkpoint(bf, dest);
   }
 
-  // Recovery / SI
-  inline void Undo(lean_treeid_t tree_id, const uint8_t* wal_entry, uint64_t tts) {
+  /// Undo the changes of the given wal record on the target tree.
+  ///
+  /// TODO: refactor the transaction undo process to work directly on the target
+  ///       page, and abandon the current indirection via tree registry.
+  inline void Undo(lean_treeid_t tree_id, const lean_wal_record* record) {
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {
       Log::Fatal("BufferManagedTree not find, treeId={}", tree_id);
     }
     auto& [tree, tree_name] = it->second;
-    return tree->Undo(wal_entry, tts);
+    return tree->Undo(record);
   }
 
   inline void GarbageCollect(lean_treeid_t tree_id, const uint8_t* version_data,

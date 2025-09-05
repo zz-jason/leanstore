@@ -41,7 +41,30 @@ inline uint64_t AlignUp(uint64_t x, uint64_t alignment) {
   return AlignDown(x + alignment - 1, alignment);
 }
 
+class Crc32 {
+public:
+  Crc32() = default;
+
+  Crc32& Update(const void* data, size_t count);
+
+  /// Finalize the CRC32 value with a mask to avoid CRC in CRC problems, for example,
+  /// CRC(str, CRC(str)) may always return a constant value.
+  uint32_t Mask() {
+    return ((crc_ >> 15) | (crc_ << 17)) + kMaskDelta;
+  }
+
+  uint32_t Get() const {
+    return crc_;
+  }
+
+private:
+  static constexpr uint32_t kMaskDelta = 0xa282ead8ul;
+
+  uint32_t crc_ = 0;
+};
+
 uint32_t CRC(const uint8_t* src, uint64_t size);
+uint32_t CrcExtend(uint32_t crc, const uint8_t* data, size_t count);
 
 // Fold functions convert integers to a lexicographical comparable format
 inline uint64_t Fold(uint8_t* writer, const uint64_t& x) {

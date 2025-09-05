@@ -1,14 +1,18 @@
 #include "leanstore/utils/log.hpp"
 
+#include "utils/coroutine/coro_env.hpp"
+
 #include <spdlog/common.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/spdlog.h>
 
+#include <cassert>
 #include <cstdlib>
 #include <format>
 #include <iostream>
 #include <mutex>
 #include <string>
+#include <string_view>
 
 namespace leanstore {
 
@@ -18,6 +22,7 @@ static constexpr char kLogFormat[] = "[%Y-%m-%d %H:%M:%S.%e] [%t] [%l] %v";
 static constexpr int kFlushIntervalSeconds = 3;
 
 namespace {
+
 std::mutex logger_mutex;
 std::shared_ptr<spdlog::logger> logger = nullptr;
 std::shared_ptr<spdlog::logger> origin_default_logger = spdlog::default_logger();
@@ -38,6 +43,15 @@ spdlog::level::level_enum LogLevelToSpdlogLevel(lean_log_level level) {
   }
 }
 
+void LogWithCoroId(void (*logger)(const std::string& msg), const std::string& msg) {
+  auto* cur_coro = CoroEnv::CurCoro();
+  if (cur_coro != nullptr) {
+    logger(std::format("[Coro-{}] {}", static_cast<void*>(cur_coro), msg));
+  } else {
+    logger(msg);
+  }
+}
+
 } // namespace
 
 void Log::Init(const lean_store_option* option) {
@@ -54,8 +68,8 @@ void Log::Init(const lean_store_option* option) {
 
   spdlog::set_default_logger(logger);
   spdlog::flush_every(std::chrono::seconds(kFlushIntervalSeconds));
-  spdlog::info("Logger initialized, flushed every {} seconds, flushed on {}", kFlushIntervalSeconds,
-               SPDLOG_LEVEL_NAME_INFO);
+  Log::Info("Logger initialized, flushed every {} seconds, flushed on {}", kFlushIntervalSeconds,
+            std::string_view(SPDLOG_LEVEL_NAME_INFO));
 }
 
 void Log::Deinit() {
@@ -64,7 +78,7 @@ void Log::Deinit() {
     return;
   }
 
-  spdlog::info("Logger deinited");
+  Log::Info("Logger deinited");
   spdlog::drop(kLoggerName);
   spdlog::set_default_logger(origin_default_logger);
   spdlog::flush_every(std::chrono::seconds(0));
@@ -73,28 +87,29 @@ void Log::Deinit() {
 
 void Log::DebugCheck(bool condition, const std::string& msg) {
   if (!condition) {
-    Fatal(msg);
+    LogWithCoroId(spdlog::critical, msg);
+    assert(false);
   }
 }
 
 void Log::Debug(const std::string& msg) {
-  spdlog::debug(msg);
+  LogWithCoroId(spdlog::debug, msg);
 }
 
 void Log::Info(const std::string& msg) {
-  spdlog::info(msg);
+  LogWithCoroId(spdlog::info, msg);
 }
 
 void Log::Warn(const std::string& msg) {
-  spdlog::warn(msg);
+  LogWithCoroId(spdlog::warn, msg);
 }
 
 void Log::Error(const std::string& msg) {
-  spdlog::error(msg);
+  LogWithCoroId(spdlog::error, msg);
 }
 
 void Log::Fatal(const std::string& msg) {
-  spdlog::critical(msg);
+  LogWithCoroId(spdlog::critical, msg);
   std::abort();
 }
 

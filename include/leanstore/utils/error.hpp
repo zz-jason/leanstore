@@ -5,8 +5,7 @@
 #include <string>
 #include <utility>
 
-namespace leanstore {
-namespace utils {
+namespace leanstore::utils {
 
 enum class ErrorCode : uint64_t {
   kGeneral = 1,
@@ -155,5 +154,4 @@ public:
   }
 };
 
-} // namespace utils
-} // namespace leanstore
+} // namespace leanstore::utils
