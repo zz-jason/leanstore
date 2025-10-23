@@ -57,16 +57,7 @@ public:
 
   /// Attempts to reserve a CoroSession for the current thread without blocking.
   /// Returns nullptr if no session is available.
-  CoroSession* TryReserveCoroSession(uint64_t runs_on) {
-    assert(runs_on < coro_executors_.size());
-    std::lock_guard<std::mutex> lock(session_pool_mutex_per_exec_[runs_on]);
-    if (session_pool_per_exec_[runs_on].empty()) {
-      return nullptr; // No available session
-    }
-    auto* session = session_pool_per_exec_[runs_on].front();
-    session_pool_per_exec_[runs_on].pop();
-    return session;
-  }
+  CoroSession* TryReserveCoroSession(uint64_t runs_on);
 
   /// Reserves a CoroSession for the current thread, blocking until one is available.
   CoroSession* ReserveCoroSession(uint64_t runs_on) {
@@ -80,12 +71,7 @@ public:
   }
 
   /// Releases a CoroSession back to the session pool.
-  void ReleaseCoroSession(CoroSession* coro_session) {
-    assert(coro_session != nullptr);
-    assert(coro_session->GetRunsOn() < coro_executors_.size());
-    std::lock_guard<std::mutex> lock(session_pool_mutex_per_exec_[coro_session->GetRunsOn()]);
-    session_pool_per_exec_[coro_session->GetRunsOn()].push(coro_session);
-  }
+  void ReleaseCoroSession(CoroSession* coro_session);
 
   /// Submits a coroutine to be executed by the target CoroExecutor.
   template <typename F, typename R = std::invoke_result_t<F>>

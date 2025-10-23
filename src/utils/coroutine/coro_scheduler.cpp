@@ -46,6 +46,29 @@ CoroScheduler::CoroScheduler(LeanStore* store, int64_t num_threads)
 CoroScheduler::~CoroScheduler() {
 }
 
+CoroSession* CoroScheduler::TryReserveCoroSession(uint64_t runs_on) {
+  assert(runs_on < coro_executors_.size());
+  std::lock_guard<std::mutex> lock(session_pool_mutex_per_exec_[runs_on]);
+  if (session_pool_per_exec_[runs_on].empty()) {
+    return nullptr; // No available session
+  }
+
+  auto* session = session_pool_per_exec_[runs_on].front();
+  session_pool_per_exec_[runs_on].pop();
+  Log::Info("CoroSession reserved, runs_on={}, tx_mgr={}", session->GetRunsOn(),
+            session->GetTxMgr() == nullptr ? -1 : session->GetTxMgr()->worker_id_);
+  return session;
+}
+
+void CoroScheduler::ReleaseCoroSession(CoroSession* coro_session) {
+  assert(coro_session != nullptr);
+  assert(coro_session->GetRunsOn() < coro_executors_.size());
+  std::lock_guard<std::mutex> lock(session_pool_mutex_per_exec_[coro_session->GetRunsOn()]);
+  session_pool_per_exec_[coro_session->GetRunsOn()].push(coro_session);
+  Log::Info("CoroSession released, runs_on={}, tx_mgr={}", coro_session->GetRunsOn(),
+            coro_session->GetTxMgr() == nullptr ? -1 : coro_session->GetTxMgr()->worker_id_);
+}
+
 void CoroScheduler::InitCoroExecutors() {
   ScopedTimer timer([this](double elapsed_ms) {
     Log::Info("CoroExecutors inited, num_threads={}, elapsed={}ms", num_threads_, elapsed_ms);
