@@ -57,6 +57,7 @@
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/debug_coro",
                 "ENABLE_COROUTINE": "ON",
+                "BUILD_SHARED_LIBS": "ON",
                 "ENABLE_COVERAGE": "ON"
             }
         },

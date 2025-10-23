@@ -5,6 +5,7 @@
 #include "leanstore/common/portable.h"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
+#include "utils/small_vector.hpp"
 
 #include <cstdint>
 #include <cstring>
@@ -169,7 +170,7 @@ public:
   /// @return the created BTreeNode.
   static BTreeNode* New(void* buf, bool is_leaf, Slice lower_fence, Slice upper_fence) {
     auto* node = new (buf) BTreeNode(is_leaf);
-    node->set_fences(lower_fence, upper_fence);
+    node->SetFences(lower_fence, upper_fence);
     return node;
   }
 
@@ -195,7 +196,7 @@ public:
     if (space_needed <= FreeSpace())
       return true;
     if (space_needed <= FreeSpaceAfterCompaction()) {
-      Compactify();
+      Compact();
       return true;
     }
     return false;
@@ -274,19 +275,23 @@ public:
     const uint16_t new_total_size = key_size_without_prefix + target_size;
 
     // store the keyWithoutPrefix temporarily before moving the payload
-    uint8_t copied_key[key_size_without_prefix];
+    SmallBuffer256 sb(key_size_without_prefix);
+    uint8_t* copied_key = sb.Data();
     std::memcpy(copied_key, KeyDataWithoutPrefix(slot_id), key_size_without_prefix);
 
     // release the old space occupied by the payload (keyWithoutPrefix + value)
-    retreat_data_offset(old_total_size);
+    if (slot_id == num_slots_ - 1) {
+      RetreatDataOffset(old_total_size);
+    }
 
     slot_[slot_id].val_size_ = 0;
     slot_[slot_id].key_size_without_prefix_ = 0;
     if (FreeSpace() < new_total_size) {
-      Compactify();
+      Compact();
     }
+
     LEAN_DCHECK(FreeSpace() >= new_total_size);
-    advance_data_offset(new_total_size);
+    AdvanceDataOffset(new_total_size);
     slot_[slot_id].offset_ = data_offset_;
     slot_[slot_id].key_size_without_prefix_ = key_size_without_prefix;
     slot_[slot_id].val_size_ = target_size;
@@ -360,7 +365,7 @@ public:
     return RequestSpaceFor(SpaceNeeded(key_size, val_size));
   }
 
-  void Compactify();
+  void Compact();
 
   /// merge right node into this node
   uint32_t MergeSpaceUpperBound(ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_right);
@@ -401,9 +406,9 @@ public:
   void Reset();
 
 private:
-  void set_fences(Slice lower_key, Slice upper_key);
+  void SetFences(Slice lower_key, Slice upper_key);
 
-  void generate_separator(const SeparatorInfo& sep_info, uint8_t* sep_key) {
+  void BuildSeparator(const SeparatorInfo& sep_info, uint8_t* sep_key) {
     // prefix
     memcpy(sep_key, LowerFenceAddr(), prefix_size_);
 
@@ -416,7 +421,7 @@ private:
     }
   }
 
-  bool shrink_search_range(uint16_t& lower, uint16_t& upper, Slice key) {
+  bool ShrinkSearchRange(uint16_t& lower, uint16_t& upper, Slice key) {
     auto mid = ((upper - lower) / 2) + lower;
     auto cmp = CmpKeys(key, KeyWithoutPrefix(mid));
     if (cmp < 0) {
@@ -434,8 +439,7 @@ private:
     return true;
   }
 
-  bool shrink_search_range_with_head(uint16_t& lower, uint16_t& upper, Slice key,
-                                     HeadType key_head) {
+  bool ShrinkSearchRangeWithHead(uint16_t& lower, uint16_t& upper, Slice key, HeadType key_head) {
     auto mid = ((upper - lower) / 2) + lower;
     auto mid_head = slot_[mid].head_;
     auto mid_size = slot_[mid].key_size_without_prefix_;
@@ -458,7 +462,7 @@ private:
 
     // now we must have: keyHead == midHead && midSize > 4
     // fallback to the normal compare
-    return shrink_search_range(lower, upper, key);
+    return ShrinkSearchRange(lower, upper, key);
   }
 
 public:
@@ -480,13 +484,13 @@ public:
 
 private:
   /// Advance the data offset by size
-  void advance_data_offset(uint16_t size) {
+  void AdvanceDataOffset(uint16_t size) {
     data_offset_ -= size;
     space_used_ += size;
   }
 
   /// Oppsite of advanceDataOffset
-  void retreat_data_offset(uint16_t size) {
+  void RetreatDataOffset(uint16_t size) {
     data_offset_ += size;
     space_used_ -= size;
   }
@@ -557,9 +561,9 @@ inline int16_t BTreeNode::LowerBound(Slice key, bool* is_equal) {
   while (lower < upper) {
     bool found_equal(false);
     if (CoroEnv::CurStore()->store_option_->enable_head_optimization_) {
-      found_equal = shrink_search_range_with_head(lower, upper, key, key_head);
+      found_equal = ShrinkSearchRangeWithHead(lower, upper, key, key_head);
     } else {
-      found_equal = shrink_search_range(lower, upper, key);
+      found_equal = ShrinkSearchRange(lower, upper, key);
     }
     if (found_equal) {
       if (is_equal != nullptr && is_leaf_) {
@@ -572,7 +576,7 @@ inline int16_t BTreeNode::LowerBound(Slice key, bool* is_equal) {
   return equality_only ? -1 : lower;
 }
 
-inline void BTreeNode::set_fences(Slice lower_key, Slice upper_key) {
+inline void BTreeNode::SetFences(Slice lower_key, Slice upper_key) {
   InsertFence(lower_fence_, lower_key);
   InsertFence(upper_fence_, upper_key);
   LEAN_DCHECK(LowerFenceAddr() == nullptr || UpperFenceAddr() == nullptr ||

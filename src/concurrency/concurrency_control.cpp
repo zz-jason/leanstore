@@ -16,6 +16,7 @@
 #include "utils/coroutine/mvcc_manager.hpp"
 
 #include <atomic>
+#include <format>
 #include <set>
 
 namespace leanstore::cr {
@@ -236,6 +237,8 @@ void ConcurrencyControl::GarbageCollection() {
 }
 
 ConcurrencyControl& ConcurrencyControl::Other(lean_wid_t other_worker_id) {
+  LEAN_DCHECK(other_worker_id < CoroEnv::CurTxMgr().tx_mgrs_.size(),
+              std::format("Invalid other_worker_id: {}", other_worker_id));
   return CoroEnv::CurTxMgr().tx_mgrs_[other_worker_id]->cc_;
 }
 

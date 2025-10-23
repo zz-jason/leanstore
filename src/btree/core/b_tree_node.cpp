@@ -5,6 +5,7 @@
 #include "leanstore/slice.hpp"
 #include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/log.hpp"
+#include "utils/small_vector.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -90,7 +91,7 @@ int16_t BTreeNode::InsertDoNotCopyPayload(Slice key, uint16_t val_size, int32_t 
   slot_[slot_id].key_size_without_prefix_ = key.size();
   slot_[slot_id].val_size_ = val_size;
   auto total_key_val_size = key.size() + val_size;
-  advance_data_offset(total_key_val_size);
+  AdvanceDataOffset(total_key_val_size);
   slot_[slot_id].offset_ = data_offset_;
   memcpy(KeyDataWithoutPrefix(slot_id), key.data(), key.size());
 
@@ -123,7 +124,7 @@ int32_t BTreeNode::Insert(Slice key, Slice val) {
   }
 }
 
-void BTreeNode::Compactify() {
+void BTreeNode::Compact() {
   uint16_t space_after_compaction [[maybe_unused]] = 0;
   DEBUG_BLOCK() {
     space_after_compaction = FreeSpaceAfterCompaction();
@@ -234,7 +235,7 @@ void BTreeNode::StoreKeyValue(uint16_t slot_id, Slice key, Slice val) {
   slot_[slot_id].val_size_ = val.size();
 
   // Value
-  advance_data_offset(key.size() + val.size());
+  AdvanceDataOffset(key.size() + val.size());
   slot_[slot_id].offset_ = data_offset_;
   memcpy(KeyDataWithoutPrefix(slot_id), key.data(), key.size());
   memcpy(ValData(slot_id), val.data(), val.size());
@@ -249,7 +250,7 @@ void BTreeNode::CopyKeyValueRange(BTreeNode* dst, uint16_t dst_slot, uint16_t sr
     for (auto i = 0u; i < count; i++) {
       // consolidate the offset of each slot
       uint32_t kv_size = KeySizeWithoutPrefix(src_slot + i) + ValSize(src_slot + i);
-      dst->advance_data_offset(kv_size);
+      dst->AdvanceDataOffset(kv_size);
       dst->slot_[dst_slot + i].offset_ = dst->data_offset_;
 
       // copy the key value pair
@@ -277,7 +278,7 @@ void BTreeNode::InsertFence(BTreeNodeHeader::FenceKey& fk, Slice key) {
   }
   assert(FreeSpace() >= key.size());
 
-  advance_data_offset(key.size());
+  AdvanceDataOffset(key.size());
   fk.offset_ = data_offset_;
   fk.size_ = key.size();
   memcpy(NodeBegin() + data_offset_, key.data(), key.size());
@@ -376,14 +377,14 @@ void BTreeNode::Split(ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_parent,
   LEAN_DCHECK(x_guarded_parent->CanInsert(sep_info.size_, sizeof(Swip)));
 
   // generate separator key
-  uint8_t sep_key[sep_info.size_];
-  generate_separator(sep_info, sep_key);
-  Slice seperator{sep_key, sep_info.size_};
+  SmallBuffer256 sep_key(sep_info.size_);
+  BuildSeparator(sep_info, sep_key.Data());
+  Slice seperator{sep_key.Data(), sep_info.size_};
 
-  x_guarded_new_left->set_fences(GetLowerFence(), seperator);
+  x_guarded_new_left->SetFences(GetLowerFence(), seperator);
 
-  uint8_t tmp_right_buf[BTreeNode::Size()];
-  auto* tmp_right = BTreeNode::New(tmp_right_buf, is_leaf_, seperator, GetUpperFence());
+  SmallBuffer256 tmp_right_buf(BTreeNode::Size());
+  auto* tmp_right = BTreeNode::New(tmp_right_buf.Data(), is_leaf_, seperator, GetUpperFence());
 
   // insert (seperator, xGuardedNewLeft) into xGuardedParent
   auto swip = x_guarded_new_left.swip();
