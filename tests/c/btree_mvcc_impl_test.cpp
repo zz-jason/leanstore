@@ -1,9 +1,14 @@
 #include "lean_test_suite.hpp"
 #include "leanstore/c/leanstore.h"
+#include "leanstore/common/status.h"
+#include "leanstore/utils/random_generator.hpp"
 
 #include <gtest/gtest.h>
 
 #include <cassert>
+#include <cstdlib>
+#include <string>
+#include <unordered_map>
 
 namespace leanstore::test {
 
@@ -131,6 +136,9 @@ TEST_F(BTreeMvccImplTest, InsertAfterRemove) {
   option->enable_wal_ = true;
   option->worker_threads_ = 2;
   option->max_concurrent_transaction_per_worker_ = 4;
+  auto num_keys = 100u;
+  auto max_value_size = 600u;
+  auto min_value_size = 100u;
 
   lean_store* store = nullptr;
   ASSERT_EQ(lean_open_store(option, &store), lean_status::LEAN_STATUS_OK);
@@ -139,67 +147,68 @@ TEST_F(BTreeMvccImplTest, InsertAfterRemove) {
   lean_session* s0 = store->connect(store);
   ASSERT_NE(s0, nullptr);
 
-  NEW_STR_VIEW(key_view_1, "11111111");
-  NEW_STR_VIEW(key_view_2, "22222222");
-  NEW_STR_VIEW(key_view_3, "33333333");
-  NEW_STR_VIEW(key_view_4, "44444444");
-
-  NEW_STR_VIEW(val_view_1, "val11111");
-  NEW_STR_VIEW(val_view_2, "val22222");
-  NEW_STR_VIEW(val_view_3, "val33333");
-  NEW_STR_VIEW(val_view_4, "val44444");
-
-  NEW_STR_VIEW(new_val_view_2, "new_val2");
-
   // create btree mvcc in session 0
   const char* btree_name = "test_btree_mvcc";
   ASSERT_EQ(s0->create_btree(s0, btree_name, lean_btree_type::LEAN_BTREE_TYPE_MVCC),
             lean_status::LEAN_STATUS_OK);
+  lean_btree* btree_s0 = s0->get_btree(s0, btree_name);
+  ASSERT_NE(btree_s0, nullptr);
 
-  // insert 4 values in session 0
-  {
-    lean_btree* btree_s0 = s0->get_btree(s0, btree_name);
-    ASSERT_NE(btree_s0, nullptr);
-    ASSERT_EQ(btree_s0->insert(btree_s0, key_view_1, val_view_1), lean_status::LEAN_STATUS_OK);
-    ASSERT_EQ(btree_s0->insert(btree_s0, key_view_2, val_view_2), lean_status::LEAN_STATUS_OK);
-    ASSERT_EQ(btree_s0->insert(btree_s0, key_view_3, val_view_3), lean_status::LEAN_STATUS_OK);
-    ASSERT_EQ(btree_s0->insert(btree_s0, key_view_4, val_view_4), lean_status::LEAN_STATUS_OK);
-    btree_s0->close(btree_s0);
+  // insert initial keys
+  std::unordered_map<std::string, std::string> all_keys;
+  for (auto i = 0u; i < num_keys; i++) {
+    auto key_str = "key_" + std::to_string(i);
+    auto val_str = utils::RandomGenerator::RandAlphString(
+        utils::RandomGenerator::RandU64(min_value_size, max_value_size));
+    auto key_view = TMP_STR_VIEW(key_str.c_str());
+    auto val_view = TMP_STR_VIEW(val_str.c_str());
+    ASSERT_EQ(btree_s0->insert(btree_s0, key_view, val_view), lean_status::LEAN_STATUS_OK);
+    all_keys.emplace(key_str, val_str);
   }
 
-  // remove key_view_2 and reinsert it with a new value
-  {
-    lean_btree* btree_s0 = s0->get_btree(s0, btree_name);
-    ASSERT_NE(btree_s0, nullptr);
-    ASSERT_EQ(btree_s0->remove(btree_s0, key_view_2), lean_status::LEAN_STATUS_OK);
-    ASSERT_EQ(btree_s0->insert(btree_s0, key_view_2, new_val_view_2), lean_status::LEAN_STATUS_OK);
-    btree_s0->close(btree_s0);
-  }
-
-  // read all values and check key_view_2 has the new value
-  {
+  // check all key-values
+  auto check_all = [&]() {
     lean_str value;
-    lean_str_init(&value, 16);
+    lean_str_init(&value, max_value_size + 1);
+    for (auto i = 0u; i < num_keys; i++) {
+      auto key_str = "key_" + std::to_string(i);
+      auto key_view = TMP_STR_VIEW(key_str.c_str());
+      ASSERT_EQ(btree_s0->lookup(btree_s0, key_view, &value), lean_status::LEAN_STATUS_OK);
+      MustEqual(value, TMP_STR_VIEW(all_keys[key_str].c_str()));
+    }
+    lean_str_deinit(&value);
+  };
 
-    lean_btree* btree_s0 = s0->get_btree(s0, btree_name);
-    ASSERT_NE(btree_s0, nullptr);
+  // remove and insert a random key 1000000 times
+  for (auto i = 0u; i < 100; i++) {
+    // key to be removed and inserted
+    auto key_idx = utils::RandomGenerator::RandU64(0, num_keys);
+    auto key_str = "key_" + std::to_string(key_idx);
+    auto key_view = TMP_STR_VIEW(key_str.c_str());
 
-    ASSERT_EQ(btree_s0->lookup(btree_s0, key_view_1, &value), lean_status::LEAN_STATUS_OK);
-    MustEqual(value, val_view_1);
+    // value buffer for lookup
+    lean_str value;
+    lean_str_init(&value, max_value_size + 1);
 
-    ASSERT_EQ(btree_s0->lookup(btree_s0, key_view_2, &value), lean_status::LEAN_STATUS_OK);
-    MustEqual(value, new_val_view_2);
+    // insert and remove in a transaction
+    s0->start_tx(s0);
+    auto val_new = utils::RandomGenerator::RandAlphString(
+        utils::RandomGenerator::RandU64(min_value_size, max_value_size));
+    auto val_view_new = TMP_STR_VIEW(val_new.c_str());
+    ASSERT_EQ(btree_s0->remove(btree_s0, key_view), lean_status::LEAN_STATUS_OK);
+    ASSERT_EQ(btree_s0->insert(btree_s0, key_view, val_view_new), lean_status::LEAN_STATUS_OK);
+    ASSERT_EQ(btree_s0->lookup(btree_s0, key_view, &value), lean_status::LEAN_STATUS_OK);
+    MustEqual(value, val_view_new);
+    s0->commit_tx(s0);
+    all_keys[key_str] = val_new;
 
-    ASSERT_EQ(btree_s0->lookup(btree_s0, key_view_3, &value), lean_status::LEAN_STATUS_OK);
-    MustEqual(value, val_view_3);
+    // check all key-values
+    check_all();
 
-    ASSERT_EQ(btree_s0->lookup(btree_s0, key_view_4, &value), lean_status::LEAN_STATUS_OK);
-    MustEqual(value, val_view_4);
-
-    btree_s0->close(btree_s0);
     lean_str_deinit(&value);
   }
 
+  btree_s0->close(btree_s0);
   s0->close(s0);
   store->close(store);
 }

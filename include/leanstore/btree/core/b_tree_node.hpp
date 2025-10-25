@@ -175,12 +175,13 @@ public:
   }
 
   uint16_t FreeSpace() {
-    return data_offset_ - (reinterpret_cast<uint8_t*>(slot_ + num_slots_) - NodeBegin());
+    auto slot_array_end_offset = reinterpret_cast<uint8_t*>(&slot_[num_slots_]) - NodeBegin();
+    return data_offset_ - slot_array_end_offset;
   }
 
   uint16_t FreeSpaceAfterCompaction() {
-    return BTreeNode::Size() - (reinterpret_cast<uint8_t*>(slot_ + num_slots_) - NodeBegin()) -
-           space_used_;
+    auto slot_array_end_offset = reinterpret_cast<uint8_t*>(&slot_[num_slots_]) - NodeBegin();
+    return BTreeNode::Size() - slot_array_end_offset - space_used_;
   }
 
   double FillFactorAfterCompaction() {
@@ -249,8 +250,8 @@ public:
   // Attention: the caller has to hold a copy of the existing payload
   void ShortenPayload(uint16_t slot_id, uint16_t target_size) {
     LEAN_DCHECK(target_size <= slot_[slot_id].val_size_);
-    const uint16_t free_space = slot_[slot_id].val_size_ - target_size;
-    space_used_ -= free_space;
+    const uint16_t space_released = slot_[slot_id].val_size_ - target_size;
+    space_used_ -= space_released;
     slot_[slot_id].val_size_ = target_size;
   }
 
@@ -280,9 +281,7 @@ public:
     std::memcpy(copied_key, KeyDataWithoutPrefix(slot_id), key_size_without_prefix);
 
     // release the old space occupied by the payload (keyWithoutPrefix + value)
-    if (slot_id == num_slots_ - 1) {
-      RetreatDataOffset(old_total_size);
-    }
+    space_used_ -= old_total_size;
 
     slot_[slot_id].val_size_ = 0;
     slot_[slot_id].key_size_without_prefix_ = 0;
@@ -487,12 +486,6 @@ private:
   void AdvanceDataOffset(uint16_t size) {
     data_offset_ -= size;
     space_used_ += size;
-  }
-
-  /// Oppsite of advanceDataOffset
-  void RetreatDataOffset(uint16_t size) {
-    data_offset_ += size;
-    space_used_ -= size;
   }
 };
 

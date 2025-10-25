@@ -278,7 +278,7 @@ std::tuple<OpCode, uint16_t> TransactionKV::GetVisibleTuple(Slice payload, ValCa
         JUMPMU_RETURN ret;
       }
       default: {
-        Log::Error("Unhandled tuple format: {}", TupleFormatUtil::ToString(tuple->format_));
+        Log::Fatal("Unhandled tuple format: {}", TupleFormatUtil::ToString(tuple->format_));
       }
       }
     }
