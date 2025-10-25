@@ -56,10 +56,11 @@ void SessionImpl::DropBTree(const char* btree_name) {
 
     switch (generic_btree->tree_type_) {
     case leanstore::storage::btree::BTreeType::kGeneric: {
+    case leanstore::storage::btree::BTreeType::kBasicKV:
       store_->DropBasicKV(btree_name);
       return;
     }
-    case leanstore::storage::btree::BTreeType::kBasicKV: {
+    case leanstore::storage::btree::BTreeType::kTransactionKV: {
       store_->DropTransactionKV(btree_name);
       return;
     }
