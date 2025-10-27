@@ -2,9 +2,7 @@
 
 #include "leanstore/utils/random_generator.hpp"
 
-using namespace std;
-namespace leanstore {
-namespace utils {
+namespace leanstore::utils {
 
 ZipfGenerator::ZipfGenerator(uint64_t ex_n, double theta) : n(ex_n - 1), theta(theta) {
   alpha = 1.0 / (1.0 - theta);
@@ -34,5 +32,4 @@ uint64_t ZipfGenerator::rand() {
   return ret;
 }
 
-} // namespace utils
-} // namespace leanstore
+} // namespace leanstore::utils

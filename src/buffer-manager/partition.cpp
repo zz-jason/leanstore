@@ -14,8 +14,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-namespace leanstore {
-namespace storage {
+namespace leanstore::storage {
 
 static void* MallocHuge(size_t size) {
   void* p = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -93,5 +92,4 @@ bool HashTable::Has(uint64_t key) {
   return false;
 }
 
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage

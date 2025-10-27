@@ -1,7 +1,6 @@
 #include "leanstore/utils/fnv_hash.hpp"
 
-namespace leanstore {
-namespace utils {
+namespace leanstore::utils {
 
 uint64_t FNV::Hash(uint64_t val) {
   // from http://en.wikipedia.org/wiki/Fowler_Noll_Vo_hash
@@ -16,5 +15,4 @@ uint64_t FNV::Hash(uint64_t val) {
   return hash_val;
 }
 
-} // namespace utils
-} // namespace leanstore
+} // namespace leanstore::utils

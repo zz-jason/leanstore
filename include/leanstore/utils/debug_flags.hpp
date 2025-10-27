@@ -5,8 +5,7 @@
 #include <string>
 #include <unordered_set>
 
-namespace leanstore {
-namespace utils {
+namespace leanstore::utils {
 
 #ifdef DEBUG
 #define LS_DEBUG_EXECUTE(store, name, action)                                                      \
@@ -54,5 +53,4 @@ public:
   }
 };
 
-} // namespace utils
-} // namespace leanstore
+} // namespace leanstore::utils

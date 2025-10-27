@@ -3,8 +3,7 @@
 #include "leanstore/sync/hybrid_guard.hpp"
 #include "leanstore/utils/jump_mu.hpp"
 
-namespace leanstore {
-namespace storage {
+namespace leanstore::storage {
 
 // The following guards are primarily designed for buffer management use cases
 // This implies that the guards never block (sleep), they immediately jump
@@ -104,5 +103,4 @@ public:
   }
 };
 
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage
