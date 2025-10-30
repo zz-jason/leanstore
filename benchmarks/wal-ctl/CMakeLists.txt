@@ -5,6 +5,7 @@ set(YCSB_SRC
 
 file(GLOB_RECURSE LEAN_WAL_CTLL_SRC **.cpp **/**.cpp **.cc **/**.cc **.hpp **/**.hpp **.h **/**.h)
 
+find_package(gflags CONFIG REQUIRED)
 set(LEAN_WAL_CTLL_DEPS
   leanstore
   gflags::gflags
