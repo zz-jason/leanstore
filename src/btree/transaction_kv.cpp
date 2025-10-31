@@ -6,7 +6,7 @@
 #include "leanstore/btree/core/btree_iter.hpp"
 #include "leanstore/btree/tuple.hpp"
 #include "leanstore/common/types.h"
-#include "leanstore/common/wal_format.h"
+#include "leanstore/common/wal_record.h"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"

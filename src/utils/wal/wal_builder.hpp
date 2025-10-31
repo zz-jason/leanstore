@@ -3,7 +3,7 @@
 #include "leanstore/btree/core/b_tree_node.hpp"
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/common/types.h"
-#include "leanstore/common/wal_format.h"
+#include "leanstore/common/wal_record.h"
 #include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/slice.hpp"
@@ -57,7 +57,7 @@ public:
     // init record base
     auto* wal_base = reinterpret_cast<lean_wal_record*>(wal_);
     wal_base->type_ = WalRecordTraits<T>::kType;
-    wal_base->lsn_ = CoroEnv::CurLogging().ReserveLsn();
+    wal_base->lsn_ = CoroEnv::CurLogging().GetLsn();
     wal_base->size_ = wal_size_;
     wal_base->crc32_ = 0; // Should be computed later after all fields are set
   }
@@ -145,7 +145,7 @@ public:
     // init record base
     auto* wal_base = reinterpret_cast<lean_wal_record*>(wal_);
     wal_base->type_ = WalRecordTraits<T>::kType;
-    wal_base->lsn_ = CoroEnv::CurLogging().ReserveLsn();
+    wal_base->lsn_ = CoroEnv::CurLogging().GetLsn();
     wal_base->size_ = wal_size_;
     wal_base->crc32_ = 0; // Should be computed later after all fields are set
   }
@@ -251,7 +251,7 @@ public:
     // init record base
     auto* wal_base = reinterpret_cast<lean_wal_record*>(wal_);
     wal_base->type_ = WalRecordTraits<T>::kType;
-    wal_base->lsn_ = CoroEnv::CurLogging().ReserveLsn();
+    wal_base->lsn_ = CoroEnv::CurLogging().GetLsn();
     wal_base->size_ = wal_size_;
     wal_base->crc32_ = 0; // Should be computed later after all fields are set
 

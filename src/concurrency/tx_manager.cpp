@@ -2,7 +2,7 @@
 
 #include "leanstore/buffer-manager/tree_registry.hpp"
 #include "leanstore/common/perf_counters.h"
-#include "leanstore/common/wal_format.h"
+#include "leanstore/common/wal_record.h"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/concurrency/group_committer.hpp"
 #include "leanstore/concurrency/logging.hpp"

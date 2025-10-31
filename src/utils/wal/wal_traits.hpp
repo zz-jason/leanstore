@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore/common/wal_format.h"
+#include "leanstore/common/wal_record.h"
 
 namespace leanstore {
 

@@ -3,7 +3,6 @@
 #include "leanstore/common/perf_counters.h"
 #include "leanstore/common/types.h"
 #include "leanstore/concurrency/concurrency_control.hpp"
-#include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/transaction.hpp"
 #include "utils/coroutine/coro_env.hpp"
 #include "utils/coroutine/coroutine.hpp"
@@ -58,11 +57,6 @@ public:
 
   /// ID of the current worker itself.
   const uint64_t worker_id_;
-
-  /// The active complex WalEntry for the current transaction, usually used for insert, update,
-  /// delete, or btree related operations.
-  /// NOTE: Only effective during transaction processing.
-  WalEntryComplex* active_walentry_complex_ = nullptr;
 
   /// All the workers.
   std::vector<std::unique_ptr<TxManager>>& tx_mgrs_;

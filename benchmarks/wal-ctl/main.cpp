@@ -4,7 +4,7 @@
 
 /// Command line args
 DEFINE_string(wal_path, "", "Path to the WAL file");
-DEFINE_string(format, "text", "Output format, available: text, json");
+DEFINE_string(format, "json", "Output format, available: text, json");
 
 /// Entry point for the wal command line tool.
 int main(int argc, char** argv) {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore/common/wal_format.h"
+#include "leanstore/common/wal_record.h"
 #include "leanstore/utils/log.hpp"
 #include "wal_ctl_exception.hpp"
 

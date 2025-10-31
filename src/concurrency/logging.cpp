@@ -1,6 +1,6 @@
 #include "leanstore/concurrency/logging.hpp"
 
-#include "leanstore/common/wal_format.h"
+#include "leanstore/common/wal_record.h"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/concurrency/wal_entry.hpp"
 #include "leanstore/exceptions.hpp"

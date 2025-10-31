@@ -1,7 +1,7 @@
 #include "leanstore/btree/chained_tuple.hpp"
 
 #include "leanstore/common/types.h"
-#include "leanstore/common/wal_format.h"
+#include "leanstore/common/wal_record.h"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/log.hpp"
 #include "utils/wal/wal_builder.hpp"

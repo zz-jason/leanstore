@@ -1,9 +1,8 @@
 #pragma once
 
-#include "leanstore/common/wal_format.h"
+#include "leanstore/common/wal_record.h"
 
 #include <cassert>
-#include <sstream>
 #include <string>
 #include <string_view>
 
@@ -37,12 +36,11 @@ private:
   static Format FormatFromString(std::string_view format);
 
   /// Print a WAL record
-  static void FormatWalRecord(const lean_wal_record* record, Format format,
-                              std::stringstream& output);
+  static std::string FormatWalRecord(const lean_wal_record* record, Format format);
 
-  static void FormatWalRecordAsText(const lean_wal_record* record, std::stringstream& output);
+  static std::string FormatWalRecordAsText(const lean_wal_record* record);
 
-  static void FormatWalRecordAsJson(const lean_wal_record* record, std::stringstream& output);
+  static std::string FormatWalRecordAsJson(const lean_wal_record* record);
 
   /// Path to the WAL file
   std::string wal_path_;

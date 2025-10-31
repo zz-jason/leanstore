@@ -7,7 +7,7 @@
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/buffer-manager/guarded_buffer_frame.hpp"
 #include "leanstore/common/types.h"
-#include "leanstore/common/wal_format.h"
+#include "leanstore/common/wal_record.h"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/log.hpp"
