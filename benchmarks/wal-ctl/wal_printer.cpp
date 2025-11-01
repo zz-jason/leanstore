@@ -2,14 +2,12 @@
 
 #include "leanstore/common/wal_record.h"
 #include "utils/json.hpp"
-#include "utils/small_vector.hpp"
+#include "utils/wal/wal_iterator.hpp"
 #include "utils/wal/wal_traits.hpp"
 
 #include <cassert>
 #include <cstring>
-#include <format>
 #include <iostream>
-#include <sstream>
 #include <string_view>
 
 #include <fcntl.h>
@@ -19,65 +17,21 @@ namespace leanstore {
 
 void WalPrinter::Run() {
   // open the file
-  int fd = open(wal_path_.c_str(), O_RDONLY | O_CLOEXEC);
-  if (fd < 0) {
-    perror("open");
+  auto wal_iter = WalIterator::New(wal_path_);
+  if (wal_iter->HasError()) {
+    std::cerr << wal_iter->GetError() << std::endl;
     exit(EXIT_FAILURE);
   }
 
-  // read and print the records
-  static constexpr size_t kHeaderSize = sizeof(lean_wal_record);
-  uint8_t header_buf[kHeaderSize];
-  uint64_t read_offset = 0ull;
-  std::stringstream formatted_wal_record;
+  lean_wal_record* record = wal_iter->Next();
+  while (record) {
+    std::cout << FormatWalRecord(record, print_format_) << std::endl;
+    record = wal_iter->Next();
+  }
 
-  while (true) {
-    ssize_t bytes_read = pread(fd, header_buf, kHeaderSize, read_offset);
-
-    // EOF
-    if (bytes_read == 0) {
-      break;
-    }
-
-    if (bytes_read < 0) {
-      std::cerr << std::format("Error reading WAL record, {}: ", wal_path_);
-      perror("read");
-      exit(EXIT_FAILURE);
-    }
-
-    if (bytes_read < static_cast<ssize_t>(kHeaderSize)) {
-      fprintf(stderr, "Incomplete WAL record header\n");
-      exit(EXIT_FAILURE);
-    }
-
-    // parse header
-    auto* tmp_record = reinterpret_cast<lean_wal_record*>(header_buf);
-    assert(tmp_record->size_ >= kHeaderSize);
-
-    // read the full record
-    size_t full_size = tmp_record->size_;
-    SmallBuffer256 full_record_buf(full_size);
-    auto* record_buf = full_record_buf.Data();
-    memcpy(record_buf, header_buf, kHeaderSize);
-    bytes_read = pread(fd,
-                       record_buf + kHeaderSize, // buffer to store the remaining data
-                       full_size - kHeaderSize,  // size of the remaining data
-                       read_offset + kHeaderSize // offset to read from
-    );
-    if (bytes_read < 0) {
-      std::cerr << std::format("Error reading WAL record data, {}: ", wal_path_);
-      perror("read");
-      exit(EXIT_FAILURE);
-    }
-
-    // TODO: compute and compare crc32
-
-    // print the record
-    auto* current_record = reinterpret_cast<lean_wal_record*>(record_buf);
-    std::cout << FormatWalRecord(current_record, print_format_) << std::endl;
-
-    // advance the offset
-    read_offset += full_size;
+  if (wal_iter->HasError()) {
+    std::cerr << wal_iter->GetError() << std::endl;
+    exit(EXIT_FAILURE);
   }
 }
 
