@@ -3,8 +3,7 @@
 #include <atomic>
 #include <type_traits>
 
-namespace leanstore {
-namespace storage {
+namespace leanstore::storage {
 
 /// Optimized for single-writer-single-reader scenarios. The reader can read the
 /// value without locking which is useful for performance-critical code. The
@@ -78,5 +77,4 @@ inline void OptimisticGuarded<T>::UpdateAttribute(Ta T::* a, const Ta& new_val) 
   version_.store(version_ + 1, std::memory_order_release);
 }
 
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage

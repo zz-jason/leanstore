@@ -17,8 +17,7 @@ class ScopedHybridGuardTest;
 
 } // namespace leanstore::test
 
-namespace leanstore {
-namespace storage {
+namespace leanstore::storage {
 
 /// A scoped guard for the hybrid latch. It locks the latch in the specified
 /// mode when constructed, and unlocks the latch when destructed.
@@ -287,5 +286,4 @@ inline void ScopedHybridGuard::unlock_pessimistic_exclusive() {
   latch_->UnlockExclusively();
 }
 
-} // namespace storage
-} // namespace leanstore
+} // namespace leanstore::storage

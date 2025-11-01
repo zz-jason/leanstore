@@ -1,7 +1,7 @@
 #pragma once
 
 #include "leanstore/common/portable.h"
-#include "leanstore/units.hpp"
+#include "leanstore/common/types.h"
 
 #include <cstdint>
 #include <functional>

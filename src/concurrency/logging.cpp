@@ -1,12 +1,14 @@
 #include "leanstore/concurrency/logging.hpp"
 
+#include "leanstore/common/wal_record.h"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/concurrency/wal_entry.hpp"
 #include "leanstore/exceptions.hpp"
 #include "leanstore/utils/log.hpp"
 #include "utils/coroutine/coro_env.hpp"
-#include "utils/to_json.hpp"
+#include "utils/wal/wal_builder.hpp"
 
+#include <cassert>
 #include <cstring>
 
 namespace leanstore::cr {
@@ -51,11 +53,12 @@ uint8_t* Logging::ReserveWalBuffer(uint32_t bytes_required) {
 void Logging::WriteWalCarriageReturn() {
   LEAN_DCHECK(wal_flushed_ <= wal_buffered_,
               "CarriageReturn should only used for the last bytes in the wal buffer");
-  auto entry_size = wal_buffer_bytes_ - wal_buffered_;
-  auto* entry_ptr = wal_buffer_ + wal_buffered_;
-  new (entry_ptr) WalCarriageReturn(entry_size);
-  wal_buffered_ = 0;
-  PublishWalBufferedOffset();
+  auto total_size = wal_buffer_bytes_ - wal_buffered_;
+  assert(total_size >= sizeof(lean_wal_carriage_return) &&
+         "CarriageReturn size exceeds the remaining buffer size");
+
+  // Build and submit the carriage return wal record
+  WalBuilder<lean_wal_carriage_return>(total_size - sizeof(lean_wal_carriage_return)).Submit();
 }
 
 // Called by worker, so concurrent writes on the buffer

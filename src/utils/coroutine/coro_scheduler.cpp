@@ -110,17 +110,15 @@ void CoroScheduler::CreateSessionPool() {
   // create all coro sessions
   all_sessions_.reserve(num_exec * num_session_per_exec);
   session_pool_per_exec_.resize(num_exec);
-  for (auto i = 0u; i < num_exec; i++) {
-    for (auto j = 0u; j < num_session_per_exec; j++) {
-      cr::TxManager* tx_mgr = nullptr;
-      if (store_ != nullptr) {
-        auto tx_mgr_id = i * num_session_per_exec + j;
-        assert(tx_mgr_id < store_->MvccManager()->TxMgrs().size() && "Invalid index for TxManager");
-        tx_mgr = store_->MvccManager()->TxMgrs()[tx_mgr_id].get();
-      }
-      all_sessions_.emplace_back(std::make_unique<CoroSession>(i, tx_mgr));
-      session_pool_per_exec_[i].push(all_sessions_.back().get());
+  for (auto i = 0u; i < num_exec * num_session_per_exec; i++) {
+    auto runs_on = i % num_exec;
+    cr::TxManager* tx_mgr = nullptr;
+    if (store_ != nullptr) {
+      assert(i < store_->MvccManager()->TxMgrs().size() && "Invalid index for TxManager");
+      tx_mgr = store_->MvccManager()->TxMgrs()[i].get();
     }
+    all_sessions_.emplace_back(std::make_unique<CoroSession>(runs_on, tx_mgr));
+    session_pool_per_exec_[runs_on].push(all_sessions_.back().get());
   }
 }
 

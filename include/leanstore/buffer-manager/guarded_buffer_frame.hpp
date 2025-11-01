@@ -2,8 +2,8 @@
 
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/buffer-manager/buffer_manager.hpp"
+#include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
-#include "leanstore/concurrency/wal_payload_handler.hpp"
 #include "leanstore/sync/hybrid_guard.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/utils/log.hpp"
@@ -179,25 +179,6 @@ public:
     }
   }
 
-  template <typename WT, typename... Args>
-  cr::WalPayloadHandler<WT> ReserveWALPayload(uint64_t wal_size, Args&&... args) {
-    LEAN_DCHECK(guard_.state_ == GuardState::kExclusivePessimistic);
-
-    const auto page_id = bf_->header_.page_id_;
-    const auto tree_id = bf_->page_.btree_id_;
-    wal_size = ((wal_size - 1) / 8 + 1) * 8;
-    auto handler = CoroEnv::CurTxMgr().ReserveWALEntryComplex<WT, Args...>(
-        sizeof(WT) + wal_size, page_id, bf_->page_.psn_, tree_id, std::forward<Args>(args)...);
-
-    return handler;
-  }
-
-  template <typename WT, typename... Args>
-  void WriteWal(uint64_t wal_size, Args&&... args) {
-    auto handle = ReserveWALPayload<WT>(wal_size, std::forward<Args>(args)...);
-    handle.SubmitWal();
-  }
-
   bool EncounteredContention() {
     return guard_.contented_;
   }
@@ -291,18 +272,6 @@ public:
   ExclusiveGuardedBufferFrame(GuardedBufferFrame<PayloadType>&& guarded_bf)
       : ref_guard_(guarded_bf) {
     ref_guard_.guard_.ToExclusiveMayJump();
-  }
-
-  template <typename WT, typename... Args>
-  cr::WalPayloadHandler<WT> ReserveWALPayload(uint64_t payload_size, Args&&... args) {
-    return ref_guard_.template ReserveWALPayload<WT>(payload_size, std::forward<Args>(args)...);
-  }
-
-  template <typename WT, typename... Args>
-  void WriteWal(uint64_t payload_size, Args&&... args) {
-    auto wal_payload_handler =
-        ref_guard_.template ReserveWALPayload<WT>(payload_size, std::forward<Args>(args)...);
-    wal_payload_handler.SubmitWal();
   }
 
   void SyncSystemTxId(lean_txid_t sys_tx_id) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "leanstore/buffer-manager/buffer_frame.hpp"
+#include "leanstore/common/types.h"
 #include "leanstore/sync/hybrid_guard.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/defer.hpp"
