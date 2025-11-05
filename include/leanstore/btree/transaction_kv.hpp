@@ -6,30 +6,24 @@
 #include "leanstore/btree/core/btree_iter_mut.hpp"
 #include "leanstore/btree/tuple.hpp"
 #include "leanstore/buffer-manager/guarded_buffer_frame.hpp"
+#include "leanstore/common/types.h"
+#include "leanstore/common/wal_record.h"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/kv_interface.hpp"
-#include "leanstore/units.hpp"
 #include "leanstore/utils/result.hpp"
 
 #include <expected>
 #include <string>
 #include <tuple>
 
+struct lean_wal_tx_insert;
+struct lean_wal_tx_update;
+struct lean_wal_tx_remove;
+
 /// forward declarations
 namespace leanstore {
-
 class LeanStore;
-
 } // namespace leanstore
-
-/// forward declarations
-namespace leanstore::storage::btree {
-
-class WalTxInsert;
-class WalTxUpdate;
-class WalTxRemove;
-
-} // namespace leanstore::storage::btree
 
 namespace leanstore::storage::btree {
 
@@ -68,7 +62,7 @@ public:
 
   // This undo implementation works only for rollback and not for undo
   // operations during recovery
-  void Undo(const uint8_t* wal_entry_ptr, const uint64_t) override;
+  void Undo(const lean_wal_record* record) override;
 
   void GarbageCollect(const uint8_t* entry_ptr, lean_wid_t version_worker_id,
                       lean_txid_t version_tx_id, bool called_before) override;
@@ -93,11 +87,11 @@ private:
 
   void InsertAfterRemove(BTreeIterMut* x_iter, Slice key, Slice val);
 
-  void undo_last_insert(const WalTxInsert* wal_insert);
+  void undo_last_insert(const lean_wal_tx_insert* wal_insert);
 
-  void undo_last_update(const WalTxUpdate* wal_update);
+  void undo_last_update(const lean_wal_tx_update* wal_update);
 
-  void undo_last_remove(const WalTxRemove* wal_remove);
+  void undo_last_remove(const lean_wal_tx_remove* wal_remove);
 
 public:
   static Result<TransactionKV*> Create(leanstore::LeanStore* store, const std::string& tree_name,

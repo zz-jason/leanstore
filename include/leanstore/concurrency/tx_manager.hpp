@@ -1,10 +1,9 @@
 #pragma once
 
 #include "leanstore/common/perf_counters.h"
+#include "leanstore/common/types.h"
 #include "leanstore/concurrency/concurrency_control.hpp"
-#include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/transaction.hpp"
-#include "leanstore/units.hpp"
 #include "utils/coroutine/coro_env.hpp"
 #include "utils/coroutine/coroutine.hpp"
 
@@ -30,7 +29,7 @@ public:
   ConcurrencyControl cc_;
 
   /// The ID of the current command in the current transaction.
-  lean_cmdid_t command_id_ = 0;
+  lean_cmdid_t cmd_id_ = 0;
 
   /// The current running transaction.
   Transaction active_tx_;
@@ -58,11 +57,6 @@ public:
 
   /// ID of the current worker itself.
   const uint64_t worker_id_;
-
-  /// The active complex WalEntry for the current transaction, usually used for insert, update,
-  /// delete, or btree related operations.
-  /// NOTE: Only effective during transaction processing.
-  WalEntryComplex* active_walentry_complex_ = nullptr;
 
   /// All the workers.
   std::vector<std::unique_ptr<TxManager>>& tx_mgrs_;
@@ -104,35 +98,6 @@ public:
   void UpdateLastCommittedUsrTx(lean_txid_t usr_tx_id) {
     last_committed_usr_tx_.store(usr_tx_id, std::memory_order_release);
   }
-
-  void WriteWalTxAbort();
-  void WriteWalTxFinish();
-
-  template <typename T, typename... Args>
-  WalPayloadHandler<T> ReserveWALEntryComplex(uint64_t payload_size, lean_pid_t page_id,
-                                              lean_lid_t psn, lean_treeid_t tree_id,
-                                              Args&&... args) {
-    auto& logging = CoroEnv::CurLogging();
-
-    auto prev_lsn = active_tx_.prev_wal_lsn_;
-    active_tx_.has_wrote_ = true;
-    SCOPED_DEFER(active_tx_.prev_wal_lsn_ = active_walentry_complex_->lsn_);
-
-    auto entry_lsn = logging.ReserveLsn();
-    auto entry_size = sizeof(WalEntryComplex) + payload_size;
-    auto* entry_ptr = logging.ReserveWalBuffer(entry_size);
-
-    active_walentry_complex_ = new (entry_ptr) WalEntryComplex(
-        entry_lsn, prev_lsn, entry_size, worker_id_, active_tx_.start_ts_, psn, page_id, tree_id);
-
-    auto* payload_ptr = active_walentry_complex_->payload_;
-    auto wal_payload = new (payload_ptr) T(std::forward<Args>(args)...);
-    return {wal_payload, entry_size};
-  }
-
-  /// Submits wal record to group committer when it is ready to flush to disk.
-  /// @param totalSize size of the wal record to be flush.
-  void SubmitWALEntryComplex(uint64_t total_size);
 
   static constexpr uint64_t kRcBit = (1ull << 63);
   static constexpr uint64_t kLongRunningBit = (1ull << 62);

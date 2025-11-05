@@ -4,9 +4,10 @@
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/buffer-manager/guarded_buffer_frame.hpp"
 #include "leanstore/buffer-manager/tree_registry.hpp"
+#include "leanstore/common/types.h"
+#include "leanstore/common/wal_record.h"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
-#include "leanstore/units.hpp"
 #include "leanstore/utils/log.hpp"
 #include "utils/json.hpp"
 
@@ -107,7 +108,7 @@ public:
   /// NOTE: The source buffer frame should be shared latched
   virtual void Checkpoint(BufferFrame& bf, void* dest) override;
 
-  virtual void Undo(const uint8_t*, const uint64_t) override {
+  virtual void Undo(const lean_wal_record*) override {
     Log::Fatal("undo is unsupported");
   }
 

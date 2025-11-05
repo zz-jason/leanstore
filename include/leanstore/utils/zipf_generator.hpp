@@ -2,8 +2,7 @@
 
 #include <cstdint>
 
-namespace leanstore {
-namespace utils {
+namespace leanstore::utils {
 
 // A Zipf distributed random number generator
 // Based on Jim Gray Algorithm as described in "Quickly Generating
@@ -24,5 +23,4 @@ public:
   uint64_t rand();
 };
 
-} // namespace utils
-} // namespace leanstore
+} // namespace leanstore::utils

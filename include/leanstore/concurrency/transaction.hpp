@@ -1,8 +1,8 @@
 #pragma once
 
+#include "leanstore/common/types.h"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/units.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 
 namespace leanstore ::cr {

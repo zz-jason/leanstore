@@ -20,14 +20,12 @@
     }                                                                                              \
   };
 
-namespace leanstore {
-namespace ex {
+namespace leanstore::ex {
 Generic_Exception(GenericException);
 Generic_Exception(EnsureFailed);
 Generic_Exception(UnReachable);
 Generic_Exception(TODO);
-} // namespace ex
-} // namespace leanstore
+} // namespace leanstore::ex
 
 #define UNREACHABLE()                                                                              \
   throw leanstore::ex::UnReachable(std::string(__FILE__) + ":" +                                   \

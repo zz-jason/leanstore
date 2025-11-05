@@ -1,7 +1,6 @@
 #pragma once
 
 #include "leanstore/lean_store.hpp"
-#include "leanstore/units.hpp"
 #include "leanstore/utils/async_io.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 
@@ -17,9 +16,10 @@ namespace leanstore::cr {
 class TxManager;
 class WalFlushReq;
 
-/// The group committer thread is responsible for committing transactions in batches. It collects
-/// wal records from all the worker threads, writes them to the wal file with libaio, and determines
-/// the commitable transactions based on the min flushed GSN and min flushed transaction ID.
+/// The group committer thread is responsible for committing transactions in
+/// batches. It collects wal records from all the worker threads, writes them to
+/// the wal file with libaio, and determines the commitable transactions based
+/// on the min flushed system and user transaction ID.
 class GroupCommitter : public leanstore::utils::ManagedThread {
 public:
   leanstore::LeanStore* store_;
@@ -27,7 +27,7 @@ public:
   /// File descriptor of the underlying WAL file.
   const int32_t wal_fd_;
 
-  /// Start file offset of the next WalEntry.
+  /// Start file offset of the next wal record.
   uint64_t wal_size_;
 
   /// The libaio wrapper.
@@ -62,7 +62,8 @@ private:
   /// Phase 2: write all the collected wal records to the wal file with libaio.
   void FlushWalRecords();
 
-  /// Phase 3: determine the commitable transactions based on minFlushedGSN and minFlushedTxId.
+  /// Phase 3: determine the commitable transactions based on min_flushed_sys_tx and
+  /// min_flushed_usr_tx.
   ///
   /// @param[in] minFlushedSysTx the min flushed system transaction ID
   /// @param[in] minFlushedUsrTx the min flushed user transaction ID

@@ -75,8 +75,8 @@ public:
   /// SIGMOD 2020" for details.
   lean_wid_t last_writer_worker_ = kInvalidWorkerId;
 
-  /// The flushed page sequence number of the containing page. Initialized when the containing page
-  /// is loaded from disk.
+  /// The flushed page sequence number of the containing page. Initialized when
+  /// the containing page is loaded from disk.
   uint64_t flushed_psn_ = 0;
 
   /// Whether the containing page is being written back to disk.
@@ -131,11 +131,6 @@ public:
 /// explicitly.
 class Page {
 public:
-  /// Short for "global sequence number", increased when a page is modified.
-  /// It's used to check whether the page has been read or written by
-  /// transactions in other workers.
-  uint64_t gsn_ = 0;
-
   /// Short for "system transaction id", increased when a system transaction modifies the page.
   uint64_t sys_tx_id_ = 0;
 
@@ -204,7 +199,6 @@ public:
     header_.state_ = State::kHot;
     header_.flushed_psn_ = 0;
 
-    page_.gsn_ = 0;
     page_.sys_tx_id_ = 0;
     page_.psn_ = 0;
   }

@@ -31,11 +31,12 @@ private:
   /// Size of the written WAL file.
   uint64_t wal_size_;
 
-  /// Stores the dirty page ID and the offset to the first WalEntry that caused that page to become
-  /// dirty.
+  /// Stores the dirty page ID and the offset to the first wal record that
+  /// caused that page to become dirty.
   std::map<lean_pid_t, uint64_t> dirty_page_table_;
 
-  /// Stores the active transaction and the offset to the last created WalEntry.
+  /// Stores the active transaction and the offset to the last created wal
+  /// record.
   std::map<lean_txid_t, uint64_t> active_tx_table_;
 
   /// Stores all the pages read from disk during the recovery process.
@@ -76,47 +77,47 @@ private:
   /// crash. The logfile is scanned from the beginning or the last checkpoint, and all transactions
   /// for which we encounter begin transaction entries are added to the TT. Whenever an End Log
   /// entry is found, the corresponding transaction is removed.
-  Result<void> analysis();
+  Result<void> Analysis();
 
   /// During the redo phase, the DPT is used to find the set of pages in the buffer pool that were
   /// dirty at the time of the crash. All these pages are read from disk and redone from the first
   /// log record that makes them dirty.
-  Result<void> redo();
+  Result<void> Redo();
 
-  Result<bool> next_wal_complex_to_redo(uint64_t& offset, WalEntryComplex* wal_entry_ptr);
+  Result<bool> NextWalComplexToRedo(uint64_t& offset, WalEntryComplex* wal_entry_ptr);
 
-  void redo_insert(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
+  void RedoInsert(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
 
-  void redo_tx_insert(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
+  void RedoTxInsert(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
 
-  void redo_update(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
+  void RedoUpdate(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
 
-  void redo_tx_update(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
+  void RedoTxUpdate(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
 
-  void redo_remove(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
+  void RedoRemove(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
 
-  void redo_tx_remove(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
+  void RedoTxRemove(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
 
-  void redo_init_page(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
+  void RedoInitPage(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
 
-  void redo_split_root(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
+  void RedoSplitRoot(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
 
-  void redo_split_non_root(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
+  void RedoSplitNonRoot(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
 
   /// During the undo phase, the TT is used to undo the transactions still active at crash time. In
   /// the case of an aborted transaction, it’s possible to traverse the log file in reverse order
   /// using the previous sequence numbers, undoing all actions taken within the specific
   /// transaction.
-  void undo() {
+  void Undo() {
   }
 
   /// Return the buffer frame containing the required dirty page
-  storage::BufferFrame& resolve_page(lean_pid_t page_id);
+  storage::BufferFrame& ResolvePage(lean_pid_t page_id);
 
-  /// Read a WalEntry from the WAL file to the destination buffer.
-  Result<void> read_wal_entry(uint64_t& offset, uint8_t* dest);
+  /// Read a wal record from the WAL file to the destination buffer.
+  Result<void> ReadWalEntry(uint64_t& offset, uint8_t* dest);
 
-  Result<void> read_from_wal_file(int64_t entry_offset, size_t entry_size, void* destination);
+  Result<void> ReadFromWalFile(int64_t entry_offset, size_t entry_size, void* destination);
 };
 
 } // namespace leanstore::cr

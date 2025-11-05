@@ -2,8 +2,7 @@
 
 #include <cstdint>
 
-namespace leanstore {
-namespace utils {
+namespace leanstore::utils {
 
 class FNV {
 private:
@@ -14,5 +13,4 @@ public:
   static uint64_t Hash(uint64_t val);
 };
 
-} // namespace utils
-} // namespace leanstore
+} // namespace leanstore::utils

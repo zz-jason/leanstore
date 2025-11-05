@@ -2,6 +2,7 @@
 
 #include "leanstore/btree/core/btree_iter_mut.hpp"
 #include "leanstore/common/portable.h"
+#include "leanstore/common/types.h"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/log.hpp"
 
@@ -70,18 +71,18 @@ public:
   lean_txid_t tx_id_;
 
   /// ID of the command who created this tuple.
-  lean_cmdid_t command_id_;
+  lean_cmdid_t cmd_id_;
 
   /// Whether the tuple is locked for write.
   bool write_locked_;
 
 public:
   Tuple(TupleFormat format, lean_wid_t worker_id, lean_txid_t tx_id,
-        lean_cmdid_t command_id = kInvalidCommandid, bool write_locked = false)
+        lean_cmdid_t command_id = kCmdInvalid, bool write_locked = false)
       : format_(format),
         worker_id_(worker_id),
         tx_id_(tx_id),
-        command_id_(command_id),
+        cmd_id_(command_id),
         write_locked_(write_locked) {
   }
 
@@ -116,11 +117,11 @@ public:
 
 /// FatTupleDelta is the delta changes made to the previous version, a delta
 /// is consisted of the following parts:
-/// 1. The creator info: worker_id_, tx_id_, command_id_
+/// 1. The creator info: worker_id_, tx_id_, cmd_id_
 /// 2. The update descriptor: payload
 ///
 /// Data loyout of a FatTupleDelta:
-/// | worker_id_ | tx_id_ | command_id_ | UpdateDesc | Delta |
+/// | worker_id_ | tx_id_ | cmd_id_ | UpdateDesc | Delta |
 ///
 /// FatTuple uses precise garbage collection
 struct PACKED FatTupleDelta {
@@ -133,7 +134,7 @@ public:
 
   /// ID of the command who creates this delta.
   /// NOTE: Take care, otherwise we would overwrite another undo version
-  lean_cmdid_t command_id_ = kInvalidCommandid;
+  lean_cmdid_t cmd_id_ = kCmdInvalid;
 
   /// Descriptor + Delta
   uint8_t payload_[];
@@ -145,7 +146,7 @@ public:
                 const uint8_t* buf, uint32_t size)
       : worker_id_(worker_id),
         tx_id_(tx_id),
-        command_id_(command_id) {
+        cmd_id_(command_id) {
     std::memcpy(payload_, buf, size);
   }
 
@@ -319,13 +320,13 @@ public:
 
   lean_txid_t tx_id_;
 
-  lean_cmdid_t command_id_;
+  lean_cmdid_t cmd_id_;
 
   Version(VersionType type, lean_wid_t worker_id, lean_txid_t tx_id, lean_cmdid_t command_id)
       : type_(type),
         worker_id_(worker_id),
         tx_id_(tx_id),
-        command_id_(command_id) {
+        cmd_id_(command_id) {
   }
 };
 
@@ -345,7 +346,7 @@ public:
   }
 
   UpdateVersion(const FatTupleDelta& delta, uint64_t delta_payload_size)
-      : Version(VersionType::kUpdate, delta.worker_id_, delta.tx_id_, delta.command_id_),
+      : Version(VersionType::kUpdate, delta.worker_id_, delta.tx_id_, delta.cmd_id_),
         is_delta_(true) {
     std::memcpy(payload_, delta.payload_, delta_payload_size);
   }

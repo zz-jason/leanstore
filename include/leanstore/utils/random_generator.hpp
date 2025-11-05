@@ -1,14 +1,11 @@
 #pragma once
 
-#include "leanstore/utils/log.hpp"
-
 #include <algorithm>
 #include <cstring>
 #include <random>
 #include <string>
 
-namespace leanstore {
-namespace utils {
+namespace leanstore::utils {
 
 class MersenneTwister {
 private:
@@ -28,14 +25,12 @@ public:
   uint64_t Rand();
 };
 
-} // namespace utils
-} // namespace leanstore
+} // namespace leanstore::utils
 
 inline thread_local leanstore::utils::MersenneTwister tls_mt_generator;
 inline thread_local std::mt19937 tls_std_generator;
 
-namespace leanstore {
-namespace utils {
+namespace leanstore::utils {
 
 class RandomGenerator {
 public:
@@ -91,5 +86,4 @@ public:
   }
 };
 
-} // namespace utils
-} // namespace leanstore
+} // namespace leanstore::utils

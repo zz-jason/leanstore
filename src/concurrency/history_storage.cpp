@@ -3,10 +3,10 @@
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/core/b_tree_node.hpp"
 #include "leanstore/btree/core/btree_iter_mut.hpp"
+#include "leanstore/common/types.h"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/sync/scoped_hybrid_guard.hpp"
-#include "leanstore/units.hpp"
 #include "leanstore/utils/jump_mu.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
@@ -25,14 +25,14 @@ void HistoryStorage::PutVersion(lean_txid_t tx_id, lean_cmdid_t command_id, lean
                                 std::function<void(uint8_t*)> insert_call_back, bool same_thread) {
   // Compose the key to be inserted
   auto* btree = is_remove ? remove_index_ : update_index_;
-  auto key_size = sizeof(tx_id) + sizeof(command_id);
+  const auto key_size = sizeof(tx_id) + sizeof(command_id);
   uint8_t key_buffer[key_size];
   uint64_t offset = 0;
   offset += utils::Fold(key_buffer + offset, tx_id);
   offset += utils::Fold(key_buffer + offset, command_id);
   version_size += sizeof(VersionMeta);
 
-  Session* session = nullptr;
+  Session* volatile session = nullptr;
   if (same_thread) {
     session = (is_remove) ? &remove_session_ : &update_session_;
   }
@@ -217,7 +217,8 @@ void HistoryStorage::PurgeVersions(lean_txid_t from_tx_id, lean_txid_t to_tx_id,
       auto* leaf_node = reinterpret_cast<BTreeNode*>(bf->page_.payload_);
       if (leaf_node->lower_fence_.IsInfinity() && leaf_node->num_slots_ > 0) {
         auto last_key_size = leaf_node->GetFullKeyLen(leaf_node->num_slots_ - 1);
-        uint8_t last_key[last_key_size];
+        SmallBuffer256 last_key_holder(last_key_size);
+        auto* last_key = last_key_holder.Data();
         leaf_node->CopyFullKey(leaf_node->num_slots_ - 1, last_key);
 
         // optimistic unlock, jump if invalid
@@ -263,14 +264,16 @@ void HistoryStorage::PurgeVersions(lean_txid_t from_tx_id, lean_txid_t to_tx_id,
 
             // get the transaction id in the first key
             auto first_key_size = guarded_leaf->GetFullKeyLen(0);
-            uint8_t first_key[first_key_size];
+            SmallBuffer256 first_key_holder(first_key_size);
+            auto* first_key = first_key_holder.Data();
             guarded_leaf->CopyFullKey(0, first_key);
             lean_txid_t tx_id_in_first_key;
             utils::Unfold(first_key, tx_id_in_first_key);
 
             // get the transaction id in the last key
             auto last_key_size = guarded_leaf->GetFullKeyLen(guarded_leaf->num_slots_ - 1);
-            uint8_t last_key[last_key_size];
+            SmallBuffer256 last_key_holder(last_key_size);
+            auto* last_key = last_key_holder.Data();
             guarded_leaf->CopyFullKey(guarded_leaf->num_slots_ - 1, last_key);
             lean_txid_t tx_id_in_last_key;
             utils::Unfold(last_key, tx_id_in_last_key);
@@ -302,12 +305,14 @@ void HistoryStorage::VisitRemovedVersions(lean_txid_t from_tx_id, lean_txid_t to
                                           RemoveVersionCallback on_remove_version) {
   auto* remove_tree = remove_index_;
   auto key_size = sizeof(to_tx_id);
-  uint8_t key_buffer[CoroEnv::CurStore()->store_option_->page_size_];
+  SmallBuffer<4096> key_buffer_holder(CoroEnv::CurStore()->store_option_->page_size_);
+  auto* key_buffer = key_buffer_holder.Data();
 
   uint64_t offset = 0;
   offset += utils::Fold(key_buffer + offset, from_tx_id);
   Slice key(key_buffer, key_size);
-  uint8_t payload[CoroEnv::CurStore()->store_option_->page_size_];
+  SmallBuffer<4096> payload_holder(CoroEnv::CurStore()->store_option_->page_size_);
+  auto* payload = payload_holder.Data();
   uint16_t payload_size;
 
   JUMPMU_TRY() {

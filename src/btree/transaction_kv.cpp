@@ -1,14 +1,16 @@
 #include "leanstore/btree/transaction_kv.hpp"
 
-#include "btree/core/b_tree_wal_payload.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/chained_tuple.hpp"
 #include "leanstore/btree/core/b_tree_generic.hpp"
 #include "leanstore/btree/core/btree_iter.hpp"
 #include "leanstore/btree/tuple.hpp"
+#include "leanstore/common/types.h"
+#include "leanstore/common/wal_record.h"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
+#include "leanstore/slice.hpp"
 #include "leanstore/sync/hybrid_guard.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/defer.hpp"
@@ -19,6 +21,7 @@
 #include "leanstore/utils/result.hpp"
 #include "utils/coroutine/mvcc_manager.hpp"
 #include "utils/small_vector.hpp"
+#include "wal/wal_builder.hpp"
 
 #include <cstring>
 #include <format>
@@ -251,8 +254,13 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
     }
 
     // WAL
-    x_iter->guarded_leaf_.WriteWal<WalTxInsert>(key.size() + val.size(), key, val, 0, 0,
-                                                kInvalidCommandid);
+    WalTxBuilder<lean_wal_tx_insert>(this->tree_id_, key.size() + val.size())
+        .SetPageInfo(x_iter->guarded_leaf_.bf_)
+        .SetPrevVersion(0, 0, kCmdInvalid)
+        .BuildTxInsert(key, val)
+        .Submit();
+
+    CoroEnv::CurTxMgr().ActiveTx().has_wrote_ = true;
 
     // insert
     TransactionKV::InsertToNode(x_iter->guarded_leaf_, key, val, CoroEnv::CurTxMgr().worker_id_,
@@ -292,7 +300,7 @@ void TransactionKV::InsertAfterRemove(BTreeIterMut* x_iter, Slice key, Slice val
   auto* chained_tuple = ChainedTuple::From(mut_raw_val.Data());
   auto last_worker_id = chained_tuple->worker_id_;
   auto last_tx_id = chained_tuple->tx_id_;
-  auto last_command_id = chained_tuple->command_id_;
+  auto last_command_id = chained_tuple->cmd_id_;
   auto is_write_locked [[maybe_unused]] = chained_tuple->IsWriteLocked();
   LEAN_DCHECK(chained_tuple->is_tombstone_,
               "Tuple should be removed before insert, workerId={}, "
@@ -309,11 +317,13 @@ void TransactionKV::InsertAfterRemove(BTreeIterMut* x_iter, Slice key, Slice val
       });
 
   // WAL
-  auto prev_worker_id = chained_tuple->worker_id_;
-  auto prev_tx_id = chained_tuple->tx_id_;
-  auto prev_command_id = chained_tuple->command_id_;
-  x_iter->guarded_leaf_.WriteWal<WalTxInsert>(key.size() + val.size(), key, val, prev_worker_id,
-                                              prev_tx_id, prev_command_id);
+  WalTxBuilder<lean_wal_tx_insert>(this->tree_id_, key.size() + val.size())
+      .SetPageInfo(x_iter->guarded_leaf_.bf_)
+      .SetPrevVersion(chained_tuple->worker_id_, chained_tuple->tx_id_, chained_tuple->cmd_id_)
+      .BuildTxInsert(key, val)
+      .Submit();
+
+  CoroEnv::CurTxMgr().ActiveTx().has_wrote_ = true;
 
   // store the old chained tuple update stats
   auto total_updates_copy = chained_tuple->total_updates_;
@@ -398,15 +408,17 @@ OpCode TransactionKV::Remove(Slice key) {
     auto command_id =
         CoroEnv::CurTxMgr().cc_.PutVersion(tree_id_, true, version_size, [&](uint8_t* version_buf) {
           new (version_buf) RemoveVersion(chained_tuple.worker_id_, chained_tuple.tx_id_,
-                                          chained_tuple.command_id_, key, val, dangling_pointer);
+                                          chained_tuple.cmd_id_, key, val, dangling_pointer);
         });
 
     // 2. write wal
-    auto prev_worker_id = chained_tuple.worker_id_;
-    auto prev_tx_id = chained_tuple.tx_id_;
-    auto prev_command_id = chained_tuple.command_id_;
-    x_iter->guarded_leaf_.WriteWal<WalTxRemove>(key.size() + val.size(), key, val, prev_worker_id,
-                                                prev_tx_id, prev_command_id);
+    WalTxBuilder<lean_wal_tx_remove>(this->tree_id_, key.size() + val.size())
+        .SetPageInfo(x_iter->guarded_leaf_.bf_)
+        .SetPrevVersion(chained_tuple.worker_id_, chained_tuple.tx_id_, chained_tuple.cmd_id_)
+        .BuildTxRemove(key, val)
+        .Submit();
+
+    CoroEnv::CurTxMgr().ActiveTx().has_wrote_ = true;
 
     // 3. remove the tuple, leave a tombsone
     if (mut_raw_val.Size() > sizeof(ChainedTuple)) {
@@ -415,7 +427,7 @@ OpCode TransactionKV::Remove(Slice key) {
     chained_tuple.is_tombstone_ = true;
     chained_tuple.worker_id_ = CoroEnv::CurTxMgr().worker_id_;
     chained_tuple.tx_id_ = CoroEnv::CurTxMgr().ActiveTx().start_ts_;
-    chained_tuple.command_id_ = command_id;
+    chained_tuple.cmd_id_ = command_id;
 
     chained_tuple.WriteUnlock();
     JUMPMU_RETURN OpCode::kOK;
@@ -443,40 +455,38 @@ OpCode TransactionKV::ScanAsc(Slice start_key, ScanCallback callback) {
   return scan4ShortRunningTx<true>(start_key, callback);
 }
 
-void TransactionKV::Undo(const uint8_t* wal_payload_ptr, const uint64_t tx_id [[maybe_unused]]) {
-  auto& wal_payload = *reinterpret_cast<const WalPayload*>(wal_payload_ptr);
-  switch (wal_payload.type_) {
-  case WalPayload::Type::kWalTxInsert: {
-    return undo_last_insert(static_cast<const WalTxInsert*>(&wal_payload));
+void TransactionKV::Undo(const lean_wal_record* record) {
+  switch (record->type_) {
+  case LEAN_WAL_TYPE_TX_INSERT: {
+    return undo_last_insert(reinterpret_cast<const lean_wal_tx_insert*>(record));
   }
-  case WalPayload::Type::kWalTxUpdate: {
-    return undo_last_update(static_cast<const WalTxUpdate*>(&wal_payload));
+  case LEAN_WAL_TYPE_TX_UPDATE: {
+    return undo_last_update(reinterpret_cast<const lean_wal_tx_update*>(record));
   }
-  case WalPayload::Type::kWalTxRemove: {
-    return undo_last_remove(static_cast<const WalTxRemove*>(&wal_payload));
+  case LEAN_WAL_TYPE_TX_REMOVE: {
+    return undo_last_remove(reinterpret_cast<const lean_wal_tx_remove*>(record));
   }
   default: {
-    Log::Error("Unknown wal payload type: {}", (uint64_t)wal_payload.type_);
+    LEAN_DCHECK(false, "Unknown wal record type: {}", (uint64_t)record->type_);
+    Log::Error("Unknown wal record type: {}", (uint64_t)record->type_);
   }
   }
 }
 
-void TransactionKV::undo_last_insert(const WalTxInsert* wal_insert) {
+void TransactionKV::undo_last_insert(const lean_wal_tx_insert* wal_insert) {
   // Assuming no insert after remove
-  auto key = wal_insert->GetKey();
+  auto key = Slice{lean_wal_tx_insert_get_key(wal_insert), wal_insert->key_size_};
   while (true) {
     JUMPMU_TRY() {
       auto x_iter = NewBTreeIterMut();
       x_iter->SeekToEqual(key);
       LEAN_DCHECK(x_iter->Valid(),
-                  "Cannot find the inserted key in btree, workerId={}, "
-                  "startTs={}, key={}",
+                  "Cannot find the inserted key in btree, worker_id={}, start_ts={}, key={}",
                   CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_,
                   key.ToString());
       // TODO(jian.z): write compensation wal entry
-      if (wal_insert->prev_command_id_ != kInvalidCommandid) {
-        // only remove the inserted value and mark the chained tuple as
-        // removed
+      if (wal_insert->prev_cmd_id_ != kCmdInvalid) {
+        // only remove the inserted value and mark the chained tuple as removed
         auto mut_raw_val = x_iter->MutableVal();
         auto* chained_tuple = ChainedTuple::From(mut_raw_val.Data());
 
@@ -486,12 +496,11 @@ void TransactionKV::undo_last_insert(const WalTxInsert* wal_insert) {
 
         // mark as removed
         chained_tuple->is_tombstone_ = true;
-        chained_tuple->worker_id_ = wal_insert->prev_worker_id_;
-        chained_tuple->tx_id_ = wal_insert->prev_tx_id_;
-        chained_tuple->command_id_ = wal_insert->prev_command_id_;
+        chained_tuple->worker_id_ = wal_insert->prev_wid_;
+        chained_tuple->tx_id_ = wal_insert->prev_txid_;
+        chained_tuple->cmd_id_ = wal_insert->prev_cmd_id_;
       } else {
-        // It's the first insert of of the value, remove the whole key-value
-        // from the btree.
+        // It's the first insert of of the value, remove the whole key-value from the btree.
         auto ret = x_iter->RemoveCurrent();
         if (ret != OpCode::kOK) {
           Log::Error("Undo last insert failed, failed to remove current key, "
@@ -511,8 +520,8 @@ void TransactionKV::undo_last_insert(const WalTxInsert* wal_insert) {
   }
 }
 
-void TransactionKV::undo_last_update(const WalTxUpdate* wal_update) {
-  auto key = wal_update->GetKey();
+void TransactionKV::undo_last_update(const lean_wal_tx_update* wal_update) {
+  auto key = Slice{lean_wal_tx_update_get_key(wal_update), wal_update->key_size_};
   while (true) {
     JUMPMU_TRY() {
       auto x_iter = NewBTreeIterMut();
@@ -532,17 +541,21 @@ void TransactionKV::undo_last_update(const WalTxUpdate* wal_update) {
         FatTuple::From(mut_raw_val.Data())->UndoLastUpdate();
       } else {
         auto& chained_tuple = *ChainedTuple::From(mut_raw_val.Data());
-        chained_tuple.worker_id_ = wal_update->prev_worker_id_;
-        chained_tuple.tx_id_ = wal_update->prev_tx_id_;
-        chained_tuple.command_id_ ^= wal_update->xor_command_id_;
-        auto& update_desc = *wal_update->GetUpdateDesc();
-        auto* xor_data = wal_update->GetDeltaPtr();
+        chained_tuple.worker_id_ = wal_update->prev_wid_;
+        chained_tuple.tx_id_ = wal_update->prev_txid_;
+        chained_tuple.cmd_id_ ^= wal_update->xor_cmd_id_;
+
+        // TODO: Uncomment this after implementing the xor-based update
+
+        auto& update_desc =
+            *reinterpret_cast<UpdateDesc*>(lean_wal_tx_update_get_update_desc(wal_update));
+        auto* delta_ptr = reinterpret_cast<uint8_t*>(lean_wal_tx_update_get_delta(wal_update));
+        auto delta_size = wal_update->delta_size_;
 
         // 1. copy the new value to buffer
-        auto delta_size = wal_update->GetDeltaSize();
         SmallBuffer256 tmp_buf(delta_size);
         auto* buff = tmp_buf.Data();
-        std::memcpy(buff, xor_data, delta_size);
+        std::memcpy(buff, delta_ptr, delta_size);
 
         // 2. calculate the old value based on xor result and old value
         BasicKV::XorToBuffer(update_desc, chained_tuple.payload_, buff);
@@ -559,8 +572,8 @@ void TransactionKV::undo_last_update(const WalTxUpdate* wal_update) {
   }
 }
 
-void TransactionKV::undo_last_remove(const WalTxRemove* wal_remove) {
-  Slice removed_key = wal_remove->RemovedKey();
+void TransactionKV::undo_last_remove(const lean_wal_tx_remove* wal_remove) {
+  Slice removed_key{lean_wal_tx_remove_get_key(wal_remove), wal_remove->key_size_};
   while (true) {
     JUMPMU_TRY() {
       auto x_iter = NewBTreeIterMut();
@@ -587,9 +600,9 @@ void TransactionKV::undo_last_remove(const WalTxRemove* wal_remove) {
       }
 
       auto cur_mut_raw_val = x_iter->MutableVal();
-      new (cur_mut_raw_val.Data())
-          ChainedTuple(wal_remove->prev_worker_id_, wal_remove->prev_tx_id_,
-                       wal_remove->prev_command_id_, wal_remove->RemovedVal());
+      Slice removed_val{lean_wal_tx_remove_get_val(wal_remove), wal_remove->val_size_};
+      new (cur_mut_raw_val.Data()) ChainedTuple(wal_remove->prev_wid_, wal_remove->prev_txid_,
+                                                wal_remove->prev_cmd_id_, removed_val);
 
       JUMPMU_RETURN;
     }
@@ -624,7 +637,7 @@ bool TransactionKV::UpdateInFatTuple(BTreeIterMut* x_iter, Slice key,
       fat_tuple->Append(update_desc);
       fat_tuple->worker_id_ = CoroEnv::CurTxMgr().worker_id_;
       fat_tuple->tx_id_ = CoroEnv::CurTxMgr().ActiveTx().start_ts_;
-      fat_tuple->command_id_ = CoroEnv::CurTxMgr().command_id_++;
+      fat_tuple->cmd_id_ = CoroEnv::CurTxMgr().cmd_id_++;
       update_call_back(fat_tuple->GetMutableValue());
       LEAN_DCHECK(fat_tuple->payload_capacity_ >= fat_tuple->payload_size_);
     };
@@ -637,21 +650,27 @@ bool TransactionKV::UpdateInFatTuple(BTreeIterMut* x_iter, Slice key,
     auto size_of_desc_and_delta = update_desc.SizeWithDelta();
     auto prev_worker_id = fat_tuple->worker_id_;
     auto prev_tx_id = fat_tuple->tx_id_;
-    auto prev_command_id = fat_tuple->command_id_;
-    auto wal_handler = x_iter->guarded_leaf_.ReserveWALPayload<WalTxUpdate>(
-        key.size() + size_of_desc_and_delta, key, update_desc, size_of_desc_and_delta,
-        prev_worker_id, prev_tx_id, prev_command_id);
-    auto* wal_buf = wal_handler->GetDeltaPtr();
+    auto prev_command_id = fat_tuple->cmd_id_;
+
+    WalTxBuilder<lean_wal_tx_update> builder(x_iter->btree_.tree_id_,
+                                             key.size() + size_of_desc_and_delta);
+    builder.SetPageInfo(x_iter->guarded_leaf_.bf_)
+        .SetPrevVersion(prev_worker_id, prev_tx_id, prev_command_id)
+        .BuildTxUpdate(key, update_desc);
+    auto* delta_ptr = reinterpret_cast<uint8_t*>(lean_wal_tx_update_get_delta(builder.GetWal()));
 
     // 1. copy old value to wal buffer
-    BasicKV::CopyToBuffer(update_desc, fat_tuple->GetValPtr(), wal_buf);
+    BasicKV::CopyToBuffer(update_desc, fat_tuple->GetValPtr(), delta_ptr);
 
     // 2. update the value in-place
     perform_update();
 
     // 3. xor with the updated new value and store to wal buffer
-    BasicKV::XorToBuffer(update_desc, fat_tuple->GetValPtr(), wal_buf);
-    wal_handler.SubmitWal();
+    BasicKV::XorToBuffer(update_desc, fat_tuple->GetValPtr(), delta_ptr);
+
+    builder.Submit();
+    CoroEnv::CurTxMgr().ActiveTx().has_wrote_ = true;
+
     return true;
   }
 }
@@ -836,24 +855,24 @@ void TransactionKV::GarbageCollect(const uint8_t* version_data, lean_wid_t versi
   }
 }
 
-void TransactionKV::Unlock(const uint8_t* wal_entry_ptr) {
-  const WalPayload& entry = *reinterpret_cast<const WalPayload*>(wal_entry_ptr);
+void TransactionKV::Unlock(const uint8_t* wal_record) {
+  const lean_wal_record* wal = reinterpret_cast<const lean_wal_record*>(wal_record);
   Slice key;
-  switch (entry.type_) {
-  case WalPayload::Type::kWalTxInsert: {
-    // Assuming no insert after remove
-    auto& wal_insert = *reinterpret_cast<const WalTxInsert*>(&entry);
-    key = wal_insert.GetKey();
+
+  switch (wal->type_) {
+  case LEAN_WAL_TYPE_TX_INSERT: {
+    auto* wal_insert = reinterpret_cast<const lean_wal_tx_insert*>(wal);
+    key = Slice{lean_wal_tx_insert_get_key(wal_insert), wal_insert->key_size_};
     break;
   }
-  case WalPayload::Type::kWalTxUpdate: {
-    auto& wal_update = *reinterpret_cast<const WalTxUpdate*>(&entry);
-    key = wal_update.GetKey();
+  case LEAN_WAL_TYPE_TX_UPDATE: {
+    auto* wal_update = reinterpret_cast<const lean_wal_tx_update*>(wal);
+    key = Slice{lean_wal_tx_update_get_key(wal_update), wal_update->key_size_};
     break;
   }
-  case WalPayload::Type::kWalTxRemove: {
-    auto& remove_entry = *reinterpret_cast<const WalTxRemove*>(&entry);
-    key = remove_entry.RemovedKey();
+  case LEAN_WAL_TYPE_TX_REMOVE: {
+    auto* wal_remove = reinterpret_cast<const lean_wal_tx_remove*>(wal);
+    key = Slice{lean_wal_tx_remove_get_key(wal_remove), wal_remove->key_size_};
     break;
   }
   default: {
