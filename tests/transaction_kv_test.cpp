@@ -18,7 +18,7 @@
 #include <utility>
 
 using namespace leanstore::utils;
-using namespace leanstore::storage::btree;
+using namespace leanstore;
 
 namespace leanstore::test {
 
@@ -81,7 +81,7 @@ TEST_F(TransactionKVTest, Create) {
 }
 
 TEST_F(TransactionKVTest, InsertAndLookup) {
-  storage::btree::TransactionKV* btree;
+  TransactionKV* btree;
 
   // prepare key-value pairs to insert
   size_t num_keys(10);
@@ -151,7 +151,7 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
 
 TEST_F(TransactionKVTest, Insert1000KVs) {
   store_->ExecSync(0, [&]() {
-    storage::btree::TransactionKV* btree;
+    TransactionKV* btree;
 
     // create leanstore btree for table records
     const auto* btree_name = "testTree1";
@@ -186,7 +186,7 @@ TEST_F(TransactionKVTest, Insert1000KVs) {
 
 TEST_F(TransactionKVTest, InsertDuplicates) {
   store_->ExecSync(0, [&]() {
-    storage::btree::TransactionKV* btree;
+    TransactionKV* btree;
 
     // create leanstore btree for table records
     const auto* btree_name = "testTree1";
@@ -229,7 +229,7 @@ TEST_F(TransactionKVTest, InsertDuplicates) {
 
 TEST_F(TransactionKVTest, Remove) {
   store_->ExecSync(0, [&]() {
-    storage::btree::TransactionKV* btree;
+    TransactionKV* btree;
 
     // create leanstore btree for table records
     const auto* btree_name = "testTree1";
@@ -278,7 +278,7 @@ TEST_F(TransactionKVTest, Remove) {
 
 TEST_F(TransactionKVTest, RemoveNotExisted) {
   store_->ExecSync(0, [&]() {
-    storage::btree::TransactionKV* btree;
+    TransactionKV* btree;
 
     // create leanstore btree for table records
     const auto* btree_name = "testTree1";
@@ -329,7 +329,7 @@ TEST_F(TransactionKVTest, RemoveNotExisted) {
 TEST_F(TransactionKVTest, RemoveFromOthers) {
   const auto* btree_name = "testTree1";
   std::set<std::string> unique_keys;
-  storage::btree::TransactionKV* btree;
+  TransactionKV* btree;
 
   store_->ExecSync(0, [&]() {
     // create leanstore btree for table records
@@ -393,7 +393,7 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
 }
 
 TEST_F(TransactionKVTest, Update) {
-  storage::btree::TransactionKV* btree;
+  TransactionKV* btree;
 
   // prepare key-value pairs to insert
   const size_t num_keys(100);
@@ -466,7 +466,7 @@ TEST_F(TransactionKVTest, Update) {
 }
 
 TEST_F(TransactionKVTest, ScanAsc) {
-  storage::btree::TransactionKV* btree;
+  TransactionKV* btree;
 
   // prepare key-value pairs to insert
   const size_t num_keys(100);
@@ -544,7 +544,7 @@ TEST_F(TransactionKVTest, ScanAsc) {
 }
 
 TEST_F(TransactionKVTest, ScanDesc) {
-  storage::btree::TransactionKV* btree;
+  TransactionKV* btree;
 
   // prepare key-value pairs to insert
   const size_t num_keys(100);
@@ -622,7 +622,7 @@ TEST_F(TransactionKVTest, ScanDesc) {
 }
 
 TEST_F(TransactionKVTest, InsertAfterRemove) {
-  storage::btree::TransactionKV* btree;
+  TransactionKV* btree;
 
   // prepare key-value pairs to insert
   const size_t num_keys(1);
@@ -724,7 +724,7 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
 }
 
 TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
-  storage::btree::TransactionKV* btree;
+  TransactionKV* btree;
 
   // prepare key-value pairs to insert
   const size_t num_keys(1);
@@ -819,7 +819,7 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
 
 TEST_F(TransactionKVTest, ConcurrentInsertWithSplit) {
   // prepare a btree for insert
-  storage::btree::TransactionKV* btree;
+  TransactionKV* btree;
   store_->ExecSync(0, [&]() {
     auto res = store_->CreateTransactionKV(
         ::testing::UnitTest::GetInstance()->current_test_info()->name());

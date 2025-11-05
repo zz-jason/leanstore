@@ -1,6 +1,6 @@
 #pragma once
 
-#include "utils/coroutine/futex_waiter.hpp"
+#include "coroutine/futex_waiter.hpp"
 
 #include <cassert>
 #include <cerrno>

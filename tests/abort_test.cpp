@@ -6,9 +6,6 @@
 
 #include <memory>
 
-using namespace leanstore::utils;
-using namespace leanstore::storage::btree;
-
 namespace leanstore::test {
 
 class AbortTest : public ::testing::Test {
@@ -39,7 +36,7 @@ protected:
 
     // Create a table with random name.
     auto* s0 = store_->GetSession(0);
-    tbl_name_ = RandomGenerator::RandAlphString(10);
+    tbl_name_ = utils::RandomGenerator::RandAlphString(10);
     auto res = s0->CreateTable(tbl_name_, true);
     ASSERT_TRUE(res);
     tbl_ = res.value();

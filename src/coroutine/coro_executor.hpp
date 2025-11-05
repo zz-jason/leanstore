@@ -1,13 +1,13 @@
 #pragma once
 
+#include "coroutine/auto_commit_protocol.hpp"
+#include "coroutine/blocking_queue_mpsc.hpp"
+#include "coroutine/coro_env.hpp"
+#include "coroutine/coro_io.hpp"
+#include "coroutine/coroutine.hpp"
 #include "leanstore//utils/jump_mu.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
-#include "utils/coroutine/auto_commit_protocol.hpp"
-#include "utils/coroutine/blocking_queue_mpsc.hpp"
-#include "utils/coroutine/coro_env.hpp"
-#include "utils/coroutine/coro_io.hpp"
-#include "utils/coroutine/coroutine.hpp"
 
 #include <atomic>
 #include <cassert>
@@ -22,19 +22,16 @@
 #include <unistd.h>
 
 namespace leanstore {
+
+/// Forward declarations
 class LeanStore;
-} // namespace leanstore
-
-namespace leanstore::storage {
 class PageEvictor;
-} // namespace leanstore::storage
-
-namespace leanstore::cr {
 class Logging;
-} // namespace leanstore::cr
 
-namespace leanstore {
-
+/// Coroutine executor responsible for managing and executing coroutines.  Each
+/// executor runs in its own thread and handles both user and system coroutines.
+/// Currently, system coroutines include logging, group commit, page eviction,
+/// and IO polling.
 class CoroExecutor {
 public:
   static constexpr auto kCoroExecNamePattern = "coro_exec_{}";
@@ -165,7 +162,7 @@ private:
   CoroIo coro_io_{CoroEnv::kMaxCoroutinesPerThread};
 
   std::unordered_set<uint64_t> eviction_pending_partitions_;
-  std::unique_ptr<leanstore::storage::PageEvictor> page_evictor_;
+  std::unique_ptr<leanstore::PageEvictor> page_evictor_;
 
   std::thread thread_;
 

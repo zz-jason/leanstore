@@ -15,21 +15,29 @@
 #include <cassert>
 #include <limits>
 
-namespace leanstore::storage::btree {
+namespace leanstore {
 
-enum class BTreeType : uint8_t { kGeneric = 0, kBasicKV = 1, kTransactionKV = 2 };
+enum class BTreeType : uint8_t {
+  kGeneric = 0,
+  kBasicKV,
+  kTransactionKV,
+};
 
 class BTreeIter;
 class BTreeIterMut;
 using BTreeNodeCallback = std::function<int64_t(BTreeNode&)>;
 
-class BTreeGeneric : public leanstore::storage::BufferManagedTree {
+class BTreeGeneric : public BufferManagedTree {
 public:
   friend class BTreeIterPessistic;
 
-  enum class XMergeReturnCode : uint8_t { kNothing, kFullMerge, kPartialMerge };
+  enum class XMergeReturnCode : uint8_t {
+    kNothing = 0,
+    kFullMerge,
+    kPartialMerge,
+  };
 
-  leanstore::LeanStore* store_;
+  LeanStore* store_;
 
   lean_treeid_t tree_id_;
 
@@ -46,7 +54,7 @@ public:
 
   virtual ~BTreeGeneric() override = default;
 
-  void Init(leanstore::LeanStore* store, lean_treeid_t tree_id, lean_btree_config config);
+  void Init(LeanStore* store, lean_treeid_t tree_id, lean_btree_config config);
 
   /// Create an immutable iterator for the BTree.
   std::unique_ptr<BTreeIter> NewBTreeIter();
@@ -65,16 +73,16 @@ public:
                           ParentSwipHandler& parent_swip_handler);
 
   uint64_t CountInnerPages() {
-    return iterate_all_pages([](BTreeNode&) { return 1; }, [](BTreeNode&) { return 0; });
+    return IterateAllPages([](BTreeNode&) { return 1; }, [](BTreeNode&) { return 0; });
   }
 
   uint64_t CountAllPages() {
-    return iterate_all_pages([](BTreeNode&) { return 1; }, [](BTreeNode&) { return 1; });
+    return IterateAllPages([](BTreeNode&) { return 1; }, [](BTreeNode&) { return 1; });
   }
 
   uint64_t CountEntries() {
-    return iterate_all_pages([](BTreeNode&) { return 0; },
-                             [](BTreeNode& node) { return node.num_slots_; });
+    return IterateAllPages([](BTreeNode&) { return 0; },
+                           [](BTreeNode& node) { return node.num_slots_; });
   }
 
   uint64_t GetHeight() {
@@ -82,8 +90,8 @@ public:
   }
 
   uint32_t FreeSpaceAfterCompaction() {
-    return iterate_all_pages([](BTreeNode& inner) { return inner.FreeSpaceAfterCompaction(); },
-                             [](BTreeNode& leaf) { return leaf.FreeSpaceAfterCompaction(); });
+    return IterateAllPages([](BTreeNode& inner) { return inner.FreeSpaceAfterCompaction(); },
+                           [](BTreeNode& leaf) { return leaf.FreeSpaceAfterCompaction(); });
   }
 
   /// Get a summary of the BTree
@@ -93,7 +101,7 @@ public:
   virtual void IterateChildSwips(BufferFrame& bf, std::function<bool(Swip&)> callback) override;
 
   virtual ParentSwipHandler FindParent(BufferFrame& child_bf) override {
-    return BTreeGeneric::find_parent_may_jump(*this, child_bf);
+    return BTreeGeneric::FindParentMayJump(*this, child_bf);
   }
 
   /// Returns true if the buffer manager has to restart and pick another buffer
@@ -125,11 +133,11 @@ public:
   virtual void Deserialize(StringMap map) override;
 
 private:
-  inline bool is_meta_node(GuardedBufferFrame<BTreeNode>& guarded_node) {
+  bool IsMetaNode(GuardedBufferFrame<BTreeNode>& guarded_node) {
     return meta_node_swip_ == guarded_node.bf_;
   }
 
-  inline bool is_meta_node(ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_node) {
+  bool IsMetaNode(ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_node) {
     return meta_node_swip_ == x_guarded_node.bf();
   }
 
@@ -142,9 +150,9 @@ private:
   ///              |     |
   ///           newLeft toSplit
   ///
-  void split_root_may_jump(lean_txid_t sys_tx_id, GuardedBufferFrame<BTreeNode>& guarded_parent,
-                           GuardedBufferFrame<BTreeNode>& guarded_child,
-                           const BTreeNode::SeparatorInfo& sep_info);
+  void SplitRootMayJump(lean_txid_t sys_tx_id, GuardedBufferFrame<BTreeNode>& guarded_parent,
+                        GuardedBufferFrame<BTreeNode>& guarded_child,
+                        const BTreeNode::SeparatorInfo& sep_info);
 
   /// Split a non-root node, 3 nodes are involved in the split:
   /// parent(toSplit) -> parent(newLeft, toSplit)
@@ -153,21 +161,21 @@ private:
   ///   |            |   |
   /// toSplit   newLeft toSplit
   ///
-  void split_non_root_may_jump(lean_txid_t sys_tx_id, GuardedBufferFrame<BTreeNode>& guarded_parent,
-                               GuardedBufferFrame<BTreeNode>& guarded_child,
-                               const BTreeNode::SeparatorInfo& sep_info,
-                               uint16_t space_needed_for_separator);
+  void SplitNonRootMayJump(lean_txid_t sys_tx_id, GuardedBufferFrame<BTreeNode>& guarded_parent,
+                           GuardedBufferFrame<BTreeNode>& guarded_child,
+                           const BTreeNode::SeparatorInfo& sep_info,
+                           uint16_t space_needed_for_separator);
 
-  int64_t iterate_all_pages(BTreeNodeCallback inner, BTreeNodeCallback leaf);
+  int64_t IterateAllPages(BTreeNodeCallback inner, BTreeNodeCallback leaf);
 
-  int64_t iterate_all_pages_recursive(GuardedBufferFrame<BTreeNode>& guarded_node,
-                                      BTreeNodeCallback inner, BTreeNodeCallback leaf);
+  int64_t IterateAllPagesRec(GuardedBufferFrame<BTreeNode>& guarded_node, BTreeNodeCallback inner,
+                             BTreeNodeCallback leaf);
 
-  int16_t merge_left_into_right(ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_parent,
-                                int16_t left_pos,
-                                ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_left,
-                                ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_right,
-                                bool full_merge_or_nothing);
+  int16_t MergeLeftIntoRight(ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_parent,
+                             int16_t left_pos,
+                             ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_left,
+                             ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_right,
+                             bool full_merge_or_nothing);
 
 public:
   // Helpers
@@ -196,7 +204,7 @@ public:
     GuardedBufferFrame<BTreeNode> guarded_root_node(btree.store_->buffer_manager_.get(),
                                                     guarded_meta_node,
                                                     guarded_meta_node->right_most_child_swip_);
-    BTreeGeneric::free_b_tree_nodes_recursive(btree, guarded_root_node);
+    BTreeGeneric::FreeBTreeNodesRec(btree, guarded_root_node);
 
     auto x_guarded_meta = ExclusiveGuardedBufferFrame(std::move(guarded_meta_node));
     x_guarded_meta.Reclaim();
@@ -205,17 +213,16 @@ public:
   static void ToJson(BTreeGeneric& btree, utils::JsonObj* btree_json_obj);
 
 private:
-  static void free_b_tree_nodes_recursive(BTreeGeneric& btree,
-                                          GuardedBufferFrame<BTreeNode>& guarded_node);
+  static void FreeBTreeNodesRec(BTreeGeneric& btree, GuardedBufferFrame<BTreeNode>& guarded_node);
 
-  static void to_json_recursive(BTreeGeneric& btree, GuardedBufferFrame<BTreeNode>& guarded_node,
-                                utils::JsonObj* node_json_obj);
+  static void ToJsonRec(BTreeGeneric& btree, GuardedBufferFrame<BTreeNode>& guarded_node,
+                        utils::JsonObj* node_json_obj);
 
-  static ParentSwipHandler find_parent_may_jump(BTreeGeneric& btree, BufferFrame& bf_to_find) {
+  static ParentSwipHandler FindParentMayJump(BTreeGeneric& btree, BufferFrame& bf_to_find) {
     return FindParent<true>(btree, bf_to_find);
   }
 
-  static ParentSwipHandler find_parent_eager(BTreeGeneric& btree, BufferFrame& bf_to_find) {
+  static ParentSwipHandler FindParentEager(BTreeGeneric& btree, BufferFrame& bf_to_find) {
     return FindParent<false>(btree, bf_to_find);
   }
 
@@ -225,14 +232,14 @@ public:
   static constexpr std::string kMetaPageId = "metaPageId";
 };
 
-inline void BTreeGeneric::free_b_tree_nodes_recursive(BTreeGeneric& btree,
-                                                      GuardedBufferFrame<BTreeNode>& guarded_node) {
+inline void BTreeGeneric::FreeBTreeNodesRec(BTreeGeneric& btree,
+                                            GuardedBufferFrame<BTreeNode>& guarded_node) {
   if (!guarded_node->is_leaf_) {
     for (auto i = 0u; i <= guarded_node->num_slots_; ++i) {
       auto* child_swip = guarded_node->ChildSwipIncludingRightMost(i);
       GuardedBufferFrame<BTreeNode> guarded_child(btree.store_->buffer_manager_.get(), guarded_node,
                                                   *child_swip);
-      free_b_tree_nodes_recursive(btree, guarded_child);
+      FreeBTreeNodesRec(btree, guarded_child);
     }
   }
 
@@ -261,7 +268,7 @@ inline SpaceCheckResult BTreeGeneric::CheckSpaceUtilization(BufferFrame& bf) {
     return SpaceCheckResult::kNothing;
   }
 
-  ParentSwipHandler parent_handler = BTreeGeneric::find_parent_may_jump(*this, bf);
+  ParentSwipHandler parent_handler = BTreeGeneric::FindParentMayJump(*this, bf);
   GuardedBufferFrame<BTreeNode> guarded_parent(store_->buffer_manager_.get(),
                                                std::move(parent_handler.parent_guard_),
                                                parent_handler.parent_bf_);
@@ -333,44 +340,6 @@ inline void BTreeGeneric::FindLeafCanJump(Slice key, GuardedBufferFrame<BTreeNod
   guarded_parent.unlock();
 }
 
-// inline void BTreeGeneric::CoroFindLeaf(Slice key, CoroLockedBufferFrame& guarded_target,
-//                                        LockMode mode) {
-//
-//   auto non_leaf_lock_mode = LockMode::kSharedOptimistic;
-//   auto* buffer_manager = store_->buffer_manager_.get();
-//
-//   // lock meta buffer frame
-//   auto* parent_bf = &meta_node_swip_.AsBufferFrame();
-//   auto* parent_node = BTreeNode::From(parent_bf);
-//   CoroLockedBufferFrame locked_parent(parent_bf, non_leaf_lock_mode);
-//
-//   // lock root buffer frame
-//   auto* child_bf = &parent_node->right_most_child_swip_.AsBufferFrame();
-//   auto* child_node = BTreeNode::From(&parent_node->right_most_child_swip_.AsBufferFrame());
-//   CoroLockedBufferFrame locked_child(locked_parent.LockChild(child_bf, non_leaf_lock_mode));
-//
-//   // search for the leaf node
-//   auto level = 0u;
-//   while (!child_node->is_leaf_) {
-//     auto& child_swip = child_node->LookupInner(key);
-//     LEAN_DCHECK(!child_swip.IsEmpty());
-//
-//     // TODO: yield and retry from the begining
-//     if (locked_parent.IsConflicted()) {
-//     }
-//
-//     locked_parent = std::move(locked_child);
-//     if (level == height_ - 1) {
-//       locked_child = locked_parent.LockChild(&child_swip.AsBufferFrame(), mode);
-//     } else {
-//       locked_child = locked_parent.LockChild(&child_swip.AsBufferFrame(), non_leaf_lock_mode);
-//     }
-//     child_bf = &locked_child.BufferFrame();
-//     child_node = BTreeNode::From(child_bf);
-//     level++;
-//   }
-// }
-
 template <bool jump_if_evicted>
 inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree, BufferFrame& bf_to_find) {
   // Check whether search on the wrong tree or the root node is evicted
@@ -378,7 +347,7 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree, BufferFra
                                                btree.meta_node_swip_);
   if (btree.tree_id_ != bf_to_find.page_.btree_id_ ||
       guarded_parent->right_most_child_swip_.IsEvicted()) {
-    leanstore::JumpContext::Jump();
+    JumpContext::Jump();
   }
 
   // Check whether the parent buffer frame to find is root
@@ -393,7 +362,7 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree, BufferFra
   // Check whether the root node is cool, all nodes below including the parent
   // of the buffer frame to find are evicted.
   if (guarded_parent->right_most_child_swip_.IsCool()) {
-    leanstore::JumpContext::Jump();
+    JumpContext::Jump();
   }
 
   auto& node_to_find = *reinterpret_cast<BTreeNode*>(bf_to_find.page_.payload_);
@@ -427,7 +396,7 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree, BufferFra
     guarded_parent = std::move(guarded_child);
     if constexpr (jump_if_evicted) {
       if (child_swip->IsEvicted()) {
-        leanstore::JumpContext::Jump();
+        JumpContext::Jump();
       }
     }
     guarded_child = GuardedBufferFrame<BTreeNode>(btree.store_->buffer_manager_.get(),
@@ -439,7 +408,7 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree, BufferFra
   const bool found = &child_swip->AsBufferFrameMasked() == &bf_to_find;
   guarded_child.JumpIfModifiedByOthers();
   if (!found) {
-    leanstore::JumpContext::Jump();
+    JumpContext::Jump();
   }
 
   LEAN_DCHECK(pos_in_parent != std::numeric_limits<uint32_t>::max(), "Invalid posInParent={}",
@@ -451,4 +420,4 @@ inline ParentSwipHandler BTreeGeneric::FindParent(BTreeGeneric& btree, BufferFra
   return parent_handler;
 }
 
-} // namespace leanstore::storage::btree
+} // namespace leanstore

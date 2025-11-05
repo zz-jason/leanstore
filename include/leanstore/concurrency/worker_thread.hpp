@@ -9,7 +9,7 @@
 #include <functional>
 #include <string>
 
-namespace leanstore::cr {
+namespace leanstore {
 
 /// WorkerThread contains the context of a worker thread. There can be multiple job senders, and
 /// each job sender can send a job to the worker thread. The worker thread state is represented by a
@@ -134,4 +134,4 @@ inline void WorkerThread::Wait() {
   cv_.notify_all();
 }
 
-} // namespace leanstore::cr
+} // namespace leanstore

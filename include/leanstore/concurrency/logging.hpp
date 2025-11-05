@@ -13,7 +13,7 @@
 
 #include <fcntl.h>
 
-namespace leanstore::cr {
+namespace leanstore {
 
 /// Used to sync wal flush request between group committer and worker.
 struct WalFlushReq {
@@ -47,7 +47,7 @@ public:
   /// Logical sequence number, i.e., the unique ID of each WAL.
   lean_lid_t lsn_ = 0;
 
-  storage::OptimisticGuarded<WalFlushReq> wal_flush_req_;
+  OptimisticGuarded<WalFlushReq> wal_flush_req_;
 
   /// The maximum writtern system transaction ID in the worker.
   lean_txid_t buffered_sys_tx_ = 0;
@@ -200,4 +200,4 @@ private:
   }
 };
 
-} // namespace leanstore::cr
+} // namespace leanstore

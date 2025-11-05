@@ -1,8 +1,8 @@
 #pragma once
 
+#include "coroutine/coro_executor.hpp"
+#include "coroutine/coroutine.hpp"
 #include "leanstore/common/portable.h"
-#include "utils/coroutine/coro_executor.hpp"
-#include "utils/coroutine/coroutine.hpp"
 
 #include <atomic>
 #include <cassert>

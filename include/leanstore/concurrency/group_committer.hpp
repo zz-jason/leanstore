@@ -11,8 +11,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-namespace leanstore::cr {
+namespace leanstore {
 
+/// Forward declarations
 class TxManager;
 class WalFlushReq;
 
@@ -20,9 +21,9 @@ class WalFlushReq;
 /// batches. It collects wal records from all the worker threads, writes them to
 /// the wal file with libaio, and determines the commitable transactions based
 /// on the min flushed system and user transaction ID.
-class GroupCommitter : public leanstore::utils::ManagedThread {
+class GroupCommitter : public utils::ManagedThread {
 public:
-  leanstore::LeanStore* store_;
+  LeanStore* store_;
 
   /// File descriptor of the underlying WAL file.
   const int32_t wal_fd_;
@@ -34,7 +35,7 @@ public:
   utils::AsyncIo aio_;
 
 public:
-  GroupCommitter(leanstore::LeanStore* store, int cpu)
+  GroupCommitter(LeanStore* store, int cpu)
       : ManagedThread(store, "GroupCommitter", cpu),
         store_(store),
         wal_fd_(store->wal_fd_),
@@ -81,4 +82,4 @@ private:
   void Append(uint8_t* buf, uint64_t lower, uint64_t upper);
 };
 
-} // namespace leanstore::cr
+} // namespace leanstore

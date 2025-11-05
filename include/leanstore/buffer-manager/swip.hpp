@@ -4,7 +4,7 @@
 #include "leanstore/common/types.h"
 #include "leanstore/utils/log.hpp"
 
-namespace leanstore::storage {
+namespace leanstore {
 
 class BufferFrame;
 
@@ -105,4 +105,4 @@ private:
   static_assert(sHotMask == 0x3FFFFFFFFFFFFFFF, "");
 };
 
-} // namespace leanstore::storage
+} // namespace leanstore

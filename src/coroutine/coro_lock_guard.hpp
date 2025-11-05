@@ -1,7 +1,7 @@
 #pragma once
 
 #include "coro_mutex.hpp"
-#include "utils/coroutine/coro_mutex.hpp"
+#include "coroutine/coro_mutex.hpp"
 
 #include <cassert>
 #include <cstdint>

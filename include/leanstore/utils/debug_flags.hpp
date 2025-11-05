@@ -1,6 +1,6 @@
 #pragma once
 
-#include "utils/coroutine/lean_mutex.hpp"
+#include "coroutine/lean_mutex.hpp"
 
 #include <string>
 #include <unordered_set>

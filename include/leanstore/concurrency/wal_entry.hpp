@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <string>
 
-namespace leanstore::cr {
+namespace leanstore {
 
 #define DO_WITH_WAL_ENTRY_TYPES(ACTION, ...)                                                       \
   ACTION(kTxAbort, "kTxAbort", __VA_ARGS__)                                                        \
@@ -178,4 +178,4 @@ inline size_t WalEntry::Size(const WalEntry* entry) {
   return 0;
 }
 
-} // namespace leanstore::cr
+} // namespace leanstore

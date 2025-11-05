@@ -16,15 +16,11 @@
 #include <sys/mman.h>
 
 namespace leanstore {
-class LeanStore;
-} // namespace leanstore
 
-namespace leanstore::storage {
+/// Forward declarations
+class LeanStore;
 template <typename T>
 class GuardedBufferFrame;
-} // namespace leanstore::storage
-
-namespace leanstore::storage {
 
 /// Synchronization in Buffer Manager, terminology:
 ///  - PET: page evictor thread
@@ -44,7 +40,7 @@ namespace leanstore::storage {
 class BufferManager {
 public:
   /// The LeanStore instance.
-  leanstore::LeanStore* store_;
+  LeanStore* store_;
 
   /// All the managed buffer frames in the memory.
   uint8_t* buffer_pool_;
@@ -65,7 +61,7 @@ public:
   /// All the page evictor threads.
   std::vector<std::unique_ptr<PageEvictor>> page_evictors_;
 
-  BufferManager(leanstore::LeanStore* store);
+  BufferManager(LeanStore* store);
 
   ~BufferManager();
 
@@ -170,7 +166,7 @@ private:
     return {};
   }
 
-  friend class leanstore::LeanStore;
+  friend class LeanStore;
 };
 
-} // namespace leanstore::storage
+} // namespace leanstore

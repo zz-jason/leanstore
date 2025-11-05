@@ -1,10 +1,10 @@
 #pragma once
 
+#include "coroutine/coro_future.hpp"
+#include "coroutine/coro_scheduler.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/utils/debug_flags.hpp"
 #include "leanstore/utils/result.hpp"
-#include "utils/coroutine/coro_future.hpp"
-#include "utils/coroutine/coro_scheduler.hpp"
 
 #include <cassert>
 #include <cstdint>
@@ -13,37 +13,22 @@
 #include <memory>
 #include <string>
 
-/// forward declarations
-namespace leanstore::storage::btree {
-
-class BTreeGeneric;
-class Config;
-class BasicKV;
-class TransactionKV;
-
-} // namespace leanstore::storage::btree
-
-/// forward declarations
-namespace leanstore::storage {
-
-class TreeRegistry;
-class BufferManager;
-
-} // namespace leanstore::storage
-
-/// forward declarations
-namespace leanstore::cr {
-
-class CRManager;
-
-} // namespace leanstore::cr
-
 namespace leanstore::utils {
+
 class JsonObj;
+
 } // namespace leanstore::utils
 
 namespace leanstore {
 
+/// forward declarations
+class BTreeGeneric;
+class Config;
+class BasicKV;
+class TransactionKV;
+class TreeRegistry;
+class BufferManager;
+class CRManager;
 class MvccManager;
 
 class LeanStore {
@@ -63,17 +48,17 @@ public:
   int32_t wal_fd_;
 
   /// The tree registry
-  std::unique_ptr<storage::TreeRegistry> tree_registry_;
+  std::unique_ptr<TreeRegistry> tree_registry_;
 
   /// The Buffer manager
-  std::unique_ptr<storage::BufferManager> buffer_manager_;
+  std::unique_ptr<BufferManager> buffer_manager_;
 
   /// The concurrency control protocol used by the store.
   std::unique_ptr<leanstore::MvccManager> mvcc_mgr_;
 
   /// The concurrent resource manager
   /// NOTE: Ownerd by LeanStore instance, should be destroyed together with it
-  cr::CRManager* crmanager_;
+  CRManager* crmanager_;
 
   CoroScheduler* coro_scheduler_;
 
@@ -90,28 +75,28 @@ public:
   ~LeanStore();
 
   /// Create a BasicKV
-  Result<leanstore::storage::btree::BasicKV*> CreateBasicKv(
-      const std::string& name,
-      lean_btree_config config = lean_btree_config{.enable_wal_ = true, .use_bulk_insert_ = false});
+  Result<BasicKV*> CreateBasicKv(const std::string& name,
+                                 lean_btree_config config = lean_btree_config{
+                                     .enable_wal_ = true, .use_bulk_insert_ = false});
 
   /// Get a registered BasicKV
-  void GetBasicKV(const std::string& name, storage::btree::BasicKV** btree);
+  void GetBasicKV(const std::string& name, BasicKV** btree);
 
   /// Unregister a BasicKV
   void DropBasicKV(const std::string& name);
 
   /// Register a TransactionKV
-  Result<leanstore::storage::btree::TransactionKV*> CreateTransactionKV(
-      const std::string& name,
-      lean_btree_config config = lean_btree_config{.enable_wal_ = true, .use_bulk_insert_ = false});
+  Result<TransactionKV*> CreateTransactionKV(const std::string& name,
+                                             lean_btree_config config = lean_btree_config{
+                                                 .enable_wal_ = true, .use_bulk_insert_ = false});
 
   /// Get a registered TransactionKV
-  void GetTransactionKV(const std::string& name, storage::btree::TransactionKV** btree);
+  void GetTransactionKV(const std::string& name, TransactionKV** btree);
 
   /// Unregister a TransactionKV
   void DropTransactionKV(const std::string& name);
 
-  std::unique_ptr<leanstore::MvccManager>& MvccManager() {
+  std::unique_ptr<MvccManager>& GetMvccManager() {
     return mvcc_mgr_;
   }
 

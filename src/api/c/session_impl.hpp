@@ -1,18 +1,18 @@
 #pragma once
 
+#include "coroutine/coro_env.hpp"
+#include "coroutine/coro_session.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/c/leanstore.h"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/lean_store.hpp"
-#include "utils/coroutine/coro_env.hpp"
-#include "utils/coroutine/coro_session.hpp"
 
 namespace leanstore {
 
 class SessionImpl {
 public:
-  static struct lean_session* Create(leanstore::LeanStore* store, leanstore::CoroSession* session) {
+  static struct lean_session* Create(LeanStore* store, CoroSession* session) {
     auto* impl = new SessionImpl(store, session);
     assert(static_cast<void*>(impl) == static_cast<void*>(&impl->base_));
     return &impl->base_;
@@ -27,9 +27,7 @@ public:
   }
 
 private:
-  SessionImpl(leanstore::LeanStore* store, leanstore::CoroSession* session)
-      : store_(store),
-        session_(session) {
+  SessionImpl(LeanStore* store, CoroSession* session) : store_(store), session_(session) {
     base_ = {
         .start_tx = &Thunk<&SessionImpl::StartTx>,
         .commit_tx = &Thunk<&SessionImpl::CommitTx>,
@@ -68,8 +66,8 @@ private:
 
 private:
   lean_session base_;
-  leanstore::LeanStore* store_;
-  leanstore::CoroSession* session_;
+  LeanStore* store_;
+  CoroSession* session_;
 };
 
 } // namespace leanstore

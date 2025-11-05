@@ -1,10 +1,10 @@
-#include "utils/coroutine/auto_commit_protocol.hpp"
+#include "coroutine/auto_commit_protocol.hpp"
 
+#include "coroutine/coro_env.hpp"
+#include "coroutine/mvcc_manager.hpp"
 #include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/utils/managed_thread.hpp"
-#include "utils/coroutine/coro_env.hpp"
-#include "utils/coroutine/mvcc_manager.hpp"
 #include "utils/scoped_timer.hpp"
 
 #include <algorithm>
@@ -77,7 +77,7 @@ void AutoCommitProtocol::CommitAck() {
 
 void AutoCommitProtocol::TrySyncLastCommittedTx() {
   ScopedTimer timer([&]([[maybe_unused]] double elapsed_ms) {
-    CoroEnv::CurStore()->MvccManager()->UpdateMinCommittedSysTx(min_committed_sys_tx_);
+    CoroEnv::CurStore()->GetMvccManager()->UpdateMinCommittedSysTx(min_committed_sys_tx_);
     LEAN_DLOG("SyncLastCommittedTx finished, elapsed_ms={}"
               ", min_committed_sys_tx={}, min_committed_usr_tx={}",
               elapsed_ms, min_committed_sys_tx_, min_committed_usr_tx_);
@@ -85,7 +85,7 @@ void AutoCommitProtocol::TrySyncLastCommittedTx() {
 
   // sync last committed sys tx
   auto min_committed_sys_tx = std::numeric_limits<lean_txid_t>::max();
-  auto& loggings = store_->MvccManager()->Loggings();
+  auto& loggings = store_->GetMvccManager()->Loggings();
   assert(loggings.size() == synced_last_committed_sys_tx_.size());
   for (auto i = 0u; i < loggings.size(); i++) {
     auto last_committed_sys_tx = loggings[i]->GetLastHardenedSysTx();
@@ -114,7 +114,7 @@ void AutoCommitProtocol::TrySyncLastCommittedTx() {
   }
 }
 
-lean_txid_t AutoCommitProtocol::DetermineCommitableUsrTx(std::vector<cr::Transaction>& tx_queue) {
+lean_txid_t AutoCommitProtocol::DetermineCommitableUsrTx(std::vector<Transaction>& tx_queue) {
   lean_txid_t max_commit_ts = 0;
   auto i = 0u;
   for (; i < tx_queue.size(); ++i) {
@@ -132,7 +132,7 @@ lean_txid_t AutoCommitProtocol::DetermineCommitableUsrTx(std::vector<cr::Transac
 }
 
 lean_txid_t AutoCommitProtocol::DetermineCommitableUsrTxRfA(
-    std::vector<cr::Transaction>& tx_queue_rfa) {
+    std::vector<Transaction>& tx_queue_rfa) {
   lean_txid_t max_commit_ts = 0;
   for (auto& tx : tx_queue_rfa) {
     max_commit_ts = std::max<lean_txid_t>(max_commit_ts, tx.commit_ts_);

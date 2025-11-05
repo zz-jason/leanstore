@@ -10,7 +10,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace leanstore::storage::btree {
+namespace leanstore {
 
 class BTreeNode;
 using HeadType = uint32_t;
@@ -582,4 +582,4 @@ inline void BTreeNode::SetFences(Slice lower_key, Slice upper_key) {
     ;
 }
 
-} // namespace leanstore::storage::btree
+} // namespace leanstore

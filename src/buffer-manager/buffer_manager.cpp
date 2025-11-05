@@ -1,5 +1,7 @@
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 
+#include "coroutine/coro_executor.hpp"
+#include "coroutine/lean_mutex.hpp"
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/buffer-manager/tree_registry.hpp"
 #include "leanstore/concurrency/cr_manager.hpp"
@@ -15,8 +17,6 @@
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/parallelize.hpp"
-#include "utils/coroutine/coro_executor.hpp"
-#include "utils/coroutine/lean_mutex.hpp"
 #include "utils/scoped_timer.hpp"
 #include "utils/small_vector.hpp"
 
@@ -34,9 +34,9 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-namespace leanstore::storage {
+namespace leanstore {
 
-BufferManager::BufferManager(leanstore::LeanStore* store) : store_(store) {
+BufferManager::BufferManager(LeanStore* store) : store_(store) {
   auto bp_size = store_->store_option_->buffer_pool_size_;
   auto bf_size = store_->store_option_->buffer_frame_size_;
   num_bfs_ = bp_size / bf_size;
@@ -216,8 +216,8 @@ Result<void> BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
 }
 
 void BufferManager::RecoverFromDisk() {
-  auto recovery = std::make_unique<leanstore::cr::Recovery>(
-      store_, 0, store_->crmanager_->group_committer_->wal_size_);
+  auto recovery =
+      std::make_unique<Recovery>(store_, 0, store_->crmanager_->group_committer_->wal_size_);
   recovery->Run();
 }
 
@@ -366,7 +366,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
       if (io_frame_guard->owns_lock()) {
         io_frame_guard->unlock();
       }
-      leanstore::JumpContext::Jump();
+      JumpContext::Jump();
     }
   }
 
@@ -386,7 +386,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
       }
       inflight_io_guard->unlock();
     }
-    leanstore::JumpContext::Jump(); // why jump?
+    JumpContext::Jump(); // why jump?
     break;
   }
   case IOFrame::State::kReady: {
@@ -420,7 +420,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
       partition.inflight_ios_.Remove(page_id);
     }
     inflight_io_guard->unlock();
-    leanstore::JumpContext::Jump();
+    JumpContext::Jump();
     break;
   }
   default: {
@@ -529,4 +529,4 @@ void BufferManager::DoWithBufferFrameIf(std::function<bool(BufferFrame& bf)> con
 #endif
 }
 
-} // namespace leanstore::storage
+} // namespace leanstore

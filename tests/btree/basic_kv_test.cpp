@@ -81,7 +81,7 @@ TEST_F(BasicKVTest, BasicKVCreate) {
 }
 
 TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
-  storage::btree::BasicKV* btree;
+  BasicKV* btree;
 
   // prepare key-value pairs to insert
   size_t num_keys(10);
@@ -139,7 +139,7 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
 }
 
 TEST_F(BasicKVTest, BasicKVInsertDuplicatedKey) {
-  storage::btree::BasicKV* btree;
+  BasicKV* btree;
   // prepare key-value pairs to insert
   size_t num_keys(10);
   std::vector<std::tuple<std::string, std::string>> kv_to_test;
@@ -196,7 +196,7 @@ TEST_F(BasicKVTest, BasicKVInsertDuplicatedKey) {
 }
 
 TEST_F(BasicKVTest, BasicKVScanAscAndScanDesc) {
-  storage::btree::BasicKV* btree;
+  BasicKV* btree;
   // prepare key-value pairs to insert
   size_t num_keys(10);
   std::vector<std::tuple<std::string, std::string>> kv_to_test;
@@ -290,7 +290,7 @@ TEST_F(BasicKVTest, BasicKVScanAscAndScanDesc) {
 
 TEST_F(BasicKVTest, SameKeyInsertRemoveMultiTimes) {
   // create a basickv
-  storage::btree::BasicKV* btree;
+  BasicKV* btree;
   store_->ExecSync(0, [&]() {
     auto res = store_->CreateBasicKv(GenBtreeName("_tree1"));
     ASSERT_TRUE(res);
@@ -342,7 +342,7 @@ TEST_F(BasicKVTest, SameKeyInsertRemoveMultiTimes) {
 }
 
 TEST_F(BasicKVTest, PrefixLookup) {
-  storage::btree::BasicKV* btree;
+  BasicKV* btree;
   store_->ExecSync(0, [&]() {
     auto res = store_->CreateBasicKv(GenBtreeName("_tree1"));
     ASSERT_TRUE(res);

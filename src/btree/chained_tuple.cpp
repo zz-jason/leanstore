@@ -6,7 +6,7 @@
 #include "leanstore/utils/log.hpp"
 #include "wal/wal_builder.hpp"
 
-namespace leanstore::storage::btree {
+namespace leanstore {
 
 std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(Slice payload,
                                                            ValCallback callback) const {
@@ -151,4 +151,4 @@ void ChainedTuple::Update(BTreeIterMut* x_iter, Slice key, MutValCallback update
   CoroEnv::CurTxMgr().ActiveTx().has_wrote_ = true;
 }
 
-} // namespace leanstore::storage::btree
+} // namespace leanstore

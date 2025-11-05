@@ -1,5 +1,7 @@
 #include "leanstore/btree/core/b_tree_generic.hpp"
 
+#include "coroutine/coro_env.hpp"
+#include "coroutine/mvcc_manager.hpp"
 #include "leanstore/btree/core/b_tree_node.hpp"
 #include "leanstore/btree/core/btree_iter.hpp"
 #include "leanstore/btree/core/btree_iter_mut.hpp"
@@ -13,8 +15,6 @@
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
-#include "utils/coroutine/coro_env.hpp"
-#include "utils/coroutine/mvcc_manager.hpp"
 #include "utils/small_vector.hpp"
 #include "utils/to_json.hpp"
 #include "wal/wal_builder.hpp"
@@ -23,12 +23,11 @@
 #include <format>
 #include <memory>
 
-using namespace leanstore::storage;
+using namespace leanstore;
 
-namespace leanstore::storage::btree {
+namespace leanstore {
 
-void BTreeGeneric::Init(leanstore::LeanStore* store, lean_treeid_t btree_id,
-                        lean_btree_config config) {
+void BTreeGeneric::Init(LeanStore* store, lean_treeid_t btree_id, lean_btree_config config) {
   this->store_ = store;
   this->tree_id_ = btree_id;
   this->config_ = std::move(config);
@@ -49,7 +48,7 @@ void BTreeGeneric::Init(leanstore::LeanStore* store, lean_treeid_t btree_id,
 
   // Record WAL
   if (config_.enable_wal_) {
-    lean_txid_t sys_tx_id = store_->MvccManager()->AllocSysTxTs();
+    lean_txid_t sys_tx_id = store_->GetMvccManager()->AllocSysTxTs();
 
     // wal for meta node
     auto* meta_bf = x_guarded_meta.bf();
@@ -80,7 +79,7 @@ std::unique_ptr<BTreeIterMut> BTreeGeneric::NewBTreeIterMut() {
 
 void BTreeGeneric::TrySplitMayJump(lean_txid_t sys_tx_id, BufferFrame& to_split,
                                    int16_t favored_split_pos) {
-  auto parent_handler = find_parent_eager(*this, to_split);
+  auto parent_handler = FindParentEager(*this, to_split);
   GuardedBufferFrame<BTreeNode> guarded_parent(store_->buffer_manager_.get(),
                                                std::move(parent_handler.parent_guard_),
                                                parent_handler.parent_bf_);
@@ -110,8 +109,8 @@ void BTreeGeneric::TrySplitMayJump(lean_txid_t sys_tx_id, BufferFrame& to_split,
   }
 
   // split the root node
-  if (is_meta_node(guarded_parent)) {
-    split_root_may_jump(sys_tx_id, guarded_parent, guarded_child, sep_info);
+  if (IsMetaNode(guarded_parent)) {
+    SplitRootMayJump(sys_tx_id, guarded_parent, guarded_child, sep_info);
     return;
   }
 
@@ -128,8 +127,8 @@ void BTreeGeneric::TrySplitMayJump(lean_txid_t sys_tx_id, BufferFrame& to_split,
   }
 
   // split the non-root node
-  split_non_root_may_jump(sys_tx_id, guarded_parent, guarded_child, sep_info,
-                          space_needed_for_separator);
+  SplitNonRootMayJump(sys_tx_id, guarded_parent, guarded_child, sep_info,
+                      space_needed_for_separator);
 }
 
 /// Split the root node, 4 nodes are involved in the split:
@@ -152,15 +151,15 @@ void BTreeGeneric::TrySplitMayJump(lean_txid_t sys_tx_id, BufferFrame& to_split,
 ///   - insert separator key into new root
 ///   - update meta node to point to new root
 ///
-void BTreeGeneric::split_root_may_jump(lean_txid_t sys_tx_id,
-                                       GuardedBufferFrame<BTreeNode>& guarded_meta,
-                                       GuardedBufferFrame<BTreeNode>& guarded_old_root,
-                                       const BTreeNode::SeparatorInfo& sep_info) {
+void BTreeGeneric::SplitRootMayJump(lean_txid_t sys_tx_id,
+                                    GuardedBufferFrame<BTreeNode>& guarded_meta,
+                                    GuardedBufferFrame<BTreeNode>& guarded_old_root,
+                                    const BTreeNode::SeparatorInfo& sep_info) {
   auto x_guarded_meta = ExclusiveGuardedBufferFrame(std::move(guarded_meta));
   auto x_guarded_old_root = ExclusiveGuardedBufferFrame(std::move(guarded_old_root));
   auto* bm = store_->buffer_manager_.get();
 
-  LEAN_DCHECK(is_meta_node(guarded_meta), "Parent should be meta node");
+  LEAN_DCHECK(IsMetaNode(guarded_meta), "Parent should be meta node");
   LEAN_DCHECK(height_ == 1 || !x_guarded_old_root->is_leaf_);
 
   // 1. create new left, lock it exclusively, write wal on demand
@@ -220,15 +219,15 @@ void BTreeGeneric::split_root_may_jump(lean_txid_t sys_tx_id,
 ///   |            |   |
 /// child     newLeft child
 ///
-void BTreeGeneric::split_non_root_may_jump(lean_txid_t sys_tx_id,
-                                           GuardedBufferFrame<BTreeNode>& guarded_parent,
-                                           GuardedBufferFrame<BTreeNode>& guarded_child,
-                                           const BTreeNode::SeparatorInfo& sep_info,
-                                           uint16_t space_needed_for_separator) {
+void BTreeGeneric::SplitNonRootMayJump(lean_txid_t sys_tx_id,
+                                       GuardedBufferFrame<BTreeNode>& guarded_parent,
+                                       GuardedBufferFrame<BTreeNode>& guarded_child,
+                                       const BTreeNode::SeparatorInfo& sep_info,
+                                       uint16_t space_needed_for_separator) {
   auto x_guarded_parent = ExclusiveGuardedBufferFrame(std::move(guarded_parent));
   auto x_guarded_child = ExclusiveGuardedBufferFrame(std::move(guarded_child));
 
-  LEAN_DCHECK(!is_meta_node(guarded_parent), "Parent should not be meta node");
+  LEAN_DCHECK(!IsMetaNode(guarded_parent), "Parent should not be meta node");
   LEAN_DCHECK(!x_guarded_parent->is_leaf_, "Parent should not be leaf node");
 
   // 1. create new left, lock it exclusively, write wal on demand
@@ -266,14 +265,14 @@ void BTreeGeneric::split_non_root_may_jump(lean_txid_t sys_tx_id,
 
 bool BTreeGeneric::TryMergeMayJump(lean_txid_t sys_tx_id, BufferFrame& to_merge,
                                    bool swizzle_sibling) {
-  auto parent_handler = find_parent_eager(*this, to_merge);
+  auto parent_handler = FindParentEager(*this, to_merge);
   GuardedBufferFrame<BTreeNode> guarded_parent(store_->buffer_manager_.get(),
                                                std::move(parent_handler.parent_guard_),
                                                parent_handler.parent_bf_);
   GuardedBufferFrame<BTreeNode> guarded_child(store_->buffer_manager_.get(), guarded_parent,
                                               parent_handler.child_swip_);
   auto pos_in_parent = parent_handler.pos_in_parent_;
-  if (is_meta_node(guarded_parent) ||
+  if (IsMetaNode(guarded_parent) ||
       guarded_child->FreeSpaceAfterCompaction() < BTreeNode::UnderFullSize()) {
     guarded_parent.unlock();
     guarded_child.unlock();
@@ -357,7 +356,7 @@ bool BTreeGeneric::TryMergeMayJump(lean_txid_t sys_tx_id, BufferFrame& to_merge,
   };
 
   SCOPED_DEFER({
-    if (!is_meta_node(guarded_parent) &&
+    if (!IsMetaNode(guarded_parent) &&
         guarded_parent->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
       JUMPMU_TRY() {
         TryMergeMayJump(sys_tx_id, *guarded_parent.bf_, true);
@@ -379,10 +378,11 @@ bool BTreeGeneric::TryMergeMayJump(lean_txid_t sys_tx_id, BufferFrame& to_merge,
 }
 
 // ret: 0 did nothing, 1 full, 2 partial
-int16_t BTreeGeneric::merge_left_into_right(
-    ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_parent, int16_t lhs_slot_id,
-    ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_left,
-    ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_right, bool full_merge_or_nothing) {
+int16_t BTreeGeneric::MergeLeftIntoRight(ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_parent,
+                                         int16_t lhs_slot_id,
+                                         ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_left,
+                                         ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_right,
+                                         bool full_merge_or_nothing) {
   // TODO: corner cases: new upper fence is larger than the older one.
   uint32_t space_upper_bound = x_guarded_left->MergeSpaceUpperBound(x_guarded_right);
   if (space_upper_bound <= BTreeNode::Size()) {
@@ -490,7 +490,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(GuardedBufferFrame<BTreeNode
   double total_fill_factor = guarded_nodes[0]->FillFactorAfterCompaction();
 
   // Handle upper swip instead of avoiding guardedParent->num_slots_ -1 swip
-  if (is_meta_node(guarded_parent) || !guarded_nodes[0]->is_leaf_) {
+  if (IsMetaNode(guarded_parent) || !guarded_nodes[0]->is_leaf_) {
     guarded_child = std::move(guarded_nodes[0]);
     return XMergeReturnCode::kNothing;
   }
@@ -520,7 +520,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(GuardedBufferFrame<BTreeNode
 
   ExclusiveGuardedBufferFrame<BTreeNode> x_guarded_parent = std::move(guarded_parent);
   // TODO(zz-jason): support wal and sync system tx id
-  // lean_txid_t sysTxId = utils::tlsStore->MvccManager()->AllocSysTxTs();
+  // lean_txid_t sysTxId = utils::tlsStore->GetMvccManager()->AllocSysTxTs();
   // xGuardedParent.SyncSystemTxId(sysTxId);
 
   XMergeReturnCode ret_code = XMergeReturnCode::kPartialMerge;
@@ -546,8 +546,8 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(GuardedBufferFrame<BTreeNode
       // xGuardedRight.SyncSystemTxId(sysTxId);
       // xGuardedLeft.SyncSystemTxId(sysTxId);
       max_right = left_hand;
-      ret = merge_left_into_right(x_guarded_parent, left_hand, x_guarded_left, x_guarded_right,
-                                  left_hand == pos);
+      ret = MergeLeftIntoRight(x_guarded_parent, left_hand, x_guarded_left, x_guarded_right,
+                               left_hand == pos);
       // we unlock only the left page, the right one should not be touched again
       if (ret == 1) {
         fully_merged[left_hand - pos] = true;
@@ -571,13 +571,13 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(GuardedBufferFrame<BTreeNode
 // -------------------------------------------------------------------------------------
 // Helpers
 // -------------------------------------------------------------------------------------
-int64_t BTreeGeneric::iterate_all_pages(BTreeNodeCallback inner, BTreeNodeCallback leaf) {
+int64_t BTreeGeneric::IterateAllPages(BTreeNodeCallback inner, BTreeNodeCallback leaf) {
   while (true) {
     JUMPMU_TRY() {
       GuardedBufferFrame<BTreeNode> guarded_parent(store_->buffer_manager_.get(), meta_node_swip_);
       GuardedBufferFrame<BTreeNode> guarded_child(store_->buffer_manager_.get(), guarded_parent,
                                                   guarded_parent->right_most_child_swip_);
-      int64_t result = iterate_all_pages_recursive(guarded_child, inner, leaf);
+      int64_t result = IterateAllPagesRec(guarded_child, inner, leaf);
       JUMPMU_RETURN result;
     }
     JUMPMU_CATCH() {
@@ -585,8 +585,8 @@ int64_t BTreeGeneric::iterate_all_pages(BTreeNodeCallback inner, BTreeNodeCallba
   }
 }
 
-int64_t BTreeGeneric::iterate_all_pages_recursive(GuardedBufferFrame<BTreeNode>& guarded_node,
-                                                  BTreeNodeCallback inner, BTreeNodeCallback leaf) {
+int64_t BTreeGeneric::IterateAllPagesRec(GuardedBufferFrame<BTreeNode>& guarded_node,
+                                         BTreeNodeCallback inner, BTreeNodeCallback leaf) {
   if (guarded_node->is_leaf_) {
     return leaf(guarded_node.ref());
   }
@@ -596,14 +596,14 @@ int64_t BTreeGeneric::iterate_all_pages_recursive(GuardedBufferFrame<BTreeNode>&
     auto guarded_child =
         GuardedBufferFrame<BTreeNode>(store_->buffer_manager_.get(), guarded_node, *child_swip);
     guarded_child.JumpIfModifiedByOthers();
-    res += iterate_all_pages_recursive(guarded_child, inner, leaf);
+    res += IterateAllPagesRec(guarded_child, inner, leaf);
   }
 
   Swip& child_swip = guarded_node->right_most_child_swip_;
   auto guarded_child =
       GuardedBufferFrame<BTreeNode>(store_->buffer_manager_.get(), guarded_node, child_swip);
   guarded_child.JumpIfModifiedByOthers();
-  res += iterate_all_pages_recursive(guarded_child, inner, leaf);
+  res += IterateAllPagesRec(guarded_child, inner, leaf);
 
   return res;
 }
@@ -674,13 +674,12 @@ void BTreeGeneric::ToJson(BTreeGeneric& btree, utils::JsonObj* btree_json_obj) {
                                                   guarded_meta_node,
                                                   guarded_meta_node->right_most_child_swip_);
   utils::JsonObj root_json_obj;
-  to_json_recursive(btree, guarded_root_node, &root_json_obj);
+  ToJsonRec(btree, guarded_root_node, &root_json_obj);
   btree_json_obj->AddJsonObj(kRootNode, root_json_obj);
 }
 
-void BTreeGeneric::to_json_recursive(BTreeGeneric& btree,
-                                     GuardedBufferFrame<BTreeNode>& guarded_node,
-                                     utils::JsonObj* node_json_obj) {
+void BTreeGeneric::ToJsonRec(BTreeGeneric& btree, GuardedBufferFrame<BTreeNode>& guarded_node,
+                             utils::JsonObj* node_json_obj) {
 
   constexpr char kBtreeNode[] = "btree_node";
   constexpr char kChildren[] = "children";
@@ -705,7 +704,7 @@ void BTreeGeneric::to_json_recursive(BTreeGeneric& btree,
     GuardedBufferFrame<BTreeNode> guarded_child(btree.store_->buffer_manager_.get(), guarded_node,
                                                 *child_swip);
     utils::JsonObj child_json_obj;
-    to_json_recursive(btree, guarded_child, &child_json_obj);
+    ToJsonRec(btree, guarded_child, &child_json_obj);
     guarded_child.unlock();
 
     children_json_array.AppendJsonObj(child_json_obj);
@@ -715,7 +714,7 @@ void BTreeGeneric::to_json_recursive(BTreeGeneric& btree,
     GuardedBufferFrame<BTreeNode> guarded_child(btree.store_->buffer_manager_.get(), guarded_node,
                                                 guarded_node->right_most_child_swip_);
     utils::JsonObj child_json_obj;
-    to_json_recursive(btree, guarded_child, &child_json_obj);
+    ToJsonRec(btree, guarded_child, &child_json_obj);
     guarded_child.unlock();
 
     children_json_array.AppendJsonObj(child_json_obj);
@@ -724,4 +723,4 @@ void BTreeGeneric::to_json_recursive(BTreeGeneric& btree,
   node_json_obj->AddJsonArray(kChildren, children_json_array);
 }
 
-} // namespace leanstore::storage::btree
+} // namespace leanstore

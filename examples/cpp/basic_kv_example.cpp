@@ -27,7 +27,7 @@ int main() {
 
   // create btree
   std::string btree_name = "testTree1";
-  leanstore::storage::btree::BasicKV* btree = nullptr;
+  leanstore::BasicKV* btree = nullptr;
   store->ExecSync(0, [&]() {
     auto res = store->CreateBasicKv(btree_name);
     if (!res) {

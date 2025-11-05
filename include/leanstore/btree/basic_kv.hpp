@@ -9,7 +9,7 @@ class LeanStore;
 
 } // namespace leanstore
 
-namespace leanstore::storage::btree {
+namespace leanstore {
 
 class BasicKV : public KVInterface, public BTreeGeneric {
 public:
@@ -100,4 +100,4 @@ private:
   OpCode LookupPessimistic(Slice key, ValCallback val_callback);
 };
 
-} // namespace leanstore::storage::btree
+} // namespace leanstore

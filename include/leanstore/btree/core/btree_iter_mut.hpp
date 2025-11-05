@@ -1,16 +1,16 @@
 #pragma once
 
+#include "coroutine/mvcc_manager.hpp"
 #include "leanstore/btree/core/btree_iter_pessistic.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/utils/counter_util.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/random_generator.hpp"
-#include "utils/coroutine/mvcc_manager.hpp"
 
 #include <memory>
 
-namespace leanstore::storage::btree {
+namespace leanstore {
 
 class BTreeIterMut : public BTreeIterPessistic {
 public:
@@ -67,7 +67,7 @@ public:
   }
 
   void SplitForKey(Slice key) {
-    auto sys_tx_id = btree_.store_->MvccManager()->AllocSysTxTs();
+    auto sys_tx_id = btree_.store_->GetMvccManager()->AllocSysTxTs();
     while (true) {
       JUMPMU_TRY() {
         if (!Valid() || !KeyInCurrentNode(key)) {
@@ -78,11 +78,11 @@ public:
         SetToInvalid();
 
         btree_.TrySplitMayJump(sys_tx_id, *bf);
-        COUNTER_INC(&leanstore::cr::tls_perf_counters.split_succeed_);
+        COUNTER_INC(&tls_perf_counters.split_succeed_);
         JUMPMU_BREAK;
       }
       JUMPMU_CATCH() {
-        COUNTER_INC(&leanstore::cr::tls_perf_counters.split_failed_);
+        COUNTER_INC(&tls_perf_counters.split_failed_);
       }
     }
   }
@@ -168,16 +168,16 @@ public:
 
       slot_id_ = -1;
       JUMPMU_TRY() {
-        lean_txid_t sys_tx_id = btree_.store_->MvccManager()->AllocSysTxTs();
+        lean_txid_t sys_tx_id = btree_.store_->GetMvccManager()->AllocSysTxTs();
         btree_.TrySplitMayJump(sys_tx_id, *guarded_leaf_.bf_, split_slot);
 
-        COUNTER_INC(&leanstore::cr::tls_perf_counters.contention_split_succeed_);
+        COUNTER_INC(&tls_perf_counters.contention_split_succeed_);
         LEAN_DLOG("[Contention Split] succeed, pageId={}, contention pct={}, split "
                   "slot={}",
                   guarded_leaf_.bf_->header_.page_id_, contention_pct, split_slot);
       }
       JUMPMU_CATCH() {
-        COUNTER_INC(&leanstore::cr::tls_perf_counters.contention_split_failed_);
+        COUNTER_INC(&tls_perf_counters.contention_split_failed_);
         Log::Info("[Contention Split] contention split failed, pageId={}, contention "
                   "pct={}, split slot={}",
                   guarded_leaf_.bf_->header_.page_id_, contention_pct, split_slot);
@@ -201,7 +201,7 @@ public:
       guarded_leaf_.unlock();
       slot_id_ = -1;
       JUMPMU_TRY() {
-        lean_txid_t sys_tx_id = btree_.store_->MvccManager()->AllocSysTxTs();
+        lean_txid_t sys_tx_id = btree_.store_->GetMvccManager()->AllocSysTxTs();
         btree_.TryMergeMayJump(sys_tx_id, *guarded_leaf_.bf_);
       }
       JUMPMU_CATCH() {
@@ -213,4 +213,4 @@ public:
   }
 };
 
-} // namespace leanstore::storage::btree
+} // namespace leanstore

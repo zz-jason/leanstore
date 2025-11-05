@@ -5,7 +5,7 @@
 #include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/log.hpp"
 
-namespace leanstore::storage {
+namespace leanstore {
 
 using Time = decltype(std::chrono::high_resolution_clock::now());
 
@@ -333,4 +333,4 @@ void PageEvictor::EvictFlushedBufferFrame(BufferFrame& cooled_bf,
   }
 };
 
-} // namespace leanstore::storage
+} // namespace leanstore

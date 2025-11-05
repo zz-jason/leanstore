@@ -1,5 +1,6 @@
 #include "leanstore/concurrency/concurrency_control.hpp"
 
+#include "coroutine/mvcc_manager.hpp"
 #include "leanstore/buffer-manager/tree_registry.hpp"
 #include "leanstore/common/perf_counters.h"
 #include "leanstore/common/types.h"
@@ -14,13 +15,12 @@
 #include "leanstore/utils/jump_mu.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/random_generator.hpp"
-#include "utils/coroutine/mvcc_manager.hpp"
 
 #include <atomic>
 #include <format>
 #include <set>
 
-namespace leanstore::cr {
+namespace leanstore {
 
 //------------------------------------------------------------------------------
 // CommitTree
@@ -30,7 +30,7 @@ void CommitTree::AppendCommitLog(lean_txid_t start_ts, lean_txid_t commit_ts) {
   LEAN_DCHECK(commit_log_.size() < capacity_,
               std::format("Commit log is full, commit_log_.size()={}, capacity_={}",
                           commit_log_.size(), capacity_));
-  storage::ScopedHybridGuard x_guard(latch_, storage::LatchMode::kExclusivePessimistic);
+  ScopedHybridGuard x_guard(latch_, LatchMode::kExclusivePessimistic);
   commit_log_.push_back({commit_ts, start_ts});
   LEAN_DLOG("Commit log appended, workerId={}, startTs={}, commitTs={}",
             CoroEnv::CurTxMgr().worker_id_, start_ts, commit_ts);
@@ -69,7 +69,7 @@ void CommitTree::CompactCommitLog() {
   }
 
   // Refill the compacted commit log
-  storage::ScopedHybridGuard x_guard(latch_, storage::LatchMode::kExclusivePessimistic);
+  ScopedHybridGuard x_guard(latch_, LatchMode::kExclusivePessimistic);
   commit_log_.clear();
   for (auto& p : set) {
     commit_log_.push_back(p);
@@ -87,7 +87,7 @@ lean_txid_t CommitTree::Lcb(lean_txid_t start_ts) {
 
   while (true) {
     JUMPMU_TRY() {
-      storage::ScopedHybridGuard o_guard(latch_, storage::LatchMode::kOptimisticOrJump);
+      ScopedHybridGuard o_guard(latch_, LatchMode::kOptimisticOrJump);
       if (auto result = LcbUnlocked(start_ts); result) {
         o_guard.Unlock();
         JUMPMU_RETURN result->second;
@@ -178,7 +178,7 @@ bool ConcurrencyControl::VisibleForMe(lean_wid_t worker_id, lean_txid_t tx_id) {
 }
 
 bool ConcurrencyControl::VisibleForAll(lean_txid_t tx_id) {
-  return tx_id < store_->MvccManager()->GlobalWmkInfo().wmk_of_all_tx_.load();
+  return tx_id < store_->GetMvccManager()->GlobalWmkInfo().wmk_of_all_tx_.load();
 }
 
 // TODO: smooth purge, we should not let the system hang on this, as a quick
@@ -262,7 +262,7 @@ void ConcurrencyControl::UpdateGlobalWmks() {
       store_->store_option_->enable_eager_gc_ ||
       utils::RandomGenerator::RandU64(0, CoroEnv::CurTxMgr().tx_mgrs_.size()) == 0;
   auto perform_gc =
-      meet_gc_probability && store_->MvccManager()->GlobalWmkInfo().global_mutex_.try_lock();
+      meet_gc_probability && store_->GetMvccManager()->GlobalWmkInfo().global_mutex_.try_lock();
   if (!perform_gc) {
     LEAN_DLOG("Skip updating global watermarks, meetGcProbability={}, performGc={}",
               meet_gc_probability, perform_gc);
@@ -270,7 +270,7 @@ void ConcurrencyControl::UpdateGlobalWmks() {
   }
 
   // release the lock on exit
-  SCOPED_DEFER(store_->MvccManager()->GlobalWmkInfo().global_mutex_.unlock());
+  SCOPED_DEFER(store_->GetMvccManager()->GlobalWmkInfo().global_mutex_.unlock());
 
   // There is a chance that oldestTxId or oldestShortTxId is
   // std::numeric_limits<lean_txid_t>::max(). It is ok because LCB(+oo) returns the id
@@ -303,12 +303,12 @@ void ConcurrencyControl::UpdateGlobalWmks() {
   }
 
   // Update the three transaction ids
-  store_->MvccManager()->GlobalWmkInfo().UpdateActiveTxInfo(oldest_tx_id, oldest_short_tx_id,
-                                                            newest_long_tx_id);
+  store_->GetMvccManager()->GlobalWmkInfo().UpdateActiveTxInfo(oldest_tx_id, oldest_short_tx_id,
+                                                               newest_long_tx_id);
 
   if (!store_->store_option_->enable_long_running_tx_ &&
-      store_->MvccManager()->GlobalWmkInfo().oldest_active_tx_ !=
-          store_->MvccManager()->GlobalWmkInfo().oldest_active_short_tx_) {
+      store_->GetMvccManager()->GlobalWmkInfo().oldest_active_tx_ !=
+          store_->GetMvccManager()->GlobalWmkInfo().oldest_active_short_tx_) {
     Log::Fatal("Oldest transaction id should be equal to the oldest "
                "short-running transaction id when long-running transaction is "
                "disabled");
@@ -333,9 +333,9 @@ void ConcurrencyControl::UpdateGlobalWmks() {
     }
 
     lean_txid_t wmk_of_all_tx =
-        cc.commit_tree_.Lcb(store_->MvccManager()->GlobalWmkInfo().oldest_active_tx_);
+        cc.commit_tree_.Lcb(store_->GetMvccManager()->GlobalWmkInfo().oldest_active_tx_);
     lean_txid_t wmk_of_short_tx =
-        cc.commit_tree_.Lcb(store_->MvccManager()->GlobalWmkInfo().oldest_active_short_tx_);
+        cc.commit_tree_.Lcb(store_->GetMvccManager()->GlobalWmkInfo().oldest_active_short_tx_);
 
     cc.wmk_version_.store(cc.wmk_version_.load() + 1, std::memory_order_release);
     cc.wmk_of_all_tx_.store(wmk_of_all_tx, std::memory_order_release);
@@ -360,8 +360,8 @@ void ConcurrencyControl::UpdateGlobalWmks() {
   // as last round, which further causes the global lower watermarks the
   // same as last round. This is not a problem, but updating the global
   // lower watermarks is not necessary in this case.
-  if (store_->MvccManager()->GlobalWmkInfo().wmk_of_all_tx_ == global_wmk_of_all_tx &&
-      store_->MvccManager()->GlobalWmkInfo().wmk_of_short_tx_ == global_wmk_of_short_tx) {
+  if (store_->GetMvccManager()->GlobalWmkInfo().wmk_of_all_tx_ == global_wmk_of_all_tx &&
+      store_->GetMvccManager()->GlobalWmkInfo().wmk_of_short_tx_ == global_wmk_of_short_tx) {
     LEAN_DLOG("Skip updating global watermarks, global watermarks are the "
               "same as last round, globalWmkOfAllTx={}, globalWmkOfShortTx={}",
               global_wmk_of_all_tx, global_wmk_of_short_tx);
@@ -378,7 +378,8 @@ void ConcurrencyControl::UpdateGlobalWmks() {
     return;
   }
 
-  store_->MvccManager()->GlobalWmkInfo().UpdateWmks(global_wmk_of_all_tx, global_wmk_of_short_tx);
+  store_->GetMvccManager()->GlobalWmkInfo().UpdateWmks(global_wmk_of_all_tx,
+                                                       global_wmk_of_short_tx);
 }
 
 void ConcurrencyControl::UpdateLocalWmks() {
@@ -411,4 +412,4 @@ void ConcurrencyControl::UpdateLocalWmks() {
               CoroEnv::CurTxMgr().worker_id_, local_wmk_of_all_tx_, local_wmk_of_short_tx_);
 }
 
-} // namespace leanstore::cr
+} // namespace leanstore

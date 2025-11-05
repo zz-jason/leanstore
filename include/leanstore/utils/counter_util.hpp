@@ -6,9 +6,9 @@
 #include <chrono>
 #endif
 
-namespace leanstore::cr {
+namespace leanstore {
 inline thread_local lean_perf_counters tls_perf_counters;
-} // namespace leanstore::cr
+} // namespace leanstore
 
 namespace leanstore {
 

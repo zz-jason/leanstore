@@ -1,29 +1,27 @@
 #pragma once
 
+#include "coroutine/coro_env.hpp"
+#include "coroutine/coroutine.hpp"
 #include "leanstore/common/perf_counters.h"
 #include "leanstore/common/types.h"
 #include "leanstore/concurrency/concurrency_control.hpp"
 #include "leanstore/concurrency/transaction.hpp"
-#include "utils/coroutine/coro_env.hpp"
-#include "utils/coroutine/coroutine.hpp"
 
 #include <atomic>
 #include <memory>
 #include <vector>
 
 namespace leanstore {
+
+/// Forward declarations
 class LeanStore;
-} // namespace leanstore
-
-namespace leanstore::cr {
-
 class Logging;
 class ConcurrencyControl;
 
 class TxManager {
 public:
   /// The store it belongs to.
-  leanstore::LeanStore* store_ = nullptr;
+  LeanStore* store_ = nullptr;
 
   /// The concurrent control component.
   ConcurrencyControl cc_;
@@ -62,8 +60,7 @@ public:
   std::vector<std::unique_ptr<TxManager>>& tx_mgrs_;
 
   /// Construct a TxManager.
-  TxManager(uint64_t worker_id, std::vector<std::unique_ptr<TxManager>>& tx_mgrs,
-            leanstore::LeanStore* store);
+  TxManager(uint64_t worker_id, std::vector<std::unique_ptr<TxManager>>& tx_mgrs, LeanStore* store);
 
   /// Destruct a TxManager.
   ~TxManager();
@@ -113,4 +110,4 @@ private:
   }
 };
 
-} // namespace leanstore::cr
+} // namespace leanstore

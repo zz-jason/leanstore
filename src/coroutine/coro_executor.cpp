@@ -1,10 +1,10 @@
-#include "utils/coroutine/coro_executor.hpp"
+#include "coroutine/coro_executor.hpp"
 
+#include "coroutine/auto_commit_protocol.hpp"
+#include "coroutine/coroutine.hpp"
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/buffer-manager/page_evictor.hpp"
 #include "leanstore/utils/log.hpp"
-#include "utils/coroutine/auto_commit_protocol.hpp"
-#include "utils/coroutine/coroutine.hpp"
 
 #include <cassert>
 #include <format>
@@ -20,7 +20,7 @@ CoroExecutor::CoroExecutor(LeanStore* store, AutoCommitProtocol* commit_protocol
   if (store_ != nullptr) {
     // init page evictor
     auto* buffer_manager = store_->buffer_manager_.get();
-    page_evictor_ = std::make_unique<leanstore::storage::PageEvictor>(
+    page_evictor_ = std::make_unique<leanstore::PageEvictor>(
         store_, "PageEvictor", 0, buffer_manager->num_bfs_, buffer_manager->buffer_pool_,
         buffer_manager->num_partitions_, buffer_manager->partitions_);
   } else {

@@ -6,7 +6,6 @@
 
 #include <atomic>
 #include <functional>
-#include <shared_mutex>
 
 #include <sys/mman.h>
 #include <unistd.h>
@@ -17,7 +16,7 @@ class ScopedHybridGuardTest;
 
 } // namespace leanstore::test
 
-namespace leanstore::storage {
+namespace leanstore {
 
 /// A scoped guard for the hybrid latch. It locks the latch in the specified
 /// mode when constructed, and unlocks the latch when destructed.
@@ -133,7 +132,7 @@ private:
 
 private:
   /// Allow the test class to access private members.
-  friend class leanstore::test::ScopedHybridGuardTest;
+  friend class test::ScopedHybridGuardTest;
 };
 
 inline void ScopedHybridGuard::GetOptimistic(HybridMutex& latch, LatchMode latch_mode,
@@ -235,7 +234,7 @@ inline void ScopedHybridGuard::lock_optimistic_or_jump() {
     contented_ = true;
     LEAN_DLOG("lockOptimisticOrJump() failed, target latch, latch={}, version={}", (void*)&latch_,
               version_on_lock_);
-    leanstore::JumpContext::Jump();
+    JumpContext::Jump();
   }
 }
 
@@ -262,7 +261,7 @@ inline void ScopedHybridGuard::jump_if_modified_by_others() {
     LEAN_DLOG("jumpIfModifiedByOthers() failed, target latch, latch={}, "
               "version(expected)={}, version(actual)={}",
               (void*)&latch_, version_on_lock_, cur_version);
-    leanstore::JumpContext::Jump();
+    JumpContext::Jump();
   }
 }
 
@@ -286,4 +285,4 @@ inline void ScopedHybridGuard::unlock_pessimistic_exclusive() {
   latch_->UnlockExclusively();
 }
 
-} // namespace leanstore::storage
+} // namespace leanstore

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "utils/coroutine/coro_env.hpp"
+#include "coroutine/coro_env.hpp"
 
 #include <cassert>
 #include <cstdint>
@@ -17,6 +17,7 @@
 
 namespace leanstore {
 
+/// Enum representing the state of a coroutine during its lifecycle.
 enum class CoroState : uint8_t {
   kReady = 0,    // Ready to run, not started yet.
   kRunning,      // Running, not yielded yet.
@@ -25,19 +26,28 @@ enum class CoroState : uint8_t {
   kDone,         // Finished execution.
 };
 
+/// Coroutine class representing a task/job executed within a coroutine
+/// executor. Each coroutine has its own execution context and can be yield and
+/// resume during its lifecycle.
 class Coroutine {
 public:
+  /// The task/job function type executed by the coroutine.
   using CoroFunc = std::function<void()>;
 
-  Coroutine(CoroFunc&& func) : func_(std::move(func)) {
+  /// Constructor initializing the coroutine with the given function.
+  explicit Coroutine(CoroFunc&& func) : func_(std::move(func)) {
   }
+  /// Destructor
   ~Coroutine() = default;
 
+  /// Disable copy and move semantics
   Coroutine(const Coroutine&) = delete;
   Coroutine& operator=(const Coroutine&) = delete;
   Coroutine(Coroutine&&) = default;
   Coroutine& operator=(Coroutine&&) = default;
 
+  /// Runs the coroutine. If not started, it starts the coroutine; otherwise,
+  /// it resumes the coroutine from its last yielded state.
   void Run() {
     if (!IsStarted()) {
       Start();
@@ -46,7 +56,8 @@ public:
     }
   }
 
-  /// Executes the coroutine function.
+  /// Starts the coroutine execution. Initializes the coroutine context and
+  /// begins execution of the coroutine function.
   void Start() {
     assert(!IsStarted());
     auto fn = [this](boost::context::continuation&& sink) {
@@ -56,7 +67,6 @@ public:
       state_ = CoroState::kDone;
       return std::move(sink_context_);
     };
-
     context_ = boost::context::callcc(std::allocator_arg, s_pooled_salloc, std::move(fn));
   }
 
@@ -64,8 +74,6 @@ public:
   void Resume() {
     assert(IsStarted());
     state_ = CoroState::kRunning;
-
-    // Resume the coroutine context.
     context_ = context_.resume();
   }
 
@@ -81,11 +89,11 @@ public:
     return state_;
   }
 
-  void SetTxMgr(cr::TxManager* tx_mgr) {
+  void SetTxMgr(TxManager* tx_mgr) {
     tx_mgr_ = tx_mgr;
   }
 
-  cr::TxManager* GetTxMgr() const {
+  TxManager* GetTxMgr() const {
     return tx_mgr_;
   }
 
@@ -148,7 +156,7 @@ private:
   CoroFunc func_ = nullptr;
 
   /// Pointer to the transaction manager associated with this coroutine.
-  cr::TxManager* tx_mgr_ = nullptr;
+  TxManager* tx_mgr_ = nullptr;
 
   /// Try lock function for the coroutine.
   std::function<bool()> try_lock_func_ = nullptr;

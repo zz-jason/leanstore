@@ -1,10 +1,10 @@
+#include "coroutine/coro_executor.hpp"
+#include "coroutine/coro_mutex.hpp"
+#include "coroutine/coro_scheduler.hpp"
+#include "coroutine/coro_session.hpp"
+#include "coroutine/coroutine.hpp"
 #include "leanstore/utils/misc.hpp"
 #include "leanstore/utils/random_generator.hpp"
-#include "utils/coroutine/coro_executor.hpp"
-#include "utils/coroutine/coro_mutex.hpp"
-#include "utils/coroutine/coro_scheduler.hpp"
-#include "utils/coroutine/coro_session.hpp"
-#include "utils/coroutine/coroutine.hpp"
 
 #include <gtest/gtest.h>
 

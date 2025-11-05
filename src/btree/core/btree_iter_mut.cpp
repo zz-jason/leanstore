@@ -2,7 +2,7 @@
 
 #include "leanstore/btree/core/btree_iter.hpp"
 
-namespace leanstore::storage::btree {
+namespace leanstore {
 
 void BTreeIterMut::IntoBtreeIter(BTreeIter* iter) {
   if (Valid()) {
@@ -17,4 +17,4 @@ void BTreeIterMut::IntoBtreeIter(BTreeIter* iter) {
   Reset();
 }
 
-} // namespace leanstore::storage::btree
+} // namespace leanstore

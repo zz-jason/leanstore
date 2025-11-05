@@ -1,6 +1,6 @@
 #include "leanstore/utils/log.hpp"
 
-#include "utils/coroutine/coro_env.hpp"
+#include "coroutine/coro_env.hpp"
 
 #include <spdlog/common.h>
 #include <spdlog/sinks/basic_file_sink.h>

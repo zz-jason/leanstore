@@ -11,10 +11,6 @@
 
 #include <unordered_map>
 
-using namespace std;
-using namespace leanstore::storage;
-using OpCode = leanstore::OpCode;
-
 namespace std {
 
 template <>
@@ -28,7 +24,7 @@ public:
 
 } // namespace std
 
-namespace leanstore::storage::btree {
+namespace leanstore {
 
 static_assert(sizeof(FatTuple) >= sizeof(ChainedTuple));
 
@@ -206,9 +202,9 @@ void FatTuple::GarbageCollection() {
   }
 
   const lean_txid_t local_oldest_oltp =
-      CoroEnv::CurTxMgr().store_->MvccManager()->GlobalWmkInfo().oldest_active_short_tx_.load();
+      CoroEnv::CurTxMgr().store_->GetMvccManager()->GlobalWmkInfo().oldest_active_short_tx_.load();
   const lean_txid_t local_newest_olap =
-      CoroEnv::CurTxMgr().store_->MvccManager()->GlobalWmkInfo().newest_active_long_tx_.load();
+      CoroEnv::CurTxMgr().store_->GetMvccManager()->GlobalWmkInfo().newest_active_long_tx_.load();
   if (deltas_visible_for_all == 0 && local_newest_olap > local_oldest_oltp) {
     return; // Nothing to do here
   }
@@ -435,4 +431,4 @@ void FatTuple::ConvertToChained(lean_treeid_t tree_id) {
   new (this) ChainedTuple(*this);
 }
 
-} // namespace leanstore::storage::btree
+} // namespace leanstore

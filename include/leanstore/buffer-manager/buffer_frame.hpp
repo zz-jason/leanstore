@@ -12,7 +12,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace leanstore::storage {
+namespace leanstore {
 
 /// Used for contention based split. See more details in: "Contention and Space Management in
 /// B-Trees"
@@ -209,4 +209,4 @@ public:
   }
 };
 
-} // namespace leanstore::storage
+} // namespace leanstore

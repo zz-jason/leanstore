@@ -6,7 +6,7 @@
 #include "leanstore/units.hpp"
 #include "leanstore/utils/log.hpp"
 
-namespace leanstore::storage::btree {
+namespace leanstore {
 /// Plan: we should handle frequently and infrequently updated tuples
 /// differently when it comes to maintaining versions in the b-tree. For
 /// frequently updated tuples, we store them in a FatTuple
@@ -444,4 +444,4 @@ public:
   }
 };
 
-} // namespace leanstore::storage::btree
+} // namespace leanstore

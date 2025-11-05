@@ -1,11 +1,11 @@
 #include "leanstore/concurrency/group_committer.hpp"
 
+#include "coroutine/lean_mutex.hpp"
+#include "coroutine/mvcc_manager.hpp"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/utils/log.hpp"
-#include "utils/coroutine/lean_mutex.hpp"
-#include "utils/coroutine/mvcc_manager.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -14,7 +14,7 @@
 #include <ctime>
 #include <format>
 
-namespace leanstore::cr {
+namespace leanstore {
 
 /// The alignment of the WAL record
 constexpr size_t kAligment = 4096;
@@ -46,8 +46,8 @@ void GroupCommitter::CollectWalRecords(lean_txid_t& min_flushed_sys_tx,
                                        std::vector<WalFlushReq>& wal_flush_req_copies) {
   min_flushed_sys_tx = std::numeric_limits<lean_txid_t>::max();
   min_flushed_usr_tx = std::numeric_limits<lean_txid_t>::max();
-  auto& loggings = store_->MvccManager()->Loggings();
-  auto& tx_mgrs = store_->MvccManager()->TxMgrs();
+  auto& loggings = store_->GetMvccManager()->Loggings();
+  auto& tx_mgrs = store_->GetMvccManager()->TxMgrs();
   LEAN_DCHECK(loggings.size() == num_rfa_txs.size());
 
   for (auto worker_id = 0u; worker_id < loggings.size(); worker_id++) {
@@ -118,8 +118,8 @@ void GroupCommitter::DetermineCommitableTx(lean_txid_t min_flushed_sys_tx,
                                            lean_txid_t min_flushed_usr_tx,
                                            const std::vector<uint64_t>& num_rfa_txs,
                                            const std::vector<WalFlushReq>& wal_flush_req_copies) {
-  auto& loggings = store_->MvccManager()->Loggings();
-  auto& tx_mgrs = store_->MvccManager()->TxMgrs();
+  auto& loggings = store_->GetMvccManager()->Loggings();
+  auto& tx_mgrs = store_->GetMvccManager()->TxMgrs();
   for (lean_wid_t worker_id = 0; worker_id < loggings.size(); worker_id++) {
     auto& tx_mgr = tx_mgrs[worker_id];
     const auto& req_copy = wal_flush_req_copies[worker_id];
@@ -182,7 +182,7 @@ void GroupCommitter::DetermineCommitableTx(lean_txid_t min_flushed_sys_tx,
     }
   }
 
-  store_->MvccManager()->UpdateMinCommittedSysTx(min_flushed_sys_tx);
+  store_->GetMvccManager()->UpdateMinCommittedSysTx(min_flushed_sys_tx);
 }
 
 void GroupCommitter::Append(uint8_t* buf, uint64_t lower, uint64_t upper) {
@@ -196,4 +196,4 @@ void GroupCommitter::Append(uint8_t* buf, uint64_t lower, uint64_t upper) {
   wal_size_ += upper - lower;
 }
 
-} // namespace leanstore::cr
+} // namespace leanstore

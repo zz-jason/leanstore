@@ -16,7 +16,7 @@
 
 #include <fcntl.h>
 
-namespace leanstore::storage::test {
+namespace leanstore::test {
 
 class AsyncWriteBufferTest : public ::testing::Test {
 protected:
@@ -127,4 +127,4 @@ TEST_F(AsyncWriteBufferTest, Basic) {
   }
 }
 
-} // namespace leanstore::storage::test
+} // namespace leanstore::test

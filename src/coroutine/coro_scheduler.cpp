@@ -1,11 +1,11 @@
-#include "utils/coroutine/coro_scheduler.hpp"
+#include "coroutine/coro_scheduler.hpp"
 
+#include "coroutine/auto_commit_protocol.hpp"
+#include "coroutine/coro_future.hpp"
+#include "coroutine/coro_session.hpp"
+#include "coroutine/mvcc_manager.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/utils/log.hpp"
-#include "utils/coroutine/auto_commit_protocol.hpp"
-#include "utils/coroutine/coro_future.hpp"
-#include "utils/coroutine/coro_session.hpp"
-#include "utils/coroutine/mvcc_manager.hpp"
 
 #include <cassert>
 #include <cstdint>
@@ -87,7 +87,7 @@ void CoroScheduler::InitCoroExecutors() {
 
   // set thread-local logging for each executor
   if (store_ != nullptr) {
-    auto& loggings = store_->MvccManager()->Loggings();
+    auto& loggings = store_->GetMvccManager()->Loggings();
     LEAN_DCHECK(loggings.size() == coro_executors_.size(),
                 "Number of loggings must match number of executors");
     for (auto i = 0u; i < loggings.size(); i++) {
@@ -112,10 +112,10 @@ void CoroScheduler::CreateSessionPool() {
   session_pool_per_exec_.resize(num_exec);
   for (auto i = 0u; i < num_exec * num_session_per_exec; i++) {
     auto runs_on = i % num_exec;
-    cr::TxManager* tx_mgr = nullptr;
+    TxManager* tx_mgr = nullptr;
     if (store_ != nullptr) {
-      assert(i < store_->MvccManager()->TxMgrs().size() && "Invalid index for TxManager");
-      tx_mgr = store_->MvccManager()->TxMgrs()[i].get();
+      assert(i < store_->GetMvccManager()->TxMgrs().size() && "Invalid index for TxManager");
+      tx_mgr = store_->GetMvccManager()->TxMgrs()[i].get();
     }
     all_sessions_.emplace_back(std::make_unique<CoroSession>(runs_on, tx_mgr));
     session_pool_per_exec_[runs_on].push(all_sessions_.back().get());

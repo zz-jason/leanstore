@@ -1,5 +1,7 @@
 #include "benchmarks/ycsb/ycsb.hpp"
 #include "benchmarks/ycsb/ycsb_leanstore_client.hpp"
+#include "coroutine/coro_future.hpp"
+#include "coroutine/coro_session.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/common/perf_counters.h"
@@ -13,8 +15,6 @@
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/random_generator.hpp"
 #include "leanstore/utils/scrambled_zipf_generator.hpp"
-#include "utils/coroutine/coro_future.hpp"
-#include "utils/coroutine/coro_session.hpp"
 #include "utils/scoped_timer.hpp"
 #include "utils/small_vector.hpp"
 
@@ -87,7 +87,7 @@ public:
   KVInterface* CreateTable() {
     // create table with transaction kv
     if (bench_transaction_kv_) {
-      leanstore::storage::btree::TransactionKV* table;
+      TransactionKV* table;
       lean_btree_config config{.enable_wal_ = true, .use_bulk_insert_ = false};
       auto job = [&]() {
         auto res = store_->CreateTransactionKV(kTableName, config);
@@ -103,7 +103,7 @@ public:
     }
 
     // create table with basic kv
-    leanstore::storage::btree::BasicKV* table;
+    BasicKV* table;
 
     auto job = [&]() {
       lean_btree_config config{.enable_wal_ = true, .use_bulk_insert_ = false};
@@ -120,11 +120,11 @@ public:
 
   KVInterface* GetTable() {
     if (bench_transaction_kv_) {
-      leanstore::storage::btree::TransactionKV* table;
+      TransactionKV* table;
       store_->GetTransactionKV(kTableName, &table);
       return table;
     }
-    leanstore::storage::btree::BasicKV* table;
+    BasicKV* table;
     store_->GetBasicKV(kTableName, &table);
     return table;
   }

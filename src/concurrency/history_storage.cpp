@@ -1,5 +1,6 @@
 #include "leanstore/concurrency/history_storage.hpp"
 
+#include "coroutine/mvcc_manager.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/core/b_tree_node.hpp"
 #include "leanstore/btree/core/btree_iter_mut.hpp"
@@ -11,14 +12,13 @@
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
-#include "utils/coroutine/mvcc_manager.hpp"
 #include "utils/small_vector.hpp"
 
 #include <functional>
 
-using namespace leanstore::storage::btree;
+using namespace leanstore;
 
-namespace leanstore::cr {
+namespace leanstore {
 
 void HistoryStorage::PutVersion(lean_txid_t tx_id, lean_cmdid_t command_id, lean_treeid_t tree_id,
                                 bool is_remove, uint64_t version_size,
@@ -147,19 +147,18 @@ void HistoryStorage::PurgeVersions(lean_txid_t from_tx_id, lean_txid_t to_tx_id,
   JUMPMU_TRY() {
   restartrem: {
     auto x_iter = btree->NewBTreeIterMut();
-    x_iter->SetExitLeafCallback(
-        [&](leanstore::storage::GuardedBufferFrame<BTreeNode>& guarded_leaf) {
-          if (guarded_leaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
-            x_iter->SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
-              JUMPMU_TRY() {
-                lean_txid_t sys_tx_id = btree->store_->MvccManager()->AllocSysTxTs();
-                btree->TryMergeMayJump(sys_tx_id, *to_merge);
-              }
-              JUMPMU_CATCH() {
-              }
-            });
+    x_iter->SetExitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guarded_leaf) {
+      if (guarded_leaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
+        x_iter->SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
+          JUMPMU_TRY() {
+            lean_txid_t sys_tx_id = btree->store_->GetMvccManager()->AllocSysTxTs();
+            btree->TryMergeMayJump(sys_tx_id, *to_merge);
+          }
+          JUMPMU_CATCH() {
           }
         });
+      }
+    });
     for (x_iter->SeekToFirstGreaterEqual(key); x_iter->Valid();
          x_iter->SeekToFirstGreaterEqual(key)) {
       // finished if we are out of the transaction range
@@ -207,11 +206,10 @@ void HistoryStorage::PurgeVersions(lean_txid_t from_tx_id, lean_txid_t to_tx_id,
   volatile bool should_try = true;
   if (from_tx_id == 0 && session->left_most_bf_ != nullptr) {
     JUMPMU_TRY() {
-      leanstore::storage::BufferFrame* bf = session->left_most_bf_;
+      BufferFrame* bf = session->left_most_bf_;
 
       // optimistic lock, jump if invalid
-      leanstore::storage::ScopedHybridGuard bf_guard(bf->header_.latch_,
-                                                     session->left_most_version_);
+      ScopedHybridGuard bf_guard(bf->header_.latch_, session->left_most_version_);
 
       // lock successfull, check whether the page can be purged
       auto* leaf_node = reinterpret_cast<BTreeNode*>(bf->page_.payload_);
@@ -240,51 +238,49 @@ void HistoryStorage::PurgeVersions(lean_txid_t from_tx_id, lean_txid_t to_tx_id,
     JUMPMU_TRY() {
       auto x_iter = btree->NewBTreeIterMut();
       // check whether the page can be merged when exit a leaf
-      x_iter->SetExitLeafCallback(
-          [&](leanstore::storage::GuardedBufferFrame<BTreeNode>& guarded_leaf) {
-            if (guarded_leaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
-              x_iter->SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
-                JUMPMU_TRY() {
-                  lean_txid_t sys_tx_id = btree->store_->MvccManager()->AllocSysTxTs();
-                  btree->TryMergeMayJump(sys_tx_id, *to_merge);
-                }
-                JUMPMU_CATCH() {
-                }
-              });
+      x_iter->SetExitLeafCallback([&](GuardedBufferFrame<BTreeNode>& guarded_leaf) {
+        if (guarded_leaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
+          x_iter->SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
+            JUMPMU_TRY() {
+              lean_txid_t sys_tx_id = btree->store_->GetMvccManager()->AllocSysTxTs();
+              btree->TryMergeMayJump(sys_tx_id, *to_merge);
+            }
+            JUMPMU_CATCH() {
             }
           });
+        }
+      });
 
       bool is_full_page_purged = false;
       // check whether the whole page can be purged when enter a leaf
-      x_iter->SetEnterLeafCallback(
-          [&](leanstore::storage::GuardedBufferFrame<BTreeNode>& guarded_leaf) {
-            if (guarded_leaf->num_slots_ == 0) {
-              return;
-            }
+      x_iter->SetEnterLeafCallback([&](GuardedBufferFrame<BTreeNode>& guarded_leaf) {
+        if (guarded_leaf->num_slots_ == 0) {
+          return;
+        }
 
-            // get the transaction id in the first key
-            auto first_key_size = guarded_leaf->GetFullKeyLen(0);
-            SmallBuffer256 first_key_holder(first_key_size);
-            auto* first_key = first_key_holder.Data();
-            guarded_leaf->CopyFullKey(0, first_key);
-            lean_txid_t tx_id_in_first_key;
-            utils::Unfold(first_key, tx_id_in_first_key);
+        // get the transaction id in the first key
+        auto first_key_size = guarded_leaf->GetFullKeyLen(0);
+        SmallBuffer256 first_key_holder(first_key_size);
+        auto* first_key = first_key_holder.Data();
+        guarded_leaf->CopyFullKey(0, first_key);
+        lean_txid_t tx_id_in_first_key;
+        utils::Unfold(first_key, tx_id_in_first_key);
 
-            // get the transaction id in the last key
-            auto last_key_size = guarded_leaf->GetFullKeyLen(guarded_leaf->num_slots_ - 1);
-            SmallBuffer256 last_key_holder(last_key_size);
-            auto* last_key = last_key_holder.Data();
-            guarded_leaf->CopyFullKey(guarded_leaf->num_slots_ - 1, last_key);
-            lean_txid_t tx_id_in_last_key;
-            utils::Unfold(last_key, tx_id_in_last_key);
+        // get the transaction id in the last key
+        auto last_key_size = guarded_leaf->GetFullKeyLen(guarded_leaf->num_slots_ - 1);
+        SmallBuffer256 last_key_holder(last_key_size);
+        auto* last_key = last_key_holder.Data();
+        guarded_leaf->CopyFullKey(guarded_leaf->num_slots_ - 1, last_key);
+        lean_txid_t tx_id_in_last_key;
+        utils::Unfold(last_key, tx_id_in_last_key);
 
-            // purge the whole page if it is in the range
-            if (from_tx_id <= tx_id_in_first_key && tx_id_in_last_key <= to_tx_id) {
-              versions_removed += guarded_leaf->num_slots_;
-              guarded_leaf->Reset();
-              is_full_page_purged = true;
-            }
-          });
+        // purge the whole page if it is in the range
+        if (from_tx_id <= tx_id_in_first_key && tx_id_in_last_key <= to_tx_id) {
+          versions_removed += guarded_leaf->num_slots_;
+          guarded_leaf->Reset();
+          is_full_page_purged = true;
+        }
+      });
 
       x_iter->SeekToFirstGreaterEqual(key);
       if (is_full_page_purged) {
@@ -356,4 +352,4 @@ void HistoryStorage::VisitRemovedVersions(lean_txid_t from_tx_id, lean_txid_t to
   }
 }
 
-} // namespace leanstore::cr
+} // namespace leanstore
