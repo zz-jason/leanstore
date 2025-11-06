@@ -1,16 +1,16 @@
 #pragma once
 
+#include "coroutine/coro_env.hpp"
 #include "leanstore/exceptions.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/utils/jump_mu.hpp"
 #include "leanstore/utils/log.hpp"
-#include "utils/coroutine/coro_env.hpp"
 
 #include <atomic>
 
 #include <unistd.h>
 
-namespace leanstore::storage {
+namespace leanstore {
 
 enum class GuardState : uint8_t {
   kUninitialized = 0,
@@ -78,7 +78,7 @@ public:
       LEAN_DLOG("JumpIfModifiedByOthers, version_(expected)={}, "
                 "latch_->GetVersion()(actual)={}",
                 version_, latch_->GetVersion());
-      leanstore::JumpContext::Jump();
+      JumpContext::Jump();
     }
   }
 
@@ -125,7 +125,7 @@ public:
     version_ = latch_->GetVersion();
     if (HasExclusiveMark(version_)) {
       contented_ = true;
-      leanstore::JumpContext::Jump();
+      JumpContext::Jump();
     }
     state_ = GuardState::kSharedOptimistic;
   }
@@ -168,7 +168,7 @@ public:
       latch_->shared_mutex_.lock();
       if (!latch_->version_.compare_exchange_strong(expected, new_version)) {
         latch_->shared_mutex_.unlock();
-        leanstore::JumpContext::Jump();
+        JumpContext::Jump();
       }
       version_ = new_version;
       state_ = GuardState::kExclusivePessimistic;
@@ -187,7 +187,7 @@ public:
       latch_->shared_mutex_.lock_shared();
       if (latch_->GetVersion() != version_) {
         latch_->shared_mutex_.unlock_shared();
-        leanstore::JumpContext::Jump();
+        JumpContext::Jump();
       }
       state_ = GuardState::kSharedPessimistic;
     } else {
@@ -202,12 +202,12 @@ public:
     uint64_t expected = version_;
 
     if (!latch_->shared_mutex_.try_lock()) {
-      leanstore::JumpContext::Jump();
+      JumpContext::Jump();
     }
 
     if (!latch_->version_.compare_exchange_strong(expected, new_version)) {
       latch_->shared_mutex_.unlock();
-      leanstore::JumpContext::Jump();
+      JumpContext::Jump();
     }
 
     version_ = new_version;
@@ -217,11 +217,11 @@ public:
   inline void TryToSharedMayJump() {
     LEAN_DCHECK(state_ == GuardState::kSharedOptimistic);
     if (!latch_->shared_mutex_.try_lock_shared()) {
-      leanstore::JumpContext::Jump();
+      JumpContext::Jump();
     }
     if (latch_->GetVersion() != version_) {
       latch_->shared_mutex_.unlock_shared();
-      leanstore::JumpContext::Jump();
+      JumpContext::Jump();
     }
     state_ = GuardState::kSharedPessimistic;
   }
@@ -262,4 +262,4 @@ private:
   // NOLINTEND
 };
 
-} // namespace leanstore::storage
+} // namespace leanstore

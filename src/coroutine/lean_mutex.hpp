@@ -2,8 +2,8 @@
 
 #ifdef ENABLE_COROUTINE
 
-#include "utils/coroutine/coro_lock_guard.hpp"
-#include "utils/coroutine/coro_mutex.hpp"
+#include "coroutine/coro_lock_guard.hpp"
+#include "coroutine/coro_mutex.hpp"
 
 #else
 

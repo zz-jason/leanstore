@@ -2,7 +2,7 @@
 
 #include "leanstore/slice.hpp"
 
-namespace leanstore::storage::btree {
+namespace leanstore {
 
 class Iterator {
 public:
@@ -67,4 +67,4 @@ public:
   virtual Slice Val() = 0;
 };
 
-} // namespace leanstore::storage::btree
+} // namespace leanstore

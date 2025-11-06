@@ -1,3 +1,6 @@
+#include "coroutine/coro_env.hpp"
+#include "coroutine/coro_executor.hpp"
+#include "coroutine/coro_session.hpp"
 #include "lean_test_suite.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
@@ -6,9 +9,6 @@
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
-#include "utils/coroutine/coro_env.hpp"
-#include "utils/coroutine/coro_executor.hpp"
-#include "utils/coroutine/coro_session.hpp"
 
 #include <gtest/gtest.h>
 
@@ -59,7 +59,7 @@ TEST_F(CoroTxTest, BasicCommit) {
 
   // create btree for table records
   auto* coro_session_0 = store->GetCoroScheduler()->ReserveCoroSession(0);
-  storage::btree::TransactionKV* btree = nullptr;
+  TransactionKV* btree = nullptr;
   auto job_create_btree = [&]() {
     auto res = store->CreateTransactionKV(kBtreeName, kBtreeConfig);
     EXPECT_TRUE(res);
@@ -95,7 +95,7 @@ TEST_F(CoroTxTest, BasicSnapshotIsolation) {
   auto* coro_session_1 = store->GetCoroScheduler()->ReserveCoroSession(1);
 
   // create btree for table records
-  storage::btree::TransactionKV* btree = nullptr;
+  TransactionKV* btree = nullptr;
   auto job_create_btree = [&]() {
     auto res = store->CreateTransactionKV(kBtreeName, kBtreeConfig);
     EXPECT_TRUE(res);

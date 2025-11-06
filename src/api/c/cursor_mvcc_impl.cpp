@@ -1,9 +1,9 @@
 #include "api/c/cursor_mvcc_impl.hpp"
 
+#include "coroutine/coro_env.hpp"
 #include "leanstore/btree/core/btree_iter.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/c/leanstore.h"
-#include "utils/coroutine/coro_env.hpp"
 
 #include <cassert>
 
@@ -120,7 +120,7 @@ lean_status CursorMvccImpl::UpdateCurrent(lean_str_view new_value [[maybe_unused
   return lean_status::LEAN_ERR_UNSUPPORTED;
 }
 
-bool CursorMvccImpl::SeekToVisibleAsc(storage::btree::BTreeIter* iter) {
+bool CursorMvccImpl::SeekToVisibleAsc(BTreeIter* iter) {
   bool found = false;
   for (; !found && iter->Valid(); iter->Next()) {
     btree_->GetVisibleTuple(iter->Val(), [&](Slice visible_val) {
@@ -135,7 +135,7 @@ bool CursorMvccImpl::SeekToVisibleAsc(storage::btree::BTreeIter* iter) {
   return found;
 }
 
-bool CursorMvccImpl::SeekToVisibleDesc(storage::btree::BTreeIter* iter) {
+bool CursorMvccImpl::SeekToVisibleDesc(BTreeIter* iter) {
   bool found = false;
   for (; !found && iter->Valid(); iter->Prev()) {
     btree_->GetVisibleTuple(iter->Val(), [&](Slice visible_val) {

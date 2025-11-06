@@ -12,7 +12,7 @@
 #include <memory>
 
 using namespace leanstore::utils;
-using namespace leanstore::storage::btree;
+using namespace leanstore;
 
 namespace leanstore::test {
 

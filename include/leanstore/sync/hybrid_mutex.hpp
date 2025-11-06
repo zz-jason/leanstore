@@ -1,14 +1,14 @@
 #pragma once
 
+#include "coroutine/lean_mutex.hpp"
 #include "leanstore/common/portable.h"
 #include "leanstore/utils/log.hpp"
-#include "utils/coroutine/lean_mutex.hpp"
 
 #include <atomic>
 
 #include <unistd.h>
 
-namespace leanstore::storage {
+namespace leanstore {
 
 class ScopedHybridGuard;
 class HybridGuard;
@@ -69,4 +69,4 @@ public:
 
 static_assert(sizeof(HybridMutex) == 64, "");
 
-} // namespace leanstore::storage
+} // namespace leanstore

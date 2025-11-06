@@ -1,12 +1,12 @@
 #pragma once
 
+#include "coroutine/lean_mutex.hpp"
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/utils/log.hpp"
-#include "utils/coroutine/lean_mutex.hpp"
 
 #include <cstdint>
 
-namespace leanstore::storage {
+namespace leanstore {
 
 class FreeList {
 public:
@@ -59,4 +59,4 @@ inline BufferFrame* FreeList::TryPopFront() {
   return free_bf;
 }
 
-} // namespace leanstore::storage
+} // namespace leanstore

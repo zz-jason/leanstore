@@ -1,6 +1,7 @@
 #pragma once
 
 #include "b_tree_generic.hpp"
+#include "coroutine/mvcc_manager.hpp"
 #include "iterator.hpp"
 #include "leanstore/btree/core/b_tree_node.hpp"
 #include "leanstore/buffer-manager/guarded_buffer_frame.hpp"
@@ -9,13 +10,12 @@
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
-#include "utils/coroutine/mvcc_manager.hpp"
 
 #include <functional>
 
 #include <sys/syscall.h>
 
-namespace leanstore::storage::btree {
+namespace leanstore {
 
 using LeafCallback = std::function<void(GuardedBufferFrame<BTreeNode>& guarded_leaf)>;
 
@@ -380,7 +380,7 @@ inline void BTreeIterPessistic::Next() {
     if (guarded_leaf_->num_slots_ == 0) {
       SetCleanUpCallback([&, to_merge = guarded_leaf_.bf_]() {
         JUMPMU_TRY() {
-          lean_txid_t sys_tx_id = btree_.store_->MvccManager()->AllocSysTxTs();
+          lean_txid_t sys_tx_id = btree_.store_->GetMvccManager()->AllocSysTxTs();
           btree_.TryMergeMayJump(sys_tx_id, *to_merge, true);
         }
         JUMPMU_CATCH() {
@@ -543,4 +543,4 @@ inline void BTreeIterPessistic::SeekTargetPage(
   }
 }
 
-} // namespace leanstore::storage::btree
+} // namespace leanstore

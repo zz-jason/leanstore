@@ -37,7 +37,7 @@ protected:
 };
 
 TEST_F(OptimisticGuardedTest, Set) {
-  storage::OptimisticGuarded<TestPayload> guarded_val({0, 100});
+  OptimisticGuarded<TestPayload> guarded_val({0, 100});
 
   // TxManager 0, set the guardedVal 100 times
   store_->ExecSync(0, [&]() {
@@ -62,7 +62,7 @@ TEST_F(OptimisticGuardedTest, Set) {
 }
 
 TEST_F(OptimisticGuardedTest, UpdateAttribute) {
-  storage::OptimisticGuarded<TestPayload> guarded_val({0, 100});
+  OptimisticGuarded<TestPayload> guarded_val({0, 100});
 
   // TxManager 0, update the guardedVal 100 times
   store_->ExecSync(0, [&]() {

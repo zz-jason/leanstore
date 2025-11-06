@@ -44,7 +44,7 @@ public:
 
   void InitHistoryStorage();
 
-  cr::WatermarkInfo& GlobalWmkInfo() {
+  WatermarkInfo& GlobalWmkInfo() {
     return global_wmk_info_;
   }
 
@@ -79,18 +79,18 @@ public:
     return sys_tso_.load();
   }
 
-  std::vector<std::unique_ptr<cr::Logging>>& Loggings() {
+  std::vector<std::unique_ptr<Logging>>& Loggings() {
     return loggings_;
   }
 
-  std::vector<std::unique_ptr<cr::TxManager>>& TxMgrs() {
+  std::vector<std::unique_ptr<TxManager>>& TxMgrs() {
     return tx_mgrs_;
   }
 
 private:
   LeanStore* store_;
 
-  cr::WatermarkInfo global_wmk_info_;
+  WatermarkInfo global_wmk_info_;
 
   /// The minimum flushed system transaction ID among all worker threads. User transactions whose
   /// max observed system transaction ID not larger than it can be committed safely.
@@ -106,11 +106,11 @@ private:
 
   /// All the logging instances in the system. Each worker thread should have 1 logging instance
   /// to write its own WAL entries.
-  std::vector<std::unique_ptr<cr::Logging>> loggings_;
+  std::vector<std::unique_ptr<Logging>> loggings_;
 
   /// All the transaction managers in the system. Each thread or coroutine should have its own
   /// transaction manager if it needs to run transactions.
-  std::vector<std::unique_ptr<cr::TxManager>> tx_mgrs_;
+  std::vector<std::unique_ptr<TxManager>> tx_mgrs_;
 };
 
 inline MvccManager::MvccManager(LeanStore* store) : store_(store) {
@@ -121,7 +121,7 @@ inline MvccManager::MvccManager(LeanStore* store) : store_(store) {
   // init logging
   loggings_.reserve(store_option->worker_threads_);
   for (auto i = 0u; i < store_option->worker_threads_; i++) {
-    loggings_.emplace_back(std::make_unique<cr::Logging>(store_option->wal_buffer_bytes_));
+    loggings_.emplace_back(std::make_unique<Logging>(store_option->wal_buffer_bytes_));
 
 #ifdef ENABLE_COROUTINE
     if (!store_option->enable_wal_) {
@@ -144,7 +144,7 @@ inline MvccManager::MvccManager(LeanStore* store) : store_(store) {
   // init transaction managers
   tx_mgrs_.reserve(num_tx_mgrs);
   for (auto i = 0u; i < num_tx_mgrs; i++) {
-    tx_mgrs_.emplace_back(std::make_unique<cr::TxManager>(i, tx_mgrs_, store));
+    tx_mgrs_.emplace_back(std::make_unique<TxManager>(i, tx_mgrs_, store));
   }
 }
 
@@ -154,8 +154,8 @@ inline void MvccManager::InitHistoryStorage() {
   static constexpr auto kUpdateNameFormat = "_history_updates_{}";
   static constexpr auto kRemoveNameFormat = "_history_removes_{}";
 
-  auto create_btree = [&](const std::string& name) -> storage::btree::BasicKV* {
-    auto res = storage::btree::BasicKV::Create(store_, name, kBtreeConfig);
+  auto create_btree = [&](const std::string& name) -> BasicKV* {
+    auto res = BasicKV::Create(store_, name, kBtreeConfig);
     if (!res) {
       Log::Fatal("Create btree failed, name={}, error={}", name, res.error().ToString());
     }

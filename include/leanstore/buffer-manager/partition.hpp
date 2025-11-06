@@ -1,18 +1,18 @@
 #pragma once
 
+#include "coroutine/coro_executor.hpp"
+#include "coroutine/lean_mutex.hpp"
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/buffer-manager/free_list.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/utils/misc.hpp"
-#include "utils/coroutine/coro_executor.hpp"
-#include "utils/coroutine/lean_mutex.hpp"
 
 #include <atomic>
 #include <cassert>
 #include <cstdint>
 #include <vector>
 
-namespace leanstore::storage {
+namespace leanstore {
 
 class BufferManager;
 
@@ -207,4 +207,4 @@ public:
   }
 };
 
-} // namespace leanstore::storage
+} // namespace leanstore

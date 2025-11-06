@@ -2,7 +2,7 @@
 
 #include "btree_iter_pessistic.hpp"
 
-namespace leanstore::storage::btree {
+namespace leanstore {
 
 class BTreeIterMut;
 
@@ -14,4 +14,4 @@ public:
   void IntoBtreeIterMut(BTreeIterMut* iter_mut);
 };
 
-} // namespace leanstore::storage::btree
+} // namespace leanstore

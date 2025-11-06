@@ -8,11 +8,9 @@
 #include <vector>
 
 namespace leanstore {
+
+/// Forward declarations
 class LeanStore;
-} // namespace leanstore
-
-namespace leanstore::cr {
-
 struct WatermarkInfo;
 class GroupCommitter;
 
@@ -20,7 +18,7 @@ class GroupCommitter;
 class CRManager {
 public:
   /// The LeanStore instance.
-  leanstore::LeanStore* store_;
+  LeanStore* store_;
 
   /// All the worker threads
   std::vector<std::unique_ptr<WorkerThread>> worker_threads_;
@@ -33,7 +31,7 @@ public:
   std::unique_ptr<GroupCommitter> group_committer_;
 
 public:
-  CRManager(leanstore::LeanStore* store);
+  CRManager(LeanStore* store);
 
   ~CRManager();
 
@@ -52,4 +50,4 @@ private:
   void StartGroupCommitter(int cpu);
 };
 
-} // namespace leanstore::cr
+} // namespace leanstore

@@ -146,7 +146,7 @@ public:
 
 class LeanStoreMVCCTableRef : public TableRef {
 public:
-  leanstore::storage::btree::TransactionKV* tree_;
+  leanstore::TransactionKV* tree_;
 };
 
 //------------------------------------------------------------------------------
@@ -197,7 +197,7 @@ inline void LeanStoreMVCCSession::AbortTx() {
 // DDL operations
 inline Result<TableRef*> LeanStoreMVCCSession::CreateTable(const std::string& tbl_name,
                                                            bool implicit_tx [[maybe_unused]]) {
-  storage::btree::TransactionKV* btree{nullptr};
+  TransactionKV* btree{nullptr};
   store_->lean_store_->ExecSync(worker_id_, [&]() {
     auto res = store_->lean_store_->CreateTransactionKV(tbl_name);
     if (res) {
@@ -226,7 +226,7 @@ inline Result<void> LeanStoreMVCCSession::DropTable(const std::string& tbl_name,
 // DML operations
 inline Result<void> LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice val,
                                               bool implicit_tx) {
-  auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
+  auto* btree = reinterpret_cast<TransactionKV*>(tbl);
   OpCode res;
   store_->lean_store_->ExecSync(worker_id_, [&]() {
     if (implicit_tx) {
@@ -251,7 +251,7 @@ inline Result<void> LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice va
 
 inline Result<uint64_t> LeanStoreMVCCSession::Get(TableRef* tbl, Slice key, std::string& val,
                                                   bool implicit_tx) {
-  auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
+  auto* btree = reinterpret_cast<TransactionKV*>(tbl);
   OpCode res;
   auto copy_value_out = [&](Slice res) {
     val.resize(res.size());
@@ -283,7 +283,7 @@ inline Result<uint64_t> LeanStoreMVCCSession::Get(TableRef* tbl, Slice key, std:
 
 inline Result<uint64_t> LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
                                                      bool implicit_tx) {
-  auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
+  auto* btree = reinterpret_cast<TransactionKV*>(tbl);
   OpCode res;
   auto update_call_back = [&](MutableSlice to_update) {
     std::memcpy(to_update.Data(), val.data(), val.length());
@@ -319,7 +319,7 @@ inline Result<uint64_t> LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, S
 }
 
 inline Result<uint64_t> LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key, bool implicit_tx) {
-  auto* btree = reinterpret_cast<storage::btree::TransactionKV*>(tbl);
+  auto* btree = reinterpret_cast<TransactionKV*>(tbl);
   OpCode res;
   store_->lean_store_->ExecSync(worker_id_, [&]() {
     if (implicit_tx) {

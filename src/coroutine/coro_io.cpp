@@ -1,8 +1,8 @@
-#include "utils/coroutine/coro_io.hpp"
+#include "coroutine/coro_io.hpp"
 
+#include "coroutine/coro_executor.hpp"
+#include "coroutine/coroutine.hpp"
 #include "leanstore/utils/log.hpp"
-#include "utils/coroutine/coro_executor.hpp"
-#include "utils/coroutine/coroutine.hpp"
 
 #include <cassert>
 #include <cerrno>

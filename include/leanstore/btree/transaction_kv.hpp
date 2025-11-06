@@ -16,16 +16,15 @@
 #include <string>
 #include <tuple>
 
+/// Forward declarations
 struct lean_wal_tx_insert;
 struct lean_wal_tx_update;
 struct lean_wal_tx_remove;
 
-/// forward declarations
 namespace leanstore {
-class LeanStore;
-} // namespace leanstore
 
-namespace leanstore::storage::btree {
+/// forward declarations
+class LeanStore;
 
 // Assumptions made in this implementation:
 // 1. We don't insert an already removed key
@@ -55,8 +54,7 @@ public:
 
   OpCode Remove(Slice key) override;
 
-  void Init(leanstore::LeanStore* store, lean_treeid_t tree_id, lean_btree_config config,
-            BasicKV* graveyard);
+  void Init(LeanStore* store, lean_treeid_t tree_id, lean_btree_config config, BasicKV* graveyard);
 
   SpaceCheckResult CheckSpaceUtilization(BufferFrame& bf) override;
 
@@ -75,37 +73,36 @@ private:
   OpCode LookupOptimistic(Slice key, ValCallback val_callback);
 
   template <bool asc = true>
-  OpCode scan4ShortRunningTx(Slice key, ScanCallback callback);
+  OpCode Scan4ShortRunningTx(Slice key, ScanCallback callback);
 
   template <bool asc = true>
-  OpCode scan4LongRunningTx(Slice key, ScanCallback callback);
+  OpCode Scan4LongRunningTx(Slice key, ScanCallback callback);
 
-  inline static bool trigger_page_wise_garbage_collection(
-      GuardedBufferFrame<BTreeNode>& guarded_node) {
+  static bool TriggerPageWiseGarbageCollection(GuardedBufferFrame<BTreeNode>& guarded_node) {
     return guarded_node->has_garbage_;
   }
 
   void InsertAfterRemove(BTreeIterMut* x_iter, Slice key, Slice val);
 
-  void undo_last_insert(const lean_wal_tx_insert* wal_insert);
+  void UndoLastInsert(const lean_wal_tx_insert* wal_insert);
 
-  void undo_last_update(const lean_wal_tx_update* wal_update);
+  void UndoLastUpdate(const lean_wal_tx_update* wal_update);
 
-  void undo_last_remove(const lean_wal_tx_remove* wal_remove);
+  void UndoLastRemove(const lean_wal_tx_remove* wal_remove);
 
 public:
-  static Result<TransactionKV*> Create(leanstore::LeanStore* store, const std::string& tree_name,
+  static Result<TransactionKV*> Create(LeanStore* store, const std::string& tree_name,
                                        lean_btree_config config, BasicKV* graveyard);
 
-  inline static void InsertToNode(GuardedBufferFrame<BTreeNode>& guarded_node, Slice key, Slice val,
-                                  lean_wid_t worker_id, lean_txid_t tx_start_ts, int32_t& slot_id) {
+  static void InsertToNode(GuardedBufferFrame<BTreeNode>& guarded_node, Slice key, Slice val,
+                           lean_wid_t worker_id, lean_txid_t tx_start_ts, int32_t& slot_id) {
     auto total_val_size = sizeof(ChainedTuple) + val.size();
     slot_id = guarded_node->InsertDoNotCopyPayload(key, total_val_size, slot_id);
     auto* tuple_addr = guarded_node->ValData(slot_id);
     new (tuple_addr) ChainedTuple(worker_id, tx_start_ts, val);
   }
 
-  inline static uint64_t ConvertToFatTupleThreshold() {
+  static uint64_t ConvertToFatTupleThreshold() {
     auto& store_option = CoroEnv::CurTxMgr().store_->store_option_;
     return store_option->worker_threads_ * store_option->max_concurrent_transaction_per_worker_;
   }
@@ -117,4 +114,4 @@ public:
                                UpdateDesc& update_desc);
 };
 
-} // namespace leanstore::storage::btree
+} // namespace leanstore

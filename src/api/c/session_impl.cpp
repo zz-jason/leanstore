@@ -2,6 +2,7 @@
 
 #include "api/c/btree_impl.hpp"
 #include "api/c/btree_mvcc_impl.hpp"
+#include "coroutine/coro_env.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/core/b_tree_generic.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
@@ -9,7 +10,6 @@
 #include "leanstore/c/leanstore.h"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/lean_store.hpp"
-#include "utils/coroutine/coro_env.hpp"
 
 #include <iostream>
 
@@ -20,7 +20,7 @@ lean_status SessionImpl::CreateBTree(const char* btree_name, lean_btree_type btr
   ExecSync([&]() {
     switch (btree_type) {
     case lean_btree_type::LEAN_BTREE_TYPE_ATOMIC: {
-      // storage::btree::BasicKV* btree;
+      // BasicKV* btree;
       auto res = store_->CreateBasicKv(btree_name);
       if (!res) {
         std::cerr << "CreateBTree failed: " << res.error().ToString() << std::endl;
@@ -49,18 +49,18 @@ lean_status SessionImpl::CreateBTree(const char* btree_name, lean_btree_type btr
 void SessionImpl::DropBTree(const char* btree_name) {
   ExecSync([&]() {
     auto* tree = store_->tree_registry_->GetTree(btree_name);
-    auto* generic_btree = dynamic_cast<leanstore::storage::btree::BTreeGeneric*>(tree);
+    auto* generic_btree = dynamic_cast<BTreeGeneric*>(tree);
     if (generic_btree == nullptr) {
       return;
     }
 
     switch (generic_btree->tree_type_) {
-    case leanstore::storage::btree::BTreeType::kGeneric: {
-    case leanstore::storage::btree::BTreeType::kBasicKV:
+    case BTreeType::kGeneric: {
+    case BTreeType::kBasicKV:
       store_->DropBasicKV(btree_name);
       return;
     }
-    case leanstore::storage::btree::BTreeType::kTransactionKV: {
+    case BTreeType::kTransactionKV: {
       store_->DropTransactionKV(btree_name);
       return;
     }
@@ -75,20 +75,20 @@ struct lean_btree* SessionImpl::GetBTree(const char* btree_name) {
   struct lean_btree* btree_result = nullptr;
   ExecSync([&]() {
     auto* tree = store_->tree_registry_->GetTree(btree_name);
-    auto* generic_btree = dynamic_cast<leanstore::storage::btree::BTreeGeneric*>(tree);
+    auto* generic_btree = dynamic_cast<BTreeGeneric*>(tree);
     if (generic_btree == nullptr) {
       btree_result = nullptr;
       return;
     }
 
     switch (generic_btree->tree_type_) {
-    case leanstore::storage::btree::BTreeType::kBasicKV: {
-      auto* btree = dynamic_cast<storage::btree::BasicKV*>(generic_btree);
+    case BTreeType::kBasicKV: {
+      auto* btree = dynamic_cast<BasicKV*>(generic_btree);
       btree_result = BTreeImpl::Create(btree, this);
       return;
     }
-    case leanstore::storage::btree::BTreeType::kTransactionKV: {
-      auto* btree_mvcc = dynamic_cast<storage::btree::TransactionKV*>(generic_btree);
+    case BTreeType::kTransactionKV: {
+      auto* btree_mvcc = dynamic_cast<TransactionKV*>(generic_btree);
       btree_result = BTreeMvccImpl::Create(btree_mvcc, this);
       return;
     }

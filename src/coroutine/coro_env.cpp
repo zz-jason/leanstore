@@ -1,20 +1,20 @@
-#include "utils/coroutine/coro_env.hpp"
+#include "coroutine/coro_env.hpp"
 
+#include "coroutine/coro_executor.hpp"
+#include "coroutine/coro_scheduler.hpp"
 #include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
-#include "utils/coroutine/coro_executor.hpp"
-#include "utils/coroutine/coro_scheduler.hpp"
 
 namespace leanstore {
 
 namespace {
 thread_local LeanStore* tls_store = nullptr;
-thread_local cr::Logging* tls_logging = nullptr;
+thread_local Logging* tls_logging = nullptr;
 
 #ifndef ENABLE_COROUTINE
-thread_local cr::TxManager* tls_tx_mgr = nullptr;
+thread_local TxManager* tls_tx_mgr = nullptr;
 #endif
 } // namespace
 
@@ -37,16 +37,16 @@ Coroutine* CoroEnv::CurCoro() {
   return CoroExecutor::CurrentCoro();
 }
 
-void CoroEnv::SetCurLogging(cr::Logging* logging) {
+void CoroEnv::SetCurLogging(Logging* logging) {
   tls_logging = logging;
 }
 
-cr::Logging& CoroEnv::CurLogging() {
+Logging& CoroEnv::CurLogging() {
   LEAN_DCHECK(tls_logging != nullptr, "Current logging is not set");
   return *tls_logging;
 }
 
-void CoroEnv::SetCurTxMgr(cr::TxManager* tx_mgr) {
+void CoroEnv::SetCurTxMgr(TxManager* tx_mgr) {
 #if ENABLE_COROUTINE
   CoroEnv::CurCoro()->SetTxMgr(tx_mgr);
 #else
@@ -54,7 +54,7 @@ void CoroEnv::SetCurTxMgr(cr::TxManager* tx_mgr) {
 #endif
 }
 
-cr::TxManager& CoroEnv::CurTxMgr() {
+TxManager& CoroEnv::CurTxMgr() {
 #if ENABLE_COROUTINE
   return *CurCoro()->GetTxMgr();
 #else

@@ -12,18 +12,14 @@
 
 #include <unistd.h>
 
+namespace leanstore {
+
 /// forward declarations
-namespace leanstore::cr {
-
 class WalEntryComplex;
-
-} // namespace leanstore::cr
-
-namespace leanstore::cr {
 
 class Recovery {
 private:
-  leanstore::LeanStore* store_;
+  LeanStore* store_;
 
   /// The offset of WAL in the underlying data file.
   uint64_t wal_start_offset_;
@@ -40,10 +36,10 @@ private:
   std::map<lean_txid_t, uint64_t> active_tx_table_;
 
   /// Stores all the pages read from disk during the recovery process.
-  std::map<lean_pid_t, storage::BufferFrame*> resolved_pages_;
+  std::map<lean_pid_t, BufferFrame*> resolved_pages_;
 
 public:
-  Recovery(leanstore::LeanStore* store, uint64_t offset, uint64_t size)
+  Recovery(LeanStore* store, uint64_t offset, uint64_t size)
       : store_(store),
         wal_start_offset_(offset),
         wal_size_(size) {
@@ -86,23 +82,23 @@ private:
 
   Result<bool> NextWalComplexToRedo(uint64_t& offset, WalEntryComplex* wal_entry_ptr);
 
-  void RedoInsert(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
+  void RedoInsert(BufferFrame& bf, WalEntryComplex* complex_entry);
 
-  void RedoTxInsert(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
+  void RedoTxInsert(BufferFrame& bf, WalEntryComplex* complex_entry);
 
-  void RedoUpdate(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
+  void RedoUpdate(BufferFrame& bf, WalEntryComplex* complex_entry);
 
-  void RedoTxUpdate(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
+  void RedoTxUpdate(BufferFrame& bf, WalEntryComplex* complex_entry);
 
-  void RedoRemove(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
+  void RedoRemove(BufferFrame& bf, WalEntryComplex* complex_entry);
 
-  void RedoTxRemove(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
+  void RedoTxRemove(BufferFrame& bf, WalEntryComplex* complex_entry);
 
-  void RedoInitPage(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
+  void RedoInitPage(BufferFrame& bf, WalEntryComplex* complex_entry);
 
-  void RedoSplitRoot(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
+  void RedoSplitRoot(BufferFrame& bf, WalEntryComplex* complex_entry);
 
-  void RedoSplitNonRoot(storage::BufferFrame& bf, WalEntryComplex* complex_entry);
+  void RedoSplitNonRoot(BufferFrame& bf, WalEntryComplex* complex_entry);
 
   /// During the undo phase, the TT is used to undo the transactions still active at crash time. In
   /// the case of an aborted transaction, it’s possible to traverse the log file in reverse order
@@ -112,7 +108,7 @@ private:
   }
 
   /// Return the buffer frame containing the required dirty page
-  storage::BufferFrame& ResolvePage(lean_pid_t page_id);
+  BufferFrame& ResolvePage(lean_pid_t page_id);
 
   /// Read a wal record from the WAL file to the destination buffer.
   Result<void> ReadWalEntry(uint64_t& offset, uint8_t* dest);
@@ -120,4 +116,4 @@ private:
   Result<void> ReadFromWalFile(int64_t entry_offset, size_t entry_size, void* destination);
 };
 
-} // namespace leanstore::cr
+} // namespace leanstore

@@ -78,7 +78,7 @@ inline std::string ToJsonString(const ObjType* entry) {
 // ToJson specializations for BufferFrame and BTreeNode
 // -----------------------------------------------------------------------------
 
-inline void ToJson(leanstore::storage::BufferFrame* bf, utils::JsonObj* json_obj) {
+inline void ToJson(leanstore::BufferFrame* bf, utils::JsonObj* json_obj) {
   // header
   JsonObj header_obj;
   header_obj.AddString(kState, bf->header_.StateString());
@@ -98,7 +98,7 @@ inline void ToJson(leanstore::storage::BufferFrame* bf, utils::JsonObj* json_obj
   json_obj->AddJsonObj(kPageWithoutPayload, page_meta_obj);
 }
 
-inline void ToJson(leanstore::storage::btree::BTreeNode* obj, JsonObj* btree_node_json_obj) {
+inline void ToJson(leanstore::BTreeNode* obj, JsonObj* btree_node_json_obj) {
   auto lower_fence = obj->GetLowerFence();
   if (lower_fence.size() == 0) {
     lower_fence = kInfNegative;
@@ -110,7 +110,7 @@ inline void ToJson(leanstore::storage::btree::BTreeNode* obj, JsonObj* btree_nod
   }
 
   utils::JsonArray hints_json_array;
-  for (auto i = 0; i < leanstore::storage::btree::BTreeNode::kHintCount; ++i) {
+  for (auto i = 0; i < leanstore::BTreeNode::kHintCount; ++i) {
     hints_json_array.AppendInt64(obj->hint_[i]);
   }
 

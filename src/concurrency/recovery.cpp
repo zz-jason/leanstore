@@ -16,11 +16,7 @@
 #include <expected>
 #include <utility>
 
-namespace leanstore::cr {
-
-using namespace leanstore::storage;
-using namespace leanstore::utils;
-using namespace leanstore::storage::btree;
+namespace leanstore {
 
 bool Recovery::Run() {
   bool error(false);
@@ -217,7 +213,7 @@ Result<bool> Recovery::NextWalComplexToRedo(uint64_t& offset, WalEntryComplex* c
   return false;
 }
 
-void Recovery::RedoInsert(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
+void Recovery::RedoInsert(BufferFrame& bf, WalEntryComplex* complex_entry) {
   auto* wal_insert = reinterpret_cast<WalInsert*>(complex_entry->payload_);
   HybridGuard guard(&bf.header_.latch_);
   GuardedBufferFrame<BTreeNode> guarded_node(store_->buffer_manager_.get(), std::move(guard), &bf);
@@ -227,7 +223,7 @@ void Recovery::RedoInsert(storage::BufferFrame& bf, WalEntryComplex* complex_ent
                               complex_entry->worker_id_, complex_entry->tx_id_, slot_id);
 }
 
-void Recovery::RedoTxInsert(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
+void Recovery::RedoTxInsert(BufferFrame& bf, WalEntryComplex* complex_entry) {
   auto* wal_insert = reinterpret_cast<WalTxInsert*>(complex_entry->payload_);
   HybridGuard guard(&bf.header_.latch_);
   GuardedBufferFrame<BTreeNode> guarded_node(store_->buffer_manager_.get(), std::move(guard), &bf);
@@ -237,12 +233,12 @@ void Recovery::RedoTxInsert(storage::BufferFrame& bf, WalEntryComplex* complex_e
                               complex_entry->worker_id_, complex_entry->tx_id_, slot_id);
 }
 
-void Recovery::RedoUpdate(storage::BufferFrame& bf [[maybe_unused]],
+void Recovery::RedoUpdate(BufferFrame& bf [[maybe_unused]],
                           WalEntryComplex* complex_entry [[maybe_unused]]) {
   Log::Fatal("Unsupported");
 }
 
-void Recovery::RedoTxUpdate(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
+void Recovery::RedoTxUpdate(BufferFrame& bf, WalEntryComplex* complex_entry) {
   auto* wal = reinterpret_cast<WalTxUpdate*>(complex_entry->payload_);
   HybridGuard guard(&bf.header_.latch_);
   GuardedBufferFrame<BTreeNode> guarded_node(store_->buffer_manager_.get(), std::move(guard), &bf);
@@ -274,12 +270,12 @@ void Recovery::RedoTxUpdate(storage::BufferFrame& bf, WalEntryComplex* complex_e
   BasicKV::CopyToValue(*update_desc, buff, chained_tuple->payload_);
 }
 
-void Recovery::RedoRemove(storage::BufferFrame& bf [[maybe_unused]],
+void Recovery::RedoRemove(BufferFrame& bf [[maybe_unused]],
                           WalEntryComplex* complex_entry [[maybe_unused]]) {
   Log::Fatal("Unsupported");
 }
 
-void Recovery::RedoTxRemove(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
+void Recovery::RedoTxRemove(BufferFrame& bf, WalEntryComplex* complex_entry) {
   auto* wal = reinterpret_cast<WalTxRemove*>(complex_entry->payload_);
   HybridGuard guard(&bf.header_.latch_);
   GuardedBufferFrame<BTreeNode> guarded_node(store_->buffer_manager_.get(), std::move(guard), &bf);
@@ -302,7 +298,7 @@ void Recovery::RedoTxRemove(storage::BufferFrame& bf, WalEntryComplex* complex_e
   chained_tuple->is_tombstone_ = true;
 }
 
-void Recovery::RedoInitPage(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
+void Recovery::RedoInitPage(BufferFrame& bf, WalEntryComplex* complex_entry) {
   auto* wal_init_page = reinterpret_cast<WalInitPage*>(complex_entry->payload_);
   HybridGuard guard(&bf.header_.latch_);
   GuardedBufferFrame<BTreeNode> guarded_node(store_->buffer_manager_.get(), std::move(guard), &bf);
@@ -311,7 +307,7 @@ void Recovery::RedoInitPage(storage::BufferFrame& bf, WalEntryComplex* complex_e
   bf.page_.btree_id_ = complex_entry->tree_id_;
 }
 
-void Recovery::RedoSplitRoot(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
+void Recovery::RedoSplitRoot(BufferFrame& bf, WalEntryComplex* complex_entry) {
   auto* wal = reinterpret_cast<WalSplitRoot*>(complex_entry->payload_);
 
   // Resolve the old root
@@ -356,7 +352,7 @@ void Recovery::RedoSplitRoot(storage::BufferFrame& bf, WalEntryComplex* complex_
   x_guarded_meta->right_most_child_swip_ = x_guarded_new_root.bf();
 }
 
-void Recovery::RedoSplitNonRoot(storage::BufferFrame& bf, WalEntryComplex* complex_entry) {
+void Recovery::RedoSplitNonRoot(BufferFrame& bf, WalEntryComplex* complex_entry) {
   auto* wal = reinterpret_cast<WalSplitNonRoot*>(complex_entry->payload_);
 
   // Resolve the old root
@@ -400,7 +396,7 @@ Result<void> Recovery::ReadWalEntry(uint64_t& offset, uint8_t* dest) {
   }
 
   switch (reinterpret_cast<WalEntry*>(dest)->type_) {
-  case leanstore::cr::WalEntry::Type::kTxAbort: {
+  case WalEntry::Type::kTxAbort: {
     auto left = sizeof(WalTxAbort) - wal_entry_size;
     auto res = ReadFromWalFile(offset + wal_entry_size, left, dest + wal_entry_size);
     if (!res) {
@@ -409,7 +405,7 @@ Result<void> Recovery::ReadWalEntry(uint64_t& offset, uint8_t* dest) {
     offset += sizeof(WalTxAbort);
     return {};
   }
-  case leanstore::cr::WalEntry::Type::kTxFinish: {
+  case WalEntry::Type::kTxFinish: {
     auto left = sizeof(WalTxFinish) - wal_entry_size;
     auto res = ReadFromWalFile(offset + wal_entry_size, left, dest + wal_entry_size);
     if (!res) {
@@ -418,7 +414,7 @@ Result<void> Recovery::ReadWalEntry(uint64_t& offset, uint8_t* dest) {
     offset += sizeof(WalTxFinish);
     return {};
   }
-  case leanstore::cr::WalEntry::Type::kCarriageReturn: {
+  case WalEntry::Type::kCarriageReturn: {
     auto left = sizeof(WalCarriageReturn) - wal_entry_size;
     auto res = ReadFromWalFile(offset + wal_entry_size, left, dest + wal_entry_size);
     if (!res) {
@@ -427,7 +423,7 @@ Result<void> Recovery::ReadWalEntry(uint64_t& offset, uint8_t* dest) {
     offset += reinterpret_cast<WalCarriageReturn*>(dest)->size_;
     return {};
   }
-  case leanstore::cr::WalEntry::Type::kComplex: {
+  case WalEntry::Type::kComplex: {
     // read the body of WalEntryComplex
     auto left = sizeof(WalEntryComplex) - wal_entry_size;
     auto res = ReadFromWalFile(offset + wal_entry_size, left, dest + wal_entry_size);
@@ -450,7 +446,7 @@ Result<void> Recovery::ReadWalEntry(uint64_t& offset, uint8_t* dest) {
   return {};
 }
 
-storage::BufferFrame& Recovery::ResolvePage(lean_pid_t page_id) {
+BufferFrame& Recovery::ResolvePage(lean_pid_t page_id) {
   auto it = resolved_pages_.find(page_id);
   if (it != resolved_pages_.end()) {
     return *it->second;
@@ -483,4 +479,4 @@ Result<void> Recovery::ReadFromWalFile(int64_t offset, size_t nbytes, void* dest
   return {};
 }
 
-} // namespace leanstore::cr
+} // namespace leanstore

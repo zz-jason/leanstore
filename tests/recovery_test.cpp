@@ -20,7 +20,7 @@
 
 #include <sys/socket.h>
 
-using namespace leanstore::storage::btree;
+using namespace leanstore;
 
 namespace leanstore::test {
 
@@ -83,8 +83,8 @@ TEST_F(RecoveryTest, SerializeAndDeserialize) {
 
   Log::Info("Buffer Pool Before Shutdown:");
   store_->buffer_manager_->DoWithBufferFrameIf(
-      [](leanstore::storage::BufferFrame& bf) { return !bf.IsFree(); },
-      [](leanstore::storage::BufferFrame& bf [[maybe_unused]]) {
+      [](leanstore::BufferFrame& bf) { return !bf.IsFree(); },
+      [](leanstore::BufferFrame& bf [[maybe_unused]]) {
         Log::Info("pageId={}, treeId={}, isDirty={}", bf.header_.page_id_, bf.page_.btree_id_,
                   bf.IsDirty());
       });

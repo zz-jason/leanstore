@@ -5,8 +5,16 @@
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 
-namespace leanstore ::cr {
-enum class TxState { kIdle, kStarted, kCommitted, kAborted };
+#include <cstdint>
+
+namespace leanstore {
+
+enum class TxState : uint8_t {
+  kIdle = 0,
+  kStarted,
+  kCommitted,
+  kAborted,
+};
 
 struct TxStatUtil {
   inline static std::string ToString(TxState state) {
@@ -100,4 +108,4 @@ public:
   }
 };
 
-} // namespace leanstore::cr
+} // namespace leanstore

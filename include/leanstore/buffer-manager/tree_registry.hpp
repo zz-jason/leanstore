@@ -1,5 +1,6 @@
 #pragma once
 
+#include "coroutine/lean_mutex.hpp"
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/common/wal_record.h"
@@ -9,7 +10,6 @@
 #include "leanstore/utils/error.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/result.hpp"
-#include "utils/coroutine/lean_mutex.hpp"
 
 #include <cstdlib>
 #include <expected>
@@ -19,7 +19,7 @@
 #include <tuple>
 #include <unordered_map>
 
-namespace leanstore::storage {
+namespace leanstore {
 
 class ParentSwipHandler {
 public:
@@ -290,4 +290,4 @@ public:
   }
 };
 
-} // namespace leanstore::storage
+} // namespace leanstore

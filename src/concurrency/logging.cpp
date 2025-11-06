@@ -1,18 +1,18 @@
 #include "leanstore/concurrency/logging.hpp"
 
+#include "coroutine/coro_env.hpp"
+#include "coroutine/coro_io.hpp"
 #include "leanstore/common/wal_record.h"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/misc.hpp"
-#include "utils/coroutine/coro_env.hpp"
-#include "utils/coroutine/coro_io.hpp"
 #include "wal/wal_builder.hpp"
 #include "wal/wal_traits.hpp"
 
 #include <cassert>
 #include <cstring>
 
-namespace leanstore::cr {
+namespace leanstore {
 
 bool Logging::CoroFlush() {
   auto flushed = wal_flushed_.load();
@@ -125,4 +125,4 @@ void Logging::ForeachWalOfCurrentTx(uint64_t first_wal,
   }
 }
 
-} // namespace leanstore::cr
+} // namespace leanstore

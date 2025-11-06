@@ -8,8 +8,7 @@ namespace leanstore {
 
 class CursorImpl {
 public:
-  static struct lean_cursor* Create(leanstore::storage::btree::BasicKV* btree,
-                                    SessionImpl* session_impl) {
+  static struct lean_cursor* Create(BasicKV* btree, SessionImpl* session_impl) {
     auto* impl = new CursorImpl(btree, session_impl);
     assert(static_cast<void*>(impl) == static_cast<void*>(&impl->base_));
     return &impl->base_;
@@ -20,7 +19,7 @@ public:
   }
 
 private:
-  CursorImpl(leanstore::storage::btree::BasicKV* btree, SessionImpl* session_impl)
+  CursorImpl(BasicKV* btree, SessionImpl* session_impl)
       : btree_(btree),
         session_impl_(session_impl) {
     base_ = {
@@ -53,7 +52,7 @@ private:
   lean_status RemoveCurrent();
   lean_status UpdateCurrent(lean_str_view new_value);
 
-  void RecordCurrent(storage::btree::BTreeIter* iter);
+  void RecordCurrent(BTreeIter* iter);
 
   template <auto Method, typename Ret, typename... Args>
   static Ret Thunk(struct lean_cursor* base, Args... args) {
@@ -63,7 +62,7 @@ private:
 
 private:
   lean_cursor base_;
-  leanstore::storage::btree::BasicKV* btree_;
+  BasicKV* btree_;
   std::string current_key_;
   std::string current_value_;
   SessionImpl* session_impl_;

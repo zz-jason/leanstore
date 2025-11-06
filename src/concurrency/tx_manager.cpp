@@ -1,5 +1,8 @@
 #include "leanstore/concurrency/tx_manager.hpp"
 
+#include "coroutine/coro_env.hpp"
+#include "coroutine/lean_mutex.hpp"
+#include "coroutine/mvcc_manager.hpp"
 #include "leanstore/buffer-manager/tree_registry.hpp"
 #include "leanstore/common/perf_counters.h"
 #include "leanstore/common/wal_record.h"
@@ -11,9 +14,6 @@
 #include "leanstore/utils/counter_util.hpp"
 #include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/log.hpp"
-#include "utils/coroutine/coro_env.hpp"
-#include "utils/coroutine/lean_mutex.hpp"
-#include "utils/coroutine/mvcc_manager.hpp"
 #include "wal/wal_builder.hpp"
 #include "wal/wal_traits.hpp"
 
@@ -21,7 +21,7 @@
 #include <cassert>
 #include <cstdlib>
 
-namespace leanstore::cr {
+namespace leanstore {
 
 TxManager::TxManager(uint64_t worker_id, std::vector<std::unique_ptr<TxManager>>& tx_mgrs,
                      leanstore::LeanStore* store)
@@ -52,7 +52,7 @@ void TxManager::StartTx(TxMode mode, IsolationLevel level, bool is_read_only) {
   }
 
   /// Reset the max observed system transaction id
-  active_tx_.max_observed_sys_tx_id_ = store_->MvccManager()->GetMinCommittedSysTx();
+  active_tx_.max_observed_sys_tx_id_ = store_->GetMvccManager()->GetMinCommittedSysTx();
 
   // Init wal and group commit related transaction information
   active_tx_.first_wal_ = CoroEnv::CurLogging().wal_buffered_;
@@ -66,9 +66,9 @@ void TxManager::StartTx(TxMode mode, IsolationLevel level, bool is_read_only) {
   // short-running) We have to acquire a transaction id and use it for locking in ANY isolation
   // level
   if (is_read_only) {
-    active_tx_.start_ts_ = store_->MvccManager()->GetUsrTxTs();
+    active_tx_.start_ts_ = store_->GetMvccManager()->GetUsrTxTs();
   } else {
-    active_tx_.start_ts_ = store_->MvccManager()->AllocUsrTxTs();
+    active_tx_.start_ts_ = store_->GetMvccManager()->AllocUsrTxTs();
   }
   auto cur_tx_id = active_tx_.start_ts_;
   if (store_->store_option_->enable_long_running_tx_ && active_tx_.IsLongRunning()) {
@@ -78,7 +78,7 @@ void TxManager::StartTx(TxMode mode, IsolationLevel level, bool is_read_only) {
 
   // Publish the transaction id
   active_tx_id_.store(cur_tx_id, std::memory_order_release);
-  cc_.global_wmk_of_all_tx_ = store_->MvccManager()->GlobalWmkInfo().wmk_of_all_tx_.load();
+  cc_.global_wmk_of_all_tx_ = store_->GetMvccManager()->GlobalWmkInfo().wmk_of_all_tx_.load();
 
   // Cleanup commit log if necessary
   cc_.commit_tree_.CompactCommitLog();
@@ -106,7 +106,7 @@ void TxManager::CommitTx() {
   // Reset cmd_id_ on commit
   cmd_id_ = 0;
   if (active_tx_.has_wrote_) {
-    active_tx_.commit_ts_ = store_->MvccManager()->AllocUsrTxTs();
+    active_tx_.commit_ts_ = store_->GetMvccManager()->AllocUsrTxTs();
     cc_.commit_tree_.AppendCommitLog(active_tx_.start_ts_, active_tx_.commit_ts_);
     cc_.latest_commit_ts_.store(active_tx_.commit_ts_, std::memory_order_release);
   } else {
@@ -214,4 +214,4 @@ lean_perf_counters* TxManager::GetPerfCounters() {
   return &tls_perf_counters;
 }
 
-} // namespace leanstore::cr
+} // namespace leanstore

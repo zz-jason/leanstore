@@ -8,7 +8,14 @@
 
 namespace leanstore {
 
-enum class OpCode : uint8_t { kOK = 0, kNotFound, kDuplicated, kAbortTx, kSpaceNotEnough, kOther };
+enum class OpCode : uint8_t {
+  kOK = 0,
+  kNotFound,
+  kDuplicated,
+  kAbortTx,
+  kSpaceNotEnough,
+  kOther,
+};
 
 inline std::string ToString(OpCode result) {
   switch (result) {
@@ -60,12 +67,12 @@ enum class IsolationLevel : uint8_t {
 
 inline IsolationLevel ParseIsolationLevel(std::string str) {
   if (str == "ser") {
-    return leanstore::IsolationLevel::kSerializable;
+    return IsolationLevel::kSerializable;
   }
   if (str == "si") {
-    return leanstore::IsolationLevel::kSnapshotIsolation;
+    return IsolationLevel::kSnapshotIsolation;
   }
-  return leanstore::IsolationLevel::kSnapshotIsolation;
+  return IsolationLevel::kSnapshotIsolation;
 }
 
 class UpdateSlotInfo {

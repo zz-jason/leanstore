@@ -10,7 +10,7 @@
 #include <algorithm>
 #include <cstdint>
 
-namespace leanstore::storage::btree {
+namespace leanstore {
 
 void BTreeNode::UpdateHint(uint16_t slot_id) {
   uint16_t dist = num_slots_ / (kHintCount + 1);
@@ -478,4 +478,4 @@ HeadType BTreeNode::Head(Slice key) {
   return __builtin_bswap32(*reinterpret_cast<const uint32_t*>(key.data()));
 }
 
-} // namespace leanstore::storage::btree
+} // namespace leanstore

@@ -5,15 +5,14 @@
 #include <unordered_set>
 #include <vector>
 
-namespace leanstore::cr {
-class TxManager;
-class Transaction;
-} // namespace leanstore::cr
-
 namespace leanstore {
 
+/// Forward declarations
 class LeanStore;
+class TxManager;
+class Transaction;
 
+/// Auto-commit protocol for decentralized transaction commit handling.
 class AutoCommitProtocol {
 public:
   AutoCommitProtocol(LeanStore* store, uint32_t group_id);
@@ -33,11 +32,11 @@ public:
     }
   }
 
-  void RegisterTxMgr(cr::TxManager* tx_mgr) {
+  void RegisterTxMgr(TxManager* tx_mgr) {
     active_tx_mgrs_.insert(tx_mgr);
   }
 
-  void UnregisterTxMgr(cr::TxManager* tx_mgr) {
+  void UnregisterTxMgr(TxManager* tx_mgr) {
     active_tx_mgrs_.erase(tx_mgr);
   }
 
@@ -58,9 +57,9 @@ private:
 
   void TrySyncLastCommittedTx();
 
-  lean_txid_t DetermineCommitableUsrTx(std::vector<cr::Transaction>& tx_queue);
+  lean_txid_t DetermineCommitableUsrTx(std::vector<Transaction>& tx_queue);
 
-  lean_txid_t DetermineCommitableUsrTxRfA(std::vector<cr::Transaction>& tx_queue_rfa);
+  lean_txid_t DetermineCommitableUsrTxRfA(std::vector<Transaction>& tx_queue_rfa);
 
 private:
   /// Reference to the store instance.
@@ -72,7 +71,7 @@ private:
   const uint32_t group_id_;
 
   /// All the active transaction managers that are using this commit protocol.
-  std::unordered_set<cr::TxManager*> active_tx_mgrs_;
+  std::unordered_set<TxManager*> active_tx_mgrs_;
 
   /// The last committed user transaction ID that has been synced from other coro executors.
   std::vector<lean_txid_t> synced_last_committed_usr_tx_;

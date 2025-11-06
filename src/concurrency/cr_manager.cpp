@@ -1,5 +1,7 @@
 #include "leanstore/concurrency/cr_manager.hpp"
 
+#include "coroutine/coro_env.hpp"
+#include "coroutine/mvcc_manager.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/concurrency/group_committer.hpp"
@@ -7,8 +9,6 @@
 #include "leanstore/concurrency/worker_thread.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/log.hpp"
-#include "utils/coroutine/coro_env.hpp"
-#include "utils/coroutine/mvcc_manager.hpp"
 #include "utils/json.hpp"
 
 #include <cassert>
@@ -19,7 +19,7 @@ namespace {
 constexpr auto kKeyWalSize = "wal_size";
 } // namespace
 
-namespace leanstore::cr {
+namespace leanstore {
 
 CRManager::CRManager(leanstore::LeanStore* store) : store_(store), group_committer_(nullptr) {
   // start worker threads
@@ -32,8 +32,8 @@ CRManager::CRManager(leanstore::LeanStore* store) : store_(store), group_committ
 
 void CRManager::StartWorkerThreads(uint64_t num_worker_threads) {
   worker_threads_.reserve(num_worker_threads);
-  auto& tx_mgrs = store_->MvccManager()->TxMgrs();
-  auto& loggings = store_->MvccManager()->Loggings();
+  auto& tx_mgrs = store_->GetMvccManager()->TxMgrs();
+  auto& loggings = store_->GetMvccManager()->Loggings();
   for (auto i = 0u; i < num_worker_threads; i++) {
     auto worker_thread = std::make_unique<WorkerThread>(store_, i, i);
     worker_thread->Start();
@@ -87,4 +87,4 @@ void CRManager::Deserialize(const utils::JsonObj& json_obj) {
   }
 }
 
-} // namespace leanstore::cr
+} // namespace leanstore

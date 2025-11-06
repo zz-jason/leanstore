@@ -10,8 +10,7 @@ namespace leanstore {
 
 class BTreeImpl {
 public:
-  static struct lean_btree* Create(leanstore::storage::btree::BasicKV* btree,
-                                   SessionImpl* session_impl) {
+  static struct lean_btree* Create(BasicKV* btree, SessionImpl* session_impl) {
     auto* impl = new BTreeImpl(btree, session_impl);
     assert(static_cast<void*>(impl) == static_cast<void*>(&impl->base_));
     return &impl->base_;
@@ -22,7 +21,7 @@ public:
   }
 
 private:
-  BTreeImpl(leanstore::storage::btree::BasicKV* btree, SessionImpl* session_impl)
+  BTreeImpl(BasicKV* btree, SessionImpl* session_impl)
       : btree_(btree),
         session_impl_(session_impl) {
     base_ = {
@@ -49,7 +48,7 @@ private:
 
 private:
   lean_btree base_;
-  storage::btree::BasicKV* btree_;
+  BasicKV* btree_;
   SessionImpl* session_impl_;
 };
 

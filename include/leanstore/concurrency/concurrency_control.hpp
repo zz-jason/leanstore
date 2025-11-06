@@ -1,11 +1,11 @@
 #pragma once
 
+#include "coroutine/lean_mutex.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/concurrency/history_storage.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/log.hpp"
-#include "utils/coroutine/lean_mutex.hpp"
 
 #include <atomic>
 #include <memory>
@@ -14,10 +14,9 @@
 #include <vector>
 
 namespace leanstore {
-class LeanStore;
-} // namespace leanstore
 
-namespace leanstore::cr {
+/// Forward declarations
+class LeanStore;
 
 /// The commit log of the current worker thread. It's used for MVCC visibility check. It's a vector
 /// of (commitTs, startTs) pairs. Everytime when a transaction is committed, a (commitTs, startTs)
@@ -26,7 +25,7 @@ namespace leanstore::cr {
 class CommitTree {
 public:
   /// The hybrid latch to guard the commit log.
-  storage::HybridMutex latch_;
+  HybridMutex latch_;
 
   /// The capacity of the commit log. Commit log is compacted when full.
   uint64_t capacity_;
@@ -120,7 +119,7 @@ struct WatermarkInfo {
 /// removes and updates, all the necessary commit log for MVCC visibility check are stored here.
 class ConcurrencyControl {
 public:
-  ConcurrencyControl(leanstore::LeanStore* store, uint64_t num_workers)
+  ConcurrencyControl(LeanStore* store, uint64_t num_workers)
       : store_(store),
         commit_tree_(num_workers) {
     lcb_cache_val_ = std::make_unique<uint64_t[]>(num_workers);
@@ -129,7 +128,7 @@ public:
 
 public:
   /// The LeanStore it belongs to.
-  leanstore::LeanStore* store_;
+  LeanStore* store_;
 
   /// The history storage of current worker thread. All history versions of transaction removes and
   /// updates executed by current worker are stored here. It's the version storage of the chained
@@ -229,4 +228,4 @@ private:
   void UpdateLocalWmks();
 };
 
-} // namespace leanstore::cr
+} // namespace leanstore

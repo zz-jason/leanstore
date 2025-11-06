@@ -1,5 +1,6 @@
 #include "leanstore/btree/basic_kv.hpp"
 
+#include "coroutine/mvcc_manager.hpp"
 #include "leanstore/btree/core/b_tree_generic.hpp"
 #include "leanstore/btree/core/btree_iter.hpp"
 #include "leanstore/btree/core/btree_iter_mut.hpp"
@@ -9,7 +10,6 @@
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/misc.hpp"
-#include "utils/coroutine/mvcc_manager.hpp"
 #include "wal/wal_builder.hpp"
 
 #include <format>
@@ -18,9 +18,9 @@
 #include <sys/types.h>
 
 using namespace std;
-using namespace leanstore::storage;
+using namespace leanstore;
 
-namespace leanstore::storage::btree {
+namespace leanstore {
 
 Result<BasicKV*> BasicKV::Create(leanstore::LeanStore* store, const std::string& tree_name,
                                  lean_btree_config config) {
@@ -325,7 +325,7 @@ OpCode BasicKV::RangeRemove(Slice start_key, Slice end_key, bool page_wise) {
       if (guarded_leaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
         x_iter->SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
           JUMPMU_TRY() {
-            lean_txid_t sys_tx_id = store_->MvccManager()->AllocSysTxTs();
+            lean_txid_t sys_tx_id = store_->GetMvccManager()->AllocSysTxTs();
             this->TryMergeMayJump(sys_tx_id, *to_merge);
           }
           JUMPMU_CATCH() {
@@ -401,4 +401,4 @@ uint64_t BasicKV::CountEntries() {
   return BTreeGeneric::CountEntries();
 }
 
-} // namespace leanstore::storage::btree
+} // namespace leanstore

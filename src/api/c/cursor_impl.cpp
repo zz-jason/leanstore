@@ -119,7 +119,7 @@ lean_status CursorImpl::UpdateCurrent(lean_str_view new_value [[maybe_unused]]) 
   return lean_status::LEAN_ERR_UNSUPPORTED;
 }
 
-void CursorImpl::RecordCurrent(storage::btree::BTreeIter* iter) {
+void CursorImpl::RecordCurrent(BTreeIter* iter) {
   if (iter->Valid()) {
     iter->AssembleKey();
     Slice key = iter->Key();

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "coroutine/coro_env.hpp"
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/concurrency/logging.hpp"
@@ -7,11 +8,10 @@
 #include "leanstore/sync/hybrid_guard.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/utils/log.hpp"
-#include "utils/coroutine/coro_env.hpp"
 
 #include <utility>
 
-namespace leanstore::storage {
+namespace leanstore {
 
 template <typename T>
 class ExclusiveGuardedBufferFrame;
@@ -352,4 +352,4 @@ public:
   }
 };
 
-} // namespace leanstore::storage
+} // namespace leanstore

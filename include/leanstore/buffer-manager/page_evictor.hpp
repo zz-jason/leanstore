@@ -17,7 +17,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-namespace leanstore::storage {
+namespace leanstore {
 
 class FreeBfList {
 private:
@@ -56,7 +56,7 @@ public:
 /// Evicts in-memory pages, provides free BufferFrames for partitions.
 class PageEvictor : public utils::ManagedThread {
 public:
-  PageEvictor(leanstore::LeanStore* store, const std::string& thread_name, uint64_t running_cpu,
+  PageEvictor(LeanStore* store, const std::string& thread_name, uint64_t running_cpu,
               uint64_t num_bfs, uint8_t* bfs, uint64_t num_partitions,
               std::vector<std::unique_ptr<Partition>>& partitions)
       : utils::ManagedThread(store, thread_name, running_cpu),
@@ -148,7 +148,7 @@ protected:
                                Partition& target_partition);
 
 private:
-  leanstore::LeanStore* store_;
+  LeanStore* store_;
   const uint64_t num_bfs_;
   uint8_t* buffer_pool_;
 
@@ -163,4 +163,4 @@ private:
   FreeBfList free_bf_list_;                       // output of phase 3
 };
 
-} // namespace leanstore::storage
+} // namespace leanstore

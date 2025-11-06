@@ -1,5 +1,6 @@
 #include "leanstore/btree/transaction_kv.hpp"
 
+#include "coroutine/mvcc_manager.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/chained_tuple.hpp"
 #include "leanstore/btree/core/b_tree_generic.hpp"
@@ -19,7 +20,6 @@
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
 #include "leanstore/utils/result.hpp"
-#include "utils/coroutine/mvcc_manager.hpp"
 #include "utils/small_vector.hpp"
 #include "wal/wal_builder.hpp"
 
@@ -27,11 +27,10 @@
 #include <format>
 #include <string_view>
 
-namespace leanstore::storage::btree {
+namespace leanstore {
 
-Result<TransactionKV*> TransactionKV::Create(leanstore::LeanStore* store,
-                                             const std::string& tree_name, lean_btree_config config,
-                                             BasicKV* graveyard) {
+Result<TransactionKV*> TransactionKV::Create(LeanStore* store, const std::string& tree_name,
+                                             lean_btree_config config, BasicKV* graveyard) {
   auto [tree_ptr, tree_id] = store->tree_registry_->CreateTree(tree_name, [&]() {
     return std::unique_ptr<BufferManagedTree>(static_cast<BufferManagedTree*>(new TransactionKV()));
   });
@@ -47,8 +46,8 @@ Result<TransactionKV*> TransactionKV::Create(leanstore::LeanStore* store,
   return tree;
 }
 
-void TransactionKV::Init(leanstore::LeanStore* store, lean_treeid_t tree_id,
-                         lean_btree_config config, BasicKV* graveyard) {
+void TransactionKV::Init(LeanStore* store, lean_treeid_t tree_id, lean_btree_config config,
+                         BasicKV* graveyard) {
   this->graveyard_ = graveyard;
   BasicKV::Init(store, tree_id, std::move(config));
 }
@@ -444,27 +443,27 @@ OpCode TransactionKV::ScanDesc(Slice start_key, ScanCallback callback) {
     TODOException();
     return OpCode::kAbortTx;
   }
-  return scan4ShortRunningTx<false>(start_key, callback);
+  return Scan4ShortRunningTx<false>(start_key, callback);
 }
 
 OpCode TransactionKV::ScanAsc(Slice start_key, ScanCallback callback) {
   LEAN_DCHECK(CoroEnv::CurTxMgr().IsTxStarted());
   if (CoroEnv::CurTxMgr().ActiveTx().IsLongRunning()) {
-    return scan4LongRunningTx(start_key, callback);
+    return Scan4LongRunningTx(start_key, callback);
   }
-  return scan4ShortRunningTx<true>(start_key, callback);
+  return Scan4ShortRunningTx<true>(start_key, callback);
 }
 
 void TransactionKV::Undo(const lean_wal_record* record) {
   switch (record->type_) {
   case LEAN_WAL_TYPE_TX_INSERT: {
-    return undo_last_insert(reinterpret_cast<const lean_wal_tx_insert*>(record));
+    return UndoLastInsert(reinterpret_cast<const lean_wal_tx_insert*>(record));
   }
   case LEAN_WAL_TYPE_TX_UPDATE: {
-    return undo_last_update(reinterpret_cast<const lean_wal_tx_update*>(record));
+    return UndoLastUpdate(reinterpret_cast<const lean_wal_tx_update*>(record));
   }
   case LEAN_WAL_TYPE_TX_REMOVE: {
-    return undo_last_remove(reinterpret_cast<const lean_wal_tx_remove*>(record));
+    return UndoLastRemove(reinterpret_cast<const lean_wal_tx_remove*>(record));
   }
   default: {
     LEAN_DCHECK(false, "Unknown wal record type: {}", (uint64_t)record->type_);
@@ -473,7 +472,7 @@ void TransactionKV::Undo(const lean_wal_record* record) {
   }
 }
 
-void TransactionKV::undo_last_insert(const lean_wal_tx_insert* wal_insert) {
+void TransactionKV::UndoLastInsert(const lean_wal_tx_insert* wal_insert) {
   // Assuming no insert after remove
   auto key = Slice{lean_wal_tx_insert_get_key(wal_insert), wal_insert->key_size_};
   while (true) {
@@ -520,7 +519,7 @@ void TransactionKV::undo_last_insert(const lean_wal_tx_insert* wal_insert) {
   }
 }
 
-void TransactionKV::undo_last_update(const lean_wal_tx_update* wal_update) {
+void TransactionKV::UndoLastUpdate(const lean_wal_tx_update* wal_update) {
   auto key = Slice{lean_wal_tx_update_get_key(wal_update), wal_update->key_size_};
   while (true) {
     JUMPMU_TRY() {
@@ -572,7 +571,7 @@ void TransactionKV::undo_last_update(const lean_wal_tx_update* wal_update) {
   }
 }
 
-void TransactionKV::undo_last_remove(const lean_wal_tx_remove* wal_remove) {
+void TransactionKV::UndoLastRemove(const lean_wal_tx_remove* wal_remove) {
   Slice removed_key{lean_wal_tx_remove_get_key(wal_remove), wal_remove->key_size_};
   while (true) {
     JUMPMU_TRY() {
@@ -683,17 +682,17 @@ SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
   HybridGuard bf_guard(&bf.header_.latch_);
   bf_guard.ToOptimisticOrJump();
   if (bf.page_.btree_id_ != tree_id_) {
-    leanstore::JumpContext::Jump();
+    JumpContext::Jump();
   }
 
   GuardedBufferFrame<BTreeNode> guarded_node(store_->buffer_manager_.get(), std::move(bf_guard),
                                              &bf);
-  if (!guarded_node->is_leaf_ || !trigger_page_wise_garbage_collection(guarded_node)) {
+  if (!guarded_node->is_leaf_ || !TriggerPageWiseGarbageCollection(guarded_node)) {
     return BTreeGeneric::CheckSpaceUtilization(bf);
   }
 
   guarded_node.ToExclusiveMayJump();
-  lean_txid_t sys_tx_id = CoroEnv::CurStore()->MvccManager()->AllocSysTxTs();
+  lean_txid_t sys_tx_id = CoroEnv::CurStore()->GetMvccManager()->AllocSysTxTs();
   guarded_node.SyncSystemTxId(sys_tx_id);
 
   for (uint16_t i = 0; i < guarded_node->num_slots_; i++) {
@@ -897,7 +896,7 @@ void TransactionKV::Unlock(const uint8_t* wal_record) {
 
 // TODO: index range lock for serializability
 template <bool asc>
-OpCode TransactionKV::scan4ShortRunningTx(Slice key, ScanCallback callback) {
+OpCode TransactionKV::Scan4ShortRunningTx(Slice key, ScanCallback callback) {
   bool keep_scanning = true;
   JUMPMU_TRY() {
     auto iter = NewBTreeIter();
@@ -933,7 +932,7 @@ OpCode TransactionKV::scan4ShortRunningTx(Slice key, ScanCallback callback) {
 
 // TODO: support scanning desc
 template <bool asc>
-OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
+OpCode TransactionKV::Scan4LongRunningTx(Slice key, ScanCallback callback) {
   bool keep_scanning = true;
   JUMPMU_TRY() {
     auto iter = NewBTreeIter();
@@ -1044,4 +1043,4 @@ OpCode TransactionKV::scan4LongRunningTx(Slice key, ScanCallback callback) {
   JUMPMU_RETURN OpCode::kOther;
 }
 
-} // namespace leanstore::storage::btree
+} // namespace leanstore

@@ -1,3 +1,4 @@
+#include "coroutine/coro_executor.hpp"
 #include "lean_test_suite.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
@@ -5,7 +6,6 @@
 #include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/lean_store.hpp"
-#include "utils/coroutine/coro_executor.hpp"
 
 #include <gtest/gtest.h>
 
@@ -54,7 +54,7 @@ TEST_F(CoroLeanStoreTest, BasicKv) {
   }
 
   // create leanstore btree for table records
-  storage::btree::BasicKV* btree;
+  BasicKV* btree;
   auto* coro_session_0 = store->GetCoroScheduler()->TryReserveCoroSession(0);
   assert(coro_session_0 != nullptr && "Failed to reserve a CoroSession for coroutine execution");
   auto job_init_btree = [&]() {

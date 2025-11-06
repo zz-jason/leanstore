@@ -1,4 +1,5 @@
 #include "benchmarks/ycsb/ycsb.hpp"
+#include "coroutine/coro_session.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/common/perf_counters.h"
@@ -11,7 +12,6 @@
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/random_generator.hpp"
 #include "leanstore/utils/scrambled_zipf_generator.hpp"
-#include "utils/coroutine/coro_session.hpp"
 #include "utils/small_vector.hpp"
 
 #include <gflags/gflags.h>

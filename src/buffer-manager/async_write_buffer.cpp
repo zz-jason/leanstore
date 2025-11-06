@@ -4,7 +4,7 @@
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/result.hpp"
 
-namespace leanstore::storage {
+namespace leanstore {
 
 AsyncWriteBuffer::AsyncWriteBuffer(int fd, uint64_t page_size, uint64_t max_batch_size)
     : fd_(fd),
@@ -57,4 +57,4 @@ void AsyncWriteBuffer::IterateFlushedBfs(
   }
 }
 
-} // namespace leanstore::storage
+} // namespace leanstore

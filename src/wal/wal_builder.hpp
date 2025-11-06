@@ -1,5 +1,6 @@
 #pragma once
 
+#include "coroutine/coro_env.hpp"
 #include "leanstore/btree/core/b_tree_node.hpp"
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/common/types.h"
@@ -7,8 +8,6 @@
 #include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/slice.hpp"
-#include "leanstore/utils/log.hpp"
-#include "utils/coroutine/coro_env.hpp"
 #include "wal/wal_serde.hpp"
 #include "wal/wal_traits.hpp"
 
@@ -32,15 +31,15 @@ class WalSmoBuilder {
 public:
   WalSmoBuilder(lean_treeid_t btree_id, lean_txid_t sys_txid);
 
-  WalSmoBuilder& SetPageInfo(storage::BufferFrame* bf);
+  WalSmoBuilder& SetPageInfo(BufferFrame* bf);
 
   WalSmoBuilder& BuildPageNew(bool is_leaf);
 
   WalSmoBuilder& BuildSplitRoot(lean_pid_t parent, lean_pid_t new_lhs, lean_pid_t new_rhs,
-                                const storage::btree::BTreeNodeHeader::SeparatorInfo& sep_info);
+                                const BTreeNodeHeader::SeparatorInfo& sep_info);
 
   WalSmoBuilder& BuildSplitNonRoot(lean_pid_t parent, lean_pid_t new_lhs,
-                                   const storage::btree::BTreeNodeHeader::SeparatorInfo& sep_info);
+                                   const BTreeNodeHeader::SeparatorInfo& sep_info);
 
   T* GetWal() {
     return wal_;
@@ -67,7 +66,7 @@ class WalBuilder {
 public:
   WalBuilder(lean_treeid_t btree_id, lean_wal_size_t payload_size);
 
-  WalBuilder& SetPageInfo(storage::BufferFrame* bf);
+  WalBuilder& SetPageInfo(BufferFrame* bf);
 
   WalBuilder& BuildInsert(const Slice& key, const Slice& value);
 
@@ -100,7 +99,7 @@ class WalTxBuilder {
 public:
   WalTxBuilder(lean_treeid_t btree_id, lean_wal_size_t payload_size);
 
-  WalTxBuilder& SetPageInfo(storage::BufferFrame* bf) {
+  WalTxBuilder& SetPageInfo(BufferFrame* bf) {
     return SetPageInfo(bf->header_.page_id_, bf->page_.psn_);
   }
 
@@ -170,7 +169,7 @@ inline WalSmoBuilder<T>::WalSmoBuilder(lean_treeid_t btree_id, lean_txid_t sys_t
 }
 
 template <typename T>
-inline WalSmoBuilder<T>& WalSmoBuilder<T>::SetPageInfo(storage::BufferFrame* bf) {
+inline WalSmoBuilder<T>& WalSmoBuilder<T>::SetPageInfo(BufferFrame* bf) {
   if constexpr (WalRecordTraits<T>::kType == LEAN_WAL_TYPE_SMO_PAGENEW ||
                 WalRecordTraits<T>::kType == LEAN_WAL_TYPE_SMO_PAGESPLIT_ROOT ||
                 WalRecordTraits<T>::kType == LEAN_WAL_TYPE_SMO_PAGESPLIT_NONROOT) {
@@ -191,7 +190,7 @@ inline WalSmoBuilder<T>& WalSmoBuilder<T>::BuildPageNew(bool is_leaf) {
 template <typename T>
 inline WalSmoBuilder<T>& WalSmoBuilder<T>::BuildSplitRoot(
     lean_pid_t parent, lean_pid_t new_lhs, lean_pid_t new_rhs,
-    const storage::btree::BTreeNodeHeader::SeparatorInfo& sep_info) {
+    const BTreeNodeHeader::SeparatorInfo& sep_info) {
   static_assert(WalRecordTraits<T>::kType == LEAN_WAL_TYPE_SMO_PAGESPLIT_ROOT,
                 "WalSmoBuilder: Invalid type for SplitRoot");
   wal_->parent_ = parent;
@@ -205,8 +204,7 @@ inline WalSmoBuilder<T>& WalSmoBuilder<T>::BuildSplitRoot(
 
 template <typename T>
 inline WalSmoBuilder<T>& WalSmoBuilder<T>::BuildSplitNonRoot(
-    lean_pid_t parent, lean_pid_t new_lhs,
-    const storage::btree::BTreeNodeHeader::SeparatorInfo& sep_info) {
+    lean_pid_t parent, lean_pid_t new_lhs, const BTreeNodeHeader::SeparatorInfo& sep_info) {
   static_assert(WalRecordTraits<T>::kType == LEAN_WAL_TYPE_SMO_PAGESPLIT_NONROOT,
                 "WalSmoBuilder: Invalid type for SplitNonRoot");
   wal_->parent_ = parent;
@@ -246,7 +244,7 @@ inline WalBuilder<T>::WalBuilder(lean_treeid_t btree_id, lean_wal_size_t payload
 }
 
 template <typename T>
-inline WalBuilder<T>& WalBuilder<T>::SetPageInfo(storage::BufferFrame* bf) {
+inline WalBuilder<T>& WalBuilder<T>::SetPageInfo(BufferFrame* bf) {
   if constexpr (WalRecordTraits<T>::kType == LEAN_WAL_TYPE_INSERT ||
                 WalRecordTraits<T>::kType == LEAN_WAL_TYPE_REMOVE ||
                 WalRecordTraits<T>::kType == LEAN_WAL_TYPE_UPDATE) {

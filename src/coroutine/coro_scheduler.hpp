@@ -1,10 +1,10 @@
 #pragma once
 
+#include "coroutine/coro_env.hpp"
+#include "coroutine/coro_executor.hpp"
+#include "coroutine/coro_future.hpp"
+#include "coroutine/coro_session.hpp"
 #include "leanstore/utils/log.hpp"
-#include "utils/coroutine/coro_env.hpp"
-#include "utils/coroutine/coro_executor.hpp"
-#include "utils/coroutine/coro_future.hpp"
-#include "utils/coroutine/coro_session.hpp"
 #include "utils/scoped_timer.hpp"
 
 #include <cassert>
@@ -15,12 +15,10 @@
 #include <type_traits>
 #include <vector>
 
-namespace leanstore::cr {
-class TxManager;
-} // namespace leanstore::cr
-
 namespace leanstore {
 
+/// Forward declarations
+class TxManager;
 class AutoCommitProtocol;
 
 /// The CoroScheduler is expected to be run on user threads, where each thread

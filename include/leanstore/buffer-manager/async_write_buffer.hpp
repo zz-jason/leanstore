@@ -12,7 +12,7 @@
 
 #include <libaio.h>
 
-namespace leanstore::storage {
+namespace leanstore {
 
 /// A batched asynchronous writer for buffer frames. It batches writes to the
 /// disk to reduce the number of syscalls.
@@ -88,4 +88,4 @@ private:
   }
 };
 
-} // namespace leanstore::storage
+} // namespace leanstore
