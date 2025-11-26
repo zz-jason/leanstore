@@ -5,9 +5,9 @@
 #include "leanstore/buffer-manager/partition.hpp"
 #include "leanstore/buffer-manager/swip.hpp"
 #include "leanstore/common/types.h"
+#include "leanstore/cpp/base/result.hpp"
 #include "leanstore/exceptions.hpp"
 #include "leanstore/utils/random_generator.hpp"
-#include "leanstore/utils/result.hpp"
 #include "utils/json.hpp"
 
 #include <expected>
@@ -115,7 +115,7 @@ public:
 
   /// Write page to disk.
   /// usually called by recovery.
-  [[nodiscard]] Result<void> WritePageSync(BufferFrame&);
+  Result<void> WritePageSync(BufferFrame&);
 
   /// Sync all the data written to disk, harden all the writes on page_fd_
   void SyncAllPageWrites() {
@@ -131,10 +131,10 @@ public:
   /// Checkpoints a buffer frame to disk. The buffer frame content is copied to
   /// a tmp memory buffer, swips in the tmp memory buffer are changed to page
   /// IDs, then the tmp memory buffer is written to the disk.
-  [[nodiscard]] Result<void> CheckpointBufferFrame(BufferFrame& bf);
+  Result<void> CheckpointBufferFrame(BufferFrame& bf);
 
   /// Checkpoints all the buffer frames.
-  [[nodiscard]] Result<void> CheckpointAllBufferFrames();
+  Result<void> CheckpointAllBufferFrames();
 
   void RecoverFromDisk();
 
@@ -158,10 +158,10 @@ private:
     }
     aio.PrepareWrite(store_->page_fd_, buffer, page_size, page_id * page_size);
     if (auto res = aio.SubmitAll(); !res) {
-      return std::unexpected(std::move(res.error()));
+      return std::move(res.error());
     }
     if (auto res = aio.WaitAll(); !res) {
-      return std::unexpected(std::move(res.error()));
+      return std::move(res.error());
     }
     return {};
   }

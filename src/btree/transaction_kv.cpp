@@ -9,17 +9,17 @@
 #include "leanstore/common/types.h"
 #include "leanstore/common/wal_record.h"
 #include "leanstore/concurrency/tx_manager.hpp"
+#include "leanstore/cpp/base/error.hpp"
+#include "leanstore/cpp/base/result.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/slice.hpp"
 #include "leanstore/sync/hybrid_guard.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/defer.hpp"
-#include "leanstore/utils/error.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
-#include "leanstore/utils/result.hpp"
 #include "utils/small_vector.hpp"
 #include "wal/wal_builder.hpp"
 
@@ -36,8 +36,8 @@ Result<TransactionKV*> TransactionKV::Create(LeanStore* store, const std::string
   });
 
   if (tree_ptr == nullptr) {
-    return std::unexpected(utils::Error::General(std::format(
-        "Failed to create TransactionKV, treeName has been taken, treeName={}", tree_name)));
+    return Error::General(std::format(
+        "Failed to create TransactionKV, treeName has been taken, treeName={}", tree_name));
   }
 
   auto* tree = DownCast<TransactionKV*>(tree_ptr);

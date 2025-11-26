@@ -2,9 +2,9 @@
 
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/common/types.h"
+#include "leanstore/cpp/base/result.hpp"
 #include "leanstore/utils/async_io.hpp"
 #include "leanstore/utils/misc.hpp"
-#include "leanstore/utils/result.hpp"
 
 #include <cstdint>
 #include <functional>

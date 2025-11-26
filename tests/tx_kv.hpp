@@ -3,12 +3,12 @@
 #include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
+#include "leanstore/cpp/base/error.hpp"
+#include "leanstore/cpp/base/result.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/defer.hpp"
-#include "leanstore/utils/error.hpp"
 #include "leanstore/utils/log.hpp"
-#include "leanstore/utils/result.hpp"
 
 #include <cstring>
 #include <expected>
@@ -56,24 +56,20 @@ public:
   virtual void AbortTx() = 0;
 
   // DDL operations
-  [[nodiscard]] virtual Result<TableRef*> CreateTable(const std::string& tbl_name,
-                                                      bool implicit_tx = false) = 0;
+  virtual Result<TableRef*> CreateTable(const std::string& tbl_name, bool implicit_tx = false) = 0;
 
-  [[nodiscard]] virtual Result<void> DropTable(const std::string& tbl_name,
-                                               bool implicit_tx = false) = 0;
+  virtual Result<void> DropTable(const std::string& tbl_name, bool implicit_tx = false) = 0;
 
   // DML operations
-  [[nodiscard]] virtual Result<void> Put(TableRef* tbl, Slice key, Slice val,
-                                         bool implicit_tx = false) = 0;
+  virtual Result<void> Put(TableRef* tbl, Slice key, Slice val, bool implicit_tx = false) = 0;
 
-  [[nodiscard]] virtual Result<uint64_t> Update(TableRef* tbl, Slice key, Slice val,
-                                                bool implicit_tx = false) = 0;
+  virtual Result<uint64_t> Update(TableRef* tbl, Slice key, Slice val,
+                                  bool implicit_tx = false) = 0;
 
-  [[nodiscard]] virtual Result<uint64_t> Get(TableRef* tbl, Slice key, std::string& val,
-                                             bool implicit_tx = false) = 0;
+  virtual Result<uint64_t> Get(TableRef* tbl, Slice key, std::string& val,
+                               bool implicit_tx = false) = 0;
 
-  [[nodiscard]] virtual Result<uint64_t> Delete(TableRef* tbl, Slice key,
-                                                bool implicit_tx = false) = 0;
+  virtual Result<uint64_t> Delete(TableRef* tbl, Slice key, bool implicit_tx = false) = 0;
 };
 
 class TableRef {
@@ -124,24 +120,19 @@ public:
   void AbortTx() override;
 
   // DDL operations
-  [[nodiscard]] Result<TableRef*> CreateTable(const std::string& tbl_name,
-                                              bool implicit_tx = false) override;
+  Result<TableRef*> CreateTable(const std::string& tbl_name, bool implicit_tx = false) override;
 
-  [[nodiscard]] Result<void> DropTable(const std::string& tbl_name,
-                                       bool implicit_tx = false) override;
+  Result<void> DropTable(const std::string& tbl_name, bool implicit_tx = false) override;
 
   // DML operations
-  [[nodiscard]] Result<void> Put(TableRef* tbl, Slice key, Slice val,
-                                 bool implicit_tx = false) override;
+  Result<void> Put(TableRef* tbl, Slice key, Slice val, bool implicit_tx = false) override;
 
-  [[nodiscard]] Result<uint64_t> Get(TableRef* tbl, Slice key, std::string& val,
-                                     bool implicit_tx = false) override;
+  Result<uint64_t> Get(TableRef* tbl, Slice key, std::string& val,
+                       bool implicit_tx = false) override;
 
-  [[nodiscard]] Result<uint64_t> Update(TableRef* tbl, Slice key, Slice val,
-                                        bool implicit_tx = false) override;
+  Result<uint64_t> Update(TableRef* tbl, Slice key, Slice val, bool implicit_tx = false) override;
 
-  [[nodiscard]] Result<uint64_t> Delete(TableRef* tbl, Slice key,
-                                        bool implicit_tx = false) override;
+  Result<uint64_t> Delete(TableRef* tbl, Slice key, bool implicit_tx = false) override;
 };
 
 class LeanStoreMVCCTableRef : public TableRef {
@@ -205,7 +196,7 @@ inline Result<TableRef*> LeanStoreMVCCSession::CreateTable(const std::string& tb
     }
   });
   if (btree == nullptr) {
-    return std::unexpected(utils::Error::General("failed"));
+    return Error::General("failed to create table");
   }
   return reinterpret_cast<TableRef*>(btree);
 }
@@ -244,7 +235,7 @@ inline Result<void> LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice va
                         Slice((const uint8_t*)val.data(), val.size()));
   });
   if (res != OpCode::kOK) {
-    return std::unexpected(utils::Error::General("Put failed: " + ToString(res)));
+    return Error::General("Put failed: " + ToString(res));
   }
   return {};
 }
@@ -278,7 +269,7 @@ inline Result<uint64_t> LeanStoreMVCCSession::Get(TableRef* tbl, Slice key, std:
   if (res == OpCode::kNotFound) {
     return 0;
   }
-  return std::unexpected(utils::Error::General("Get failed: " + ToString(res)));
+  return Error::General("Get failed: " + ToString(res));
 }
 
 inline Result<uint64_t> LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, Slice val,
@@ -315,7 +306,7 @@ inline Result<uint64_t> LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, S
   if (res == OpCode::kNotFound) {
     return 0;
   }
-  return std::unexpected(utils::Error::General("Update failed: " + ToString(res)));
+  return Error::General("Update failed: " + ToString(res));
 }
 
 inline Result<uint64_t> LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key, bool implicit_tx) {
@@ -341,7 +332,7 @@ inline Result<uint64_t> LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key, b
   if (res == OpCode::kNotFound) {
     return 0;
   }
-  return std::unexpected(utils::Error::General("Delete failed: " + ToString(res)));
+  return Error::General("Delete failed: " + ToString(res));
 }
 
 } // namespace test

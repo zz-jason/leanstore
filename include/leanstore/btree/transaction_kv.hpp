@@ -9,8 +9,8 @@
 #include "leanstore/common/types.h"
 #include "leanstore/common/wal_record.h"
 #include "leanstore/concurrency/tx_manager.hpp"
+#include "leanstore/cpp/base/result.hpp"
 #include "leanstore/kv_interface.hpp"
-#include "leanstore/utils/result.hpp"
 
 #include <expected>
 #include <string>

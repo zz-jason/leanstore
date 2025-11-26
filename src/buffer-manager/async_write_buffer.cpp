@@ -1,8 +1,8 @@
 #include "leanstore/buffer-manager/async_write_buffer.hpp"
 
 #include "leanstore/buffer-manager/buffer_frame.hpp"
+#include "leanstore/cpp/base/result.hpp"
 #include "leanstore/utils/log.hpp"
-#include "leanstore/utils/result.hpp"
 
 namespace leanstore {
 

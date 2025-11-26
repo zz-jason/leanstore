@@ -5,6 +5,7 @@
 #include "leanstore/btree/core/btree_iter.hpp"
 #include "leanstore/btree/core/btree_iter_mut.hpp"
 #include "leanstore/common/wal_record.h"
+#include "leanstore/cpp/base/error.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
@@ -28,7 +29,7 @@ Result<BasicKV*> BasicKV::Create(leanstore::LeanStore* store, const std::string&
     return std::unique_ptr<BufferManagedTree>(static_cast<BufferManagedTree*>(new BasicKV()));
   });
   if (tree_ptr == nullptr) {
-    return std::unexpected<utils::Error>(utils::Error::General("Tree name has been taken"));
+    return Error::General("Tree name has been taken");
   }
   auto* tree = DownCast<BasicKV*>(tree_ptr);
   tree->Init(store, tree_id, std::move(config));
