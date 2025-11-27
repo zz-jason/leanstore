@@ -1,7 +1,7 @@
 #include "utils/json.hpp"
 
-#include "leanstore/utils/error.hpp"
-#include "leanstore/utils/result.hpp"
+#include "leanstore/cpp/base/error.hpp"
+#include "leanstore/cpp/base/result.hpp"
 
 #include <cassert>
 
@@ -42,8 +42,7 @@ std::string JsonObj::Serialize() const {
 Result<void> JsonObj::Deserialize(std::string_view json) {
   doc_.Parse(json.data(), json.size());
   if (doc_.HasParseError()) {
-    return std::unexpected(Error(ErrorCode::kGeneral, "Failed to parse JSON: {}",
-                                 std::string(json.data(), json.size())));
+    return Error::General(std::format("Failed to parse JSON: {}", json));
   }
   return {};
 }

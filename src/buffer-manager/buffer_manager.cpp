@@ -7,12 +7,12 @@
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/concurrency/group_committer.hpp"
 #include "leanstore/concurrency/recovery.hpp"
+#include "leanstore/cpp/base/error.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/sync/scoped_hybrid_guard.hpp"
 #include "leanstore/utils/async_io.hpp"
 #include "leanstore/utils/debug_flags.hpp"
-#include "leanstore/utils/error.hpp"
 #include "leanstore/utils/jump_mu.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
@@ -25,6 +25,7 @@
 #include <cstring>
 #include <expected>
 #include <format>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -145,7 +146,7 @@ Result<void> BufferManager::CheckpointAllBufferFrames() {
 
   LS_DEBUG_EXECUTE(store_, "skip_CheckpointAllBufferFrames", {
     Log::Error("CheckpointAllBufferFrames skipped due to debug flag");
-    return std::unexpected(utils::Error::General("skipped due to debug flag"));
+    return Error::General("skipped due to debug flag");
   });
 
   auto checkpoint_func = [&](uint64_t begin, uint64_t end) {
@@ -207,7 +208,7 @@ Result<void> BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
     store_->tree_registry_->Checkpoint(bf.page_.btree_id_, bf, buffer);
     auto res = WritePageSync(bf.header_.page_id_, buffer);
     if (!res) {
-      return std::unexpected(std::move(res.error()));
+      return std::move(res.error());
     }
     bf.header_.flushed_psn_ = bf.page_.psn_;
   }

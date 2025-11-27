@@ -8,13 +8,13 @@
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
+#include "leanstore/cpp/base/error.hpp"
+#include "leanstore/cpp/base/result.hpp"
 #include "leanstore/utils/defer.hpp"
-#include "leanstore/utils/error.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
 #include "leanstore/utils/parallelize.hpp"
-#include "leanstore/utils/result.hpp"
 #include "utils/json.hpp"
 #include "utils/scoped_timer.hpp"
 
@@ -41,8 +41,9 @@ namespace leanstore {
 
 Result<std::unique_ptr<LeanStore>> LeanStore::Open(lean_store_option* option) {
   if (option == nullptr) {
-    return std::unexpected(utils::Error::General("lean_store_option should not be null"));
+    return Error::General("lean_store_option should not be null");
   }
+
   if (option->create_from_scratch_) {
     Log::Info("Create store from scratch, store_dir={}", option->store_dir_);
     std::filesystem::path dir_path(option->store_dir_);
@@ -472,7 +473,7 @@ Result<TransactionKV*> LeanStore::CreateTransactionKV(const std::string& name,
       !res) {
     Log::Error("Create graveyard failed, btree_name={}, graveyard_name={}, error={}", name,
                graveyard_name, res.error().ToString());
-    return std::unexpected(std::move(res.error()));
+    return std::move(res.error());
   } else {
     graveyard = res.value();
   }

@@ -61,7 +61,7 @@ Result<void> Recovery::Analysis() {
   for (auto offset = wal_start_offset_; offset < wal_size_;) {
     auto start_offset = offset;
     if (auto res = ReadWalEntry(offset, wal_entry_ptr); !res) {
-      return std::unexpected(std::move(res.error()));
+      return std::move(res.error());
     }
     auto* wal_entry = reinterpret_cast<WalEntry*>(wal_entry_ptr);
     switch (wal_entry->type_) {
@@ -117,7 +117,7 @@ Result<void> Recovery::Redo() {
       // met error
       Log::Error("[Recovery] failed to get next WalComplex, offset={}, error={}", start_offset,
                  res.error().ToString());
-      return std::unexpected(res.error());
+      return std::move(res.error());
     }
 
     if (!res.value()) {
@@ -190,7 +190,7 @@ Result<bool> Recovery::NextWalComplexToRedo(uint64_t& offset, WalEntryComplex* c
   while (offset < wal_size_) {
     // read a WalEntry
     if (auto res = ReadWalEntry(offset, buff); !res) {
-      return std::unexpected(res.error());
+      return std::move(res.error());
     }
 
     // skip if not a complex entry
@@ -392,7 +392,7 @@ Result<void> Recovery::ReadWalEntry(uint64_t& offset, uint8_t* dest) {
   // read the WalEntry
   auto wal_entry_size = sizeof(WalEntry);
   if (auto res = ReadFromWalFile(offset, wal_entry_size, dest); !res) {
-    return std::unexpected(res.error());
+    return std::move(res.error());
   }
 
   switch (reinterpret_cast<WalEntry*>(dest)->type_) {
@@ -400,7 +400,7 @@ Result<void> Recovery::ReadWalEntry(uint64_t& offset, uint8_t* dest) {
     auto left = sizeof(WalTxAbort) - wal_entry_size;
     auto res = ReadFromWalFile(offset + wal_entry_size, left, dest + wal_entry_size);
     if (!res) {
-      return std::unexpected(res.error());
+      return std::move(res.error());
     }
     offset += sizeof(WalTxAbort);
     return {};
@@ -409,7 +409,7 @@ Result<void> Recovery::ReadWalEntry(uint64_t& offset, uint8_t* dest) {
     auto left = sizeof(WalTxFinish) - wal_entry_size;
     auto res = ReadFromWalFile(offset + wal_entry_size, left, dest + wal_entry_size);
     if (!res) {
-      return std::unexpected(res.error());
+      return std::move(res.error());
     }
     offset += sizeof(WalTxFinish);
     return {};
@@ -418,7 +418,7 @@ Result<void> Recovery::ReadWalEntry(uint64_t& offset, uint8_t* dest) {
     auto left = sizeof(WalCarriageReturn) - wal_entry_size;
     auto res = ReadFromWalFile(offset + wal_entry_size, left, dest + wal_entry_size);
     if (!res) {
-      return std::unexpected(res.error());
+      return std::move(res.error());
     }
     offset += reinterpret_cast<WalCarriageReturn*>(dest)->size_;
     return {};
@@ -428,14 +428,14 @@ Result<void> Recovery::ReadWalEntry(uint64_t& offset, uint8_t* dest) {
     auto left = sizeof(WalEntryComplex) - wal_entry_size;
     auto res = ReadFromWalFile(offset + wal_entry_size, left, dest + wal_entry_size);
     if (!res) {
-      return std::unexpected(res.error());
+      return std::move(res.error());
     }
 
     // read the payload of WalEntryComplex
     left = reinterpret_cast<WalEntryComplex*>(dest)->size_ - sizeof(WalEntryComplex);
     res = ReadFromWalFile(offset + sizeof(WalEntryComplex), left, dest + sizeof(WalEntryComplex));
     if (!res) {
-      return std::unexpected(res.error());
+      return std::move(res.error());
     }
 
     // advance the offset
@@ -464,16 +464,16 @@ Result<void> Recovery::ReadFromWalFile(int64_t offset, size_t nbytes, void* dest
   auto file_name = store_->GetWalFilePath();
   FILE* fp = fopen(file_name.c_str(), "rb");
   if (fp == nullptr) {
-    return std::unexpected(utils::Error::FileOpen(file_name, errno, strerror(errno)));
+    return Error::FileOpen(file_name, errno, strerror(errno));
   }
   SCOPED_DEFER(fclose(fp));
 
   if (fseek(fp, offset, SEEK_SET) != 0) {
-    return std::unexpected(utils::Error::FileSeek(file_name, errno, strerror(errno)));
+    return Error::FileSeek(file_name, errno, strerror(errno));
   }
 
   if (fread(destination, 1, nbytes, fp) != nbytes) {
-    return std::unexpected(utils::Error::FileRead(file_name, errno, strerror(errno)));
+    return Error::FileRead(file_name, errno, strerror(errno));
   }
 
   return {};

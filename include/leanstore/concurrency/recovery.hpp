@@ -3,8 +3,8 @@
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/common/types.h"
+#include "leanstore/cpp/base/result.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/utils/result.hpp"
 
 #include <cstring>
 #include <expected>

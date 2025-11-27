@@ -1,4 +1,4 @@
-#pragma once
+#include "leanstore/cpp/base/stacktrace.hpp"
 
 #include <cpptrace/cpptrace.hpp>
 
@@ -6,7 +6,7 @@
 
 namespace leanstore {
 
-inline std::string Stacktrace() {
+std::string Stacktrace() {
   std::stringstream ss;
   auto st = cpptrace::stacktrace::current();
   st.print(ss, false);

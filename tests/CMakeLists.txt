@@ -46,6 +46,7 @@ endfunction(leanstore_add_test_in_dir)
 if(${ENABLE_COROUTINE})
   leanstore_add_test_in_dir(coroutine)
   leanstore_add_test_in_dir(c)
+  leanstore_add_test_in_dir(cpp)
 else()
   # Add tests
   leanstore_add_test(recovery_test)

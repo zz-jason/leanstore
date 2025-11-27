@@ -1,8 +1,8 @@
 #pragma once
 
-#include "leanstore/utils/error.hpp"
+#include "leanstore/cpp/base/error.hpp"
+#include "leanstore/cpp/base/result.hpp"
 #include "leanstore/utils/log.hpp"
-#include "leanstore/utils/result.hpp"
 
 #include <cerrno>
 #include <cstdint>
@@ -86,9 +86,9 @@ public:
 
     int ret = io_submit(aio_ctx_, num_reqs_, &iocb_ptrs_[0]);
     if (ret < 0) {
-      return std::unexpected(
-          utils::Error::ErrorAio(ret, std::format("io_submit({}, {}, {})", (void*)&aio_ctx_,
-                                                  num_reqs_, (void*)&iocb_ptrs_[0])));
+      auto api_name =
+          std::format("io_submit({}, {}, {})", (void*)&aio_ctx_, num_reqs_, (void*)&iocb_ptrs_[0]);
+      return Error::Aio(api_name, -ret, strerror(-ret));
     }
 
     // return requests submitted
@@ -102,7 +102,7 @@ public:
 
     int ret = io_getevents(aio_ctx_, num_reqs_, num_reqs_, &io_events_[0], timeout);
     if (ret < 0) {
-      return std::unexpected(utils::Error::ErrorAio(ret, "io_getevents"));
+      return Error::Aio("io_getevents", -ret, strerror(-ret));
     }
 
     // reset pending requests, allowing new writes
@@ -120,7 +120,7 @@ public:
     int flags = O_TRUNC | O_CREAT | O_RDWR | O_DIRECT;
     auto fd = open(file, flags, 0666);
     if (fd == -1) {
-      return std::unexpected(utils::Error::FileOpen(file, errno, strerror(errno)));
+      return Error::FileOpen(file, errno, strerror(errno));
     }
     return fd;
   }

@@ -2,24 +2,19 @@
 
 #include "leanstore/common/portable.h"
 #include "leanstore/common/types.h"
+#include "leanstore/cpp/base/enum_traits.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/misc.hpp"
 
 #include <cstdint>
-#include <string>
 
 namespace leanstore {
 
-#define DO_WITH_WAL_ENTRY_TYPES(ACTION, ...)                                                       \
-  ACTION(kTxAbort, "kTxAbort", __VA_ARGS__)                                                        \
-  ACTION(kTxFinish, "kTxFinish", __VA_ARGS__)                                                      \
-  ACTION(kComplex, "kComplex", __VA_ARGS__)                                                        \
-  ACTION(kCarriageReturn, "kCarriageReturn", __VA_ARGS__)
-
-#define DECR_WAL_ENTRY_TYPE(type, type_name, ...) type,
-#define WAL_ENTRY_TYPE_NAME(type, type_name, ...)                                                  \
-  case Type::type:                                                                                 \
-    return type_name;
+#define LEAN_WAL_ENTRY_TYPE_LIST(ACTION)                                                           \
+  ACTION(kTxAbort)                                                                                 \
+  ACTION(kTxFinish)                                                                                \
+  ACTION(kComplex)                                                                                 \
+  ACTION(kCarriageReturn)
 
 // forward declaration
 class WalTxAbort;
@@ -34,7 +29,11 @@ class WalEntryComplex;
 /// functions are avoided to make the size as small as possible.
 class PACKED WalEntry {
 public:
-  enum class Type : uint8_t { DO_WITH_WAL_ENTRY_TYPES(DECR_WAL_ENTRY_TYPE) };
+  enum class Type : uint8_t {
+#define ACTION(type) type,
+    LEAN_WAL_ENTRY_TYPE_LIST(ACTION)
+#undef ACTION
+  };
 
   /// Type of the WAL entry.
   Type type_;
@@ -44,8 +43,6 @@ public:
 
   WalEntry(Type type) : type_(type) {
   }
-
-  std::string TypeName() const;
 
   /// Returns the size of the WalEntry, including all the payloads.
   static size_t Size(const WalEntry* entry);
@@ -151,16 +148,41 @@ public:
 // WalEntry
 // -----------------------------------------------------------------------------
 
-inline std::string WalEntry::TypeName() const {
-  switch (type_) {
-    DO_WITH_WAL_ENTRY_TYPES(WAL_ENTRY_TYPE_NAME);
-  default:
-    return "Unknow WAL entry type";
+/// Specialization of EnumTraits for WalEntry::Type
+template <>
+struct EnumTraits<WalEntry::Type> {
+  /// Converts the enum value to its string representation.
+  static std::string_view ToString(WalEntry::Type enum_item) {
+#define ACTION(enum_item)                                                                          \
+  case WalEntry::Type::enum_item: {                                                                \
+    return #enum_item;                                                                             \
   }
-}
 
-#undef DECR_WAL_ENTRY_TYPE
-#undef WAL_ENTRY_TYPE_NAME
+    switch (enum_item) {
+      LEAN_WAL_ENTRY_TYPE_LIST(ACTION);
+    default:
+      return "Unknown WalEntry::Type";
+    }
+
+#undef ACTION
+  }
+
+  /// Converts a string representation to its enum value.
+  static std::optional<WalEntry::Type> FromString(std::string_view str) {
+#define ACTION(enum_item)                                                                          \
+  if (str == #enum_item) {                                                                         \
+    return WalEntry::Type::enum_item;                                                              \
+  }
+
+    LEAN_WAL_ENTRY_TYPE_LIST(ACTION);
+    return std::nullopt;
+
+#undef ACTION
+  }
+
+  static_assert(EnumTraitsRequired<WalEntry::Type>,
+                "WalEntry::Type must satisfy EnumTraitsRequired");
+};
 
 inline size_t WalEntry::Size(const WalEntry* entry) {
   switch (entry->type_) {

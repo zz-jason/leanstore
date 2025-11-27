@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore/utils/result.hpp"
+#include "leanstore/cpp/base/result.hpp"
 
 #include <cassert>
 

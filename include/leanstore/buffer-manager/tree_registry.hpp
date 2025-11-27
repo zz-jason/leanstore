@@ -4,12 +4,12 @@
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/common/wal_record.h"
+#include "leanstore/cpp/base/error.hpp"
+#include "leanstore/cpp/base/result.hpp"
 #include "leanstore/sync/hybrid_guard.hpp"
 #include "leanstore/units.hpp"
 #include "leanstore/utils/defer.hpp"
-#include "leanstore/utils/error.hpp"
 #include "leanstore/utils/log.hpp"
-#include "leanstore/utils/result.hpp"
 
 #include <cstdlib>
 #include <expected>
@@ -115,7 +115,7 @@ private:
   std::atomic<lean_treeid_t> tree_id_allocator_ = 0;
 
 public:
-  inline lean_treeid_t AllocTreeId() {
+  lean_treeid_t AllocTreeId() {
     auto allocated_tree_id = tree_id_allocator_++;
     return allocated_tree_id;
   }
@@ -126,7 +126,7 @@ public:
   };
 
   /// Creates a tree managed by buffer manager.
-  inline std::tuple<BufferManagedTree*, lean_treeid_t> CreateTree(
+  std::tuple<BufferManagedTree*, lean_treeid_t> CreateTree(
       const std::string& tree_name, std::function<std::unique_ptr<BufferManagedTree>()> ctor) {
     LEAN_UNIQUE_LOCK(mutex_);
 
@@ -151,8 +151,8 @@ public:
     return std::make_tuple(tree_ptr, tree_id);
   }
 
-  inline bool RegisterTree(lean_treeid_t tree_id, std::unique_ptr<BufferManagedTree> tree,
-                           const std::string& tree_name) {
+  bool RegisterTree(lean_treeid_t tree_id, std::unique_ptr<BufferManagedTree> tree,
+                    const std::string& tree_name) {
     SCOPED_DEFER(if (tree_id > tree_id_allocator_) { tree_id_allocator_ = tree_id; });
     LEAN_UNIQUE_LOCK(mutex_);
     if (tree_index_by_name_.find(tree_name) != tree_index_by_name_.end()) {
@@ -165,7 +165,7 @@ public:
     return true;
   }
 
-  [[nodiscard]] inline Result<bool> UnregisterTree(const std::string& tree_name) {
+  Result<bool> UnregisterTree(const std::string& tree_name) {
     LEAN_UNIQUE_LOCK(mutex_);
     auto it = tree_index_by_name_.find(tree_name);
     if (it != tree_index_by_name_.end()) {
@@ -174,10 +174,10 @@ public:
       trees_.erase(tree_it);
       return true;
     }
-    return std::unexpected<utils::Error>(utils::Error::General("TreeId not found"));
+    return Error::General("TreeId not found");
   }
 
-  [[nodiscard]] inline Result<bool> UnRegisterTree(lean_treeid_t tree_id) {
+  Result<bool> UnRegisterTree(lean_treeid_t tree_id) {
     LEAN_UNIQUE_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it != trees_.end()) {
@@ -186,10 +186,10 @@ public:
       trees_.erase(it);
       return true;
     }
-    return std::unexpected<utils::Error>(utils::Error::General("TreeId not found"));
+    return Error::General("TreeId not found");
   }
 
-  inline BufferManagedTree* GetTree(const std::string& tree_name) {
+  BufferManagedTree* GetTree(const std::string& tree_name) {
     LEAN_SHARED_LOCK(mutex_);
     auto it = tree_index_by_name_.find(tree_name);
     if (it != tree_index_by_name_.end()) {
@@ -199,8 +199,8 @@ public:
     return nullptr;
   }
 
-  inline void IterateChildSwips(lean_treeid_t tree_id, BufferFrame& bf,
-                                std::function<bool(Swip&)> callback) {
+  void IterateChildSwips(lean_treeid_t tree_id, BufferFrame& bf,
+                         std::function<bool(Swip&)> callback) {
     LEAN_SHARED_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {
@@ -210,7 +210,7 @@ public:
     tree->IterateChildSwips(bf, callback);
   }
 
-  inline ParentSwipHandler FindParent(lean_treeid_t tree_id, BufferFrame& bf) {
+  ParentSwipHandler FindParent(lean_treeid_t tree_id, BufferFrame& bf) {
     LEAN_SHARED_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {
@@ -220,7 +220,7 @@ public:
     return tree->FindParent(bf);
   }
 
-  inline SpaceCheckResult CheckSpaceUtilization(lean_treeid_t tree_id, BufferFrame& bf) {
+  SpaceCheckResult CheckSpaceUtilization(lean_treeid_t tree_id, BufferFrame& bf) {
     LEAN_SHARED_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {
@@ -231,7 +231,7 @@ public:
   }
 
   // Pre: bf is shared/exclusive latched
-  inline void Checkpoint(lean_treeid_t tree_id, BufferFrame& bf, void* dest) {
+  void Checkpoint(lean_treeid_t tree_id, BufferFrame& bf, void* dest) {
     LEAN_SHARED_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {
@@ -245,7 +245,7 @@ public:
   ///
   /// TODO: refactor the transaction undo process to work directly on the target
   ///       page, and abandon the current indirection via tree registry.
-  inline void Undo(lean_treeid_t tree_id, const lean_wal_record* record) {
+  void Undo(lean_treeid_t tree_id, const lean_wal_record* record) {
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {
       Log::Fatal("BufferManagedTree not find, treeId={}", tree_id);
@@ -254,9 +254,8 @@ public:
     return tree->Undo(record);
   }
 
-  inline void GarbageCollect(lean_treeid_t tree_id, const uint8_t* version_data,
-                             lean_wid_t version_worker_id, lean_txid_t version_tx_id,
-                             bool called_before) {
+  void GarbageCollect(lean_treeid_t tree_id, const uint8_t* version_data,
+                      lean_wid_t version_worker_id, lean_txid_t version_tx_id, bool called_before) {
     LEAN_SHARED_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {
@@ -269,7 +268,7 @@ public:
     return tree->GarbageCollect(version_data, version_worker_id, version_tx_id, called_before);
   }
 
-  inline void Unlock(lean_treeid_t tree_id, const uint8_t* entry) {
+  void Unlock(lean_treeid_t tree_id, const uint8_t* entry) {
     LEAN_SHARED_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {
@@ -279,7 +278,7 @@ public:
     return tree->Unlock(entry);
   }
 
-  inline void Deserialize(lean_treeid_t tree_id, StringMap map) {
+  void Deserialize(lean_treeid_t tree_id, StringMap map) {
     LEAN_SHARED_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {

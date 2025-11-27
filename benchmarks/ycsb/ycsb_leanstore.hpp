@@ -67,7 +67,7 @@ public:
     if (!res) {
       std::cerr << "Failed to open leanstore: " << res.error().ToString() << std::endl;
       lean_store_option_destroy(option);
-      exit(res.error().Code());
+      exit(res.error().GetCode());
     }
 
     store_ = std::move(res.value());

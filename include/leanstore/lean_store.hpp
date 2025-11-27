@@ -3,8 +3,8 @@
 #include "coroutine/coro_future.hpp"
 #include "coroutine/coro_scheduler.hpp"
 #include "leanstore/common/types.h"
+#include "leanstore/cpp/base/result.hpp"
 #include "leanstore/utils/debug_flags.hpp"
-#include "leanstore/utils/result.hpp"
 
 #include <cassert>
 #include <cstdint>
