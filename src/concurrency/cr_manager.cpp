@@ -83,7 +83,7 @@ utils::JsonObj CRManager::Serialize() const {
 
 void CRManager::Deserialize(const utils::JsonObj& json_obj) {
   if (group_committer_ != nullptr && json_obj.HasMember(kKeyWalSize)) {
-    group_committer_->wal_size_ = json_obj.GetUint64(kKeyWalSize).value();
+    group_committer_->wal_size_ = *json_obj.GetUint64(kKeyWalSize);
   }
 }
 

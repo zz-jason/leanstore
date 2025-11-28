@@ -3,6 +3,7 @@
 #include "leanstore/common/portable.h"
 #include "leanstore/common/types.h"
 #include "leanstore/cpp/base/enum_traits.hpp"
+#include "leanstore/cpp/base/optional.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/misc.hpp"
 
@@ -168,7 +169,7 @@ struct EnumTraits<WalEntry::Type> {
   }
 
   /// Converts a string representation to its enum value.
-  static std::optional<WalEntry::Type> FromString(std::string_view str) {
+  static Optional<WalEntry::Type> FromString(std::string_view str) {
 #define ACTION(enum_item)                                                                          \
   if (str == #enum_item) {                                                                         \
     return WalEntry::Type::enum_item;                                                              \

@@ -350,41 +350,48 @@ bool LeanStore::DeserializeMeta() {
   meta_file.open(GetMetaFilePath());
 
   utils::JsonObj meta_json_obj;
-  meta_json_obj.Deserialize(
+  auto res = meta_json_obj.Deserialize(
       std::string(std::istreambuf_iterator<char>(meta_file), std::istreambuf_iterator<char>()));
+  if (!res) {
+    Log::Error("DeserializeMeta failed: {}", res.error().ToString());
+    return false;
+  }
 
   // Deserialize concurrent resource manager
   if (crmanager_) {
     assert(meta_json_obj.HasMember(kMetaKeyCrManager));
-    crmanager_->Deserialize(meta_json_obj.GetJsonObj(kMetaKeyCrManager).value());
+    crmanager_->Deserialize(*meta_json_obj.GetJsonObj(kMetaKeyCrManager));
   }
 
-  mvcc_mgr_->Deserialize(meta_json_obj.GetJsonObj(kMetaKeyMvcc).value());
+  mvcc_mgr_->Deserialize(*meta_json_obj.GetJsonObj(kMetaKeyMvcc));
 
   // Deserialize buffer manager
   assert(meta_json_obj.HasMember(kMetaKeyBufferManager));
-  buffer_manager_->Deserialize(meta_json_obj.GetJsonObj(kMetaKeyBufferManager).value());
+  buffer_manager_->Deserialize(*meta_json_obj.GetJsonObj(kMetaKeyBufferManager));
 
   assert(meta_json_obj.HasMember(kMetaKeyBTrees));
-  auto all_pages_up_to_date = meta_json_obj.GetBool("pages_up_to_date").value();
+  auto all_pages_up_to_date = *meta_json_obj.GetBool("pages_up_to_date");
 
   assert(meta_json_obj.HasMember(kMetaKeyBTrees));
-  auto btree_json_array = meta_json_obj.GetJsonArray(kMetaKeyBTrees).value();
+  auto& btree_json_array = *meta_json_obj.GetJsonArray(kMetaKeyBTrees);
 
   for (auto i = 0u; i < btree_json_array.Size(); ++i) {
     assert(btree_json_array.GetJsonObj(i).has_value());
-    auto btree_json_obj = btree_json_array.GetJsonObj(i).value();
+    auto btree_json_obj_opt = btree_json_array.GetJsonObj(i);
+    if (!btree_json_obj_opt) {
+      Log::Fatal("DeserializeMeta failed, invalid btree json object at index {}", i);
+    }
+    const auto& btree_json_obj = *btree_json_obj_opt;
 
-    const lean_treeid_t btree_id = btree_json_obj.GetInt64("id").value();
-    const auto btree_type = btree_json_obj.GetInt64("type").value();
-    const auto btree_name_ref = btree_json_obj.GetString("name").value();
-    const auto btree_enable_wal = btree_json_obj.GetBool("enable_wal").value();
-    const auto btree_use_bulk_insert = btree_json_obj.GetBool("use_bulk_insert").value();
-
+    const lean_treeid_t btree_id = *btree_json_obj.GetInt64("id");
+    const auto btree_type = *btree_json_obj.GetInt64("type");
+    const auto btree_name_ref = *btree_json_obj.GetString("name");
+    const auto btree_enable_wal = *btree_json_obj.GetBool("enable_wal");
+    const auto btree_use_bulk_insert = *btree_json_obj.GetBool("use_bulk_insert");
     std::string btree_name(btree_name_ref.data(), btree_name_ref.size());
 
     StringMap btree_meta_map;
-    auto btree_meta_json_obj = btree_json_obj.GetJsonObj("serialized").value();
+    const auto& btree_meta_json_obj = *btree_json_obj.GetJsonObj("serialized");
     btree_meta_json_obj.Foreach([&](const std::string_view& key, const utils::JsonValue& value) {
       assert(value.IsString());
       auto meta_key = std::string(key.data(), key.size());

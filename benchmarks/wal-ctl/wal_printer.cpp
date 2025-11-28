@@ -1,7 +1,7 @@
 #include "wal_printer.hpp"
 
 #include "leanstore/common/wal_record.h"
-#include "wal/wal_iterator.hpp"
+#include "leanstore/cpp/wal/wal_cursor.hpp"
 #include "wal/wal_serde.hpp"
 
 #include <cassert>
@@ -11,27 +11,35 @@
 namespace leanstore {
 
 void WalPrinter::Run() {
+  auto error_exit = [](const Error& error) {
+    std::cerr << error << std::endl;
+    exit(EXIT_FAILURE);
+  };
+
   // open the file
-  auto wal_iter = WalIterator::New(wal_path_);
-  if (wal_iter->HasError()) {
-    std::cerr << wal_iter->GetError() << std::endl;
-    exit(EXIT_FAILURE);
+  auto cursor_res = WalCursor::New(wal_path_);
+  if (!cursor_res) {
+    error_exit(cursor_res.error());
   }
 
-  lean_wal_record* record = wal_iter->Next();
-  while (record) {
+  // seek to the beginning
+  auto wal_iter = std::move(cursor_res.value());
+  if (auto err = wal_iter->Seek(0); err) {
+    error_exit(*err);
+  }
+
+  while (wal_iter->Valid()) {
+    const auto& record = wal_iter->CurrentRecord();
     std::cout << FormatWalRecord(record, print_format_) << std::endl;
-    record = wal_iter->Next();
-  }
 
-  if (wal_iter->HasError()) {
-    std::cerr << wal_iter->GetError() << std::endl;
-    exit(EXIT_FAILURE);
+    if (auto err = wal_iter->Next(); err) {
+      error_exit(*err);
+    }
   }
 }
 
 WalPrinter::Format WalPrinter::FormatFromString(std::string_view format) {
-  static const constexpr char* kWalPrintFormatNames[] = {
+  static constexpr const char* kWalPrintFormatNames[] = {
       "unknown",
       "text",
       "json",
@@ -50,38 +58,14 @@ WalPrinter::Format WalPrinter::FormatFromString(std::string_view format) {
   return Format::kUnknown;
 }
 
-std::string WalPrinter::FormatWalRecord(const lean_wal_record* record, Format format) {
+std::string WalPrinter::FormatWalRecord(const lean_wal_record& record, Format format) {
   switch (format) {
-  case Format::kText: {
-    return FormatWalRecordAsText(record);
-  }
   case Format::kJson: {
     return WalSerde::ToJson(record);
   }
+  case Format::kText:
   default: {
     assert(false && "Unsupported print format");
-    return "";
-  }
-  }
-}
-
-std::string WalPrinter::FormatWalRecordAsText(const lean_wal_record* record) {
-  switch (record->type_) {
-  case LEAN_WAL_TYPE_CARRIAGE_RETURN:
-  case LEAN_WAL_TYPE_SMO_COMPLETE:
-  case LEAN_WAL_TYPE_SMO_PAGENEW:
-  case LEAN_WAL_TYPE_SMO_PAGESPLIT_ROOT:
-  case LEAN_WAL_TYPE_SMO_PAGESPLIT_NONROOT:
-  case LEAN_WAL_TYPE_INSERT:
-  case LEAN_WAL_TYPE_UPDATE:
-  case LEAN_WAL_TYPE_REMOVE:
-  case LEAN_WAL_TYPE_TX_ABORT:
-  case LEAN_WAL_TYPE_TX_COMPLETE:
-  case LEAN_WAL_TYPE_TX_INSERT:
-  case LEAN_WAL_TYPE_TX_REMOVE:
-  case LEAN_WAL_TYPE_TX_UPDATE:
-  default: {
-    assert(false && "Unsupported WAL record type for JSON format");
     return "";
   }
   }

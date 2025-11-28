@@ -36,9 +36,7 @@ private:
   static Format FormatFromString(std::string_view format);
 
   /// Print a WAL record
-  static std::string FormatWalRecord(const lean_wal_record* record, Format format);
-
-  static std::string FormatWalRecordAsText(const lean_wal_record* record);
+  static std::string FormatWalRecord(const lean_wal_record& record, Format format);
 
   /// Path to the WAL file
   std::string wal_path_;

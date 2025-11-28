@@ -1,5 +1,6 @@
 #pragma once
 
+#include "leanstore/cpp/base/optional.hpp"
 #include "leanstore/cpp/base/result.hpp"
 
 #include <cassert>
@@ -66,12 +67,12 @@ public:
   // Utils to access element in a JSON object
   //----------------------------------------------------------------------------
 
-  std::optional<bool> GetBool(std::string_view key) const;
-  std::optional<int64_t> GetInt64(std::string_view key) const;
-  std::optional<uint64_t> GetUint64(std::string_view key) const;
-  std::optional<std::string_view> GetString(std::string_view key) const;
-  std::optional<JsonObj> GetJsonObj(std::string_view key) const;
-  std::optional<JsonArray> GetJsonArray(std::string_view key) const;
+  Optional<bool> GetBool(std::string_view key) const;
+  Optional<int64_t> GetInt64(std::string_view key) const;
+  Optional<uint64_t> GetUint64(std::string_view key) const;
+  Optional<std::string_view> GetString(std::string_view key) const;
+  Optional<JsonObj> GetJsonObj(std::string_view key) const;
+  Optional<JsonArray> GetJsonArray(std::string_view key) const;
   void Foreach(const std::function<void(std::string_view key, const JsonValue& value)>& fn) const;
   bool HasMember(std::string_view key) const;
 
@@ -144,55 +145,55 @@ public:
   // Utils to access element in a JSON array
   //----------------------------------------------------------------------------
 
-  std::optional<int64_t> GetInt64(size_t index) const {
+  Optional<int64_t> GetInt64(size_t index) const {
     if (!doc_.IsArray()) {
-      return {};
+      return std::nullopt;
     }
 
     const auto& array = doc_.GetArray();
     if (index >= array.Size()) {
-      return {};
+      return std::nullopt;
     }
 
     const auto& value = array[index];
     if (!value.IsInt64()) {
-      return {};
+      return std::nullopt;
     }
 
     return value.GetInt64();
   }
 
-  std::optional<std::string_view> GetString(size_t index) const {
+  Optional<std::string_view> GetString(size_t index) const {
     if (!doc_.IsArray()) {
-      return {};
+      return std::nullopt;
     }
 
     const auto& array = doc_.GetArray();
     if (index >= array.Size()) {
-      return {};
+      return std::nullopt;
     }
 
     const auto& value = array[index];
     if (!value.IsString()) {
-      return {};
+      return std::nullopt;
     }
 
     return std::string_view(value.GetString(), value.GetStringLength());
   }
 
-  std::optional<JsonObj> GetJsonObj(size_t index) const {
+  Optional<JsonObj> GetJsonObj(size_t index) const {
     if (!doc_.IsArray()) {
-      return {};
+      return std::nullopt;
     }
 
     const auto& array = doc_.GetArray();
     if (index >= array.Size()) {
-      return {};
+      return std::nullopt;
     }
 
     const auto& value = array[index];
     if (!value.IsObject()) {
-      return {};
+      return std::nullopt;
     }
 
     JsonObj json_obj;
@@ -200,19 +201,19 @@ public:
     return json_obj;
   }
 
-  std::optional<JsonArray> GetJsonArray(size_t index) const {
+  Optional<JsonArray> GetJsonArray(size_t index) const {
     if (!doc_.IsArray()) {
-      return {};
+      return std::nullopt;
     }
 
     const auto& array = doc_.GetArray();
     if (index >= array.Size()) {
-      return {};
+      return std::nullopt;
     }
 
     const auto& value = array[index];
     if (!value.IsArray()) {
-      return {};
+      return std::nullopt;
     }
 
     JsonArray json_array;

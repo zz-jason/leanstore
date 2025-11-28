@@ -21,7 +21,12 @@ namespace leanstore {
 bool Recovery::Run() {
   bool error(false);
 
-  Analysis();
+  auto res = Analysis();
+  if (!res) {
+    Log::Error("Recovery analysis phase failed: {}", res.error().ToString());
+    return true;
+  }
+
   Log::Info("[Recovery] resolved page size: {}", resolved_pages_.size());
   for (auto it = resolved_pages_.begin(); it != resolved_pages_.end(); ++it) {
     if (it->second->IsFree()) {
@@ -44,7 +49,11 @@ bool Recovery::Run() {
     LEAN_DLOG("Dirty page table after analysis, pageId: {}, offset: {}", it->first, it->second);
   }
 
-  Redo();
+  res = Redo();
+  if (!res) {
+    Log::Error("Recovery redo phase failed: {}", res.error().ToString());
+    return true;
+  }
 
   Undo();
 

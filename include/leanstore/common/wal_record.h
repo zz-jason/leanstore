@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-/// NOLINTBEGIN
+/// NOLINTBEGIN: To keep the C-style naming conventions for structs
 
 //------------------------------------------------------------------------------
 // Integer type aliases used in WAL records

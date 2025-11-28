@@ -46,7 +46,7 @@ public:
   }
 
   WalSmoBuilder& Submit() {
-    wal_->base_.crc32_ = WalSerde::Crc32Masked(reinterpret_cast<lean_wal_record*>(wal_));
+    wal_->base_.crc32_ = WalSerde::Crc32Masked(*reinterpret_cast<lean_wal_record*>(wal_));
     CoroEnv::CurLogging().AdvanceWalBuffer(wal_->base_.size_);
     CoroEnv::CurLogging().PublishWalFlushReq(0);
     return *this;
@@ -79,7 +79,7 @@ public:
   }
 
   WalBuilder& Submit() {
-    wal_->base_.crc32_ = WalSerde::Crc32Masked(reinterpret_cast<lean_wal_record*>(wal_));
+    wal_->base_.crc32_ = WalSerde::Crc32Masked(*reinterpret_cast<lean_wal_record*>(wal_));
     CoroEnv::CurLogging().AdvanceWalBuffer(wal_->base_.size_);
     CoroEnv::CurLogging().PublishWalFlushReq(0);
     return *this;
@@ -131,7 +131,7 @@ public:
   }
 
   WalTxBuilder& Submit() {
-    wal_->tx_base_.base_.crc32_ = WalSerde::Crc32Masked(reinterpret_cast<lean_wal_record*>(wal_));
+    wal_->tx_base_.base_.crc32_ = WalSerde::Crc32Masked(*reinterpret_cast<lean_wal_record*>(wal_));
     CoroEnv::CurLogging().AdvanceWalBuffer(wal_->tx_base_.base_.size_);
     CoroEnv::CurLogging().PublishWalFlushReq(wal_->tx_base_.txid_);
     CoroEnv::CurTxMgr().ActiveTx().prev_wal_lsn_ = wal_->tx_base_.base_.lsn_;

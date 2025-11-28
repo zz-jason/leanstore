@@ -25,7 +25,7 @@ BinPackArguments: true
 AllowAllArgumentsOnNextLine: true
 AlignAfterOpenBracket: Align
 QualifierAlignment: Custom
-QualifierOrder: ['inline', 'static', 'const', 'constexpr', 'volatile', 'type']
+QualifierOrder: ['inline', 'static', 'constexpr', 'const', 'volatile', 'type']
 
 # include headers
 IncludeCategories:

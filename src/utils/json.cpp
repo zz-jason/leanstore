@@ -1,6 +1,7 @@
 #include "utils/json.hpp"
 
 #include "leanstore/cpp/base/error.hpp"
+#include "leanstore/cpp/base/optional.hpp"
 #include "leanstore/cpp/base/result.hpp"
 
 #include <cassert>
@@ -83,42 +84,42 @@ void JsonObj::AddJsonArray(std::string_view key, const JsonArray& value) {
   doc_.AddMember(key_copy, value_copy, doc_.GetAllocator());
 }
 
-std::optional<bool> JsonObj::GetBool(std::string_view key) const {
+Optional<bool> JsonObj::GetBool(std::string_view key) const {
   const auto* value = GetJsonValue(key);
   if (!value || !value->IsBool()) {
-    return {};
+    return std::nullopt;
   }
   return value->GetBool();
 }
 
-std::optional<int64_t> JsonObj::GetInt64(std::string_view key) const {
+Optional<int64_t> JsonObj::GetInt64(std::string_view key) const {
   const auto* value = GetJsonValue(key);
   if (!value || !value->IsInt64()) {
-    return {};
+    return std::nullopt;
   }
   return value->GetInt64();
 }
 
-std::optional<uint64_t> JsonObj::GetUint64(std::string_view key) const {
+Optional<uint64_t> JsonObj::GetUint64(std::string_view key) const {
   const auto* value = GetJsonValue(key);
   if (!value || !value->IsUint64()) {
-    return {};
+    return std::nullopt;
   }
   return value->GetUint64();
 }
 
-std::optional<std::string_view> JsonObj::GetString(std::string_view key) const {
+Optional<std::string_view> JsonObj::GetString(std::string_view key) const {
   const auto* value = GetJsonValue(key);
   if (!value || !value->IsString()) {
-    return {};
+    return std::nullopt;
   }
   return std::string_view(value->GetString(), value->GetStringLength());
 }
 
-std::optional<JsonObj> JsonObj::GetJsonObj(std::string_view key) const {
+Optional<JsonObj> JsonObj::GetJsonObj(std::string_view key) const {
   const auto* value = GetJsonValue(key);
   if (!value || !value->IsObject()) {
-    return {};
+    return std::nullopt;
   }
 
   JsonObj json;
@@ -126,10 +127,10 @@ std::optional<JsonObj> JsonObj::GetJsonObj(std::string_view key) const {
   return json;
 }
 
-std::optional<JsonArray> JsonObj::GetJsonArray(std::string_view key) const {
+Optional<JsonArray> JsonObj::GetJsonArray(std::string_view key) const {
   const auto* value = GetJsonValue(key);
   if (!value || !value->IsArray()) {
-    return {};
+    return std::nullopt;
   }
 
   JsonArray json;

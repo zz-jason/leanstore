@@ -131,7 +131,7 @@ utils::JsonObj BufferManager::Serialize() {
 }
 
 void BufferManager::Deserialize(const utils::JsonObj& json_obj) {
-  lean_pid_t max_page_id = json_obj.GetUint64(kMaxPageId).value();
+  lean_pid_t max_page_id = *json_obj.GetUint64(kMaxPageId);
   max_page_id = (max_page_id + (num_partitions_ - 1)) & ~(num_partitions_ - 1);
   for (uint64_t i = 0; i < num_partitions_; i++) {
     GetPartition(i).SetNextPageId(max_page_id + i);
@@ -486,7 +486,10 @@ Result<void> BufferManager::WritePageSync(BufferFrame& bf) {
   auto page_id = bf.header_.page_id_;
   auto& partition = GetPartition(page_id);
 
-  WritePageSync(page_id, &bf.page_);
+  auto res = WritePageSync(page_id, &bf.page_);
+  if (!res) {
+    return std::move(res.error());
+  }
 
   bf.Reset();
   guard.Unlock();

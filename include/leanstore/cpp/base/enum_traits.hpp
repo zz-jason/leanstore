@@ -1,5 +1,7 @@
 #pragma once
 
+#include "leanstore/cpp/base/optional.hpp"
+
 #include <optional>
 #include <string_view>
 
@@ -14,9 +16,9 @@ struct EnumTraits {
     return {};
   }
 
-  static std::optional<E> FromString(std::string_view) {
+  static Optional<E> FromString(std::string_view) {
     static_assert(sizeof(E) == 0, "EnumTraits not specialized for this enum type");
-    return {};
+    return std::nullopt;
   }
 };
 
@@ -25,7 +27,7 @@ struct EnumTraits {
 template <typename E>
 concept EnumTraitsRequired = requires(E e) {
   { EnumTraits<E>::ToString(e) } -> std::same_as<std::string_view>;
-  { EnumTraits<E>::FromString(std::string_view{}) } -> std::same_as<std::optional<E>>;
+  { EnumTraits<E>::FromString(std::string_view{}) } -> std::same_as<Optional<E>>;
 };
 
 } // namespace leanstore
