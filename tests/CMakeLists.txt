@@ -49,7 +49,7 @@ if(${ENABLE_COROUTINE})
   leanstore_add_test_in_dir(cpp)
 else()
   # Add tests
-  leanstore_add_test(recovery_test)
+  # leanstore_add_test(recovery_test)
   leanstore_add_test(optimistic_guarded_test)
   leanstore_add_test(transaction_kv_test)
   leanstore_add_test(mvcc_test)

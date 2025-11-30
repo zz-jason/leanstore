@@ -2,6 +2,7 @@
 
 #include "coroutine/coro_executor.hpp"
 #include "coroutine/lean_mutex.hpp"
+#include "failpoint/failpoint.hpp"
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/buffer-manager/tree_registry.hpp"
 #include "leanstore/concurrency/cr_manager.hpp"
@@ -12,7 +13,6 @@
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/sync/scoped_hybrid_guard.hpp"
 #include "leanstore/utils/async_io.hpp"
-#include "leanstore/utils/debug_flags.hpp"
 #include "leanstore/utils/jump_mu.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
@@ -25,7 +25,6 @@
 #include <cstring>
 #include <expected>
 #include <format>
-#include <optional>
 #include <utility>
 #include <vector>
 
@@ -144,10 +143,7 @@ Result<void> BufferManager::CheckpointAllBufferFrames() {
   });
   Log::Info("CheckpointAllBufferFrames, num_bfs_={}", num_bfs_);
 
-  LS_DEBUG_EXECUTE(store_, "skip_CheckpointAllBufferFrames", {
-    Log::Error("CheckpointAllBufferFrames skipped due to debug flag");
-    return Error::General("skipped due to debug flag");
-  });
+  LEAN_FAIL_POINT(FailPoint::kSkipCheckpointAll, return Error::General("Checkpoint skipped"););
 
   auto checkpoint_func = [&](uint64_t begin, uint64_t end) {
     const auto buffer_frame_size = store_->store_option_->buffer_frame_size_;

@@ -4,7 +4,6 @@
 #include "coroutine/coro_scheduler.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/cpp/base/result.hpp"
-#include "leanstore/utils/debug_flags.hpp"
 
 #include <cassert>
 #include <cstdint>
@@ -61,10 +60,6 @@ public:
   CRManager* crmanager_;
 
   CoroScheduler* coro_scheduler_;
-
-#ifdef DEBUG
-  utils::DebugFlagsRegistry debug_flags_registry_;
-#endif
 
   /// The LeanStore constructor
   /// NOTE: The option is created by LeanStore user, its ownership is transferred to the LeanStore
