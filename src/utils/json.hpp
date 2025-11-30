@@ -112,7 +112,8 @@ public:
   /// Move assignment
   JsonArray& operator=(JsonArray&& other) {
     if (this != &other) {
-      doc_ = std::move(other.doc_);
+      doc_.SetArray();
+      doc_.Swap(other.doc_);
     }
     return *this;
   }

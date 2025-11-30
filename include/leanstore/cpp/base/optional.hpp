@@ -19,6 +19,25 @@ class [[nodiscard]] Optional {
 public:
   using optional_t = std::optional<T>;
 
+  /// No copy and assign
+  Optional(const Optional&) = delete;
+  Optional& operator=(const Optional&) = delete;
+
+  /// Move constructor
+  Optional(Optional&& other) noexcept {
+    // call move assignment
+    *this = std::move(other);
+  }
+
+  /// Move assignment
+  Optional& operator=(Optional&& other) noexcept {
+    if (this != &other) {
+      opt_ = std::move(other.opt_);
+      other.opt_ = std::nullopt;
+    }
+    return *this;
+  }
+
   /// Construct from std::optional
   Optional(optional_t&& opt) : opt_(std::move(opt)) {
   }
@@ -49,14 +68,24 @@ public:
     return has_value();
   }
 
-  constexpr const T& operator*() const& { // NOLINT: mimicking std::optional
+  constexpr T& value() & { // NOLINT: mimicking std::optional
     LEAN_DCHECK_HAS_VALUE;
-    return *opt_;
+    return opt_.value();
   }
 
-  constexpr const T* operator->() const& { // NOLINT: mimicking std::optional
+  constexpr const T& value() const& { // NOLINT: mimicking std::optional
     LEAN_DCHECK_HAS_VALUE;
-    return opt_.operator->();
+    return opt_.value();
+  }
+
+  constexpr const T& operator*() const& {
+    LEAN_DCHECK_HAS_VALUE;
+    return opt_.value();
+  }
+
+  constexpr const T* operator->() const& {
+    LEAN_DCHECK_HAS_VALUE;
+    return &opt_.value();
   }
 
 private:

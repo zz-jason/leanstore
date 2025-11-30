@@ -8,6 +8,7 @@
 
 #include <cassert>
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <string_view>
 
@@ -37,6 +38,9 @@ public:
 
   /// Get the current WAL record referenced by the cursor.
   virtual const lean_wal_record& CurrentRecord() const = 0;
+
+  /// Apply a custom function to each WAL record in the cursor.
+  Optional<Error> Foreach(const std::function<bool(lean_wal_record& record)>& func);
 };
 
 } // namespace leanstore

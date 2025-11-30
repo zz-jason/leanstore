@@ -19,10 +19,10 @@ command line arguments according to your needs
 
 ```sh
 # load data
-./build/performance/benchmarks/ycsb/ycsb -flagfile=benchmarks/ycsb/ycsb-config.flags -ycsb_cmd=load
+./build/performance/tools/ycsb/ycsb -flagfile=tools/ycsb/ycsb-config.flags -ycsb_cmd=load
 
 # run benchmark
-./build/performance/benchmarks/ycsb/ycsb -flagfile=benchmarks/ycsb/ycsb-config.flags -ycsb_cmd=run
+./build/performance/tools/ycsb/ycsb -flagfile=tools/ycsb/ycsb-config.flags -ycsb_cmd=run
 ```
 
 ## Profile
@@ -36,7 +36,7 @@ curl -G "127.0.0.1:8080/profile" > cpu.prof
 View the profile result:
 
 ```sh
-pprof -http 0.0.0.0:4000 build/release/benchmarks/ycsb/ycsb cpu.prof
+pprof -http 0.0.0.0:4000 build/release/tools/ycsb/ycsb cpu.prof
 ```
 
 Then open the browser at **127.0.0.1:4000** to view the cpu profile.

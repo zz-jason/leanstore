@@ -22,7 +22,6 @@ endif()
 find_package(Boost REQUIRED COMPONENTS context)
 
 find_package(unofficial-concurrentqueue CONFIG REQUIRED)
-  # target_link_libraries(main PRIVATE unofficial::concurrentqueue::concurrentqueue)
 
 set(leanstore_deps
   aio

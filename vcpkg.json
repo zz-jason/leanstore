@@ -1,7 +1,6 @@
 {
   "dependencies": [
     "benchmark",
-    "gflags",
     "spdlog",
     "gtest",
     "rapidjson",
@@ -12,6 +11,7 @@
     "cpptrace",
     "concurrentqueue",
     "boost-context",
+    "tanakh-cmdline",
     "rocksdb"
   ]
 }

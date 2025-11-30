@@ -3,6 +3,7 @@
 #include "leanstore/utils/parallelize.hpp"
 #include "leanstore/utils/random_generator.hpp"
 #include "leanstore/utils/scrambled_zipf_generator.hpp"
+#include "utils/small_vector.hpp"
 #include "ycsb.hpp"
 
 #include <gperftools/heap-profiler.h>
@@ -23,45 +24,47 @@ private:
   rocksdb::DB* db_ = nullptr;
 
 public:
-  YcsbRocksDb() {
-    rocksdb::Options options;
-    options.create_if_missing = true;
-    options.error_if_exists = false;
-    options.arena_block_size = FLAGS_ycsb_mem_gb << 30;
+  YcsbRocksDb(const YcsbOptions& ycsb_options) : YcsbExecutor(ycsb_options) {
+    rocksdb::Options rocksdb_options;
+    rocksdb_options.create_if_missing = true;
+    rocksdb_options.error_if_exists = false;
+    rocksdb_options.arena_block_size = options_.mem_gb_ << 30;
 
-    auto status =
-        rocksdb::DB::Open(options, FLAGS_ycsb_data_dir + "/rocksdb/" + FLAGS_ycsb_workload, &db_);
+    auto status = rocksdb::DB::Open(rocksdb_options,
+                                    options_.data_dir_ + "/rocksdb/" + options_.workload_, &db_);
     if (!status.ok()) {
       Log::Fatal("Failed to open rocksdb: {}", status.ToString());
     }
   }
 
   void HandleCmdLoad() override {
-    // load data with FLAGS_ycsb_threads
+    // load data with options_.threads_
     auto start = std::chrono::high_resolution_clock::now();
-    std::cout << "Inserting " << FLAGS_ycsb_record_count << " values" << std::endl;
+    std::cout << "Inserting " << options_.record_count_ << " values" << std::endl;
     SCOPED_DEFER({
       auto end = std::chrono::high_resolution_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
       std::cout << "Done inserting" << ", time elapsed: " << duration / 1000000.0 << " seconds"
-                << ", throughput: " << CalculateTps(start, end, FLAGS_ycsb_record_count) << " tps"
+                << ", throughput: " << CalculateTps(start, end, options_.record_count_) << " tps"
                 << std::endl;
     });
 
     utils::Parallelize::Range(
-        FLAGS_ycsb_threads, FLAGS_ycsb_record_count,
+        options_.threads_, options_.record_count_,
         [&](uint64_t thread_id [[maybe_unused]], uint64_t begin, uint64_t end) {
-          uint8_t key[FLAGS_ycsb_key_size];
-          uint8_t val[FLAGS_ycsb_val_size];
-          rocksdb::WriteOptions write_option;
+          SmallBuffer256 key_buffer(options_.key_size_);
+          SmallBuffer256 val_buffer(options_.val_size_);
+          auto* key = key_buffer.Data();
+          auto* val = val_buffer.Data();
+          rocksdb::WriteOptions write_options;
 
           for (uint64_t i = begin; i < end; i++) {
             // generate key-value for insert
             GenKey(i, key);
-            utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
+            utils::RandomGenerator::RandString(val, options_.val_size_);
 
-            auto status = db_->Put(write_option, rocksdb::Slice((char*)key, FLAGS_ycsb_key_size),
-                                   rocksdb::Slice((char*)val, FLAGS_ycsb_val_size));
+            auto status = db_->Put(write_options, rocksdb::Slice((char*)key, options_.key_size_),
+                                   rocksdb::Slice((char*)val, options_.val_size_));
             if (!status.ok()) {
               Log::Fatal("Failed to insert: {}", status.ToString());
             }
@@ -70,20 +73,20 @@ public:
   }
 
   void HandleCmdRun() override {
-    // Run the benchmark in FLAGS_ycsb_threads
-    auto workload_type = static_cast<Workload>(FLAGS_ycsb_workload[0] - 'a');
+    auto workload_type = static_cast<Workload>(options_.workload_[0] - 'a');
     auto workload = GetWorkloadSpec(workload_type);
     auto zipf_random =
-        utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count, FLAGS_ycsb_zipf_factor);
+        utils::ScrambledZipfGenerator(0, options_.record_count_, options_.zipf_factor_);
     std::atomic<bool> keep_running = true;
-    std::vector<std::atomic<uint64_t>> thread_committed(FLAGS_ycsb_threads);
-    std::vector<std::atomic<uint64_t>> thread_aborted(FLAGS_ycsb_threads);
+    std::vector<std::atomic<uint64_t>> thread_committed(options_.threads_);
+    std::vector<std::atomic<uint64_t>> thread_aborted(options_.threads_);
 
     std::vector<std::thread> threads;
-    for (uint64_t worker_id = 0; worker_id < FLAGS_ycsb_threads; worker_id++) {
+    for (uint64_t worker_id = 0; worker_id < options_.threads_; worker_id++) {
       threads.emplace_back(
           [&](uint64_t thread_id) {
-            uint8_t key[FLAGS_ycsb_key_size];
+            SmallBuffer256 key_buffer(options_.key_size_);
+            auto* key = key_buffer.Data();
             std::string val_read;
             while (keep_running) {
               switch (workload_type) {
@@ -94,9 +97,8 @@ public:
                 if (read_probability <= workload.read_proportion_ * 100) {
                   // generate key for read
                   GenYcsbKey(zipf_random, key);
-                  auto status =
-                      db_->Get(rocksdb::ReadOptions(),
-                               rocksdb::Slice((char*)key, FLAGS_ycsb_key_size), &val_read);
+                  auto status = db_->Get(rocksdb::ReadOptions(),
+                                         rocksdb::Slice((char*)key, options_.key_size_), &val_read);
                   if (!status.ok()) {
                     Log::Fatal("Failed to read: {}", status.ToString());
                   }
@@ -105,8 +107,8 @@ public:
                   GenYcsbKey(zipf_random, key);
                   // generate val for update
                   auto status = db_->Put(rocksdb::WriteOptions(),
-                                         rocksdb::Slice((char*)key, FLAGS_ycsb_key_size),
-                                         rocksdb::Slice((char*)key, FLAGS_ycsb_val_size));
+                                         rocksdb::Slice((char*)key, options_.key_size_),
+                                         rocksdb::Slice((char*)key, options_.val_size_));
                   if (!status.ok()) {
                     thread_aborted[thread_id]++;
                   }
@@ -131,7 +133,7 @@ public:
       a = 0;
     }
 
-    PrintTpsSummary(1, FLAGS_ycsb_run_for_seconds, FLAGS_ycsb_threads, thread_committed,
+    PrintTpsSummary(1, options_.run_for_seconds_, options_.threads_, thread_committed,
                     thread_aborted);
 
     keep_running.store(false);

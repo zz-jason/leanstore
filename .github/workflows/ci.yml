@@ -37,7 +37,7 @@ jobs:
       run: TSAN_OPTIONS="suppressions=$(pwd)/tests/tsan.supp" ctest --test-dir build/debug_tsan --output-on-failure -j 2
 
     - name: Generate coverage file
-      run: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*' --verbose
+      run: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'tools/*' --verbose
 
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v4
@@ -75,7 +75,7 @@ jobs:
       run: ctest --test-dir build/debug_coro --output-on-failure -j 2
 
     - name: Generate coverage file
-      run: gcovr -v -r . --xml-pretty --xml=coverage_coro.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*' --verbose
+      run: gcovr -v -r . --xml-pretty --xml=coverage_coro.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'tools/*' --verbose
 
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v4

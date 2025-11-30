@@ -81,7 +81,7 @@ pkg_check_modules(libunwind REQUIRED IMPORTED_TARGET GLOBAL libunwind)
 # ------------------------------------------------------------------------------
 
 add_subdirectory(src)
-add_subdirectory(benchmarks)
+add_subdirectory(tools)
 
 # tests
 include(CTest)
@@ -96,7 +96,7 @@ file(GLOB_RECURSE ALL_SOURCE_FILES
   "src/*.cpp" "src/*.hpp"
   "include/*.hpp"
   "tests/*.cpp" "tests/*.hpp"
-  "benchmarks/*.cpp" "benchmarks/*.hpp")
+  "tools/*.cpp" "tools/*.hpp")
 
 # check-format
 add_custom_target(check-format
