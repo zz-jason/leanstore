@@ -22,8 +22,9 @@ void CoroEnv::SetCurStore(LeanStore* store) {
   tls_store = store;
 }
 
-LeanStore* CoroEnv::CurStore() {
-  return tls_store;
+LeanStore& CoroEnv::CurStore() {
+  LEAN_DCHECK(tls_store != nullptr, "Current store is not set");
+  return *tls_store;
 }
 
 CoroExecutor* CoroEnv::CurCoroExec() {

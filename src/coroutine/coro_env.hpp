@@ -22,7 +22,7 @@ public:
   /// Sets the current LeanStore instance for the calling thread.
   static void SetCurStore(LeanStore* store);
   /// Gets the current LeanStore instance for the calling thread.
-  static LeanStore* CurStore();
+  static LeanStore& CurStore();
 
   /// Sets the current coroutine executor for the calling thread.
   static CoroExecutor* CurCoroExec();

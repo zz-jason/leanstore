@@ -2,7 +2,7 @@
 
 #include "leanstore/common/wal_record.h"
 #include "leanstore/cpp/wal/wal_cursor.hpp"
-#include "wal/wal_serde.hpp"
+#include "leanstore/cpp/wal/wal_serde.hpp"
 
 #include <cassert>
 #include <cstring>

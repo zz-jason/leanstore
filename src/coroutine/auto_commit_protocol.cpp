@@ -77,7 +77,7 @@ void AutoCommitProtocol::CommitAck() {
 
 void AutoCommitProtocol::TrySyncLastCommittedTx() {
   ScopedTimer timer([&]([[maybe_unused]] double elapsed_ms) {
-    CoroEnv::CurStore()->GetMvccManager()->UpdateMinCommittedSysTx(min_committed_sys_tx_);
+    CoroEnv::CurStore().GetMvccManager()->UpdateMinCommittedSysTx(min_committed_sys_tx_);
     LEAN_DLOG("SyncLastCommittedTx finished, elapsed_ms={}"
               ", min_committed_sys_tx={}, min_committed_usr_tx={}",
               elapsed_ms, min_committed_sys_tx_, min_committed_usr_tx_);

@@ -167,7 +167,7 @@ Result<void> BufferManager::CheckpointAllBufferFrames() {
           auto page_offset = bf.header_.page_id_ * page_size;
           store_->tree_registry_->Checkpoint(bf.page_.btree_id_, bf, tmp_buffer);
           aio.PrepareWrite(store_->page_fd_, tmp_buffer, page_size, page_offset);
-          bf.header_.flushed_psn_ = bf.page_.psn_;
+          bf.header_.flushed_page_version_ = bf.page_.page_version_;
           batch_size++;
         }
       }
@@ -206,7 +206,7 @@ Result<void> BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
     if (!res) {
       return std::move(res.error());
     }
-    bf.header_.flushed_psn_ = bf.page_.psn_;
+    bf.header_.flushed_page_version_ = bf.page_.page_version_;
   }
   bf.header_.latch_.UnlockExclusively();
   return {};
@@ -238,7 +238,7 @@ BufferFrame& BufferManager::AllocNewPageMayJump(lean_treeid_t tree_id) {
   free_bf->Init(partition.NextPageId());
 
   free_bf->page_.btree_id_ = tree_id;
-  free_bf->page_.psn_++; // mark the page as dirty
+  free_bf->page_.page_version_++; // mark the page as dirty
   LEAN_DLOG("Alloc new page, pageId={}, btreeId={}", free_bf->header_.page_id_,
             free_bf->page_.btree_id_);
   return *free_bf;
@@ -331,7 +331,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
 
     // 4. Intialize the buffer frame header
     LEAN_DCHECK(!bf.header_.is_being_written_back_);
-    bf.header_.flushed_psn_ = bf.page_.psn_;
+    bf.header_.flushed_page_version_ = bf.page_.page_version_;
     bf.header_.state_ = State::kLoaded;
     bf.header_.page_id_ = page_id;
     if (store_->store_option_->enable_buffer_crc_check_) {

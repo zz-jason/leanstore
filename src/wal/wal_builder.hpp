@@ -7,9 +7,9 @@
 #include "leanstore/common/wal_record.h"
 #include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
+#include "leanstore/cpp/wal/wal_serde.hpp"
+#include "leanstore/cpp/wal/wal_traits.hpp"
 #include "leanstore/slice.hpp"
-#include "wal/wal_serde.hpp"
-#include "wal/wal_traits.hpp"
 
 #include <cstdint>
 
@@ -100,7 +100,7 @@ public:
   WalTxBuilder(lean_treeid_t btree_id, lean_wal_size_t payload_size);
 
   WalTxBuilder& SetPageInfo(BufferFrame* bf) {
-    return SetPageInfo(bf->header_.page_id_, bf->page_.psn_);
+    return SetPageInfo(bf->header_.page_id_, bf->page_.page_version_);
   }
 
   WalTxBuilder& SetPageInfo(lean_pid_t page_id, lean_lid_t page_version);
@@ -174,7 +174,7 @@ inline WalSmoBuilder<T>& WalSmoBuilder<T>::SetPageInfo(BufferFrame* bf) {
                 WalRecordTraits<T>::kType == LEAN_WAL_TYPE_SMO_PAGESPLIT_ROOT ||
                 WalRecordTraits<T>::kType == LEAN_WAL_TYPE_SMO_PAGESPLIT_NONROOT) {
     wal_->page_id_ = bf->header_.page_id_;
-    wal_->page_version_ = bf->page_.psn_;
+    wal_->page_version_ = bf->page_.page_version_;
   }
   return *this;
 }
@@ -249,7 +249,7 @@ inline WalBuilder<T>& WalBuilder<T>::SetPageInfo(BufferFrame* bf) {
                 WalRecordTraits<T>::kType == LEAN_WAL_TYPE_REMOVE ||
                 WalRecordTraits<T>::kType == LEAN_WAL_TYPE_UPDATE) {
     wal_->page_id_ = bf->header_.page_id_;
-    wal_->page_version_ = bf->page_.psn_;
+    wal_->page_version_ = bf->page_.page_version_;
   }
   return *this;
 }

@@ -85,12 +85,12 @@ inline void ToJson(leanstore::BufferFrame* bf, utils::JsonObj* json_obj) {
   header_obj.AddBool(kKeepInMemory, bf->header_.keep_in_memory_);
   header_obj.AddInt64(kPageId, bf->header_.page_id_);
   header_obj.AddInt64(kLastWriterWorker, bf->header_.last_writer_worker_);
-  header_obj.AddInt64(kFlushedPsn, bf->header_.flushed_psn_);
+  header_obj.AddInt64(kFlushedPsn, bf->header_.flushed_page_version_);
   header_obj.AddBool(kIsBeingWrittenBack, bf->header_.is_being_written_back_);
 
   // page without payload
   JsonObj page_meta_obj;
-  page_meta_obj.AddInt64(kPsn, bf->page_.psn_);
+  page_meta_obj.AddInt64(kPsn, bf->page_.page_version_);
   page_meta_obj.AddInt64(kBtreeId, bf->page_.btree_id_);
   page_meta_obj.AddInt64(kMagicDebugging, bf->page_.magic_debugging_);
 

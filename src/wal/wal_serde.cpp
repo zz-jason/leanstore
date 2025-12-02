@@ -1,9 +1,10 @@
-#include "wal/wal_serde.hpp"
+#include "leanstore/cpp/wal/wal_serde.hpp"
 
 #include "leanstore/common/wal_record.h"
+#include "leanstore/cpp/wal/wal_cast.hpp"
+#include "leanstore/cpp/wal/wal_traits.hpp"
 #include "leanstore/utils/misc.hpp"
 #include "utils/json.hpp"
-#include "wal/wal_traits.hpp"
 
 #include <cassert>
 #include <string>
@@ -37,11 +38,6 @@ static constexpr auto kPrevWorkerId = "prev_worker";
 static constexpr auto kPrevTxId = "prev_tx";
 static constexpr auto kPrevCmd = "prev_cmd";
 static constexpr auto kXorCmdId = "xor_cmd_id";
-
-template <typename T>
-const T& CastTo(const lean_wal_record& record) {
-  return *reinterpret_cast<const T*>(&record);
-}
 
 } // namespace
 

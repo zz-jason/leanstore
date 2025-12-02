@@ -1,6 +1,6 @@
 #include "wal_analysis.hpp"
 
-#include "wal/parallel_recovery.hpp"
+#include "leanstore/cpp/wal/parallel_recovery.hpp"
 
 #include <tanakh-cmdline/cmdline.h>
 

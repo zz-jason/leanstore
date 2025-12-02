@@ -1,28 +1,46 @@
 # YCSB Benchmark
 
-## Build With RocksDB
-
-1. Add `rocksdb` to `$CMAKE_SOURCE_DIR/vcpkg.json`
-
-2. Build the project:
+## Build && install
 
 ```sh
-cmake --preset=performance
-cmake --build build/performance -j `nproc`
+export LEANSTORE_HOME=`pwd`
+cmake --preset=release_coro
+cmake --build build/release_coro -j `nproc`
+cmake --install build/release_coro
 ```
 
 ## Run YCSB
 
-For convenience, a `ycsb-config.flags` file is provided to configure the YCSB
-benchmark. You can modify the parameters in this file or override them with
-command line arguments according to your needs
-
 ```sh
+export LD_LIBRARY_PATH=$LEANSTORE_HOME/dist/release_coro/lib:$LD_LIBRARY_PATH
+
 # load data
-./build/performance/tools/ycsb/ycsb -flagfile=tools/ycsb/ycsb-config.flags -ycsb_cmd=load
+$LEANSTORE_HOME/dist/release_coro/bin/ycsb \
+    --data_dir=/tmp/leanstore/ycsb \
+    --key_size=16 \
+    --val_size=200 \
+    --record_count=1000000 \
+    --mem_gb=1 \
+    --run_for_seconds=360000 \
+    --target=basickv \
+    --workload=c \
+    --threads=4 \
+    --clients=4 \
+    --cmd=load
 
 # run benchmark
-./build/performance/tools/ycsb/ycsb -flagfile=tools/ycsb/ycsb-config.flags -ycsb_cmd=run
+$LEANSTORE_HOME/dist/release_coro/bin/ycsb \
+    --data_dir=/tmp/leanstore/ycsb \
+    --key_size=16 \
+    --val_size=200 \
+    --record_count=1000000 \
+    --mem_gb=1 \
+    --run_for_seconds=360000 \
+    --target=basickv \
+    --workload=c \
+    --threads=4 \
+    --clients=4 \
+    --cmd=run
 ```
 
 ## Profile
@@ -36,7 +54,7 @@ curl -G "127.0.0.1:8080/profile" > cpu.prof
 View the profile result:
 
 ```sh
-pprof -http 0.0.0.0:4000 build/release/tools/ycsb/ycsb cpu.prof
+pprof -http 0.0.0.0:4000 $LEANSTORE_HOME/dist/release_coro/bin/ycsb cpu.prof
 ```
 
 Then open the browser at **127.0.0.1:4000** to view the cpu profile.

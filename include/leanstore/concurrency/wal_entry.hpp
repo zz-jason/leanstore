@@ -98,7 +98,7 @@ public:
   lean_txid_t tx_id_;
 
   /// Page sequence number of the WalEntry.
-  uint64_t psn_;
+  uint64_t page_version_;
 
   /// The page ID of the WalEntry, used to identify the btree node together with
   /// btree ID
@@ -123,7 +123,7 @@ public:
         size_(size),
         worker_id_(worker_id),
         tx_id_(txid),
-        psn_(psn),
+        page_version_(psn),
         page_id_(page_id),
         tree_id_(tree_id) {
   }

@@ -1,8 +1,9 @@
-#include "wal/parallel_recovery.hpp"
+#include "leanstore/cpp/wal/parallel_recovery.hpp"
 
 #include "leanstore/common/wal_record.h"
 #include "leanstore/cpp/base/optional.hpp"
 #include "leanstore/cpp/base/result.hpp"
+#include "leanstore/cpp/wal/wal_cast.hpp"
 #include "leanstore/cpp/wal/wal_cursor.hpp"
 #include "leanstore/utils/log.hpp"
 
@@ -11,16 +12,6 @@
 #include <vector>
 
 namespace leanstore {
-
-namespace {
-
-/// Casts a generic lean_wal_record to a specific WAL record type T.
-template <typename T>
-T& CastTo(lean_wal_record& record) {
-  return *reinterpret_cast<T*>(&record);
-}
-
-} // namespace
 
 Optional<Error> ParallelRecovery::Run() {
   return std::nullopt;

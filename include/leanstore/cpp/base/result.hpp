@@ -89,7 +89,7 @@ public:
 
   /// Gets the error.
   constexpr E& error() & { // NOLINT: mimicking std::expected
-    LEAN_DCHECK_HAS_VALUE;
+    LEAN_DCHECK_HAS_ERROR;
     return result_.error();
   }
 

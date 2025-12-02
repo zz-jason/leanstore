@@ -26,7 +26,7 @@ void BTreeNode::UpdateHint(uint16_t slot_id) {
 
 void BTreeNode::SearchHint(HeadType key_head, uint16_t& lower_out, uint16_t& upper_out) {
   if (num_slots_ > kHintCount * 2) {
-    if (CoroEnv::CurStore()->store_option_->btree_hints_ == 2) {
+    if (CoroEnv::CurStore().store_option_->btree_hints_ == 2) {
 #ifdef __AVX512F__
       const uint16_t dist = num_slots_ / (kHintCount + 1);
       uint16_t pos, pos2;
@@ -49,7 +49,7 @@ void BTreeNode::SearchHint(HeadType key_head, uint16_t& lower_out, uint16_t& upp
 #else
       Log::Error("Search hint with AVX512 failed: __AVX512F__ not found");
 #endif
-    } else if (CoroEnv::CurStore()->store_option_->btree_hints_ == 1) {
+    } else if (CoroEnv::CurStore().store_option_->btree_hints_ == 1) {
       const uint16_t dist = num_slots_ / (kHintCount + 1);
       uint16_t pos, pos2;
 
