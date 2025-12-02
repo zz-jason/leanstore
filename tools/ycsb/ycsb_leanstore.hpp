@@ -1,5 +1,3 @@
-#include "benchmarks/ycsb/ycsb.hpp"
-#include "benchmarks/ycsb/ycsb_leanstore_client.hpp"
 #include "coroutine/coro_future.hpp"
 #include "coroutine/coro_session.hpp"
 #include "leanstore/btree/basic_kv.hpp"
@@ -15,8 +13,11 @@
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/random_generator.hpp"
 #include "leanstore/utils/scrambled_zipf_generator.hpp"
+#include "tools/ycsb/ycsb.hpp"
+#include "tools/ycsb/ycsb_leanstore_client.hpp"
 #include "utils/scoped_timer.hpp"
 #include "utils/small_vector.hpp"
+#include "ycsb_args.hpp"
 
 #include <gperftools/heap-profiler.h>
 #include <gperftools/profiler.h>
@@ -50,18 +51,19 @@ private:
   bool bench_transaction_kv_;
 
 public:
-  YcsbLeanStore(bool bench_transaction_kv, bool create_from_scratch)
-      : bench_transaction_kv_(bench_transaction_kv) {
+  YcsbLeanStore(const YcsbOptions& options, bool bench_transaction_kv, bool create_from_scratch)
+      : YcsbExecutor(options),
+        bench_transaction_kv_(bench_transaction_kv) {
 
-    auto datadir_str = std::format("{}/{}", FLAGS_ycsb_data_dir, kTableName);
+    auto datadir_str = std::format("{}/{}", options.data_dir_, kTableName);
     lean_store_option* option = lean_store_option_create(datadir_str.c_str());
     option->create_from_scratch_ = create_from_scratch;
     option->enable_eager_gc_ = true;
     option->enable_wal_ = true;
-    option->worker_threads_ = FLAGS_ycsb_threads;
-    option->buffer_pool_size_ = FLAGS_ycsb_mem_gb << 30;
+    option->worker_threads_ = options.threads_;
+    option->buffer_pool_size_ = options.mem_gb_ << 30;
     option->max_concurrent_transaction_per_worker_ =
-        (FLAGS_ycsb_clients + FLAGS_ycsb_threads - 1) / FLAGS_ycsb_threads;
+        (options.clients_ + options.threads_ - 1) / options.threads_;
 
     auto res = LeanStore::Open(option);
     if (!res) {
@@ -75,7 +77,7 @@ public:
     // start metrics http exposer for cpu/mem profiling
     lean_metrics_exposer_start(8080);
     std::cout << std::format("YCSB started, workload={}, threads={}, clients={}",
-                             FLAGS_ycsb_workload, FLAGS_ycsb_threads, FLAGS_ycsb_clients)
+                             options_.workload_, options_.threads_, options_.clients_)
               << std::endl;
   }
 
@@ -131,42 +133,42 @@ public:
 
   void HandleCmdLoad() override {
     auto* table = CreateTable();
-    std::cout << "Inserting " << FLAGS_ycsb_record_count << " values" << std::endl;
+    std::cout << "Inserting " << options_.record_count_ << " values" << std::endl;
 
     // record the start and end time, calculating throughput in the end
     ScopedTimer timer([&](double elapsed_ms) {
       auto elapsed_sec = elapsed_ms / 1000.0;
-      auto ops = FLAGS_ycsb_record_count / elapsed_sec;
+      auto ops = options_.record_count_ / elapsed_sec;
       std::cout << std::format("Inserted values: {}, time_elapsed_sec: {:.2f}, tps: {:.2f}",
-                               FLAGS_ycsb_record_count, elapsed_sec, ops)
+                               options_.record_count_, elapsed_sec, ops)
                 << std::endl;
     });
 
     auto num_workers = store_->store_option_->worker_threads_;
-    auto avg = FLAGS_ycsb_record_count / num_workers;
-    auto rem = FLAGS_ycsb_record_count % num_workers;
+    auto avg = options_.record_count_ / num_workers;
+    auto rem = options_.record_count_ % num_workers;
 
     std::vector<std::shared_ptr<CoroFuture<void>>> futures;
     std::vector<CoroSession*> reserved_sessions;
     for (auto i = 0u, begin = 0u; i < num_workers;) {
       auto end = begin + avg + (rem-- > 0 ? 1 : 0);
       auto insert_func = [&, begin, end]() {
-        SmallBuffer<1024> key_buffer(FLAGS_ycsb_key_size);
-        SmallBuffer<1024> val_buffer(FLAGS_ycsb_val_size);
+        SmallBuffer<1024> key_buffer(options_.key_size_);
+        SmallBuffer<1024> val_buffer(options_.val_size_);
         uint8_t* key = key_buffer.Data();
         uint8_t* val = val_buffer.Data();
 
         for (uint64_t i = begin; i < end; i++) {
           // generate key-value for insert
           GenKey(i, key);
-          utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
+          utils::RandomGenerator::RandString(val, options_.val_size_);
 
           if (bench_transaction_kv_) {
             CoroEnv::CurTxMgr().StartTx();
           }
 
           auto op_code =
-              table->Insert(Slice(key, FLAGS_ycsb_key_size), Slice(val, FLAGS_ycsb_val_size));
+              table->Insert(Slice(key, options_.key_size_), Slice(val, options_.val_size_));
           if (op_code != OpCode::kOK) {
             Log::Fatal("Failed to insert, opCode={}", static_cast<uint8_t>(op_code));
           }
@@ -202,7 +204,7 @@ public:
   }
 
   void HandleCmdRun() override {
-    if (FLAGS_ycsb_clients > 0) {
+    if (options_.clients_ > 0) {
       return CmdRunWithMultiClients();
     }
 
@@ -210,7 +212,7 @@ public:
     auto workload_type = GetWorkloadType();
     auto workload = GetWorkloadSpec(workload_type);
     auto zipf_random =
-        utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count, FLAGS_ycsb_zipf_factor);
+        utils::ScrambledZipfGenerator(0, options_.record_count_, options_.zipf_factor_);
     std::atomic<bool> keep_running = true;
 
     std::vector<lean_perf_counters*> worker_perf_counters;
@@ -223,7 +225,7 @@ public:
     std::vector<CoroSession*> reserved_sessions;
     for (uint64_t worker_id = 0; worker_id < store_->store_option_->worker_threads_; worker_id++) {
       auto job = [&]() {
-        SmallBuffer<1024> key_buffer(FLAGS_ycsb_key_size);
+        SmallBuffer<1024> key_buffer(options_.key_size_);
         uint8_t* key = key_buffer.Data();
 
         std::string val_read;
@@ -236,7 +238,7 @@ public:
         auto* update_desc = UpdateDesc::CreateFrom(update_desc_buf);
         update_desc->num_slots_ = 1;
         update_desc->update_slots_[0].offset_ = 0;
-        update_desc->update_slots_[0].size_ = FLAGS_ycsb_val_size;
+        update_desc->update_slots_[0].size_ = options_.key_size_;
 
         std::string val_gen;
         auto update_call_back = [&](MutableSlice to_update) {
@@ -258,10 +260,10 @@ public:
                 if (bench_transaction_kv_) {
                   CoroEnv::CurTxMgr().StartTx(TxMode::kShortRunning,
                                               IsolationLevel::kSnapshotIsolation, true);
-                  table->Lookup(Slice(key, FLAGS_ycsb_key_size), copy_value);
+                  table->Lookup(Slice(key, options_.key_size_), copy_value);
                   CoroEnv::CurTxMgr().CommitTx();
                 } else {
-                  table->Lookup(Slice(key, FLAGS_ycsb_key_size), copy_value);
+                  table->Lookup(Slice(key, options_.key_size_), copy_value);
                 }
               } else {
                 // generate key for update
@@ -269,11 +271,11 @@ public:
                 // generate val for update
                 if (bench_transaction_kv_) {
                   CoroEnv::CurTxMgr().StartTx();
-                  table->UpdatePartial(Slice(key, FLAGS_ycsb_key_size), update_call_back,
+                  table->UpdatePartial(Slice(key, options_.key_size_), update_call_back,
                                        *update_desc);
                   CoroEnv::CurTxMgr().CommitTx();
                 } else {
-                  table->UpdatePartial(Slice(key, FLAGS_ycsb_key_size), update_call_back,
+                  table->UpdatePartial(Slice(key, options_.key_size_), update_call_back,
                                        *update_desc);
                 }
               }
@@ -342,7 +344,7 @@ public:
     });
 
     uint64_t report_period = 1;
-    for (uint64_t i = 0; i < FLAGS_ycsb_run_for_seconds; i += report_period) {
+    for (uint64_t i = 0; i < options_.run_for_seconds_; i += report_period) {
       sleep(report_period);
 
       uint64_t tx_committed = 0;
@@ -371,16 +373,16 @@ public:
   }
 
   void CmdRunWithMultiClients() {
-    Log::Info("Running YCSB with {} clients", FLAGS_ycsb_clients);
+    Log::Info("Running YCSB with {} clients", options_.clients_);
     // collect perf counters
     auto all_perf_counters = GetPerfCounters();
 
     // create && start clients
-    Log::Info("Starting YCSB clients, num_clients={}", FLAGS_ycsb_clients);
+    Log::Info("Starting YCSB clients, num_clients={}", options_.clients_);
     std::vector<std::unique_ptr<YcsbLeanStoreClient>> clients;
-    for (auto i = 0u; i < FLAGS_ycsb_clients; i++) {
-      clients.emplace_back(YcsbLeanStoreClient::New(store_.get(), GetTable(), GetWorkloadType(),
-                                                    bench_transaction_kv_));
+    for (auto i = 0u; i < options_.clients_; i++) {
+      clients.emplace_back(YcsbLeanStoreClient::New(options_, store_.get(), GetTable(),
+                                                    GetWorkloadType(), bench_transaction_kv_));
     }
     for (auto& client : clients) {
       client->Start();
@@ -388,7 +390,7 @@ public:
 
     // report tps
     auto report_period = 1u;
-    for (auto i = 0u; i < FLAGS_ycsb_run_for_seconds; i += report_period) {
+    for (auto i = 0u; i < options_.run_for_seconds_; i += report_period) {
       sleep(report_period);
       uint64_t tx_committed = 0;
       uint64_t tx_aborted = 0;
@@ -406,7 +408,7 @@ public:
   }
 
   Workload GetWorkloadType() const {
-    return static_cast<Workload>(FLAGS_ycsb_workload[0] - 'a');
+    return static_cast<Workload>(options_.workload_[0] - 'a');
   }
 
   std::vector<lean_perf_counters*> GetPerfCounters() {

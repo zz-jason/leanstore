@@ -1,4 +1,3 @@
-#include "benchmarks/ycsb/ycsb.hpp"
 #include "coroutine/coro_session.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
@@ -12,10 +11,9 @@
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/random_generator.hpp"
 #include "leanstore/utils/scrambled_zipf_generator.hpp"
+#include "tools/ycsb/ycsb.hpp"
 #include "utils/small_vector.hpp"
-
-#include <gflags/gflags.h>
-#include <gflags/gflags_declare.h>
+#include "ycsb_args.hpp"
 
 #include <atomic>
 #include <cassert>
@@ -35,12 +33,12 @@ public:
   static constexpr auto kThreadNamePattern = "ycsb_cli_{}";
   inline static std::atomic<uint64_t> s_client_id_counter = 0;
 
-  static std::unique_ptr<YcsbLeanStoreClient> New(LeanStore* store, KVInterface* btree,
-                                                  Workload workload_type,
+  static std::unique_ptr<YcsbLeanStoreClient> New(const YcsbOptions& options, LeanStore* store,
+                                                  KVInterface* btree, Workload workload_type,
                                                   bool bench_transaction_kv) {
     assert(btree != nullptr && "BTree must not be null");
-    auto* client = new YcsbLeanStoreClient(s_client_id_counter++, store, btree, workload_type,
-                                           bench_transaction_kv);
+    auto* client = new YcsbLeanStoreClient(options, s_client_id_counter++, store, btree,
+                                           workload_type, bench_transaction_kv);
     return std::unique_ptr<YcsbLeanStoreClient>(client);
   }
 
@@ -51,9 +49,10 @@ public:
   }
 
 protected:
-  YcsbLeanStoreClient(uint64_t client_id, LeanStore* store, KVInterface* btree,
-                      Workload workload_type, bool bench_transaction_kv)
+  YcsbLeanStoreClient(const YcsbOptions& options, uint64_t client_id, LeanStore* store,
+                      KVInterface* btree, Workload workload_type, bool bench_transaction_kv)
       : utils::ManagedThread(nullptr, std::format(kThreadNamePattern, client_id)),
+        options_(options),
         client_id_(client_id),
         store_(store),
         btree_(btree),
@@ -62,7 +61,7 @@ protected:
     update_desc_ = UpdateDesc::CreateFrom(update_desc_buffer_.Data());
     update_desc_->num_slots_ = 1;
     update_desc_->update_slots_[0].offset_ = 0;
-    update_desc_->update_slots_[0].size_ = FLAGS_ycsb_val_size;
+    update_desc_->update_slots_[0].size_ = options_.val_size_;
 
 #ifdef ENABLE_COROUTINE
     coro_session_ = store_->GetCoroScheduler()->TryReserveCoroSession(
@@ -103,16 +102,16 @@ protected:
 
   std::function<void()> NewLookupJob() {
     return [this]() {
-      SmallBuffer<1024> key_buffer(FLAGS_ycsb_key_size);
+      SmallBuffer<1024> key_buffer(options_.key_size_);
       uint8_t* key = key_buffer.Data();
       GenYcsbKey(zipf_random_, key);
 
       if (bench_transaction_kv_) {
         CoroEnv::CurTxMgr().StartTx();
-        btree_->Lookup(Slice(key, FLAGS_ycsb_key_size), copy_value_);
+        btree_->Lookup(Slice(key, options_.key_size_), copy_value_);
         CoroEnv::CurTxMgr().CommitTx();
       } else {
-        btree_->Lookup(Slice(key, FLAGS_ycsb_key_size), copy_value_);
+        btree_->Lookup(Slice(key, options_.key_size_), copy_value_);
       }
 
       lean_current_perf_counters()->tx_committed_++;
@@ -121,16 +120,16 @@ protected:
 
   std::function<void()> NewUpdateJob() {
     return [this]() {
-      SmallBuffer<1024> key_buffer(FLAGS_ycsb_key_size);
+      SmallBuffer<1024> key_buffer(options_.key_size_);
       uint8_t* key = key_buffer.Data();
       GenYcsbKey(zipf_random_, key);
 
       if (bench_transaction_kv_) {
         CoroEnv::CurTxMgr().StartTx();
-        btree_->UpdatePartial(Slice(key, FLAGS_ycsb_key_size), update_callback_, *update_desc_);
+        btree_->UpdatePartial(Slice(key, options_.key_size_), update_callback_, *update_desc_);
         CoroEnv::CurTxMgr().CommitTx();
       } else {
-        btree_->UpdatePartial(Slice(key, FLAGS_ycsb_key_size), update_callback_, *update_desc_);
+        btree_->UpdatePartial(Slice(key, options_.key_size_), update_callback_, *update_desc_);
       }
 
       lean_current_perf_counters()->tx_committed_++;
@@ -144,10 +143,12 @@ protected:
   void GenKey(uint64_t key, uint8_t* key_buf) {
     auto key_str = std::to_string(key);
     auto prefix_size =
-        FLAGS_ycsb_key_size - key_str.size() > 0 ? FLAGS_ycsb_key_size - key_str.size() : 0;
+        options_.key_size_ - key_str.size() > 0 ? options_.key_size_ - key_str.size() : 0;
     std::memset(key_buf, 'k', prefix_size);
     std::memcpy(key_buf + prefix_size, key_str.data(), key_str.size());
   }
+
+  const YcsbOptions& options_;
 
   uint64_t client_id_;
 
@@ -161,7 +162,7 @@ protected:
 
   Workload workload_type_ = Workload::kA;
 
-  utils::ScrambledZipfGenerator zipf_random_{0, FLAGS_ycsb_record_count, FLAGS_ycsb_zipf_factor};
+  utils::ScrambledZipfGenerator zipf_random_{0, options_.record_count_, options_.zipf_factor_};
 
   std::string val_read_;
 

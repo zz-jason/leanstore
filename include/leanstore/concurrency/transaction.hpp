@@ -99,7 +99,7 @@ public:
     state_ = TxState::kStarted;
     tx_mode_ = mode;
     tx_isolation_level_ = level;
-    is_durable_ = CoroEnv::CurStore()->store_option_->enable_wal_;
+    is_durable_ = CoroEnv::CurStore().store_option_->enable_wal_;
   }
 
   /// Check whether a user transaction with remote dependencies can be committed.

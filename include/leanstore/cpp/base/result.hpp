@@ -7,6 +7,14 @@
 
 namespace leanstore {
 
+#ifdef DEBUG
+#define LEAN_DCHECK_HAS_VALUE assert(has_value() && "No value present in Result");
+#define LEAN_DCHECK_HAS_ERROR assert(!has_value() && "No error present in Result");
+#else
+#define LEAN_DCHECK_HAS_VALUE
+#define LEAN_DCHECK_HAS_ERROR
+#endif
+
 template <typename T>
 struct ResultStorageType {
   using type = T;
@@ -20,7 +28,7 @@ struct ResultStorageType<void> {
 /// A Result type that encapsulates either a value of type T or an Error.
 /// All APIs are mimicked after std::expected.
 template <typename T, typename E = Error>
-class Result {
+class [[nodiscard]] Result {
 public:
   /// Actual underlying std::expected type.
   using storage_t = typename ResultStorageType<T>::type;
@@ -68,48 +76,26 @@ public:
   }
 
   /// Gets the value.
-  /// Asserts if there is no value present in debug mode.
   constexpr storage_t& value() & { // NOLINT: mimicking std::expected
-#ifdef DEBUG
-    if (!has_value()) {
-      assert(false && "No value present in Result");
-    }
-#endif
+    LEAN_DCHECK_HAS_VALUE;
     return result_.value();
   }
 
   /// Gets the value (const version).
-  /// Asserts if there is no value present in debug mode.
-  const constexpr storage_t& value() const& { // NOLINT: mimicking std::expected
-#ifdef DEBUG
-    if (!has_value()) {
-      assert(false && "No value present in Result");
-    }
-#endif
-
+  constexpr const storage_t& value() const& { // NOLINT: mimicking std::expected
+    LEAN_DCHECK_HAS_VALUE;
     return result_.value();
   }
 
   /// Gets the error.
-  /// Asserts if there is a value present in debug mode.
   constexpr E& error() & { // NOLINT: mimicking std::expected
-#ifdef DEBUG
-    if (has_value()) {
-      assert(false && "No error present in Result");
-    }
-#endif
-
+    LEAN_DCHECK_HAS_ERROR;
     return result_.error();
   }
 
   /// Gets the error (const version).
-  const constexpr E& error() const& { // NOLINT: mimicking std::expected
-#ifdef DEBUG
-    if (has_value()) {
-      assert(false && "No error present in Result");
-    }
-#endif
-
+  constexpr const E& error() const& { // NOLINT: mimicking std::expected
+    LEAN_DCHECK_HAS_ERROR
     return result_.error();
   }
 
@@ -117,5 +103,8 @@ private:
   /// The underlying std::expected instance.
   result_t result_;
 };
+
+#undef LEAN_DCHECK_HAS_VALUE
+#undef LEAN_DCHECK_HAS_ERROR
 
 } // namespace leanstore

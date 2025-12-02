@@ -18,6 +18,7 @@
 
 #include <atomic>
 #include <format>
+#include <optional>
 #include <set>
 
 namespace leanstore {
@@ -100,11 +101,11 @@ lean_txid_t CommitTree::Lcb(lean_txid_t start_ts) {
   }
 }
 
-std::optional<std::pair<lean_txid_t, lean_txid_t>> CommitTree::LcbUnlocked(lean_txid_t start_ts) {
+Optional<std::pair<lean_txid_t, lean_txid_t>> CommitTree::LcbUnlocked(lean_txid_t start_ts) {
   auto comp = [&](const auto& pair, lean_txid_t start_ts) { return start_ts > pair.first; };
   auto it = std::lower_bound(commit_log_.begin(), commit_log_.end(), start_ts, comp);
   if (it == commit_log_.begin()) {
-    return {};
+    return std::nullopt;
   }
   it--;
   LEAN_DCHECK(it->second < start_ts);

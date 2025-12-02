@@ -75,9 +75,9 @@ public:
   /// SIGMOD 2020" for details.
   lean_wid_t last_writer_worker_ = kInvalidWorkerId;
 
-  /// The flushed page sequence number of the containing page. Initialized when
-  /// the containing page is loaded from disk.
-  uint64_t flushed_psn_ = 0;
+  /// The flushed page version of the containing page. Initialized when the
+  /// containing page is loaded from disk.
+  uint64_t flushed_page_version_ = 0;
 
   /// Whether the containing page is being written back to disk.
   std::atomic<bool> is_being_written_back_ = false;
@@ -101,7 +101,7 @@ public:
 
     page_id_ = kInvalidPageId;
     last_writer_worker_ = kInvalidWorkerId;
-    flushed_psn_ = 0;
+    flushed_page_version_ = 0;
     is_being_written_back_.store(false, std::memory_order_release);
     contention_stats_.Reset();
     crc_ = 0;
@@ -134,9 +134,9 @@ public:
   /// Short for "system transaction id", increased when a system transaction modifies the page.
   uint64_t sys_tx_id_ = 0;
 
-  /// Short for "page sequence number", increased when a page is modified by any user or system
-  /// transaction. A page is "dirty" when page_.psn_ > header_.flushed_psn_.
-  uint64_t psn_ = 0;
+  /// Short for "page version", increased when a page is modified by any user or system
+  /// transaction. A page is "dirty" when page_.page_version_ > header_.flushed_page_version_.
+  uint64_t page_version_ = 0;
 
   /// The btree ID it belongs to.
   lean_treeid_t btree_id_ = std::numeric_limits<lean_treeid_t>::max();
@@ -149,7 +149,7 @@ public:
 
 public:
   uint64_t CRC() {
-    return utils::CRC(payload_, CoroEnv::CurStore()->store_option_->page_size_ - sizeof(Page));
+    return utils::CRC(payload_, CoroEnv::CurStore().store_option_->page_size_ - sizeof(Page));
   }
 };
 
@@ -181,7 +181,7 @@ public:
   }
 
   bool IsDirty() const {
-    return page_.psn_ != header_.flushed_psn_;
+    return page_.page_version_ > header_.flushed_page_version_;
   }
 
   bool IsFree() const {
@@ -197,10 +197,10 @@ public:
     LEAN_DCHECK(header_.state_ == State::kFree);
     header_.page_id_ = page_id;
     header_.state_ = State::kHot;
-    header_.flushed_psn_ = 0;
+    header_.flushed_page_version_ = 0;
 
     page_.sys_tx_id_ = 0;
-    page_.psn_ = 0;
+    page_.page_version_ = 0;
   }
 
   // Pre: bf is exclusively locked

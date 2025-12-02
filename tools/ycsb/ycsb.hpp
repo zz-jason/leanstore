@@ -2,9 +2,7 @@
 
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/scrambled_zipf_generator.hpp"
-
-#include <gflags/gflags.h>
-#include <gflags/gflags_declare.h>
+#include "ycsb_args.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -16,22 +14,6 @@
 #include <vector>
 
 #include <unistd.h>
-
-// For the benchmark driver
-DECLARE_string(ycsb_target);
-DECLARE_string(ycsb_cmd);
-DECLARE_string(ycsb_workload);
-DECLARE_uint32(ycsb_threads);
-DECLARE_uint32(ycsb_clients);
-DECLARE_uint64(ycsb_mem_gb);
-DECLARE_uint64(ycsb_run_for_seconds);
-
-// For the data preparation
-DECLARE_string(ycsb_data_dir);
-DECLARE_uint64(ycsb_key_size);
-DECLARE_uint64(ycsb_val_size);
-DECLARE_uint64(ycsb_record_count);
-DECLARE_double(ycsb_zipf_factor);
 
 namespace leanstore::ycsb {
 
@@ -59,6 +41,8 @@ struct WorkloadSpec {
 
 class YcsbExecutor {
 public:
+  YcsbExecutor(const YcsbOptions& options) : options_(options) {
+  }
   virtual ~YcsbExecutor() = default;
 
   virtual void HandleCmdLoad() {
@@ -96,6 +80,18 @@ protected:
               << std::endl;
   }
 
+  void GenKey(uint64_t key, uint8_t* key_buf) {
+    auto key_str = std::to_string(key);
+    auto prefix_size =
+        options_.key_size_ - key_str.size() > 0 ? options_.key_size_ - key_str.size() : 0;
+    std::memset(key_buf, 'k', prefix_size);
+    std::memcpy(key_buf + prefix_size, key_str.data(), key_str.size());
+  }
+
+  void GenYcsbKey(utils::ScrambledZipfGenerator& zipf_random, uint8_t* key_buf) {
+    GenKey(zipf_random.rand(), key_buf);
+  }
+
   std::string FormatWithSpaces(uint64_t n) {
     std::string num = std::to_string(n);
     int len = num.length();
@@ -112,6 +108,8 @@ protected:
     }
     return oss.str();
   }
+
+  const YcsbOptions options_;
 };
 
 // Generate workload spec from workload type
@@ -141,18 +139,6 @@ inline double CalculateTps(std::chrono::high_resolution_clock::time_point begin,
   // calculate secondas elaspsed
   auto sec = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / 1000.0;
   return num_operations / sec;
-}
-
-inline void GenKey(uint64_t key, uint8_t* key_buf) {
-  auto key_str = std::to_string(key);
-  auto prefix_size =
-      FLAGS_ycsb_key_size - key_str.size() > 0 ? FLAGS_ycsb_key_size - key_str.size() : 0;
-  std::memset(key_buf, 'k', prefix_size);
-  std::memcpy(key_buf + prefix_size, key_str.data(), key_str.size());
-}
-
-inline void GenYcsbKey(utils::ScrambledZipfGenerator& zipf_random, uint8_t* key_buf) {
-  GenKey(zipf_random.rand(), key_buf);
 }
 
 } // namespace leanstore::ycsb

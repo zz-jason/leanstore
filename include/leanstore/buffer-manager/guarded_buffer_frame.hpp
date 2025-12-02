@@ -144,7 +144,7 @@ public:
   /// Mark the page as dirty after modification by a user or system transaction.
   void MarkPageAsDirty() {
     LEAN_DCHECK(bf_ != nullptr);
-    bf_->page_.psn_++;
+    bf_->page_.page_version_++;
   }
 
   /// Sync the system transaction id to the page. Page system transaction id is updated during the

@@ -25,7 +25,7 @@ BinPackArguments: true
 AllowAllArgumentsOnNextLine: true
 AlignAfterOpenBracket: Align
 QualifierAlignment: Custom
-QualifierOrder: ['inline', 'static', 'const', 'constexpr', 'volatile', 'type']
+QualifierOrder: ['inline', 'static', 'constexpr', 'const', 'volatile', 'type']
 
 # include headers
 IncludeCategories:
@@ -35,7 +35,7 @@ IncludeCategories:
     Priority:        2
   - Regex:           '^("|<)(benchmark)/'
     Priority:        3
-  - Regex:           '^("|<)(concurrentqueue|cpptrace|boost|gtest|gmock|gflags|spdlog|glog|rapidjson|rocksdb|gperftools|crc32c|prometheus)/'
+  - Regex:           '^("|<)(tanakh-cmdline|concurrentqueue|cpptrace|boost|gtest|gmock|spdlog|glog|rapidjson|rocksdb|gperftools|crc32c|prometheus)/'
     Priority:        4
   - Regex:           '^("|<)(httplib)'
     Priority:        4

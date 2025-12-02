@@ -474,7 +474,7 @@ public:
   }
 
   static uint16_t Size() {
-    return static_cast<uint16_t>(CoroEnv::CurStore()->store_option_->page_size_ - sizeof(Page));
+    return static_cast<uint16_t>(CoroEnv::CurStore().store_option_->page_size_ - sizeof(Page));
   }
 
   static uint16_t UnderFullSize() {
@@ -553,7 +553,7 @@ inline int16_t BTreeNode::LowerBound(Slice key, bool* is_equal) {
   SearchHint(key_head, lower, upper);
   while (lower < upper) {
     bool found_equal(false);
-    if (CoroEnv::CurStore()->store_option_->enable_head_optimization_) {
+    if (CoroEnv::CurStore().store_option_->enable_head_optimization_) {
       found_equal = ShrinkSearchRangeWithHead(lower, upper, key, key_head);
     } else {
       found_equal = ShrinkSearchRange(lower, upper, key);

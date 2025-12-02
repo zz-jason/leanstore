@@ -16,14 +16,14 @@ class Error;
 /// To add a new error code, simply add a new line in this macro with the
 /// format, all the other code will be generated automatically.
 #define LEAN_ERROR_CODE_LIST(ACTION)                                                               \
-  ACTION(General, 1, "{}")                                                                         \
-  ACTION(FileOpen, 2, "Open file failed, file={}, errno={}, strerror={}")                          \
-  ACTION(FileClose, 3, "Close file failed, file={}, errno={}, strerror={}")                        \
-  ACTION(FileSeek, 4, "Seek file failed, file={}, errno={}, strerror={}")                          \
-  ACTION(FileRead, 5, "Read file failed, file={}, errno={}, strerror={}")                          \
-  ACTION(FileWrite, 6, "Write file failed, file={}, errno={}, strerror={}")                        \
-  ACTION(FileFsync, 7, "Fsync file failed, file={}, errno={}, strerror={}")                        \
-  ACTION(Aio, 100, "AIO operation failed, operation={}, errno={}, strerror={}")
+  ACTION(General, 001, "{}")                                                                       \
+  ACTION(Aio, 010, "AIO operation failed, operation={}, errno={}, strerror={}")                    \
+  ACTION(FileOpen, 100, "Open file failed, file={}, errno={}, strerror={}")                        \
+  ACTION(FileClose, 101, "Close file failed, file={}, errno={}, strerror={}")                      \
+  ACTION(FileSeek, 102, "Seek file failed, file={}, errno={}, strerror={}")                        \
+  ACTION(FileRead, 103, "Read file failed, file={}, errno={}, strerror={}")                        \
+  ACTION(FileWrite, 104, "Write file failed, file={}, errno={}, strerror={}")                      \
+  ACTION(FileFsync, 105, "Fsync file failed, file={}, errno={}, strerror={}")
 
 #define LEAN_ERROR_CODE(ename) k##ename
 
@@ -76,8 +76,8 @@ public:
   }
 
   /// Stream output operator for Error.
-  std::ostream& operator<<(std::ostream& os) const {
-    return os << ToString();
+  friend std::ostream& operator<<(std::ostream& os, const Error& error) {
+    return os << error.ToString();
   }
 
   /// Equality operator for Error.
@@ -112,7 +112,7 @@ private:
   Code code_;              // error code.
   std::string message_;    // error message.
   std::string stacktrace_; // stack trace at error creation.
-}; // namespace leanstore
+};
 
 #undef LEAN_ERROR_CODE_LIST
 #undef LEAN_ERROR_CODE

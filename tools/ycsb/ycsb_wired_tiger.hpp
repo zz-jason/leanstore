@@ -1,10 +1,13 @@
 #pragma once
 
+#include "leanstore/common/utils.h"
 #include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/parallelize.hpp"
 #include "leanstore/utils/random_generator.hpp"
+#include "utils/small_vector.hpp"
 #include "ycsb.hpp"
+#include "ycsb_args.hpp"
 
 #include <chrono>
 #include <cstring>
@@ -25,7 +28,7 @@ class YcsbWiredTiger : public YcsbExecutor {
 #ifdef ENABLE_WIRED_TIGER
 
 public:
-  YcsbWiredTiger() : conn_(nullptr) {
+  YcsbWiredTiger(const YcsbOptions& options) : YcsbExecutor(options), conn_(nullptr) {
     lean_metrics_exposer_start(8080);
   }
 
@@ -36,14 +39,13 @@ public:
   void HandleCmdLoad() override {
     open_wired_tiger(true);
 
-    // load data with FLAGS_ycsb_threads
     auto start = std::chrono::high_resolution_clock::now();
-    std::cout << "Inserting " << FLAGS_ycsb_record_count << " values" << std::endl;
+    std::cout << "Inserting " << options_.record_count_ << " values" << std::endl;
     SCOPED_DEFER({
       auto end = std::chrono::high_resolution_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
       std::cout << "Done inserting" << ", time elapsed: " << duration / 1000000.0 << " seconds"
-                << ", throughput: " << CalculateTps(start, end, FLAGS_ycsb_record_count) << " tps"
+                << ", throughput: " << CalculateTps(start, end, options_.record_count_) << " tps"
                 << std::endl;
     });
 
@@ -57,27 +59,29 @@ public:
 
     // insert data in parallel
     utils::Parallelize::Range(
-        FLAGS_ycsb_threads, FLAGS_ycsb_record_count,
+        options_.threads_, options_.record_count_,
         [&](uint64_t thread_id [[maybe_unused]], uint64_t begin, uint64_t end) {
           // session and cursor for each thread
           WT_SESSION* session = open_session("isolation=snapshot");
           WT_CURSOR* cursor = open_cursor(session, table_name);
 
           // key value buf
-          uint8_t key[FLAGS_ycsb_key_size];
+          SmallBuffer256 key_buffer(options_.key_size_);
+          auto* key = key_buffer.Data();
           WT_ITEM key_item;
           key_item.data = key;
-          key_item.size = FLAGS_ycsb_key_size;
+          key_item.size = options_.key_size_;
 
-          uint8_t val[FLAGS_ycsb_val_size];
+          SmallBuffer256 val_buffer(options_.val_size_);
+          auto* val = val_buffer.Data();
           WT_ITEM val_item;
           val_item.data = val;
-          val_item.size = FLAGS_ycsb_val_size;
+          val_item.size = options_.val_size_;
 
           for (uint64_t i = begin; i < end; i++) {
             // generate key-value for insert
             GenKey(i, key);
-            utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
+            utils::RandomGenerator::RandString(val, options_.val_size_);
 
             // insert into wiredtiger
             cursor->set_key(cursor, &key_item);
@@ -93,17 +97,16 @@ public:
   void HandleCmdRun() override {
     open_wired_tiger(false);
 
-    // Run the benchmark in FLAGS_ycsb_threads
-    auto workload_type = static_cast<Workload>(FLAGS_ycsb_workload[0] - 'a');
+    auto workload_type = static_cast<Workload>(options_.workload_[0] - 'a');
     auto workload = GetWorkloadSpec(workload_type);
     auto zipf_random =
-        utils::ScrambledZipfGenerator(0, FLAGS_ycsb_record_count, FLAGS_ycsb_zipf_factor);
+        utils::ScrambledZipfGenerator(0, options_.record_count_, options_.zipf_factor_);
     std::atomic<bool> keep_running = true;
-    std::vector<std::atomic<uint64_t>> thread_committed(FLAGS_ycsb_threads);
-    std::vector<std::atomic<uint64_t>> thread_aborted(FLAGS_ycsb_threads);
+    std::vector<std::atomic<uint64_t>> thread_committed(options_.threads_);
+    std::vector<std::atomic<uint64_t>> thread_aborted(options_.threads_);
 
     std::vector<std::thread> threads;
-    for (uint64_t worker_id = 0; worker_id < FLAGS_ycsb_threads; worker_id++) {
+    for (uint64_t worker_id = 0; worker_id < options_.threads_; worker_id++) {
       threads.emplace_back(
           [&](uint64_t thread_id) {
             // session and cursor
@@ -111,16 +114,18 @@ public:
             WT_CURSOR* cursor = open_cursor(session, "table:ycsb");
 
             // key buffer
-            uint8_t key[FLAGS_ycsb_key_size];
+            SmallBuffer256 key_buffer(options_.key_size_);
+            auto* key = key_buffer.Data();
             WT_ITEM key_item;
             key_item.data = key;
-            key_item.size = FLAGS_ycsb_key_size;
+            key_item.size = options_.key_size_;
 
             // val buffer
-            uint8_t val[FLAGS_ycsb_val_size];
+            SmallBuffer256 val_buffer(options_.val_size_);
+            auto* val = val_buffer.Data();
             WT_ITEM val_item;
             val_item.data = val;
-            val_item.size = FLAGS_ycsb_val_size;
+            val_item.size = options_.val_size_;
 
             while (keep_running) {
               switch (workload_type) {
@@ -144,7 +149,7 @@ public:
                 } else {
                   // generate key val for update
                   GenYcsbKey(zipf_random, key);
-                  utils::RandomGenerator::RandString(val, FLAGS_ycsb_val_size);
+                  utils::RandomGenerator::RandString(val, options_.val_size_);
 
                   cursor->set_key(cursor, &key_item);
                   cursor->set_value(cursor, &val_item);
@@ -173,7 +178,7 @@ public:
       a = 0;
     }
 
-    PrintTpsSummary(1, FLAGS_ycsb_run_for_seconds, FLAGS_ycsb_threads, thread_committed,
+    PrintTpsSummary(1, options_.run_for_seconds_, options_.threads_, thread_committed,
                     thread_aborted);
 
     keep_running.store(false);
@@ -185,7 +190,7 @@ public:
 private:
   /// open wiredtiger
   void open_wired_tiger(bool create_from_scratch = true) {
-    std::string data_dir = FLAGS_ycsb_data_dir + "/wiredtiger";
+    std::string data_dir = options_.data_dir_ + "/wiredtiger";
 
     if (create_from_scratch) {
       // remove the existing data
@@ -199,7 +204,7 @@ private:
         "create, direct_io=[data, log, checkpoint], "
         "log=(enabled=true,archive=true), statistics_log=(wait=1), "
         "statistics=(all, clear), session_max=2000, eviction=(threads_max=4), cache_size=" +
-        std::to_string(FLAGS_ycsb_mem_gb * 1024) + "M");
+        std::to_string(options_.mem_gb_ * 1024) + "M");
     int ret = wiredtiger_open(data_dir.c_str(), nullptr, config_string.c_str(), &conn_);
     if (ret != 0) {
       Log::Fatal("Failed to open wiredtiger: {}", wiredtiger_strerror(ret));

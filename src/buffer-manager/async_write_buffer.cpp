@@ -51,7 +51,7 @@ void AsyncWriteBuffer::IterateFlushedBfs(
                        reinterpret_cast<uint64_t>(write_buffer_.Get())) /
                       page_size_;
     auto* flushed_page = reinterpret_cast<Page*>(GetWriteBuffer(slot));
-    auto flushed_psn = flushed_page->psn_;
+    auto flushed_psn = flushed_page->page_version_;
     auto* flushed_bf = write_commands_[slot].bf_;
     callback(*const_cast<BufferFrame*>(flushed_bf), flushed_psn);
   }

@@ -21,7 +21,12 @@ namespace leanstore {
 bool Recovery::Run() {
   bool error(false);
 
-  Analysis();
+  auto res = Analysis();
+  if (!res) {
+    Log::Error("Recovery analysis phase failed: {}", res.error().ToString());
+    return true;
+  }
+
   Log::Info("[Recovery] resolved page size: {}", resolved_pages_.size());
   for (auto it = resolved_pages_.begin(); it != resolved_pages_.end(); ++it) {
     if (it->second->IsFree()) {
@@ -44,7 +49,11 @@ bool Recovery::Run() {
     LEAN_DLOG("Dirty page table after analysis, pageId: {}, offset: {}", it->first, it->second);
   }
 
-  Redo();
+  res = Redo();
+  if (!res) {
+    Log::Error("Recovery redo phase failed: {}", res.error().ToString());
+    return true;
+  }
 
   Undo();
 
@@ -85,7 +94,7 @@ Result<void> Recovery::Analysis() {
       auto* wal = reinterpret_cast<WalEntryComplex*>(wal_entry_ptr);
       active_tx_table_[wal->tx_id_] = offset;
       auto& bf = ResolvePage(wal->page_id_);
-      if (wal->psn_ >= bf.page_.psn_ &&
+      if (wal->page_version_ >= bf.page_.page_version_ &&
           dirty_page_table_.find(wal->page_id_) == dirty_page_table_.end()) {
         // record the first WalEntry that makes the page dirty
         auto page_id = wal->page_id_;

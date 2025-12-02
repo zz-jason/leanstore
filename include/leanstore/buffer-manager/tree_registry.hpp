@@ -242,9 +242,6 @@ public:
   }
 
   /// Undo the changes of the given wal record on the target tree.
-  ///
-  /// TODO: refactor the transaction undo process to work directly on the target
-  ///       page, and abandon the current indirection via tree registry.
   void Undo(lean_treeid_t tree_id, const lean_wal_record* record) {
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {

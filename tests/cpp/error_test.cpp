@@ -28,11 +28,10 @@ TEST_F(ErrorTest, CreateAndCompareErrors) {
   ASSERT_EQ(err4.GetCode(), static_cast<int64_t>(Error::Code::kGeneral));
 
   // Test string representation
-  std::string expected_msg =
-      "[ERR-005] Read file failed, file=file1.path, errno=42, strerror=I/O error";
+  std::string expected_msg = "Read file failed, file=file1.path, errno=42, strerror=I/O error";
   auto err_str = err1.ToString();
   // ASSERT_EQ(err_str, "");
-  ASSERT_TRUE(err_str.starts_with(expected_msg));
+  ASSERT_TRUE(err_str.contains(expected_msg));
   ASSERT_TRUE(err_str.contains("Stack trace"));
 }
 

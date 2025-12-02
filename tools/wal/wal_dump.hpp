@@ -2,6 +2,8 @@
 
 #include "leanstore/common/wal_record.h"
 
+#include <tanakh-cmdline/cmdline.h>
+
 #include <cassert>
 #include <string>
 #include <string_view>
@@ -10,7 +12,7 @@ namespace leanstore {
 
 /// Wal command line tool, currently only supports reading wal files and
 /// printing their contents in human-readable format.
-class WalPrinter {
+class WalDump {
 public:
   /// WAL print format
   enum class Format : uint8_t {
@@ -21,7 +23,7 @@ public:
   };
 
   /// Constructor
-  WalPrinter(std::string_view wal_path, std::string_view format)
+  WalDump(std::string_view wal_path, std::string_view format)
       : wal_path_(wal_path),
         print_format_(FormatFromString(format)) {
     assert(!wal_path_.empty() && "WAL path is required");
@@ -36,9 +38,7 @@ private:
   static Format FormatFromString(std::string_view format);
 
   /// Print a WAL record
-  static std::string FormatWalRecord(const lean_wal_record* record, Format format);
-
-  static std::string FormatWalRecordAsText(const lean_wal_record* record);
+  static std::string FormatWalRecord(const lean_wal_record& record, Format format);
 
   /// Path to the WAL file
   std::string wal_path_;

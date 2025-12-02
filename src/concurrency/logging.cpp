@@ -4,10 +4,10 @@
 #include "coroutine/coro_io.hpp"
 #include "leanstore/common/wal_record.h"
 #include "leanstore/concurrency/tx_manager.hpp"
+#include "leanstore/cpp/wal/wal_traits.hpp"
 #include "leanstore/utils/log.hpp"
 #include "leanstore/utils/misc.hpp"
 #include "wal/wal_builder.hpp"
-#include "wal/wal_traits.hpp"
 
 #include <cassert>
 #include <cstring>

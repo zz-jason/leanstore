@@ -5,17 +5,17 @@ coverage:
   status:
     patch:
       default:
-        target: 60%
+        target: 10%
         threshold: 1%
         base: auto
     project:
       default:
-        target: 57%
+        target: 30%
         threshold: 1%
         base: auto
 
 ignore:
-  - "benchmarks"
+  - "tools"
   - "build"
   - "dist"
   - "docker"

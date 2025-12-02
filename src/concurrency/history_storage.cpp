@@ -131,13 +131,13 @@ void HistoryStorage::PurgeVersions(lean_txid_t from_tx_id, lean_txid_t to_tx_id,
                                    RemoveVersionCallback on_remove_version,
                                    [[maybe_unused]] const uint64_t limit) {
   auto key_size = sizeof(to_tx_id);
-  SmallBuffer256 key_buffer_holder(CoroEnv::CurStore()->store_option_->page_size_);
+  SmallBuffer256 key_buffer_holder(CoroEnv::CurStore().store_option_->page_size_);
   auto* key_buffer = key_buffer_holder.Data();
 
   utils::Fold(key_buffer, from_tx_id);
   Slice key(key_buffer, key_size);
 
-  SmallBuffer<4096> pl_holder(CoroEnv::CurStore()->store_option_->page_size_);
+  SmallBuffer<4096> pl_holder(CoroEnv::CurStore().store_option_->page_size_);
   auto* payload = pl_holder.Data();
   uint16_t payload_size;
   uint64_t versions_removed = 0;
@@ -301,13 +301,13 @@ void HistoryStorage::VisitRemovedVersions(lean_txid_t from_tx_id, lean_txid_t to
                                           RemoveVersionCallback on_remove_version) {
   auto* remove_tree = remove_index_;
   auto key_size = sizeof(to_tx_id);
-  SmallBuffer<4096> key_buffer_holder(CoroEnv::CurStore()->store_option_->page_size_);
+  SmallBuffer<4096> key_buffer_holder(CoroEnv::CurStore().store_option_->page_size_);
   auto* key_buffer = key_buffer_holder.Data();
 
   uint64_t offset = 0;
   offset += utils::Fold(key_buffer + offset, from_tx_id);
   Slice key(key_buffer, key_size);
-  SmallBuffer<4096> payload_holder(CoroEnv::CurStore()->store_option_->page_size_);
+  SmallBuffer<4096> payload_holder(CoroEnv::CurStore().store_option_->page_size_);
   auto* payload = payload_holder.Data();
   uint16_t payload_size;
 

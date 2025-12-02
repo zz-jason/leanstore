@@ -692,7 +692,7 @@ SpaceCheckResult TransactionKV::CheckSpaceUtilization(BufferFrame& bf) {
   }
 
   guarded_node.ToExclusiveMayJump();
-  lean_txid_t sys_tx_id = CoroEnv::CurStore()->GetMvccManager()->AllocSysTxTs();
+  lean_txid_t sys_tx_id = CoroEnv::CurStore().GetMvccManager()->AllocSysTxTs();
   guarded_node.SyncSystemTxId(sys_tx_id);
 
   for (uint16_t i = 0; i < guarded_node->num_slots_; i++) {

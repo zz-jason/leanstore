@@ -41,10 +41,10 @@ cmake --build build/debug --target=check-format
 cmake --build build/debug --target=format
 ```
 
-To run simple ycsb benchmarks:
+To run simple ycsb tools:
 
 ```sh
-./build/debug/benchmarks/ycsb/ycsb \
+./build/debug/tools/ycsb/ycsb \
   --ycsb_threads=8 \
   --ycsb_record_count=100000 \
   --ycsb_workload=c \

@@ -135,15 +135,15 @@ public:
 
   /// Updates contention statistics after each slot modification on the page.
   void UpdateContentionStats() {
-    if (!CoroEnv::CurStore()->store_option_->enable_contention_split_) {
+    if (!CoroEnv::CurStore().store_option_->enable_contention_split_) {
       return;
     }
     const uint64_t random_number = utils::RandomGenerator::RandU64();
 
     // haven't met the contention stats update probability
     if ((random_number &
-         ((1ull << CoroEnv::CurStore()->store_option_->contention_split_sample_probability_) -
-          1)) != 0) {
+         ((1ull << CoroEnv::CurStore().store_option_->contention_split_sample_probability_) - 1)) !=
+        0) {
       return;
     }
     auto& contention_stats = guarded_leaf_.bf_->header_.contention_stats_;
@@ -155,13 +155,13 @@ public:
 
     // haven't met the contention split validation probability
     if ((random_number &
-         ((1ull << CoroEnv::CurStore()->store_option_->contention_split_probility_) - 1)) != 0) {
+         ((1ull << CoroEnv::CurStore().store_option_->contention_split_probility_) - 1)) != 0) {
       return;
     }
     auto contention_pct = contention_stats.ContentionPercentage();
     contention_stats.Reset();
     if (last_updated_slot != slot_id_ &&
-        contention_pct >= CoroEnv::CurStore()->store_option_->contention_split_threshold_pct_ &&
+        contention_pct >= CoroEnv::CurStore().store_option_->contention_split_threshold_pct_ &&
         guarded_leaf_->num_slots_ > 2) {
       int16_t split_slot = std::min<int16_t>(last_updated_slot, slot_id_);
       guarded_leaf_.unlock();

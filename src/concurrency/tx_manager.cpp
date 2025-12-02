@@ -10,12 +10,12 @@
 #include "leanstore/concurrency/group_committer.hpp"
 #include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/transaction.hpp"
+#include "leanstore/cpp/wal/wal_traits.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/counter_util.hpp"
 #include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/log.hpp"
 #include "wal/wal_builder.hpp"
-#include "wal/wal_traits.hpp"
 
 #include <algorithm>
 #include <cassert>

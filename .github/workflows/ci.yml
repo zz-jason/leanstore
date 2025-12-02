@@ -37,7 +37,7 @@ jobs:
       run: TSAN_OPTIONS="suppressions=$(pwd)/tests/tsan.supp" ctest --test-dir build/debug_tsan --output-on-failure -j 2
 
     - name: Generate coverage file
-      run: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*' --verbose
+      run: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'tools/*' --verbose
 
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v4
@@ -75,7 +75,7 @@ jobs:
       run: ctest --test-dir build/debug_coro --output-on-failure -j 2
 
     - name: Generate coverage file
-      run: gcovr -v -r . --xml-pretty --xml=coverage_coro.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'benchmarks/*' --verbose
+      run: gcovr -v -r . --xml-pretty --xml=coverage_coro.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'tools/*' --verbose
 
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v4
@@ -126,18 +126,18 @@ jobs:
           ldd ./dist/release_thread/bin/ycsb
       - name: YCSB data load
         run: |
-          ./dist/release_thread/bin/ycsb --ycsb_data_dir=/tmp/leanstore/thread \
-            --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
-            --ycsb_target=basickv --ycsb_workload=b \
-            --ycsb_threads=2 --ycsb_clients=6 \
-            --ycsb_cmd=load
+          ./dist/release_thread/bin/ycsb --data_dir=/tmp/leanstore/thread \
+            --key_size=16 --val_size=200 --record_count=10000 --mem_gb=1 \
+            --target=basickv --workload=b \
+            --threads=2 --clients=6 \
+            --cmd=load
       - name: YCSB bench
         run: |
-          ./dist/release_thread/bin/ycsb --ycsb_data_dir=/tmp/leanstore/thread \
-            --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
-            --ycsb_target=basickv --ycsb_workload=b \
-            --ycsb_threads=2 --ycsb_clients=6 --ycsb_run_for_seconds=30 \
-            --ycsb_cmd=run > ycsb_b_basickv.out
+          ./dist/release_thread/bin/ycsb --data_dir=/tmp/leanstore/thread \
+            --key_size=16 --val_size=200 --record_count=10000 --mem_gb=1 \
+            --target=basickv --workload=b \
+            --threads=2 --clients=6 --run_for_seconds=30 \
+            --cmd=run > ycsb_b_basickv.out
           sed -i '1i**Bench YCSB B on BasicKV**\n```txt' ycsb_b_basickv.out
           echo '```' >> ycsb_b_basickv.out
           cat ycsb_b_basickv.out
@@ -164,18 +164,18 @@ jobs:
           ldd ./dist/release_thread/bin/ycsb
       - name: YCSB data load
         run: |
-          ./dist/release_thread/bin/ycsb --ycsb_data_dir=/tmp/leanstore/thread \
-            --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
-            --ycsb_target=transactionkv --ycsb_workload=b \
-            --ycsb_threads=2 --ycsb_clients=6 \
-            --ycsb_cmd=load
+          ./dist/release_thread/bin/ycsb --data_dir=/tmp/leanstore/thread \
+            --key_size=16 --val_size=200 --record_count=10000 --mem_gb=1 \
+            --target=transactionkv --workload=b \
+            --threads=2 --clients=6 \
+            --cmd=load
       - name: YCSB bench
         run: |
-          ./dist/release_thread/bin/ycsb --ycsb_data_dir=/tmp/leanstore/thread \
-            --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
-            --ycsb_target=transactionkv --ycsb_workload=b \
-            --ycsb_threads=2 --ycsb_clients=6 --ycsb_run_for_seconds=30 \
-            --ycsb_cmd=run > ycsb_b_transactionkv.out
+          ./dist/release_thread/bin/ycsb --data_dir=/tmp/leanstore/thread \
+            --key_size=16 --val_size=200 --record_count=10000 --mem_gb=1 \
+            --target=transactionkv --workload=b \
+            --threads=2 --clients=6 --run_for_seconds=30 \
+            --cmd=run > ycsb_b_transactionkv.out
           sed -i '1i**Bench YCSB B on TransactionKV**\n```txt' ycsb_b_transactionkv.out
           echo '```' >> ycsb_b_transactionkv.out
           cat ycsb_b_transactionkv.out
@@ -225,18 +225,18 @@ jobs:
           LD_LIBRARY_PATH=./dist/release_coro/lib ldd ./dist/release_coro/bin/ycsb
       - name: YCSB data load
         run: |
-          LD_LIBRARY_PATH=./dist/release_coro/lib ./dist/release_coro/bin/ycsb --ycsb_data_dir=/tmp/leanstore/coro \
-            --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
-            --ycsb_target=basickv --ycsb_workload=b \
-            --ycsb_threads=2 --ycsb_clients=6 \
-            --ycsb_cmd=load
+          LD_LIBRARY_PATH=./dist/release_coro/lib ./dist/release_coro/bin/ycsb --data_dir=/tmp/leanstore/coro \
+            --key_size=16 --val_size=200 --record_count=10000 --mem_gb=1 \
+            --target=basickv --workload=b \
+            --threads=2 --clients=6 \
+            --cmd=load
       - name: YCSB bench
         run: |
-          LD_LIBRARY_PATH=./dist/release_coro/lib ./dist/release_coro/bin/ycsb --ycsb_data_dir=/tmp/leanstore/coro \
-            --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
-            --ycsb_target=basickv --ycsb_workload=b \
-            --ycsb_threads=2 --ycsb_clients=6 --ycsb_run_for_seconds=30 \
-            --ycsb_cmd=run > ycsb_b_coro_basickv.out
+          LD_LIBRARY_PATH=./dist/release_coro/lib ./dist/release_coro/bin/ycsb --data_dir=/tmp/leanstore/coro \
+            --key_size=16 --val_size=200 --record_count=10000 --mem_gb=1 \
+            --target=basickv --workload=b \
+            --threads=2 --clients=6 --run_for_seconds=30 \
+            --cmd=run > ycsb_b_coro_basickv.out
           sed -i '1i**[COROUTINE] Bench YCSB B on BasicKV**\n```txt' ycsb_b_coro_basickv.out
           echo '```' >> ycsb_b_coro_basickv.out
           cat ycsb_b_coro_basickv.out
@@ -263,18 +263,18 @@ jobs:
           LD_LIBRARY_PATH=./dist/release_coro/lib ldd ./dist/release_coro/bin/ycsb
       - name: YCSB data load
         run: |
-          LD_LIBRARY_PATH=./dist/release_coro/lib ./dist/release_coro/bin/ycsb --ycsb_data_dir=/tmp/leanstore/coro \
-            --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
-            --ycsb_target=transactionkv --ycsb_workload=b \
-            --ycsb_threads=2 --ycsb_clients=6 \
-            --ycsb_cmd=load
+          LD_LIBRARY_PATH=./dist/release_coro/lib ./dist/release_coro/bin/ycsb --data_dir=/tmp/leanstore/coro \
+            --key_size=16 --val_size=200 --record_count=10000 --mem_gb=1 \
+            --target=transactionkv --workload=b \
+            --threads=2 --clients=6 \
+            --cmd=load
       - name: YCSB bench
         run: |
-          LD_LIBRARY_PATH=./dist/release_coro/lib ./dist/release_coro/bin/ycsb --ycsb_data_dir=/tmp/leanstore/coro \
-            --ycsb_key_size=16 --ycsb_val_size=200 --ycsb_record_count=10000 --ycsb_mem_gb=1 \
-            --ycsb_target=transactionkv --ycsb_workload=b \
-            --ycsb_threads=2 --ycsb_clients=6 --ycsb_run_for_seconds=30 \
-            --ycsb_cmd=run > ycsb_b_coro_transactionkv.out
+          LD_LIBRARY_PATH=./dist/release_coro/lib ./dist/release_coro/bin/ycsb --data_dir=/tmp/leanstore/coro \
+            --key_size=16 --val_size=200 --record_count=10000 --mem_gb=1 \
+            --target=transactionkv --workload=b \
+            --threads=2 --clients=6 --run_for_seconds=30 \
+            --cmd=run > ycsb_b_coro_transactionkv.out
           sed -i '1i**[COROUTINE] Bench YCSB B on TransactionKV**\n```txt' ycsb_b_coro_transactionkv.out
           echo '```' >> ycsb_b_coro_transactionkv.out
           cat ycsb_b_coro_transactionkv.out

@@ -274,10 +274,10 @@ void PageEvictor::FlushAndRecycleBufferFrames(Partition& target_partition) {
           BMOptimisticGuard optimistic_guard(written_bf.header_.latch_);
           BMExclusiveGuard exclusive_guard(optimistic_guard);
           LEAN_DCHECK(written_bf.header_.is_being_written_back_);
-          LEAN_DCHECK(written_bf.header_.flushed_psn_ < flushed_psn);
+          LEAN_DCHECK(written_bf.header_.flushed_page_version_ < flushed_psn);
 
           // For recovery, so much has to be done here...
-          written_bf.header_.flushed_psn_ = flushed_psn;
+          written_bf.header_.flushed_page_version_ = flushed_psn;
           written_bf.header_.is_being_written_back_ = false;
         }
         JUMPMU_CATCH() {
