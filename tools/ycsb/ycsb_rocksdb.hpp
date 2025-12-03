@@ -1,5 +1,5 @@
-#include "leanstore/utils/defer.hpp"
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/defer.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/utils/parallelize.hpp"
 #include "leanstore/utils/random_generator.hpp"
 #include "leanstore/utils/scrambled_zipf_generator.hpp"
@@ -41,7 +41,7 @@ public:
     // load data with options_.threads_
     auto start = std::chrono::high_resolution_clock::now();
     std::cout << "Inserting " << options_.record_count_ << " values" << std::endl;
-    SCOPED_DEFER({
+    LEAN_DEFER({
       auto end = std::chrono::high_resolution_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
       std::cout << "Done inserting" << ", time elapsed: " << duration / 1000000.0 << " seconds"

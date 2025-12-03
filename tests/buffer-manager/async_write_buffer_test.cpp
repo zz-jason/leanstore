@@ -1,8 +1,8 @@
 #include "leanstore/buffer-manager/async_write_buffer.hpp"
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/buffer-manager/swip.hpp"
-#include "leanstore/utils/defer.hpp"
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/defer.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/utils/misc.hpp"
 #include "leanstore/utils/random_generator.hpp"
 
@@ -76,7 +76,7 @@ protected:
 TEST_F(AsyncWriteBufferTest, Basic) {
   auto test_file = get_rand_test_file();
   auto test_fd = open_file(test_file);
-  SCOPED_DEFER({
+  LEAN_DEFER({
     close_file(test_fd);
     Log::Info("Test file={}", test_file);
   });

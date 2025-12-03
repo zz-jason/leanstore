@@ -2,8 +2,8 @@
 
 #include "leanstore/common/types.h"
 #include "leanstore/common/wal_record.h"
-#include "leanstore/units.hpp"
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/constants.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "wal/wal_builder.hpp"
 
 namespace leanstore {
@@ -15,7 +15,7 @@ std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(Slice payload,
       return {OpCode::kNotFound, 1};
     }
 
-    auto val_size = payload.length() - sizeof(ChainedTuple);
+    auto val_size = payload.size() - sizeof(ChainedTuple);
     callback(GetValue(val_size));
     return {OpCode::kOK, 1};
   }
@@ -25,7 +25,7 @@ std::tuple<OpCode, uint16_t> ChainedTuple::GetVisibleTuple(Slice payload,
   }
 
   // Head is not visible
-  uint16_t value_size = payload.length() - sizeof(ChainedTuple);
+  uint16_t value_size = payload.size() - sizeof(ChainedTuple);
   auto value_buf = std::make_unique<uint8_t[]>(value_size);
   std::memcpy(value_buf.get(), this->payload_, value_size);
 
@@ -110,14 +110,14 @@ void ChainedTuple::Update(BTreeIterMut* x_iter, Slice key, MutValCallback update
 
   auto perform_update = [&]() {
     auto mut_raw_val = x_iter->MutableVal();
-    auto user_val_size = mut_raw_val.Size() - sizeof(ChainedTuple);
+    auto user_val_size = mut_raw_val.size() - sizeof(ChainedTuple);
     update_call_back(MutableSlice(payload_, user_val_size));
     worker_id_ = CoroEnv::CurTxMgr().worker_id_;
     tx_id_ = CoroEnv::CurTxMgr().ActiveTx().start_ts_;
     cmd_id_ = curr_command_id;
   };
 
-  SCOPED_DEFER({
+  LEAN_DEFER({
     WriteUnlock();
     x_iter->UpdateContentionStats();
   });

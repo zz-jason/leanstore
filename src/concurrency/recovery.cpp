@@ -6,10 +6,10 @@
 #include "leanstore/buffer-manager/guarded_buffer_frame.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/concurrency/wal_entry.hpp"
+#include "leanstore/cpp/base/defer.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_guard.hpp"
-#include "leanstore/utils/defer.hpp"
-#include "leanstore/utils/log.hpp"
 #include "utils/small_vector.hpp"
 
 #include <cstdint>
@@ -62,7 +62,7 @@ bool Recovery::Run() {
 
 Result<void> Recovery::Analysis() {
   Log::Info("[Recovery] analysis phase begins");
-  SCOPED_DEFER(Log::Info("[Recovery] analysis phase ends"))
+  LEAN_DEFER(Log::Info("[Recovery] analysis phase ends"))
 
   // asume that each WalEntry is smaller than the page size
   utils::AlignedBuffer<512> aligned_buffer(store_->store_option_->page_size_);
@@ -113,7 +113,7 @@ Result<void> Recovery::Analysis() {
 
 Result<void> Recovery::Redo() {
   Log::Info("[Recovery] redo phase begins");
-  SCOPED_DEFER(Log::Info("[Recovery] redo phase ends"))
+  LEAN_DEFER(Log::Info("[Recovery] redo phase ends"))
 
   // asume that each WalEntry is smaller than the page size
   utils::AlignedBuffer<512> aligned_buffer(store_->store_option_->page_size_);
@@ -136,7 +136,7 @@ Result<void> Recovery::Redo() {
 
     // get a buffer frame for the corresponding dirty page
     auto& bf = ResolvePage(complex_entry->page_id_);
-    SCOPED_DEFER(bf.header_.keep_in_memory_ = false);
+    LEAN_DEFER(bf.header_.keep_in_memory_ = false);
 
     auto* wal_payload = reinterpret_cast<WalPayload*>(complex_entry->payload_);
     switch (wal_payload->type_) {
@@ -475,7 +475,7 @@ Result<void> Recovery::ReadFromWalFile(int64_t offset, size_t nbytes, void* dest
   if (fp == nullptr) {
     return Error::FileOpen(file_name, errno, strerror(errno));
   }
-  SCOPED_DEFER(fclose(fp));
+  LEAN_DEFER(fclose(fp));
 
   if (fseek(fp, offset, SEEK_SET) != 0) {
     return Error::FileSeek(file_name, errno, strerror(errno));

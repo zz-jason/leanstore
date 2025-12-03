@@ -2,7 +2,7 @@
 
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/common/types.h"
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/log.hpp"
 
 namespace leanstore {
 

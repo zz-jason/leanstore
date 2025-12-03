@@ -2,10 +2,10 @@
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
+#include "leanstore/cpp/base/defer.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/utils/defer.hpp"
-#include "leanstore/utils/log.hpp"
 #include "leanstore/utils/random_generator.hpp"
 
 #include <gtest/gtest.h>
@@ -74,7 +74,7 @@ TEST_F(TransactionKVTest, Create) {
 
   store_->ExecSync(1, [&]() {
     CoroEnv::CurTxMgr().StartTx();
-    SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
+    LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
     store_->DropTransactionKV(btree_name);
     store_->DropTransactionKV(btree_name2);
   });
@@ -113,7 +113,7 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
   // query on the created btree in the same worker
   store_->ExecSync(0, [&]() {
     CoroEnv::CurTxMgr().StartTx();
-    SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
+    LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
     std::string copied_value;
     auto copy_value_out = [&](Slice val) {
       copied_value = std::string((const char*)val.data(), val.size());
@@ -129,7 +129,7 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
   // query on the created btree in another worker
   store_->ExecSync(1, [&]() {
     CoroEnv::CurTxMgr().StartTx();
-    SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
+    LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
     std::string copied_value;
     auto copy_value_out = [&](Slice val) {
       copied_value = std::string((const char*)val.data(), val.size());
@@ -144,7 +144,7 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
 
   store_->ExecSync(1, [&]() {
     CoroEnv::CurTxMgr().StartTx();
-    SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
+    LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
     store_->DropTransactionKV(btree_name);
   });
 }
@@ -217,7 +217,7 @@ TEST_F(TransactionKVTest, InsertDuplicates) {
     for (auto& key : unique_keys) {
       auto val = RandomGenerator::RandAlphString(128);
       CoroEnv::CurTxMgr().StartTx();
-      EXPECT_EQ(btree->Insert(ToSlice(key), ToSlice(val)), OpCode::kDuplicated);
+      EXPECT_EQ(btree->Insert(Slice(key), Slice(val)), OpCode::kDuplicated);
       CoroEnv::CurTxMgr().CommitTx();
     }
 
@@ -426,7 +426,7 @@ TEST_F(TransactionKVTest, Update) {
     // update all the values to this newVal
     auto new_val = RandomGenerator::RandAlphString(val_size);
     auto update_call_back = [&](MutableSlice mut_raw_val) {
-      std::memcpy(mut_raw_val.Data(), new_val.data(), mut_raw_val.Size());
+      std::memcpy(mut_raw_val.data(), new_val.data(), mut_raw_val.size());
     };
 
     // update in the same worker
@@ -672,7 +672,7 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
     for (const auto& [key, val] : kv_to_test) {
       // remove
       CoroEnv::CurTxMgr().StartTx();
-      SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
+      LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
 
       EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())), OpCode::kOK);
 
@@ -687,7 +687,7 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
       update_desc->update_slots_[0].offset_ = 0;
       update_desc->update_slots_[0].size_ = val_size;
       auto update_call_back = [&](MutableSlice mut_raw_val) {
-        std::memcpy(mut_raw_val.Data(), new_val.data(), mut_raw_val.Size());
+        std::memcpy(mut_raw_val.data(), new_val.data(), mut_raw_val.size());
       };
       EXPECT_EQ(btree->UpdatePartial(Slice((const uint8_t*)key.data(), key.size()),
                                      update_call_back, *update_desc),
@@ -773,7 +773,7 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
     // remove
     for (const auto& [key, val] : kv_to_test) {
       CoroEnv::CurTxMgr().StartTx();
-      SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
+      LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
       EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())), OpCode::kOK);
     }
   });
@@ -781,7 +781,7 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
   store_->ExecSync(1, [&]() {
     for (const auto& [key, val] : kv_to_test) {
       CoroEnv::CurTxMgr().StartTx();
-      SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
+      LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
 
       // remove twice should got not found error
       EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())), OpCode::kNotFound);
@@ -794,7 +794,7 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
       update_desc->update_slots_[0].offset_ = 0;
       update_desc->update_slots_[0].size_ = val_size;
       auto update_call_back = [&](MutableSlice mut_raw_val) {
-        std::memcpy(mut_raw_val.Data(), new_val.data(), mut_raw_val.Size());
+        std::memcpy(mut_raw_val.data(), new_val.data(), mut_raw_val.size());
       };
       EXPECT_EQ(btree->UpdatePartial(Slice((const uint8_t*)key.data(), key.size()),
                                      update_call_back, *update_desc),
@@ -835,7 +835,7 @@ TEST_F(TransactionKVTest, ConcurrentInsertWithSplit) {
   store_->ExecAsync(0, [&]() {
     for (auto i = 0; !stop; i++) {
       CoroEnv::CurTxMgr().StartTx();
-      SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
+      LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
       auto key = std::format("{}_{}_{}", RandomGenerator::RandAlphString(key_size), 0, i);
       auto val = RandomGenerator::RandAlphString(val_size);
       auto res = btree->Insert(key, val);
@@ -847,7 +847,7 @@ TEST_F(TransactionKVTest, ConcurrentInsertWithSplit) {
   store_->ExecAsync(1, [&]() {
     for (auto i = 0; !stop; i++) {
       CoroEnv::CurTxMgr().StartTx();
-      SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
+      LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
       auto key = std::format("{}_{}_{}", RandomGenerator::RandAlphString(key_size), 1, i);
       auto val = RandomGenerator::RandAlphString(val_size);
       auto res = btree->Insert(key, val);

@@ -2,7 +2,7 @@
 
 #include "coroutine/lean_mutex.hpp"
 #include "leanstore/buffer-manager/buffer_frame.hpp"
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/log.hpp"
 
 #include <cstdint>
 

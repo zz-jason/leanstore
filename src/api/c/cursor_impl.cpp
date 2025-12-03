@@ -2,7 +2,7 @@
 
 #include "leanstore/btree/core/btree_iter.hpp"
 #include "leanstore/c/leanstore.h"
-#include "leanstore/slice.hpp"
+#include "leanstore/cpp/base/slice.hpp"
 
 #include <cassert>
 

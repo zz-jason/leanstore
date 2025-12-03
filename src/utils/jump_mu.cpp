@@ -1,4 +1,4 @@
-#include "leanstore/utils/jump_mu.hpp"
+#include "leanstore/cpp/base/jump_mu.hpp"
 
 namespace leanstore {
 

@@ -2,8 +2,8 @@
 
 #include "leanstore/common/portable.h"
 #include "leanstore/common/wal_record.h"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/sync/optimistic_guarded.hpp"
-#include "leanstore/utils/log.hpp"
 
 #include <algorithm>
 #include <atomic>

@@ -6,14 +6,15 @@
 #include "leanstore/buffer-manager/tree_registry.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/common/wal_record.h"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
-#include "leanstore/utils/log.hpp"
 #include "utils/json.hpp"
 
 #include <atomic>
 #include <cassert>
 #include <limits>
+#include <unordered_map>
 
 namespace leanstore {
 
@@ -128,9 +129,9 @@ public:
     Log::Fatal("unlock is unsupported");
   }
 
-  virtual StringMap Serialize() override;
+  virtual std::unordered_map<std::string, std::string> Serialize() override;
 
-  virtual void Deserialize(StringMap map) override;
+  virtual void Deserialize(std::unordered_map<std::string, std::string> map) override;
 
 private:
   bool IsMetaNode(GuardedBufferFrame<BTreeNode>& guarded_node) {

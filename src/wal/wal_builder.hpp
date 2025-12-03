@@ -7,9 +7,9 @@
 #include "leanstore/common/wal_record.h"
 #include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
+#include "leanstore/cpp/base/slice.hpp"
 #include "leanstore/cpp/wal/wal_serde.hpp"
 #include "leanstore/cpp/wal/wal_traits.hpp"
-#include "leanstore/slice.hpp"
 
 #include <cstdint>
 
@@ -68,11 +68,11 @@ public:
 
   WalBuilder& SetPageInfo(BufferFrame* bf);
 
-  WalBuilder& BuildInsert(const Slice& key, const Slice& value);
+  WalBuilder& BuildInsert(Slice key, Slice value);
 
-  WalBuilder& BuildRemove(const Slice& key, const Slice& value);
+  WalBuilder& BuildRemove(Slice key, Slice value);
 
-  WalBuilder& BuildUpdate(const Slice& key, const UpdateDesc& update_desc);
+  WalBuilder& BuildUpdate(Slice key, const UpdateDesc& update_desc);
 
   T* GetWal() {
     return wal_;
@@ -120,11 +120,11 @@ public:
     return *this;
   }
 
-  WalTxBuilder& BuildTxInsert(const Slice& key, const Slice& value);
+  WalTxBuilder& BuildTxInsert(Slice key, Slice value);
 
-  WalTxBuilder& BuildTxRemove(const Slice& key, const Slice& value);
+  WalTxBuilder& BuildTxRemove(Slice key, Slice value);
 
-  WalTxBuilder& BuildTxUpdate(const Slice& key, const UpdateDesc& update_desc);
+  WalTxBuilder& BuildTxUpdate(Slice key, const UpdateDesc& update_desc);
 
   T* GetWal() {
     return wal_;
@@ -255,7 +255,7 @@ inline WalBuilder<T>& WalBuilder<T>::SetPageInfo(BufferFrame* bf) {
 }
 
 template <typename T>
-inline WalBuilder<T>& WalBuilder<T>::BuildInsert(const Slice& key, const Slice& value) {
+inline WalBuilder<T>& WalBuilder<T>::BuildInsert(Slice key, Slice value) {
   static_assert(WalRecordTraits<T>::kType == LEAN_WAL_TYPE_INSERT,
                 "WalBuilder: Invalid type for Insert");
   wal_->key_size_ = static_cast<lean_wal_size_t>(key.size());
@@ -272,7 +272,7 @@ inline WalBuilder<T>& WalBuilder<T>::BuildInsert(const Slice& key, const Slice& 
 }
 
 template <typename T>
-inline WalBuilder<T>& WalBuilder<T>::BuildRemove(const Slice& key, const Slice& value) {
+inline WalBuilder<T>& WalBuilder<T>::BuildRemove(Slice key, Slice value) {
   static_assert(WalRecordTraits<T>::kType == LEAN_WAL_TYPE_REMOVE,
                 "WalBuilder: Invalid type for Remove");
   wal_->key_size_ = static_cast<lean_wal_size_t>(key.size());
@@ -289,7 +289,7 @@ inline WalBuilder<T>& WalBuilder<T>::BuildRemove(const Slice& key, const Slice& 
 }
 
 template <typename T>
-inline WalBuilder<T>& WalBuilder<T>::BuildUpdate(const Slice& key, const UpdateDesc& update_desc) {
+inline WalBuilder<T>& WalBuilder<T>::BuildUpdate(Slice key, const UpdateDesc& update_desc) {
   static_assert(WalRecordTraits<T>::kType == LEAN_WAL_TYPE_UPDATE,
                 "WalBuilder: Invalid type for Update");
   wal_->key_size_ = static_cast<lean_wal_size_t>(key.size());
@@ -370,7 +370,7 @@ inline WalTxBuilder<T>& WalTxBuilder<T>::SetPrevVersion(lean_wid_t prev_wid, lea
 }
 
 template <typename T>
-inline WalTxBuilder<T>& WalTxBuilder<T>::BuildTxInsert(const Slice& key, const Slice& value) {
+inline WalTxBuilder<T>& WalTxBuilder<T>::BuildTxInsert(Slice key, Slice value) {
   static_assert(WalRecordTraits<T>::kType == LEAN_WAL_TYPE_TX_INSERT,
                 "WalTxBuilder: Invalid type for TxInsert");
   wal_->key_size_ = static_cast<lean_wal_size_t>(key.size());
@@ -387,7 +387,7 @@ inline WalTxBuilder<T>& WalTxBuilder<T>::BuildTxInsert(const Slice& key, const S
 }
 
 template <typename T>
-inline WalTxBuilder<T>& WalTxBuilder<T>::BuildTxRemove(const Slice& key, const Slice& value) {
+inline WalTxBuilder<T>& WalTxBuilder<T>::BuildTxRemove(Slice key, Slice value) {
   static_assert(WalRecordTraits<T>::kType == LEAN_WAL_TYPE_TX_REMOVE,
                 "WalTxBuilder: Invalid type for TxRemove");
   wal_->key_size_ = static_cast<lean_wal_size_t>(key.size());
@@ -404,8 +404,7 @@ inline WalTxBuilder<T>& WalTxBuilder<T>::BuildTxRemove(const Slice& key, const S
 }
 
 template <typename T>
-inline WalTxBuilder<T>& WalTxBuilder<T>::BuildTxUpdate(const Slice& key,
-                                                       const UpdateDesc& update_desc) {
+inline WalTxBuilder<T>& WalTxBuilder<T>::BuildTxUpdate(Slice key, const UpdateDesc& update_desc) {
   static_assert(WalRecordTraits<T>::kType == LEAN_WAL_TYPE_TX_UPDATE,
                 "WalTxBuilder: Invalid type for TxUpdate");
   wal_->key_size_ = static_cast<lean_wal_size_t>(key.size());

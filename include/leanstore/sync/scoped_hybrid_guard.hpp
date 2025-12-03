@@ -1,8 +1,8 @@
 #pragma once
 
+#include "leanstore/cpp/base/jump_mu.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
-#include "leanstore/utils/jump_mu.hpp"
-#include "leanstore/utils/log.hpp"
 
 #include <atomic>
 #include <functional>

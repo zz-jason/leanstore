@@ -10,9 +10,9 @@
 #include "leanstore/buffer-manager/guarded_buffer_frame.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/common/wal_record.h"
+#include "leanstore/cpp/base/defer.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/utils/defer.hpp"
-#include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
 #include "utils/small_vector.hpp"
@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <format>
 #include <memory>
+#include <unordered_map>
 
 using namespace leanstore;
 
@@ -355,7 +356,7 @@ bool BTreeGeneric::TryMergeMayJump(lean_txid_t sys_tx_id, BufferFrame& to_merge,
     return true;
   };
 
-  SCOPED_DEFER({
+  LEAN_DEFER({
     if (!IsMetaNode(guarded_parent) &&
         guarded_parent->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
       JUMPMU_TRY() {
@@ -621,7 +622,7 @@ std::string BTreeGeneric::Summary() {
                      GetHeight(), guarded_root->num_slots_, FreeSpaceAfterCompaction());
 }
 
-StringMap BTreeGeneric::Serialize() {
+std::unordered_map<std::string, std::string> BTreeGeneric::Serialize() {
   LEAN_DCHECK(meta_node_swip_.AsBufferFrame().page_.btree_id_ == tree_id_);
   auto& meta_bf = meta_node_swip_.AsBufferFrame();
   auto meta_page_id = meta_bf.header_.page_id_;
@@ -634,7 +635,7 @@ StringMap BTreeGeneric::Serialize() {
           {kMetaPageId, std::to_string(meta_page_id)}};
 }
 
-void BTreeGeneric::Deserialize(StringMap map) {
+void BTreeGeneric::Deserialize(std::unordered_map<std::string, std::string> map) {
   tree_id_ = std::stoull(map[kTreeId]);
   height_ = std::stoull(map[kHeight]);
   meta_node_swip_.Evict(std::stoull(map[kMetaPageId]));

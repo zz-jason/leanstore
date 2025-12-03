@@ -5,10 +5,10 @@
 #include "iterator.hpp"
 #include "leanstore/btree/core/b_tree_node.hpp"
 #include "leanstore/buffer-manager/guarded_buffer_frame.hpp"
+#include "leanstore/cpp/base/log.hpp"
+#include "leanstore/cpp/base/slice.hpp"
 #include "leanstore/kv_interface.hpp"
-#include "leanstore/slice.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
-#include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 
 #include <functional>

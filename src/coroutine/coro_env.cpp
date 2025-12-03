@@ -4,7 +4,7 @@
 #include "coroutine/coro_scheduler.hpp"
 #include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 
 namespace leanstore {

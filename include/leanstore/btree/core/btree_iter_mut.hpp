@@ -2,9 +2,9 @@
 
 #include "coroutine/mvcc_manager.hpp"
 #include "leanstore/btree/core/btree_iter_pessistic.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/utils/counter_util.hpp"
-#include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/random_generator.hpp"
 
@@ -94,7 +94,7 @@ public:
         return ret;
       }
       LEAN_DCHECK(KeyInCurrentNode(key));
-      if (!HasEnoughSpaceFor(key.size(), val.length())) {
+      if (!HasEnoughSpaceFor(key.size(), val.size())) {
         SplitForKey(key);
         continue;
       }

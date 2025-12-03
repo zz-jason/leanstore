@@ -3,8 +3,8 @@
 #include "leanstore/common/portable.h"
 #include "leanstore/common/types.h"
 #include "leanstore/cpp/base/enum_traits.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/cpp/base/optional.hpp"
-#include "leanstore/utils/log.hpp"
 #include "leanstore/utils/misc.hpp"
 
 #include <cstdint>

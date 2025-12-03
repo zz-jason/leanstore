@@ -2,9 +2,9 @@
 
 #include "leanstore/buffer-manager/swip.hpp"
 #include "leanstore/common/portable.h"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
-#include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
 

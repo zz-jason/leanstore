@@ -9,15 +9,15 @@
 #include "leanstore/common/types.h"
 #include "leanstore/common/wal_record.h"
 #include "leanstore/concurrency/tx_manager.hpp"
+#include "leanstore/cpp/base/constants.hpp"
+#include "leanstore/cpp/base/defer.hpp"
 #include "leanstore/cpp/base/error.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/cpp/base/result.hpp"
+#include "leanstore/cpp/base/slice.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/slice.hpp"
 #include "leanstore/sync/hybrid_guard.hpp"
-#include "leanstore/units.hpp"
-#include "leanstore/utils/defer.hpp"
-#include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
 #include "utils/small_vector.hpp"
@@ -25,7 +25,6 @@
 
 #include <cstring>
 #include <format>
-#include <string_view>
 
 namespace leanstore {
 
@@ -133,7 +132,7 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback update_call_back,
     // Record is found
     while (true) {
       auto mut_raw_val = x_iter->MutableVal();
-      auto& tuple = *Tuple::From(mut_raw_val.Data());
+      auto& tuple = *Tuple::From(mut_raw_val.data());
       auto visible_for_me = CoroEnv::CurTxMgr().cc_.VisibleForMe(tuple.worker_id_, tuple.tx_id_);
       if (tuple.IsWriteLocked() || !visible_for_me) {
         // conflict detected, the tuple is write locked by other worker or not
@@ -143,8 +142,8 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback update_call_back,
 
       // write lock the tuple
       tuple.WriteLock();
-      SCOPED_DEFER({
-        LEAN_DCHECK(!Tuple::From(mut_raw_val.Data())->IsWriteLocked(),
+      LEAN_DEFER({
+        LEAN_DCHECK(!Tuple::From(mut_raw_val.data())->IsWriteLocked(),
                     "Tuple should be write unlocked after update");
       });
 
@@ -152,14 +151,14 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback update_call_back,
       case TupleFormat::kFat: {
         auto succeed = UpdateInFatTuple(x_iter.get(), key, update_call_back, update_desc);
         x_iter->UpdateContentionStats();
-        Tuple::From(mut_raw_val.Data())->WriteUnlock();
+        Tuple::From(mut_raw_val.data())->WriteUnlock();
         if (!succeed) {
           JUMPMU_CONTINUE;
         }
         JUMPMU_RETURN OpCode::kOK;
       }
       case TupleFormat::kChained: {
-        auto& chained_tuple = *ChainedTuple::From(mut_raw_val.Data());
+        auto& chained_tuple = *ChainedTuple::From(mut_raw_val.data());
         if (chained_tuple.is_tombstone_) {
           chained_tuple.WriteUnlock();
           JUMPMU_RETURN OpCode::kNotFound;
@@ -175,7 +174,7 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback update_call_back,
           if (succeed) {
             x_iter->guarded_leaf_->has_garbage_ = true;
           }
-          Tuple::From(mut_raw_val.Data())->WriteUnlock();
+          Tuple::From(mut_raw_val.data())->WriteUnlock();
           JUMPMU_CONTINUE;
         }
 
@@ -204,7 +203,7 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
 
     if (ret == OpCode::kDuplicated) {
       auto mut_raw_val = x_iter->MutableVal();
-      auto* chained_tuple = ChainedTuple::From(mut_raw_val.Data());
+      auto* chained_tuple = ChainedTuple::From(mut_raw_val.data());
       auto last_worker_id = chained_tuple->worker_id_;
       auto last_tx_id = chained_tuple->tx_id_;
       auto is_write_locked = chained_tuple->IsWriteLocked();
@@ -232,7 +231,7 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
                   "startTs={}, key={}, tupleLastWriter={}, tupleLastTxId={}, "
                   "tupleIsWriteLocked={}, tupleIsRemoved={}, tupleVisibleForMe={}",
                   CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_,
-                  ToString(key), last_worker_id, last_tx_id, is_write_locked, is_tombsone,
+                  key.ToString(), last_worker_id, last_tx_id, is_write_locked, is_tombsone,
                   visible_for_me);
         return OpCode::kAbortTx;
       }
@@ -296,7 +295,7 @@ std::tuple<OpCode, uint16_t> TransactionKV::GetVisibleTuple(Slice payload, ValCa
 
 void TransactionKV::InsertAfterRemove(BTreeIterMut* x_iter, Slice key, Slice val) {
   auto mut_raw_val = x_iter->MutableVal();
-  auto* chained_tuple = ChainedTuple::From(mut_raw_val.Data());
+  auto* chained_tuple = ChainedTuple::From(mut_raw_val.data());
   auto last_worker_id = chained_tuple->worker_id_;
   auto last_tx_id = chained_tuple->tx_id_;
   auto last_command_id = chained_tuple->cmd_id_;
@@ -330,22 +329,22 @@ void TransactionKV::InsertAfterRemove(BTreeIterMut* x_iter, Slice key, Slice val
 
   // make room for the new chained tuple
   auto chained_tuple_size = val.size() + sizeof(ChainedTuple);
-  if (mut_raw_val.Size() < chained_tuple_size) {
+  if (mut_raw_val.size() < chained_tuple_size) {
     auto succeed [[maybe_unused]] = x_iter->ExtendPayload(chained_tuple_size);
     LEAN_DCHECK(succeed,
                 "Failed to extend btree node slot to store the expanded "
                 "chained tuple, workerId={}, startTs={}, key={}, "
                 "curRawValSize={}, chainedTupleSize={}",
                 CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_,
-                key.ToString(), mut_raw_val.Size(), chained_tuple_size);
+                key.ToString(), mut_raw_val.size(), chained_tuple_size);
 
-  } else if (mut_raw_val.Size() > chained_tuple_size) {
+  } else if (mut_raw_val.size() > chained_tuple_size) {
     x_iter->ShortenWithoutCompaction(chained_tuple_size);
   }
 
   // get the new value place and recreate a new chained tuple there
   auto new_mut_raw_val = x_iter->MutableVal();
-  auto* new_chained_tuple = new (new_mut_raw_val.Data()) ChainedTuple(
+  auto* new_chained_tuple = new (new_mut_raw_val.data()) ChainedTuple(
       CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_, command_id, val);
   new_chained_tuple->total_updates_ = total_updates_copy;
   new_chained_tuple->oldest_tx_ = oldest_tx_copy;
@@ -367,7 +366,7 @@ OpCode TransactionKV::Remove(Slice key) {
     }
 
     auto mut_raw_val = x_iter->MutableVal();
-    auto* tuple = Tuple::From(mut_raw_val.Data());
+    auto* tuple = Tuple::From(mut_raw_val.data());
 
     // remove fat tuple is not supported yet
     if (tuple->format_ == TupleFormat::kFat) {
@@ -394,8 +393,8 @@ OpCode TransactionKV::Remove(Slice key) {
     }
 
     chained_tuple.WriteLock();
-    SCOPED_DEFER({
-      LEAN_DCHECK(!Tuple::From(mut_raw_val.Data())->IsWriteLocked(),
+    LEAN_DEFER({
+      LEAN_DCHECK(!Tuple::From(mut_raw_val.data())->IsWriteLocked(),
                   "Tuple should be write unlocked after remove");
     });
 
@@ -420,7 +419,7 @@ OpCode TransactionKV::Remove(Slice key) {
     CoroEnv::CurTxMgr().ActiveTx().has_wrote_ = true;
 
     // 3. remove the tuple, leave a tombsone
-    if (mut_raw_val.Size() > sizeof(ChainedTuple)) {
+    if (mut_raw_val.size() > sizeof(ChainedTuple)) {
       x_iter->ShortenWithoutCompaction(sizeof(ChainedTuple));
     }
     chained_tuple.is_tombstone_ = true;
@@ -487,9 +486,9 @@ void TransactionKV::UndoLastInsert(const lean_wal_tx_insert* wal_insert) {
       if (wal_insert->prev_cmd_id_ != kCmdInvalid) {
         // only remove the inserted value and mark the chained tuple as removed
         auto mut_raw_val = x_iter->MutableVal();
-        auto* chained_tuple = ChainedTuple::From(mut_raw_val.Data());
+        auto* chained_tuple = ChainedTuple::From(mut_raw_val.data());
 
-        if (mut_raw_val.Size() > sizeof(ChainedTuple)) {
+        if (mut_raw_val.size() > sizeof(ChainedTuple)) {
           x_iter->ShortenWithoutCompaction(sizeof(ChainedTuple));
         }
 
@@ -532,14 +531,14 @@ void TransactionKV::UndoLastUpdate(const lean_wal_tx_update* wal_update) {
                   key.ToString());
 
       auto mut_raw_val = x_iter->MutableVal();
-      auto& tuple = *Tuple::From(mut_raw_val.Data());
+      auto& tuple = *Tuple::From(mut_raw_val.data());
       LEAN_DCHECK(!tuple.IsWriteLocked(), "Tuple is write locked, workerId={}, startTs={}, key={}",
                   CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_,
                   key.ToString());
       if (tuple.format_ == TupleFormat::kFat) {
-        FatTuple::From(mut_raw_val.Data())->UndoLastUpdate();
+        FatTuple::From(mut_raw_val.data())->UndoLastUpdate();
       } else {
-        auto& chained_tuple = *ChainedTuple::From(mut_raw_val.Data());
+        auto& chained_tuple = *ChainedTuple::From(mut_raw_val.data());
         chained_tuple.worker_id_ = wal_update->prev_wid_;
         chained_tuple.tx_id_ = wal_update->prev_txid_;
         chained_tuple.cmd_id_ ^= wal_update->xor_cmd_id_;
@@ -600,7 +599,7 @@ void TransactionKV::UndoLastRemove(const lean_wal_tx_remove* wal_remove) {
 
       auto cur_mut_raw_val = x_iter->MutableVal();
       Slice removed_val{lean_wal_tx_remove_get_val(wal_remove), wal_remove->val_size_};
-      new (cur_mut_raw_val.Data()) ChainedTuple(wal_remove->prev_wid_, wal_remove->prev_txid_,
+      new (cur_mut_raw_val.data()) ChainedTuple(wal_remove->prev_wid_, wal_remove->prev_txid_,
                                                 wal_remove->prev_cmd_id_, removed_val);
 
       JUMPMU_RETURN;
@@ -615,7 +614,7 @@ void TransactionKV::UndoLastRemove(const lean_wal_tx_remove* wal_remove) {
 bool TransactionKV::UpdateInFatTuple(BTreeIterMut* x_iter, Slice key,
                                      MutValCallback update_call_back, UpdateDesc& update_desc) {
   while (true) {
-    auto* fat_tuple = reinterpret_cast<FatTuple*>(x_iter->MutableVal().Data());
+    auto* fat_tuple = reinterpret_cast<FatTuple*>(x_iter->MutableVal().data());
     LEAN_DCHECK(fat_tuple->IsWriteLocked(), "Tuple should be write locked");
 
     if (!fat_tuple->HasSpaceFor(update_desc)) {
@@ -626,7 +625,7 @@ bool TransactionKV::UpdateInFatTuple(BTreeIterMut* x_iter, Slice key,
 
       // Not enough space to store the fat tuple, convert to chained
       auto chained_tuple_size = fat_tuple->val_size_ + sizeof(ChainedTuple);
-      LEAN_DCHECK(chained_tuple_size < x_iter->Val().length());
+      LEAN_DCHECK(chained_tuple_size < x_iter->Val().size());
       fat_tuple->ConvertToChained(x_iter->btree_.tree_id_);
       x_iter->ShortenWithoutCompaction(chained_tuple_size);
       return false;
@@ -787,7 +786,7 @@ void TransactionKV::GarbageCollect(const uint8_t* version_data, lean_wid_t versi
     }
 
     MutableSlice mut_raw_val = x_iter->MutableVal();
-    auto& tuple = *Tuple::From(mut_raw_val.Data());
+    auto& tuple = *Tuple::From(mut_raw_val.data());
     if (tuple.format_ == TupleFormat::kFat) {
       LEAN_DLOG("Skip moving removedKey to graveyard for FatTuple, "
                 "versionWorkerId={}, versionTxId={}, removedKey={}",
@@ -795,7 +794,7 @@ void TransactionKV::GarbageCollect(const uint8_t* version_data, lean_wid_t versi
       JUMPMU_RETURN;
     }
 
-    ChainedTuple& chained_tuple = *ChainedTuple::From(mut_raw_val.Data());
+    ChainedTuple& chained_tuple = *ChainedTuple::From(mut_raw_val.data());
     if (chained_tuple.IsWriteLocked()) {
       Log::Fatal("The removedKey is write locked, should not happen, "
                  "versionWorkerId={}, versionTxId={}, removedKey={}",
@@ -886,7 +885,7 @@ void TransactionKV::Unlock(const uint8_t* wal_record) {
     LEAN_DCHECK(x_iter->Valid(), "Cannot find the key in btree, workerId={}, startTs={}, key={}",
                 CoroEnv::CurTxMgr().worker_id_, CoroEnv::CurTxMgr().ActiveTx().start_ts_,
                 key.ToString());
-    auto& tuple = *Tuple::From(x_iter->MutableVal().Data());
+    auto& tuple = *Tuple::From(x_iter->MutableVal().data());
     ENSURE(tuple.format_ == TupleFormat::kChained);
   }
   JUMPMU_CATCH() {

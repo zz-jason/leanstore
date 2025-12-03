@@ -7,10 +7,10 @@
 #include "leanstore/common/utils.h"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
+#include "leanstore/cpp/base/jump_mu.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/utils/jump_mu.hpp"
-#include "leanstore/utils/log.hpp"
 #include "leanstore/utils/random_generator.hpp"
 #include "leanstore/utils/scrambled_zipf_generator.hpp"
 #include "tools/ycsb/ycsb.hpp"
@@ -244,7 +244,7 @@ public:
         auto update_call_back = [&](MutableSlice to_update) {
           auto new_val_size = update_desc->update_slots_[0].size_;
           utils::RandomGenerator::RandAlphString(new_val_size, val_gen);
-          std::memcpy(to_update.Data(), val_gen.data(), val_gen.size());
+          std::memcpy(to_update.data(), val_gen.data(), val_gen.size());
         };
 
         while (keep_running) {

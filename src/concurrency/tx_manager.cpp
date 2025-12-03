@@ -10,11 +10,11 @@
 #include "leanstore/concurrency/group_committer.hpp"
 #include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/transaction.hpp"
+#include "leanstore/cpp/base/defer.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/cpp/wal/wal_traits.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/counter_util.hpp"
-#include "leanstore/utils/defer.hpp"
-#include "leanstore/utils/log.hpp"
 #include "wal/wal_builder.hpp"
 
 #include <algorithm>
@@ -40,7 +40,7 @@ void TxManager::StartTx(TxMode mode, IsolationLevel level, bool is_read_only) {
   LEAN_DCHECK(prev_tx.state_ != TxState::kStarted,
               "Previous transaction not ended, workerId={}, startTs={}, txState={}", worker_id_,
               prev_tx.start_ts_, TxStatUtil::ToString(prev_tx.state_));
-  SCOPED_DEFER({
+  LEAN_DEFER({
     LEAN_DLOG("Start transaction, workerId={}, startTs={}, max_observed_sys_tx={}", worker_id_,
               active_tx_.start_ts_, active_tx_.max_observed_sys_tx_id_);
   });
@@ -89,7 +89,7 @@ void TxManager::StartTx(TxMode mode, IsolationLevel level, bool is_read_only) {
 }
 
 void TxManager::CommitTx() {
-  SCOPED_DEFER({
+  LEAN_DEFER({
     COUNTER_INC(&tls_perf_counters.tx_committed_);
     if (active_tx_.has_remote_dependency_) {
       COUNTER_INC(&tls_perf_counters.tx_with_remote_dependencies_);
@@ -161,7 +161,7 @@ void TxManager::CommitTx() {
 ///
 /// It may share the same code with the recovery process?
 void TxManager::AbortTx() {
-  SCOPED_DEFER({
+  LEAN_DEFER({
     active_tx_.state_ = TxState::kAborted;
     COUNTER_INC(&tls_perf_counters.tx_aborted_);
     if (active_tx_.has_remote_dependency_) {

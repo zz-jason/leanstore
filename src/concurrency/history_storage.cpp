@@ -5,11 +5,11 @@
 #include "leanstore/btree/core/b_tree_node.hpp"
 #include "leanstore/btree/core/btree_iter_mut.hpp"
 #include "leanstore/common/types.h"
+#include "leanstore/cpp/base/jump_mu.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/sync/scoped_hybrid_guard.hpp"
-#include "leanstore/utils/jump_mu.hpp"
-#include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
 #include "utils/small_vector.hpp"
@@ -51,7 +51,7 @@ void HistoryStorage::PutVersion(lean_txid_t tx_id, lean_cmdid_t command_id, lean
           x_iter.InsertToCurrentNode(key, version_size);
         }
 
-        auto& version_meta = *new (x_iter.MutableVal().Data()) VersionMeta();
+        auto& version_meta = *new (x_iter.MutableVal().data()) VersionMeta();
         version_meta.tree_id_ = tree_id;
         insert_call_back(version_meta.payload_);
         x_iter.guarded_leaf_.unlock();
@@ -78,7 +78,7 @@ void HistoryStorage::PutVersion(lean_txid_t tx_id, lean_cmdid_t command_id, lean
         JUMPMU_CONTINUE;
       }
       x_iter->InsertToCurrentNode(key, version_size);
-      auto& version_meta = *new (x_iter->MutableVal().Data()) VersionMeta();
+      auto& version_meta = *new (x_iter->MutableVal().data()) VersionMeta();
       version_meta.tree_id_ = tree_id;
       insert_call_back(version_meta.payload_);
 
@@ -108,9 +108,9 @@ bool HistoryStorage::GetVersion(lean_txid_t newer_tx_id, lean_cmdid_t newer_comm
 
   JUMPMU_TRY() {
     BasicKV* kv = const_cast<BasicKV*>(btree);
-    auto ret = kv->Lookup(Slice(key_buffer, key_size), [&](const Slice& payload) {
+    auto ret = kv->Lookup(Slice(key_buffer, key_size), [&](Slice payload) {
       const auto& version_container = *VersionMeta::From(payload.data());
-      cb(version_container.payload_, payload.length() - sizeof(VersionMeta));
+      cb(version_container.payload_, payload.size() - sizeof(VersionMeta));
     });
 
     if (ret == OpCode::kNotFound) {
@@ -169,7 +169,7 @@ void HistoryStorage::PurgeVersions(lean_txid_t from_tx_id, lean_txid_t to_tx_id,
         break;
       }
 
-      auto& version_container = *reinterpret_cast<VersionMeta*>(x_iter->MutableVal().Data());
+      auto& version_container = *reinterpret_cast<VersionMeta*>(x_iter->MutableVal().data());
       const lean_treeid_t tree_id = version_container.tree_id_;
       const bool called_before = version_container.called_before_;
       version_container.called_before_ = true;
@@ -324,7 +324,7 @@ void HistoryStorage::VisitRemovedVersions(lean_txid_t from_tx_id, lean_txid_t to
         break;
       }
 
-      auto& version_container = *VersionMeta::From(x_iter->MutableVal().Data());
+      auto& version_container = *VersionMeta::From(x_iter->MutableVal().data());
       const lean_treeid_t tree_id = version_container.tree_id_;
       const bool called_before = version_container.called_before_;
       LEAN_DCHECK(called_before == false,
@@ -334,12 +334,12 @@ void HistoryStorage::VisitRemovedVersions(lean_txid_t from_tx_id, lean_txid_t to
       version_container.called_before_ = true;
 
       // set the next key to be seeked
-      key_size = x_iter->Key().length();
+      key_size = x_iter->Key().size();
       std::memcpy(key_buffer, x_iter->Key().data(), key_size);
       key = Slice(key_buffer, key_size + 1);
 
       // get the remove version
-      payload_size = x_iter->Val().length() - sizeof(VersionMeta);
+      payload_size = x_iter->Val().size() - sizeof(VersionMeta);
       std::memcpy(payload, version_container.payload_, payload_size);
 
       x_iter->Reset();

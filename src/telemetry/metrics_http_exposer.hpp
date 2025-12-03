@@ -61,7 +61,7 @@ private:
 
     // profile for the given seconds
     HeapProfilerStart(perf_file.c_str());
-    SCOPED_DEFER({
+    LEAN_DEFER({
       HeapProfilerStop();
       std::remove(perf_file.c_str());
     });
@@ -84,7 +84,7 @@ private:
 
     // generate a random file name
     auto perf_file = CreateRandomFile();
-    SCOPED_DEFER(std::remove(perf_file.c_str()));
+    LEAN_DEFER(std::remove(perf_file.c_str()));
 
     // profile for the given seconds
     ProfilerStart(perf_file.c_str());

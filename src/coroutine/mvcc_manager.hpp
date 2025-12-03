@@ -4,7 +4,7 @@
 #include "leanstore/concurrency/concurrency_control.hpp"
 #include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "utils/json.hpp"
 
 #include <filesystem>

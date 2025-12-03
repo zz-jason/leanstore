@@ -1,8 +1,8 @@
 #pragma once
 
 #include "leanstore/common/wal_record.h"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/cpp/wal/wal_traits.hpp"
-#include "leanstore/utils/log.hpp"
 
 namespace leanstore {
 

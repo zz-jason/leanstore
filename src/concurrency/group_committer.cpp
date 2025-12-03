@@ -5,7 +5,7 @@
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/log.hpp"
 
 #include <algorithm>
 #include <atomic>

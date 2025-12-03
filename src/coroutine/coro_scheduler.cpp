@@ -5,7 +5,7 @@
 #include "coroutine/coro_session.hpp"
 #include "coroutine/mvcc_manager.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/log.hpp"
 
 #include <cassert>
 #include <cstdint>

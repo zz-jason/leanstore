@@ -1,8 +1,8 @@
 #pragma once
 
 #include "coroutine/coro_env.hpp"
-#include "leanstore/utils/defer.hpp"
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/defer.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/utils/misc.hpp"
 
 #include <atomic>
@@ -82,7 +82,7 @@ protected:
 
     // log info about thread start and stop events
     Log::Info("{} thread started", thread_name_);
-    SCOPED_DEFER(Log::Info("{} thread stopped", thread_name_));
+    LEAN_DEFER(Log::Info("{} thread stopped", thread_name_));
 
     // setup thread name
     pthread_setname_np(pthread_self(), thread_name_.c_str());

@@ -86,12 +86,11 @@ TEST_F(AbortTest, AfterUpdate) {
 
   std::string key1("1"), val1("10"), val11("11");
   std::string val_read;
-  ASSERT_TRUE(s0->Put(tbl_, key1, ToSlice(val1), true));
+  ASSERT_TRUE(s0->Put(tbl_, key1, Slice(val1), true));
 
   s0->StartTx();
   s1->StartTx();
-  ASSERT_TRUE(s0->Update(tbl_, key1, ToSlice(val11)));
-
+  ASSERT_TRUE(s0->Update(tbl_, key1, Slice(val11)));
   auto res = s0->Get(tbl_, key1, val_read);
   ASSERT_TRUE(res && res.value() == 1); // got the uncommitted value
   ASSERT_EQ(val_read, val11);
@@ -118,7 +117,7 @@ TEST_F(AbortTest, AfterRemove) {
 
   std::string key1("1"), val1("10"), val11("11");
   std::string val_read;
-  ASSERT_TRUE(s0->Put(tbl_, key1, ToSlice(val1), true));
+  ASSERT_TRUE(s0->Put(tbl_, key1, Slice(val1), true));
 
   s0->StartTx();
   s1->StartTx();
@@ -149,7 +148,7 @@ TEST_F(AbortTest, AfterInsertOnRemove) {
 
   std::string key1("1"), val1("10"), val11("11");
   std::string val_read;
-  ASSERT_TRUE(s0->Put(tbl_, key1, ToSlice(val1), true));
+  ASSERT_TRUE(s0->Put(tbl_, key1, Slice(val1), true));
 
   s0->StartTx();
   s1->StartTx();
@@ -163,7 +162,7 @@ TEST_F(AbortTest, AfterInsertOnRemove) {
   ASSERT_EQ(val_read, val1);
 
   // insert on removed key
-  ASSERT_TRUE(s0->Put(tbl_, key1, ToSlice(val11)));
+  ASSERT_TRUE(s0->Put(tbl_, key1, Slice(val11)));
   res = s0->Get(tbl_, key1, val_read);
   ASSERT_TRUE(res && res.value() == 1); // get the uncommitted value
   ASSERT_EQ(val_read, val11);

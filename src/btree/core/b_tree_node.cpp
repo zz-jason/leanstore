@@ -1,10 +1,10 @@
 #include "leanstore/btree/core/b_tree_node.hpp"
 
 #include "leanstore/buffer-manager/guarded_buffer_frame.hpp"
+#include "leanstore/cpp/base/defer.hpp"
+#include "leanstore/cpp/base/log.hpp"
+#include "leanstore/cpp/base/slice.hpp"
 #include "leanstore/exceptions.hpp"
-#include "leanstore/slice.hpp"
-#include "leanstore/utils/defer.hpp"
-#include "leanstore/utils/log.hpp"
 #include "utils/small_vector.hpp"
 
 #include <algorithm>
@@ -129,7 +129,7 @@ void BTreeNode::Compact() {
   DEBUG_BLOCK() {
     space_after_compaction = FreeSpaceAfterCompaction();
   }
-  SCOPED_DEFER(DEBUG_BLOCK() { LEAN_DCHECK(space_after_compaction == FreeSpace()); });
+  LEAN_DEFER(DEBUG_BLOCK() { LEAN_DCHECK(space_after_compaction == FreeSpace()); });
 
   // generate a temp node to store the compacted data
   auto tmp_node_buf = utils::JumpScopedArray<uint8_t>(BTreeNode::Size());

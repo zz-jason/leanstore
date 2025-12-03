@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/log.hpp"
 
 #include <cassert>
 #include <cstdint>

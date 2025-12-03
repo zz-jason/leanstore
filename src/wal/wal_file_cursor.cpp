@@ -2,7 +2,7 @@
 
 #include "leanstore/common/wal_record.h"
 #include "leanstore/cpp/base/error.hpp"
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/log.hpp"
 
 #include <cassert>
 #include <cerrno>

@@ -3,12 +3,12 @@
 #include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
+#include "leanstore/cpp/base/defer.hpp"
 #include "leanstore/cpp/base/error.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/cpp/base/result.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/utils/defer.hpp"
-#include "leanstore/utils/log.hpp"
 
 #include <cstring>
 #include <expected>
@@ -223,7 +223,7 @@ inline Result<void> LeanStoreMVCCSession::Put(TableRef* tbl, Slice key, Slice va
     if (implicit_tx) {
       CoroEnv::CurTxMgr().StartTx(tx_mode_, isolation_level_);
     }
-    SCOPED_DEFER(if (implicit_tx) {
+    LEAN_DEFER(if (implicit_tx) {
       if (res == OpCode::kOK) {
         CoroEnv::CurTxMgr().CommitTx();
       } else {
@@ -253,7 +253,7 @@ inline Result<uint64_t> LeanStoreMVCCSession::Get(TableRef* tbl, Slice key, std:
     if (implicit_tx) {
       CoroEnv::CurTxMgr().StartTx(tx_mode_, isolation_level_);
     }
-    SCOPED_DEFER(if (implicit_tx) {
+    LEAN_DEFER(if (implicit_tx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
         CoroEnv::CurTxMgr().CommitTx();
       } else {
@@ -277,13 +277,13 @@ inline Result<uint64_t> LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, S
   auto* btree = reinterpret_cast<TransactionKV*>(tbl);
   OpCode res;
   auto update_call_back = [&](MutableSlice to_update) {
-    std::memcpy(to_update.Data(), val.data(), val.length());
+    std::memcpy(to_update.data(), val.data(), val.size());
   };
   store_->lean_store_->ExecSync(worker_id_, [&]() {
     if (implicit_tx) {
       CoroEnv::CurTxMgr().StartTx(tx_mode_, isolation_level_);
     }
-    SCOPED_DEFER(if (implicit_tx) {
+    LEAN_DEFER(if (implicit_tx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
         CoroEnv::CurTxMgr().CommitTx();
       } else {
@@ -316,7 +316,7 @@ inline Result<uint64_t> LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key, b
     if (implicit_tx) {
       CoroEnv::CurTxMgr().StartTx(tx_mode_, isolation_level_);
     }
-    SCOPED_DEFER(if (implicit_tx) {
+    LEAN_DEFER(if (implicit_tx) {
       if (res == OpCode::kOK || res == OpCode::kNotFound) {
         CoroEnv::CurTxMgr().CommitTx();
       } else {

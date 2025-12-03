@@ -3,8 +3,8 @@
 #include "leanstore/btree/core/btree_iter_mut.hpp"
 #include "leanstore/common/portable.h"
 #include "leanstore/common/types.h"
-#include "leanstore/units.hpp"
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/constants.hpp"
+#include "leanstore/cpp/base/log.hpp"
 
 namespace leanstore {
 /// Plan: we should handle frequently and infrequently updated tuples

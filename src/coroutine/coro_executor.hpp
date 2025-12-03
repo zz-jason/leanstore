@@ -5,8 +5,8 @@
 #include "coroutine/coro_env.hpp"
 #include "coroutine/coro_io.hpp"
 #include "coroutine/coroutine.hpp"
-#include "leanstore//utils/jump_mu.hpp"
-#include "leanstore/utils/log.hpp"
+#include "leanstore//cpp/base/jump_mu.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 
 #include <atomic>

@@ -38,7 +38,7 @@ public:
   // State Serialization
   utils::JsonObj Serialize() const;
 
-  /// Deserialize the state of the CRManager from a StringMap.
+  /// Deserialize the state of the CRManager.
   void Deserialize(const utils::JsonObj& json_obj);
 
   /// Stop all the worker threads and the group committer thread.

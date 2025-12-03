@@ -3,8 +3,8 @@
 #include "leanstore/common/types.h"
 #include "leanstore/common/wal_record.h"
 #include "leanstore/cpp/base/error.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/cpp/wal/wal_cursor.hpp"
-#include "leanstore/utils/log.hpp"
 
 #include <cassert>
 #include <cerrno>
