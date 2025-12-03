@@ -49,7 +49,7 @@ void BTreeGeneric::Init(LeanStore* store, lean_treeid_t btree_id, lean_btree_con
 
   // Record WAL
   if (config_.enable_wal_) {
-    lean_txid_t sys_tx_id = store_->GetMvccManager()->AllocSysTxTs();
+    lean_txid_t sys_tx_id = store_->GetMvccManager().AllocSysTxTs();
 
     // wal for meta node
     auto* meta_bf = x_guarded_meta.bf();
@@ -521,7 +521,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(GuardedBufferFrame<BTreeNode
 
   ExclusiveGuardedBufferFrame<BTreeNode> x_guarded_parent = std::move(guarded_parent);
   // TODO(zz-jason): support wal and sync system tx id
-  // lean_txid_t sysTxId = utils::tlsStore->GetMvccManager()->AllocSysTxTs();
+  // lean_txid_t sysTxId = utils::tlsStore->GetMvccManager().AllocSysTxTs();
   // xGuardedParent.SyncSystemTxId(sysTxId);
 
   XMergeReturnCode ret_code = XMergeReturnCode::kPartialMerge;

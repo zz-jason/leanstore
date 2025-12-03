@@ -77,7 +77,7 @@ void AutoCommitProtocol::CommitAck() {
 
 void AutoCommitProtocol::TrySyncLastCommittedTx() {
   ScopedTimer timer([&]([[maybe_unused]] double elapsed_ms) {
-    CoroEnv::CurStore().GetMvccManager()->UpdateMinCommittedSysTx(min_committed_sys_tx_);
+    CoroEnv::CurStore().GetMvccManager().UpdateMinCommittedSysTx(min_committed_sys_tx_);
     LEAN_DLOG("SyncLastCommittedTx finished, elapsed_ms={}"
               ", min_committed_sys_tx={}, min_committed_usr_tx={}",
               elapsed_ms, min_committed_sys_tx_, min_committed_usr_tx_);
@@ -85,7 +85,7 @@ void AutoCommitProtocol::TrySyncLastCommittedTx() {
 
   // sync last committed sys tx
   auto min_committed_sys_tx = std::numeric_limits<lean_txid_t>::max();
-  auto& loggings = store_->GetMvccManager()->Loggings();
+  auto& loggings = store_->GetMvccManager().Loggings();
   assert(loggings.size() == synced_last_committed_sys_tx_.size());
   for (auto i = 0u; i < loggings.size(); i++) {
     auto last_committed_sys_tx = loggings[i]->GetLastHardenedSysTx();

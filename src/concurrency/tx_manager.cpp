@@ -52,7 +52,7 @@ void TxManager::StartTx(TxMode mode, IsolationLevel level, bool is_read_only) {
   }
 
   /// Reset the max observed system transaction id
-  active_tx_.max_observed_sys_tx_id_ = store_->GetMvccManager()->GetMinCommittedSysTx();
+  active_tx_.max_observed_sys_tx_id_ = store_->GetMvccManager().GetMinCommittedSysTx();
 
   // Init wal and group commit related transaction information
   active_tx_.first_wal_ = CoroEnv::CurLogging().wal_buffered_;
@@ -66,9 +66,9 @@ void TxManager::StartTx(TxMode mode, IsolationLevel level, bool is_read_only) {
   // short-running) We have to acquire a transaction id and use it for locking in ANY isolation
   // level
   if (is_read_only) {
-    active_tx_.start_ts_ = store_->GetMvccManager()->GetUsrTxTs();
+    active_tx_.start_ts_ = store_->GetMvccManager().GetUsrTxTs();
   } else {
-    active_tx_.start_ts_ = store_->GetMvccManager()->AllocUsrTxTs();
+    active_tx_.start_ts_ = store_->GetMvccManager().AllocUsrTxTs();
   }
   auto cur_tx_id = active_tx_.start_ts_;
   if (store_->store_option_->enable_long_running_tx_ && active_tx_.IsLongRunning()) {
@@ -78,7 +78,7 @@ void TxManager::StartTx(TxMode mode, IsolationLevel level, bool is_read_only) {
 
   // Publish the transaction id
   active_tx_id_.store(cur_tx_id, std::memory_order_release);
-  cc_.global_wmk_of_all_tx_ = store_->GetMvccManager()->GlobalWmkInfo().wmk_of_all_tx_.load();
+  cc_.global_wmk_of_all_tx_ = store_->GetMvccManager().GlobalWmkInfo().wmk_of_all_tx_.load();
 
   // Cleanup commit log if necessary
   cc_.commit_tree_.CompactCommitLog();
@@ -106,7 +106,7 @@ void TxManager::CommitTx() {
   // Reset cmd_id_ on commit
   cmd_id_ = 0;
   if (active_tx_.has_wrote_) {
-    active_tx_.commit_ts_ = store_->GetMvccManager()->AllocUsrTxTs();
+    active_tx_.commit_ts_ = store_->GetMvccManager().AllocUsrTxTs();
     cc_.commit_tree_.AppendCommitLog(active_tx_.start_ts_, active_tx_.commit_ts_);
     cc_.latest_commit_ts_.store(active_tx_.commit_ts_, std::memory_order_release);
   } else {

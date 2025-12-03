@@ -326,7 +326,7 @@ OpCode BasicKV::RangeRemove(Slice start_key, Slice end_key, bool page_wise) {
       if (guarded_leaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
         x_iter->SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
           JUMPMU_TRY() {
-            lean_txid_t sys_tx_id = store_->GetMvccManager()->AllocSysTxTs();
+            lean_txid_t sys_tx_id = store_->GetMvccManager().AllocSysTxTs();
             this->TryMergeMayJump(sys_tx_id, *to_merge);
           }
           JUMPMU_CATCH() {

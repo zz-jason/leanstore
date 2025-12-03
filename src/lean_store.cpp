@@ -1,6 +1,5 @@
 #include "leanstore/lean_store.hpp"
 
-#include "coroutine/coro_session.hpp"
 #include "coroutine/mvcc_manager.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/core/b_tree_generic.hpp"
@@ -14,7 +13,9 @@
 #include "leanstore/cpp/base/result.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
+#ifndef ENABLE_COROUTINE
 #include "leanstore/utils/parallelize.hpp"
+#endif
 #include "utils/json.hpp"
 #include "utils/scoped_timer.hpp"
 
@@ -71,22 +72,7 @@ LeanStore::LeanStore(lean_store_option* option) : store_option_(option) {
 
   mvcc_mgr_ = std::make_unique<leanstore::MvccManager>(this);
 
-#ifdef ENABLE_COROUTINE
-  coro_scheduler_ = new CoroScheduler(this, store_option_->worker_threads_);
-  coro_scheduler_->Init();
-  buffer_manager_->InitFreeBfLists();
-  crmanager_ = nullptr;
-  auto* coro_session = coro_scheduler_->TryReserveCoroSession(0);
-  assert(coro_session != nullptr && "Failed to reserve a CoroSession for coroutine execution");
-  coro_scheduler_->Submit(coro_session, [&]() { mvcc_mgr_->InitHistoryStorage(); })->Wait();
-  coro_scheduler_->ReleaseCoroSession(coro_session);
-#else
-  buffer_manager_->InitFreeBfLists();
-  buffer_manager_->StartPageEvictors();
-  crmanager_ = new CRManager(this);
-  crmanager_->worker_threads_[0]->SetJob([&]() { mvcc_mgr_->InitHistoryStorage(); });
-  crmanager_->worker_threads_[0]->Wait();
-#endif
+  StartBackgroundThreads();
 
   // recover from disk
   if (!store_option_->create_from_scratch_) {
@@ -212,11 +198,23 @@ LeanStore::~LeanStore() {
 
 void LeanStore::StartBackgroundThreads() {
 #ifdef ENABLE_COROUTINE
-  coro_scheduler_ = new CoroScheduler(this, store_option_->worker_threads_);
+  coro_scheduler_ = std::make_unique<CoroScheduler>(this, store_option_->worker_threads_);
   coro_scheduler_->Init();
+  buffer_manager_->InitFreeBfLists();
+
+  crmanager_ = nullptr;
+
+  auto* coro_session = coro_scheduler_->TryReserveCoroSession(0);
+  assert(coro_session != nullptr && "Failed to reserve a CoroSession for coroutine execution");
+  coro_scheduler_->Submit(coro_session, [&]() { mvcc_mgr_->InitHistoryStorage(); })->Wait();
+  coro_scheduler_->ReleaseCoroSession(coro_session);
 #else
+  buffer_manager_->InitFreeBfLists();
   buffer_manager_->StartPageEvictors();
-  crmanager_ = new CRManager(this);
+
+  crmanager_ = std::make_unique<CRManager>(this);
+  crmanager_->worker_threads_[0]->SetJob([&]() { mvcc_mgr_->InitHistoryStorage(); });
+  crmanager_->worker_threads_[0]->Wait();
 #endif
 }
 
@@ -225,13 +223,11 @@ void LeanStore::StopBackgroundThreads() {
   // destroy coro scheduler
   if (coro_scheduler_ != nullptr) {
     coro_scheduler_->Deinit();
-    delete coro_scheduler_;
     coro_scheduler_ = nullptr;
   }
 #else
   // destroy and Stop all foreground workers
   if (crmanager_ != nullptr) {
-    delete crmanager_;
     crmanager_ = nullptr;
   }
   // destroy buffer manager (buffer frame providers)
@@ -434,10 +430,10 @@ bool LeanStore::DeserializeMeta() {
       };
 
 #ifdef ENABLE_COROUTINE
-      auto* coro_session = GetCoroScheduler()->TryReserveCoroSession(0);
+      auto* coro_session = GetCoroScheduler().TryReserveCoroSession(0);
       assert(coro_session != nullptr && "Failed to reserve a CoroSession for coroutine execution");
-      GetCoroScheduler()->Submit(coro_session, std::move(job))->Wait();
-      GetCoroScheduler()->ReleaseCoroSession(coro_session);
+      GetCoroScheduler().Submit(coro_session, std::move(job))->Wait();
+      GetCoroScheduler().ReleaseCoroSession(coro_session);
 #else
       ExecSync(0, std::move(job));
 #endif

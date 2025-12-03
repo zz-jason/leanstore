@@ -151,7 +151,7 @@ void HistoryStorage::PurgeVersions(lean_txid_t from_tx_id, lean_txid_t to_tx_id,
       if (guarded_leaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
         x_iter->SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
           JUMPMU_TRY() {
-            lean_txid_t sys_tx_id = btree->store_->GetMvccManager()->AllocSysTxTs();
+            lean_txid_t sys_tx_id = btree->store_->GetMvccManager().AllocSysTxTs();
             btree->TryMergeMayJump(sys_tx_id, *to_merge);
           }
           JUMPMU_CATCH() {
@@ -242,7 +242,7 @@ void HistoryStorage::PurgeVersions(lean_txid_t from_tx_id, lean_txid_t to_tx_id,
         if (guarded_leaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
           x_iter->SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
             JUMPMU_TRY() {
-              lean_txid_t sys_tx_id = btree->store_->GetMvccManager()->AllocSysTxTs();
+              lean_txid_t sys_tx_id = btree->store_->GetMvccManager().AllocSysTxTs();
               btree->TryMergeMayJump(sys_tx_id, *to_merge);
             }
             JUMPMU_CATCH() {

@@ -16,7 +16,9 @@
 #include "leanstore/sync/scoped_hybrid_guard.hpp"
 #include "leanstore/utils/async_io.hpp"
 #include "leanstore/utils/managed_thread.hpp"
+#ifndef ENABLE_COROUTINE
 #include "leanstore/utils/parallelize.hpp"
+#endif
 #include "utils/scoped_timer.hpp"
 #include "utils/small_vector.hpp"
 
