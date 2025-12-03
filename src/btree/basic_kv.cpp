@@ -6,10 +6,10 @@
 #include "leanstore/btree/core/btree_iter_mut.hpp"
 #include "leanstore/common/wal_record.h"
 #include "leanstore/cpp/base/error.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
-#include "leanstore/utils/log.hpp"
 #include "leanstore/utils/misc.hpp"
 #include "wal/wal_builder.hpp"
 
@@ -173,7 +173,7 @@ OpCode BasicKV::Insert(Slice key, Slice val) {
     }
 
     if (config_.enable_wal_) {
-      WalBuilder<lean_wal_insert>(this->tree_id_, key.length() + val.length())
+      WalBuilder<lean_wal_insert>(this->tree_id_, key.size() + val.size())
           .SetPageInfo(x_iter->guarded_leaf_.bf_)
           .BuildInsert(key, val)
           .Submit();
@@ -271,13 +271,13 @@ OpCode BasicKV::UpdatePartial(Slice key, MutValCallback update_call_back, Update
       auto* delta_ptr = lean_wal_update_get_delta(builder.GetWal());
 
       // 1. copy old value to wal buffer
-      BasicKV::CopyToBuffer(update_desc, current_val.Data(), delta_ptr);
+      BasicKV::CopyToBuffer(update_desc, current_val.data(), delta_ptr);
 
       // 2. update with the new value
       update_call_back(current_val);
 
       // 3. xor with new value, store the result in wal buffer
-      BasicKV::XorToBuffer(update_desc, current_val.Data(), delta_ptr);
+      BasicKV::XorToBuffer(update_desc, current_val.data(), delta_ptr);
 
       builder.Submit();
     } else {

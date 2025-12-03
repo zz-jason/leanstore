@@ -3,8 +3,8 @@
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
+#include "leanstore/cpp/base/defer.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/random_generator.hpp"
 
 #include <gtest/gtest.h>
@@ -52,7 +52,7 @@ protected:
   void TearDown() override {
     store_->ExecSync(1, [&]() {
       CoroEnv::CurTxMgr().StartTx();
-      SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
+      LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
       store_->DropTransactionKV(tree_name_);
     });
   }

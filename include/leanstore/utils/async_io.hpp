@@ -1,8 +1,8 @@
 #pragma once
 
 #include "leanstore/cpp/base/error.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/cpp/base/result.hpp"
-#include "leanstore/utils/log.hpp"
 
 #include <cerrno>
 #include <cstdint>

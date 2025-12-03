@@ -4,12 +4,11 @@
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/common/wal_record.h"
+#include "leanstore/cpp/base/defer.hpp"
 #include "leanstore/cpp/base/error.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/cpp/base/result.hpp"
 #include "leanstore/sync/hybrid_guard.hpp"
-#include "leanstore/units.hpp"
-#include "leanstore/utils/defer.hpp"
-#include "leanstore/utils/log.hpp"
 
 #include <cstdlib>
 #include <expected>
@@ -78,12 +77,12 @@ public:
     Log::Fatal("BufferManagedTree::unlock is unimplemented");
   }
 
-  virtual StringMap Serialize() {
+  virtual std::unordered_map<std::string, std::string> Serialize() {
     Log::Fatal("BufferManagedTree::Serialize is unimplemented");
     return {};
   }
 
-  virtual void Deserialize(StringMap) {
+  virtual void Deserialize(std::unordered_map<std::string, std::string>) {
     Log::Fatal("BufferManagedTree::Deserialize is unimplemented");
   }
 
@@ -153,7 +152,7 @@ public:
 
   bool RegisterTree(lean_treeid_t tree_id, std::unique_ptr<BufferManagedTree> tree,
                     const std::string& tree_name) {
-    SCOPED_DEFER(if (tree_id > tree_id_allocator_) { tree_id_allocator_ = tree_id; });
+    LEAN_DEFER(if (tree_id > tree_id_allocator_) { tree_id_allocator_ = tree_id; });
     LEAN_UNIQUE_LOCK(mutex_);
     if (tree_index_by_name_.find(tree_name) != tree_index_by_name_.end()) {
       return false;
@@ -275,7 +274,7 @@ public:
     return tree->Unlock(entry);
   }
 
-  void Deserialize(lean_treeid_t tree_id, StringMap map) {
+  void Deserialize(lean_treeid_t tree_id, std::unordered_map<std::string, std::string> map) {
     LEAN_SHARED_LOCK(mutex_);
     auto it = trees_.find(tree_id);
     if (it == trees_.end()) {

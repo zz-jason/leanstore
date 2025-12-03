@@ -1,8 +1,8 @@
 #pragma once
 
 #include "leanstore/common/utils.h"
-#include "leanstore/utils/defer.hpp"
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/defer.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/utils/parallelize.hpp"
 #include "leanstore/utils/random_generator.hpp"
 #include "utils/small_vector.hpp"
@@ -41,7 +41,7 @@ public:
 
     auto start = std::chrono::high_resolution_clock::now();
     std::cout << "Inserting " << options_.record_count_ << " values" << std::endl;
-    SCOPED_DEFER({
+    LEAN_DEFER({
       auto end = std::chrono::high_resolution_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
       std::cout << "Done inserting" << ", time elapsed: " << duration / 1000000.0 << " seconds"
@@ -53,7 +53,7 @@ public:
     const char table_name[] = "table:ycsb";
     {
       WT_SESSION* session = open_session("isolation=snapshot");
-      SCOPED_DEFER(close_session(session));
+      LEAN_DEFER(close_session(session));
       create_table(session, table_name);
     }
 

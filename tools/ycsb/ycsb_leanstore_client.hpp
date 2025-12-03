@@ -5,9 +5,9 @@
 #include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/random_generator.hpp"
 #include "leanstore/utils/scrambled_zipf_generator.hpp"
@@ -174,7 +174,7 @@ protected:
   std::function<void(MutableSlice to_update)> update_callback_ = [&](MutableSlice to_update) {
     auto new_val_size = update_desc_->update_slots_[0].size_;
     utils::RandomGenerator::RandAlphString(new_val_size, val_buf_);
-    std::memcpy(to_update.Data(), val_buf_.data(), val_buf_.size());
+    std::memcpy(to_update.data(), val_buf_.data(), val_buf_.size());
   };
 };
 

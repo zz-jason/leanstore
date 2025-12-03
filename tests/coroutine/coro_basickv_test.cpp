@@ -1,7 +1,7 @@
 #include "lean_test_suite.hpp"
 #include "leanstore/c/leanstore.h"
 #include "leanstore/common/types.h"
-#include "leanstore/utils/defer.hpp"
+#include "leanstore/cpp/base/defer.hpp"
 
 #include <gtest/gtest.h>
 
@@ -26,7 +26,7 @@ public:
     // connect to leanstore
     lean_session* sess = store_->connect(store_);
     ASSERT_NE(sess, nullptr);
-    SCOPED_DEFER(sess->close(sess));
+    LEAN_DEFER(sess->close(sess));
 
     auto status = sess->create_btree(sess, btree_name_, lean_btree_type::LEAN_BTREE_TYPE_ATOMIC);
     ASSERT_EQ(status, lean_status::LEAN_STATUS_OK);
@@ -66,7 +66,7 @@ TEST_F(CoroBasicKvTest, BasicKvIterMut) {
   // connect to leanstore
   auto* s0 = store_->connect(store_);
   ASSERT_NE(s0, nullptr);
-  SCOPED_DEFER(s0->close(s0));
+  LEAN_DEFER(s0->close(s0));
 
   auto* btree_s0 = s0->get_btree(s0, btree_name_);
   ASSERT_NE(btree_s0, nullptr);
@@ -81,12 +81,12 @@ TEST_F(CoroBasicKvTest, BasicKvIterMut) {
   // create cursor
   auto* cursor_s0 = btree_s0->open_cursor(btree_s0);
   ASSERT_NE(cursor_s0, nullptr);
-  SCOPED_DEFER(cursor_s0->close(cursor_s0));
+  LEAN_DEFER(cursor_s0->close(cursor_s0));
 
   lean_str key, value;
   lean_str_init(&key, 8);
   lean_str_init(&value, 8);
-  SCOPED_DEFER({
+  LEAN_DEFER({
     lean_str_deinit(&key);
     lean_str_deinit(&value);
   });
@@ -98,12 +98,12 @@ TEST_F(CoroBasicKvTest, BasicKvIterMut) {
 
   auto* cursor_s0_another = btree_s0->open_cursor(btree_s0);
   ASSERT_NE(cursor_s0_another, nullptr);
-  SCOPED_DEFER(cursor_s0_another->close(cursor_s0_another));
+  LEAN_DEFER(cursor_s0_another->close(cursor_s0_another));
 
   lean_str key_another, value_another;
   lean_str_init(&key_another, 8);
   lean_str_init(&value_another, 8);
-  SCOPED_DEFER({
+  LEAN_DEFER({
     lean_str_deinit(&key_another);
     lean_str_deinit(&value_another);
   });
@@ -125,7 +125,7 @@ TEST_F(CoroBasicKvTest, BasicKvIterMut) {
   lean_str key_after_remove, value_after_remove;
   lean_str_init(&key_after_remove, 8);
   lean_str_init(&value_after_remove, 8);
-  SCOPED_DEFER({
+  LEAN_DEFER({
     lean_str_deinit(&key_after_remove);
     lean_str_deinit(&value_after_remove);
   });

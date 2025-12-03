@@ -1,11 +1,11 @@
 #include "leanstore/cpp/wal/parallel_recovery.hpp"
 
 #include "leanstore/common/wal_record.h"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/cpp/base/optional.hpp"
 #include "leanstore/cpp/base/result.hpp"
 #include "leanstore/cpp/wal/wal_cast.hpp"
 #include "leanstore/cpp/wal/wal_cursor.hpp"
-#include "leanstore/utils/log.hpp"
 
 #include <memory>
 #include <optional>

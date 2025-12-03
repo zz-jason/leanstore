@@ -2,8 +2,8 @@
 
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/buffer-manager/tree_registry.hpp"
-#include "leanstore/utils/defer.hpp"
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/defer.hpp"
+#include "leanstore/cpp/base/log.hpp"
 
 namespace leanstore {
 
@@ -29,8 +29,8 @@ void PageEvictor::RunImpl() {
 
 void PageEvictor::PickBufferFramesToCool(Partition& target_partition) {
   LEAN_DLOG("Phase1: PickBufferFramesToCool begins");
-  SCOPED_DEFER(LEAN_DLOG("Phase1: PickBufferFramesToCool ended, evict_candidate_bfs_.size={}",
-                         evict_candidate_bfs_.size()));
+  LEAN_DEFER(LEAN_DLOG("Phase1: PickBufferFramesToCool ended, evict_candidate_bfs_.size={}",
+                       evict_candidate_bfs_.size()));
 
   // [corner cases]: prevent starving when free list is empty and cooling to
   // the required level can not be achieved
@@ -171,9 +171,9 @@ void PageEvictor::RandomBufferFrames2CoolOrEvict() {
 
 void PageEvictor::PrepareAsyncWriteBuffer(Partition& target_partition) {
   LEAN_DLOG("Phase2: PrepareAsyncWriteBuffer begins");
-  SCOPED_DEFER(LEAN_DLOG("Phase2: PrepareAsyncWriteBuffer ended, "
-                         "async_write_buffer_.PendingRequests={}",
-                         async_write_buffer_.GetPendingRequests()));
+  LEAN_DEFER(LEAN_DLOG("Phase2: PrepareAsyncWriteBuffer ended, "
+                       "async_write_buffer_.PendingRequests={}",
+                       async_write_buffer_.GetPendingRequests()));
 
   free_bf_list_.Reset();
   for (auto* cooled_bf : evict_candidate_bfs_) {
@@ -248,7 +248,7 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& target_partition) {
 
 void PageEvictor::FlushAndRecycleBufferFrames(Partition& target_partition) {
   LEAN_DLOG("Phase3: FlushAndRecycleBufferFrames begins");
-  SCOPED_DEFER(LEAN_DLOG("Phase3: FlushAndRecycleBufferFrames ended"));
+  LEAN_DEFER(LEAN_DLOG("Phase3: FlushAndRecycleBufferFrames ended"));
 
   auto result = async_write_buffer_.SubmitAll();
   if (!result) {

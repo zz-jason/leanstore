@@ -1,7 +1,7 @@
 #include "leanstore/utils/parallelize.hpp"
 
 #include "coroutine/coro_env.hpp"
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/log.hpp"
 
 #include <functional>
 #include <thread>

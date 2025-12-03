@@ -7,8 +7,8 @@
 #include "leanstore/concurrency/group_committer.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/concurrency/worker_thread.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/utils/log.hpp"
 #include "utils/json.hpp"
 
 #include <cassert>

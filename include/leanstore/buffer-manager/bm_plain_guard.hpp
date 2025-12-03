@@ -1,7 +1,7 @@
 #pragma once
 
+#include "leanstore/cpp/base/jump_mu.hpp"
 #include "leanstore/sync/hybrid_guard.hpp"
-#include "leanstore/utils/jump_mu.hpp"
 
 namespace leanstore {
 

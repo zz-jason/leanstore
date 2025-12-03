@@ -2,7 +2,7 @@
 #include "lean_test_suite.hpp"
 #include "leanstore/c/leanstore.h"
 #include "leanstore/common/types.h"
-#include "leanstore/utils/defer.hpp"
+#include "leanstore/cpp/base/defer.hpp"
 #include "leanstore/utils/random_generator.hpp"
 
 #include <gtest/gtest.h>
@@ -49,22 +49,22 @@ void RecoveryTest::TearDown() {
 TEST_F(RecoveryTest, AtomicBTreeRecoverAfterInsert) {
   auto* s0 = store_->connect(store_);
   ASSERT_NE(s0, nullptr);
-  SCOPED_DEFER({ s0->close(s0); })
+  LEAN_DEFER({ s0->close(s0); })
 
   const char* btree_name = "recovery_test_tree";
   auto status = s0->create_btree(s0, btree_name, lean_btree_type::LEAN_BTREE_TYPE_ATOMIC);
   ASSERT_EQ(status, lean_status::LEAN_STATUS_OK);
   auto* btree_s0 = s0->get_btree(s0, btree_name);
   ASSERT_NE(btree_s0, nullptr);
-  SCOPED_DEFER({ btree_s0->close(btree_s0); })
+  LEAN_DEFER({ btree_s0->close(btree_s0); })
 
   auto* s1 = store_->connect(store_);
   ASSERT_NE(s1, nullptr);
-  SCOPED_DEFER({ s1->close(s1); })
+  LEAN_DEFER({ s1->close(s1); })
 
   auto* btree_s1 = s1->get_btree(s1, btree_name);
   ASSERT_NE(btree_s1, nullptr);
-  SCOPED_DEFER({ btree_s1->close(btree_s1); })
+  LEAN_DEFER({ btree_s1->close(btree_s1); })
 
   // Insert some entries
   size_t num_entries = 100;
@@ -83,7 +83,7 @@ TEST_F(RecoveryTest, AtomicBTreeRecoverAfterInsert) {
 
   // Close the store without checkpointing, to simulate a crash after inserts
   FailPoint::Enable(FailPoint::kSkipCheckpointAll);
-  SCOPED_DEFER(FailPoint::Disable(FailPoint::kSkipCheckpointAll));
+  LEAN_DEFER(FailPoint::Disable(FailPoint::kSkipCheckpointAll));
   store_->close(store_);
   store_ = nullptr;
 }

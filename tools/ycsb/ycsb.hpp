@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/utils/scrambled_zipf_generator.hpp"
 #include "ycsb_args.hpp"
 
@@ -94,7 +94,7 @@ protected:
 
   std::string FormatWithSpaces(uint64_t n) {
     std::string num = std::to_string(n);
-    int len = num.length();
+    int len = num.size();
     std::ostringstream oss;
 
     int first_group = len % 3;

@@ -6,14 +6,14 @@
 #include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
+#include "leanstore/cpp/base/constants.hpp"
+#include "leanstore/cpp/base/defer.hpp"
+#include "leanstore/cpp/base/jump_mu.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/exceptions.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/sync/scoped_hybrid_guard.hpp"
-#include "leanstore/units.hpp"
 #include "leanstore/utils/counter_util.hpp"
-#include "leanstore/utils/defer.hpp"
-#include "leanstore/utils/jump_mu.hpp"
-#include "leanstore/utils/log.hpp"
 #include "leanstore/utils/random_generator.hpp"
 
 #include <atomic>
@@ -271,7 +271,7 @@ void ConcurrencyControl::UpdateGlobalWmks() {
   }
 
   // release the lock on exit
-  SCOPED_DEFER(store_->GetMvccManager()->GlobalWmkInfo().global_mutex_.unlock());
+  LEAN_DEFER(store_->GetMvccManager()->GlobalWmkInfo().global_mutex_.unlock());
 
   // There is a chance that oldestTxId or oldestShortTxId is
   // std::numeric_limits<lean_txid_t>::max(). It is ok because LCB(+oo) returns the id
@@ -384,10 +384,10 @@ void ConcurrencyControl::UpdateGlobalWmks() {
 }
 
 void ConcurrencyControl::UpdateLocalWmks() {
-  SCOPED_DEFER(LEAN_DLOG("Local watermarks updated, workerId={}, "
-                         "local_wmk_of_all_tx_={}, local_wmk_of_short_tx_={}",
-                         CoroEnv::CurTxMgr().worker_id_, local_wmk_of_all_tx_,
-                         local_wmk_of_short_tx_));
+  LEAN_DEFER(LEAN_DLOG("Local watermarks updated, workerId={}, "
+                       "local_wmk_of_all_tx_={}, local_wmk_of_short_tx_={}",
+                       CoroEnv::CurTxMgr().worker_id_, local_wmk_of_all_tx_,
+                       local_wmk_of_short_tx_));
   while (true) {
     uint64_t version = wmk_version_.load();
 

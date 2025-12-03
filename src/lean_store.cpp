@@ -8,10 +8,10 @@
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/concurrency/cr_manager.hpp"
+#include "leanstore/cpp/base/defer.hpp"
 #include "leanstore/cpp/base/error.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/cpp/base/result.hpp"
-#include "leanstore/utils/defer.hpp"
-#include "leanstore/utils/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
 #include "leanstore/utils/parallelize.hpp"
@@ -26,6 +26,7 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <unordered_map>
 #include <utility>
 
 #include <linux/fs.h>
@@ -58,7 +59,7 @@ LeanStore::LeanStore(lean_store_option* option) : store_option_(option) {
   CoroEnv::SetCurStore(this);
 
   Log::Info("LeanStore starting ...");
-  SCOPED_DEFER(Log::Info("LeanStore started"));
+  LEAN_DEFER(Log::Info("LeanStore started"));
 
   InitDbFiles();
 
@@ -101,7 +102,7 @@ LeanStore::LeanStore(lean_store_option* option) : store_option_(option) {
 }
 
 void LeanStore::InitDbFiles() {
-  SCOPED_DEFER({
+  LEAN_DEFER({
     LEAN_DCHECK(fcntl(page_fd_, F_GETFL) != -1);
     LEAN_DCHECK(fcntl(wal_fd_, F_GETFL) != -1);
   });
@@ -150,7 +151,7 @@ void LeanStore::InitDbFiles() {
 
 LeanStore::~LeanStore() {
   Log::Info("LeanStore stopping ...");
-  SCOPED_DEFER({
+  LEAN_DEFER({
     lean_store_option_destroy(store_option_);
     Log::Info("LeanStore stopped");
     Log::Deinit();
@@ -391,7 +392,7 @@ bool LeanStore::DeserializeMeta() {
     const auto btree_use_bulk_insert = *btree_json_obj->GetBool("use_bulk_insert");
     std::string btree_name(btree_name_ref.data(), btree_name_ref.size());
 
-    StringMap btree_meta_map;
+    std::unordered_map<std::string, std::string> btree_meta_map;
     auto btree_meta_json_obj = btree_json_obj->GetJsonObj("serialized");
     btree_meta_json_obj->Foreach([&](const std::string_view& key, const utils::JsonValue& value) {
       assert(value.IsString());

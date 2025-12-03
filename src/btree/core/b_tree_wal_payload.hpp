@@ -2,8 +2,8 @@
 
 #include "leanstore/btree/core/b_tree_node.hpp"
 #include "leanstore/common/types.h"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/kv_interface.hpp"
-#include "leanstore/utils/log.hpp"
 
 #include <string>
 

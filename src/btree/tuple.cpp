@@ -6,7 +6,7 @@
 #include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/utils/misc.hpp"
 
 #include <unordered_map>
@@ -39,14 +39,14 @@ static uint64_t MaxFatTupleLength() {
 bool Tuple::ToFat(BTreeIterMut* x_iter) {
   // Process the chain tuple
   MutableSlice mut_raw_val = x_iter->MutableVal();
-  auto& chained_tuple = *ChainedTuple::From(mut_raw_val.Data());
+  auto& chained_tuple = *ChainedTuple::From(mut_raw_val.data());
   LEAN_DCHECK(chained_tuple.IsWriteLocked());
   LEAN_DCHECK(chained_tuple.format_ == TupleFormat::kChained);
 
   auto tmp_buf_size = MaxFatTupleLength();
   auto tmp_buf = utils::JumpScopedArray<uint8_t>(tmp_buf_size);
   uint32_t payload_size = tmp_buf_size - sizeof(FatTuple);
-  uint32_t val_size = mut_raw_val.Size() - sizeof(ChainedTuple);
+  uint32_t val_size = mut_raw_val.size() - sizeof(ChainedTuple);
   auto* fat_tuple = new (tmp_buf->get()) FatTuple(payload_size, val_size, chained_tuple);
 
   auto newer_worker_id = chained_tuple.worker_id_;
@@ -132,7 +132,7 @@ bool Tuple::ToFat(BTreeIterMut* x_iter) {
   }
 
   // Copy the FatTuple back to the underlying value buffer.
-  std::memcpy(mut_raw_val.Data(), tmp_buf->get(), fat_tuple_size);
+  std::memcpy(mut_raw_val.data(), tmp_buf->get(), fat_tuple_size);
   return true;
 }
 

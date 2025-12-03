@@ -5,9 +5,9 @@
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/sync/hybrid_guard.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
-#include "leanstore/utils/log.hpp"
 
 #include <utility>
 

@@ -1,8 +1,8 @@
 #pragma once
 
 #include "leanstore/common/portable.h"
-#include "leanstore/utils/jump_mu.hpp"
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/jump_mu.hpp"
+#include "leanstore/cpp/base/log.hpp"
 
 #include <cmath>
 #include <memory>

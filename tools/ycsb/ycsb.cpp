@@ -1,6 +1,6 @@
 #include "tools/ycsb/ycsb.hpp"
 
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "tools/ycsb/ycsb_leanstore.hpp"
 #include "tools/ycsb/ycsb_rocksdb.hpp"
 #include "tools/ycsb/ycsb_wired_tiger.hpp"

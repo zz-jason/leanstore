@@ -5,9 +5,9 @@
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/concurrency/history_storage.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
+#include "leanstore/cpp/base/defer.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/utils/defer.hpp"
 #include "leanstore/utils/random_generator.hpp"
 
 #include <gtest/gtest.h>
@@ -61,11 +61,11 @@ protected:
     // global lower watermarks for garbage collection
     store_->ExecSync(0, [&]() {
       CoroEnv::CurTxMgr().StartTx();
-      ASSERT_EQ(kv_->Insert(ToSlice("0"), ToSlice("0")), OpCode::kOK);
+      ASSERT_EQ(kv_->Insert(Slice("0"), Slice("0")), OpCode::kOK);
       CoroEnv::CurTxMgr().CommitTx();
 
       CoroEnv::CurTxMgr().StartTx();
-      ASSERT_EQ(kv_->Remove(ToSlice("0")), OpCode::kOK);
+      ASSERT_EQ(kv_->Remove(Slice("0")), OpCode::kOK);
       CoroEnv::CurTxMgr().CommitTx();
     });
   }
@@ -74,7 +74,7 @@ protected:
     // TxManager 0, remove the btree
     store_->ExecSync(0, [&]() {
       CoroEnv::CurTxMgr().StartTx();
-      SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
+      LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
       store_->DropTransactionKV(tree_name_);
     });
   }
@@ -94,11 +94,11 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
   // Insert 2 key-values as the test base.
   store_->ExecSync(1, [&]() {
     CoroEnv::CurTxMgr().StartTx();
-    EXPECT_EQ(kv_->Insert(key1, ToSlice(val1)), OpCode::kOK);
+    EXPECT_EQ(kv_->Insert(key1, Slice(val1)), OpCode::kOK);
     CoroEnv::CurTxMgr().CommitTx();
 
     CoroEnv::CurTxMgr().StartTx();
-    EXPECT_EQ(kv_->Insert(key2, ToSlice(val2)), OpCode::kOK);
+    EXPECT_EQ(kv_->Insert(key2, Slice(val2)), OpCode::kOK);
     CoroEnv::CurTxMgr().CommitTx();
   });
 
@@ -152,7 +152,7 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
   // now worker 2 can not get the old value
   store_->ExecSync(2, [&]() {
     CoroEnv::CurTxMgr().StartTx(TxMode::kLongRunning, IsolationLevel::kSnapshotIsolation);
-    SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
+    LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
 
     EXPECT_EQ(kv_->Lookup(key1, copy_value), OpCode::kNotFound);
     EXPECT_EQ(kv_->Lookup(key2, copy_value), OpCode::kNotFound);
@@ -172,11 +172,11 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
   // Work 1, insert 2 key-values as the test base
   store_->ExecSync(1, [&]() {
     CoroEnv::CurTxMgr().StartTx();
-    EXPECT_EQ(kv_->Insert(key1, ToSlice(val1)), OpCode::kOK);
+    EXPECT_EQ(kv_->Insert(key1, Slice(val1)), OpCode::kOK);
     CoroEnv::CurTxMgr().CommitTx();
 
     CoroEnv::CurTxMgr().StartTx();
-    EXPECT_EQ(kv_->Insert(key2, ToSlice(val2)), OpCode::kOK);
+    EXPECT_EQ(kv_->Insert(key2, Slice(val2)), OpCode::kOK);
     CoroEnv::CurTxMgr().CommitTx();
   });
 
@@ -207,7 +207,7 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
     auto update_call_back = [&](MutableSlice to_update) {
       auto new_val_size = update_desc->update_slots_[0].size_;
       new_val = RandomGenerator::RandAlphString(new_val_size);
-      std::memcpy(to_update.Data(), new_val.data(), new_val.size());
+      std::memcpy(to_update.data(), new_val.data(), new_val.size());
     };
 
     for (size_t i = 0; i < 100; ++i) {
@@ -251,7 +251,7 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
   // TxManager 2, now get the updated new value
   store_->ExecSync(2, [&]() {
     CoroEnv::CurTxMgr().StartTx(TxMode::kLongRunning);
-    SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
+    LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
 
     EXPECT_EQ(kv_->Lookup(key1, copy_value), OpCode::kOK);
     EXPECT_EQ(copied_val, new_val);
@@ -285,8 +285,8 @@ TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
   store_->ExecSync(0, [&]() {
     for (const auto& [key, val] : kv_to_test) {
       CoroEnv::CurTxMgr().StartTx();
-      SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
-      EXPECT_EQ(kv_->Insert(key, ToSlice(val)), OpCode::kOK);
+      LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
+      EXPECT_EQ(kv_->Insert(key, Slice(val)), OpCode::kOK);
     }
   });
 
@@ -300,7 +300,7 @@ TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
   };
   store_->ExecSync(2, [&]() {
     CoroEnv::CurTxMgr().StartTx(TxMode::kLongRunning);
-    EXPECT_EQ(kv_->ScanAsc(ToSlice(smallest_key), copy_key_val), OpCode::kOK);
+    EXPECT_EQ(kv_->ScanAsc(Slice(smallest_key), copy_key_val), OpCode::kOK);
   });
 
   // remove the key-values in worker 1
@@ -313,7 +313,7 @@ TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
 
   // get the old values in worker 2
   store_->ExecSync(
-      2, [&]() { EXPECT_EQ(kv_->ScanAsc(ToSlice(smallest_key), copy_key_val), OpCode::kOK); });
+      2, [&]() { EXPECT_EQ(kv_->ScanAsc(Slice(smallest_key), copy_key_val), OpCode::kOK); });
 
   // commit the transaction in worker 1, all the removed key-values should be
   // moved to graveyard
@@ -324,7 +324,7 @@ TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
 
   // still get the old values in worker 2
   store_->ExecSync(2, [&]() {
-    EXPECT_EQ(kv_->ScanAsc(ToSlice(smallest_key), copy_key_val), OpCode::kOK);
+    EXPECT_EQ(kv_->ScanAsc(Slice(smallest_key), copy_key_val), OpCode::kOK);
 
     // commit the transaction in worker 2
     CoroEnv::CurTxMgr().CommitTx();
@@ -333,8 +333,8 @@ TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
   // now worker 2 can not get the old values
   store_->ExecSync(2, [&]() {
     CoroEnv::CurTxMgr().StartTx(TxMode::kLongRunning);
-    SCOPED_DEFER(CoroEnv::CurTxMgr().CommitTx());
-    EXPECT_EQ(kv_->ScanAsc(ToSlice(smallest_key), copy_key_val), OpCode::kOK);
+    LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
+    EXPECT_EQ(kv_->ScanAsc(Slice(smallest_key), copy_key_val), OpCode::kOK);
   });
 }
 

@@ -3,7 +3,7 @@
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/buffer-manager/guarded_buffer_frame.hpp"
 #include "leanstore/common/portable.h"
-#include "leanstore/utils/log.hpp"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "utils/small_vector.hpp"
 
