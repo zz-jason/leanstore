@@ -6,6 +6,7 @@
 #include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/cpp/base/log.hpp"
+#include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_guard.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 
@@ -141,10 +142,11 @@ public:
   }
 
 public:
-  /// Mark the page as dirty after modification by a user or system transaction.
-  void MarkPageAsDirty() {
+  /// Update page version to a new GSN. Should be called when the page is
+  /// modified, which makes the page dirty.
+  void UpdatePageVersion() {
     LEAN_DCHECK(bf_ != nullptr);
-    bf_->page_.page_version_++;
+    bf_->page_.page_version_ = CoroEnv::CurStore().AllocWalGsn();
   }
 
   /// Sync the system transaction id to the page. Page system transaction id is updated during the
@@ -299,6 +301,10 @@ public:
 
   PayloadType* GetPagePayload() {
     return reinterpret_cast<PayloadType*>(ref_guard_.bf_->page_.payload_);
+  }
+
+  void UpdatePageVersion() {
+    ref_guard_.UpdatePageVersion();
   }
 
   PayloadType* operator->() {

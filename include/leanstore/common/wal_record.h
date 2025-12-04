@@ -115,7 +115,7 @@ typedef struct PACKED lean_wal_smo_pagenew {
   lean_txid_t sys_txid_;
 
   lean_pid_t page_id_;
-  lean_lid_t page_version_;
+  lean_lid_t page_version_; // version after applying this WAL record
 
   bool is_leaf_;
 
@@ -127,7 +127,7 @@ typedef struct PACKED lean_wal_smo_pagesplit_root {
   lean_txid_t sys_txid_;
 
   lean_pid_t page_id_;
-  lean_lid_t page_version_;
+  lean_lid_t page_version_; // version after applying this WAL record
 
   lean_pid_t parent_; // meta node
   lean_pid_t new_lhs_;
@@ -145,7 +145,7 @@ typedef struct PACKED lean_wal_smo_pagesplit_nonroot {
   lean_txid_t sys_txid_;
 
   lean_pid_t page_id_;
-  lean_lid_t page_version_;
+  lean_lid_t page_version_; // version after applying this WAL record
 
   lean_pid_t parent_;
   lean_pid_t new_lhs_;
@@ -167,7 +167,7 @@ typedef struct PACKED lean_wal_insert {
   /// Used to identify the btree node.
   lean_pid_t page_id_;
 
-  /// Version of the page before applying this WAL record.
+  /// Version of the page after applying this WAL record.
   ///
   /// Page version is updated to the LSN of this WAL record after applying this
   /// WAL record.
@@ -191,7 +191,7 @@ typedef struct PACKED lean_wal_update {
   /// Used to identify the btree node.
   lean_pid_t page_id_;
 
-  /// Version of the page before applying this WAL record.
+  /// Version of the page after applying this WAL record.
   ///
   /// Page version is updated to the LSN of this WAL record after applying this
   /// WAL record.
@@ -230,7 +230,7 @@ typedef struct PACKED lean_wal_remove {
   /// Used to identify the btree node.
   lean_pid_t page_id_;
 
-  /// Version of the page before applying this WAL record.
+  /// Version of the page after applying this WAL record.
   ///
   /// Page version is updated to the LSN of this WAL record after applying this
   /// WAL record.
@@ -289,7 +289,7 @@ typedef struct PACKED lean_wal_tx_insert {
   /// Used to identify the btree node.
   lean_pid_t page_id_;
 
-  /// Version of the page before applying this WAL record.
+  /// Version of the page after applying this WAL record.
   ///
   /// Page version is updated to the LSN of this WAL record after applying this
   /// WAL record.
@@ -329,7 +329,7 @@ typedef struct PACKED lean_wal_tx_remove {
   /// Used to identify the btree node.
   lean_pid_t page_id_;
 
-  /// Version of the page before applying this WAL record.
+  /// Version of the page after applying this WAL record.
   ///
   /// Page version is updated to the LSN of this WAL record after applying this
   /// WAL record.
@@ -373,7 +373,7 @@ typedef struct PACKED lean_wal_tx_update {
   /// Used to identify the btree node.
   lean_pid_t page_id_;
 
-  /// Version of the page before applying this WAL record.
+  /// Version of the page after applying this WAL record.
   ///
   /// Page version is updated to the LSN of this WAL record after applying this
   /// WAL record.

@@ -98,6 +98,8 @@ public:
     return *mvcc_mgr_;
   }
 
+  uint64_t AllocWalGsn();
+
   CoroScheduler& GetCoroScheduler() {
     LEAN_DCHECK(coro_scheduler_ != nullptr, "Coroutine scheduler is not initialized");
     return *coro_scheduler_;

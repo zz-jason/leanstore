@@ -252,6 +252,7 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
     }
 
     // WAL
+    x_iter->guarded_leaf_.UpdatePageVersion();
     WalTxBuilder<lean_wal_tx_insert>(this->tree_id_, key.size() + val.size())
         .SetPageInfo(x_iter->guarded_leaf_.bf_)
         .SetPrevVersion(0, 0, kCmdInvalid)
@@ -315,6 +316,7 @@ void TransactionKV::InsertAfterRemove(BTreeIterMut* x_iter, Slice key, Slice val
       });
 
   // WAL
+  x_iter->guarded_leaf_.UpdatePageVersion();
   WalTxBuilder<lean_wal_tx_insert>(this->tree_id_, key.size() + val.size())
       .SetPageInfo(x_iter->guarded_leaf_.bf_)
       .SetPrevVersion(chained_tuple->worker_id_, chained_tuple->tx_id_, chained_tuple->cmd_id_)
@@ -410,6 +412,7 @@ OpCode TransactionKV::Remove(Slice key) {
         });
 
     // 2. write wal
+    x_iter->guarded_leaf_.UpdatePageVersion();
     WalTxBuilder<lean_wal_tx_remove>(this->tree_id_, key.size() + val.size())
         .SetPageInfo(x_iter->guarded_leaf_.bf_)
         .SetPrevVersion(chained_tuple.worker_id_, chained_tuple.tx_id_, chained_tuple.cmd_id_)
@@ -650,6 +653,7 @@ bool TransactionKV::UpdateInFatTuple(BTreeIterMut* x_iter, Slice key,
     auto prev_tx_id = fat_tuple->tx_id_;
     auto prev_command_id = fat_tuple->cmd_id_;
 
+    x_iter->guarded_leaf_.UpdatePageVersion();
     WalTxBuilder<lean_wal_tx_update> builder(x_iter->btree_.tree_id_,
                                              key.size() + size_of_desc_and_delta);
     builder.SetPageInfo(x_iter->guarded_leaf_.bf_)

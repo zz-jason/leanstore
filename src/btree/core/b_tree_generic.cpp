@@ -52,16 +52,16 @@ void BTreeGeneric::Init(LeanStore* store, lean_treeid_t btree_id, lean_btree_con
     lean_txid_t sys_tx_id = store_->GetMvccManager().AllocSysTxTs();
 
     // wal for meta node
-    auto* meta_bf = x_guarded_meta.bf();
+    x_guarded_meta.UpdatePageVersion();
     WalSmoBuilder<lean_wal_smo_pagenew>(tree_id_, sys_tx_id)
-        .SetPageInfo(meta_bf)
+        .SetPageInfo(x_guarded_meta.bf())
         .BuildPageNew(x_guarded_meta->is_leaf_)
         .Submit();
 
     // wal for root node
-    auto* root_bf = x_guarded_root.bf();
+    x_guarded_root.UpdatePageVersion();
     WalSmoBuilder<lean_wal_smo_pagenew>(tree_id_, sys_tx_id)
-        .SetPageInfo(root_bf)
+        .SetPageInfo(x_guarded_root.bf())
         .BuildPageNew(x_guarded_root->is_leaf_)
         .Submit();
 
@@ -168,9 +168,9 @@ void BTreeGeneric::SplitRootMayJump(lean_txid_t sys_tx_id,
   auto guarded_new_left = GuardedBufferFrame<BTreeNode>(bm, new_left_bf);
   auto x_guarded_new_left = ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guarded_new_left));
   if (config_.enable_wal_) {
-    auto* new_left_bf = x_guarded_new_left.bf();
+    x_guarded_new_left.UpdatePageVersion();
     WalSmoBuilder<lean_wal_smo_pagenew>(tree_id_, sys_tx_id)
-        .SetPageInfo(new_left_bf)
+        .SetPageInfo(x_guarded_new_left.bf())
         .BuildPageNew(x_guarded_old_root->is_leaf_)
         .Submit();
     x_guarded_new_left.SyncSystemTxId(sys_tx_id);
@@ -182,9 +182,9 @@ void BTreeGeneric::SplitRootMayJump(lean_txid_t sys_tx_id,
   auto guarded_new_root = GuardedBufferFrame<BTreeNode>(bm, new_root_bf);
   auto x_guarded_new_root = ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guarded_new_root));
   if (config_.enable_wal_) {
-    auto* new_root_bf = x_guarded_new_root.bf();
+    x_guarded_new_root.UpdatePageVersion();
     WalSmoBuilder<lean_wal_smo_pagenew>(tree_id_, sys_tx_id)
-        .SetPageInfo(new_root_bf)
+        .SetPageInfo(x_guarded_new_root.bf())
         .BuildPageNew(false)
         .Submit();
     x_guarded_new_root.SyncSystemTxId(sys_tx_id);
@@ -193,9 +193,9 @@ void BTreeGeneric::SplitRootMayJump(lean_txid_t sys_tx_id,
 
   // 3.1. write wal on demand
   if (config_.enable_wal_) {
-    auto* old_root_bf = x_guarded_old_root.bf();
+    x_guarded_old_root.UpdatePageVersion();
     WalSmoBuilder<lean_wal_smo_pagesplit_root>(tree_id_, sys_tx_id)
-        .SetPageInfo(old_root_bf)
+        .SetPageInfo(x_guarded_old_root.bf())
         .BuildSplitRoot(x_guarded_meta.bf()->header_.page_id_,
                         x_guarded_new_left.bf()->header_.page_id_,
                         x_guarded_new_root.bf()->header_.page_id_, sep_info)
@@ -236,9 +236,9 @@ void BTreeGeneric::SplitNonRootMayJump(lean_txid_t sys_tx_id,
   auto guarded_new_left = GuardedBufferFrame<BTreeNode>(store_->buffer_manager_.get(), new_left_bf);
   auto x_guarded_new_left = ExclusiveGuardedBufferFrame<BTreeNode>(std::move(guarded_new_left));
   if (config_.enable_wal_) {
-    auto* new_left_bf = x_guarded_new_left.bf();
+    x_guarded_new_left.UpdatePageVersion();
     WalSmoBuilder<lean_wal_smo_pagenew>(tree_id_, sys_tx_id)
-        .SetPageInfo(new_left_bf)
+        .SetPageInfo(x_guarded_new_left.bf())
         .BuildPageNew(x_guarded_child->is_leaf_)
         .Submit();
     x_guarded_new_left.SyncSystemTxId(sys_tx_id);
@@ -247,9 +247,9 @@ void BTreeGeneric::SplitNonRootMayJump(lean_txid_t sys_tx_id,
 
   // 2.1. write wal on demand or simply mark as dirty
   if (config_.enable_wal_) {
-    auto* child_bf = x_guarded_child.bf();
+    x_guarded_child.UpdatePageVersion();
     WalSmoBuilder<lean_wal_smo_pagesplit_nonroot>(tree_id_, sys_tx_id)
-        .SetPageInfo(child_bf)
+        .SetPageInfo(x_guarded_child.bf())
         .BuildSplitNonRoot(x_guarded_parent.bf()->header_.page_id_,
                            x_guarded_new_left.bf()->header_.page_id_, sep_info)
         .Submit();
@@ -638,7 +638,7 @@ std::unordered_map<std::string, std::string> BTreeGeneric::Serialize() {
 void BTreeGeneric::Deserialize(std::unordered_map<std::string, std::string> map) {
   tree_id_ = std::stoull(map[kTreeId]);
   height_ = std::stoull(map[kHeight]);
-  meta_node_swip_.Evict(std::stoull(map[kMetaPageId]));
+  meta_node_swip_.FromPageId(std::stoull(map[kMetaPageId]));
 
   // load meta node to memory
   HybridMutex dummy_latch;

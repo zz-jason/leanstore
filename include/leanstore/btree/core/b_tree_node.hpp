@@ -51,7 +51,7 @@ public:
   };
 
   /// The swip of the right-most child, can be nullptr for leaf nodes.
-  Swip right_most_child_swip_ = nullptr;
+  Swip right_most_child_swip_{nullptr};
 
   /// The lower fence of the node. Exclusive.
   FenceKey lower_fence_ = {0, 0};

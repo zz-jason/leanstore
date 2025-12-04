@@ -4,12 +4,15 @@
 #include "leanstore/common/types.h"
 #include "leanstore/cpp/base/log.hpp"
 
+#include <cstdint>
+
 namespace leanstore {
 
 class BufferFrame;
 
-/// Swip represents either the page id or the pointer to the buffer frame which contains the page.
-/// It can be the following 3 stats:
+/// Swip represents either the page id or the pointer to the buffer frame which
+/// contains the page. A swip can be in one of the three states:
+///
 /// - EVICTED: page id, the most most significant bit is 1 which marks the swip as "EVICTED".
 /// - COOL: buffer frame pointer, the 2nd most most significant bit is 1 which marks it as "COOL".
 /// - HOT: buffer frame pointer, the 2nd most most significant bit is 0 which marks it as "HOT".
@@ -18,47 +21,91 @@ class BufferFrame;
 /// - 1xxxxxxxxxxxx EVICTED, page id
 /// - 01xxxxxxxxxxx COOL, buffer frame pointer
 /// - 00xxxxxxxxxxx HOT, buffer frame pointer
+///
+/// The rationale behind this is pointer tagging, which allows us to store the
+/// state of the swip without any additional space overhead.
 class Swip {
 public:
-  /// The actual data
+  /// The actual data, both are 64 bits, either page id or pointer to buffer frame.
   union {
+    /// Alias to page id with evicted tag.
     uint64_t page_id_;
+
+    /// Alias to buffer frame pointer with cool/hot tag.
     BufferFrame* bf_;
+
+    /// Raw access to the underlying value, used for comparison, tagging, etc.
+    uint64_t raw_value_;
   };
 
   /// Create an empty swip.
-  Swip() : page_id_(0) {
+  Swip() : raw_value_(0) {
   }
 
-  /// Create an swip pointing to the buffer frame.
+  /// Create a swip from a buffer frame pointer.
+  /// Allow implicit conversion from BufferFrame* to Swip for convenient.
   Swip(BufferFrame* bf) : bf_(bf) {
+  }
+
+  /// Reset the swip to a buffer frame pointer. After this, the swip is in hot
+  /// state.
+  void FromBufferFrame(BufferFrame* bf) {
+    this->bf_ = bf;
+    LEAN_DCHECK(IsHot(), "The swip should be hot now");
+  }
+
+  /// Reset the swip to a page id. After this, the swip is in evicted state.
+  void FromPageId(lean_pid_t page_id) {
+    this->raw_value_ = page_id | kEvictedBit;
+    LEAN_DCHECK(IsEvicted(), "The swip should be evicted now");
+  }
+
+  /// Set the swip to hot state. Only applicable when the swip is cool. The cool
+  /// tag is removed from the underlying buffer frame pointer.
+  void SetToHot() {
+    LEAN_DCHECK(IsCool(), "The swip to hot should be cool");
+    this->raw_value_ = raw_value_ & ~kCoolBit;
+  }
+
+  /// Set the swip to cool state. Only applicable when the swip is hot. The
+  /// underlying buffer frame pointer is tagged with cool bit, i.e. the 2nd most
+  /// significant bit is set to 1.
+  void SetToCool() {
+    LEAN_DCHECK(IsHot(), "The swip to cool should be hot");
+    this->raw_value_ = raw_value_ | kCoolBit;
+  }
+
+  /// Set the swip to evicted state, the underlying raw value is changed to the
+  /// corresponding page id with evicted tag, i.e. the most significant bit is
+  /// set to 1.
+  void SetToEvicted() {
+    LEAN_DCHECK(IsHot() || IsCool(), "The swip to evict should be either hot or cool");
+    this->raw_value_ = AsBufferFrameMasked().GetPageId() | kEvictedBit;
   }
 
   /// Whether two swip is equal.
   bool operator==(const Swip& other) const {
-    return (Raw() == other.Raw());
+    return (raw_value_ == other.raw_value_);
   }
 
-  bool IsHot() {
-    return (page_id_ & (sEvictedBit | sCoolBit)) == 0;
-  }
-
-  bool IsCool() {
-    return page_id_ & sCoolBit;
-  }
-
-  bool IsEvicted() {
-    return page_id_ & sEvictedBit;
-  }
-
-  /// Whether this swip points to nothing, the memory pointer is nullptr
+  /// Check whether the swip is empty.
   bool IsEmpty() {
-    return page_id_ == 0;
+    return raw_value_ == 0;
   }
 
-  uint64_t AsPageId() {
-    LEAN_DCHECK(IsEvicted());
-    return page_id_ & sEvictedMask;
+  /// Check whether the swip is in hot state.
+  bool IsHot() {
+    return !IsEmpty() && (raw_value_ & (kEvictedBit | kCoolBit)) == 0;
+  }
+
+  /// Check whether the swip is in cool state.
+  bool IsCool() {
+    return !IsEmpty() && (raw_value_ & kCoolBit);
+  }
+
+  /// Check whether the swip is in evicted state.
+  bool IsEvicted() {
+    return !IsEmpty() && (raw_value_ & kEvictedBit);
   }
 
   /// Return the underlying buffer frame from a hot buffer frame.
@@ -69,40 +116,24 @@ public:
 
   /// Return the underlying buffer frame from a cool buffer frame.
   BufferFrame& AsBufferFrameMasked() {
-    return *reinterpret_cast<BufferFrame*>(page_id_ & sHotMask);
+    LEAN_DCHECK(IsHot() || IsCool(), "The swip should be either hot or cool");
+    return *reinterpret_cast<BufferFrame*>(raw_value_ & kHotMask);
   }
 
-  uint64_t Raw() const {
-    return page_id_;
-  }
-
-  void MarkHOT(BufferFrame* bf) {
-    this->bf_ = bf;
-  }
-
-  void MarkHOT() {
-    LEAN_DCHECK(IsCool());
-    this->page_id_ = page_id_ & ~sCoolBit;
-  }
-
-  void Cool() {
-    this->page_id_ = page_id_ | sCoolBit;
-  }
-
-  void Evict(lean_pid_t page_id) {
-    this->page_id_ = page_id | sEvictedBit;
+  /// Return the underlying page id from an evicted swip.
+  uint64_t AsPageId() {
+    LEAN_DCHECK(IsEvicted());
+    return raw_value_ & kEvictedMask;
   }
 
 private:
-  static const uint64_t sEvictedBit = uint64_t(1) << 63;
-  static const uint64_t sEvictedMask = ~(uint64_t(1) << 63);
-  static const uint64_t sCoolBit = uint64_t(1) << 62;
-  static const uint64_t sCoolMask = ~(uint64_t(1) << 62);
-  static const uint64_t sHotMask = ~(uint64_t(3) << 62);
-
-  static_assert(sEvictedBit == 0x8000000000000000, "");
-  static_assert(sEvictedMask == 0x7FFFFFFFFFFFFFFF, "");
-  static_assert(sHotMask == 0x3FFFFFFFFFFFFFFF, "");
+  static constexpr uint64_t kEvictedBit = uint64_t(1) << 63;
+  static constexpr uint64_t kEvictedMask = ~(uint64_t(1) << 63);
+  static constexpr uint64_t kCoolBit = uint64_t(1) << 62;
+  static constexpr uint64_t kCoolMask = ~(uint64_t(1) << 62);
+  static constexpr uint64_t kHotMask = ~(uint64_t(3) << 62);
 };
+
+static_assert(sizeof(Swip) == 8, "Swip size should be 8 bytes");
 
 } // namespace leanstore

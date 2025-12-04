@@ -235,6 +235,10 @@ void LeanStore::StopBackgroundThreads() {
 #endif
 }
 
+uint64_t LeanStore::AllocWalGsn() {
+  return mvcc_mgr_->AllocWalGsn();
+}
+
 void LeanStore::ExecSync(uint64_t worker_id, std::function<void()> job) {
   crmanager_->worker_threads_[worker_id]->SetJob(std::move(job));
   crmanager_->worker_threads_[worker_id]->Wait();

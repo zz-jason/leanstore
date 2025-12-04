@@ -290,7 +290,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
     BMExclusiveUpgradeIfNeeded swip_x_guard(node_guard); // parent
     BMExclusiveGuard bf_x_guard(bf_guard);               // child
     bf->header_.state_ = State::kHot;
-    swip_in_node.MarkHOT();
+    swip_in_node.SetToHot();
     return bf;
   }
 
@@ -347,7 +347,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
       JumpScoped<LeanUniqueLock<LeanSharedMutex>> inflight_io_guard(partition.inflight_ios_mutex_);
       BMExclusiveUpgradeIfNeeded swip_x_guard(node_guard);
 
-      swip_in_node.MarkHOT(&bf);
+      swip_in_node.FromBufferFrame(&bf);
       bf.header_.state_ = State::kHot;
 
       if (io_frame.num_readers_.fetch_add(-1) == 1) {
@@ -399,7 +399,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
       BMExclusiveUpgradeIfNeeded swip_x_guard(node_guard);
       BMExclusiveGuard bf_x_guard(bf_guard);
       io_frame.bf_ = nullptr;
-      swip_in_node.MarkHOT(bf);
+      swip_in_node.FromBufferFrame(bf);
       LEAN_DCHECK(bf->header_.page_id_ == page_id);
       LEAN_DCHECK(swip_in_node.IsHot());
       LEAN_DCHECK(bf->header_.state_ == State::kLoaded);
@@ -466,7 +466,7 @@ BufferFrame& BufferManager::ReadPageSync(lean_pid_t page_id) {
   dummy_parent_guard.ToOptimisticSpin();
 
   Swip swip;
-  swip.Evict(page_id);
+  swip.FromPageId(page_id);
 
   while (true) {
     JUMPMU_TRY() {
