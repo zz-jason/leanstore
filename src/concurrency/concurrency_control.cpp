@@ -179,7 +179,7 @@ bool ConcurrencyControl::VisibleForMe(lean_wid_t worker_id, lean_txid_t tx_id) {
 }
 
 bool ConcurrencyControl::VisibleForAll(lean_txid_t tx_id) {
-  return tx_id < store_->GetMvccManager()->GlobalWmkInfo().wmk_of_all_tx_.load();
+  return tx_id < store_->GetMvccManager().GlobalWmkInfo().wmk_of_all_tx_.load();
 }
 
 // TODO: smooth purge, we should not let the system hang on this, as a quick
@@ -263,7 +263,7 @@ void ConcurrencyControl::UpdateGlobalWmks() {
       store_->store_option_->enable_eager_gc_ ||
       utils::RandomGenerator::RandU64(0, CoroEnv::CurTxMgr().tx_mgrs_.size()) == 0;
   auto perform_gc =
-      meet_gc_probability && store_->GetMvccManager()->GlobalWmkInfo().global_mutex_.try_lock();
+      meet_gc_probability && store_->GetMvccManager().GlobalWmkInfo().global_mutex_.try_lock();
   if (!perform_gc) {
     LEAN_DLOG("Skip updating global watermarks, meetGcProbability={}, performGc={}",
               meet_gc_probability, perform_gc);
@@ -271,7 +271,7 @@ void ConcurrencyControl::UpdateGlobalWmks() {
   }
 
   // release the lock on exit
-  LEAN_DEFER(store_->GetMvccManager()->GlobalWmkInfo().global_mutex_.unlock());
+  LEAN_DEFER(store_->GetMvccManager().GlobalWmkInfo().global_mutex_.unlock());
 
   // There is a chance that oldestTxId or oldestShortTxId is
   // std::numeric_limits<lean_txid_t>::max(). It is ok because LCB(+oo) returns the id
@@ -304,12 +304,12 @@ void ConcurrencyControl::UpdateGlobalWmks() {
   }
 
   // Update the three transaction ids
-  store_->GetMvccManager()->GlobalWmkInfo().UpdateActiveTxInfo(oldest_tx_id, oldest_short_tx_id,
-                                                               newest_long_tx_id);
+  store_->GetMvccManager().GlobalWmkInfo().UpdateActiveTxInfo(oldest_tx_id, oldest_short_tx_id,
+                                                              newest_long_tx_id);
 
   if (!store_->store_option_->enable_long_running_tx_ &&
-      store_->GetMvccManager()->GlobalWmkInfo().oldest_active_tx_ !=
-          store_->GetMvccManager()->GlobalWmkInfo().oldest_active_short_tx_) {
+      store_->GetMvccManager().GlobalWmkInfo().oldest_active_tx_ !=
+          store_->GetMvccManager().GlobalWmkInfo().oldest_active_short_tx_) {
     Log::Fatal("Oldest transaction id should be equal to the oldest "
                "short-running transaction id when long-running transaction is "
                "disabled");
@@ -334,9 +334,9 @@ void ConcurrencyControl::UpdateGlobalWmks() {
     }
 
     lean_txid_t wmk_of_all_tx =
-        cc.commit_tree_.Lcb(store_->GetMvccManager()->GlobalWmkInfo().oldest_active_tx_);
+        cc.commit_tree_.Lcb(store_->GetMvccManager().GlobalWmkInfo().oldest_active_tx_);
     lean_txid_t wmk_of_short_tx =
-        cc.commit_tree_.Lcb(store_->GetMvccManager()->GlobalWmkInfo().oldest_active_short_tx_);
+        cc.commit_tree_.Lcb(store_->GetMvccManager().GlobalWmkInfo().oldest_active_short_tx_);
 
     cc.wmk_version_.store(cc.wmk_version_.load() + 1, std::memory_order_release);
     cc.wmk_of_all_tx_.store(wmk_of_all_tx, std::memory_order_release);
@@ -361,8 +361,8 @@ void ConcurrencyControl::UpdateGlobalWmks() {
   // as last round, which further causes the global lower watermarks the
   // same as last round. This is not a problem, but updating the global
   // lower watermarks is not necessary in this case.
-  if (store_->GetMvccManager()->GlobalWmkInfo().wmk_of_all_tx_ == global_wmk_of_all_tx &&
-      store_->GetMvccManager()->GlobalWmkInfo().wmk_of_short_tx_ == global_wmk_of_short_tx) {
+  if (store_->GetMvccManager().GlobalWmkInfo().wmk_of_all_tx_ == global_wmk_of_all_tx &&
+      store_->GetMvccManager().GlobalWmkInfo().wmk_of_short_tx_ == global_wmk_of_short_tx) {
     LEAN_DLOG("Skip updating global watermarks, global watermarks are the "
               "same as last round, globalWmkOfAllTx={}, globalWmkOfShortTx={}",
               global_wmk_of_all_tx, global_wmk_of_short_tx);
@@ -379,8 +379,7 @@ void ConcurrencyControl::UpdateGlobalWmks() {
     return;
   }
 
-  store_->GetMvccManager()->GlobalWmkInfo().UpdateWmks(global_wmk_of_all_tx,
-                                                       global_wmk_of_short_tx);
+  store_->GetMvccManager().GlobalWmkInfo().UpdateWmks(global_wmk_of_all_tx, global_wmk_of_short_tx);
 }
 
 void ConcurrencyControl::UpdateLocalWmks() {

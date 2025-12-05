@@ -132,6 +132,7 @@ void ChainedTuple::Update(BTreeIterMut* x_iter, Slice key, MutValCallback update
   auto prev_command_id = cmd_id_;
 
   WalTxBuilder<lean_wal_tx_update> builder(tree_id, key.size() + size_of_desc_and_delta);
+  x_iter->guarded_leaf_.UpdatePageVersion();
   builder.SetPageInfo(x_iter->guarded_leaf_.bf_)
       .SetPrevVersion(prev_worker_id, prev_tx_id, prev_command_id ^ curr_command_id)
       .BuildTxUpdate(key, update_desc);

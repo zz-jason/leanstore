@@ -1,7 +1,7 @@
 #pragma once
 
-#include "leanstore/buffer-manager/swip.hpp"
 #include "leanstore/common/portable.h"
+#include "leanstore/common/types.h"
 #include "leanstore/cpp/base/log.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
@@ -206,6 +206,10 @@ public:
   // Pre: bf is exclusively locked
   void Reset() {
     header_.Reset();
+  }
+
+  lean_pid_t GetPageId() {
+    return header_.page_id_;
   }
 };
 

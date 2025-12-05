@@ -2,6 +2,7 @@
 
 #include "coroutine/lean_mutex.hpp"
 #include "leanstore/buffer-manager/buffer_frame.hpp"
+#include "leanstore/buffer-manager/swip.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/common/wal_record.h"
 #include "leanstore/cpp/base/defer.hpp"

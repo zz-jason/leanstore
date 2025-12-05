@@ -1,5 +1,6 @@
 #include "leanstore/btree/basic_kv.hpp"
 
+#include "coroutine/coro_env.hpp"
 #include "coroutine/mvcc_manager.hpp"
 #include "leanstore/btree/core/b_tree_generic.hpp"
 #include "leanstore/btree/core/btree_iter.hpp"
@@ -173,6 +174,7 @@ OpCode BasicKV::Insert(Slice key, Slice val) {
     }
 
     if (config_.enable_wal_) {
+      x_iter->guarded_leaf_.UpdatePageVersion();
       WalBuilder<lean_wal_insert>(this->tree_id_, key.size() + val.size())
           .SetPageInfo(x_iter->guarded_leaf_.bf_)
           .BuildInsert(key, val)
@@ -262,6 +264,7 @@ OpCode BasicKV::UpdatePartial(Slice key, MutValCallback update_call_back, Update
     }
     auto current_val = x_iter->MutableVal();
     if (config_.enable_wal_) {
+      x_iter->guarded_leaf_.UpdatePageVersion();
       LEAN_DCHECK(update_desc.num_slots_ > 0);
       auto size_of_desc_and_delta = update_desc.SizeWithDelta();
       auto builder =
@@ -303,6 +306,7 @@ OpCode BasicKV::Remove(Slice key) {
 
     Slice value = x_iter->Val();
     if (config_.enable_wal_) {
+      x_iter->guarded_leaf_.UpdatePageVersion();
       WalBuilder<lean_wal_remove>(this->tree_id_, key.size() + value.size())
           .SetPageInfo(x_iter->guarded_leaf_.bf_)
           .BuildRemove(key, value)
@@ -326,7 +330,7 @@ OpCode BasicKV::RangeRemove(Slice start_key, Slice end_key, bool page_wise) {
       if (guarded_leaf->FreeSpaceAfterCompaction() >= BTreeNode::UnderFullSize()) {
         x_iter->SetCleanUpCallback([&, to_merge = guarded_leaf.bf_] {
           JUMPMU_TRY() {
-            lean_txid_t sys_tx_id = store_->GetMvccManager()->AllocSysTxTs();
+            lean_txid_t sys_tx_id = store_->GetMvccManager().AllocSysTxTs();
             this->TryMergeMayJump(sys_tx_id, *to_merge);
           }
           JUMPMU_CATCH() {

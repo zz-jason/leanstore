@@ -143,7 +143,7 @@ void PageEvictor::PickBufferFramesToCool(Partition& target_partition) {
           // mark the buffer frame in cool state
           cool_candidate->header_.state_ = State::kCool;
           // mark the swip to the buffer frame to cool state
-          parent_handler.child_swip_.Cool();
+          parent_handler.child_swip_.SetToCool();
           LEAN_DLOG("Cool candidate find, state changed to cool, pageId={}",
                     cool_candidate->header_.page_id_);
         }
@@ -320,8 +320,9 @@ void PageEvictor::EvictFlushedBufferFrame(BufferFrame& cooled_bf,
   LEAN_DCHECK(!cooled_bf.header_.is_being_written_back_);
   LEAN_DCHECK(cooled_bf.header_.state_ == State::kCool);
   LEAN_DCHECK(parent_handler.child_swip_.IsCool());
+  LEAN_DCHECK(&parent_handler.child_swip_.AsBufferFrameMasked() == &cooled_bf);
 
-  parent_handler.child_swip_.Evict(cooled_bf.header_.page_id_);
+  parent_handler.child_swip_.SetToEvicted();
 
   // Reclaim buffer frame
   cooled_bf.Reset();

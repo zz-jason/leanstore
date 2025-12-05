@@ -68,7 +68,7 @@ public:
     if (CoroEnv::CurTxMgr().cc_.VisibleForAll(tx_id_) ||
         oldest_tx_ !=
             static_cast<uint16_t>(
-                CoroEnv::CurTxMgr().store_->GetMvccManager()->GlobalWmkInfo().oldest_active_tx_ &
+                CoroEnv::CurTxMgr().store_->GetMvccManager().GlobalWmkInfo().oldest_active_tx_ &
                 0xFFFF)) {
       oldest_tx_ = 0;
       total_updates_ = 0;
@@ -82,7 +82,7 @@ public:
     auto* store = tx_mgr.store_;
 
     bool command_valid = cmd_id_ != kCmdInvalid;
-    bool has_long_running_olap = store->GetMvccManager()->GlobalWmkInfo().HasActiveLongRunningTx();
+    bool has_long_running_olap = store->GetMvccManager().GlobalWmkInfo().HasActiveLongRunningTx();
     bool frequently_updated = total_updates_ > store->store_option_->worker_threads_;
     bool recent_updated_by_others =
         worker_id_ != tx_mgr.worker_id_ || tx_id_ != tx_mgr.ActiveTx().start_ts_;

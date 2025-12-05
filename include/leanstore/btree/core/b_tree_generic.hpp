@@ -259,7 +259,7 @@ inline void BTreeGeneric::IterateChildSwips(BufferFrame& bf, std::function<bool(
       return;
     }
   }
-  if (btree_node.right_most_child_swip_ != nullptr) {
+  if (!btree_node.right_most_child_swip_.IsEmpty()) {
     callback(btree_node.right_most_child_swip_);
   }
 }
@@ -287,23 +287,21 @@ inline SpaceCheckResult BTreeGeneric::CheckSpaceUtilization(BufferFrame& bf) {
 }
 
 inline void BTreeGeneric::Checkpoint(BufferFrame& bf, void* dest) {
+  // Copy page content to destination buffer
   std::memcpy(dest, &bf.page_, store_->store_option_->page_size_);
   auto* dest_page = reinterpret_cast<Page*>(dest);
   auto* dest_node = reinterpret_cast<BTreeNode*>(dest_page->payload_);
 
+  // Replace all child swips to their page ID in the destination buffer
   if (!dest_node->is_leaf_) {
-    // Replace all child swip to their page ID
     for (uint64_t i = 0; i < dest_node->num_slots_; i++) {
       if (!dest_node->ChildSwip(i)->IsEvicted()) {
-        auto& child_bf = dest_node->ChildSwip(i)->AsBufferFrameMasked();
-        dest_node->ChildSwip(i)->Evict(child_bf.header_.page_id_);
+        dest_node->ChildSwip(i)->SetToEvicted();
       }
     }
-    // Replace right most child swip to page id
-    if (dest_node->right_most_child_swip_ != nullptr &&
+    if (!dest_node->right_most_child_swip_.IsEmpty() &&
         !dest_node->right_most_child_swip_.IsEvicted()) {
-      auto& child_bf = dest_node->right_most_child_swip_.AsBufferFrameMasked();
-      dest_node->right_most_child_swip_.Evict(child_bf.header_.page_id_);
+      dest_node->right_most_child_swip_.SetToEvicted();
     }
   }
 }

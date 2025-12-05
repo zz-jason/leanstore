@@ -87,7 +87,7 @@ void CoroScheduler::InitCoroExecutors() {
 
   // set thread-local logging for each executor
   if (store_ != nullptr) {
-    auto& loggings = store_->GetMvccManager()->Loggings();
+    auto& loggings = store_->GetMvccManager().Loggings();
     LEAN_DCHECK(loggings.size() == coro_executors_.size(),
                 "Number of loggings must match number of executors");
     for (auto i = 0u; i < loggings.size(); i++) {
@@ -114,8 +114,8 @@ void CoroScheduler::CreateSessionPool() {
     auto runs_on = i % num_exec;
     TxManager* tx_mgr = nullptr;
     if (store_ != nullptr) {
-      assert(i < store_->GetMvccManager()->TxMgrs().size() && "Invalid index for TxManager");
-      tx_mgr = store_->GetMvccManager()->TxMgrs()[i].get();
+      assert(i < store_->GetMvccManager().TxMgrs().size() && "Invalid index for TxManager");
+      tx_mgr = store_->GetMvccManager().TxMgrs()[i].get();
     }
     all_sessions_.emplace_back(std::make_unique<CoroSession>(runs_on, tx_mgr));
     session_pool_per_exec_[runs_on].push(all_sessions_.back().get());

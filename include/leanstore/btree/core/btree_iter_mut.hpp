@@ -67,7 +67,7 @@ public:
   }
 
   void SplitForKey(Slice key) {
-    auto sys_tx_id = btree_.store_->GetMvccManager()->AllocSysTxTs();
+    auto sys_tx_id = btree_.store_->GetMvccManager().AllocSysTxTs();
     while (true) {
       JUMPMU_TRY() {
         if (!Valid() || !KeyInCurrentNode(key)) {
@@ -168,7 +168,7 @@ public:
 
       slot_id_ = -1;
       JUMPMU_TRY() {
-        lean_txid_t sys_tx_id = btree_.store_->GetMvccManager()->AllocSysTxTs();
+        lean_txid_t sys_tx_id = btree_.store_->GetMvccManager().AllocSysTxTs();
         btree_.TrySplitMayJump(sys_tx_id, *guarded_leaf_.bf_, split_slot);
 
         COUNTER_INC(&tls_perf_counters.contention_split_succeed_);
@@ -201,7 +201,7 @@ public:
       guarded_leaf_.unlock();
       slot_id_ = -1;
       JUMPMU_TRY() {
-        lean_txid_t sys_tx_id = btree_.store_->GetMvccManager()->AllocSysTxTs();
+        lean_txid_t sys_tx_id = btree_.store_->GetMvccManager().AllocSysTxTs();
         btree_.TryMergeMayJump(sys_tx_id, *guarded_leaf_.bf_);
       }
       JUMPMU_CATCH() {

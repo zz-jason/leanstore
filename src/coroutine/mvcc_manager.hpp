@@ -7,6 +7,7 @@
 #include "leanstore/cpp/base/log.hpp"
 #include "utils/json.hpp"
 
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <vector>
@@ -79,6 +80,10 @@ public:
     return sys_tso_.load();
   }
 
+  uint64_t AllocWalGsn() {
+    return wal_gsn_.fetch_add(1);
+  }
+
   std::vector<std::unique_ptr<Logging>>& Loggings() {
     return loggings_;
   }
@@ -103,6 +108,9 @@ private:
   /// The global timestamp oracle for system transactions. Used to generate timestamps for system
   /// transactions. Start from a positive number, 0 indicates invalid timestamp
   std::atomic<uint64_t> sys_tso_ = 1;
+
+  /// The global WAL GSN counter. Used to order the WAL records among all WAL files.
+  std::atomic<uint64_t> wal_gsn_ = 0;
 
   /// All the logging instances in the system. Each worker thread should have 1 logging instance
   /// to write its own WAL entries.

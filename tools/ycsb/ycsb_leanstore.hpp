@@ -180,11 +180,11 @@ public:
       };
 
 #ifdef ENABLE_COROUTINE
-      reserved_sessions.push_back(store_->GetCoroScheduler()->TryReserveCoroSession(i));
+      reserved_sessions.push_back(store_->GetCoroScheduler().TryReserveCoroSession(i));
       assert(reserved_sessions.back() != nullptr &&
              "Failed to reserve a CoroSession for parallel range execution");
       futures.emplace_back(
-          store_->GetCoroScheduler()->Submit(reserved_sessions.back(), std::move(insert_func)));
+          store_->GetCoroScheduler().Submit(reserved_sessions.back(), std::move(insert_func)));
 #else
       store_->ExecAsync(i, std::move(insert_func));
 #endif
@@ -196,7 +196,7 @@ public:
       future->Wait();
     }
     for (auto* session : reserved_sessions) {
-      store_->GetCoroScheduler()->ReleaseCoroSession(session);
+      store_->GetCoroScheduler().ReleaseCoroSession(session);
     }
 #else
     store_->WaitAll();
@@ -298,11 +298,11 @@ public:
       };
 
 #ifdef ENABLE_COROUTINE
-      reserved_sessions.push_back(store_->GetCoroScheduler()->TryReserveCoroSession(worker_id));
+      reserved_sessions.push_back(store_->GetCoroScheduler().TryReserveCoroSession(worker_id));
       assert(reserved_sessions.back() != nullptr &&
              "Failed to reserve a CoroSession for parallel range execution");
       futures.emplace_back(
-          store_->GetCoroScheduler()->Submit(reserved_sessions.back(), std::move(job)));
+          store_->GetCoroScheduler().Submit(reserved_sessions.back(), std::move(job)));
 #else
       store_->ExecAsync(worker_id, std::move(job));
 #endif
@@ -365,7 +365,7 @@ public:
       future->Wait();
     }
     for (auto* session : reserved_sessions) {
-      store_->GetCoroScheduler()->ReleaseCoroSession(session);
+      store_->GetCoroScheduler().ReleaseCoroSession(session);
     }
 #else
     store_->WaitAll();
@@ -424,10 +424,10 @@ public:
 
   void SubmitJobSync(std::function<void()>&& job, uint64_t worker_id) {
 #ifdef ENABLE_COROUTINE
-    auto* coro_session = store_->GetCoroScheduler()->TryReserveCoroSession(worker_id);
+    auto* coro_session = store_->GetCoroScheduler().TryReserveCoroSession(worker_id);
     assert(coro_session != nullptr && "Failed to reserve a CoroSession for coroutine execution");
-    store_->GetCoroScheduler()->Submit(coro_session, std::move(job))->Wait();
-    store_->GetCoroScheduler()->ReleaseCoroSession(coro_session);
+    store_->GetCoroScheduler().Submit(coro_session, std::move(job))->Wait();
+    store_->GetCoroScheduler().ReleaseCoroSession(coro_session);
 #else
     store_->ExecSync(worker_id, std::move(job));
 #endif

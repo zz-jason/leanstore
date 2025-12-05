@@ -202,9 +202,9 @@ void FatTuple::GarbageCollection() {
   }
 
   const lean_txid_t local_oldest_oltp =
-      CoroEnv::CurTxMgr().store_->GetMvccManager()->GlobalWmkInfo().oldest_active_short_tx_.load();
+      CoroEnv::CurTxMgr().store_->GetMvccManager().GlobalWmkInfo().oldest_active_short_tx_.load();
   const lean_txid_t local_newest_olap =
-      CoroEnv::CurTxMgr().store_->GetMvccManager()->GlobalWmkInfo().newest_active_long_tx_.load();
+      CoroEnv::CurTxMgr().store_->GetMvccManager().GlobalWmkInfo().newest_active_long_tx_.load();
   if (deltas_visible_for_all == 0 && local_newest_olap > local_oldest_oltp) {
     return; // Nothing to do here
   }

@@ -23,7 +23,7 @@ public:
   }
 
   void ExecSync(std::function<void()>&& job) {
-    store_->GetCoroScheduler()->Submit(session_, std::move(job))->Wait();
+    store_->GetCoroScheduler().Submit(session_, std::move(job))->Wait();
   }
 
 private:

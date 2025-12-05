@@ -3,6 +3,7 @@
 #include "coroutine/coro_future.hpp"
 #include "coroutine/coro_scheduler.hpp"
 #include "leanstore/common/types.h"
+#include "leanstore/cpp/base/log.hpp"
 #include "leanstore/cpp/base/result.hpp"
 
 #include <cassert>
@@ -53,13 +54,13 @@ public:
   std::unique_ptr<BufferManager> buffer_manager_;
 
   /// The concurrency control protocol used by the store.
-  std::unique_ptr<leanstore::MvccManager> mvcc_mgr_;
+  std::unique_ptr<MvccManager> mvcc_mgr_;
 
   /// The concurrent resource manager
-  /// NOTE: Ownerd by LeanStore instance, should be destroyed together with it
-  CRManager* crmanager_;
+  std::unique_ptr<CRManager> crmanager_;
 
-  CoroScheduler* coro_scheduler_;
+  /// The coroutine scheduler
+  std::unique_ptr<CoroScheduler> coro_scheduler_ = nullptr;
 
   /// The LeanStore constructor
   /// NOTE: The option is created by LeanStore user, its ownership is transferred to the LeanStore
@@ -91,12 +92,17 @@ public:
   /// Unregister a TransactionKV
   void DropTransactionKV(const std::string& name);
 
-  std::unique_ptr<MvccManager>& GetMvccManager() {
-    return mvcc_mgr_;
+  /// Get the MVCC manager
+  MvccManager& GetMvccManager() {
+    LEAN_DCHECK(mvcc_mgr_ != nullptr, "MVCC manager is not initialized");
+    return *mvcc_mgr_;
   }
 
-  CoroScheduler* GetCoroScheduler() {
-    return coro_scheduler_;
+  uint64_t AllocWalGsn();
+
+  CoroScheduler& GetCoroScheduler() {
+    LEAN_DCHECK(coro_scheduler_ != nullptr, "Coroutine scheduler is not initialized");
+    return *coro_scheduler_;
   }
 
   /// Execute a custom user function on a worker thread.
