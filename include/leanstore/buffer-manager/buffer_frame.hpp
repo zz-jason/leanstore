@@ -77,7 +77,7 @@ public:
 
   /// The flushed page version of the containing page. Initialized when the
   /// containing page is loaded from disk.
-  uint64_t flushed_page_version_ = 0;
+  lean_lid_t flushed_page_version_ = 0;
 
   /// Whether the containing page is being written back to disk.
   std::atomic<bool> is_being_written_back_ = false;
@@ -136,7 +136,7 @@ public:
 
   /// Short for "page version", increased when a page is modified by any user or system
   /// transaction. A page is "dirty" when page_.page_version_ > header_.flushed_page_version_.
-  uint64_t page_version_ = 0;
+  lean_lid_t page_version_ = 0;
 
   /// The btree ID it belongs to.
   lean_treeid_t btree_id_ = std::numeric_limits<lean_treeid_t>::max();
