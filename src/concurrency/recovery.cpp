@@ -8,9 +8,10 @@
 #include "leanstore/concurrency/wal_entry.hpp"
 #include "leanstore/cpp/base/defer.hpp"
 #include "leanstore/cpp/base/log.hpp"
+#include "leanstore/cpp/base/small_vector.hpp"
+#include "leanstore/cpp/config/store_paths.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_guard.hpp"
-#include "utils/small_vector.hpp"
 
 #include <cstdint>
 #include <utility>
@@ -469,7 +470,7 @@ BufferFrame& Recovery::ResolvePage(lean_pid_t page_id) {
 
 // TODO(zz-jason): refactor with aio
 Result<void> Recovery::ReadFromWalFile(int64_t offset, size_t nbytes, void* destination) {
-  auto file_name = store_->GetWalFilePath();
+  auto file_name = StorePaths::WalFilePath(store_->store_option_->store_dir_);
   FILE* fp = fopen(file_name.c_str(), "rb");
   if (fp == nullptr) {
     return Error::FileOpen(file_name, errno, strerror(errno));

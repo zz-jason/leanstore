@@ -23,6 +23,20 @@ Result<std::unique_ptr<WalCursor>> WalCursor::New(std::string_view wal_path) {
   return cursor;
 }
 
+Result<std::vector<std::unique_ptr<WalCursor>>> WalCursor::NewWalCursors(
+    const std::vector<std::string>& wal_file_paths) {
+  std::vector<std::unique_ptr<WalCursor>> wal_cursors;
+  for (const auto& wal_file_path : wal_file_paths) {
+    auto cursor = WalCursor::New(wal_file_path);
+    if (cursor) {
+      wal_cursors.push_back(std::move(cursor.value()));
+    } else {
+      return std::move(cursor.error());
+    }
+  }
+  return wal_cursors;
+}
+
 Optional<Error> WalCursor::Foreach(const std::function<bool(lean_wal_record& record)>& func) {
   // Seek to the begining.
   if (auto err = Seek(0); err) {

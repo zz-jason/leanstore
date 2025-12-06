@@ -7,9 +7,9 @@
 #include "leanstore/cpp/base/error.hpp"
 #include "leanstore/cpp/base/log.hpp"
 #include "leanstore/cpp/base/result.hpp"
+#include "leanstore/cpp/base/small_vector.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
-#include "utils/small_vector.hpp"
 
 #include <cstring>
 #include <expected>

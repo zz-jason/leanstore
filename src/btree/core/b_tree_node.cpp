@@ -5,8 +5,8 @@
 #include "leanstore/cpp/base/defer.hpp"
 #include "leanstore/cpp/base/log.hpp"
 #include "leanstore/cpp/base/slice.hpp"
+#include "leanstore/cpp/base/small_vector.hpp"
 #include "leanstore/exceptions.hpp"
-#include "utils/small_vector.hpp"
 
 #include <algorithm>
 #include <cassert>

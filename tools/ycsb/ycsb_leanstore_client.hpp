@@ -6,13 +6,13 @@
 #include "leanstore/concurrency/cr_manager.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/cpp/base/log.hpp"
+#include "leanstore/cpp/base/small_vector.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/random_generator.hpp"
 #include "leanstore/utils/scrambled_zipf_generator.hpp"
 #include "tools/ycsb/ycsb.hpp"
-#include "utils/small_vector.hpp"
 #include "ycsb_args.hpp"
 
 #include <atomic>
