@@ -16,6 +16,8 @@ typedef enum lean_status {
   LEAN_ERR_OPEN_STORE,   // Failed to open/initialize store
   LEAN_ERR_CTEATE_BTREE, // Failed to create B-tree
   LEAN_ERR_UNSUPPORTED,  // Operation not supported
+  LEAN_ERR_CREATE_TABLE, // Failed to create a table
+  LEAN_ERR_TABLE_NOT_FOUND, // Table not found
 } lean_status;
 
 /// NOLINTEND

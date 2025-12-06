@@ -2,6 +2,7 @@
 
 #include "api/c/btree_impl.hpp"
 #include "api/c/btree_mvcc_impl.hpp"
+#include "api/c/table_impl.hpp"
 #include "coroutine/coro_env.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/core/b_tree_generic.hpp"
@@ -9,11 +10,92 @@
 #include "leanstore/buffer-manager/tree_registry.hpp"
 #include "leanstore/c/leanstore.h"
 #include "leanstore/concurrency/tx_manager.hpp"
+#include "leanstore/cpp/base/error.hpp"
 #include "leanstore/lean_store.hpp"
 
 #include <iostream>
+#include <utility>
+#include <vector>
 
 namespace leanstore {
+
+namespace {
+
+ColumnType ConvertColumnType(lean_column_type type) {
+  switch (type) {
+  case LEAN_COLUMN_TYPE_BOOL:
+    return ColumnType::kBool;
+  case LEAN_COLUMN_TYPE_INT32:
+    return ColumnType::kInt32;
+  case LEAN_COLUMN_TYPE_INT64:
+    return ColumnType::kInt64;
+  case LEAN_COLUMN_TYPE_UINT64:
+    return ColumnType::kUInt64;
+  case LEAN_COLUMN_TYPE_FLOAT32:
+    return ColumnType::kFloat32;
+  case LEAN_COLUMN_TYPE_FLOAT64:
+    return ColumnType::kFloat64;
+  case LEAN_COLUMN_TYPE_STRING:
+    return ColumnType::kString;
+  case LEAN_COLUMN_TYPE_BINARY:
+  default:
+    return ColumnType::kBinary;
+  }
+}
+
+Result<TableDefinition> BuildTableDefinition(const lean_table_def* table_def) {
+  if (table_def == nullptr) {
+    return Error::General("table definition cannot be null");
+  }
+  if (table_def->name.data == nullptr || table_def->name.size == 0) {
+    return Error::General("table name cannot be empty");
+  }
+  if (table_def->columns == nullptr || table_def->num_columns == 0) {
+    return Error::General("table must define at least one column");
+  }
+  if (table_def->num_primary_key_columns == 0) {
+    return Error::General("table must define at least one primary key column");
+  }
+  if (table_def->primary_key_column_indexes == nullptr) {
+    return Error::General("primary key column indexes cannot be null");
+  }
+
+  TableDefinition def;
+  def.name.assign(table_def->name.data, table_def->name.size);
+  def.primary_index_type = table_def->primary_index_type;
+  def.primary_index_config = table_def->primary_index_config;
+
+  std::vector<ColumnDefinition> columns;
+  columns.reserve(table_def->num_columns);
+  for (uint32_t i = 0; i < table_def->num_columns; ++i) {
+    const auto& c_def = table_def->columns[i];
+    if (c_def.name.data == nullptr || c_def.name.size == 0) {
+      return Error::General("column name cannot be empty");
+    }
+    ColumnDefinition column;
+    column.name.assign(c_def.name.data, c_def.name.size);
+    column.type = ConvertColumnType(c_def.type);
+    column.nullable = c_def.nullable;
+    column.fixed_length = c_def.fixed_length;
+    columns.emplace_back(std::move(column));
+  }
+
+  std::vector<uint32_t> pk_columns;
+  pk_columns.reserve(table_def->num_primary_key_columns);
+  for (uint32_t i = 0; i < table_def->num_primary_key_columns; ++i) {
+    pk_columns.push_back(table_def->primary_key_column_indexes[i]);
+  }
+
+  def.schema = TableSchema(std::move(columns), std::move(pk_columns));
+
+  if (auto res = def.Validate(); !res) {
+    return std::move(res.error());
+  }
+
+  return def;
+}
+
+} // namespace
 
 lean_status SessionImpl::CreateBTree(const char* btree_name, lean_btree_type btree_type) {
   lean_status status = lean_status::LEAN_STATUS_OK;
@@ -100,6 +182,53 @@ struct lean_btree* SessionImpl::GetBTree(const char* btree_name) {
   });
 
   return btree_result;
+}
+
+lean_status SessionImpl::CreateTable(const struct lean_table_def* table_def) {
+  auto def_res = BuildTableDefinition(table_def);
+  if (!def_res) {
+    std::cerr << "CreateTable failed: " << def_res.error().ToString() << std::endl;
+    return lean_status::LEAN_ERR_CREATE_TABLE;
+  }
+
+  lean_status status = lean_status::LEAN_STATUS_OK;
+  auto definition = std::move(def_res.value());
+  ExecSync([&]() {
+    auto res = store_->CreateTable(definition);
+    if (!res) {
+      std::cerr << "CreateTable failed: " << res.error().ToString() << std::endl;
+      status = lean_status::LEAN_ERR_CREATE_TABLE;
+    }
+  });
+  return status;
+}
+
+lean_status SessionImpl::DropTable(const char* table_name) {
+  if (table_name == nullptr) {
+    return lean_status::LEAN_ERR_TABLE_NOT_FOUND;
+  }
+  lean_status status = lean_status::LEAN_STATUS_OK;
+  ExecSync([&]() {
+    auto res = store_->DropTable(table_name);
+    if (!res) {
+      std::cerr << "DropTable failed: " << res.error().ToString() << std::endl;
+      status = lean_status::LEAN_ERR_TABLE_NOT_FOUND;
+    }
+  });
+  return status;
+}
+
+struct lean_table* SessionImpl::GetTable(const char* table_name) {
+  struct lean_table* table_handle = nullptr;
+  ExecSync([&]() {
+    auto* table = store_->GetTable(table_name);
+    if (table == nullptr) {
+      table_handle = nullptr;
+      return;
+    }
+    table_handle = TableImpl::Create(table, this);
+  });
+  return table_handle;
 }
 
 } // namespace leanstore
