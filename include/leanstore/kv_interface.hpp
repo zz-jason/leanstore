@@ -81,7 +81,6 @@ public:
 
   uint16_t size_ = 0;
 
-public:
   bool operator==(const UpdateSlotInfo& other) const {
     return offset_ == other.offset_ && size_ == other.size_;
   }
@@ -97,7 +96,6 @@ public:
 
   UpdateSlotInfo update_slots_[];
 
-public:
   uint64_t Size() const {
     return UpdateDesc::Size(num_slots_);
   }
@@ -116,21 +114,21 @@ private:
   }
 
 public:
-  inline static const UpdateDesc* From(const uint8_t* buffer) {
+  static const UpdateDesc* From(const uint8_t* buffer) {
     return reinterpret_cast<const UpdateDesc*>(buffer);
   }
 
-  inline static UpdateDesc* From(uint8_t* buffer) {
+  static UpdateDesc* From(uint8_t* buffer) {
     return reinterpret_cast<UpdateDesc*>(buffer);
   }
 
-  inline static uint64_t Size(uint8_t num_slots) {
+  static uint64_t Size(uint8_t num_slots) {
     uint64_t self_size = sizeof(UpdateDesc);
     self_size += (num_slots * sizeof(UpdateSlotInfo));
     return self_size;
   }
 
-  inline static UpdateDesc* CreateFrom(uint8_t* buffer) {
+  static UpdateDesc* CreateFrom(uint8_t* buffer) {
     auto* update_desc = new (buffer) UpdateDesc();
     return update_desc;
   }

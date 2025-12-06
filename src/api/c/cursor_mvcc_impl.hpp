@@ -62,7 +62,6 @@ private:
     return (impl->*Method)(std::forward<Args>(args)...);
   }
 
-private:
   lean_cursor base_;
   TransactionKV* btree_;
   std::string current_key_;

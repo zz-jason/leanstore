@@ -24,11 +24,11 @@ struct PACKED VersionMeta {
   uint8_t payload_[];
 
 public:
-  inline static const VersionMeta* From(const uint8_t* buffer) {
+  static const VersionMeta* From(const uint8_t* buffer) {
     return reinterpret_cast<const VersionMeta*>(buffer);
   }
 
-  inline static VersionMeta* From(uint8_t* buffer) {
+  static VersionMeta* From(uint8_t* buffer) {
     return reinterpret_cast<VersionMeta*>(buffer);
   }
 };

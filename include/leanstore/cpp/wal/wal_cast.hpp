@@ -2,6 +2,7 @@
 
 #include "leanstore/common/wal_record.h"
 #include "leanstore/cpp/base/log.hpp"
+#include "leanstore/cpp/base/slice.hpp"
 #include "leanstore/cpp/wal/wal_traits.hpp"
 
 namespace leanstore {

@@ -30,7 +30,6 @@ public:
   /// started.
   std::unique_ptr<GroupCommitter> group_committer_;
 
-public:
   explicit CRManager(LeanStore* store);
 
   ~CRManager();

@@ -1,46 +1,125 @@
 ---
+# ==============================================================================
+# 1. Base Style and Indentation
+#    (Controls the fundamental structure and spacing)
+# ==============================================================================
 BasedOnStyle: LLVM
-# BreakBeforeBraces: Linux
-# SpaceInEmptyParentheses: 'false'
-ColumnLimit: 100
-IndentWidth: 2
-PointerAlignment: Left
-AlwaysBreakTemplateDeclarations: true
+Language: Cpp
 
+# Set the maximum line width for wrapping. (LLVM default is 80)
+ColumnLimit: 100
+
+# Set the block indentation width to 2 spaces for a more compact style. (LLVM default is 4)
+IndentWidth: 2
+
+# Place the pointer/reference symbol (e.g., '*' or '&') on the left, next to the type.
+# Example: int* x; (Instead of int *x;)
+PointerAlignment: Left
+
+# Penalty for placing the return type of a long function on its own line.
+# High penalty (1000) strongly discourages putting the return type on a separate line.
 PenaltyReturnTypeOnItsOwnLine: 1000
 
+
+# ==============================================================================
+# 2. Line Wrapping and Single-Line Control
+#    (Strictly enforces multi-line structure for better readability)
+# ==============================================================================
+
+# Forces a break after the 'template <...>' part of a template declaration.
+AlwaysBreakTemplateDeclarations: true
+
+# Forcing multi-line structure for short blocks (high readability requirement).
 AllowShortBlocksOnASingleLine: false
 AllowShortCaseLabelsOnASingleLine: false
-AllowShortFunctionsOnASingleLine: None
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
-EmptyLineBeforeAccessModifier: Always
-Cpp11BracedListStyle: true
+# Note: Functions are also forced to multi-line via 'AllowShortFunctionsOnASingleLine: None'
+AllowShortFunctionsOnASingleLine: None
 
-# constructor initializers
+
+# ==============================================================================
+# 3. Declarations, Parameters, and Alignment
+#    (Controls function signatures, initializers, and variable alignment)
+# ==============================================================================
+
+# Parameter Packing (Function Definition/Declaration):
+# Allow function parameters to be packed on one line if they fit.
+BinPackParameters: true
+# If parameters must wrap, allow all parameters to be moved to the next line.
+AllowAllParametersOfDeclarationOnNextLine: true
+
+# Argument Packing (Function Call):
+# Allow function call arguments to be packed on one line if they fit.
+BinPackArguments: true
+# If arguments must wrap, allow all arguments to be moved to the next line.
+AllowAllArgumentsOnNextLine: true
+
+# Alignment of elements after an open parenthesis or bracket.
+# 'Align' means alignment will be relative to the open bracket itself.
+AlignAfterOpenBracket: Align
+
+# Constructor Initializer List Formatting:
+# Put initializers on the current line if possible, wrapping to the next line only when needed.
 PackConstructorInitializers: CurrentLine
 
-# arguments
-BinPackArguments: true
-AllowAllArgumentsOnNextLine: true
-AlignAfterOpenBracket: Align
+# C++11 Uniform Initialization:
+# Use extra indentation for braced lists ({...}) in C++11 style.
+Cpp11BracedListStyle: true
+
+
+# ==============================================================================
+# 4. Access Modifiers and Qualifiers
+#    (Controls keywords like 'public' and 'const')
+# ==============================================================================
+
+# Forces an empty line before access specifiers (public:, private:, protected:).
+EmptyLineBeforeAccessModifier: Always
+
+# Enforce a specific, custom order for type qualifiers (const, static, etc.).
 QualifierAlignment: Custom
 QualifierOrder: ['inline', 'static', 'constexpr', 'const', 'volatile', 'type']
 
-# include headers
-IncludeCategories:
-  - Regex:           '^".*.hpp'
-    Priority:        2
-  - Regex:           '^("|<)leanstore/*'
-    Priority:        2
-  - Regex:           '^("|<)(benchmark)/'
-    Priority:        3
-  - Regex:           '^("|<)(tanakh-cmdline|concurrentqueue|cpptrace|boost|gtest|gmock|spdlog|glog|rapidjson|rocksdb|gperftools|crc32c|prometheus)/'
-    Priority:        4
-  - Regex:           '^("|<)(httplib)'
-    Priority:        4
-  - Regex:           '<[[:alnum:]_/]+>'
-    Priority:        5
-  - Regex:           '<[[:alnum:]_/.]+>'
-    Priority:        6
+
+# ==============================================================================
+# 5. Include Header Sorting and Grouping
+#    (Strictly controls the order of includes based on source of file)
+# ==============================================================================
+
+# Defines the style of include blocks: regroup means adjacent includes of the same priority
+# are grouped together, and different groups are separated by empty lines.
 IncludeBlocks: Regroup
+
+# Defines the specific sorting order using Regular Expressions and assigned Priority.
+# Lower Priority number means the group comes first.
+
+IncludeCategories:
+  # Priority 2 (Highest Priority: Project-Specific Headers)
+  # 1. Matching header file for the current source file (e.g., "file.hpp").
+  - Regex: '^".*.hpp'
+    Priority: 2
+  # 2. Internal Project Core Library includes (e.g., "leanstore/...")
+  - Regex: '^("|<)leanstore/*'
+    Priority: 2
+
+  # Priority 3 (Internal Tools / Specific Third-Party Tools)
+  - Regex: '^("|<)(benchmark)/'
+    Priority: 3
+
+  # Priority 4 (Major External Third-Party Libraries - Tier 1)
+  # Includes Boost, Google Test, Spdlog, RocksDB, etc.
+  - Regex: '^("|<)(tanakh-cmdline|concurrentqueue|cpptrace|boost|gtest|gmock|spdlog|glog|rapidjson|rocksdb|gperftools|crc32c|prometheus)/'
+    Priority: 4
+  # Specific external library (httplib)
+  - Regex: '^("|<)(httplib)'
+    Priority: 4
+
+  # Priority 5 (Standard C++ Library Headers)
+  # Matches system headers without dots (e.g., <vector>, <iostream>)
+  - Regex: '<[[:alnum:]_/]+>'
+    Priority: 5
+
+  # Priority 6 (C/POSIX System Headers)
+  # Matches system headers that might contain a dot (e.g., <sys/stat.h>, <cstdint>)
+  - Regex: '<[[:alnum:]_/.]+>'
+    Priority: 6

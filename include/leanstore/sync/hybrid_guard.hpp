@@ -34,7 +34,6 @@ public:
 
   bool contented_ = false;
 
-public:
   HybridGuard() = default;
 
   explicit HybridGuard(HybridMutex* latch)
@@ -123,7 +122,7 @@ public:
     state_ = GuardState::kSharedOptimistic;
   }
 
-  inline void ToOptimisticOrJump() {
+  void ToOptimisticOrJump() {
     LEAN_DCHECK(state_ == GuardState::kUninitialized && latch_ != nullptr);
     version_ = latch_->GetVersion();
     if (HasExclusiveMark(version_)) {
@@ -133,7 +132,7 @@ public:
     state_ = GuardState::kSharedOptimistic;
   }
 
-  inline void ToOptimisticOrShared() {
+  void ToOptimisticOrShared() {
     if (state_ == GuardState::kSharedOptimistic || state_ == GuardState::kSharedPessimistic) {
       return;
     }
@@ -147,7 +146,7 @@ public:
     }
   }
 
-  inline void ToOptimisticOrExclusive() {
+  void ToOptimisticOrExclusive() {
     LEAN_DCHECK(state_ == GuardState::kUninitialized && latch_ != nullptr);
     version_ = latch_->GetVersion();
     if (HasExclusiveMark(version_)) {
@@ -158,7 +157,7 @@ public:
     }
   }
 
-  inline void ToExclusiveMayJump() {
+  void ToExclusiveMayJump() {
     LEAN_DCHECK(state_ != GuardState::kSharedPessimistic);
     if (state_ == GuardState::kExclusivePessimistic) {
       return;
@@ -180,7 +179,7 @@ public:
     }
   }
 
-  inline void ToSharedMayJump() {
+  void ToSharedMayJump() {
     LEAN_DCHECK(state_ == GuardState::kSharedOptimistic ||
                 state_ == GuardState::kSharedPessimistic);
     if (state_ == GuardState::kSharedPessimistic) {
@@ -199,7 +198,7 @@ public:
   }
 
   // For buffer management
-  inline void TryToExclusiveMayJump() {
+  void TryToExclusiveMayJump() {
     LEAN_DCHECK(state_ == GuardState::kSharedOptimistic);
     const uint64_t new_version = version_ + kLatchExclusiveBit;
     uint64_t expected = version_;
@@ -217,7 +216,7 @@ public:
     state_ = GuardState::kExclusivePessimistic;
   }
 
-  inline void TryToSharedMayJump() {
+  void TryToSharedMayJump() {
     LEAN_DCHECK(state_ == GuardState::kSharedOptimistic);
     if (!latch_->shared_mutex_.try_lock_shared()) {
       JumpContext::Jump();
@@ -232,7 +231,7 @@ public:
 private:
   // NOLINTBEGIN
 
-  inline void lock_exclusive() {
+  void lock_exclusive() {
     latch_->shared_mutex_.lock();
     LEAN_DCHECK(!HasExclusiveMark(latch_->GetVersion()));
     version_ = latch_->GetVersion() + kLatchExclusiveBit;
@@ -240,7 +239,7 @@ private:
     state_ = GuardState::kExclusivePessimistic;
   }
 
-  inline void unlock_exclusive() {
+  void unlock_exclusive() {
     LEAN_DCHECK(HasExclusiveMark(latch_->GetVersion()));
     version_ += kLatchExclusiveBit;
     latch_->version_.store(version_, std::memory_order_release);
@@ -249,14 +248,14 @@ private:
     state_ = GuardState::kSharedOptimistic;
   }
 
-  inline void lock_shared() {
+  void lock_shared() {
     latch_->shared_mutex_.lock_shared();
     LEAN_DCHECK(!HasExclusiveMark(latch_->GetVersion()));
     version_ = latch_->GetVersion();
     state_ = GuardState::kSharedPessimistic;
   }
 
-  inline void unlock_shared() {
+  void unlock_shared() {
     LEAN_DCHECK(!HasExclusiveMark(latch_->GetVersion()));
     latch_->shared_mutex_.unlock_shared();
     state_ = GuardState::kSharedOptimistic;

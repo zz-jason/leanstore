@@ -1,7 +1,6 @@
 #pragma once
 
 #include "api/c/session_impl.hpp"
-#include "api/c/tx_guard.hpp"
 #include "leanstore/c/leanstore.h"
 #include "leanstore/table/table.hpp"
 
@@ -50,7 +49,6 @@ private:
     return (impl->*Method)(std::forward<Args>(args)...);
   }
 
-private:
   lean_table base_;
   Table* table_;
   SessionImpl* session_impl_;
@@ -101,7 +99,6 @@ private:
     return (impl->*Method)(std::forward<Args>(args)...);
   }
 
-private:
   lean_table_cursor base_;
   SessionImpl* session_impl_;
   std::unique_ptr<TableCursor> cursor_;

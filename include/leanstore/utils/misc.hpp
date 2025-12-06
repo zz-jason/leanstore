@@ -157,7 +157,6 @@ class AlignedBuffer {
 public:
   ALIGNAS(Alignment) uint8_t* buffer_;
 
-public:
   explicit AlignedBuffer(size_t size)
       : buffer_(reinterpret_cast<uint8_t*>(std::aligned_alloc(Alignment, size))) {
   }
@@ -169,7 +168,6 @@ public:
     }
   }
 
-public:
   uint8_t* Get() {
     return buffer_;
   }

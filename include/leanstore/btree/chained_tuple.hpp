@@ -27,7 +27,6 @@ public:
   // latest version in-place
   uint8_t payload_[];
 
-public:
   /// Construct a ChainedTuple, copy the value to its payload
   ///
   /// NOTE: Payload space should be allocated in advance. This constructor is
@@ -57,8 +56,7 @@ public:
     std::memmove(payload_, old_fat_tuple.payload_, old_fat_tuple.val_size_);
   }
 
-public:
-  inline Slice GetValue(size_t size) const {
+  Slice GetValue(size_t size) const {
     return Slice(payload_, size);
   }
 
@@ -92,12 +90,11 @@ public:
   void Update(BTreeIterMut* x_iter, Slice key, MutValCallback update_call_back,
               UpdateDesc& update_desc);
 
-public:
-  inline static const ChainedTuple* From(const uint8_t* buffer) {
+  static const ChainedTuple* From(const uint8_t* buffer) {
     return reinterpret_cast<const ChainedTuple*>(buffer);
   }
 
-  inline static ChainedTuple* From(uint8_t* buffer) {
+  static ChainedTuple* From(uint8_t* buffer) {
     return reinterpret_cast<ChainedTuple*>(buffer);
   }
 };

@@ -5,9 +5,9 @@
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/common/wal_record.h"
-#include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/cpp/base/slice.hpp"
+#include "leanstore/cpp/wal/logging.hpp"
 #include "leanstore/cpp/wal/wal_serde.hpp"
 #include "leanstore/cpp/wal/wal_traits.hpp"
 

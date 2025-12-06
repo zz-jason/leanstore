@@ -1,8 +1,11 @@
 #include "wal_dump.hpp"
 
 #include "leanstore/common/wal_record.h"
+#include "leanstore/cpp/base/result.hpp"
 #include "leanstore/cpp/wal/wal_cursor.hpp"
 #include "leanstore/cpp/wal/wal_serde.hpp"
+
+#include <tanakh-cmdline/cmdline.h>
 
 #include <cassert>
 #include <cstring>
@@ -40,20 +43,20 @@ void WalDump::Run() {
   };
 
   // Lambda for printing a wal record
-  auto print_record = [&](const lean_wal_record& record) {
+  auto print_record = [&](const lean_wal_record& record) -> Result<bool> {
     std::cout << FormatWalRecord(record, print_format_) << std::endl;
     return true;
   };
 
   // open the file
-  auto cursor_res = WalCursor::New(wal_path_);
-  if (!cursor_res) {
-    error_exit(cursor_res.error());
+  auto cursor = WalCursor::New(wal_path_);
+  if (!cursor) {
+    error_exit(cursor.error());
   }
 
   // iterate and print each record
-  if (auto err = cursor_res.value()->Foreach(print_record); err) {
-    error_exit(*err);
+  if (auto res = cursor.value()->Foreach(print_record); !res) {
+    error_exit(res.error());
   }
 }
 

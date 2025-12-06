@@ -79,7 +79,6 @@ public:
   /// disk by the group commit thread.
   ALIGNAS(512) uint8_t* wal_buffer_;
 
-public:
   explicit Logging(uint64_t wal_buffer_bytes)
       : wal_buffer_bytes_(wal_buffer_bytes),
         wal_buffer_((uint8_t*)(std::aligned_alloc(512, wal_buffer_bytes))) {

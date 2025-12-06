@@ -33,13 +33,11 @@ public:
   /// The vector to store all the (commitTs, startTs) pairs.
   std::vector<std::pair<lean_txid_t, lean_txid_t>> commit_log_;
 
-public:
   /// Constructor.
   explicit CommitTree(const uint64_t num_workers) : capacity_(num_workers + 1) {
     commit_log_.reserve(capacity_);
   }
 
-public:
   /// AppendCommitLog is called when a transaction is committed. It appends the (commitTs, startTs)
   /// pair to the commit log. Transactions are sequential in one worker, so the commitTs and startTs
   /// are also increasing in the commit log of one worker
@@ -126,7 +124,6 @@ public:
     lcb_cache_key_ = std::make_unique<uint64_t[]>(num_workers);
   }
 
-public:
   /// The LeanStore it belongs to.
   LeanStore* store_;
 
@@ -181,7 +178,6 @@ public:
   /// transaction start. Used for visibility check of the current transaction.
   lean_txid_t global_wmk_of_all_tx_ = 0;
 
-public:
   /// Get the older version in version storage according to the given (newerWorkerId, newerTxId,
   /// newerCommandId). The callback function is called with the version data when the version is
   /// found.
@@ -193,9 +189,9 @@ public:
   /// @param newerCommandId: the command id of the newer version.
   /// @param getCallback: the callback function to be called when the version is found.
   /// @return: true if the version is found, false otherwise.
-  inline bool GetVersion(lean_wid_t newer_worker_id, lean_txid_t newer_tx_id,
-                         lean_cmdid_t newer_command_id,
-                         std::function<void(const uint8_t*, uint64_t version_size)> get_callback) {
+  bool GetVersion(lean_wid_t newer_worker_id, lean_txid_t newer_tx_id,
+                  lean_cmdid_t newer_command_id,
+                  std::function<void(const uint8_t*, uint64_t version_size)> get_callback) {
     auto is_remove_command = newer_command_id & kCmdRemoveMark;
     return Other(newer_worker_id)
         .history_storage_.GetVersion(newer_tx_id, newer_command_id, is_remove_command,

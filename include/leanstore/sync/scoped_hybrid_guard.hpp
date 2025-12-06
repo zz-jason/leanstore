@@ -130,7 +130,6 @@ private:
   /// Unlock the latch in kExclusivePessimistic mode.
   void unlock_pessimistic_exclusive(); // NOLINT (fixme)
 
-private:
   /// Allow the test class to access private members.
   friend class test::ScopedHybridGuardTest;
 };

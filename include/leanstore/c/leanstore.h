@@ -136,7 +136,8 @@ typedef struct lean_session {
   void (*abort_tx)(struct lean_session* session);
 
   /// Create new B-tree index
-  lean_status (*create_btree)(struct lean_session* session, const char* btree_name,
+  lean_status (*create_btree)(struct lean_session* session,
+                              const char* btree_name,
                               lean_btree_type btree_type);
 
   /// Delete B-tree index

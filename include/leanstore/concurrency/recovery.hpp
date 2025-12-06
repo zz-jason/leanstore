@@ -51,7 +51,6 @@ public:
   Recovery& operator=(const Recovery&) = delete;
   Recovery(const Recovery&) = delete;
 
-public:
   /// The ARIES algorithm relies on logging of all database operations with ascending sequence
   /// numbers. The resulting logfile is stored on so-called “stable storage”, which is a storage
   /// medium that is assumed to survive crashes and hardware failures. To gather the necessary

@@ -43,7 +43,6 @@ public:
   /// Whether the current job is done.
   JobStatus job_status_;
 
-public:
   /// Constructor.
   WorkerThread(LeanStore* store, lean_wid_t worker_id, int cpu)
       : utils::ManagedThread(store, "Worker" + std::to_string(worker_id), cpu),

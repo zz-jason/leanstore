@@ -11,6 +11,8 @@
 #include "leanstore/cpp/base/error.hpp"
 #include "leanstore/cpp/base/log.hpp"
 #include "leanstore/cpp/base/result.hpp"
+#include "leanstore/cpp/checkpoint/checkpoint_processor.hpp"
+#include "leanstore/cpp/config/store_paths.hpp"
 #include "leanstore/table/table.hpp"
 #include "leanstore/table/table_registry.hpp"
 #include "leanstore/utils/managed_thread.hpp"
@@ -91,35 +93,38 @@ LeanStore::LeanStore(lean_store_option* option) : store_option_(option) {
 }
 
 void LeanStore::InitDbFiles() {
-  LEAN_DEFER({
-    LEAN_DCHECK(fcntl(page_fd_, F_GETFL) != -1);
-    LEAN_DCHECK(fcntl(wal_fd_, F_GETFL) != -1);
-  });
-
+  LEAN_DEFER({ LEAN_DCHECK(fcntl(page_fd_, F_GETFL) != -1); });
+#ifndef ENABLE_COROUTINE
+  LEAN_DEFER({ LEAN_DCHECK(fcntl(wal_fd_, F_GETFL) != -1); });
+#endif
   // Create a new instance on the specified DB file
   if (store_option_->create_from_scratch_) {
     Log::Info("Create new page and wal files");
     int flags = O_TRUNC | O_CREAT | O_RDWR | O_DIRECT;
-    auto db_file_path = GetDbFilePath();
+    auto db_file_path = StorePaths::PagesFilePath(store_option_->store_dir_);
     page_fd_ = open(db_file_path.c_str(), flags, 0666);
     if (page_fd_ == -1) {
       Log::Fatal("Could not open file at: {}", db_file_path);
     }
     Log::Info("Init page fd succeed, pageFd={}, pageFile={}", page_fd_, db_file_path);
 
-    auto wal_file_path = GetWalFilePath();
-    wal_fd_ = open(wal_file_path.c_str(), flags, 0666);
-    if (wal_fd_ == -1) {
-      Log::Fatal("Could not open file at: {}", wal_file_path);
+#ifndef ENABLE_COROUTINE
+    {
+      auto wal_file_path = StorePaths::WalFilePath(store_option_->store_dir_);
+      wal_fd_ = open(wal_file_path.c_str(), flags, 0666);
+      if (wal_fd_ == -1) {
+        Log::Fatal("Could not open file at: {}", wal_file_path);
+      }
+      Log::Info("Init wal fd succeed, walFd={}, walFile={}", wal_fd_, wal_file_path);
     }
-    Log::Info("Init wal fd succeed, walFd={}, walFile={}", wal_fd_, wal_file_path);
+#endif
     return;
   }
 
   // Recover pages and WAL from existing files
   Log::Info("Reopen existing page and wal files");
   int flags = O_RDWR | O_DIRECT;
-  auto db_file_path = GetDbFilePath();
+  auto db_file_path = StorePaths::PagesFilePath(store_option_->store_dir_);
   page_fd_ = open(db_file_path.c_str(), flags, 0666);
   if (page_fd_ == -1) {
     Log::Fatal("Recover failed, could not open file at: {}. The data is lost, "
@@ -128,14 +133,18 @@ void LeanStore::InitDbFiles() {
   }
   Log::Info("Init page fd succeed, pageFd={}, pageFile={}", page_fd_, db_file_path);
 
-  auto wal_file_path = GetWalFilePath();
-  wal_fd_ = open(wal_file_path.c_str(), flags, 0666);
-  if (wal_fd_ == -1) {
-    Log::Fatal("Recover failed, could not open file at: {}. The data is lost, "
-               "please create a new WAL file and start a new instance from it",
-               wal_file_path);
+#ifndef ENABLE_COROUTINE
+  {
+    auto wal_file_path = StorePaths::WalFilePath(store_option_->store_dir_);
+    wal_fd_ = open(wal_file_path.c_str(), flags, 0666);
+    if (wal_fd_ == -1) {
+      Log::Fatal("Recover failed, could not open file at: {}. The data is lost, "
+                 "please create a new WAL file and start a new instance from it",
+                 wal_file_path);
+    }
+    Log::Info("Init wal fd succeed, walFd={}, walFile={}", wal_fd_, wal_file_path);
   }
-  Log::Info("Init wal fd succeed, walFd={}, walFile={}", wal_fd_, wal_file_path);
+#endif
 }
 
 LeanStore::~LeanStore() {
@@ -164,9 +173,22 @@ LeanStore::~LeanStore() {
 
   // persist all the metadata and pages before exit
   bool all_pages_up_to_date = true;
+
+#ifdef ENABLE_COROUTINE
+  {
+    CheckpointProcessor processor(*this, *store_option_);
+    auto res = processor.CheckpointAll(buffer_manager_->buffer_pool_, buffer_manager_->num_bfs_);
+    if (!res) {
+      Log::Error("Failed to checkpoint all buffer frames: {}", res.error().ToString());
+      all_pages_up_to_date = false;
+    }
+  }
+#else
   if (auto res = buffer_manager_->CheckpointAllBufferFrames(); !res) {
     all_pages_up_to_date = false;
   }
+#endif
+
   SerializeMeta(all_pages_up_to_date);
 
   buffer_manager_->SyncAllPageWrites();
@@ -185,60 +207,71 @@ LeanStore::~LeanStore() {
     Log::Info("Page file closed");
   }
 
+#ifndef ENABLE_COROUTINE
   {
-    auto wal_file_path = GetWalFilePath();
+    auto wal_file_path = StorePaths::WalFilePath(store_option_->store_dir_);
     struct stat st;
     if (stat(wal_file_path.c_str(), &st) == 0) {
       LEAN_DLOG("The size of {} is {} bytes", wal_file_path, st.st_size);
     }
+
+    if (close(wal_fd_) == -1) {
+      perror("Failed to close WAL file: ");
+    } else {
+      Log::Info("WAL file closed");
+    }
   }
-  if (close(wal_fd_) == -1) {
-    perror("Failed to close WAL file: ");
-  } else {
-    Log::Info("WAL file closed");
-  }
+#endif
 }
 
 void LeanStore::StartBackgroundThreads() {
 #ifdef ENABLE_COROUTINE
-  coro_scheduler_ = std::make_unique<CoroScheduler>(this, store_option_->worker_threads_);
-  coro_scheduler_->Init();
-  buffer_manager_->InitFreeBfLists();
+  {
+    coro_scheduler_ = std::make_unique<CoroScheduler>(this, store_option_->worker_threads_);
+    coro_scheduler_->Init();
+    buffer_manager_->InitFreeBfLists();
 
-  crmanager_ = nullptr;
+    crmanager_ = nullptr;
 
-  auto* coro_session = coro_scheduler_->TryReserveCoroSession(0);
-  assert(coro_session != nullptr && "Failed to reserve a CoroSession for coroutine execution");
-  coro_scheduler_->Submit(coro_session, [&]() { mvcc_mgr_->InitHistoryStorage(); })->Wait();
-  coro_scheduler_->ReleaseCoroSession(coro_session);
+    auto* coro_session = coro_scheduler_->TryReserveCoroSession(0);
+    assert(coro_session != nullptr && "Failed to reserve a CoroSession for coroutine execution");
+    coro_scheduler_->Submit(coro_session, [&]() { mvcc_mgr_->InitHistoryStorage(); })->Wait();
+    coro_scheduler_->ReleaseCoroSession(coro_session);
+  }
 #else
-  buffer_manager_->InitFreeBfLists();
-  buffer_manager_->StartPageEvictors();
+  {
+    buffer_manager_->InitFreeBfLists();
+    buffer_manager_->StartPageEvictors();
 
-  crmanager_ = std::make_unique<CRManager>(this);
-  crmanager_->worker_threads_[0]->SetJob([&]() { mvcc_mgr_->InitHistoryStorage(); });
-  crmanager_->worker_threads_[0]->Wait();
+    crmanager_ = std::make_unique<CRManager>(this);
+    crmanager_->worker_threads_[0]->SetJob([&]() { mvcc_mgr_->InitHistoryStorage(); });
+    crmanager_->worker_threads_[0]->Wait();
+  }
 #endif
 }
 
 void LeanStore::StopBackgroundThreads() {
 #ifdef ENABLE_COROUTINE
-  // destroy coro scheduler
-  if (coro_scheduler_ != nullptr) {
-    coro_scheduler_->Deinit();
-    coro_scheduler_ = nullptr;
+  {
+    // destroy coro scheduler
+    if (coro_scheduler_ != nullptr) {
+      coro_scheduler_->Deinit();
+      coro_scheduler_ = nullptr;
+    }
   }
 #else
-  // destroy and Stop all foreground workers
-  if (crmanager_ != nullptr) {
-    crmanager_ = nullptr;
+  {
+    // destroy and Stop all foreground workers
+    if (crmanager_ != nullptr) {
+      crmanager_ = nullptr;
+    }
+    // destroy buffer manager (buffer frame providers)
+    buffer_manager_->StopPageEvictors();
   }
-  // destroy buffer manager (buffer frame providers)
-  buffer_manager_->StopPageEvictors();
 #endif
 }
 
-uint64_t LeanStore::AllocWalGsn() {
+lean_lid_t LeanStore::AllocWalGsn() {
   return mvcc_mgr_->AllocWalGsn();
 }
 
@@ -296,7 +329,7 @@ void LeanStore::SerializeMeta(bool all_pages_up_to_date) {
   // serialize data structure instances
   utils::JsonObj meta_json_obj;
   std::ofstream meta_file;
-  meta_file.open(GetMetaFilePath(), std::ios::trunc);
+  meta_file.open(StorePaths::MetaFilePath(store_option_->store_dir_), std::ios::trunc);
 
   // cr_manager
   if (crmanager_) {
@@ -389,7 +422,7 @@ bool LeanStore::DeserializeMeta() {
   });
 
   std::ifstream meta_file;
-  meta_file.open(GetMetaFilePath());
+  meta_file.open(StorePaths::MetaFilePath(store_option_->store_dir_));
 
   utils::JsonObj meta_json_obj;
   auto res = meta_json_obj.Deserialize(

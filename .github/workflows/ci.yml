@@ -30,14 +30,6 @@ jobs:
     - name: Clang-format
       run: cmake --build build/debug_tsan --target=check-format
 
-    - name: Clang-tidy on changed files
-      run: |
-        bash ".github/scripts/run-clang-tidy-pr.sh" \
-          "${{ github.event.pull_request.number }}" \
-          "${{ github.repository }}" \
-          "${{ secrets.GITHUB_TOKEN }}" \
-          "build/debug_tsan" \
-
     - name: Build
       run: cmake --build build/debug_tsan -j `nproc`
 
@@ -75,14 +67,6 @@ jobs:
 
     - name: Clang-format
       run: cmake --build build/debug_coro --target=check-format
-
-    - name: Clang-tidy on changed files
-      run: |
-        bash ".github/scripts/run-clang-tidy-pr.sh" \
-          "${{ github.event.pull_request.number }}" \
-          "${{ github.repository }}" \
-          "${{ secrets.GITHUB_TOKEN }}" \
-          "build/debug_coro" \
 
     - name: Build
       run: cmake --build build/debug_coro -j `nproc`
@@ -359,3 +343,47 @@ jobs:
             -DLEANSTORE_LIBRARY_DIR=../../dist/release_coro/lib
           cmake --build build -j `nproc`
           ./build/kv_basic_example
+
+  clang-tidy:
+    runs-on: ubuntu-latest
+    container:
+      image: zzjason/leanstore-dev:latest
+    name: "Clang-tidy"
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v3
+
+    - name: Config project
+      run: |
+        which vcpkg;
+        cmake --preset debug_tsan
+
+    - name: Clang-tidy on changed files
+      run: |
+        bash ".github/scripts/run-clang-tidy-pr.sh" \
+          "${{ github.event.pull_request.number }}" \
+          "${{ github.repository }}" \
+          "${{ secrets.GITHUB_TOKEN }}" \
+          "build/debug_tsan"
+
+  clang-tidy-coro:
+    runs-on: ubuntu-latest
+    container:
+      image: zzjason/leanstore-dev:latest
+    name: "[COROUTINE] Clang-tidy"
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v3
+
+    - name: Config project
+      run: |
+        which vcpkg;
+        cmake --preset debug_coro
+
+    - name: Clang-tidy on changed files
+      run: |
+        bash ".github/scripts/run-clang-tidy-pr.sh" \
+          "${{ github.event.pull_request.number }}" \
+          "${{ github.repository }}" \
+          "${{ secrets.GITHUB_TOKEN }}" \
+          "build/debug_coro"

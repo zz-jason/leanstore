@@ -1,6 +1,7 @@
 #include "leanstore/cpp/base/log.hpp"
 
 #include "coroutine/coro_env.hpp"
+#include "leanstore/cpp/config/store_paths.hpp"
 
 #include <spdlog/common.h>
 #include <spdlog/sinks/basic_file_sink.h>
@@ -17,7 +18,6 @@
 namespace leanstore {
 
 static constexpr char kLoggerName[] = "leanstore_logger";
-static constexpr char kLogFileName[] = "leanstore.log";
 static constexpr char kLogFormat[] = "[%Y-%m-%d %H:%M:%S.%e] [%t] [%l] %v";
 static constexpr int kFlushIntervalSeconds = 3;
 
@@ -60,7 +60,7 @@ void Log::Init(const lean_store_option* option) {
     return;
   }
 
-  auto log_path = std::format("{}/{}", option->store_dir_, kLogFileName);
+  auto log_path = StorePaths::LogFilePath(option->store_dir_);
   logger = spdlog::basic_logger_mt(kLoggerName, log_path);
   logger->set_pattern(kLogFormat);
   logger->flush_on(spdlog::level::info);

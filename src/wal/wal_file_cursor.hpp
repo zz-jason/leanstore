@@ -2,8 +2,8 @@
 
 #include "leanstore/common/types.h"
 #include "leanstore/common/wal_record.h"
-#include "leanstore/cpp/base/error.hpp"
 #include "leanstore/cpp/base/log.hpp"
+#include "leanstore/cpp/base/result.hpp"
 #include "leanstore/cpp/wal/wal_cursor.hpp"
 
 #include <cassert>
@@ -38,13 +38,13 @@ public:
     }
   }
 
-  Optional<Error> Seek(lean_lid_t lsn) override {
+  Result<void> Seek(lean_lid_t lsn) override {
     read_offset_ = static_cast<int64_t>(lsn);
     is_valid_ = true;
     return LoadCurrentRecord();
   }
 
-  Optional<Error> Next() override {
+  Result<void> Next() override {
     LEAN_DCHECK(Valid(), "Can only advance when the cursor is valid");
     read_offset_ += wal_buffer_.size();
     return LoadCurrentRecord();
@@ -61,7 +61,7 @@ public:
 
 private:
   /// Loads the current WAL record into the buffer.
-  Optional<Error> LoadCurrentRecord();
+  Result<void> LoadCurrentRecord();
 
   static constexpr auto kInvalidFd = -1;
   static constexpr auto kDefaultBufferSize = 1024 * 1024;

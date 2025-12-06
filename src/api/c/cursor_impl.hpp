@@ -60,7 +60,6 @@ private:
     return (impl->*Method)(std::forward<Args>(args)...);
   }
 
-private:
   lean_cursor base_;
   BasicKV* btree_;
   std::string current_key_;

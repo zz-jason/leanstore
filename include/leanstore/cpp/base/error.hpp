@@ -17,13 +17,15 @@ class Error;
 /// format, all the other code will be generated automatically.
 #define LEAN_ERROR_CODE_LIST(ACTION)                                                               \
   ACTION(General, 001, "{}")                                                                       \
+  ACTION(NotImplemented, 002, "{}")                                                                \
+  ACTION(InvalidArgument, 003, "{}")                                                               \
   ACTION(Aio, 010, "AIO operation failed, operation={}, errno={}, strerror={}")                    \
   ACTION(FileOpen, 100, "Open file failed, file={}, errno={}, strerror={}")                        \
   ACTION(FileClose, 101, "Close file failed, file={}, errno={}, strerror={}")                      \
   ACTION(FileSeek, 102, "Seek file failed, file={}, errno={}, strerror={}")                        \
   ACTION(FileRead, 103, "Read file failed, file={}, errno={}, strerror={}")                        \
   ACTION(FileWrite, 104, "Write file failed, file={}, errno={}, strerror={}")                      \
-  ACTION(FileFsync, 105, "Fsync file failed, file={}, errno={}, strerror={}")
+  ACTION(FileSync, 105, "Sync file failed, file={}, errno={}, strerror={}")
 
 #define LEAN_ERROR_CODE(ename) k##ename
 

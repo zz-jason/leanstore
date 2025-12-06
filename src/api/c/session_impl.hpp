@@ -75,7 +75,6 @@ private:
     return (impl->*Method)(std::forward<Args>(args)...);
   }
 
-private:
   lean_session base_;
   LeanStore* store_;
   CoroSession* session_;

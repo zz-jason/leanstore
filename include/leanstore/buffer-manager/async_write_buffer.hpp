@@ -3,7 +3,7 @@
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/cpp/base/result.hpp"
-#include "leanstore/utils/async_io.hpp"
+#include "leanstore/cpp/io/async_io.hpp"
 #include "leanstore/utils/misc.hpp"
 
 #include <cstdint>

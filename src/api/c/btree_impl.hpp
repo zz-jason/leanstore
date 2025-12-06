@@ -46,7 +46,6 @@ private:
     return (impl->*Method)(std::forward<Args>(args)...);
   }
 
-private:
   lean_btree base_;
   BasicKV* btree_;
   SessionImpl* session_impl_;

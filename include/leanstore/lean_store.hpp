@@ -116,7 +116,7 @@ public:
   /// Register a logical table that already has its backing BTree.
   Result<Table*> RegisterTableWithExisting(const TableDefinition& definition);
 
-  uint64_t AllocWalGsn();
+  lean_lid_t AllocWalGsn();
 
   CoroScheduler& GetCoroScheduler() {
     LEAN_DCHECK(coro_scheduler_ != nullptr, "Coroutine scheduler is not initialized");
@@ -137,22 +137,6 @@ public:
 
   void ParallelRange(uint64_t num_jobs,
                      std::function<void(uint64_t job_begin, uint64_t job_end)>&& job_handler);
-
-  std::string GetMetaFilePath() const {
-    return std::string(store_option_->store_dir_) + "/db.meta.json";
-  }
-
-  std::string GetDbFilePath() const {
-    return std::string(store_option_->store_dir_) + "/db.pages";
-  }
-
-  std::string GetWalFilePath() const {
-    return std::string(store_option_->store_dir_) + "/db.wal";
-  }
-
-  std::string GetWalDir() const {
-    return std::string(store_option_->store_dir_) + "/wal";
-  }
 
 private:
   void StartBackgroundThreads();

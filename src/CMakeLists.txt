@@ -21,7 +21,7 @@ if(POLICY CMP0167)
 endif()
 find_package(Boost REQUIRED COMPONENTS context)
 
-find_package(unofficial-concurrentqueue CONFIG REQUIRED)
+find_package(concurrentqueue CONFIG)
 
 set(leanstore_deps
   aio
@@ -30,7 +30,7 @@ set(leanstore_deps
   rapidjson
   spdlog::spdlog_header_only
   Crc32c::crc32c
-  unofficial::concurrentqueue::concurrentqueue
+  concurrentqueue::concurrentqueue
   httplib::httplib
   PkgConfig::libunwind
 )
