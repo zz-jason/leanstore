@@ -30,6 +30,9 @@ class TreeRegistry;
 class BufferManager;
 class CRManager;
 class MvccManager;
+class Table;
+class TableRegistry;
+struct TableDefinition;
 
 class LeanStore {
 public:
@@ -49,6 +52,9 @@ public:
 
   /// The tree registry
   std::unique_ptr<TreeRegistry> tree_registry_;
+
+  /// Logical table registry
+  std::unique_ptr<TableRegistry> table_registry_;
 
   /// The Buffer manager
   std::unique_ptr<BufferManager> buffer_manager_;
@@ -97,6 +103,18 @@ public:
     LEAN_DCHECK(mvcc_mgr_ != nullptr, "MVCC manager is not initialized");
     return *mvcc_mgr_;
   }
+
+  /// Create a logical table.
+  Result<Table*> CreateTable(const TableDefinition& definition);
+
+  /// Drop a logical table.
+  Result<void> DropTable(const std::string& name);
+
+  /// Lookup a logical table by name.
+  Table* GetTable(const std::string& name);
+
+  /// Register a logical table that already has its backing BTree.
+  Result<Table*> RegisterTableWithExisting(const TableDefinition& definition);
 
   uint64_t AllocWalGsn();
 
