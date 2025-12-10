@@ -76,7 +76,7 @@ TEST_F(BTreeImplTest, BTreeOperations) {
 
   // remove 50 key-value pairs
   uint64_t num_entries_to_remove = num_entries / 2;
-  for (auto i = 0u; i < num_entries_to_remove; i++) {
+  for (auto i = 0U; i < num_entries_to_remove; i++) {
     auto status = btree_->remove(btree_, {keys[i].data(), keys[i].size()});
     ASSERT_EQ(status, lean_status::LEAN_STATUS_OK);
   }

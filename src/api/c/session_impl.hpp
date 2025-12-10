@@ -8,6 +8,8 @@
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/lean_store.hpp"
 
+#include <utility>
+
 namespace leanstore {
 
 class SessionImpl {
@@ -22,8 +24,9 @@ public:
     delete reinterpret_cast<SessionImpl*>(session);
   }
 
-  void ExecSync(std::function<void()>&& job) {
-    store_->GetCoroScheduler().Submit(session_, std::move(job))->Wait();
+  template <typename F>
+  void ExecSync(F&& job) {
+    store_->GetCoroScheduler().Submit(session_, std::forward<F>(job))->Wait();
   }
 
 private:

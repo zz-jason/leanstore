@@ -1,5 +1,6 @@
 #include "leanstore/btree/core/b_tree_node.hpp"
 
+#include "coroutine/coro_env.hpp"
 #include "leanstore/buffer-manager/guarded_buffer_frame.hpp"
 #include "leanstore/cpp/base/defer.hpp"
 #include "leanstore/cpp/base/log.hpp"
@@ -8,7 +9,10 @@
 #include "utils/small_vector.hpp"
 
 #include <algorithm>
+#include <cassert>
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 
 namespace leanstore {
 
@@ -16,12 +20,15 @@ void BTreeNode::UpdateHint(uint16_t slot_id) {
   uint16_t dist = num_slots_ / (kHintCount + 1);
   uint16_t begin = 0;
   if ((num_slots_ > kHintCount * 2 + 1) && (((num_slots_ - 1) / (kHintCount + 1)) == dist) &&
-      ((slot_id / dist) > 1))
+      ((slot_id / dist) > 1)) {
     begin = (slot_id / dist) - 1;
-  for (uint16_t i = begin; i < kHintCount; i++)
+  }
+  for (uint16_t i = begin; i < kHintCount; i++) {
     hint_[i] = slot_[dist * (i + 1)].head_;
-  for (uint16_t i = 0; i < kHintCount; i++)
+  }
+  for (uint16_t i = 0; i < kHintCount; i++) {
     assert(hint_[i] == slot_[dist * (i + 1)].head_);
+  }
 }
 
 void BTreeNode::SearchHint(HeadType key_head, uint16_t& lower_out, uint16_t& upper_out) {
@@ -210,8 +217,9 @@ bool BTreeNode::merge(uint16_t slot_id, ExclusiveGuardedBufferFrame<BTreeNode>& 
       space_used_ + x_guarded_right->space_used_ +
       (reinterpret_cast<uint8_t*>(slot_ + num_slots_ + x_guarded_right->num_slots_) - NodeBegin()) +
       left_grow + right_grow + SpaceNeeded(extra_key_length, sizeof(Swip), tmp->prefix_size_);
-  if (space_upper_bound > BTreeNode::Size())
+  if (space_upper_bound > BTreeNode::Size()) {
     return false;
+  }
   CopyKeyValueRange(tmp, 0, 0, num_slots_);
   // Allocate in the stack, freed when the calling function exits.
   auto extra_key = utils::JumpScopedArray<uint8_t>(extra_key_length);
@@ -247,7 +255,7 @@ void BTreeNode::CopyKeyValueRange(BTreeNode* dst, uint16_t dst_slot, uint16_t sr
     // copy slot array
     memcpy(dst->slot_ + dst_slot, slot_ + src_slot, sizeof(BTreeNodeSlot) * count);
 
-    for (auto i = 0u; i < count; i++) {
+    for (auto i = 0U; i < count; i++) {
       // consolidate the offset of each slot
       uint32_t kv_size = KeySizeWithoutPrefix(src_slot + i) + ValSize(src_slot + i);
       dst->AdvanceDataOffset(kv_size);
@@ -258,8 +266,9 @@ void BTreeNode::CopyKeyValueRange(BTreeNode* dst, uint16_t dst_slot, uint16_t sr
              kv_size);
     }
   } else {
-    for (uint16_t i = 0; i < count; i++)
+    for (uint16_t i = 0; i < count; i++) {
       CopyKeyValue(src_slot + i, dst, dst_slot + i);
+    }
   }
   dst->num_slots_ += count;
 }
@@ -298,9 +307,11 @@ uint16_t BTreeNode::CommonPrefix(uint16_t slot_a, uint16_t slot_b) {
       std::min(slot_[slot_a].key_size_without_prefix_, slot_[slot_b].key_size_without_prefix_);
   uint8_t *a = KeyDataWithoutPrefix(slot_a), *b = KeyDataWithoutPrefix(slot_b);
   uint32_t i;
-  for (i = 0; i < limit; i++)
-    if (a[i] != b[i])
+  for (i = 0; i < limit; i++) {
+    if (a[i] != b[i]) {
       break;
+    }
+  }
   return i;
 }
 
@@ -322,10 +333,11 @@ BTreeNode::SeparatorInfo BTreeNode::FindSep() {
     best_prefix_length = CommonPrefix(lower, 0);
     best_slot = lower;
 
-    if (best_prefix_length != CommonPrefix(upper - 1, 0))
+    if (best_prefix_length != CommonPrefix(upper - 1, 0)) {
       for (best_slot = lower + 1;
-           (best_slot < upper) && (CommonPrefix(best_slot, 0) == best_prefix_length); best_slot++)
-        ;
+           (best_slot < upper) && (CommonPrefix(best_slot, 0) == best_prefix_length); best_slot++) {
+      }
+    }
   } else {
     best_slot = (num_slots_ - 1) / 2;
     // bestPrefixLength = CommonPrefix(bestSlot, 0);
@@ -334,8 +346,9 @@ BTreeNode::SeparatorInfo BTreeNode::FindSep() {
   // Try to truncate separator
   uint16_t common = CommonPrefix(best_slot, best_slot + 1);
   if ((best_slot + 1 < num_slots_) && (slot_[best_slot].key_size_without_prefix_ > common) &&
-      (slot_[best_slot + 1].key_size_without_prefix_ > (common + 1)))
+      (slot_[best_slot + 1].key_size_without_prefix_ > (common + 1))) {
     return SeparatorInfo{static_cast<uint16_t>(prefix_size_ + common + 1), best_slot, true};
+  }
 
   return SeparatorInfo{GetFullKeyLen(best_slot), best_slot, false};
 }
@@ -344,14 +357,16 @@ int32_t BTreeNode::CompareKeyWithBoundaries(Slice key) {
   // Lower Bound exclusive, upper bound inclusive
   if (lower_fence_.offset_) {
     int cmp = CmpKeys(key, GetLowerFence());
-    if (!(cmp > 0))
+    if (!(cmp > 0)) {
       return 1; // Key lower or equal LF
+    }
   }
 
   if (upper_fence_.offset_) {
     int cmp = CmpKeys(key, GetUpperFence());
-    if (!(cmp <= 0))
+    if (!(cmp <= 0)) {
       return -1; // Key higher than UF
+    }
   }
   return 0;
 }

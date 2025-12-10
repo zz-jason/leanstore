@@ -17,10 +17,9 @@ protected:
   std::string tbl_name_;
   TableRef* tbl_;
 
-protected:
   AnomaliesTest() = default;
 
-  ~AnomaliesTest() = default;
+  ~AnomaliesTest() override = default;
 
   void SetUp() override {
     uint32_t session_limit = 4;
@@ -42,8 +41,10 @@ protected:
     ASSERT_NE(tbl_, nullptr);
 
     // Insert 2 key-values as the test base.
-    std::string key1("1"), val1("10");
-    std::string key2("2"), val2("20");
+    std::string key1("1");
+    std::string val1("10");
+    std::string key2("2");
+    std::string val2("20");
     ASSERT_TRUE(s0->Put(tbl_, key1, Slice(val1), true));
     ASSERT_TRUE(s0->Put(tbl_, key2, Slice(val2), true));
   }
@@ -118,10 +119,7 @@ TEST_F(AnomaliesTest, NoG1a) {
   auto* s2 = store_->GetSession(2);
 
   std::string key1("1");
-  std::string new_val11("11"), new_val12("12");
-
-  std::string key2("2");
-  std::string new_val21("21"), new_val22("22");
+  std::string new_val11("11");
   std::string res;
 
   s1->StartTx();
@@ -237,13 +235,13 @@ TEST_F(AnomaliesTest, NoPMP) {
   s2->StartTx();
 
   auto res = s1->Get(tbl_, Slice(key3), val_read);
-  EXPECT_TRUE(res && res.value() == 0u);
+  EXPECT_TRUE(res && res.value() == 0U);
 
-  EXPECT_TRUE(s2->Put(tbl_, Slice(key3), Slice(val3)));
+  EXPECT_TRUE(s2->Put(tbl_, Slice(key3), Slice(val3), false));
   s2->CommitTx();
 
   res = s1->Get(tbl_, Slice(key3), val_read);
-  EXPECT_TRUE(res && res.value() == 0u);
+  EXPECT_TRUE(res && res.value() == 0U);
 
   s1->CommitTx();
 }

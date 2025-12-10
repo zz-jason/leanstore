@@ -21,7 +21,7 @@ public:
   static constexpr auto kKeyGlobalUsrTso = "global_user_tso";
   static constexpr auto kKeyGlobalSysTso = "global_system_tso";
 
-  MvccManager(LeanStore* store);
+  explicit MvccManager(LeanStore* store);
 
   utils::JsonObj Serialize() const {
     utils::JsonObj json_obj;
@@ -128,7 +128,7 @@ inline MvccManager::MvccManager(LeanStore* store) : store_(store) {
 
   // init logging
   loggings_.reserve(store_option->worker_threads_);
-  for (auto i = 0u; i < store_option->worker_threads_; i++) {
+  for (auto i = 0U; i < store_option->worker_threads_; i++) {
     loggings_.emplace_back(std::make_unique<Logging>(store_option->wal_buffer_bytes_));
 
 #ifdef ENABLE_COROUTINE
@@ -151,7 +151,7 @@ inline MvccManager::MvccManager(LeanStore* store) : store_(store) {
 
   // init transaction managers
   tx_mgrs_.reserve(num_tx_mgrs);
-  for (auto i = 0u; i < num_tx_mgrs; i++) {
+  for (auto i = 0U; i < num_tx_mgrs; i++) {
     tx_mgrs_.emplace_back(std::make_unique<TxManager>(i, tx_mgrs_, store));
   }
 }

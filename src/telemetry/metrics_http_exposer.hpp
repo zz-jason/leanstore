@@ -36,7 +36,7 @@ private:
   int32_t port_;
 
 public:
-  MetricsHttpExposer(int32_t port);
+  explicit MetricsHttpExposer(int32_t port);
 
   ~MetricsHttpExposer() override {
     server_.stop();

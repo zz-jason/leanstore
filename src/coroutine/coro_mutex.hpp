@@ -47,7 +47,7 @@ public:
 
 private:
   /// Exclusive lock flag. Indicates if the mutex is held exclusively.
-  std::atomic_flag lock_flag_{ATOMIC_FLAG_INIT};
+  std::atomic_flag lock_flag_ = ATOMIC_FLAG_INIT;
 };
 
 // -----------------------------------------------------------------------------

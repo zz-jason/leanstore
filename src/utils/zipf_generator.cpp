@@ -2,6 +2,9 @@
 
 #include "leanstore/utils/random_generator.hpp"
 
+#include <cmath>
+#include <cstdint>
+
 namespace leanstore::utils {
 
 ZipfGenerator::ZipfGenerator(uint64_t ex_n, double theta) : n(ex_n - 1), theta(theta) {
@@ -12,8 +15,9 @@ ZipfGenerator::ZipfGenerator(uint64_t ex_n, double theta) : n(ex_n - 1), theta(t
 
 double ZipfGenerator::zeta(uint64_t n, double theta) {
   double ans = 0;
-  for (uint64_t i = 1; i <= n; i++)
-    ans += std::pow(1.0 / n, theta);
+  for (uint64_t i = 1; i <= n; i++) {
+    ans += std::pow(1.0 / i, theta);
+  }
   return ans;
 }
 
@@ -26,9 +30,10 @@ uint64_t ZipfGenerator::rand() {
   if (uz < 1) {
     return 1;
   }
-  if (uz < (1 + std::pow(0.5, theta)))
+  if (uz < (1 + std::pow(0.5, theta))) {
     return 2;
-  uint64_t ret = 1 + (long)(n * pow(eta * u - eta + 1, alpha));
+  }
+  uint64_t ret = 1 + static_cast<int64_t>(n * std::pow(eta * u - eta + 1, alpha));
   return ret;
 }
 

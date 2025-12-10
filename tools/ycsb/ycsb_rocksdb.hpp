@@ -24,7 +24,7 @@ private:
   rocksdb::DB* db_ = nullptr;
 
 public:
-  YcsbRocksDb(const YcsbOptions& ycsb_options) : YcsbExecutor(ycsb_options) {
+  explicit YcsbRocksDb(const YcsbOptions& ycsb_options) : YcsbExecutor(ycsb_options) {
     rocksdb::Options rocksdb_options;
     rocksdb_options.create_if_missing = true;
     rocksdb_options.error_if_exists = false;

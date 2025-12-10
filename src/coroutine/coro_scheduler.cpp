@@ -25,9 +25,9 @@ CoroScheduler::CoroScheduler(LeanStore* store, int64_t num_threads)
 
   // create commit protocols for each commit group
   if (store != nullptr) {
-    for (auto i = 0u; i < store->store_option_->worker_threads_; i++) {
+    for (auto i = 0U; i < store->store_option_->worker_threads_; i++) {
       assert(store != nullptr && "Store must not be null when commit groups are enabled");
-      commit_protocols_.emplace_back(std::make_unique<AutoCommitProtocol>(store, i));
+      commit_protocols_.emplace_back(std::make_unique<AutoCommitProtocol>(store));
     }
   }
 
@@ -43,8 +43,7 @@ CoroScheduler::CoroScheduler(LeanStore* store, int64_t num_threads)
   }
 }
 
-CoroScheduler::~CoroScheduler() {
-}
+CoroScheduler::~CoroScheduler() = default;
 
 CoroSession* CoroScheduler::TryReserveCoroSession(uint64_t runs_on) {
   assert(runs_on < coro_executors_.size());
@@ -90,7 +89,7 @@ void CoroScheduler::InitCoroExecutors() {
     auto& loggings = store_->GetMvccManager().Loggings();
     LEAN_DCHECK(loggings.size() == coro_executors_.size(),
                 "Number of loggings must match number of executors");
-    for (auto i = 0u; i < loggings.size(); i++) {
+    for (auto i = 0U; i < loggings.size(); i++) {
       auto* logging = loggings[i].get();
       auto* coro_session = TryReserveCoroSession(i);
       assert(coro_session != nullptr && "Failed to reserve a CoroSession for coroutine execution");
@@ -110,7 +109,7 @@ void CoroScheduler::CreateSessionPool() {
   // create all coro sessions
   all_sessions_.reserve(num_exec * num_session_per_exec);
   session_pool_per_exec_.resize(num_exec);
-  for (auto i = 0u; i < num_exec * num_session_per_exec; i++) {
+  for (auto i = 0U; i < num_exec * num_session_per_exec; i++) {
     auto runs_on = i % num_exec;
     TxManager* tx_mgr = nullptr;
     if (store_ != nullptr) {

@@ -78,12 +78,12 @@ public:
   ScopedHybridGuard& operator=(const ScopedHybridGuard& other) = delete;
 
   /// Move construct
-  ScopedHybridGuard(ScopedHybridGuard&& other) {
+  ScopedHybridGuard(ScopedHybridGuard&& other) noexcept {
     *this = std::move(other);
   }
 
   /// Move assign
-  ScopedHybridGuard& operator=(ScopedHybridGuard&& other) {
+  ScopedHybridGuard& operator=(ScopedHybridGuard&& other) noexcept {
     Unlock();
 
     latch_ = other.latch_;
@@ -107,28 +107,28 @@ public:
 
 private:
   /// Lock the latch in kOptimisticOrJump mode.
-  void lock_optimistic_or_jump();
+  void lock_optimistic_or_jump(); // NOLINT (fixme)
 
   /// Lock the latch in kOptimisticSpin mode.
-  void lock_optimistic_spin();
+  void lock_optimistic_spin(); // NOLINT (fixme)
 
   /// Unlock the latch in kOptimisticOrJump or kOptimisticSpin mode.
-  void unlock_optimistic_or_jump();
+  void unlock_optimistic_or_jump(); // NOLINT (fixme)
 
   /// Jump if the latch has been modified by others.
-  void jump_if_modified_by_others();
+  void jump_if_modified_by_others(); // NOLINT (fixme)
 
   /// Lock the latch in kSharedPessimistic mode.
-  void lock_pessimistic_shared();
+  void lock_pessimistic_shared(); // NOLINT (fixme)
 
   /// Unlock the latch in kSharedPessimistic mode.
-  void unlock_pessimistic_shared();
+  void unlock_pessimistic_shared(); // NOLINT (fixme)
 
   /// Lock the latch in kExclusivePessimistic mode.
-  void lock_pessimistic_exclusive();
+  void lock_pessimistic_exclusive(); // NOLINT (fixme)
 
   /// Unlock the latch in kExclusivePessimistic mode.
-  void unlock_pessimistic_exclusive();
+  void unlock_pessimistic_exclusive(); // NOLINT (fixme)
 
 private:
   /// Allow the test class to access private members.

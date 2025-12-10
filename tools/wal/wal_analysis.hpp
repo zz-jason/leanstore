@@ -19,7 +19,7 @@ public:
   void Run();
 
 private:
-  WalAnalysis(const WalAnalysisOptions&& options) : options_(std::move(options)) {
+  explicit WalAnalysis(const WalAnalysisOptions&& options) : options_(std::move(options)) {
   }
 
   static std::vector<std::string> ListWalFiles(std::string_view wal_dir);

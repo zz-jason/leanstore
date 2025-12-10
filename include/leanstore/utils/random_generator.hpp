@@ -9,19 +9,19 @@ namespace leanstore::utils {
 
 class MersenneTwister {
 private:
-  static const int sNn = 312;
-  static const int sMm = 156;
-  static const uint64_t sMatrixA = 0xB5026F5AA96619E9ULL;
-  static const uint64_t sUm = 0xFFFFFFFF80000000ULL;
-  static const uint64_t sLm = 0x7FFFFFFFULL;
+  static const int s_nn = 312;
+  static const int s_mm = 156;
+  static const uint64_t s_matrix_a = 0xB5026F5AA96619E9ULL;
+  static const uint64_t s_um = 0xFFFFFFFF80000000ULL;
+  static const uint64_t s_lm = 0x7FFFFFFFULL;
 
-  uint64_t mt_[sNn];
+  uint64_t mt_[s_nn];
   int mti_;
 
-  void init(uint64_t seed);
+  void Init(uint64_t seed);
 
 public:
-  MersenneTwister(uint64_t seed = 19650218ULL);
+  explicit MersenneTwister(uint64_t seed = 19650218ULL);
   uint64_t Rand();
 };
 

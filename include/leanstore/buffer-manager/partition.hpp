@@ -44,13 +44,13 @@ struct HashTable {
 
     IOFrame value_;
 
-    Entry(uint64_t key);
+    explicit Entry(uint64_t key);
   };
 
   struct Handler {
     Entry** holder_;
 
-    operator bool() const {
+    explicit operator bool() const {
       return holder_ != nullptr;
     }
 
@@ -76,7 +76,7 @@ struct HashTable {
 
   bool Has(uint64_t key); // for debugging
 
-  HashTable(uint64_t size_in_bits);
+  explicit HashTable(uint64_t size_in_bits);
 };
 
 /// The I/O partition for the underlying pages. Page read/write operations are
@@ -130,7 +130,7 @@ public:
   /// already in the inflight IOs.
   bool IsBeingReadBack(lean_pid_t cooled_page_id) {
     LEAN_SHARED_LOCK(inflight_ios_mutex_);
-    return inflight_ios_.Lookup(cooled_page_id);
+    return static_cast<bool>(inflight_ios_.Lookup(cooled_page_id));
   }
 
   uint64_t PartitionId() const {

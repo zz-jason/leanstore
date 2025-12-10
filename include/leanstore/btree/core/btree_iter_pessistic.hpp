@@ -67,7 +67,8 @@ public:
   bool is_using_upper_fence_;
 
 public:
-  BTreeIterPessistic(BTreeGeneric& tree, const LatchMode mode = LatchMode::kSharedPessimistic)
+  explicit BTreeIterPessistic(BTreeGeneric& tree,
+                              const LatchMode mode = LatchMode::kSharedPessimistic)
       : btree_(tree),
         mode_(mode),
         func_enter_leaf_(nullptr),

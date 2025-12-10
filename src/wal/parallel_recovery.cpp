@@ -1,6 +1,7 @@
 #include "leanstore/cpp/wal/parallel_recovery.hpp"
 
 #include "leanstore/common/wal_record.h"
+#include "leanstore/cpp/base/error.hpp"
 #include "leanstore/cpp/base/log.hpp"
 #include "leanstore/cpp/base/optional.hpp"
 #include "leanstore/cpp/base/result.hpp"
@@ -9,6 +10,8 @@
 
 #include <memory>
 #include <optional>
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace leanstore {

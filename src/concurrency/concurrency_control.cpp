@@ -32,7 +32,7 @@ void CommitTree::AppendCommitLog(lean_txid_t start_ts, lean_txid_t commit_ts) {
               std::format("Commit log is full, commit_log_.size()={}, capacity_={}",
                           commit_log_.size(), capacity_));
   ScopedHybridGuard x_guard(latch_, LatchMode::kExclusivePessimistic);
-  commit_log_.push_back({commit_ts, start_ts});
+  commit_log_.emplace_back(commit_ts, start_ts);
   LEAN_DLOG("Commit log appended, workerId={}, startTs={}, commitTs={}",
             CoroEnv::CurTxMgr().worker_id_, start_ts, commit_ts);
 }

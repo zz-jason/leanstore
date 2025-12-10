@@ -10,7 +10,7 @@ namespace leanstore {
 template <typename T, size_t stack_limit>
 class SmallVector {
 public:
-  SmallVector(size_t capacity) {
+  explicit SmallVector(size_t capacity) {
     if (capacity > stack_limit) {
       data_ = new T[capacity];
     } else {
@@ -51,7 +51,7 @@ private:
 template <typename T, size_t stack_limit, size_t alignment>
 class SmallVectorAligned {
 public:
-  SmallVectorAligned(size_t capacity) {
+  explicit SmallVectorAligned(size_t capacity) {
     if (capacity > stack_limit) {
       // Allocate aligned memory for the heap array
       data_ = reinterpret_cast<T*>(std::aligned_alloc(alignment, capacity * sizeof(T)));

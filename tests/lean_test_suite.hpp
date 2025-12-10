@@ -7,7 +7,7 @@ namespace leanstore::test {
 class LeanTestSuite : public ::testing::Test {
 protected:
   LeanTestSuite() = default;
-  ~LeanTestSuite() = default;
+  ~LeanTestSuite() override = default;
 
   static constexpr auto kCommonTestDir = "/tmp/leanstore/test";
 
@@ -17,7 +17,7 @@ protected:
 
   std::string TestName() const {
     auto* cur_test = ::testing::UnitTest::GetInstance()->current_test_info();
-    return cur_test->test_case_name();
+    return cur_test->test_suite_name();
   }
 
   std::string CaseName() const {

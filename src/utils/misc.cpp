@@ -2,6 +2,9 @@
 
 #include <crc32c/crc32c.h>
 
+#include <cstddef>
+#include <cstdint>
+
 namespace leanstore::utils {
 
 uint32_t CRC(const uint8_t* src, uint64_t size) {

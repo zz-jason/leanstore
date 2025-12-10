@@ -1,19 +1,101 @@
 Checks: >
   -*,
+
   clang-diagnostic-*,
-  -llvmlibc-restrict-system-libc-headers,
-  llvm-*,
-  misc-*,
-  -misc-const-correctness,
-  -misc-unused-parameters,
-  -misc-non-private-member-variables-in-classes,
-  -misc-no-recursion,
-  -misc-use-anonymous-namespace,
+
   readability-identifier-naming,
+  readability-braces-around-statements,
+  readability-else-after-return,
+  readability-static-definition-in-anonymous-namespace,
+  readability-use-std-min-max,
+  readability-string-compare,
+
+  # TODO: fix and enable the excluded readability-redundant-* checks
+  readability-redundant-*,
+  -readability-redundant-casting,
+  -readability-redundant-control-flow,
+  -readability-redundant-inline-specifier,
+  -readability-redundant-member-init,
+  -readability-redundant-string-init,
+
+  # TODO: fix and enable the following checks
+  # readability-avoid-const-params-in-decls,
+  # readability-container-size-empty,
+  # readability-implicit-bool-conversion,
+  # readability-isolate-declaration,
+  # readability-uppercase-literal-suffix,
+  # readability-redundant-access-specifiers,
+
+
+  modernize-*,
+  -modernize-deprecated-headers,
+  -modernize-use-trailing-return-type,
+  -modernize-avoid-c-arrays,
+  -modernize-use-nodiscard,
+  -modernize-loop-convert,
+  -modernize-pass-by-value,
+  -modernize-return-braced-init-list,
+  -modernize-unary-static-assert,
+  -modernize-use-auto,
+  -modernize-use-default-member-init,
+  -modernize-use-nodiscard,
+  -modernize-use-ranges,
+  -modernize-use-integer-sign-comparison,
+
+  llvm-*,
   -llvm-header-guard,
   -llvm-include-order,
+  -llvmlibc-restrict-system-libc-headers,
+
+  google-*,
+  -google-readability-casting,
+  -google-readability-todo,
+
+  bugprone-*,
+  -bugprone-branch-clone,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-exception-escape,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-macro-parentheses,
+  -bugprone-multi-level-implicit-pointer-conversion,
+  -bugprone-narrowing-conversions,
+  -bugprone-not-null-terminated-result,
+  -bugprone-sizeof-expression,
+  -bugprone-suspicious-stringview-data-usage,
+  -bugprone-too-small-loop-variable,
+  -bugprone-unchecked-optional-access,
+  -bugprone-unsafe-functions,
+
+  clang-analyzer-*,
+  -clang-analyzer-core.CallAndMessage,
+  -clang-analyzer-core.StackAddressEscape,
+  -clang-analyzer-core.uninitialized.UndefReturn,
+  -clang-analyzer-deadcode.DeadStores,
+  -clang-analyzer-optin.cplusplus.UninitializedObject,
+  -clang-analyzer-optin.cplusplus.VirtualCall,
+  -clang-analyzer-optin.performance.Padding,
+  -clang-analyzer-security.insecureAPI.bcmp,
+  -clang-analyzer-security.PointerSub,
+
+  portability-*,
+  -portability-template-virtual-member-function
+
+  performance-*,
+  -performance-avoid-endl,
+  -performance-enum-size,
+  -performance-inefficient-vector-operation,
+  -performance-move-const-arg,
+  -performance-no-int-to-ptr,
+  -performance-unnecessary-value-param,
+
+  misc-*,
+  -misc-const-correctness,
+  -misc-non-private-member-variables-in-classes,
+  -misc-no-recursion,
+  -misc-include-cleaner,
 
 WarningsAsErrors: "*"
+HeaderFilterRegex: '.*'
 
 CheckOptions:
 

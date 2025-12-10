@@ -31,7 +31,7 @@ public:
   std::unique_ptr<GroupCommitter> group_committer_;
 
 public:
-  CRManager(LeanStore* store);
+  explicit CRManager(LeanStore* store);
 
   ~CRManager();
 

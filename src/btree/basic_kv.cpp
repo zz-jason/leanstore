@@ -19,9 +19,6 @@
 
 #include <sys/types.h>
 
-using namespace std;
-using namespace leanstore;
-
 namespace leanstore {
 
 Result<BasicKV*> BasicKV::Create(leanstore::LeanStore* store, const std::string& tree_name,

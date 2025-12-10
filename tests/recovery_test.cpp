@@ -1,6 +1,7 @@
 #include "failpoint/failpoint.hpp"
 #include "lean_test_suite.hpp"
 #include "leanstore/c/leanstore.h"
+#include "leanstore/common/status.h"
 #include "leanstore/common/types.h"
 #include "leanstore/cpp/base/defer.hpp"
 #include "leanstore/utils/random_generator.hpp"
@@ -11,16 +12,12 @@
 #include <format>
 #include <string>
 
-#include <sys/socket.h>
-
-using namespace leanstore;
-
 namespace leanstore::test {
 
 class RecoveryTest : public LeanTestSuite {
 protected:
   RecoveryTest() = default;
-  ~RecoveryTest() = default;
+  ~RecoveryTest() override = default;
 
   void SetUp() override;
   void TearDown() override;
@@ -68,7 +65,7 @@ TEST_F(RecoveryTest, AtomicBTreeRecoverAfterInsert) {
 
   // Insert some entries
   size_t num_entries = 100;
-  for (auto i = 0u; i < num_entries; i++) {
+  for (auto i = 0U; i < num_entries; i++) {
     std::string key = std::format("key_{:03}", i);
     std::string val = std::format("val_{:03}", i);
     lean_str_view key_view = {key.data(), key.size()};

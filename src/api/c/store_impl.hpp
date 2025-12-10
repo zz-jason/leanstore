@@ -21,7 +21,7 @@ public:
   }
 
 private:
-  StoreImpl(std::unique_ptr<LeanStore> store) : store_(std::move(store)) {
+  explicit StoreImpl(std::unique_ptr<LeanStore> store) : store_(std::move(store)) {
     base_ = {
         .connect = &Thunk<&StoreImpl::Connect>,
         .try_connect = &Thunk<&StoreImpl::TryConnect>,

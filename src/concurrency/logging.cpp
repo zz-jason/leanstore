@@ -9,8 +9,11 @@
 #include "leanstore/utils/misc.hpp"
 #include "wal/wal_builder.hpp"
 
+#include <atomic>
 #include <cassert>
+#include <cstdint>
 #include <cstring>
+#include <functional>
 
 namespace leanstore {
 

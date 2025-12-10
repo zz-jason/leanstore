@@ -61,7 +61,7 @@ public:
   /// All the page evictor threads.
   std::vector<std::unique_ptr<PageEvictor>> page_evictors_;
 
-  BufferManager(LeanStore* store);
+  explicit BufferManager(LeanStore* store);
 
   ~BufferManager();
 

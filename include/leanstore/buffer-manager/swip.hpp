@@ -43,8 +43,7 @@ public:
   }
 
   /// Create a swip from a buffer frame pointer.
-  /// Allow implicit conversion from BufferFrame* to Swip for convenient.
-  Swip(BufferFrame* bf) : bf_(bf) {
+  explicit Swip(BufferFrame* bf) : bf_(bf) {
   }
 
   /// Reset the swip to a buffer frame pointer. After this, the swip is in hot

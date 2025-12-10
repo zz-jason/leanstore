@@ -4,6 +4,9 @@
 #include "leanstore/cpp/base/log.hpp"
 #include "leanstore/cpp/base/result.hpp"
 
+#include <cstdint>
+#include <functional>
+
 namespace leanstore {
 
 AsyncWriteBuffer::AsyncWriteBuffer(int fd, uint64_t page_size, uint64_t max_batch_size)
@@ -14,8 +17,7 @@ AsyncWriteBuffer::AsyncWriteBuffer(int fd, uint64_t page_size, uint64_t max_batc
       write_commands_(max_batch_size) {
 }
 
-AsyncWriteBuffer::~AsyncWriteBuffer() {
-}
+AsyncWriteBuffer::~AsyncWriteBuffer() = default;
 
 bool AsyncWriteBuffer::IsFull() {
   return aio_.IsFull();

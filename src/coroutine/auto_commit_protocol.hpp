@@ -15,7 +15,7 @@ class Transaction;
 /// Auto-commit protocol for decentralized transaction commit handling.
 class AutoCommitProtocol {
 public:
-  AutoCommitProtocol(LeanStore* store, uint32_t group_id);
+  explicit AutoCommitProtocol(LeanStore* store);
   ~AutoCommitProtocol() = default;
 
   // No copy and assignment
@@ -64,11 +64,6 @@ private:
 private:
   /// Reference to the store instance.
   LeanStore* store_;
-
-  /// Commit group id, identifies the group of workers that are committing
-  /// together.  All workers in the same commit group shares the same
-  /// AutoCommitProtocol instance and the same commit acknowledgment.
-  const uint32_t group_id_;
 
   /// All the active transaction managers that are using this commit protocol.
   std::unordered_set<TxManager*> active_tx_mgrs_;

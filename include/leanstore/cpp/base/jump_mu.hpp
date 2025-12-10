@@ -170,7 +170,7 @@ public:
   T obj_;
 
   template <typename... Args>
-  JumpScoped(Args&&... args) : obj_(std::forward<Args>(args)...) {
+  explicit JumpScoped(Args&&... args) : obj_(std::forward<Args>(args)...) {
     JUMPMU_REGISTER_STACK_OBJECT(&obj_);
   }
 

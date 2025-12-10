@@ -5,6 +5,7 @@
 #include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
+#include "leanstore/cpp/base/likely.hpp"
 #include "leanstore/cpp/base/log.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_guard.hpp"
@@ -152,7 +153,10 @@ public:
   /// Sync the system transaction id to the page. Page system transaction id is updated during the
   /// execution of a system transaction.
   void SyncSystemTxId(lean_txid_t sys_tx_id) {
-    LEAN_DCHECK(bf_ != nullptr);
+    if (LEAN_UNLIKELY(bf_ == nullptr)) {
+      LEAN_DCHECK(bf_ != nullptr);
+      return;
+    }
 
     // update system transaction id
     bf_->page_.sys_tx_id_ = sys_tx_id;

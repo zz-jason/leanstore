@@ -50,7 +50,7 @@ TEST_F(CoroLeanStoreTest, BasicKv) {
   for (size_t i = 0; i < kNumKeys; ++i) {
     std::string key(std::format(kKeyPattern, i));
     std::string val(std::format(kValPattern, i));
-    kv_to_test.push_back(std::make_tuple(key, val));
+    kv_to_test.emplace_back(key, val);
   }
 
   // create leanstore btree for table records

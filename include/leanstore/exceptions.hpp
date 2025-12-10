@@ -1,5 +1,7 @@
 #pragma once
 
+#include "leanstore/cpp/base/log.hpp"
+
 #include <cassert>
 #include <cstdio>
 #include <exception>
@@ -9,10 +11,10 @@
   struct name : public std::exception {                                                            \
     const std::string msg;                                                                         \
     explicit name() : msg(#name) {                                                                 \
-      printf("Throwing exception: %s\n", #name);                                                   \
+      Log::Warn("Throwing exception: {}", #name);                                                  \
     }                                                                                              \
     explicit name(const std::string& msg) : msg(msg) {                                             \
-      printf("Throwing exception: %s(%s)\n", #name, msg.c_str());                                  \
+      Log::Warn("Throwing exception: {}({})", #name, msg);                                         \
     }                                                                                              \
     ~name() = default;                                                                             \
     virtual const char* what() const noexcept override {                                           \

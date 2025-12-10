@@ -15,19 +15,24 @@ public:
   Slice() : slice_() {
   }
 
-  Slice(const std::string& str) : slice_(reinterpret_cast<const uint8_t*>(str.data()), str.size()) {
+  Slice(const std::string& str) // NOLINT (google-explicit-constructor)
+      : slice_(reinterpret_cast<const uint8_t*>(str.data()), str.size()) {
   }
 
-  Slice(const std::basic_string<uint8_t>& str) : slice_(str.data(), str.size()) {
+  Slice(const std::basic_string<uint8_t>& str) // NOLINT (google-explicit-constructor)
+      : slice_(str.data(), str.size()) {
   }
 
-  Slice(std::string_view str) : slice_(reinterpret_cast<const uint8_t*>(str.data()), str.size()) {
+  Slice(std::string_view str) // NOLINT (google-explicit-constructor)
+      : slice_(reinterpret_cast<const uint8_t*>(str.data()), str.size()) {
   }
 
-  Slice(const uint8_t* data, size_t size) : slice_(data, size) {
+  Slice(const uint8_t* data, size_t size) // NOLINT (google-explicit-constructor)
+      : slice_(data, size) {
   }
 
-  Slice(const char* data) : slice_(reinterpret_cast<const uint8_t*>(data), std::strlen(data)) {
+  Slice(const char* data) // NOLINT (google-explicit-constructor)
+      : slice_(reinterpret_cast<const uint8_t*>(data), std::strlen(data)) {
   }
 
   Slice(const char* data, size_t size) : slice_(reinterpret_cast<const uint8_t*>(data), size) {

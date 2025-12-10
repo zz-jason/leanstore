@@ -26,7 +26,7 @@ public:
   OptimisticGuarded() = default;
 
   /// Constructor.
-  OptimisticGuarded(const T& value) : version_(0), value_(value) {
+  explicit OptimisticGuarded(const T& value) : version_(0), value_(value) {
   }
 
   /// Copies the value and returns the version of the value. The version is

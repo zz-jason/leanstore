@@ -94,7 +94,7 @@ TEST_F(CoroTest, SharedMutex) {
   int64_t value_x = 100;
   int64_t value_y = 0;
 
-  for (auto i = 0u; i < 20; ++i) {
+  for (auto i = 0U; i < 20; ++i) {
     auto future0 = coro_scheduler.Submit(coro_session_0, [&]() {
       auto rand_num = utils::RandomGenerator::RandU64(1, 100);
       shared_mutex.lock();
@@ -160,7 +160,7 @@ TEST_F(CoroTest, Io) {
   constexpr auto kReadCoros = 10u;
   std::vector<std::shared_ptr<CoroFuture<void>>> read_futures;
   std::vector<CoroSession*> reserved_sessions;
-  for (auto i = 0u; i < kReadCoros; ++i) {
+  for (auto i = 0U; i < kReadCoros; ++i) {
     // coro 1: read from file
     reserved_sessions.push_back(coro_scheduler.TryReserveCoroSession(i % 2));
     assert(reserved_sessions.back() != nullptr &&
@@ -197,10 +197,10 @@ TEST_F(CoroTest, ChildCoro) {
   assert(reserved_sessions.back() != nullptr &&
          "Failed to reserve a CoroSession for coroutine execution");
   auto future = coro_scheduler.Submit(reserved_sessions[0], [&]() {
-    messages.push_back("Parent coroutine started");
+    messages.emplace_back("Parent coroutine started");
 
     Coroutine child_coro([&]() {
-      messages.push_back("Child coroutine started");
+      messages.emplace_back("Child coroutine started");
 
       value = 42;
 
@@ -208,7 +208,7 @@ TEST_F(CoroTest, ChildCoro) {
 
       // this will not be executed
       value = 43;
-      messages.push_back("Child coroutine finished");
+      messages.emplace_back("Child coroutine finished");
     });
 
     CoroExecutor::CurrentThread()->RunCoroutine(&child_coro);
@@ -216,7 +216,7 @@ TEST_F(CoroTest, ChildCoro) {
     // after child coroutine finishes
     EXPECT_EQ(value, 42);
     EXPECT_NE(CoroExecutor::CurrentCoro(), &child_coro);
-    messages.push_back("Parent coroutine finished");
+    messages.emplace_back("Parent coroutine finished");
   });
 
   future->Wait();

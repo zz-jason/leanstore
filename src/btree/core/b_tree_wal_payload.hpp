@@ -48,7 +48,7 @@ public:
 
   WalPayload() = default;
 
-  WalPayload(Type type) : type_(type) {
+  explicit WalPayload(Type type) : type_(type) {
   }
 
   std::string WalLogTypeName(Type type) const {

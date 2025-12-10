@@ -21,7 +21,6 @@
 
 #include <cassert>
 #include <cstdint>
-#include <expected>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -253,7 +252,7 @@ void LeanStore::Wait(lean_wid_t worker_id) {
 }
 
 void LeanStore::WaitAll() {
-  for (auto i = 0u; i < store_option_->worker_threads_; i++) {
+  for (auto i = 0U; i < store_option_->worker_threads_; i++) {
     crmanager_->worker_threads_[i]->Wait();
   }
 }
@@ -271,7 +270,6 @@ constexpr char kMetaKeyCrManager[] = "cr_manager";
 constexpr char kMetaKeyMvcc[] = "mvcc";
 constexpr char kMetaKeyBufferManager[] = "buffer_manager";
 constexpr char kMetaKeyBTrees[] = "leanstore/btrees";
-constexpr char kMetaKeyFlags[] = "flags";
 constexpr char kName[] = "name";
 constexpr char kType[] = "type";
 constexpr char kId[] = "id";
@@ -309,7 +307,7 @@ void LeanStore::SerializeMeta(bool all_pages_up_to_date) {
       for (const auto& it : all_trees) {
         auto btree_id = it.first;
         auto& [tree_ptr, btree_name] = it.second;
-        if (btree_name.substr(0, 1) == "_") {
+        if (btree_name.starts_with("_")) {
           continue;
         }
 
@@ -378,7 +376,7 @@ bool LeanStore::DeserializeMeta() {
 
   assert(meta_json_obj.HasMember(kMetaKeyBTrees));
   auto btree_json_array = meta_json_obj.GetJsonArray(kMetaKeyBTrees);
-  for (auto i = 0u; i < btree_json_array->Size(); ++i) {
+  for (auto i = 0U; i < btree_json_array->Size(); ++i) {
     assert(btree_json_array->GetJsonObj(i).has_value());
     auto btree_json_obj = btree_json_array->GetJsonObj(i);
     if (!btree_json_obj) {
@@ -474,24 +472,23 @@ void LeanStore::DropBasicKV(const std::string& name) {
 
 Result<TransactionKV*> LeanStore::CreateTransactionKV(const std::string& name,
                                                       lean_btree_config config) {
+  static constexpr auto kGraveyardConfig =
+      lean_btree_config{.enable_wal_ = false, .use_bulk_insert_ = false};
+
   // create btree for graveyard
   auto graveyard_name = std::format(kGraveyardNameFormat, name);
-  BasicKV* graveyard;
-  if (auto res = BasicKV::Create(
-          this, graveyard_name, lean_btree_config{.enable_wal_ = false, .use_bulk_insert_ = false});
-      !res) {
+  auto graveyard = BasicKV::Create(this, graveyard_name, kGraveyardConfig);
+  if (!graveyard) {
     Log::Error("Create graveyard failed, btree_name={}, graveyard_name={}, error={}", name,
-               graveyard_name, res.error().ToString());
-    return std::move(res.error());
-  } else {
-    graveyard = res.value();
+               graveyard_name, graveyard.error().ToString());
+    return std::move(graveyard.error());
   }
 
   // create transaction btree
-  auto res = TransactionKV::Create(this, name, std::move(config), graveyard);
+  auto res = TransactionKV::Create(this, name, std::move(config), graveyard.value());
   if (!res) {
-    BTreeGeneric::FreeAndReclaim(*static_cast<BTreeGeneric*>(graveyard));
-    auto res2 = tree_registry_->UnRegisterTree(graveyard->tree_id_);
+    BTreeGeneric::FreeAndReclaim(*static_cast<BTreeGeneric*>(graveyard.value()));
+    auto res2 = tree_registry_->UnRegisterTree(graveyard.value()->tree_id_);
     if (!res2) {
       Log::Error("Unregister graveyard failed, btree_name={}, graveyard_name={}, error={}", name,
                  graveyard_name, res2.error().ToString());

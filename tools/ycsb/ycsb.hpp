@@ -41,7 +41,7 @@ struct WorkloadSpec {
 
 class YcsbExecutor {
 public:
-  YcsbExecutor(const YcsbOptions& options) : options_(options) {
+  explicit YcsbExecutor(const YcsbOptions& options) : options_(options) {
   }
   virtual ~YcsbExecutor() = default;
 
@@ -116,17 +116,35 @@ protected:
 inline WorkloadSpec GetWorkloadSpec(Workload workload) {
   switch (workload) {
   case Workload::kA:
-    return {0.5, 0.5, 0.0, 0.0};
+    return {.read_proportion_ = 0.5,
+            .update_proportion_ = 0.5,
+            .scan_proportion_ = 0.0,
+            .insert_proportion_ = 0.0};
   case Workload::kB:
-    return {0.95, 0.05, 0.0, 0.0};
+    return {.read_proportion_ = 0.95,
+            .update_proportion_ = 0.05,
+            .scan_proportion_ = 0.0,
+            .insert_proportion_ = 0.0};
   case Workload::kC:
-    return {1.0, 0.0, 0.0, 0.0};
+    return {.read_proportion_ = 1.0,
+            .update_proportion_ = 0.0,
+            .scan_proportion_ = 0.0,
+            .insert_proportion_ = 0.0};
   case Workload::kD:
-    return {0.95, 0.0, 0.0, 0.05};
+    return {.read_proportion_ = 0.95,
+            .update_proportion_ = 0.0,
+            .scan_proportion_ = 0.0,
+            .insert_proportion_ = 0.05};
   case Workload::kE:
-    return {0.0, 0.0, 0.95, 0.05};
+    return {.read_proportion_ = 0.0,
+            .update_proportion_ = 0.0,
+            .scan_proportion_ = 0.95,
+            .insert_proportion_ = 0.05};
   case Workload::kF:
-    return {0.5, 0.0, 0.0, 0.5};
+    return {.read_proportion_ = 0.5,
+            .update_proportion_ = 0.0,
+            .scan_proportion_ = 0.0,
+            .insert_proportion_ = 0.5};
   default:
     Log::Fatal("Unknown workload: {}", static_cast<uint8_t>(workload));
   }

@@ -61,7 +61,7 @@ void Log::Init(const lean_store_option* option) {
   }
 
   auto log_path = std::format("{}/{}", option->store_dir_, kLogFileName);
-  logger = spdlog::basic_logger_mt(kLoggerName, log_path.c_str());
+  logger = spdlog::basic_logger_mt(kLoggerName, log_path);
   logger->set_pattern(kLogFormat);
   logger->flush_on(spdlog::level::info);
   logger->set_level(LogLevelToSpdlogLevel(option->log_level_));

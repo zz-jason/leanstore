@@ -6,7 +6,7 @@ namespace leanstore {
 /// goes out of scope.
 template <class F>
 struct ScopedDeferrer {
-  ScopedDeferrer(F f) : func_(f) {
+  explicit ScopedDeferrer(F f) : func_(f) {
   }
 
   ~ScopedDeferrer() {

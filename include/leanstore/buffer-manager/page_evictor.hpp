@@ -57,15 +57,13 @@ public:
 class PageEvictor : public utils::ManagedThread {
 public:
   PageEvictor(LeanStore* store, const std::string& thread_name, uint64_t running_cpu,
-              uint64_t num_bfs, uint8_t* bfs, uint64_t num_partitions,
+              uint64_t num_bfs, uint64_t num_partitions,
               std::vector<std::unique_ptr<Partition>>& partitions)
       : utils::ManagedThread(store, thread_name, running_cpu),
         store_(store),
         num_bfs_(num_bfs),
-        buffer_pool_(bfs),
         num_partitions_(num_partitions),
         partitions_(partitions),
-        fd_(store->page_fd_),
         cool_candidate_bfs_(),
         evict_candidate_bfs_(),
         async_write_buffer_(store->page_fd_, store->store_option_->page_size_,
@@ -150,12 +148,9 @@ protected:
 private:
   LeanStore* store_;
   const uint64_t num_bfs_;
-  uint8_t* buffer_pool_;
 
   const uint64_t num_partitions_;
   std::vector<std::unique_ptr<Partition>>& partitions_;
-
-  const int fd_;
 
   std::vector<BufferFrame*> cool_candidate_bfs_;  // input of phase 1
   std::vector<BufferFrame*> evict_candidate_bfs_; // output of phase 1

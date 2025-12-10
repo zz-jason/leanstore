@@ -20,7 +20,7 @@ constexpr size_t kAlignment = 512;
 
 class AsyncIo {
 public:
-  AsyncIo(uint64_t max_batch_size)
+  explicit AsyncIo(uint64_t max_batch_size)
       : max_reqs_(max_batch_size),
         num_reqs_(0),
         iocbs_(max_batch_size),

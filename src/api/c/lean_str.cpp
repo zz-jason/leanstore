@@ -1,10 +1,9 @@
 #include "leanstore/c/leanstore.h"
 
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-
-#include <linux/perf_event.h>
 
 void lean_str_init(lean_str* s, uint64_t capacity) {
   s->size = 0;

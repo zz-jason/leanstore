@@ -24,7 +24,7 @@ private:
 #endif
 
 public:
-  ScopedCounterTimer(lean_counter_t* counter [[maybe_unused]]) {
+  explicit ScopedCounterTimer(lean_counter_t* counter [[maybe_unused]]) {
 #ifdef ENABLE_PERF_COUNTERS
     counter_to_cum_ = counter;
     started_at_ = std::chrono::steady_clock::now();

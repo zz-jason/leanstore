@@ -62,6 +62,14 @@ jobs:
         which vcpkg;
         cmake --preset debug_coro
 
+    - name: Run clang-tidy on changed files
+      run: |
+        bash ".github/scripts/run-clang-tidy-pr.sh" \
+          "${{ github.event.pull_request.number }}" \
+          "${{ github.repository }}" \
+          "${{ secrets.GITHUB_TOKEN }}" \
+          "build/debug_coro" \
+
     - name: Cppcheck
       run: cppcheck --project=build/debug_coro/compile_commands.json -i tests --error-exitcode=1 --check-level=exhaustive
 

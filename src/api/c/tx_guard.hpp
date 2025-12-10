@@ -1,14 +1,14 @@
 #pragma once
 
 #include "coroutine/coro_env.hpp"
-#include "leanstore/c/leanstore.h"
+#include "leanstore/common/status.h"
 #include "leanstore/concurrency/tx_manager.hpp"
 
 namespace leanstore {
 
 class TxGuard {
 public:
-  TxGuard(lean_status& status) : status_(status) {
+  explicit TxGuard(lean_status& status) : status_(status) {
     implicit_tx_ = !CoroEnv::CurTxMgr().IsTxStarted();
     if (implicit_tx_) {
       CoroEnv::CurTxMgr().StartTx();

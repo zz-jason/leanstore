@@ -229,11 +229,11 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
   store_->ExecSync(1, [&]() {
     CoroEnv::CurTxMgr().CommitTx();
 
-    EXPECT_EQ(kv_->graveyard_->CountEntries(), 0u);
+    EXPECT_EQ(kv_->graveyard_->CountEntries(), 0U);
     auto* update_tree = CoroEnv::CurTxMgr().cc_.history_storage_.GetUpdateIndex();
     auto* remove_tree = CoroEnv::CurTxMgr().cc_.history_storage_.GetRemoveIndex();
     EXPECT_EQ(update_tree->CountEntries(), 100u);
-    EXPECT_EQ(remove_tree->CountEntries(), 0u);
+    EXPECT_EQ(remove_tree->CountEntries(), 0U);
   });
 
   // TxManager 2, lookup, skip the update versions, still get old values, commit

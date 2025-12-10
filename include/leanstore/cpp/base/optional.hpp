@@ -39,7 +39,7 @@ public:
   }
 
   /// Construct from std::optional
-  Optional(optional_t&& opt) : opt_(std::move(opt)) {
+  Optional(optional_t&& opt) : opt_(std::move(opt)) { // NOLINT (google-explicit-constructor)
   }
 
   /// Construct an empty Optional
@@ -47,15 +47,15 @@ public:
   }
 
   /// Construct an empty Optional from std::nullopt
-  Optional(std::nullopt_t) : opt_(std::nullopt) {
+  Optional(std::nullopt_t) : opt_(std::nullopt) { // NOLINT (google-explicit-constructor)
   }
 
   /// Construct a value Optional
-  Optional(T&& v) : opt_(std::move(v)) {
+  Optional(T&& v) : opt_(std::move(v)) { // NOLINT (google-explicit-constructor)
   }
 
   /// Construct a value Optional from const reference
-  Optional(const T& v) : opt_(v) {
+  Optional(const T& v) : opt_(v) { // NOLINT (google-explicit-constructor)
   }
 
   /// Checks if the Optional contains a value

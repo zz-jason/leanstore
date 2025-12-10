@@ -65,7 +65,7 @@ public:
   /// The LeanStore constructor
   /// NOTE: The option is created by LeanStore user, its ownership is transferred to the LeanStore
   ///       instance after the call, it will be destroyed when the LeanStore instance is destroyed.
-  LeanStore(lean_store_option* option);
+  explicit LeanStore(lean_store_option* option);
 
   /// The LeanStore destructor
   ~LeanStore();

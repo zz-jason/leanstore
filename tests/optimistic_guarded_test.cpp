@@ -54,7 +54,7 @@ TEST_F(OptimisticGuardedTest, Set) {
       auto curr_version = guarded_val.Get(copied_val);
       if (curr_version != version) {
         EXPECT_EQ(copied_val.a_ + copied_val.b_, 100);
-        EXPECT_EQ((curr_version - version) % 2, 0u);
+        EXPECT_EQ((curr_version - version) % 2, 0U);
         version = curr_version;
       }
     }
@@ -79,7 +79,7 @@ TEST_F(OptimisticGuardedTest, UpdateAttribute) {
       auto curr_version = guarded_val.Get(copied_val);
       if (curr_version != version) {
         EXPECT_EQ(copied_val.b_, 100);
-        EXPECT_EQ((curr_version - version) % 2, 0u);
+        EXPECT_EQ((curr_version - version) % 2, 0U);
         version = curr_version;
       }
     }

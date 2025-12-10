@@ -47,11 +47,11 @@ protected:
   void TearDown() override {
   }
 
-  std::string get_rand_test_file() {
+  std::string get_rand_test_file() { // NOLINT (fixme)
     return std::format("{}/{}", test_dir_, utils::RandomGenerator::RandAlphString(8));
   }
 
-  int open_file(const std::string& file_name) {
+  int open_file(const std::string& file_name) { // NOLINT (fixme)
     // open the file
     auto flag = O_TRUNC | O_CREAT | O_RDWR | O_DIRECT;
     int fd = open(file_name.c_str(), flag, 0666);
@@ -61,12 +61,12 @@ protected:
     return fd;
   }
 
-  void close_file(int fd) {
+  void close_file(int fd) { // NOLINT (fixme)
     ASSERT_EQ(close(fd), 0) << std::format("Failed to close file, fd={}, errno={}, error={}", fd,
                                            errno, strerror(errno));
   }
 
-  void remove_file(const std::string& file_name) {
+  void remove_file(const std::string& file_name) { // NOLINT (fixme)
     ASSERT_EQ(remove(file_name.c_str()), 0)
         << std::format("Failed to remove file, fileName={}, errno={}, error={}", file_name, errno,
                        strerror(errno));

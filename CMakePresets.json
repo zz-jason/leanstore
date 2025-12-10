@@ -35,7 +35,7 @@
             "binaryDir": "${sourceDir}/build/debug",
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/debug",
-                "ENABLE_COROUTINE": "ON",
+                "ENABLE_COROUTINE": "OFF",
                 "ENABLE_PROFILING": "ON"
             }
         },

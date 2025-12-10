@@ -7,6 +7,7 @@
 #include "leanstore/cpp/base/log.hpp"
 
 #include <cassert>
+#include <cstdint>
 #include <format>
 #include <memory>
 #include <utility>
@@ -21,15 +22,15 @@ CoroExecutor::CoroExecutor(LeanStore* store, AutoCommitProtocol* commit_protocol
     // init page evictor
     auto* buffer_manager = store_->buffer_manager_.get();
     page_evictor_ = std::make_unique<leanstore::PageEvictor>(
-        store_, "PageEvictor", 0, buffer_manager->num_bfs_, buffer_manager->buffer_pool_,
-        buffer_manager->num_partitions_, buffer_manager->partitions_);
+        store_, "PageEvictor", 0, buffer_manager->num_bfs_, buffer_manager->num_partitions_,
+        buffer_manager->partitions_);
   } else {
     page_evictor_ = nullptr;
   }
 
-  if (!store)
+  if (!store) {
     user_tasks_.resize(4);
-  else {
+  } else {
     user_tasks_.resize(store->store_option_->max_concurrent_transaction_per_worker_);
   }
 
@@ -113,8 +114,9 @@ void CoroExecutor::ThreadLoop() {
     } else {
       // only wait for new job if there are no other yield slots.
       bool wait = (num_yield_slots == 0);
-      if (!DequeueCoro(coro, wait))
+      if (!DequeueCoro(coro, wait)) {
         continue;
+      }
     }
 
     // Shutdown if required
