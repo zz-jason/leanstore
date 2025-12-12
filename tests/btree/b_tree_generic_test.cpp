@@ -11,9 +11,6 @@
 
 #include <string>
 
-using namespace leanstore::utils;
-using namespace leanstore;
-
 namespace leanstore::test {
 
 class BTreeGenericTest : public ::testing::Test {
@@ -26,7 +23,7 @@ protected:
   BTreeGenericTest() {
     auto* cur_test = ::testing::UnitTest::GetInstance()->current_test_info();
     auto cur_test_name =
-        std::string(cur_test->test_case_name()) + "_" + std::string(cur_test->name());
+        std::string(cur_test->test_suite_name()) + "_" + std::string(cur_test->name());
     auto store_dir_str = "/tmp/leanstore/" + cur_test_name;
     lean_store_option* option = lean_store_option_create(store_dir_str.c_str());
     option->create_from_scratch_ = true;
@@ -35,10 +32,10 @@ protected:
     store_ = std::move(res.value());
   }
 
-  ~BTreeGenericTest() = default;
+  ~BTreeGenericTest() override = default;
 
   void SetUp() override {
-    tree_name_ = RandomGenerator::RandAlphString(10);
+    tree_name_ = utils::RandomGenerator::RandAlphString(10);
     store_->ExecSync(0, [&]() {
       auto res = store_->CreateTransactionKV(tree_name_);
       ASSERT_TRUE(res);
@@ -60,8 +57,8 @@ TEST_F(BTreeGenericTest, GetSummary) {
   // insert 200 key-value pairs
   for (int i = 0; i < 200; i++) {
     store_->ExecSync(0, [&]() {
-      auto key = RandomGenerator::RandAlphString(24) + std::to_string(i);
-      auto val = RandomGenerator::RandAlphString(176);
+      auto key = utils::RandomGenerator::RandAlphString(24) + std::to_string(i);
+      auto val = utils::RandomGenerator::RandAlphString(176);
 
       CoroEnv::CurTxMgr().StartTx();
       LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());

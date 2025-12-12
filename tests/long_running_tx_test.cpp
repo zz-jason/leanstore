@@ -9,14 +9,12 @@
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/random_generator.hpp"
+#include "utils/small_vector.hpp"
 
 #include <gtest/gtest.h>
 
 #include <string>
 #include <unordered_map>
-
-using namespace leanstore::utils;
-using namespace leanstore;
 
 namespace leanstore::test {
 
@@ -29,13 +27,13 @@ protected:
 protected:
   LongRunningTxTest() = default;
 
-  ~LongRunningTxTest() = default;
+  ~LongRunningTxTest() override = default;
 
   void SetUp() override {
     // Create a leanstore instance for the test case
     auto* cur_test = ::testing::UnitTest::GetInstance()->current_test_info();
     auto cur_test_name =
-        std::string(cur_test->test_case_name()) + "_" + std::string(cur_test->name());
+        std::string(cur_test->test_suite_name()) + "_" + std::string(cur_test->name());
     auto store_dir_str = std::string("/tmp/leanstore/") + cur_test_name;
 
     lean_store_option* option = lean_store_option_create(store_dir_str.c_str());
@@ -48,7 +46,7 @@ protected:
     store_ = std::move(res.value());
 
     // TxManager 0, create a btree for test
-    tree_name_ = RandomGenerator::RandAlphString(10);
+    tree_name_ = utils::RandomGenerator::RandAlphString(10);
     store_->ExecSync(0, [&]() {
       auto res = store_->CreateTransactionKV(tree_name_);
       ASSERT_TRUE(res);
@@ -84,7 +82,6 @@ protected:
 TEST_F(LongRunningTxTest, LookupFromGraveyard) {
   std::string key1("1"), val1("10");
   std::string key2("2"), val2("20");
-  std::string res;
 
   std::string copied_val;
   auto copy_value = [&](Slice val) {
@@ -162,7 +159,6 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
 TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
   std::string key1("1"), val1("10");
   std::string key2("2"), val2("20");
-  std::string res;
 
   std::string copied_val;
   auto copy_value = [&](Slice val) {
@@ -198,15 +194,15 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
   std::string new_val;
   store_->ExecSync(1, [&]() {
     auto update_desc_buf_size = UpdateDesc::Size(1);
-    uint8_t update_desc_buf[update_desc_buf_size];
-    auto* update_desc = UpdateDesc::CreateFrom(update_desc_buf);
+    auto update_desc_buf = SmallBuffer256(update_desc_buf_size);
+    auto* update_desc = UpdateDesc::CreateFrom(update_desc_buf.Data());
     update_desc->num_slots_ = 1;
     update_desc->update_slots_[0].offset_ = 0;
     update_desc->update_slots_[0].size_ = val1.size();
 
     auto update_call_back = [&](MutableSlice to_update) {
       auto new_val_size = update_desc->update_slots_[0].size_;
-      new_val = RandomGenerator::RandAlphString(new_val_size);
+      new_val = utils::RandomGenerator::RandAlphString(new_val_size);
       std::memcpy(to_update.data(), new_val.data(), new_val.size());
     };
 
@@ -267,8 +263,8 @@ TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
   std::unordered_map<std::string, std::string> kv_to_test;
   std::string smallest_key;
   for (size_t i = 0; i < num_kv; ++i) {
-    std::string key = RandomGenerator::RandAlphString(10);
-    std::string val = RandomGenerator::RandAlphString(10);
+    std::string key = utils::RandomGenerator::RandAlphString(10);
+    std::string val = utils::RandomGenerator::RandAlphString(10);
     if (kv_to_test.find(key) != kv_to_test.end()) {
       --i;
       continue;

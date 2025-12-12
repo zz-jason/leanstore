@@ -19,13 +19,12 @@ protected:
 
   std::unique_ptr<LeanStore> store_;
 
-  OptimisticGuardedTest() {
-  }
+  OptimisticGuardedTest() = default;
 
   void SetUp() override {
     auto* cur_test = ::testing::UnitTest::GetInstance()->current_test_info();
     auto cur_test_name =
-        std::string(cur_test->test_case_name()) + "_" + std::string(cur_test->name());
+        std::string(cur_test->test_suite_name()) + "_" + std::string(cur_test->name());
     auto store_dir_str = "/tmp/leanstore/" + cur_test_name;
     auto* option = lean_store_option_create(store_dir_str.c_str());
     option->create_from_scratch_ = true;
@@ -37,12 +36,12 @@ protected:
 };
 
 TEST_F(OptimisticGuardedTest, Set) {
-  OptimisticGuarded<TestPayload> guarded_val({0, 100});
+  OptimisticGuarded<TestPayload> guarded_val({.a_ = 0, .b_ = 100});
 
   // TxManager 0, set the guardedVal 100 times
   store_->ExecSync(0, [&]() {
     for (int64_t i = 0; i < 100; i++) {
-      guarded_val.Set(TestPayload{i, 100 - i});
+      guarded_val.Set(TestPayload{.a_ = i, .b_ = 100 - i});
     }
   });
 
@@ -62,7 +61,7 @@ TEST_F(OptimisticGuardedTest, Set) {
 }
 
 TEST_F(OptimisticGuardedTest, UpdateAttribute) {
-  OptimisticGuarded<TestPayload> guarded_val({0, 100});
+  OptimisticGuarded<TestPayload> guarded_val({.a_ = 0, .b_ = 100});
 
   // TxManager 0, update the guardedVal 100 times
   store_->ExecSync(0, [&]() {

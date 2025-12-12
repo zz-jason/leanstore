@@ -63,11 +63,11 @@ TEST_F(AbortTest, AfterInsert) {
   s1->StartTx();
   ASSERT_TRUE(s0->Put(tbl_, key1, val1, false));
 
-  auto res = s0->Get(tbl_, key1, val_read);
+  auto res = s0->Get(tbl_, key1, val_read, false);
   ASSERT_TRUE(res && res.value() == 1); // got the uncommitted value
   ASSERT_EQ(val_read, val1);
 
-  res = s1->Get(tbl_, key1, val_read);
+  res = s1->Get(tbl_, key1, val_read, false);
   ASSERT_TRUE(res && res.value() == 0); // got nothing
 
   s0->AbortTx();
@@ -90,12 +90,12 @@ TEST_F(AbortTest, AfterUpdate) {
 
   s0->StartTx();
   s1->StartTx();
-  ASSERT_TRUE(s0->Update(tbl_, key1, Slice(val11)));
-  auto res = s0->Get(tbl_, key1, val_read);
+  ASSERT_TRUE(s0->Update(tbl_, key1, Slice(val11), false));
+  auto res = s0->Get(tbl_, key1, val_read, false);
   ASSERT_TRUE(res && res.value() == 1); // got the uncommitted value
   ASSERT_EQ(val_read, val11);
 
-  res = s1->Get(tbl_, key1, val_read);
+  res = s1->Get(tbl_, key1, val_read, false);
   ASSERT_TRUE(res && res.value() == 1); // got the old value
   ASSERT_EQ(val_read, val1);
 
@@ -121,12 +121,12 @@ TEST_F(AbortTest, AfterRemove) {
 
   s0->StartTx();
   s1->StartTx();
-  ASSERT_TRUE(s0->Delete(tbl_, key1));
+  ASSERT_TRUE(s0->Delete(tbl_, key1, false));
 
-  auto res = s0->Get(tbl_, key1, val_read);
+  auto res = s0->Get(tbl_, key1, val_read, false);
   ASSERT_TRUE(res && res.value() == 0); // got nothing
 
-  res = s1->Get(tbl_, key1, val_read);
+  res = s1->Get(tbl_, key1, val_read, false);
   ASSERT_TRUE(res && res.value() == 1); // got the old value
   ASSERT_EQ(val_read, val1);
 
@@ -152,22 +152,22 @@ TEST_F(AbortTest, AfterInsertOnRemove) {
 
   s0->StartTx();
   s1->StartTx();
-  ASSERT_TRUE(s0->Delete(tbl_, key1));
+  ASSERT_TRUE(s0->Delete(tbl_, key1, false));
 
-  auto res = s0->Get(tbl_, key1, val_read);
+  auto res = s0->Get(tbl_, key1, val_read, false);
   ASSERT_TRUE(res && res.value() == 0); // got nothing
 
-  res = s1->Get(tbl_, key1, val_read);
+  res = s1->Get(tbl_, key1, val_read, false);
   ASSERT_TRUE(res && res.value() == 1); // got the old value
   ASSERT_EQ(val_read, val1);
 
   // insert on removed key
   ASSERT_TRUE(s0->Put(tbl_, key1, Slice(val11), false));
-  res = s0->Get(tbl_, key1, val_read);
+  res = s0->Get(tbl_, key1, val_read, false);
   ASSERT_TRUE(res && res.value() == 1); // get the uncommitted value
   ASSERT_EQ(val_read, val11);
 
-  res = s1->Get(tbl_, key1, val_read);
+  res = s1->Get(tbl_, key1, val_read, false);
   ASSERT_TRUE(res && res.value() == 1); // got the old value
   ASSERT_EQ(val_read, val1);
 
