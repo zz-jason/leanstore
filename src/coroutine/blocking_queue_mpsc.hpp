@@ -10,7 +10,7 @@ namespace leanstore {
 template <typename T>
 class BlockingQueueMpsc {
 public:
-  BlockingQueueMpsc(size_t capacity) : queue_(capacity), capacity_(capacity) {
+  explicit BlockingQueueMpsc(size_t capacity) : queue_(capacity), capacity_(capacity) {
   }
   ~BlockingQueueMpsc() = default;
 

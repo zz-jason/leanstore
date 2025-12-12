@@ -34,7 +34,7 @@ void CRManager::StartWorkerThreads(uint64_t num_worker_threads) {
   worker_threads_.reserve(num_worker_threads);
   auto& tx_mgrs = store_->GetMvccManager().TxMgrs();
   auto& loggings = store_->GetMvccManager().Loggings();
-  for (auto i = 0u; i < num_worker_threads; i++) {
+  for (auto i = 0U; i < num_worker_threads; i++) {
     auto worker_thread = std::make_unique<WorkerThread>(store_, i, i);
     worker_thread->Start();
     auto* tx_mgr = tx_mgrs[i].get();

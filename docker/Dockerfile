@@ -5,10 +5,10 @@ FROM ubuntu:25.10
 RUN apt update \
  && apt install -y \
         build-essential g++-aarch64-linux-gnu gcc-aarch64-linux-gnu \
-        git cmake make gcc g++ clang-format ninja-build \
+        git cmake make gcc g++ clangd clang-format clang-tidy ninja-build \
         libaio-dev python3-pip cppcheck \
         curl zip unzip tar pkg-config \
-        autoconf libtool golang graphviz sysstat \
+        autoconf libtool golang graphviz sysstat jq \
  && rm -rf /var/lib/apt/lists/*
 
 

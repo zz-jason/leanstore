@@ -6,6 +6,9 @@ namespace leanstore::utils {
 
 class ScrambledZipfGenerator {
 public:
+  // NOLINTBEGIN
+  // TODO: Fix NOLINT issues
+
   uint64_t min;
   uint64_t max;
   uint64_t n;
@@ -19,6 +22,8 @@ public:
   }
 
   uint64_t rand();
+
+  // NOLINTEND
 };
 
 } // namespace leanstore::utils

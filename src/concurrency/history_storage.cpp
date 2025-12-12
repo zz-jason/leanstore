@@ -16,8 +16,6 @@
 
 #include <functional>
 
-using namespace leanstore;
-
 namespace leanstore {
 
 void HistoryStorage::PutVersion(lean_txid_t tx_id, lean_cmdid_t command_id, lean_treeid_t tree_id,
@@ -39,8 +37,8 @@ void HistoryStorage::PutVersion(lean_txid_t tx_id, lean_cmdid_t command_id, lean
   if (session != nullptr && session->rightmost_bf_ != nullptr) {
     JUMPMU_TRY() {
       Slice key(key_buffer, key_size);
-      BTreeIterMut x_iter(*static_cast<BTreeGeneric*>(const_cast<BasicKV*>(btree)),
-                          session->rightmost_bf_, session->rightmost_version_);
+      BTreeIterMut x_iter(*static_cast<BTreeGeneric*>(btree), session->rightmost_bf_,
+                          session->rightmost_version_);
       if (x_iter.HasEnoughSpaceFor(key.size(), version_size) && x_iter.KeyInCurrentNode(key)) {
 
         if (session->last_tx_id_ == tx_id) {
@@ -65,7 +63,7 @@ void HistoryStorage::PutVersion(lean_txid_t tx_id, lean_cmdid_t command_id, lean
   while (true) {
     JUMPMU_TRY() {
       Slice key(key_buffer, key_size);
-      auto x_iter = const_cast<BasicKV*>(btree)->NewBTreeIterMut();
+      auto x_iter = btree->NewBTreeIterMut();
       OpCode ret = x_iter->SeekToInsert(key);
       if (ret == OpCode::kDuplicated) {
         // remove the last inserted version for the key

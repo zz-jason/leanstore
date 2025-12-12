@@ -1,4 +1,5 @@
 #include "lean_test_suite.hpp"
+#include "leanstore/cpp/base/error.hpp"
 #include "leanstore/cpp/base/result.hpp"
 
 #include "gtest/gtest.h"

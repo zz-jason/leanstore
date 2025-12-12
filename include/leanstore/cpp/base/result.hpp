@@ -36,7 +36,7 @@ public:
 
   /// Construct from std::expected
   /// No explicit in order to allow implicit conversions.
-  Result(result_t&& result) : result_(std::move(result)) {
+  Result(result_t&& result) : result_(std::move(result)) { // NOLINT (google-explicit-constructor)
   }
 
   /// Construct an empty Result for void type.
@@ -47,12 +47,12 @@ public:
 
   /// Construct a value Result.
   /// No explicit in order to allow implicit conversions.
-  Result(storage_t&& v) : result_(std::move(v)) {
+  Result(storage_t&& v) : result_(std::move(v)) { // NOLINT (google-explicit-constructor)
   }
 
   /// Construct an error Result.
   /// No explicit in order to allow implicit conversions.
-  Result(E&& e) : result_(std::unexpected(std::move(e))) {
+  Result(E&& e) : result_(std::unexpected(std::move(e))) { // NOLINT (google-explicit-constructor)
   }
 
   /// Checks if the Result contains a value

@@ -13,7 +13,6 @@
 #include "utils/small_vector.hpp"
 
 #include <cstdint>
-#include <expected>
 #include <utility>
 
 namespace leanstore {
@@ -356,9 +355,9 @@ void Recovery::RedoSplitRoot(BufferFrame& bf, WalEntryComplex* complex_entry) {
   // move half of the old root to the new left,
   // insert separator key into new root,
   // update meta node to point to new root
-  x_guarded_new_root->right_most_child_swip_ = x_guarded_old_root.bf();
+  x_guarded_new_root->right_most_child_swip_.FromBufferFrame(x_guarded_old_root.bf());
   x_guarded_old_root->Split(x_guarded_new_root, x_guarded_new_left, sep_info);
-  x_guarded_meta->right_most_child_swip_ = x_guarded_new_root.bf();
+  x_guarded_meta->right_most_child_swip_.FromBufferFrame(x_guarded_new_root.bf());
 }
 
 void Recovery::RedoSplitNonRoot(BufferFrame& bf, WalEntryComplex* complex_entry) {
@@ -391,7 +390,7 @@ void Recovery::RedoSplitNonRoot(BufferFrame& bf, WalEntryComplex* complex_entry)
       BTreeNode::SeparatorInfo(wal->separator_size_, wal->split_slot_, wal->separator_truncated_);
 
   const uint16_t space_needed_for_separator =
-      guarded_parent->SpaceNeeded(sep_info.size_, sizeof(Swip));
+      x_guarded_parent->SpaceNeeded(sep_info.size_, sizeof(Swip));
   x_guarded_parent->RequestSpaceFor(space_needed_for_separator);
   x_guarded_child->Split(x_guarded_parent, x_guarded_new_left, sep_info);
 }

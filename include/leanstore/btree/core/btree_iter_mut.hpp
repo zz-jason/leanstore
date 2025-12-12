@@ -14,7 +14,8 @@ namespace leanstore {
 
 class BTreeIterMut : public BTreeIterPessistic {
 public:
-  BTreeIterMut(BTreeGeneric& tree) : BTreeIterPessistic(tree, LatchMode::kExclusivePessimistic) {
+  explicit BTreeIterMut(BTreeGeneric& tree)
+      : BTreeIterPessistic(tree, LatchMode::kExclusivePessimistic) {
   }
 
   BTreeIterMut(BTreeGeneric& tree, BufferFrame* bf, const uint64_t bf_version)

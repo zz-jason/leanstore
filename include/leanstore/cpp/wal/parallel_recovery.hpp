@@ -16,7 +16,8 @@ namespace leanstore {
 
 class ParallelRecovery {
 public:
-  ParallelRecovery(std::vector<std::string>&& wal_files) : wal_file_paths_(std::move(wal_files)) {
+  explicit ParallelRecovery(std::vector<std::string>&& wal_files)
+      : wal_file_paths_(std::move(wal_files)) {
   }
 
   ~ParallelRecovery() = default;

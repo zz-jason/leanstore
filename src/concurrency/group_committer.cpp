@@ -50,7 +50,7 @@ void GroupCommitter::CollectWalRecords(lean_txid_t& min_flushed_sys_tx,
   auto& tx_mgrs = store_->GetMvccManager().TxMgrs();
   LEAN_DCHECK(loggings.size() == num_rfa_txs.size());
 
-  for (auto worker_id = 0u; worker_id < loggings.size(); worker_id++) {
+  for (auto worker_id = 0U; worker_id < loggings.size(); worker_id++) {
     auto& tx_mgr = tx_mgrs[worker_id];
     auto& logging = loggings[worker_id];
     // collect logging info
@@ -100,7 +100,7 @@ void GroupCommitter::FlushWalRecords() {
   }
 
   /// wait all to finish.
-  timespec timeout = {1, 0}; // 1s
+  timespec timeout = {.tv_sec = 1, .tv_nsec = 0}; // 1s
   if (auto res = aio_.WaitAll(&timeout); !res) {
     Log::Error("Failed to wait all IO, error={}", res.error().ToString());
   }

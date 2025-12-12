@@ -13,9 +13,7 @@
 
 namespace leanstore {
 
-AutoCommitProtocol::AutoCommitProtocol(LeanStore* store, uint32_t group_id)
-    : store_(store),
-      group_id_(group_id) {
+AutoCommitProtocol::AutoCommitProtocol(LeanStore* store) : store_(store) {
   auto num_workers = store->store_option_->worker_threads_;
 
   synced_last_committed_sys_tx_.resize(num_workers, 0);
@@ -87,7 +85,7 @@ void AutoCommitProtocol::TrySyncLastCommittedTx() {
   auto min_committed_sys_tx = std::numeric_limits<lean_txid_t>::max();
   auto& loggings = store_->GetMvccManager().Loggings();
   assert(loggings.size() == synced_last_committed_sys_tx_.size());
-  for (auto i = 0u; i < loggings.size(); i++) {
+  for (auto i = 0U; i < loggings.size(); i++) {
     auto last_committed_sys_tx = loggings[i]->GetLastHardenedSysTx();
     if (last_committed_sys_tx != synced_last_committed_sys_tx_[i]) {
       synced_last_committed_sys_tx_[i] = last_committed_sys_tx;
@@ -102,7 +100,7 @@ void AutoCommitProtocol::TrySyncLastCommittedTx() {
   // sync last committed user tx
   auto min_committed_usr_tx = std::numeric_limits<lean_txid_t>::max();
   assert(loggings.size() == synced_last_committed_usr_tx_.size());
-  for (auto i = 0u; i < loggings.size(); i++) {
+  for (auto i = 0U; i < loggings.size(); i++) {
     auto last_committed_usr_tx = loggings[i]->GetLastHardenedUsrTx();
     if (last_committed_usr_tx != synced_last_committed_usr_tx_[i]) {
       synced_last_committed_usr_tx_[i] = last_committed_usr_tx;
@@ -116,7 +114,7 @@ void AutoCommitProtocol::TrySyncLastCommittedTx() {
 
 lean_txid_t AutoCommitProtocol::DetermineCommitableUsrTx(std::vector<Transaction>& tx_queue) {
   lean_txid_t max_commit_ts = 0;
-  auto i = 0u;
+  auto i = 0U;
   for (; i < tx_queue.size(); ++i) {
     auto& tx = tx_queue[i];
     if (!tx.CanCommit(min_committed_sys_tx_, min_committed_usr_tx_)) {

@@ -8,7 +8,8 @@ class BTreeIterMut;
 
 class BTreeIter : public BTreeIterPessistic {
 public:
-  BTreeIter(BTreeGeneric& btree) : BTreeIterPessistic(btree, LatchMode::kSharedPessimistic) {
+  explicit BTreeIter(BTreeGeneric& btree)
+      : BTreeIterPessistic(btree, LatchMode::kSharedPessimistic) {
   }
 
   void IntoBtreeIterMut(BTreeIterMut* iter_mut);

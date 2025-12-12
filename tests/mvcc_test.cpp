@@ -11,9 +11,6 @@
 
 #include <memory>
 
-using namespace leanstore::utils;
-using namespace leanstore;
-
 namespace leanstore::test {
 
 class MvccTest : public ::testing::Test {
@@ -27,7 +24,7 @@ protected:
   MvccTest() {
     auto* cur_test = ::testing::UnitTest::GetInstance()->current_test_info();
     auto cur_test_name =
-        std::string(cur_test->test_case_name()) + "_" + std::string(cur_test->name());
+        std::string(cur_test->test_suite_name()) + "_" + std::string(cur_test->name());
     auto store_dir_str = "/tmp/leanstore/" + cur_test_name;
     lean_store_option* option = lean_store_option_create(store_dir_str.c_str());
     option->create_from_scratch_ = true;
@@ -36,11 +33,11 @@ protected:
     store_ = std::move(res.value());
   }
 
-  ~MvccTest() = default;
+  ~MvccTest() override = default;
 
   void SetUp() override {
     // create a btree name for test
-    tree_name_ = RandomGenerator::RandAlphString(10);
+    tree_name_ = utils::RandomGenerator::RandAlphString(10);
     store_->ExecSync(0, [&]() {
       auto res = store_->CreateTransactionKV(tree_name_);
       ASSERT_TRUE(res);
@@ -60,8 +57,8 @@ protected:
 
 TEST_F(MvccTest, LookupWhileInsert) {
   // insert a base record
-  auto key0 = RandomGenerator::RandAlphString(42);
-  auto val0 = RandomGenerator::RandAlphString(151);
+  auto key0 = utils::RandomGenerator::RandAlphString(42);
+  auto val0 = utils::RandomGenerator::RandAlphString(151);
   store_->ExecSync(0, [&]() {
     CoroEnv::CurTxMgr().StartTx();
     auto res = btree_->Insert(Slice((const uint8_t*)key0.data(), key0.size()),
@@ -71,8 +68,8 @@ TEST_F(MvccTest, LookupWhileInsert) {
   });
 
   // start a transaction to insert another record, don't commit
-  auto key1 = RandomGenerator::RandAlphString(17);
-  auto val1 = RandomGenerator::RandAlphString(131);
+  auto key1 = utils::RandomGenerator::RandAlphString(17);
+  auto val1 = utils::RandomGenerator::RandAlphString(131);
   store_->ExecSync(1, [&]() {
     CoroEnv::CurTxMgr().StartTx();
     auto res = btree_->Insert(Slice((const uint8_t*)key1.data(), key1.size()),
@@ -123,8 +120,8 @@ TEST_F(MvccTest, LookupWhileInsert) {
 
 TEST_F(MvccTest, InsertConflict) {
   // insert a base record
-  auto key0 = RandomGenerator::RandAlphString(42);
-  auto val0 = RandomGenerator::RandAlphString(151);
+  auto key0 = utils::RandomGenerator::RandAlphString(42);
+  auto val0 = utils::RandomGenerator::RandAlphString(151);
   store_->ExecSync(0, [&]() {
     CoroEnv::CurTxMgr().StartTx();
     auto res = btree_->Insert(Slice((const uint8_t*)key0.data(), key0.size()),
@@ -153,8 +150,6 @@ TEST_F(MvccTest, InsertConflict) {
   });
 
   // start another transaction to insert a smaller key
-  auto key2 = std::string(key0.data(), key0.size() - 1);
-  auto val2 = val0;
   store_->ExecSync(2, [&]() {
     CoroEnv::CurTxMgr().StartTx();
     auto res = btree_->Insert(Slice((const uint8_t*)key1.data(), key1.size()),

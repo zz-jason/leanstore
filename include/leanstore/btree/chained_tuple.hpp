@@ -50,7 +50,7 @@ public:
   ///
   /// NOTE: This constructor is usually called by a placmenet new operator on
   /// the address of the FatTuple
-  ChainedTuple(FatTuple& old_fat_tuple)
+  explicit ChainedTuple(FatTuple& old_fat_tuple)
       : Tuple(TupleFormat::kChained, old_fat_tuple.worker_id_, old_fat_tuple.tx_id_,
               old_fat_tuple.cmd_id_),
         is_tombstone_(false) {

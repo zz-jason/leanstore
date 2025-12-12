@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 
-struct lean_wal_record;
+struct lean_wal_record; // NOLINT (readability-identifier-naming)
 
 namespace leanstore {
 

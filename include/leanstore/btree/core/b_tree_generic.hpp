@@ -53,7 +53,7 @@ public:
 
   BTreeGeneric() = default;
 
-  virtual ~BTreeGeneric() override = default;
+  ~BTreeGeneric() override = default;
 
   void Init(LeanStore* store, lean_treeid_t tree_id, lean_btree_config config);
 
@@ -99,9 +99,9 @@ public:
   std::string Summary();
 
   // for buffer manager
-  virtual void IterateChildSwips(BufferFrame& bf, std::function<bool(Swip&)> callback) override;
+  void IterateChildSwips(BufferFrame& bf, std::function<bool(Swip&)> callback) override;
 
-  virtual ParentSwipHandler FindParent(BufferFrame& child_bf) override {
+  ParentSwipHandler FindParent(BufferFrame& child_bf) override {
     return BTreeGeneric::FindParentMayJump(*this, child_bf);
   }
 
@@ -110,36 +110,36 @@ public:
   /// synchronized with the ones in the buffer frame manager stack frame
   ///
   /// Called by buffer manager before eviction
-  virtual SpaceCheckResult CheckSpaceUtilization(BufferFrame& bf) override;
+  SpaceCheckResult CheckSpaceUtilization(BufferFrame& bf) override;
 
   /// Flush the page content in the buffer frame to disk
   ///
   /// NOTE: The source buffer frame should be shared latched
-  virtual void Checkpoint(BufferFrame& bf, void* dest) override;
+  void Checkpoint(BufferFrame& bf, void* dest) override;
 
-  virtual void Undo(const lean_wal_record*) override {
+  void Undo(const lean_wal_record*) override {
     Log::Fatal("undo is unsupported");
   }
 
-  virtual void GarbageCollect(const uint8_t*, lean_wid_t, lean_txid_t, bool) override {
+  void GarbageCollect(const uint8_t*, lean_wid_t, lean_txid_t, bool) override {
     Log::Fatal("GarbageCollect is unsupported");
   }
 
-  virtual void Unlock(const uint8_t*) override {
+  void Unlock(const uint8_t*) override {
     Log::Fatal("unlock is unsupported");
   }
 
-  virtual std::unordered_map<std::string, std::string> Serialize() override;
+  std::unordered_map<std::string, std::string> Serialize() override;
 
-  virtual void Deserialize(std::unordered_map<std::string, std::string> map) override;
+  void Deserialize(std::unordered_map<std::string, std::string> map) override;
 
 private:
   bool IsMetaNode(GuardedBufferFrame<BTreeNode>& guarded_node) {
-    return meta_node_swip_ == guarded_node.bf_;
+    return &meta_node_swip_.AsBufferFrameMasked() == guarded_node.bf_;
   }
 
   bool IsMetaNode(ExclusiveGuardedBufferFrame<BTreeNode>& x_guarded_node) {
-    return meta_node_swip_ == x_guarded_node.bf();
+    return &meta_node_swip_.AsBufferFrameMasked() == x_guarded_node.bf();
   }
 
   /// Split the root node, 4 nodes are involved in the split:
@@ -236,7 +236,7 @@ public:
 inline void BTreeGeneric::FreeBTreeNodesRec(BTreeGeneric& btree,
                                             GuardedBufferFrame<BTreeNode>& guarded_node) {
   if (!guarded_node->is_leaf_) {
-    for (auto i = 0u; i <= guarded_node->num_slots_; ++i) {
+    for (auto i = 0U; i <= guarded_node->num_slots_; ++i) {
       auto* child_swip = guarded_node->ChildSwipIncludingRightMost(i);
       GuardedBufferFrame<BTreeNode> guarded_child(btree.store_->buffer_manager_.get(), guarded_node,
                                                   *child_swip);

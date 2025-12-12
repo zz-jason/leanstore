@@ -87,8 +87,7 @@ public:
     Log::Fatal("BufferManagedTree::Deserialize is unimplemented");
   }
 
-  virtual ~BufferManagedTree() {
-  }
+  virtual ~BufferManagedTree() = default;
 };
 
 using TreeAndName = std::tuple<std::unique_ptr<BufferManagedTree>, std::string>;

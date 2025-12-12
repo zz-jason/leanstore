@@ -156,7 +156,7 @@ TEST_F(BTreeMvccImplTest, InsertAfterRemove) {
 
   // insert initial keys
   std::unordered_map<std::string, std::string> all_keys;
-  for (auto i = 0u; i < num_keys; i++) {
+  for (auto i = 0U; i < num_keys; i++) {
     auto key_str = "key_" + std::to_string(i);
     auto val_str = utils::RandomGenerator::RandAlphString(
         utils::RandomGenerator::RandU64(min_value_size, max_value_size));
@@ -170,7 +170,7 @@ TEST_F(BTreeMvccImplTest, InsertAfterRemove) {
   auto check_all = [&]() {
     lean_str value;
     lean_str_init(&value, max_value_size + 1);
-    for (auto i = 0u; i < num_keys; i++) {
+    for (auto i = 0U; i < num_keys; i++) {
       auto key_str = "key_" + std::to_string(i);
       auto key_view = TMP_STR_VIEW(key_str.c_str());
       ASSERT_EQ(btree_s0->lookup(btree_s0, key_view, &value), lean_status::LEAN_STATUS_OK);
@@ -180,7 +180,7 @@ TEST_F(BTreeMvccImplTest, InsertAfterRemove) {
   };
 
   // remove and insert a random key 1000000 times
-  for (auto i = 0u; i < 100; i++) {
+  for (auto i = 0U; i < 100; i++) {
     // key to be removed and inserted
     auto key_idx = utils::RandomGenerator::RandU64(0, num_keys);
     auto key_str = "key_" + std::to_string(key_idx);

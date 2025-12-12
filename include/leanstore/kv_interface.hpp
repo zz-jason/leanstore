@@ -154,7 +154,7 @@ public:
 
   virtual OpCode Remove(Slice key) = 0;
 
-  virtual OpCode RangeRemove(Slice start_key, Slice end_key, bool page_wise = true) = 0;
+  virtual OpCode RangeRemove(Slice start_key, Slice end_key, bool page_wise) = 0;
 
   virtual OpCode ScanAsc(Slice start_key, ScanCallback callback) = 0;
 

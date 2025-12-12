@@ -3,7 +3,9 @@
 #include "leanstore/cpp/base/log.hpp"
 #include "tools/ycsb/ycsb_leanstore.hpp"
 #include "tools/ycsb/ycsb_rocksdb.hpp"
+#ifdef ENABLE_WIRED_TIGER
 #include "tools/ycsb/ycsb_wired_tiger.hpp"
+#endif
 #include "ycsb_args.hpp"
 
 #include <tanakh-cmdline/cmdline.h>
@@ -34,7 +36,9 @@ constexpr auto kCmdRun = "run";
 constexpr auto kTargetTransactionKv = "transactionkv";
 constexpr auto kTargetBasicKv = "basickv";
 constexpr auto kTargetRocksDb = "rocksdb";
+#ifdef ENABLE_WIRED_TIGER
 constexpr auto kWiredTiger = "wiredtiger";
+#endif
 
 leanstore::ycsb::YcsbOptions ArgParse(int argc, char** argv) {
   cmdline::parser arg_parser;

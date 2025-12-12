@@ -150,7 +150,7 @@ public:
 
     std::vector<std::shared_ptr<CoroFuture<void>>> futures;
     std::vector<CoroSession*> reserved_sessions;
-    for (auto i = 0u, begin = 0u; i < num_workers;) {
+    for (auto i = 0U, begin = 0U; i < num_workers;) {
       auto end = begin + avg + (rem-- > 0 ? 1 : 0);
       auto insert_func = [&, begin, end]() {
         SmallBuffer<1024> key_buffer(options_.key_size_);
@@ -216,9 +216,8 @@ public:
     std::atomic<bool> keep_running = true;
 
     std::vector<lean_perf_counters*> worker_perf_counters;
-    auto job = [&]() { worker_perf_counters.push_back(lean_current_perf_counters()); };
-    for (auto i = 0u; i < store_->store_option_->worker_threads_; i++) {
-      SubmitJobSync(std::move(job), i);
+    for (auto i = 0U; i < store_->store_option_->worker_threads_; i++) {
+      SubmitJobSync([&]() { worker_perf_counters.push_back(lean_current_perf_counters()); }, i);
     }
 
     std::vector<std::shared_ptr<CoroFuture<void>>> futures;
@@ -380,7 +379,7 @@ public:
     // create && start clients
     Log::Info("Starting YCSB clients, num_clients={}", options_.clients_);
     std::vector<std::unique_ptr<YcsbLeanStoreClient>> clients;
-    for (auto i = 0u; i < options_.clients_; i++) {
+    for (auto i = 0U; i < options_.clients_; i++) {
       clients.emplace_back(YcsbLeanStoreClient::New(options_, store_.get(), GetTable(),
                                                     GetWorkloadType(), bench_transaction_kv_));
     }
@@ -390,7 +389,7 @@ public:
 
     // report tps
     auto report_period = 1u;
-    for (auto i = 0u; i < options_.run_for_seconds_; i += report_period) {
+    for (auto i = 0U; i < options_.run_for_seconds_; i += report_period) {
       sleep(report_period);
       uint64_t tx_committed = 0;
       uint64_t tx_aborted = 0;
@@ -413,9 +412,8 @@ public:
 
   std::vector<lean_perf_counters*> GetPerfCounters() {
     std::vector<lean_perf_counters*> perf_counters;
-    auto job = [&]() { perf_counters.push_back(lean_current_perf_counters()); };
-    for (auto i = 0u; i < store_->store_option_->worker_threads_; i++) {
-      SubmitJobSync(std::move(job), i);
+    for (auto i = 0U; i < store_->store_option_->worker_threads_; i++) {
+      SubmitJobSync([&]() { perf_counters.push_back(lean_current_perf_counters()); }, i);
     }
 
     Log::Info("Collected {} perf counters", perf_counters.size());

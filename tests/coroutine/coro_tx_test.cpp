@@ -54,7 +54,7 @@ TEST_F(CoroTxTest, BasicCommit) {
   for (size_t i = 0; i < kNumKeys; ++i) {
     std::string key(std::format(kKeyPattern, i));
     std::string val(std::format(kValPattern, i));
-    kv_to_test.push_back(std::make_tuple(key, val));
+    kv_to_test.emplace_back(key, val);
   }
 
   // create btree for table records

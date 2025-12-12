@@ -1,5 +1,7 @@
 #include "leanstore/utils/fnv_hash.hpp"
 
+#include <cstdint>
+
 namespace leanstore::utils {
 
 uint64_t FNV::Hash(uint64_t val) {

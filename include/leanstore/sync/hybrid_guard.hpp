@@ -37,7 +37,10 @@ public:
 public:
   HybridGuard() = default;
 
-  HybridGuard(HybridMutex* latch) : latch_(latch), state_(GuardState::kUninitialized), version_(0) {
+  explicit HybridGuard(HybridMutex* latch)
+      : latch_(latch),
+        state_(GuardState::kUninitialized),
+        version_(0) {
   }
 
   // Manually construct a guard from a snapshot. Use with caution!
@@ -55,12 +58,12 @@ public:
   }
 
   // Move constructor
-  HybridGuard(HybridGuard&& other) {
+  HybridGuard(HybridGuard&& other) noexcept {
     *this = std::move(other);
   }
 
   // Move assignment
-  HybridGuard& operator=(HybridGuard&& other) {
+  HybridGuard& operator=(HybridGuard&& other) noexcept {
     Unlock();
 
     latch_ = other.latch_;

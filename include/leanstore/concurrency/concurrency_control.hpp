@@ -35,7 +35,7 @@ public:
 
 public:
   /// Constructor.
-  CommitTree(const uint64_t num_workers) : capacity_(num_workers + 1) {
+  explicit CommitTree(const uint64_t num_workers) : capacity_(num_workers + 1) {
     commit_log_.reserve(capacity_);
   }
 

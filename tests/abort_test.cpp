@@ -17,12 +17,12 @@ protected:
 protected:
   AbortTest() = default;
 
-  ~AbortTest() = default;
+  ~AbortTest() override = default;
 
   void SetUp() override {
     auto* cur_test = ::testing::UnitTest::GetInstance()->current_test_info();
     auto cur_test_name =
-        std::string(cur_test->test_case_name()) + "_" + std::string(cur_test->name());
+        std::string(cur_test->test_suite_name()) + "_" + std::string(cur_test->name());
     std::string store_dir = "/tmp/leanstore/" + cur_test_name;
     uint32_t session_limit = 2;
     store_ = StoreFactory::NewLeanStoreMVCC(store_dir, session_limit);
@@ -61,7 +61,7 @@ TEST_F(AbortTest, AfterInsert) {
 
   s0->StartTx();
   s1->StartTx();
-  ASSERT_TRUE(s0->Put(tbl_, key1, val1));
+  ASSERT_TRUE(s0->Put(tbl_, key1, val1, false));
 
   auto res = s0->Get(tbl_, key1, val_read);
   ASSERT_TRUE(res && res.value() == 1); // got the uncommitted value
@@ -115,7 +115,7 @@ TEST_F(AbortTest, AfterRemove) {
   auto* s0 = store_->GetSession(0);
   auto* s1 = store_->GetSession(1);
 
-  std::string key1("1"), val1("10"), val11("11");
+  std::string key1("1"), val1("10");
   std::string val_read;
   ASSERT_TRUE(s0->Put(tbl_, key1, Slice(val1), true));
 
@@ -162,7 +162,7 @@ TEST_F(AbortTest, AfterInsertOnRemove) {
   ASSERT_EQ(val_read, val1);
 
   // insert on removed key
-  ASSERT_TRUE(s0->Put(tbl_, key1, Slice(val11)));
+  ASSERT_TRUE(s0->Put(tbl_, key1, Slice(val11), false));
   res = s0->Get(tbl_, key1, val_read);
   ASSERT_TRUE(res && res.value() == 1); // get the uncommitted value
   ASSERT_EQ(val_read, val11);

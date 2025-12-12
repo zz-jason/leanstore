@@ -15,7 +15,7 @@ namespace leanstore {
 
 /// Forward declarations
 class TxManager;
-class WalFlushReq;
+struct WalFlushReq;
 
 /// The group committer thread is responsible for committing transactions in
 /// batches. It collects wal records from all the worker threads, writes them to
@@ -43,10 +43,10 @@ public:
         aio_(store->store_option_->worker_threads_ * 2 + 2) {
   }
 
-  virtual ~GroupCommitter() override = default;
+  ~GroupCommitter() override = default;
 
 protected:
-  virtual void RunImpl() override;
+  void RunImpl() override;
 
 private:
   /// Phase 1: collect wal records from all the worker threads. Collected wal records are written to

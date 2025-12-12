@@ -7,7 +7,7 @@ namespace leanstore {
 template <typename Callback>
 class ScopedTimer {
 public:
-  ScopedTimer(Callback&& cb)
+  explicit ScopedTimer(Callback&& cb)
       : start_(std::chrono::steady_clock::now()),
         callback_(std::forward<Callback>(cb)) {
   }

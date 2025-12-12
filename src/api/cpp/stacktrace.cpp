@@ -1,8 +1,9 @@
 #include "leanstore/cpp/base/stacktrace.hpp"
 
-#include <cpptrace/cpptrace.hpp>
+#include <cpptrace/basic.hpp>
 
 #include <sstream>
+#include <string>
 
 namespace leanstore {
 

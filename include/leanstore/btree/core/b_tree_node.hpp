@@ -29,7 +29,7 @@ public:
     /// Indicates whether the separator key is truncated.
     bool trunc_;
 
-    SeparatorInfo(uint16_t size = 0, uint16_t slot_id = 0, bool trunc = false)
+    explicit SeparatorInfo(uint16_t size = 0, uint16_t slot_id = 0, bool trunc = false)
         : size_(size),
           slot_id_(slot_id),
           trunc_(trunc) {
@@ -51,13 +51,13 @@ public:
   };
 
   /// The swip of the right-most child, can be nullptr for leaf nodes.
-  Swip right_most_child_swip_{nullptr};
+  Swip right_most_child_swip_ = {};
 
   /// The lower fence of the node. Exclusive.
-  FenceKey lower_fence_ = {0, 0};
+  FenceKey lower_fence_ = {.offset_ = 0, .size_ = 0};
 
   /// The upper fence of the node. Inclusive.
-  FenceKey upper_fence_ = {0, 0};
+  FenceKey upper_fence_ = {.offset_ = 0, .size_ = 0};
 
   /// Size of the slot array.
   uint16_t num_slots_ = 0;
@@ -158,7 +158,7 @@ public:
   /// 1. ExclusiveGuardedBufferFrame::InitPayload() creates a BTreeNode on the holding BufferFrame.
   /// 2. BTreeNode::New(): creates a BTreeNode on the providing buffer. The size of the underlying
   ///    buffer to store a BTreeNode can be obtained through BTreeNode::Size()
-  BTreeNode(bool is_leaf) : BTreeNodeHeader(is_leaf, BTreeNode::Size()) {
+  explicit BTreeNode(bool is_leaf) : BTreeNodeHeader(is_leaf, BTreeNode::Size()) {
   }
 
   /// Creates a BTreeNode on the providing buffer. Callers should ensure the buffer has at least
@@ -194,8 +194,9 @@ public:
 
   // ATTENTION: this method has side effects !
   bool RequestSpaceFor(uint16_t space_needed) {
-    if (space_needed <= FreeSpace())
+    if (space_needed <= FreeSpace()) {
       return true;
+    }
     if (space_needed <= FreeSpaceAfterCompaction()) {
       Compact();
       return true;
@@ -326,8 +327,9 @@ public:
 
   void MakeHint() {
     uint16_t dist = num_slots_ / (kHintCount + 1);
-    for (uint16_t i = 0; i < kHintCount; i++)
+    for (uint16_t i = 0; i < kHintCount; i++) {
       hint_[i] = slot_[dist * (i + 1)].head_;
+    }
   }
 
   int32_t CompareKeyWithBoundaries(Slice key);
@@ -578,8 +580,8 @@ inline void BTreeNode::SetFences(Slice lower_key, Slice upper_key) {
   // prefix compression
   for (prefix_size_ = 0; (prefix_size_ < std::min(lower_key.size(), upper_key.size())) &&
                          (lower_key[prefix_size_] == upper_key[prefix_size_]);
-       prefix_size_++)
-    ;
+       prefix_size_++) {
+  }
 }
 
 } // namespace leanstore

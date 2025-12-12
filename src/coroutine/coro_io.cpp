@@ -9,10 +9,9 @@
 #include <cstdint>
 #include <cstring>
 #include <ctime>
-#include <expected>
+#include <stdexcept>
 #include <vector>
 
-#include <fcntl.h>
 #include <libaio.h>
 
 namespace leanstore {
@@ -113,7 +112,7 @@ void CoroIo::Poll() {
   }
 
   // poll for completed IO requests
-  timespec timeout{0, 0};
+  timespec timeout{.tv_sec = 0, .tv_nsec = 0};
   int completed_reqs = io_getevents(aio_ctx_, 1, num_reqs_, &io_events_[0], &timeout);
 
   // change coroutine state to running for each completed request

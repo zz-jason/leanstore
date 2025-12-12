@@ -16,7 +16,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_compile_options(-ftls-model=global-dynamic)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -Wextra -rdynamic -fno-omit-frame-pointer -pthread -Wno-error=clobbered")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -Wextra -fno-omit-frame-pointer -pthread")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftls-model=local-exec")
 if (CMAKE_BUILD_TYPE MATCHES Debug)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDEBUG -O0 -g3")
@@ -26,9 +26,12 @@ endif()
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     add_compile_options(-Wno-vla-cxx-extension)
 endif()
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    add_compile_options(-Wno-error=clobbered)
+endif()
 
 # for clangd
-add_compile_definitions(__cpp_concepts=202002L)
+# add_compile_definitions(__cpp_concepts=202002L)
 
 # platform specific flags
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
@@ -117,7 +120,14 @@ add_custom_target(format
 
 # clang-tidy
 add_custom_target(check-tidy
-    COMMAND clang-tidy -p=${CMAKE_BINARY_DIR} --config-file=${CMAKE_SOURCE_DIR}/.clang-tidy ${ALL_SOURCE_FILES} -extra-arg='--std=c++2b'
+    COMMAND run-clang-tidy
+            -p=${CMAKE_BINARY_DIR}
+            -config-file=${CMAKE_SOURCE_DIR}/.clang-tidy
+            -j 20
+            -quiet
+            -extra-arg=-std=c++2b
+            -extra-arg=-Wno-unknown-warning-option
+            ${ALL_SOURCE_FILES}
     COMMENT "Running Clang-Tidy"
     VERBATIM
 )

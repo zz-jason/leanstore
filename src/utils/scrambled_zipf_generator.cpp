@@ -2,6 +2,8 @@
 
 #include "leanstore/utils/fnv_hash.hpp"
 
+#include <cstdint>
+
 namespace leanstore::utils {
 
 uint64_t ScrambledZipfGenerator::rand() {

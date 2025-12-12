@@ -17,26 +17,26 @@ public:
     tree_type_ = BTreeType::kBasicKV;
   }
 
-  virtual OpCode Lookup(Slice key, ValCallback val_callback) override;
+  OpCode Lookup(Slice key, ValCallback val_callback) override;
 
-  virtual OpCode Insert(Slice key, Slice val) override;
+  OpCode Insert(Slice key, Slice val) override;
 
-  virtual OpCode UpdatePartial(Slice key, MutValCallback update_call_back,
-                               UpdateDesc& update_desc) override;
+  OpCode UpdatePartial(Slice key, MutValCallback update_call_back,
+                       UpdateDesc& update_desc) override;
 
-  virtual OpCode Remove(Slice key) override;
+  OpCode Remove(Slice key) override;
 
-  virtual OpCode ScanAsc(Slice start_key, ScanCallback callback) override;
+  OpCode ScanAsc(Slice start_key, ScanCallback callback) override;
 
-  virtual OpCode ScanDesc(Slice start_key, ScanCallback callback) override;
+  OpCode ScanDesc(Slice start_key, ScanCallback callback) override;
 
-  virtual OpCode PrefixLookup(Slice, PrefixLookupCallback callback) override;
+  OpCode PrefixLookup(Slice, PrefixLookupCallback callback) override;
 
-  virtual OpCode PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) override;
+  OpCode PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) override;
 
-  virtual OpCode RangeRemove(Slice start_key, Slice end_key, bool page_used) override;
+  OpCode RangeRemove(Slice start_key, Slice end_key, bool page_used) override;
 
-  virtual uint64_t CountEntries() override;
+  uint64_t CountEntries() override;
 
   bool IsRangeEmpty(Slice start_key, Slice end_key);
 

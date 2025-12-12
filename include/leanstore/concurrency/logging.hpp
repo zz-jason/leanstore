@@ -33,7 +33,8 @@ struct WalFlushReq {
   /// written to the wal ring buffer.
   lean_txid_t curr_tx_id_ = 0;
 
-  WalFlushReq(uint64_t wal_buffered = 0, uint64_t sys_tx_writtern = 0, lean_txid_t curr_tx_id = 0)
+  explicit WalFlushReq(uint64_t wal_buffered = 0, uint64_t sys_tx_writtern = 0,
+                       lean_txid_t curr_tx_id = 0)
       : version_(0),
         wal_buffered_(wal_buffered),
         buffered_sys_tx_(sys_tx_writtern),
@@ -79,7 +80,7 @@ public:
   ALIGNAS(512) uint8_t* wal_buffer_;
 
 public:
-  Logging(uint64_t wal_buffer_bytes)
+  explicit Logging(uint64_t wal_buffer_bytes)
       : wal_buffer_bytes_(wal_buffer_bytes),
         wal_buffer_((uint8_t*)(std::aligned_alloc(512, wal_buffer_bytes))) {
     std::memset(wal_buffer_, 0, wal_buffer_bytes);

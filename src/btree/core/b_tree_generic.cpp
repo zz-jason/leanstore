@@ -24,8 +24,6 @@
 #include <memory>
 #include <unordered_map>
 
-using namespace leanstore;
-
 namespace leanstore {
 
 void BTreeGeneric::Init(LeanStore* store, lean_treeid_t btree_id, lean_btree_config config) {
@@ -33,7 +31,7 @@ void BTreeGeneric::Init(LeanStore* store, lean_treeid_t btree_id, lean_btree_con
   this->tree_id_ = btree_id;
   this->config_ = std::move(config);
 
-  meta_node_swip_ = &store_->buffer_manager_->AllocNewPage(btree_id);
+  meta_node_swip_.FromBufferFrame(&store_->buffer_manager_->AllocNewPage(btree_id));
   meta_node_swip_.AsBufferFrame().header_.keep_in_memory_ = true;
   LEAN_DCHECK(meta_node_swip_.AsBufferFrame().header_.latch_.GetVersion() == 0);
 
@@ -45,7 +43,7 @@ void BTreeGeneric::Init(LeanStore* store, lean_treeid_t btree_id, lean_btree_con
   auto guarded_meta = GuardedBufferFrame<BTreeNode>(store_->buffer_manager_.get(), meta_node_swip_);
   auto x_guarded_meta = ExclusiveGuardedBufferFrame(std::move(guarded_meta));
   x_guarded_meta->is_leaf_ = false;
-  x_guarded_meta->right_most_child_swip_ = x_guarded_root.bf();
+  x_guarded_meta->right_most_child_swip_.FromBufferFrame(x_guarded_root.bf());
 
   // Record WAL
   if (config_.enable_wal_) {
@@ -205,11 +203,11 @@ void BTreeGeneric::SplitRootMayJump(lean_txid_t sys_tx_id,
 
   // 3.2. move half of the old root to the new left,
   // 3.3. insert separator key into new root,
-  x_guarded_new_root->right_most_child_swip_ = x_guarded_old_root.bf();
+  x_guarded_new_root->right_most_child_swip_.FromBufferFrame(x_guarded_old_root.bf());
   x_guarded_old_root->Split(x_guarded_new_root, x_guarded_new_left, sep_info);
 
   // 3.4. update meta node to point to new root
-  x_guarded_meta->right_most_child_swip_ = x_guarded_new_root.bf();
+  x_guarded_meta->right_most_child_swip_.FromBufferFrame(x_guarded_new_root.bf());
   height_++;
 }
 
@@ -312,9 +310,9 @@ bool BTreeGeneric::TryMergeMayJump(lean_txid_t sys_tx_id, BufferFrame& to_merge,
     }
 
     if (config_.enable_wal_) {
-      guarded_parent.SyncSystemTxId(sys_tx_id);
-      guarded_child.SyncSystemTxId(sys_tx_id);
-      guarded_left.SyncSystemTxId(sys_tx_id);
+      x_guarded_parent.SyncSystemTxId(sys_tx_id);
+      x_guarded_child.SyncSystemTxId(sys_tx_id);
+      x_guarded_left.SyncSystemTxId(sys_tx_id);
     }
 
     x_guarded_left.Reclaim();
@@ -345,9 +343,9 @@ bool BTreeGeneric::TryMergeMayJump(lean_txid_t sys_tx_id, BufferFrame& to_merge,
     }
 
     if (config_.enable_wal_) {
-      guarded_parent.SyncSystemTxId(sys_tx_id);
-      guarded_child.SyncSystemTxId(sys_tx_id);
-      guarded_right.SyncSystemTxId(sys_tx_id);
+      x_guarded_parent.SyncSystemTxId(sys_tx_id);
+      x_guarded_child.SyncSystemTxId(sys_tx_id);
+      x_guarded_right.SyncSystemTxId(sys_tx_id);
     }
 
     x_guarded_child.Reclaim();
@@ -395,8 +393,9 @@ int16_t BTreeGeneric::MergeLeftIntoRight(ExclusiveGuardedBufferFrame<BTreeNode>&
     return 1;
   }
 
-  if (full_merge_or_nothing)
+  if (full_merge_or_nothing) {
     return 0;
+  }
 
   // Do a partial merge
   // Remove a key at a time from the merge and check if now it fits
@@ -533,8 +532,9 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(GuardedBufferFrame<BTreeNode
       }
       break;
     }
-    if (right_hand == pos)
+    if (right_hand == pos) {
       break;
+    }
 
     left_hand = right_hand - 1;
 
@@ -562,7 +562,7 @@ BTreeGeneric::XMergeReturnCode BTreeGeneric::XMerge(GuardedBufferFrame<BTreeNode
       }
     }
   }
-  if (guarded_child.guard_.state_ == GuardState::kMoved) {
+  if (guarded_nodes[0].guard_.state_ == GuardState::kMoved) {
     guarded_child = std::move(guarded_nodes[0]);
   }
   guarded_parent = std::move(x_guarded_parent);
@@ -646,7 +646,8 @@ void BTreeGeneric::Deserialize(std::unordered_map<std::string, std::string> map)
   dummy_guard.ToOptimisticSpin();
   while (true) {
     JUMPMU_TRY() {
-      meta_node_swip_ = store_->buffer_manager_->ResolveSwipMayJump(dummy_guard, meta_node_swip_);
+      auto* bf = store_->buffer_manager_->ResolveSwipMayJump(dummy_guard, meta_node_swip_);
+      meta_node_swip_.FromBufferFrame(bf);
       JUMPMU_BREAK;
     }
     JUMPMU_CATCH() {
@@ -700,7 +701,7 @@ void BTreeGeneric::ToJsonRec(BTreeGeneric& btree, GuardedBufferFrame<BTreeNode>&
   }
 
   utils::JsonArray children_json_array;
-  for (auto i = 0u; i < guarded_node->num_slots_; ++i) {
+  for (auto i = 0U; i < guarded_node->num_slots_; ++i) {
     auto* child_swip = guarded_node->ChildSwip(i);
     GuardedBufferFrame<BTreeNode> guarded_child(btree.store_->buffer_manager_.get(), guarded_node,
                                                 *child_swip);
@@ -711,7 +712,7 @@ void BTreeGeneric::ToJsonRec(BTreeGeneric& btree, GuardedBufferFrame<BTreeNode>&
     children_json_array.AppendJsonObj(child_json_obj);
   }
 
-  if (guarded_node->right_most_child_swip_ != nullptr) {
+  if (!guarded_node->right_most_child_swip_.IsEmpty()) {
     GuardedBufferFrame<BTreeNode> guarded_child(btree.store_->buffer_manager_.get(), guarded_node,
                                                 guarded_node->right_most_child_swip_);
     utils::JsonObj child_json_obj;

@@ -200,7 +200,7 @@ public:
   uint8_t payload_[];
 
 public:
-  FatTuple(uint32_t payload_capacity)
+  explicit FatTuple(uint32_t payload_capacity)
       : Tuple(TupleFormat::kFat, 0, 0),
         payload_capacity_(payload_capacity),
         data_offset_(payload_capacity) {
@@ -255,23 +255,23 @@ public:
   }
 
 private:
-  void resize(uint32_t new_size);
+  void resize(uint32_t new_size); // NOLINT (fixme)
 
-  inline FatTupleDelta& get_delta(uint16_t i) {
+  inline FatTupleDelta& get_delta(uint16_t i) { // NOLINT (fixme)
     LEAN_DCHECK(i < num_deltas_);
     return *reinterpret_cast<FatTupleDelta*>(payload_ + get_delta_offsets()[i]);
   }
 
-  inline const FatTupleDelta& get_delta(uint16_t i) const {
+  inline const FatTupleDelta& get_delta(uint16_t i) const { // NOLINT (fixme)
     LEAN_DCHECK(i < num_deltas_);
     return *reinterpret_cast<const FatTupleDelta*>(payload_ + get_delta_offsets()[i]);
   }
 
-  inline uint16_t* get_delta_offsets() {
+  inline uint16_t* get_delta_offsets() { // NOLINT (fixme)
     return reinterpret_cast<uint16_t*>(payload_ + val_size_);
   }
 
-  inline const uint16_t* get_delta_offsets() const {
+  inline const uint16_t* get_delta_offsets() const { // NOLINT (fixme)
     return reinterpret_cast<const uint16_t*>(payload_ + val_size_);
   }
 
@@ -299,7 +299,7 @@ struct PACKED DanglingPointer {
 public:
   DanglingPointer() = default;
 
-  DanglingPointer(const BTreeIterMut* x_iter)
+  explicit DanglingPointer(const BTreeIterMut* x_iter)
       : bf_(x_iter->guarded_leaf_.bf_),
         latch_version_should_be_(x_iter->guarded_leaf_.guard_.version_),
         head_slot_(x_iter->slot_id_) {

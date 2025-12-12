@@ -41,13 +41,13 @@ public:
   JsonObj& operator=(const JsonObj&) = delete;
 
   /// Move constructor
-  JsonObj(JsonObj&& other) {
+  JsonObj(JsonObj&& other) noexcept {
     // call move assignment
     *this = std::move(other);
   }
 
   /// Move assignment
-  JsonObj& operator=(JsonObj&& other);
+  JsonObj& operator=(JsonObj&& other) noexcept;
 
   std::string Serialize() const;
   Result<void> Deserialize(std::string_view json);
@@ -104,13 +104,13 @@ public:
   JsonArray& operator=(const JsonArray&) = delete;
 
   /// Move constructor
-  JsonArray(JsonArray&& other) {
+  JsonArray(JsonArray&& other) noexcept {
     // call move assignment
     *this = std::move(other);
   }
 
   /// Move assignment
-  JsonArray& operator=(JsonArray&& other) {
+  JsonArray& operator=(JsonArray&& other) noexcept {
     if (this != &other) {
       doc_.SetArray();
       doc_.Swap(other.doc_);

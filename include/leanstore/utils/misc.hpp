@@ -131,7 +131,7 @@ inline std::string ToHex(const uint8_t* buf, size_t size) {
   static const char kSHexDigits[] = "0123456789ABCDEF";
   std::string output;
   output.reserve(size * 2);
-  for (size_t i = 0u; i < size; i++) {
+  for (size_t i = 0U; i < size; i++) {
     output.push_back(kSHexDigits[buf[i] >> 4]);
     output.push_back(kSHexDigits[buf[i] & 15]);
   }
@@ -158,7 +158,7 @@ public:
   ALIGNAS(Alignment) uint8_t* buffer_;
 
 public:
-  AlignedBuffer(size_t size)
+  explicit AlignedBuffer(size_t size)
       : buffer_(reinterpret_cast<uint8_t*>(std::aligned_alloc(Alignment, size))) {
   }
 

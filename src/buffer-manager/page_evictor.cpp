@@ -162,7 +162,7 @@ void PageEvictor::PickBufferFramesToCool(Partition& target_partition) {
 
 void PageEvictor::RandomBufferFrames2CoolOrEvict() {
   cool_candidate_bfs_.clear();
-  for (auto i = 0u; i < store_->store_option_->buffer_frame_recycle_batch_size_; i++) {
+  for (auto i = 0U; i < store_->store_option_->buffer_frame_recycle_batch_size_; i++) {
     auto* random_bf = &store_->buffer_manager_->RandomBufferFrame();
     DoNotOptimize(random_bf->header_.state_);
     cool_candidate_bfs_.push_back(random_bf);

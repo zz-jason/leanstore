@@ -5,6 +5,8 @@
 #include "leanstore/cpp/base/result.hpp"
 
 #include <cassert>
+#include <functional>
+#include <optional>
 
 #define RAPIDJSON_NAMESPACE leanstore::rapidjson
 #define RAPIDJSON_NAMESPACE_BEGIN namespace leanstore::rapidjson {
@@ -19,13 +21,13 @@
 #undef RAPIDJSON_NAMESPACE
 
 #include <cstdint>
-#include <expected>
+#include <format>
 #include <string>
 #include <string_view>
 
 namespace leanstore::utils {
 
-JsonObj& JsonObj::operator=(JsonObj&& other) {
+JsonObj& JsonObj::operator=(JsonObj&& other) noexcept {
   if (this != &other) {
     doc_.SetObject();
     doc_.Swap(other.doc_);

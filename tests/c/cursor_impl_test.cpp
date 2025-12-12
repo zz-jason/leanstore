@@ -1,5 +1,6 @@
 #include "lean_test_suite.hpp"
 #include "leanstore/c/leanstore.h"
+#include "leanstore/common/status.h"
 #include "leanstore/common/types.h"
 
 #include "gtest/gtest.h"
@@ -7,6 +8,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <numeric>
 #include <random>
 #include <string>
 #include <vector>

@@ -23,17 +23,17 @@ class BMOptimisticGuard {
 public:
   HybridGuard guard_;
 
-  BMOptimisticGuard(HybridMutex& lock) : guard_(&lock) {
+  explicit BMOptimisticGuard(HybridMutex& lock) : guard_(&lock) {
     guard_.ToOptimisticOrJump();
   }
 
   BMOptimisticGuard() = delete;
   BMOptimisticGuard(BMOptimisticGuard& other) = delete; // copy constructor
   // move constructor
-  BMOptimisticGuard(BMOptimisticGuard&& other) : guard_(std::move(other.guard_)) {
+  BMOptimisticGuard(BMOptimisticGuard&& other) noexcept : guard_(std::move(other.guard_)) {
   }
   BMOptimisticGuard& operator=(BMOptimisticGuard& other) = delete;
-  BMOptimisticGuard& operator=(BMOptimisticGuard&& other) {
+  BMOptimisticGuard& operator=(BMOptimisticGuard&& other) noexcept {
     guard_ = std::move(other.guard_);
     return *this;
   }
@@ -48,7 +48,8 @@ private:
   BMOptimisticGuard& optimistic_guard_; // our basis
 
 public:
-  BMExclusiveGuard(BMOptimisticGuard& optimistic_guard) : optimistic_guard_(optimistic_guard) {
+  explicit BMExclusiveGuard(BMOptimisticGuard& optimistic_guard)
+      : optimistic_guard_(optimistic_guard) {
     optimistic_guard_.guard_.TryToExclusiveMayJump();
     JUMPMU_REGISTER_STACK_OBJECT(this);
   }
@@ -68,7 +69,7 @@ private:
   const bool was_exclusive_;
 
 public:
-  BMExclusiveUpgradeIfNeeded(HybridGuard& guard)
+  explicit BMExclusiveUpgradeIfNeeded(HybridGuard& guard)
       : guard_(guard),
         was_exclusive_(guard.state_ == GuardState::kExclusivePessimistic) {
     guard_.TryToExclusiveMayJump();
@@ -90,7 +91,8 @@ private:
   BMOptimisticGuard& optimistic_guard_; // our basis
 
 public:
-  BMSharedGuard(BMOptimisticGuard& optimistic_guard) : optimistic_guard_(optimistic_guard) {
+  explicit BMSharedGuard(BMOptimisticGuard& optimistic_guard)
+      : optimistic_guard_(optimistic_guard) {
     optimistic_guard_.guard_.TryToSharedMayJump();
     JUMPMU_REGISTER_STACK_OBJECT(this);
   }

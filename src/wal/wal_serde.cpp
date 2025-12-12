@@ -13,31 +13,31 @@ namespace leanstore {
 
 namespace {
 
-static constexpr auto kWalType = "type";
-static constexpr auto kLsn = "lsn";
-static constexpr auto kSize = "size";
-static constexpr auto kSysTxId = "sys_tx";
-static constexpr auto kPageId = "page_id";
-static constexpr auto kPageVersion = "page_version";
-static constexpr auto kBtreeId = "btree_id";
-static constexpr auto kIsLeaf = "is_leaf";
-static constexpr auto kParent = "parent";
-static constexpr auto kNewLhs = "new_lhs";
-static constexpr auto kNewRhs = "new_rhs";
-static constexpr auto kSepSlot = "sep_slot";
-static constexpr auto kSepSize = "sep_size";
-static constexpr auto kSepTruncated = "sep_truncated";
-static constexpr auto kKeySize = "key_size";
-static constexpr auto kValSize = "val_size";
-static constexpr auto kUpdateDescSize = "update_desc_size";
-static constexpr auto kDeltaSize = "delta_size";
-static constexpr auto kWorkerId = "worker";
-static constexpr auto kTxId = "tx";
-static constexpr auto kPrevLsn = "prev_lsn";
-static constexpr auto kPrevWorkerId = "prev_worker";
-static constexpr auto kPrevTxId = "prev_tx";
-static constexpr auto kPrevCmd = "prev_cmd";
-static constexpr auto kXorCmdId = "xor_cmd_id";
+constexpr auto kWalType = "type";
+constexpr auto kLsn = "lsn";
+constexpr auto kSize = "size";
+constexpr auto kSysTxId = "sys_tx";
+constexpr auto kPageId = "page_id";
+constexpr auto kPageVersion = "page_version";
+constexpr auto kBtreeId = "btree_id";
+constexpr auto kIsLeaf = "is_leaf";
+constexpr auto kParent = "parent";
+constexpr auto kNewLhs = "new_lhs";
+constexpr auto kNewRhs = "new_rhs";
+constexpr auto kSepSlot = "sep_slot";
+constexpr auto kSepSize = "sep_size";
+constexpr auto kSepTruncated = "sep_truncated";
+constexpr auto kKeySize = "key_size";
+constexpr auto kValSize = "val_size";
+constexpr auto kUpdateDescSize = "update_desc_size";
+constexpr auto kDeltaSize = "delta_size";
+constexpr auto kWorkerId = "worker";
+constexpr auto kTxId = "tx";
+constexpr auto kPrevLsn = "prev_lsn";
+constexpr auto kPrevWorkerId = "prev_worker";
+constexpr auto kPrevTxId = "prev_tx";
+constexpr auto kPrevCmd = "prev_cmd";
+constexpr auto kXorCmdId = "xor_cmd_id";
 
 } // namespace
 

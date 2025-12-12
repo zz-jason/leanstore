@@ -11,7 +11,7 @@ namespace leanstore {
 template <typename T>
 class CoroUniqueLock {
 public:
-  CoroUniqueLock(T& coro_mutex) : coro_mutex_(coro_mutex) {
+  explicit CoroUniqueLock(T& coro_mutex) : coro_mutex_(coro_mutex) {
     lock();
   }
 
@@ -50,7 +50,7 @@ private:
 template <typename T>
 class CoroSharedLock {
 public:
-  CoroSharedLock(T& coro_mutex) : coro_mutex_(coro_mutex) {
+  explicit CoroSharedLock(T& coro_mutex) : coro_mutex_(coro_mutex) {
     coro_mutex_.lock_shared();
   }
 
@@ -79,8 +79,8 @@ public:
     kMoved,
   };
 
-  CoroHybridLock(CoroHybridMutex* hybrid_mutex = nullptr,
-                 uint64_t version_on_lock = kVersionUnlocked)
+  explicit CoroHybridLock(CoroHybridMutex* hybrid_mutex = nullptr,
+                          uint64_t version_on_lock = kVersionUnlocked)
       : hybrid_mutex_(hybrid_mutex),
         version_on_lock_(version_on_lock),
         mutex_state_(version_on_lock == kVersionUnlocked ? State::kUninitialized
@@ -95,7 +95,7 @@ public:
   }
 
   // move constructor
-  CoroHybridLock(CoroHybridLock&& other)
+  CoroHybridLock(CoroHybridLock&& other) noexcept
       : hybrid_mutex_(other.hybrid_mutex_),
         version_on_lock_(other.version_on_lock_),
         mutex_state_(other.mutex_state_),
@@ -107,7 +107,7 @@ public:
   }
 
   // move assignment
-  CoroHybridLock& operator=(CoroHybridLock&& other) {
+  CoroHybridLock& operator=(CoroHybridLock&& other) noexcept {
     if (this != &other) {
       this->Unlock();
 

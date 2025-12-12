@@ -10,7 +10,6 @@
 
 namespace {
 
-constexpr auto kArgRecoverFrom = "recover_from";
 constexpr auto kArgWalPath = "wal_path";
 constexpr auto kFormat = "format";
 
@@ -65,9 +64,8 @@ WalDump::Format WalDump::FormatFromString(std::string_view format) {
       "json",
   };
 
-  std::string lower_format;
-  lower_format.resize(format.size());
-  std::transform(format.begin(), format.end(), lower_format.begin(), ::tolower);
+  auto lower_format = std::string(format.size(), '\0');
+  std::ranges::transform(format, lower_format.begin(), ::tolower);
 
   if (lower_format == kWalPrintFormatNames[static_cast<int>(Format::kText)]) {
     return Format::kText;

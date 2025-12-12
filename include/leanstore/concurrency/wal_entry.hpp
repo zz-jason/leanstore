@@ -42,7 +42,7 @@ public:
 public:
   WalEntry() = default;
 
-  WalEntry(Type type) : type_(type) {
+  explicit WalEntry(Type type) : type_(type) {
   }
 
   /// Returns the size of the WalEntry, including all the payloads.

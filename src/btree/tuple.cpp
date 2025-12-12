@@ -32,9 +32,13 @@ static_assert(sizeof(FatTuple) >= sizeof(ChainedTuple));
 // Tuple
 // -----------------------------------------------------------------------------
 
-static uint64_t MaxFatTupleLength() {
+namespace {
+
+uint64_t MaxFatTupleLength() {
   return BTreeNode::Size() - 1000;
 }
+
+} // namespace
 
 bool Tuple::ToFat(BTreeIterMut* x_iter) {
   // Process the chain tuple

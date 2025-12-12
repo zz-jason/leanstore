@@ -25,15 +25,11 @@
 #include <cerrno>
 #include <cstdint>
 #include <cstring>
-#include <expected>
 #include <format>
 #include <utility>
 #include <vector>
 
-#include <fcntl.h>
-#include <linux/perf_event.h>
-#include <sys/resource.h>
-#include <sys/time.h>
+#include <sys/mman.h>
 #include <unistd.h>
 
 namespace leanstore {
@@ -48,7 +44,7 @@ BufferManager::BufferManager(LeanStore* store) : store_(store) {
   // MAP_PRIVATE and MAP_ANONYMOUS, no underlying file descriptor to allocate
   // totalmemSize buffer pool with zero-initialized contents.
   void* underlying_buf =
-      mmap(NULL, total_mem_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+      mmap(nullptr, total_mem_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (underlying_buf == MAP_FAILED) {
     Log::Fatal("Failed to allocate memory for the buffer pool, bufferPoolSize={}, totalMemSize={}",
                store_->store_option_->buffer_pool_size_, total_mem_size);
@@ -98,7 +94,7 @@ void BufferManager::StartPageEvictors() {
 
   LEAN_DCHECK(num_buffer_providers <= num_partitions_);
   page_evictors_.reserve(num_buffer_providers);
-  for (auto i = 0u; i < num_buffer_providers; ++i) {
+  for (auto i = 0U; i < num_buffer_providers; ++i) {
     std::string thread_name = "PageEvictor";
     if (num_buffer_providers > 1) {
       thread_name += std::to_string(i);
@@ -106,11 +102,11 @@ void BufferManager::StartPageEvictors() {
 
     auto& store_option = store_->store_option_;
     auto running_cpu = store_option->worker_threads_ + store_option->enable_wal_ + i;
-    page_evictors_.push_back(std::make_unique<PageEvictor>(
-        store_, thread_name, running_cpu, num_bfs_, buffer_pool_, num_partitions_, partitions_));
+    page_evictors_.push_back(std::make_unique<PageEvictor>(store_, thread_name, running_cpu,
+                                                           num_bfs_, num_partitions_, partitions_));
   }
 
-  for (auto i = 0u; i < page_evictors_.size(); ++i) {
+  for (auto i = 0U; i < page_evictors_.size(); ++i) {
     page_evictors_[i]->Start();
   }
 }
@@ -155,7 +151,7 @@ Result<void> BufferManager::CheckpointAllBufferFrames() {
     const auto batch_capacity = store_->store_option_->buffer_write_batch_size_;
     auto small_buffer = SmallBuffer512Aligned<4096 * 1024>(page_size * batch_capacity);
     auto* buffer = small_buffer.Data();
-    auto batch_size = 0u;
+    auto batch_size = 0U;
 
     // the aio itself
     utils::AsyncIo aio(batch_capacity);
@@ -470,7 +466,8 @@ BufferFrame& BufferManager::ReadPageSync(lean_pid_t page_id) {
 
   while (true) {
     JUMPMU_TRY() {
-      swip = ResolveSwipMayJump(dummy_parent_guard, swip);
+      auto* bf = ResolveSwipMayJump(dummy_parent_guard, swip);
+      swip.FromBufferFrame(bf);
       JUMPMU_RETURN swip.AsBufferFrame();
     }
     JUMPMU_CATCH() {

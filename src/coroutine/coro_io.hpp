@@ -22,7 +22,7 @@ extern void CoroFsync(int32_t fd);
 
 class CoroIo {
 public:
-  CoroIo(uint64_t max_batch_size)
+  explicit CoroIo(uint64_t max_batch_size)
       : max_reqs_(max_batch_size),
         num_reqs_(0),
         io_events_(max_batch_size) {
