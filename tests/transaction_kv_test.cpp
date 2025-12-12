@@ -7,6 +7,7 @@
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/random_generator.hpp"
+#include "utils/small_vector.hpp"
 
 #include <gtest/gtest.h>
 
@@ -16,9 +17,6 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
-
-using namespace leanstore::utils;
-using namespace leanstore;
 
 namespace leanstore::test {
 
@@ -30,7 +28,7 @@ protected:
   TransactionKVTest() {
     auto* cur_test = ::testing::UnitTest::GetInstance()->current_test_info();
     auto cur_test_name =
-        std::string(cur_test->test_case_name()) + "_" + std::string(cur_test->name());
+        std::string(cur_test->test_suite_name()) + "_" + std::string(cur_test->name());
     auto* option = lean_store_option_create(("/tmp/leanstore/" + cur_test_name).c_str());
     option->create_from_scratch_ = true;
     option->worker_threads_ = 3;
@@ -39,7 +37,7 @@ protected:
     store_ = std::move(res.value());
   }
 
-  ~TransactionKVTest() = default;
+  ~TransactionKVTest() override = default;
 };
 
 TEST_F(TransactionKVTest, Create) {
@@ -89,7 +87,7 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
   for (size_t i = 0; i < num_keys; ++i) {
     std::string key("key_btree_VI_xxxxxxxxxxxx_" + std::to_string(i));
     std::string val("VAL_BTREE_VI_YYYYYYYYYYYY_" + std::to_string(i));
-    kv_to_test.push_back(std::make_tuple(key, val));
+    kv_to_test.emplace_back(key, val);
   }
 
   // create leanstore btree for table records
@@ -165,13 +163,13 @@ TEST_F(TransactionKVTest, Insert1000KVs) {
     ssize_t num_keys(1000);
     CoroEnv::CurTxMgr().StartTx();
     for (ssize_t i = 0; i < num_keys; ++i) {
-      auto key = RandomGenerator::RandAlphString(24);
+      auto key = utils::RandomGenerator::RandAlphString(24);
       if (unique_keys.find(key) != unique_keys.end()) {
         i--;
         continue;
       }
       unique_keys.insert(key);
-      auto val = RandomGenerator::RandAlphString(128);
+      auto val = utils::RandomGenerator::RandAlphString(128);
       EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
                               Slice((const uint8_t*)val.data(), val.size())),
                 OpCode::kOK);
@@ -199,13 +197,13 @@ TEST_F(TransactionKVTest, InsertDuplicates) {
     std::set<std::string> unique_keys;
     ssize_t num_keys(100);
     for (ssize_t i = 0; i < num_keys; ++i) {
-      auto key = RandomGenerator::RandAlphString(24);
+      auto key = utils::RandomGenerator::RandAlphString(24);
       if (unique_keys.find(key) != unique_keys.end()) {
         i--;
         continue;
       }
       unique_keys.insert(key);
-      auto val = RandomGenerator::RandAlphString(128);
+      auto val = utils::RandomGenerator::RandAlphString(128);
       CoroEnv::CurTxMgr().StartTx();
       EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
                               Slice((const uint8_t*)val.data(), val.size())),
@@ -215,7 +213,7 @@ TEST_F(TransactionKVTest, InsertDuplicates) {
 
     // insert duplicated keys
     for (auto& key : unique_keys) {
-      auto val = RandomGenerator::RandAlphString(128);
+      auto val = utils::RandomGenerator::RandAlphString(128);
       CoroEnv::CurTxMgr().StartTx();
       EXPECT_EQ(btree->Insert(Slice(key), Slice(val)), OpCode::kDuplicated);
       CoroEnv::CurTxMgr().CommitTx();
@@ -242,13 +240,13 @@ TEST_F(TransactionKVTest, Remove) {
     std::set<std::string> unique_keys;
     ssize_t num_keys(100);
     for (ssize_t i = 0; i < num_keys; ++i) {
-      auto key = RandomGenerator::RandAlphString(24);
+      auto key = utils::RandomGenerator::RandAlphString(24);
       if (unique_keys.find(key) != unique_keys.end()) {
         i--;
         continue;
       }
       unique_keys.insert(key);
-      auto val = RandomGenerator::RandAlphString(128);
+      auto val = utils::RandomGenerator::RandAlphString(128);
 
       CoroEnv::CurTxMgr().StartTx();
       EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
@@ -291,13 +289,13 @@ TEST_F(TransactionKVTest, RemoveNotExisted) {
     std::set<std::string> unique_keys;
     ssize_t num_keys(100);
     for (ssize_t i = 0; i < num_keys; ++i) {
-      auto key = RandomGenerator::RandAlphString(24);
+      auto key = utils::RandomGenerator::RandAlphString(24);
       if (unique_keys.find(key) != unique_keys.end()) {
         i--;
         continue;
       }
       unique_keys.insert(key);
-      auto val = RandomGenerator::RandAlphString(128);
+      auto val = utils::RandomGenerator::RandAlphString(128);
 
       CoroEnv::CurTxMgr().StartTx();
       EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
@@ -308,7 +306,7 @@ TEST_F(TransactionKVTest, RemoveNotExisted) {
 
     // remove keys not existed
     for (ssize_t i = 0; i < num_keys; ++i) {
-      auto key = RandomGenerator::RandAlphString(24);
+      auto key = utils::RandomGenerator::RandAlphString(24);
       if (unique_keys.find(key) != unique_keys.end()) {
         i--;
         continue;
@@ -341,13 +339,13 @@ TEST_F(TransactionKVTest, RemoveFromOthers) {
     // insert numKVs tuples
     ssize_t num_keys(100);
     for (ssize_t i = 0; i < num_keys; ++i) {
-      auto key = RandomGenerator::RandAlphString(24);
+      auto key = utils::RandomGenerator::RandAlphString(24);
       if (unique_keys.find(key) != unique_keys.end()) {
         i--;
         continue;
       }
       unique_keys.insert(key);
-      auto val = RandomGenerator::RandAlphString(128);
+      auto val = utils::RandomGenerator::RandAlphString(128);
 
       CoroEnv::CurTxMgr().StartTx();
       EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
@@ -400,9 +398,9 @@ TEST_F(TransactionKVTest, Update) {
   const size_t val_size = 120;
   std::vector<std::tuple<std::string, std::string>> kv_to_test;
   for (size_t i = 0; i < num_keys; ++i) {
-    auto key = RandomGenerator::RandAlphString(24);
-    auto val = RandomGenerator::RandAlphString(val_size);
-    kv_to_test.push_back(std::make_tuple(key, val));
+    auto key = utils::RandomGenerator::RandAlphString(24);
+    auto val = utils::RandomGenerator::RandAlphString(val_size);
+    kv_to_test.emplace_back(key, val);
   }
 
   const auto* btree_name = "testTree1";
@@ -424,15 +422,15 @@ TEST_F(TransactionKVTest, Update) {
     }
 
     // update all the values to this newVal
-    auto new_val = RandomGenerator::RandAlphString(val_size);
+    auto new_val = utils::RandomGenerator::RandAlphString(val_size);
     auto update_call_back = [&](MutableSlice mut_raw_val) {
       std::memcpy(mut_raw_val.data(), new_val.data(), mut_raw_val.size());
     };
 
     // update in the same worker
     const uint64_t update_desc_buf_size = UpdateDesc::Size(1);
-    uint8_t update_desc_buf[update_desc_buf_size];
-    auto* update_desc = UpdateDesc::CreateFrom(update_desc_buf);
+    SmallBuffer256 update_desc_buf(update_desc_buf_size);
+    auto* update_desc = UpdateDesc::CreateFrom(update_desc_buf.Data());
     update_desc->num_slots_ = 1;
     update_desc->update_slots_[0].offset_ = 0;
     update_desc->update_slots_[0].size_ = val_size;
@@ -475,8 +473,8 @@ TEST_F(TransactionKVTest, ScanAsc) {
   std::string smallest;
   std::string bigest;
   for (size_t i = 0; i < num_keys; ++i) {
-    auto key = RandomGenerator::RandAlphString(24);
-    auto val = RandomGenerator::RandAlphString(val_size);
+    auto key = utils::RandomGenerator::RandAlphString(24);
+    auto val = utils::RandomGenerator::RandAlphString(val_size);
     if (kv_to_test.find(key) != kv_to_test.end()) {
       i--;
       continue;
@@ -553,8 +551,8 @@ TEST_F(TransactionKVTest, ScanDesc) {
   std::string smallest;
   std::string bigest;
   for (size_t i = 0; i < num_keys; ++i) {
-    auto key = RandomGenerator::RandAlphString(24);
-    auto val = RandomGenerator::RandAlphString(val_size);
+    auto key = utils::RandomGenerator::RandAlphString(24);
+    auto val = utils::RandomGenerator::RandAlphString(val_size);
     if (kv_to_test.find(key) != kv_to_test.end()) {
       i--;
       continue;
@@ -631,8 +629,8 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
   std::string smallest;
   std::string bigest;
   for (size_t i = 0; i < num_keys; ++i) {
-    auto key = RandomGenerator::RandAlphString(24);
-    auto val = RandomGenerator::RandAlphString(val_size);
+    auto key = utils::RandomGenerator::RandAlphString(24);
+    auto val = utils::RandomGenerator::RandAlphString(val_size);
     if (kv_to_test.find(key) != kv_to_test.end()) {
       i--;
       continue;
@@ -647,7 +645,7 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
   }
 
   const auto* btree_name = "InsertAfterRemove";
-  std::string new_val = RandomGenerator::RandAlphString(val_size);
+  std::string new_val = utils::RandomGenerator::RandAlphString(val_size);
   std::string copied_value;
   auto copy_value_out = [&](Slice val) {
     copied_value = std::string((const char*)val.data(), val.size());
@@ -681,8 +679,8 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
 
       // update should fail
       const uint64_t update_desc_buf_size = UpdateDesc::Size(1);
-      uint8_t update_desc_buf[update_desc_buf_size];
-      auto* update_desc = UpdateDesc::CreateFrom(update_desc_buf);
+      SmallBuffer256 update_desc_buf(update_desc_buf_size);
+      auto* update_desc = UpdateDesc::CreateFrom(update_desc_buf.Data());
       update_desc->num_slots_ = 1;
       update_desc->update_slots_[0].offset_ = 0;
       update_desc->update_slots_[0].size_ = val_size;
@@ -733,8 +731,8 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
   std::string smallest;
   std::string bigest;
   for (size_t i = 0; i < num_keys; ++i) {
-    auto key = RandomGenerator::RandAlphString(24);
-    auto val = RandomGenerator::RandAlphString(val_size);
+    auto key = utils::RandomGenerator::RandAlphString(24);
+    auto val = utils::RandomGenerator::RandAlphString(val_size);
     if (kv_to_test.find(key) != kv_to_test.end()) {
       i--;
       continue;
@@ -749,7 +747,7 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
   }
 
   const auto* btree_name = "InsertAfterRemoveDifferentWorkers";
-  std::string new_val = RandomGenerator::RandAlphString(val_size);
+  std::string new_val = utils::RandomGenerator::RandAlphString(val_size);
   std::string copied_value;
   auto copy_value_out = [&](Slice val) {
     copied_value = std::string((const char*)val.data(), val.size());
@@ -788,8 +786,8 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
 
       // update should fail
       const uint64_t update_desc_buf_size = UpdateDesc::Size(1);
-      uint8_t update_desc_buf[update_desc_buf_size];
-      auto* update_desc = UpdateDesc::CreateFrom(update_desc_buf);
+      SmallBuffer256 update_desc_buf(update_desc_buf_size);
+      auto* update_desc = UpdateDesc::CreateFrom(update_desc_buf.Data());
       update_desc->num_slots_ = 1;
       update_desc->update_slots_[0].offset_ = 0;
       update_desc->update_slots_[0].size_ = val_size;
@@ -836,8 +834,8 @@ TEST_F(TransactionKVTest, ConcurrentInsertWithSplit) {
     for (auto i = 0; !stop; i++) {
       CoroEnv::CurTxMgr().StartTx();
       LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
-      auto key = std::format("{}_{}_{}", RandomGenerator::RandAlphString(key_size), 0, i);
-      auto val = RandomGenerator::RandAlphString(val_size);
+      auto key = std::format("{}_{}_{}", utils::RandomGenerator::RandAlphString(key_size), 0, i);
+      auto val = utils::RandomGenerator::RandAlphString(val_size);
       auto res = btree->Insert(key, val);
       EXPECT_EQ(res, OpCode::kOK);
     }
@@ -848,8 +846,8 @@ TEST_F(TransactionKVTest, ConcurrentInsertWithSplit) {
     for (auto i = 0; !stop; i++) {
       CoroEnv::CurTxMgr().StartTx();
       LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
-      auto key = std::format("{}_{}_{}", RandomGenerator::RandAlphString(key_size), 1, i);
-      auto val = RandomGenerator::RandAlphString(val_size);
+      auto key = std::format("{}_{}_{}", utils::RandomGenerator::RandAlphString(key_size), 1, i);
+      auto val = utils::RandomGenerator::RandAlphString(val_size);
       auto res = btree->Insert(key, val);
       EXPECT_EQ(res, OpCode::kOK);
     }

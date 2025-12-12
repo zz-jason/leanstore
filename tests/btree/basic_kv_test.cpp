@@ -24,7 +24,7 @@ protected:
 
   BasicKVTest() = default;
 
-  ~BasicKVTest() = default;
+  ~BasicKVTest() override = default;
 
   void SetUp() override {
     // Create a leanstore instance for the test case
@@ -89,7 +89,7 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
   for (size_t i = 0; i < num_keys; ++i) {
     std::string key("key_btree_LL_xxxxxxxxxxxx_" + std::to_string(i));
     std::string val("VAL_BTREE_LL_YYYYYYYYYYYY_" + std::to_string(i));
-    kv_to_test.push_back(std::make_tuple(key, val));
+    kv_to_test.emplace_back(key, val);
   }
 
   // create leanstore btree for table records
@@ -146,7 +146,7 @@ TEST_F(BasicKVTest, BasicKVInsertDuplicatedKey) {
   for (size_t i = 0; i < num_keys; ++i) {
     std::string key("key_btree_LL_xxxxxxxxxxxx_" + std::to_string(i));
     std::string val("VAL_BTREE_LL_YYYYYYYYYYYY_" + std::to_string(i));
-    kv_to_test.push_back(std::make_tuple(key, val));
+    kv_to_test.emplace_back(key, val);
   }
   // create leanstore btree for table records
   const auto* btree_name = "testTree1";
@@ -208,12 +208,12 @@ TEST_F(BasicKVTest, BasicKVScanAscAndScanDesc) {
                     std::string(reinterpret_cast<char*>(key_buffer), key_size));
     std::string val("VAL_BTREE_LL_YYYYYYYYYYYY_" +
                     std::string(reinterpret_cast<char*>(key_buffer), key_size));
-    kv_to_test.push_back(std::make_tuple(key, val));
+    kv_to_test.emplace_back(key, val);
   }
 
   // create leanstore btree for table records
   auto* cur_test = ::testing::UnitTest::GetInstance()->current_test_info();
-  auto btree_name = std::string(cur_test->test_case_name()) + "_" + std::string(cur_test->name());
+  auto btree_name = std::string(cur_test->test_suite_name()) + "_" + std::string(cur_test->name());
 
   store_->ExecSync(0, [&]() {
     auto res = store_->CreateBasicKv(btree_name);

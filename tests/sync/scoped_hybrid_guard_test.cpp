@@ -26,7 +26,7 @@ protected:
   ScopedHybridGuardTest() {
     auto* cur_test = ::testing::UnitTest::GetInstance()->current_test_info();
     auto cur_test_name =
-        std::string(cur_test->test_case_name()) + "_" + std::string(cur_test->name());
+        std::string(cur_test->test_suite_name()) + "_" + std::string(cur_test->name());
     auto* option = lean_store_option_create(("/tmp/leanstore/" + cur_test_name).c_str());
     option->create_from_scratch_ = true;
     option->worker_threads_ = 2;
@@ -35,21 +35,21 @@ protected:
     store_ = std::move(res.value());
   }
 
-  ~ScopedHybridGuardTest() = default;
+  ~ScopedHybridGuardTest() override = default;
 
-  static LatchMode get_latch_mode(const ScopedHybridGuard& guard) {
+  static LatchMode GetLatchMode(const ScopedHybridGuard& guard) {
     return guard.latch_mode_;
   }
 
-  static uint64_t get_version_on_lock(const ScopedHybridGuard& guard) {
+  static uint64_t GetVersionOnLock(const ScopedHybridGuard& guard) {
     return guard.version_on_lock_;
   }
 
-  static bool is_encountered_contention(const ScopedHybridGuard& guard) {
+  static bool IsEncounteredContention(const ScopedHybridGuard& guard) {
     return guard.contented_;
   }
 
-  static bool is_locked(const ScopedHybridGuard& guard) {
+  static bool IsLocked(const ScopedHybridGuard& guard) {
     return guard.locked_;
   }
 };
@@ -71,10 +71,10 @@ TEST_F(ScopedHybridGuardTest, OptimisticSpinAfterExclusive) {
   store_->ExecAsync(0, [&]() {
     // lock exclusively
     ScopedHybridGuard guard(latch, LatchMode::kExclusivePessimistic);
-    EXPECT_EQ(get_latch_mode(guard), LatchMode::kExclusivePessimistic);
-    EXPECT_EQ(get_version_on_lock(guard), 0);
-    EXPECT_FALSE(is_encountered_contention(guard));
-    EXPECT_TRUE(is_locked(guard));
+    EXPECT_EQ(GetLatchMode(guard), LatchMode::kExclusivePessimistic);
+    EXPECT_EQ(GetVersionOnLock(guard), 0);
+    EXPECT_FALSE(IsEncounteredContention(guard));
+    EXPECT_TRUE(IsLocked(guard));
 
     // allow the other thread to read
     start_to_read.store(true);
@@ -86,10 +86,10 @@ TEST_F(ScopedHybridGuardTest, OptimisticSpinAfterExclusive) {
 
     // unlock
     guard.Unlock();
-    EXPECT_EQ(get_latch_mode(guard), LatchMode::kExclusivePessimistic);
-    EXPECT_EQ(get_version_on_lock(guard), 0);
-    EXPECT_FALSE(is_encountered_contention(guard));
-    EXPECT_FALSE(is_locked(guard));
+    EXPECT_EQ(GetLatchMode(guard), LatchMode::kExclusivePessimistic);
+    EXPECT_EQ(GetVersionOnLock(guard), 0);
+    EXPECT_FALSE(IsEncounteredContention(guard));
+    EXPECT_FALSE(IsLocked(guard));
   });
 
   store_->ExecAsync(1, [&]() {
@@ -104,18 +104,18 @@ TEST_F(ScopedHybridGuardTest, OptimisticSpinAfterExclusive) {
 
         // lock optimistically, spin until the latch is not locked
         ScopedHybridGuard guard(latch, LatchMode::kOptimisticSpin);
-        EXPECT_EQ(get_latch_mode(guard), LatchMode::kOptimisticSpin);
-        EXPECT_EQ(get_version_on_lock(guard), 2);
-        EXPECT_TRUE(is_locked(guard));
+        EXPECT_EQ(GetLatchMode(guard), LatchMode::kOptimisticSpin);
+        EXPECT_EQ(GetVersionOnLock(guard), 2);
+        EXPECT_TRUE(IsLocked(guard));
 
         // read the value
         value_read = value;
 
         // jump if the latch is modified by others
         guard.Unlock();
-        EXPECT_EQ(get_latch_mode(guard), LatchMode::kOptimisticSpin);
-        EXPECT_EQ(get_version_on_lock(guard), 2);
-        EXPECT_FALSE(is_locked(guard));
+        EXPECT_EQ(GetLatchMode(guard), LatchMode::kOptimisticSpin);
+        EXPECT_EQ(GetVersionOnLock(guard), 2);
+        EXPECT_FALSE(IsLocked(guard));
 
         JUMPMU_BREAK;
       }
@@ -157,20 +157,20 @@ TEST_F(ScopedHybridGuardTest, OptimisticSpinBeforeExclusive) {
 
     // lock exclusively
     ScopedHybridGuard guard(latch, LatchMode::kExclusivePessimistic);
-    EXPECT_EQ(get_latch_mode(guard), LatchMode::kExclusivePessimistic);
-    EXPECT_EQ(get_version_on_lock(guard), 0);
-    EXPECT_FALSE(is_encountered_contention(guard));
-    EXPECT_TRUE(is_locked(guard));
+    EXPECT_EQ(GetLatchMode(guard), LatchMode::kExclusivePessimistic);
+    EXPECT_EQ(GetVersionOnLock(guard), 0);
+    EXPECT_FALSE(IsEncounteredContention(guard));
+    EXPECT_TRUE(IsLocked(guard));
 
     // write the value
     value = 42;
 
     // unlock
     guard.Unlock();
-    EXPECT_EQ(get_latch_mode(guard), LatchMode::kExclusivePessimistic);
-    EXPECT_EQ(get_version_on_lock(guard), 0);
-    EXPECT_FALSE(is_encountered_contention(guard));
-    EXPECT_FALSE(is_locked(guard));
+    EXPECT_EQ(GetLatchMode(guard), LatchMode::kExclusivePessimistic);
+    EXPECT_EQ(GetVersionOnLock(guard), 0);
+    EXPECT_FALSE(IsEncounteredContention(guard));
+    EXPECT_FALSE(IsLocked(guard));
 
     // allow the other thread to read
     start_to_read.store(true);
@@ -183,14 +183,14 @@ TEST_F(ScopedHybridGuardTest, OptimisticSpinBeforeExclusive) {
       JUMPMU_TRY() {
         // lock optimistically, spin until the latch is not locked
         ScopedHybridGuard guard(latch, LatchMode::kOptimisticSpin);
-        EXPECT_EQ(get_latch_mode(guard), LatchMode::kOptimisticSpin);
+        EXPECT_EQ(GetLatchMode(guard), LatchMode::kOptimisticSpin);
         if (jumped) {
-          EXPECT_EQ(get_version_on_lock(guard), 2);
+          EXPECT_EQ(GetVersionOnLock(guard), 2);
         } else {
-          EXPECT_EQ(get_version_on_lock(guard), 0);
+          EXPECT_EQ(GetVersionOnLock(guard), 0);
         }
-        EXPECT_FALSE(is_encountered_contention(guard));
-        EXPECT_TRUE(is_locked(guard));
+        EXPECT_FALSE(IsEncounteredContention(guard));
+        EXPECT_TRUE(IsLocked(guard));
 
         // allow the other thread to write
         start_to_write.store(true);
@@ -204,9 +204,9 @@ TEST_F(ScopedHybridGuardTest, OptimisticSpinBeforeExclusive) {
 
         // jump if the latch is modified by others
         guard.Unlock();
-        EXPECT_EQ(get_latch_mode(guard), LatchMode::kOptimisticSpin);
-        EXPECT_EQ(get_version_on_lock(guard), 2);
-        EXPECT_FALSE(is_locked(guard));
+        EXPECT_EQ(GetLatchMode(guard), LatchMode::kOptimisticSpin);
+        EXPECT_EQ(GetVersionOnLock(guard), 2);
+        EXPECT_FALSE(IsLocked(guard));
 
         JUMPMU_BREAK;
       }
@@ -292,7 +292,7 @@ TEST_F(ScopedHybridGuardTest, OptimisticBankTransfer) {
     for (int i = 0; i < 1000; i++) {
       {
         auto guard = ScopedHybridGuard(latch, LatchMode::kExclusivePessimistic);
-        EXPECT_TRUE(is_locked(guard));
+        EXPECT_TRUE(IsLocked(guard));
 
         // transfer random amount from a to b
         auto amount = utils::RandomGenerator::RandU64(0, a + 1);
@@ -302,7 +302,7 @@ TEST_F(ScopedHybridGuardTest, OptimisticBankTransfer) {
 
       {
         auto guard = ScopedHybridGuard(latch, LatchMode::kExclusivePessimistic);
-        EXPECT_TRUE(is_locked(guard));
+        EXPECT_TRUE(IsLocked(guard));
 
         // transfer random amount from b to a
         auto amount = utils::RandomGenerator::RandU64(0, b + 1);
@@ -348,7 +348,7 @@ TEST_F(ScopedHybridGuardTest, PessimisticBankTransfer) {
     for (int i = 0; i < 1000; i++) {
       {
         auto guard = ScopedHybridGuard(latch, LatchMode::kExclusivePessimistic);
-        EXPECT_TRUE(is_locked(guard));
+        EXPECT_TRUE(IsLocked(guard));
 
         // transfer random amount from a to b
         auto amount = utils::RandomGenerator::RandU64(0, a + 1);
@@ -358,7 +358,7 @@ TEST_F(ScopedHybridGuardTest, PessimisticBankTransfer) {
 
       {
         auto guard = ScopedHybridGuard(latch, LatchMode::kExclusivePessimistic);
-        EXPECT_TRUE(is_locked(guard));
+        EXPECT_TRUE(IsLocked(guard));
 
         // transfer random amount from b to a
         auto amount = utils::RandomGenerator::RandU64(0, b + 1);

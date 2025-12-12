@@ -30,6 +30,14 @@ jobs:
     - name: Clang-format
       run: cmake --build build/debug_tsan --target=check-format
 
+    - name: Clang-tidy on changed files
+      run: |
+        bash ".github/scripts/run-clang-tidy-pr.sh" \
+          "${{ github.event.pull_request.number }}" \
+          "${{ github.repository }}" \
+          "${{ secrets.GITHUB_TOKEN }}" \
+          "build/debug_tsan" \
+
     - name: Build
       run: cmake --build build/debug_tsan -j `nproc`
 

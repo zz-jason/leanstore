@@ -9,6 +9,7 @@
 #include "leanstore/cpp/base/result.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
+#include "utils/small_vector.hpp"
 
 #include <cstring>
 #include <expected>
@@ -17,8 +18,7 @@
 #include <unordered_map>
 #include <utility>
 
-namespace leanstore {
-namespace test {
+namespace leanstore::test {
 
 class Store;
 class StoreFactory {
@@ -56,20 +56,18 @@ public:
   virtual void AbortTx() = 0;
 
   // DDL operations
-  virtual Result<TableRef*> CreateTable(const std::string& tbl_name, bool implicit_tx = false) = 0;
+  virtual Result<TableRef*> CreateTable(const std::string& tbl_name, bool implicit_tx) = 0;
 
-  virtual Result<void> DropTable(const std::string& tbl_name, bool implicit_tx = false) = 0;
+  virtual Result<void> DropTable(const std::string& tbl_name, bool implicit_tx) = 0;
 
   // DML operations
-  virtual Result<void> Put(TableRef* tbl, Slice key, Slice val, bool implicit_tx = false) = 0;
+  virtual Result<void> Put(TableRef* tbl, Slice key, Slice val, bool implicit_tx) = 0;
 
-  virtual Result<uint64_t> Update(TableRef* tbl, Slice key, Slice val,
-                                  bool implicit_tx = false) = 0;
+  virtual Result<uint64_t> Update(TableRef* tbl, Slice key, Slice val, bool implicit_tx) = 0;
 
-  virtual Result<uint64_t> Get(TableRef* tbl, Slice key, std::string& val,
-                               bool implicit_tx = false) = 0;
+  virtual Result<uint64_t> Get(TableRef* tbl, Slice key, std::string& val, bool implicit_tx) = 0;
 
-  virtual Result<uint64_t> Delete(TableRef* tbl, Slice key, bool implicit_tx = false) = 0;
+  virtual Result<uint64_t> Delete(TableRef* tbl, Slice key, bool implicit_tx) = 0;
 };
 
 class TableRef {
@@ -120,19 +118,18 @@ public:
   void AbortTx() override;
 
   // DDL operations
-  Result<TableRef*> CreateTable(const std::string& tbl_name, bool implicit_tx = false) override;
+  Result<TableRef*> CreateTable(const std::string& tbl_name, bool implicit_tx) override;
 
-  Result<void> DropTable(const std::string& tbl_name, bool implicit_tx = false) override;
+  Result<void> DropTable(const std::string& tbl_name, bool implicit_tx) override;
 
   // DML operations
-  Result<void> Put(TableRef* tbl, Slice key, Slice val, bool implicit_tx = false) override;
+  Result<void> Put(TableRef* tbl, Slice key, Slice val, bool implicit_tx) override;
 
-  Result<uint64_t> Get(TableRef* tbl, Slice key, std::string& val,
-                       bool implicit_tx = false) override;
+  Result<uint64_t> Get(TableRef* tbl, Slice key, std::string& val, bool implicit_tx) override;
 
-  Result<uint64_t> Update(TableRef* tbl, Slice key, Slice val, bool implicit_tx = false) override;
+  Result<uint64_t> Update(TableRef* tbl, Slice key, Slice val, bool implicit_tx) override;
 
-  Result<uint64_t> Delete(TableRef* tbl, Slice key, bool implicit_tx = false) override;
+  Result<uint64_t> Delete(TableRef* tbl, Slice key, bool implicit_tx) override;
 };
 
 class LeanStoreMVCCTableRef : public TableRef {
@@ -292,8 +289,8 @@ inline Result<uint64_t> LeanStoreMVCCSession::Update(TableRef* tbl, Slice key, S
     });
 
     const uint64_t update_desc_buf_size = UpdateDesc::Size(1);
-    uint8_t update_desc_buf[update_desc_buf_size];
-    auto* update_desc = UpdateDesc::CreateFrom(update_desc_buf);
+    SmallBuffer256 update_desc_buf(update_desc_buf_size);
+    auto* update_desc = UpdateDesc::CreateFrom(update_desc_buf.Data());
     update_desc->num_slots_ = 1;
     update_desc->update_slots_[0].offset_ = 0;
     update_desc->update_slots_[0].size_ = val.size();
@@ -335,5 +332,4 @@ inline Result<uint64_t> LeanStoreMVCCSession::Delete(TableRef* tbl, Slice key, b
   return Error::General("Delete failed: " + ToString(res));
 }
 
-} // namespace test
-} // namespace leanstore
+} // namespace leanstore::test
