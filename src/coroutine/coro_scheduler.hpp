@@ -5,6 +5,7 @@
 #include "coroutine/coro_future.hpp"
 #include "coroutine/coro_session.hpp"
 #include "leanstore/cpp/base/log.hpp"
+#include "leanstore/cpp/base/range_splits.hpp"
 #include "utils/scoped_timer.hpp"
 
 #include <cassert>
@@ -129,33 +130,17 @@ inline std::shared_ptr<CoroFuture<R>> CoroScheduler::Submit(CoroSession* session
 
 inline void CoroScheduler::ParallelRange(
     uint64_t num_jobs, std::function<void(uint64_t job_begin, uint64_t job_end)>&& job_handler) {
-  auto num_executors = coro_executors_.size();
-  uint64_t jobs_per_thread = num_jobs / num_executors;
-  uint64_t num_remaining = num_jobs % num_executors;
-  uint64_t num_proceed_tasks = 0;
-  if (jobs_per_thread < num_executors) {
-    num_executors = num_remaining;
-  }
-
-  // To balance the workload among all threads:
-  // - the first numRemaining threads process jobsPerThread+1 tasks
-  // - other threads process jobsPerThread tasks
   std::vector<std::shared_ptr<CoroFuture<void>>> futures;
   std::vector<CoroSession*> reserved_sessions;
-  for (uint64_t i = 0; i < num_executors; i++) {
-    uint64_t begin = num_proceed_tasks;
-    uint64_t end = begin + jobs_per_thread;
-    if (num_remaining > 0) {
-      end++;
-      num_remaining--;
-    }
-    num_proceed_tasks = end;
-
+  RangeSplits<uint64_t> splitted_ranges(num_jobs, coro_executors_.size());
+  for (auto i = 0u; i < coro_executors_.size(); i++) {
     reserved_sessions.push_back(TryReserveCoroSession(i));
     assert(reserved_sessions.back() != nullptr &&
            "Failed to reserve a CoroSession for parallel range execution");
-    futures.emplace_back(
-        Submit(reserved_sessions.back(), [begin, end, job_handler]() { job_handler(begin, end); }));
+    auto range = splitted_ranges[i];
+    futures.emplace_back(Submit(reserved_sessions.back(), [range, &job_handler]() {
+      job_handler(range.begin(), range.end());
+    }));
   }
 
   for (auto& future : futures) {

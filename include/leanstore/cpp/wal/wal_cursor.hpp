@@ -17,8 +17,12 @@ namespace leanstore {
 /// Abstract WAL cursor interface.
 class WalCursor {
 public:
-  /// Create a new WAL cursor for the given WAL file path.
+  /// Create a new WAL cursor for the given WAL file.
   static Result<std::unique_ptr<WalCursor>> New(std::string_view wal_path);
+
+  /// Create WAL cursors for each WAL file.
+  static Result<std::vector<std::unique_ptr<WalCursor>>> NewWalCursors(
+      const std::vector<std::string>& wal_file_paths);
 
   /// Default constructor.
   WalCursor() = default;

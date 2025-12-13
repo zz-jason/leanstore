@@ -6,10 +6,10 @@
 #include "leanstore/concurrency/history_storage.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/cpp/base/defer.hpp"
+#include "leanstore/cpp/base/small_vector.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/random_generator.hpp"
-#include "utils/small_vector.hpp"
 
 #include <gtest/gtest.h>
 

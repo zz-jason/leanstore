@@ -17,6 +17,8 @@ class Error;
 /// format, all the other code will be generated automatically.
 #define LEAN_ERROR_CODE_LIST(ACTION)                                                               \
   ACTION(General, 001, "{}")                                                                       \
+  ACTION(NotImplemented, 002, "{}")                                                                \
+  ACTION(InvalidArgument, 003, "{}")                                                               \
   ACTION(Aio, 010, "AIO operation failed, operation={}, errno={}, strerror={}")                    \
   ACTION(FileOpen, 100, "Open file failed, file={}, errno={}, strerror={}")                        \
   ACTION(FileClose, 101, "Close file failed, file={}, errno={}, strerror={}")                      \

@@ -3,9 +3,9 @@
 #include "leanstore/common/utils.h"
 #include "leanstore/cpp/base/defer.hpp"
 #include "leanstore/cpp/base/log.hpp"
+#include "leanstore/cpp/base/small_vector.hpp"
 #include "leanstore/utils/parallelize.hpp"
 #include "leanstore/utils/random_generator.hpp"
-#include "utils/small_vector.hpp"
 #include "ycsb.hpp"
 #include "ycsb_args.hpp"
 

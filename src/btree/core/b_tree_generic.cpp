@@ -12,10 +12,10 @@
 #include "leanstore/common/wal_record.h"
 #include "leanstore/cpp/base/defer.hpp"
 #include "leanstore/cpp/base/log.hpp"
+#include "leanstore/cpp/base/small_vector.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
-#include "utils/small_vector.hpp"
 #include "utils/to_json.hpp"
 #include "wal/wal_builder.hpp"
 

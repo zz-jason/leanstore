@@ -1,4 +1,4 @@
-#include "leanstore/concurrency/logging.hpp"
+#include "leanstore/cpp/wal/logging.hpp"
 
 #include "coroutine/coro_env.hpp"
 #include "coroutine/coro_io.hpp"
