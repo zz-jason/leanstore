@@ -275,7 +275,6 @@ constexpr char kMetaKeyMvcc[] = "mvcc";
 constexpr char kMetaKeyBufferManager[] = "buffer_manager";
 constexpr char kMetaKeyBTrees[] = "leanstore/btrees";
 constexpr char kMetaKeyTables[] = "leanstore/tables";
-constexpr char kMetaKeyFlags[] = "flags";
 constexpr char kName[] = "name";
 constexpr char kType[] = "type";
 constexpr char kId[] = "id";
@@ -347,26 +346,26 @@ void LeanStore::SerializeMeta(bool all_pages_up_to_date) {
     utils::JsonArray table_json_array;
     table_registry_->Visit([&](const auto& tables) {
       for (const auto& [table_name, table_ptr] : tables) {
-        const auto& def = table_ptr->definition();
+        const auto& def = table_ptr->Definition();
         utils::JsonObj table_obj;
-        table_obj.AddString(kName, def.name);
-        table_obj.AddInt64(kPrimaryIndexType, static_cast<int64_t>(def.primary_index_type));
-        table_obj.AddBool(kEnableWal, def.primary_index_config.enable_wal_);
-        table_obj.AddBool(kUseBulkInsert, def.primary_index_config.use_bulk_insert_);
+        table_obj.AddString(kName, def.name_);
+        table_obj.AddInt64(kPrimaryIndexType, static_cast<int64_t>(def.primary_index_type_));
+        table_obj.AddBool(kEnableWal, def.primary_index_config_.enable_wal_);
+        table_obj.AddBool(kUseBulkInsert, def.primary_index_config_.use_bulk_insert_);
 
         utils::JsonArray col_array;
-        for (const auto& col : def.schema.columns()) {
+        for (const auto& col : def.schema_.Columns()) {
           utils::JsonObj col_obj;
-          col_obj.AddString(kName, col.name);
-          col_obj.AddInt64(kType, static_cast<int64_t>(col.type));
-          col_obj.AddBool("nullable", col.nullable);
-          col_obj.AddInt64("fixed_length", col.fixed_length);
+          col_obj.AddString(kName, col.name_);
+          col_obj.AddInt64(kType, static_cast<int64_t>(col.type_));
+          col_obj.AddBool("nullable", col.nullable_);
+          col_obj.AddInt64("fixed_length", col.fixed_length_);
           col_array.AppendJsonObj(col_obj);
         }
         table_obj.AddJsonArray(kColumns, col_array);
 
         utils::JsonArray pk_array;
-        for (auto pk : def.schema.primary_key_columns()) {
+        for (auto pk : def.schema_.PrimaryKeyColumns()) {
           pk_array.AppendInt64(static_cast<int64_t>(pk));
         }
         table_obj.AddJsonArray(kPrimaryKey, pk_array);
@@ -510,16 +509,20 @@ bool LeanStore::DeserializeMeta() {
           continue;
         }
         auto name_sv = name_sv_opt.value();
-        TableDefinition def;
-        def.name.assign(name_sv.data(), name_sv.size());
+        std::string name{name_sv.data(), name_sv.size()};
+        lean_btree_type primary_index_type = lean_btree_type::LEAN_BTREE_TYPE_MVCC;
         if (auto pit_opt = table_obj.GetInt64(kPrimaryIndexType); pit_opt) {
-          def.primary_index_type = static_cast<lean_btree_type>(pit_opt.value());
+          primary_index_type = static_cast<lean_btree_type>(pit_opt.value());
         }
+        lean_btree_config primary_index_config{
+            .enable_wal_ = true,
+            .use_bulk_insert_ = false,
+        };
         if (auto wal_opt = table_obj.GetBool(kEnableWal); wal_opt) {
-          def.primary_index_config.enable_wal_ = wal_opt.value();
+          primary_index_config.enable_wal_ = wal_opt.value();
         }
         if (auto bulk_opt = table_obj.GetBool(kUseBulkInsert); bulk_opt) {
-          def.primary_index_config.use_bulk_insert_ = bulk_opt.value();
+          primary_index_config.use_bulk_insert_ = bulk_opt.value();
         }
 
         std::vector<ColumnDefinition> columns;
@@ -534,16 +537,16 @@ bool LeanStore::DeserializeMeta() {
             ColumnDefinition col_def;
             if (auto col_name_sv_opt = col_obj.GetString(kName)) {
               auto col_name_sv = col_name_sv_opt.value();
-              col_def.name.assign(col_name_sv.data(), col_name_sv.size());
+              col_def.name_.assign(col_name_sv.data(), col_name_sv.size());
             }
             if (auto type_opt = col_obj.GetInt64(kType)) {
-              col_def.type = static_cast<ColumnType>(type_opt.value());
+              col_def.type_ = static_cast<ColumnType>(type_opt.value());
             }
             if (auto nullable_opt = col_obj.GetBool("nullable")) {
-              col_def.nullable = nullable_opt.value();
+              col_def.nullable_ = nullable_opt.value();
             }
             if (auto fixed_opt = col_obj.GetInt64("fixed_length")) {
-              col_def.fixed_length = static_cast<uint32_t>(fixed_opt.value());
+              col_def.fixed_length_ = static_cast<uint32_t>(fixed_opt.value());
             }
             columns.emplace_back(std::move(col_def));
           }
@@ -558,11 +561,25 @@ bool LeanStore::DeserializeMeta() {
             }
           }
         }
-        def.schema = TableSchema(columns, pk_columns);
+        auto schema_res = TableSchema::Create(std::move(columns), std::move(pk_columns));
+        if (!schema_res) {
+          Log::Error("Failed to deserialize table {}, invalid schema: {}", name,
+                     schema_res.error().ToString());
+          continue;
+        }
 
+        auto def_res = TableDefinition::Create(std::move(name), std::move(schema_res.value()),
+                                               primary_index_type, primary_index_config);
+        if (!def_res) {
+          Log::Error("Failed to deserialize table, invalid definition: {}",
+                     def_res.error().ToString());
+          continue;
+        }
+
+        const auto& def = def_res.value();
         auto res = RegisterTableWithExisting(def);
         if (!res) {
-          Log::Error("Failed to deserialize table {}, error={}", def.name, res.error().ToString());
+          Log::Error("Failed to deserialize table {}, error={}", def.name_, res.error().ToString());
         }
       }
     }
@@ -639,7 +656,7 @@ void LeanStore::DropTransactionKV(const std::string& name) {
 }
 
 Result<Table*> LeanStore::CreateTable(const TableDefinition& definition) {
-  auto def = definition;
+  const auto& def = definition;
   if (auto res = def.Validate(); !res) {
     return std::move(res.error());
   }
@@ -651,11 +668,11 @@ Result<Table*> LeanStore::CreateTable(const TableDefinition& definition) {
   }
 
   auto table = std::move(table_res.value());
-  auto table_name = table->definition().name;
+  auto table_name = table->Definition().name_;
   auto register_res = table_registry_->Register(std::move(table));
   if (!register_res) {
     // Undo physical resources that were allocated for the table.
-    switch (def.primary_index_type) {
+    switch (def.primary_index_type_) {
     case lean_btree_type::LEAN_BTREE_TYPE_ATOMIC:
       DropBasicKV(table_name);
       break;
@@ -671,7 +688,7 @@ Result<Table*> LeanStore::CreateTable(const TableDefinition& definition) {
 }
 
 Result<Table*> LeanStore::RegisterTableWithExisting(const TableDefinition& definition) {
-  auto def = definition;
+  const auto& def = definition;
   if (auto res = def.Validate(); !res) {
     return std::move(res.error());
   }
@@ -693,19 +710,19 @@ Result<void> LeanStore::DropTable(const std::string& name) {
     return Error::General("table not found: " + name);
   }
 
-  TableDefinition def = table->definition();
+  TableDefinition def = table->Definition();
   auto drop_res = table_registry_->Drop(name);
   if (!drop_res) {
     return std::move(drop_res.error());
   }
   auto dropped_table = std::move(drop_res.value());
 
-  switch (def.primary_index_type) {
+  switch (def.primary_index_type_) {
   case lean_btree_type::LEAN_BTREE_TYPE_ATOMIC:
-    DropBasicKV(def.name);
+    DropBasicKV(def.name_);
     break;
   case lean_btree_type::LEAN_BTREE_TYPE_MVCC:
-    DropTransactionKV(def.name);
+    DropTransactionKV(def.name_);
     break;
   default:
     break;

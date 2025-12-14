@@ -1,20 +1,22 @@
+#include "lean_test_suite.hpp"
 #include "leanstore/c/leanstore.h"
 
 #include <gtest/gtest.h>
 
 #include <cstring>
 #include <map>
+#include <numbers>
 #include <string>
 #include <vector>
 
 namespace leanstore::test {
 
-class TableInterfaceTest : public ::testing::Test {
+class TableInterfaceTest : public LeanTestSuite {
 protected:
   lean_store* store_ = nullptr;
 
   void SetUp() override {
-    lean_store_option* option = lean_store_option_create(GetTestDataDir().c_str());
+    lean_store_option* option = lean_store_option_create(TestCaseStoreDir().c_str());
     option->create_from_scratch_ = true;
     option->worker_threads_ = 2;
     ASSERT_EQ(lean_open_store(option, &store_), lean_status::LEAN_STATUS_OK);
@@ -26,11 +28,6 @@ protected:
       store_->close(store_);
       store_ = nullptr;
     }
-  }
-
-  std::string GetTestDataDir() const {
-    auto* cur_test = ::testing::UnitTest::GetInstance()->current_test_info();
-    return std::string("/tmp/leanstore/") + cur_test->name();
   }
 };
 
@@ -52,8 +49,8 @@ TEST_F(TableInterfaceTest, CreateAndUseTable) {
       .name = {.data = table_name, .size = strlen(table_name)},
       .columns = columns,
       .num_columns = 2,
-      .primary_key_column_indexes = pk_columns,
-      .num_primary_key_columns = 1,
+      .pk_cols = pk_columns,
+      .pk_cols_count = 1,
       .primary_index_type = lean_btree_type::LEAN_BTREE_TYPE_ATOMIC,
       .primary_index_config =
           {
@@ -79,11 +76,13 @@ TEST_F(TableInterfaceTest, CreateAndUseTable) {
   for (const auto& [key, value] : rows) {
     lean_row row;
     lean_datum cols[2];
-    lean_str key_str{.data = key.data(), .size = key.size(), .capacity = 0};
-    lean_str val_str{.data = value.data(), .size = value.size(), .capacity = 0};
-    cols[0] = {.type = LEAN_COLUMN_TYPE_BINARY, .is_null = false, .value = {.str = key_str}};
-    cols[1] = {.type = LEAN_COLUMN_TYPE_BINARY, .is_null = false, .value = {.str = val_str}};
+    bool nulls[2] = {false, false};
+    lean_str_view key_str{.data = key.data(), .size = key.size()};
+    lean_str_view val_str{.data = value.data(), .size = value.size()};
+    cols[0].str = key_str;
+    cols[1].str = val_str;
     row.columns = cols;
+    row.nulls = nulls;
     row.num_columns = 2;
     EXPECT_EQ(table->insert(table, &row), lean_status::LEAN_STATUS_OK);
   }
@@ -91,25 +90,23 @@ TEST_F(TableInterfaceTest, CreateAndUseTable) {
   for (const auto& [key, value] : rows) {
     lean_row key_row;
     lean_datum key_cols[2];
-    lean_str key_str{.data = key.data(), .size = key.size(), .capacity = 0};
-    key_cols[0] = {.type = LEAN_COLUMN_TYPE_BINARY, .is_null = false, .value = {.str = key_str}};
-    key_cols[1] = {.type = LEAN_COLUMN_TYPE_BINARY, .is_null = true, .value = {.str = {}}};
+    bool key_nulls[2] = {false, true};
+    lean_str_view key_str{.data = key.data(), .size = key.size()};
+    key_cols[0].str = key_str;
     key_row.columns = key_cols;
+    key_row.nulls = key_nulls;
     key_row.num_columns = 2;
 
     lean_row out_row;
     lean_datum out_cols[2] = {};
-    out_cols[0].type = LEAN_COLUMN_TYPE_BINARY;
-    out_cols[1].type = LEAN_COLUMN_TYPE_BINARY;
-    out_cols[0].is_null = false;
-    out_cols[1].is_null = false;
+    bool out_nulls[2] = {false, false};
     out_row.columns = out_cols;
+    out_row.nulls = out_nulls;
     out_row.num_columns = 2;
 
     auto status = table->lookup(table, &key_row, &out_row);
     EXPECT_EQ(status, lean_status::LEAN_STATUS_OK);
-    EXPECT_EQ(std::string(out_cols[1].value.str.data, out_cols[1].value.str.size), value);
-    lean_row_deinit(&out_row);
+    EXPECT_EQ(std::string(out_cols[1].str.data, out_cols[1].str.size), value);
   }
 
   auto* cursor = table->open_cursor(table);
@@ -120,13 +117,12 @@ TEST_F(TableInterfaceTest, CreateAndUseTable) {
   do {
     lean_row row;
     lean_datum cols[2] = {};
-    cols[0].type = LEAN_COLUMN_TYPE_BINARY;
-    cols[1].type = LEAN_COLUMN_TYPE_BINARY;
+    bool nulls[2] = {false, false};
     row.columns = cols;
+    row.nulls = nulls;
     row.num_columns = 2;
     cursor->current_row(cursor, &row);
-    EXPECT_EQ(std::string(cols[1].value.str.data, cols[1].value.str.size), rows[seen].second);
-    lean_row_deinit(&row);
+    EXPECT_EQ(std::string(cols[1].str.data, cols[1].str.size), rows[seen].second);
     seen++;
   } while (cursor->next(cursor));
   EXPECT_EQ(seen, rows.size());
@@ -154,8 +150,8 @@ TEST_F(TableInterfaceTest, RejectNullsForNotNullColumns) {
   lean_table_def table_def = {.name = {.data = table_name, .size = strlen(table_name)},
                               .columns = columns,
                               .num_columns = 2,
-                              .primary_key_column_indexes = pk_columns,
-                              .num_primary_key_columns = 1,
+                              .pk_cols = pk_columns,
+                              .pk_cols_count = 1,
                               .primary_index_type = lean_btree_type::LEAN_BTREE_TYPE_ATOMIC,
                               .primary_index_config = {
                                   .enable_wal_ = true,
@@ -171,21 +167,23 @@ TEST_F(TableInterfaceTest, RejectNullsForNotNullColumns) {
   // Null primary key should be rejected.
   {
     lean_datum cols[2];
-    cols[0] = {.type = LEAN_COLUMN_TYPE_INT64, .is_null = true, .value = {.i64 = 0}};
+    bool nulls[2] = {true, false};
+    cols[0].i64 = 0;
     const char* v = "value";
-    lean_str val{.data = v, .size = strlen(v), .capacity = 0};
-    cols[1] = {.type = LEAN_COLUMN_TYPE_STRING, .is_null = false, .value = {.str = val}};
-    lean_row row{.columns = cols, .num_columns = 2};
+    lean_str_view val{.data = v, .size = strlen(v)};
+    cols[1].str = val;
+    lean_row row{.columns = cols, .nulls = nulls, .num_columns = 2};
     EXPECT_NE(table->insert(table, &row), lean_status::LEAN_STATUS_OK);
   }
 
   // Null non-nullable value column should also be rejected.
   {
     lean_datum cols[2];
-    cols[0] = {.type = LEAN_COLUMN_TYPE_INT64, .is_null = false, .value = {.i64 = 1}};
-    lean_str empty{.data = nullptr, .size = 0, .capacity = 0};
-    cols[1] = {.type = LEAN_COLUMN_TYPE_STRING, .is_null = true, .value = {.str = empty}};
-    lean_row row{.columns = cols, .num_columns = 2};
+    bool nulls[2] = {false, true};
+    cols[0].i64 = 1;
+    lean_str_view empty{.data = nullptr, .size = 0};
+    cols[1].str = empty;
+    lean_row row{.columns = cols, .nulls = nulls, .num_columns = 2};
     EXPECT_NE(table->insert(table, &row), lean_status::LEAN_STATUS_OK);
   }
 
@@ -226,8 +224,8 @@ TEST_F(TableInterfaceTest, InsertAndReadVariousTypes) {
   lean_table_def table_def = {.name = {.data = table_name, .size = strlen(table_name)},
                               .columns = columns,
                               .num_columns = 6,
-                              .primary_key_column_indexes = pk_columns,
-                              .num_primary_key_columns = 1,
+                              .pk_cols = pk_columns,
+                              .pk_cols_count = 1,
                               .primary_index_type = lean_btree_type::LEAN_BTREE_TYPE_ATOMIC,
                               .primary_index_config = {
                                   .enable_wal_ = true,
@@ -243,42 +241,38 @@ TEST_F(TableInterfaceTest, InsertAndReadVariousTypes) {
   // Insert one row
   {
     lean_datum cols[6];
-    cols[0] = {.type = LEAN_COLUMN_TYPE_INT64, .is_null = false, .value = {.i64 = 42}};
-    cols[1] = {.type = LEAN_COLUMN_TYPE_BOOL, .is_null = false, .value = {.b = true}};
-    cols[2] = {.type = LEAN_COLUMN_TYPE_INT32, .is_null = false, .value = {.i32 = -123}};
-    cols[3] = {.type = LEAN_COLUMN_TYPE_UINT64, .is_null = false, .value = {.u64 = 9999}};
-    cols[4] = {.type = LEAN_COLUMN_TYPE_FLOAT64, .is_null = false, .value = {.f64 = 3.14159}};
+    bool nulls[6] = {false, false, false, false, false, false};
+    cols[0].i64 = 42;
+    cols[1].b = true;
+    cols[2].i32 = -123;
+    cols[3].u64 = 9999;
+    cols[4].f64 = std::numbers::pi;
     const char* str = "hello";
-    lean_str str_view{.data = str, .size = strlen(str), .capacity = 0};
-    cols[5] = {.type = LEAN_COLUMN_TYPE_STRING, .is_null = false, .value = {.str = str_view}};
-    lean_row row{.columns = cols, .num_columns = 6};
+    lean_str_view str_view{.data = str, .size = strlen(str)};
+    cols[5].str = str_view;
+    lean_row row{.columns = cols, .nulls = nulls, .num_columns = 6};
     EXPECT_EQ(table->insert(table, &row), lean_status::LEAN_STATUS_OK);
   }
 
   // Lookup and verify decoded values
   {
     lean_datum key_cols[6] = {};
-    key_cols[0] = {.type = LEAN_COLUMN_TYPE_INT64, .is_null = false, .value = {.i64 = 42}};
-    lean_row key_row{.columns = key_cols, .num_columns = 6};
+    bool key_nulls[6] = {false, true, true, true, true, true};
+    key_cols[0].i64 = 42;
+    lean_row key_row{.columns = key_cols, .nulls = key_nulls, .num_columns = 6};
 
     lean_datum out_cols[6] = {};
-    out_cols[0].type = LEAN_COLUMN_TYPE_INT64;
-    out_cols[1].type = LEAN_COLUMN_TYPE_BOOL;
-    out_cols[2].type = LEAN_COLUMN_TYPE_INT32;
-    out_cols[3].type = LEAN_COLUMN_TYPE_UINT64;
-    out_cols[4].type = LEAN_COLUMN_TYPE_FLOAT64;
-    out_cols[5].type = LEAN_COLUMN_TYPE_STRING;
-    lean_row out_row{.columns = out_cols, .num_columns = 6};
+    bool out_nulls[6] = {false, false, false, false, false, false};
+    lean_row out_row{.columns = out_cols, .nulls = out_nulls, .num_columns = 6};
 
     auto status = table->lookup(table, &key_row, &out_row);
     ASSERT_EQ(status, lean_status::LEAN_STATUS_OK);
-    EXPECT_EQ(out_cols[0].value.i64, 42);
-    EXPECT_TRUE(out_cols[1].value.b);
-    EXPECT_EQ(out_cols[2].value.i32, -123);
-    EXPECT_EQ(out_cols[3].value.u64, 9999u);
-    EXPECT_NEAR(out_cols[4].value.f64, 3.14159, 1e-5);
-    EXPECT_EQ(std::string(out_cols[5].value.str.data, out_cols[5].value.str.size), "hello");
-    lean_row_deinit(&out_row);
+    EXPECT_EQ(out_cols[0].i64, 42);
+    EXPECT_TRUE(out_cols[1].b);
+    EXPECT_EQ(out_cols[2].i32, -123);
+    EXPECT_EQ(out_cols[3].u64, 9999u);
+    EXPECT_NEAR(out_cols[4].f64, 3.14159, 1e-5);
+    EXPECT_EQ(std::string(out_cols[5].str.data, out_cols[5].str.size), "hello");
   }
 
   table->close(table);
@@ -302,8 +296,8 @@ TEST_F(TableInterfaceTest, TransactionCommitAndAbort) {
   lean_table_def table_def = {.name = {.data = table_name, .size = strlen(table_name)},
                               .columns = columns,
                               .num_columns = 2,
-                              .primary_key_column_indexes = pk_columns,
-                              .num_primary_key_columns = 1,
+                              .pk_cols = pk_columns,
+                              .pk_cols_count = 1,
                               .primary_index_type = lean_btree_type::LEAN_BTREE_TYPE_MVCC,
                               .primary_index_config = {
                                   .enable_wal_ = true,
@@ -324,11 +318,12 @@ TEST_F(TableInterfaceTest, TransactionCommitAndAbort) {
   writer->start_tx(writer);
   {
     lean_datum cols[2];
-    cols[0] = {.type = LEAN_COLUMN_TYPE_INT64, .is_null = false, .value = {.i64 = 1}};
+    bool nulls[2] = {false, false};
+    cols[0].i64 = 1;
     const char* v = "committed";
-    lean_str val{.data = v, .size = strlen(v), .capacity = 0};
-    cols[1] = {.type = LEAN_COLUMN_TYPE_STRING, .is_null = false, .value = {.str = val}};
-    lean_row row{.columns = cols, .num_columns = 2};
+    lean_str_view val{.data = v, .size = strlen(v)};
+    cols[1].str = val;
+    lean_row row{.columns = cols, .nulls = nulls, .num_columns = 2};
     EXPECT_EQ(table_w->insert(table_w, &row), lean_status::LEAN_STATUS_OK);
   }
   writer->commit_tx(writer);
@@ -336,27 +331,27 @@ TEST_F(TableInterfaceTest, TransactionCommitAndAbort) {
   // Reader should see committed row
   {
     lean_datum key_cols[2] = {};
-    key_cols[0] = {.type = LEAN_COLUMN_TYPE_INT64, .is_null = false, .value = {.i64 = 1}};
-    lean_row key_row{.columns = key_cols, .num_columns = 2};
+    bool key_nulls[2] = {false, true};
+    key_cols[0].i64 = 1;
+    lean_row key_row{.columns = key_cols, .nulls = key_nulls, .num_columns = 2};
     lean_datum out_cols[2] = {};
-    out_cols[0].type = LEAN_COLUMN_TYPE_INT64;
-    out_cols[1].type = LEAN_COLUMN_TYPE_STRING;
-    lean_row out_row{.columns = out_cols, .num_columns = 2};
+    bool out_nulls[2] = {false, false};
+    lean_row out_row{.columns = out_cols, .nulls = out_nulls, .num_columns = 2};
     auto status = table_r->lookup(table_r, &key_row, &out_row);
     ASSERT_EQ(status, lean_status::LEAN_STATUS_OK);
-    EXPECT_EQ(std::string(out_cols[1].value.str.data, out_cols[1].value.str.size), "committed");
-    lean_row_deinit(&out_row);
+    EXPECT_EQ(std::string(out_cols[1].str.data, out_cols[1].str.size), "committed");
   }
 
   // Insert and abort
   writer->start_tx(writer);
   {
     lean_datum cols[2];
-    cols[0] = {.type = LEAN_COLUMN_TYPE_INT64, .is_null = false, .value = {.i64 = 2}};
+    bool nulls[2] = {false, false};
+    cols[0].i64 = 2;
     const char* v = "rolledback";
-    lean_str val{.data = v, .size = strlen(v), .capacity = 0};
-    cols[1] = {.type = LEAN_COLUMN_TYPE_STRING, .is_null = false, .value = {.str = val}};
-    lean_row row{.columns = cols, .num_columns = 2};
+    lean_str_view val{.data = v, .size = strlen(v)};
+    cols[1].str = val;
+    lean_row row{.columns = cols, .nulls = nulls, .num_columns = 2};
     EXPECT_EQ(table_w->insert(table_w, &row), lean_status::LEAN_STATUS_OK);
   }
   writer->abort_tx(writer);
@@ -364,15 +359,14 @@ TEST_F(TableInterfaceTest, TransactionCommitAndAbort) {
   // Reader should not see aborted row
   {
     lean_datum key_cols[2] = {};
-    key_cols[0] = {.type = LEAN_COLUMN_TYPE_INT64, .is_null = false, .value = {.i64 = 2}};
-    lean_row key_row{.columns = key_cols, .num_columns = 2};
+    bool key_nulls[2] = {false, true};
+    key_cols[0].i64 = 2;
+    lean_row key_row{.columns = key_cols, .nulls = key_nulls, .num_columns = 2};
     lean_datum out_cols[2] = {};
-    out_cols[0].type = LEAN_COLUMN_TYPE_INT64;
-    out_cols[1].type = LEAN_COLUMN_TYPE_STRING;
-    lean_row out_row{.columns = out_cols, .num_columns = 2};
+    bool out_nulls[2] = {false, false};
+    lean_row out_row{.columns = out_cols, .nulls = out_nulls, .num_columns = 2};
     auto status = table_r->lookup(table_r, &key_row, &out_row);
     EXPECT_EQ(status, lean_status::LEAN_ERR_NOT_FOUND);
-    lean_row_deinit(&out_row);
   }
 
   table_w->close(table_w);
@@ -398,8 +392,8 @@ TEST_F(TableInterfaceTest, Float32PrimaryKeyOrdering) {
   lean_table_def table_def = {.name = {.data = table_name, .size = strlen(table_name)},
                               .columns = columns,
                               .num_columns = 2,
-                              .primary_key_column_indexes = pk_columns,
-                              .num_primary_key_columns = 1,
+                              .pk_cols = pk_columns,
+                              .pk_cols_count = 1,
                               .primary_index_type = lean_btree_type::LEAN_BTREE_TYPE_ATOMIC,
                               .primary_index_config = {
                                   .enable_wal_ = true,
@@ -420,29 +414,29 @@ TEST_F(TableInterfaceTest, Float32PrimaryKeyOrdering) {
 
   for (const auto& [key, value] : rows) {
     lean_datum cols[2];
-    cols[0] = {.type = LEAN_COLUMN_TYPE_FLOAT32, .is_null = false, .value = {.f32 = key}};
-    lean_str val{.data = value.data(), .size = value.size(), .capacity = 0};
-    cols[1] = {.type = LEAN_COLUMN_TYPE_STRING, .is_null = false, .value = {.str = val}};
-    lean_row row{.columns = cols, .num_columns = 2};
+    bool nulls[2] = {false, false};
+    cols[0].f32 = key;
+    lean_str_view val{.data = value.data(), .size = value.size()};
+    cols[1].str = val;
+    lean_row row{.columns = cols, .nulls = nulls, .num_columns = 2};
     EXPECT_EQ(table->insert(table, &row), lean_status::LEAN_STATUS_OK);
   }
 
   // Verify lookup works.
   for (const auto& [key, value] : rows) {
     lean_datum key_cols[2] = {};
-    key_cols[0] = {.type = LEAN_COLUMN_TYPE_FLOAT32, .is_null = false, .value = {.f32 = key}};
-    lean_row key_row{.columns = key_cols, .num_columns = 2};
+    bool key_nulls[2] = {false, true};
+    key_cols[0].f32 = key;
+    lean_row key_row{.columns = key_cols, .nulls = key_nulls, .num_columns = 2};
 
     lean_datum out_cols[2] = {};
-    out_cols[0].type = LEAN_COLUMN_TYPE_FLOAT32;
-    out_cols[1].type = LEAN_COLUMN_TYPE_STRING;
-    lean_row out_row{.columns = out_cols, .num_columns = 2};
+    bool out_nulls[2] = {false, false};
+    lean_row out_row{.columns = out_cols, .nulls = out_nulls, .num_columns = 2};
 
     auto status = table->lookup(table, &key_row, &out_row);
     ASSERT_EQ(status, lean_status::LEAN_STATUS_OK);
-    EXPECT_NEAR(out_cols[0].value.f32, key, 1e-6);
-    EXPECT_EQ(std::string(out_cols[1].value.str.data, out_cols[1].value.str.size), value);
-    lean_row_deinit(&out_row);
+    EXPECT_NEAR(out_cols[0].f32, key, 1e-6);
+    EXPECT_EQ(std::string(out_cols[1].str.data, out_cols[1].str.size), value);
   }
 
   // Verify cursor order matches ascending primary keys.
@@ -453,14 +447,13 @@ TEST_F(TableInterfaceTest, Float32PrimaryKeyOrdering) {
   for (auto it = rows.begin(); cursor->is_valid(cursor) && it != rows.end(); ++it) {
     lean_row row;
     lean_datum cols[2] = {};
-    cols[0].type = LEAN_COLUMN_TYPE_FLOAT32;
-    cols[1].type = LEAN_COLUMN_TYPE_STRING;
+    bool nulls[2] = {false, false};
     row.columns = cols;
+    row.nulls = nulls;
     row.num_columns = 2;
     cursor->current_row(cursor, &row);
-    EXPECT_NEAR(cols[0].value.f32, it->first, 1e-6);
-    EXPECT_EQ(std::string(cols[1].value.str.data, cols[1].value.str.size), it->second);
-    lean_row_deinit(&row);
+    EXPECT_NEAR(cols[0].f32, it->first, 1e-6);
+    EXPECT_EQ(std::string(cols[1].str.data, cols[1].str.size), it->second);
     seen++;
     if (!cursor->next(cursor)) {
       break;

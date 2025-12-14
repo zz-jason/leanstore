@@ -54,6 +54,7 @@ private:
   lean_table base_;
   Table* table_;
   SessionImpl* session_impl_;
+  std::string lookup_buffer_;
 };
 
 class TableCursorImpl {
@@ -65,7 +66,7 @@ public:
   }
 
 private:
-  TableCursorImpl(Table* table, SessionImpl* session_impl)
+  explicit TableCursorImpl(SessionImpl* session_impl)
       : base_{.seek_to_first = &Thunk<&TableCursorImpl::SeekToFirst, bool>,
               .seek_to_first_ge = &Thunk<&TableCursorImpl::SeekToFirstGe, bool, const lean_row*>,
               .next = &Thunk<&TableCursorImpl::Next, bool>,
@@ -78,7 +79,6 @@ private:
               .update_current =
                   &Thunk<&TableCursorImpl::UpdateCurrent, lean_status, const lean_row*>,
               .close = &Destroy},
-        table_(table),
         session_impl_(session_impl) {
   }
 
@@ -103,7 +103,6 @@ private:
 
 private:
   lean_table_cursor base_;
-  Table* table_;
   SessionImpl* session_impl_;
   std::unique_ptr<TableCursor> cursor_;
 };

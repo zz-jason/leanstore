@@ -53,17 +53,12 @@ Result<TableDefinition> BuildTableDefinition(const lean_table_def* table_def) {
   if (table_def->columns == nullptr || table_def->num_columns == 0) {
     return Error::General("table must define at least one column");
   }
-  if (table_def->num_primary_key_columns == 0) {
+  if (table_def->pk_cols_count == 0) {
     return Error::General("table must define at least one primary key column");
   }
-  if (table_def->primary_key_column_indexes == nullptr) {
+  if (table_def->pk_cols == nullptr) {
     return Error::General("primary key column indexes cannot be null");
   }
-
-  TableDefinition def;
-  def.name.assign(table_def->name.data, table_def->name.size);
-  def.primary_index_type = table_def->primary_index_type;
-  def.primary_index_config = table_def->primary_index_config;
 
   std::vector<ColumnDefinition> columns;
   columns.reserve(table_def->num_columns);
@@ -73,26 +68,27 @@ Result<TableDefinition> BuildTableDefinition(const lean_table_def* table_def) {
       return Error::General("column name cannot be empty");
     }
     ColumnDefinition column;
-    column.name.assign(c_def.name.data, c_def.name.size);
-    column.type = ConvertColumnType(c_def.type);
-    column.nullable = c_def.nullable;
-    column.fixed_length = c_def.fixed_length;
+    column.name_.assign(c_def.name.data, c_def.name.size);
+    column.type_ = ConvertColumnType(c_def.type);
+    column.nullable_ = c_def.nullable;
+    column.fixed_length_ = c_def.fixed_length;
     columns.emplace_back(std::move(column));
   }
 
   std::vector<uint32_t> pk_columns;
-  pk_columns.reserve(table_def->num_primary_key_columns);
-  for (uint32_t i = 0; i < table_def->num_primary_key_columns; ++i) {
-    pk_columns.push_back(table_def->primary_key_column_indexes[i]);
+  pk_columns.reserve(table_def->pk_cols_count);
+  for (uint32_t i = 0; i < table_def->pk_cols_count; ++i) {
+    pk_columns.push_back(table_def->pk_cols[i]);
   }
 
-  def.schema = TableSchema(std::move(columns), std::move(pk_columns));
-
-  if (auto res = def.Validate(); !res) {
-    return std::move(res.error());
+  auto schema_res = TableSchema::Create(std::move(columns), std::move(pk_columns));
+  if (!schema_res) {
+    return std::move(schema_res.error());
   }
 
-  return def;
+  std::string name(table_def->name.data, table_def->name.size);
+  return TableDefinition::Create(std::move(name), std::move(schema_res.value()),
+                                 table_def->primary_index_type, table_def->primary_index_config);
 }
 
 } // namespace

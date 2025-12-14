@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 
 namespace leanstore {
@@ -16,8 +17,8 @@ public:
   ~TableRegistry() = default;
 
   Result<Table*> Register(std::unique_ptr<Table> table);
-  Result<std::unique_ptr<Table>> Drop(const std::string& name);
-  Table* Get(const std::string& name);
+  Result<std::unique_ptr<Table>> Drop(std::string_view name);
+  Table* Get(std::string_view name);
 
   template <typename Visitor>
   void Visit(Visitor&& visitor) {

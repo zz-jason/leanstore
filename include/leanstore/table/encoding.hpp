@@ -16,8 +16,8 @@ namespace leanstore {
 using Datum = lean_datum;
 
 struct EncodedRow {
-  std::string key;
-  std::string value;
+  std::string key_;
+  std::string value_;
 };
 
 /// Codec to transform typed Datums into persisted key/value bytes and back.

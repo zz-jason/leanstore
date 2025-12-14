@@ -58,16 +58,3 @@ void lean_str_append(lean_str* s, const char* data, uint64_t size) {
 void lean_str_append_view(lean_str* s, lean_str_view str_view) {
   lean_str_append(s, str_view.data, str_view.size);
 }
-
-void lean_row_deinit(struct lean_row* row) {
-  if (row == nullptr || row->columns == nullptr) {
-    return;
-  }
-  for (uint32_t i = 0; i < row->num_columns; ++i) {
-    auto* datum = &row->columns[i];
-    if ((datum->type == LEAN_COLUMN_TYPE_BINARY || datum->type == LEAN_COLUMN_TYPE_STRING) &&
-        !datum->is_null) {
-      lean_str_deinit(&datum->value.str);
-    }
-  }
-}

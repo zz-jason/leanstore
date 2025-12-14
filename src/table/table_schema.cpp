@@ -15,12 +15,12 @@ Result<void> TableSchema::Validate() const {
 
   std::unordered_set<std::string> seen_names;
   for (const auto& col : columns_) {
-    if (col.name.empty()) {
+    if (col.name_.empty()) {
       return Error::General("column name cannot be empty");
     }
-    auto insert_res = seen_names.emplace(col.name);
+    auto insert_res = seen_names.emplace(col.name_);
     if (!insert_res.second) {
-      return Error::General(std::string("duplicated column name: ") + col.name);
+      return Error::General(std::string("duplicated column name: ") + col.name_);
     }
   }
 
@@ -32,13 +32,51 @@ Result<void> TableSchema::Validate() const {
     if (!seen_pk_indexes.emplace(pk_index).second) {
       return Error::General("duplicate primary key column index");
     }
-    if (columns_[pk_index].nullable) {
+    if (columns_[pk_index].nullable_) {
       return Error::General(std::string("primary key column must be NOT NULL: ") +
-                            columns_[pk_index].name);
+                            columns_[pk_index].name_);
     }
   }
 
   return {};
+}
+
+Result<TableSchema> TableSchema::Create(std::vector<ColumnDefinition> columns,
+                                        std::vector<uint32_t> primary_key_columns) {
+  TableSchema schema(std::move(columns), std::move(primary_key_columns));
+  if (auto res = schema.Validate(); !res) {
+    return std::move(res.error());
+  }
+  return schema;
+}
+
+TableSchema::TableSchema() = default;
+
+TableSchema::TableSchema(std::vector<ColumnDefinition> columns,
+                         std::vector<uint32_t> primary_key_columns)
+    : columns_(std::move(columns)),
+      primary_key_columns_(std::move(primary_key_columns)) {
+}
+
+TableDefinition::TableDefinition() = default;
+
+TableDefinition::TableDefinition(std::string name, TableSchema schema,
+                                 lean_btree_type primary_index_type,
+                                 lean_btree_config primary_index_config)
+    : name_(std::move(name)),
+      schema_(std::move(schema)),
+      primary_index_type_(primary_index_type),
+      primary_index_config_(primary_index_config) {
+}
+
+Result<TableDefinition> TableDefinition::Create(std::string name, TableSchema schema,
+                                                lean_btree_type primary_index_type,
+                                                lean_btree_config primary_index_config) {
+  TableDefinition def(std::move(name), std::move(schema), primary_index_type, primary_index_config);
+  if (auto res = def.Validate(); !res) {
+    return std::move(res.error());
+  }
+  return def;
 }
 
 } // namespace leanstore

@@ -3,26 +3,27 @@
 #include "api/c/tx_guard.hpp"
 #include "leanstore/c/leanstore.h"
 
-namespace leanstore {
-
-lean_status ToStatus(OpCode code) {
+namespace {
+lean_status ToStatus(leanstore::OpCode code) {
   switch (code) {
-  case OpCode::kOK:
+  case leanstore::OpCode::kOK:
     return lean_status::LEAN_STATUS_OK;
-  case OpCode::kNotFound:
+  case leanstore::OpCode::kNotFound:
     return lean_status::LEAN_ERR_NOT_FOUND;
-  case OpCode::kDuplicated:
+  case leanstore::OpCode::kDuplicated:
     return lean_status::LEAN_ERR_DUPLICATED;
-  case OpCode::kAbortTx:
+  case leanstore::OpCode::kAbortTx:
     return lean_status::LEAN_ERR_CONFLICT;
-  case OpCode::kSpaceNotEnough:
+  case leanstore::OpCode::kSpaceNotEnough:
     return lean_status::LEAN_ERR_UNSUPPORTED;
-  case OpCode::kOther:
+  case leanstore::OpCode::kOther:
     return lean_status::LEAN_ERR_UNSUPPORTED;
   }
   return lean_status::LEAN_ERR_UNSUPPORTED;
 }
+} // namespace
 
+namespace leanstore {
 lean_status TableImpl::Insert(const struct lean_row* row) {
   lean_status status = lean_status::LEAN_STATUS_OK;
   session_impl_->ExecSync([&]() {
@@ -45,7 +46,7 @@ lean_status TableImpl::Lookup(const struct lean_row* key_row, struct lean_row* o
   lean_status status = lean_status::LEAN_STATUS_OK;
   session_impl_->ExecSync([&]() {
     TxGuard tx_guard(status);
-    status = ToStatus(table_->Lookup(key_row, out_row));
+    status = ToStatus(table_->Lookup(key_row, out_row, lookup_buffer_));
   });
   return status;
 }
@@ -55,7 +56,7 @@ struct lean_table_cursor* TableImpl::OpenCursor() {
 }
 
 struct lean_table_cursor* TableCursorImpl::Create(Table* table, SessionImpl* session_impl) {
-  auto* impl = new TableCursorImpl(table, session_impl);
+  auto* impl = new TableCursorImpl(session_impl);
   impl->cursor_ = table->NewCursor();
   assert(impl->cursor_ != nullptr);
   return &impl->base_;

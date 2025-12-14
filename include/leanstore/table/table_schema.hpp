@@ -47,53 +47,73 @@ inline std::string_view ToString(ColumnType type) {
 
 /// Definition of a single column in a table.
 struct ColumnDefinition {
-  std::string name;
-  ColumnType type = ColumnType::kBinary;
-  bool nullable = true;
+  std::string name_;
+  ColumnType type_ = ColumnType::kBinary;
+  bool nullable_ = true;
   /// For fixed length types (CHAR, BINARY, etc). Zero implies variable sized.
-  uint32_t fixed_length = 0;
+  uint32_t fixed_length_ = 0;
 };
 
 class TableSchema {
 public:
-  TableSchema() = default;
+  TableSchema(const TableSchema&) = default;
+  TableSchema(TableSchema&&) noexcept = default;
+  TableSchema& operator=(const TableSchema&) = default;
+  TableSchema& operator=(TableSchema&&) noexcept = default;
+  ~TableSchema() = default;
 
-  explicit TableSchema(std::vector<ColumnDefinition> columns,
-                       std::vector<uint32_t> primary_key_columns = {})
-      : columns_(std::move(columns)),
-        primary_key_columns_(std::move(primary_key_columns)) {
-  }
+  static Result<TableSchema> Create(std::vector<ColumnDefinition> columns,
+                                    std::vector<uint32_t> primary_key_columns);
 
-  const std::vector<ColumnDefinition>& columns() const {
+  const std::vector<ColumnDefinition>& Columns() const {
     return columns_;
   }
 
-  const std::vector<uint32_t>& primary_key_columns() const {
+  const std::vector<uint32_t>& PrimaryKeyColumns() const {
     return primary_key_columns_;
   }
 
   Result<void> Validate() const;
 
 private:
+  friend struct TableDefinition;
+
+  TableSchema();
+  TableSchema(std::vector<ColumnDefinition> columns, std::vector<uint32_t> primary_key_columns);
+
   std::vector<ColumnDefinition> columns_;
   std::vector<uint32_t> primary_key_columns_;
 };
 
 struct TableDefinition {
-  std::string name;
-  TableSchema schema;
-  lean_btree_type primary_index_type = lean_btree_type::LEAN_BTREE_TYPE_MVCC;
-  lean_btree_config primary_index_config{
+  std::string name_;
+  TableSchema schema_;
+  lean_btree_type primary_index_type_ = lean_btree_type::LEAN_BTREE_TYPE_MVCC;
+  lean_btree_config primary_index_config_{
       .enable_wal_ = true,
       .use_bulk_insert_ = false,
   };
 
+  static Result<TableDefinition> Create(std::string name, TableSchema schema,
+                                        lean_btree_type primary_index_type,
+                                        lean_btree_config primary_index_config);
+
   Result<void> Validate() const {
-    if (name.empty()) {
+    if (name_.empty()) {
       return Error::General("table name cannot be empty");
     }
-    return schema.Validate();
+    return schema_.Validate();
   }
+
+  TableDefinition(const TableDefinition&) = default;
+  TableDefinition(TableDefinition&&) noexcept = default;
+  TableDefinition& operator=(const TableDefinition&) = default;
+  TableDefinition& operator=(TableDefinition&&) noexcept = default;
+
+private:
+  TableDefinition();
+  TableDefinition(std::string name, TableSchema schema, lean_btree_type primary_index_type,
+                  lean_btree_config primary_index_config);
 };
 
 } // namespace leanstore

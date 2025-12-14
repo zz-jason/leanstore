@@ -86,35 +86,30 @@ typedef struct lean_table_def {
   struct lean_str_view name;
   const struct lean_table_column_def* columns;
   uint32_t num_columns;
-  const uint32_t* primary_key_column_indexes;
-  uint32_t num_primary_key_columns;
+  /// pk_cols[i] is the column position in the table schema.
+  const uint32_t* pk_cols;
+  uint32_t pk_cols_count;
   lean_btree_type primary_index_type;
   struct lean_btree_config primary_index_config;
 } lean_table_def;
 
-/// Datum representation for a single column.
-typedef struct lean_datum {
-  lean_column_type type;
-  bool is_null;
-  union {
-    bool b;
-    int32_t i32;
-    int64_t i64;
-    uint64_t u64;
-    float f32;
-    double f64;
-    struct lean_str str; /// used for binary/string values
-  } value;
+/// Datum representation for a single column. The type is defined by the table schema.
+typedef union lean_datum {
+  bool b;
+  int32_t i32;
+  int64_t i64;
+  uint64_t u64;
+  float f32;
+  double f64;
+  struct lean_str_view str; /// used for binary/string values
 } lean_datum;
 
 /// Row consisting of typed datums.
 typedef struct lean_row {
-  struct lean_datum* columns;
+  lean_datum* columns;
+  bool* nulls; // array of length num_columns, true if null
   uint32_t num_columns;
 } lean_row;
-
-/// Free any owned varlen memory inside a row.
-void lean_row_deinit(struct lean_row* row);
 
 /// Main database store instance with connection management
 typedef struct lean_store {

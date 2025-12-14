@@ -44,30 +44,25 @@ public:
   static Result<std::unique_ptr<Table>> WrapExisting(LeanStore* store, TableDefinition definition);
   ~Table() = default;
 
-  const TableDefinition& definition() const {
+  const TableDefinition& Definition() const {
     return definition_;
   }
 
   OpCode Insert(const lean_row* row);
   OpCode Remove(const lean_row* key_row);
-  OpCode Lookup(const lean_row* key_row, lean_row* out_row);
+  OpCode Lookup(const lean_row* key_row, lean_row* out_row, std::string& value_buf);
 
   std::unique_ptr<TableCursor> NewCursor();
 
-private:
-  Table(LeanStore* store, TableDefinition definition, KVInterface* kv_interface, BTreeGeneric* tree)
-      : store_(store),
-        definition_(std::move(definition)),
+  Table(TableDefinition definition, KVInterface* kv_interface)
+      : definition_(std::move(definition)),
         kv_interface_(kv_interface),
-        tree_(tree),
         codec_(definition_) {
   }
 
 private:
-  LeanStore* store_;
   TableDefinition definition_;
   KVInterface* kv_interface_;
-  BTreeGeneric* tree_;
   TableCodec codec_;
 };
 
