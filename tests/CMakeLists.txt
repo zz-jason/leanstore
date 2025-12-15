@@ -48,6 +48,7 @@ if(${ENABLE_COROUTINE})
   leanstore_add_test_in_dir(c)
   leanstore_add_test_in_dir(cpp)
   leanstore_add_test(recovery_test)
+  leanstore_add_test_in_dir(table)
 else()
   # Add tests
   leanstore_add_test(optimistic_guarded_test)

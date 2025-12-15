@@ -7,6 +7,7 @@
 #include "leanstore/c/leanstore.h"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/lean_store.hpp"
+#include "leanstore/table/table.hpp"
 
 #include <utility>
 
@@ -39,6 +40,10 @@ private:
             &Thunk<&SessionImpl::CreateBTree, lean_status, const char*, lean_btree_type>,
         .drop_btree = &Thunk<&SessionImpl::DropBTree, void, const char*>,
         .get_btree = &Thunk<&SessionImpl::GetBTree, struct lean_btree*, const char*>,
+        .create_table =
+            &Thunk<&SessionImpl::CreateTable, lean_status, const struct lean_table_def*>,
+        .drop_table = &Thunk<&SessionImpl::DropTable, lean_status, const char*>,
+        .get_table = &Thunk<&SessionImpl::GetTable, struct lean_table*, const char*>,
         .close = &Destroy,
     };
   }
@@ -60,6 +65,9 @@ private:
   lean_status CreateBTree(const char* btree_name, lean_btree_type btree_type);
   void DropBTree(const char* btree_name);
   struct lean_btree* GetBTree(const char* btree_name);
+  lean_status CreateTable(const struct lean_table_def* table_def);
+  lean_status DropTable(const char* table_name);
+  struct lean_table* GetTable(const char* table_name);
 
   template <auto Method, typename Ret, typename... Args>
   static Ret Thunk(struct lean_session* base, Args... args) {
