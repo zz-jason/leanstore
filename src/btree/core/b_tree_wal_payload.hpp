@@ -84,11 +84,11 @@ public:
     std::memcpy(payload_ + key_size_, val.data(), val_size_);
   }
 
-  inline Slice GetKey() const {
+  Slice GetKey() const {
     return Slice(payload_, key_size_);
   }
 
-  inline Slice GetVal() const {
+  Slice GetVal() const {
     return Slice(payload_ + key_size_, val_size_);
   }
 };
@@ -173,11 +173,11 @@ public:
     std::memcpy(payload_ + key.size(), &update_desc, update_desc.Size());
   }
 
-  inline Slice GetKey() const {
+  Slice GetKey() const {
     return Slice(payload_, key_size_);
   }
 
-  inline const UpdateDesc* GetUpdateDesc() const {
+  const UpdateDesc* GetUpdateDesc() const {
     auto* update_desc = UpdateDesc::From(payload_ + key_size_);
     LEAN_DCHECK(update_desc->Size() == update_desc_size_,
                 "Malformed WalTxUpdate: updateDesc->Size() != update_desc_size_, "
@@ -186,11 +186,11 @@ public:
     return update_desc;
   }
 
-  inline uint8_t* GetDeltaPtr() {
+  uint8_t* GetDeltaPtr() {
     return payload_ + key_size_ + update_desc_size_;
   }
 
-  inline const uint8_t* GetDeltaPtr() const {
+  const uint8_t* GetDeltaPtr() const {
     return payload_ + key_size_ + update_desc_size_;
   }
 

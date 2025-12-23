@@ -61,7 +61,6 @@ private:
 
   lean_txid_t DetermineCommitableUsrTxRfA(std::vector<Transaction>& tx_queue_rfa);
 
-private:
   /// Reference to the store instance.
   LeanStore* store_;
 

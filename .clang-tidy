@@ -14,17 +14,14 @@ Checks: >
   readability-redundant-*,
   -readability-redundant-casting,
   -readability-redundant-control-flow,
-  -readability-redundant-inline-specifier,
   -readability-redundant-member-init,
   -readability-redundant-string-init,
 
   # TODO: fix and enable the following checks
-  # readability-avoid-const-params-in-decls,
   # readability-container-size-empty,
   # readability-implicit-bool-conversion,
   # readability-isolate-declaration,
   # readability-uppercase-literal-suffix,
-  # readability-redundant-access-specifiers,
 
 
   modernize-*,

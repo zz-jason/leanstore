@@ -51,7 +51,7 @@ public:
   }
 
   template <typename T>
-  inline static T Rand(T min, T max) {
+  static T Rand(T min, T max) {
     uint64_t rand = RandU64(min, max);
     return static_cast<T>(rand);
   }

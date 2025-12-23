@@ -1,7 +1,7 @@
 #pragma once
 
+#include "leanstore/cpp/io/async_io.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/utils/async_io.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 
 #include <string>
@@ -34,7 +34,6 @@ public:
   /// The libaio wrapper.
   utils::AsyncIo aio_;
 
-public:
   GroupCommitter(LeanStore* store, int cpu)
       : ManagedThread(store, "GroupCommitter", cpu),
         store_(store),

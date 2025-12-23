@@ -66,7 +66,6 @@ public:
   /// Tndicates whether the fence_size_ is for lower or upper fence key.
   bool is_using_upper_fence_;
 
-public:
   explicit BTreeIterPessistic(BTreeGeneric& tree,
                               const LatchMode mode = LatchMode::kSharedPessimistic)
       : btree_(tree),

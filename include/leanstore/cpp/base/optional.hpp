@@ -1,5 +1,7 @@
 #pragma once
 
+#include "leanstore/cpp/base/error.hpp"
+
 #include <cassert>
 #include <optional>
 
@@ -11,10 +13,15 @@ namespace leanstore {
 #define LEAN_DCHECK_HAS_VALUE
 #endif
 
-/// A simple Optional type that encapsulates an optional value of type T.
-/// Optional<void> is not supported.
+/// A concept constraining the value type of Optional. Rationale:
+/// - Optional<void> has no well-defined value semantics.
+/// - Optional<Error> is an anti-pattern: Error represents failure in the
+///   control flow, not the absence of a value.
 template <typename T>
-  requires(!std::is_void_v<T>)
+concept OptionalValue = !std::is_void_v<T> && !std::same_as<std::remove_cvref_t<T>, Error>;
+
+/// A simple Optional type that encapsulates an optional value of type T.
+template <OptionalValue T>
 class [[nodiscard]] Optional {
 public:
   using optional_t = std::optional<T>;
@@ -74,6 +81,11 @@ public:
   }
 
   constexpr const T& value() const& { // NOLINT: mimicking std::optional
+    LEAN_DCHECK_HAS_VALUE;
+    return opt_.value();
+  }
+
+  constexpr T& operator*() & {
     LEAN_DCHECK_HAS_VALUE;
     return opt_.value();
   }

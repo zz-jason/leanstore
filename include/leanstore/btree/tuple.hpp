@@ -40,7 +40,7 @@ enum class TupleFormat : uint8_t {
 };
 
 struct TupleFormatUtil {
-  inline static std::string ToString(TupleFormat format) {
+  static std::string ToString(TupleFormat format) {
     switch (format) {
     case TupleFormat::kChained: {
       return "kChained";
@@ -76,7 +76,6 @@ public:
   /// Whether the tuple is locked for write.
   bool write_locked_;
 
-public:
   Tuple(TupleFormat format, lean_wid_t worker_id, lean_txid_t tx_id,
         lean_cmdid_t command_id = kCmdInvalid, bool write_locked = false)
       : format_(format),
@@ -86,25 +85,23 @@ public:
         write_locked_(write_locked) {
   }
 
-public:
-  inline bool IsWriteLocked() const {
+  bool IsWriteLocked() const {
     return write_locked_;
   }
 
-  inline void WriteLock() {
+  void WriteLock() {
     write_locked_ = true;
   }
 
-  inline void WriteUnlock() {
+  void WriteUnlock() {
     write_locked_ = false;
   }
 
-public:
-  inline static Tuple* From(uint8_t* buffer) {
+  static Tuple* From(uint8_t* buffer) {
     return reinterpret_cast<Tuple*>(buffer);
   }
 
-  inline static const Tuple* From(const uint8_t* buffer) {
+  static const Tuple* From(const uint8_t* buffer) {
     return reinterpret_cast<const Tuple*>(buffer);
   }
 
@@ -139,7 +136,6 @@ public:
   /// Descriptor + Delta
   uint8_t payload_[];
 
-public:
   FatTupleDelta() = default;
 
   FatTupleDelta(lean_wid_t worker_id, lean_txid_t tx_id, lean_cmdid_t command_id,
@@ -150,24 +146,23 @@ public:
     std::memcpy(payload_, buf, size);
   }
 
-public:
-  inline UpdateDesc& GetUpdateDesc() {
+  UpdateDesc& GetUpdateDesc() {
     return *reinterpret_cast<UpdateDesc*>(payload_);
   }
 
-  inline const UpdateDesc& GetUpdateDesc() const {
+  const UpdateDesc& GetUpdateDesc() const {
     return *reinterpret_cast<const UpdateDesc*>(payload_);
   }
 
-  inline uint8_t* GetDeltaPtr() {
+  uint8_t* GetDeltaPtr() {
     return payload_ + GetUpdateDesc().Size();
   }
 
-  inline const uint8_t* GetDeltaPtr() const {
+  const uint8_t* GetDeltaPtr() const {
     return payload_ + GetUpdateDesc().Size();
   }
 
-  inline uint32_t TotalSize() {
+  uint32_t TotalSize() {
     const auto& update_desc = GetUpdateDesc();
     return sizeof(FatTupleDelta) + update_desc.SizeWithDelta();
   }
@@ -199,7 +194,6 @@ public:
   // value, FatTupleDelta+Descriptor+Delta[] O2N
   uint8_t payload_[];
 
-public:
   explicit FatTuple(uint32_t payload_capacity)
       : Tuple(TupleFormat::kFat, 0, 0),
         payload_capacity_(payload_capacity),
@@ -219,19 +213,19 @@ public:
 
   void UndoLastUpdate();
 
-  inline MutableSlice GetMutableValue() {
+  MutableSlice GetMutableValue() {
     return MutableSlice(GetValPtr(), val_size_);
   }
 
-  inline Slice GetValue() const {
+  Slice GetValue() const {
     return Slice(GetValPtr(), val_size_);
   }
 
-  inline uint8_t* GetValPtr() {
+  uint8_t* GetValPtr() {
     return payload_;
   }
 
-  inline const uint8_t* GetValPtr() const {
+  const uint8_t* GetValPtr() const {
     return payload_;
   }
 
@@ -250,37 +244,37 @@ public:
   ///
   /// TODO(jian.z): verify whether it's expected to reverse the bytes instead
   /// of Deltas
-  inline void ReverseDeltas() {
+  void ReverseDeltas() {
     std::reverse(get_delta_offsets(), get_delta_offsets() + num_deltas_);
   }
 
 private:
   void resize(uint32_t new_size); // NOLINT (fixme)
 
-  inline FatTupleDelta& get_delta(uint16_t i) { // NOLINT (fixme)
+  FatTupleDelta& get_delta(uint16_t i) { // NOLINT (fixme)
     LEAN_DCHECK(i < num_deltas_);
     return *reinterpret_cast<FatTupleDelta*>(payload_ + get_delta_offsets()[i]);
   }
 
-  inline const FatTupleDelta& get_delta(uint16_t i) const { // NOLINT (fixme)
+  const FatTupleDelta& get_delta(uint16_t i) const { // NOLINT (fixme)
     LEAN_DCHECK(i < num_deltas_);
     return *reinterpret_cast<const FatTupleDelta*>(payload_ + get_delta_offsets()[i]);
   }
 
-  inline uint16_t* get_delta_offsets() { // NOLINT (fixme)
+  uint16_t* get_delta_offsets() { // NOLINT (fixme)
     return reinterpret_cast<uint16_t*>(payload_ + val_size_);
   }
 
-  inline const uint16_t* get_delta_offsets() const { // NOLINT (fixme)
+  const uint16_t* get_delta_offsets() const { // NOLINT (fixme)
     return reinterpret_cast<const uint16_t*>(payload_ + val_size_);
   }
 
 public:
-  inline static FatTuple* From(uint8_t* buffer) {
+  static FatTuple* From(uint8_t* buffer) {
     return reinterpret_cast<FatTuple*>(buffer);
   }
 
-  inline static const FatTuple* From(const uint8_t* buffer) {
+  static const FatTuple* From(const uint8_t* buffer) {
     return reinterpret_cast<const FatTuple*>(buffer);
   }
 };
@@ -351,8 +345,7 @@ public:
     std::memcpy(payload_, delta.payload_, delta_payload_size);
   }
 
-public:
-  inline static const UpdateVersion* From(const uint8_t* buffer) {
+  static const UpdateVersion* From(const uint8_t* buffer) {
     return reinterpret_cast<const UpdateVersion*>(buffer);
   }
 };
@@ -366,7 +359,6 @@ public:
   // Key + Value
   uint8_t payload_[];
 
-public:
   InsertVersion(lean_wid_t worker_id, lean_txid_t tx_id, lean_cmdid_t command_id, uint16_t key_size,
                 uint16_t val_size)
       : Version(VersionType::kInsert, worker_id, tx_id, command_id),
@@ -391,8 +383,7 @@ public:
     return Slice(payload_ + key_size_, val_size_);
   }
 
-public:
-  inline static const InsertVersion* From(const uint8_t* buffer) {
+  static const InsertVersion* From(const uint8_t* buffer) {
     return reinterpret_cast<const InsertVersion*>(buffer);
   }
 };
@@ -412,7 +403,6 @@ public:
   // Key + Value
   uint8_t payload_[];
 
-public:
   RemoveVersion(lean_wid_t worker_id, lean_txid_t tx_id, lean_cmdid_t command_id, uint16_t key_size,
                 uint16_t val_size)
       : Version(VersionType::kRemove, worker_id, tx_id, command_id),
@@ -438,8 +428,7 @@ public:
     return Slice(payload_ + key_size_, val_size_);
   }
 
-public:
-  inline static const RemoveVersion* From(const uint8_t* buffer) {
+  static const RemoveVersion* From(const uint8_t* buffer) {
     return reinterpret_cast<const RemoveVersion*>(buffer);
   }
 };

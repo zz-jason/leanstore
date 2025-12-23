@@ -184,7 +184,6 @@ private:
     mutex_state_ = State::kSharedOptimistic;
   }
 
-private:
   /// The hybrid mutex that this guard is managing. It can be null if the guard
   /// is uninitialized.
   CoroHybridMutex* hybrid_mutex_ = nullptr;

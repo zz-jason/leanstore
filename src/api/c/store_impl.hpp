@@ -54,7 +54,6 @@ private:
     return (impl->*Method)(std::forward<Args>(args)...);
   }
 
-private:
   lean_store base_;
   std::unique_ptr<LeanStore> store_;
 };

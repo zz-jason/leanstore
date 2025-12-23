@@ -39,7 +39,6 @@ public:
   /// Type of the WAL entry.
   Type type_;
 
-public:
   WalEntry() = default;
 
   explicit WalEntry(Type type) : type_(type) {

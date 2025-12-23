@@ -1,0 +1,35 @@
+#include "leanstore/cpp/recovery/parallel_recovery.hpp"
+
+#include "leanstore/cpp/recovery/recovery_analyzer.hpp"
+#include "leanstore/cpp/recovery/recovery_redoer.hpp"
+#include "leanstore/cpp/recovery/recovery_undoer.hpp"
+
+namespace leanstore {
+
+Result<void> ParallelRecovery::Run() {
+  // analysis phase
+  RecoveryAnalyzer analyzer(recovery_ctx_);
+  if (auto res = analyzer.Run(); !res) {
+    return res;
+  }
+
+  // redo phase
+  RecoveryRedoer redoer(recovery_ctx_.GetStoreDir(), recovery_ctx_.GetWalFilePaths(),
+                        analyzer.GetDirtyPageTable(), recovery_ctx_.GetNumPartitions());
+  if (auto res = redoer.Run(); !res) {
+    return res;
+  }
+
+  // TODO: update last checkpoint gsn to max observed page version after redo
+  // auto max_observed_page_version = analyzer.GetMaxObservedPageVersion();
+
+  // undo phase
+  RecoveryUndoer undoer(analyzer.GetActiveTxTable());
+  if (auto res = undoer.Run(); !res) {
+    return res;
+  }
+
+  return {};
+}
+
+} // namespace leanstore

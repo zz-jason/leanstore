@@ -17,7 +17,7 @@ enum class TxState : uint8_t {
 };
 
 struct TxStatUtil {
-  inline static std::string ToString(TxState state) {
+  static std::string ToString(TxState state) {
     switch (state) {
     case TxState::kIdle: {
       return "Idle";
@@ -82,7 +82,6 @@ public:
 
   bool wal_exceed_buffer_ = false;
 
-public:
   bool IsLongRunning() {
     return tx_mode_ == TxMode::kLongRunning;
   }

@@ -3,10 +3,10 @@
 #include "coroutine/coro_env.hpp"
 #include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/buffer-manager/buffer_manager.hpp"
-#include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/cpp/base/likely.hpp"
 #include "leanstore/cpp/base/log.hpp"
+#include "leanstore/cpp/wal/logging.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_guard.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
@@ -38,7 +38,6 @@ public:
   /// will be reclaimed by the buffer manager.
   bool keep_alive_ = true;
 
-public:
   /// Construct an empty GuardedBufferFrame, nothing to guard.
   GuardedBufferFrame()
       : buffer_manager_(nullptr),
@@ -142,7 +141,6 @@ public:
     return *this;
   }
 
-public:
   /// Update page version to a new GSN. Should be called when the page is
   /// modified, which makes the page dirty.
   void UpdatePageVersion() {

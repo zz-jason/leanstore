@@ -7,12 +7,12 @@
 #include "leanstore/common/types.h"
 #include "leanstore/cpp/base/jump_mu.hpp"
 #include "leanstore/cpp/base/log.hpp"
+#include "leanstore/cpp/base/small_vector.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/sync/scoped_hybrid_guard.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
-#include "utils/small_vector.hpp"
 
 #include <functional>
 

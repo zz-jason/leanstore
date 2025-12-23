@@ -2,8 +2,8 @@
 
 #include "coroutine/coro_env.hpp"
 #include "coroutine/mvcc_manager.hpp"
-#include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
+#include "leanstore/cpp/wal/logging.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "utils/scoped_timer.hpp"
 

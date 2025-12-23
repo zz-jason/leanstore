@@ -11,16 +11,17 @@
 #include "leanstore/cpp/base/error.hpp"
 #include "leanstore/cpp/base/jump_mu.hpp"
 #include "leanstore/cpp/base/log.hpp"
+#include "leanstore/cpp/config/store_paths.hpp"
+#include "leanstore/cpp/io/async_io.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/sync/scoped_hybrid_guard.hpp"
-#include "leanstore/utils/async_io.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #ifndef ENABLE_COROUTINE
 #include "leanstore/utils/parallelize.hpp"
 #endif
+#include "leanstore/cpp/base/small_vector.hpp"
 #include "utils/scoped_timer.hpp"
-#include "utils/small_vector.hpp"
 
 #include <cerrno>
 #include <cstdint>
@@ -442,12 +443,13 @@ void BufferManager::ReadPageSync(lean_pid_t page_id, void* page_buffer) {
       page->Init(page_id);
       if (bytes_read == 0) {
         Log::Warn("Read empty page, pageId={}, fd={}, bytesRead={}, bytesLeft={}, file={}", page_id,
-                  store_->page_fd_, bytes_read, bytes_left, store_->GetDbFilePath());
+                  store_->page_fd_, bytes_read, bytes_left,
+                  StorePaths::PagesFilePath(store_->store_option_->store_dir_));
       } else {
         Log::Error("Failed to read page, errno={}, error={}, pageId={}, fd={}, bytesRead={}, "
                    "bytesLeft={}, file={}",
                    errno, strerror(errno), page_id, store_->page_fd_, bytes_read, bytes_left,
-                   store_->GetDbFilePath());
+                   StorePaths::PagesFilePath(store_->store_option_->store_dir_));
       }
       return;
     }

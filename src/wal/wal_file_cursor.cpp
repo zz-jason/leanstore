@@ -9,12 +9,11 @@
 #include <cstdint>
 #include <cstring>
 #include <format>
-#include <optional>
 #include <string>
 
 namespace leanstore {
 
-Optional<Error> WalFileCursor::LoadCurrentRecord() {
+Result<void> WalFileCursor::LoadCurrentRecord() {
   static constexpr int64_t kWalHeaderSize = sizeof(lean_wal_record);
 
   wal_buffer_.resize(kWalHeaderSize);
@@ -23,7 +22,7 @@ Optional<Error> WalFileCursor::LoadCurrentRecord() {
   // EOF
   if (bytes_read == 0) {
     is_valid_ = false;
-    return std::nullopt;
+    return {};
   }
 
   // Error reading
@@ -52,7 +51,7 @@ Optional<Error> WalFileCursor::LoadCurrentRecord() {
                                       full_size - kWalHeaderSize, bytes_read));
   }
 
-  return std::nullopt;
+  return {};
 }
 
 } // namespace leanstore

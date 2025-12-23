@@ -1,10 +1,12 @@
 #pragma once
 
 #include "leanstore/btree/basic_kv.hpp"
+#include "leanstore/common/types.h"
 #include "leanstore/concurrency/concurrency_control.hpp"
-#include "leanstore/concurrency/logging.hpp"
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/cpp/base/log.hpp"
+#include "leanstore/cpp/config/store_paths.hpp"
+#include "leanstore/cpp/wal/logging.hpp"
 #include "utils/json.hpp"
 
 #include <cstdint>
@@ -80,7 +82,7 @@ public:
     return sys_tso_.load();
   }
 
-  uint64_t AllocWalGsn() {
+  lean_lid_t AllocWalGsn() {
     return wal_gsn_.fetch_add(1);
   }
 
@@ -110,7 +112,7 @@ private:
   std::atomic<uint64_t> sys_tso_ = 1;
 
   /// The global WAL GSN counter. Used to order the WAL records among all WAL files.
-  std::atomic<uint64_t> wal_gsn_ = 0;
+  std::atomic<lean_lid_t> wal_gsn_ = 0;
 
   /// All the logging instances in the system. Each worker thread should have 1 logging instance
   /// to write its own WAL entries.
@@ -137,7 +139,7 @@ inline MvccManager::MvccManager(LeanStore* store) : store_(store) {
       continue;
     }
     // create wal dir if not exists
-    std::string wal_dir = std::string(store_option->store_dir_) + "/wal";
+    std::string wal_dir = StorePaths::WalDir(store_option->store_dir_);
     if (!std::filesystem::exists(wal_dir)) {
       std::filesystem::create_directories(wal_dir);
       Log::Info("Created WAL directory: {}", wal_dir);

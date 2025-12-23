@@ -45,9 +45,14 @@ public:
       : result_(std::expected<storage_t, E>{}) {
   }
 
-  /// Construct a value Result.
+  /// Construct a value Result. Moves the value.
   /// No explicit in order to allow implicit conversions.
   Result(storage_t&& v) : result_(std::move(v)) { // NOLINT (google-explicit-constructor)
+  }
+
+  /// Construct a value Result (const version). Copies the value.
+  /// No explicit in order to allow implicit conversions.
+  Result(const storage_t& v) : result_(v) { // NOLINT (google-explicit-constructor)
   }
 
   /// Construct an error Result.

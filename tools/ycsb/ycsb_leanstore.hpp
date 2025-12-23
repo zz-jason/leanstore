@@ -9,6 +9,7 @@
 #include "leanstore/concurrency/tx_manager.hpp"
 #include "leanstore/cpp/base/jump_mu.hpp"
 #include "leanstore/cpp/base/log.hpp"
+#include "leanstore/cpp/base/small_vector.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/random_generator.hpp"
@@ -16,7 +17,6 @@
 #include "tools/ycsb/ycsb.hpp"
 #include "tools/ycsb/ycsb_leanstore_client.hpp"
 #include "utils/scoped_timer.hpp"
-#include "utils/small_vector.hpp"
 #include "ycsb_args.hpp"
 
 #include <gperftools/heap-profiler.h>

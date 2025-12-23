@@ -1,6 +1,8 @@
 #include "wal_analysis.hpp"
 
-#include "leanstore/cpp/wal/parallel_recovery.hpp"
+#include "leanstore/cpp/recovery/recovery_analyzer.hpp"
+#include "leanstore/cpp/recovery/recovery_context.hpp"
+#include "leanstore/cpp/recovery/recovery_redoer.hpp"
 
 #include <tanakh-cmdline/cmdline.h>
 
@@ -27,7 +29,10 @@ WalAnalysis WalAnalysis::New(int argc, char** argv) {
 }
 
 void WalAnalysis::Run() {
-  std::cout << std::format("Starting WAL analysis on directory: {}\n", options_.wal_dir_);
+  // get store dir from wal dir
+  std::string store_dir = std::filesystem::path(options_.wal_dir_).parent_path().string();
+  std::cout << std::format("Starting WAL analysis. store dir: {}, wal dir: {}\n", store_dir,
+                           options_.wal_dir_);
 
   auto wal_files = ListWalFiles(options_.wal_dir_);
   std::cout << std::format("Found {} WAL files\n", wal_files.size());
@@ -35,22 +40,29 @@ void WalAnalysis::Run() {
     std::cout << std::format(" - {}\n", wal_file);
   }
 
-  auto parallel_recovery = ParallelRecovery(std::move(wal_files));
-  if (auto err = parallel_recovery.Analysis(); err) {
-    std::cerr << std::format("WAL analysis failed: {}\n", err->ToString());
+  RecoveryContext recovery_ctx(store_dir, std::move(wal_files), 0, 4);
+  auto recovery_analyzer = RecoveryAnalyzer(recovery_ctx);
+  if (auto res = recovery_analyzer.Run(); !res) {
+    std::cerr << std::format("WAL analysis failed: {}\n", res.error().ToString());
     return;
   }
 
-  auto& dpt = parallel_recovery.GetDPT();
+  auto& dpt = recovery_analyzer.GetDirtyPageTable();
   std::cout << std::format("Dirty Page Table (DPT) size: {}\n", dpt.size());
   for (const auto& [page_id, lid] : dpt) {
-    std::cout << std::format(" - Page ID: {}, First Dirty LSN: {}\n", page_id, lid);
+    std::cout << std::format(" - Page ID: {}, First Dirty GSN: {}\n", page_id, lid);
   }
 
-  auto& att = parallel_recovery.GetATT();
+  auto& att = recovery_analyzer.GetActiveTxTable();
   std::cout << std::format("Active Transaction Table (ATT) size: {}\n", att.size());
   for (const auto& [tx_id, lid] : att) {
     std::cout << std::format(" - Transaction ID: {}, Last LSN: {}\n", tx_id, lid);
+  }
+
+  auto wal_redo_processor = RecoveryRedoer(store_dir, recovery_ctx.GetWalFilePaths(), dpt, 4);
+  if (auto res = wal_redo_processor.Run(); !res) {
+    std::cerr << std::format("WAL redo processing failed: {}\n", res.error().ToString());
+    return;
   }
 };
 

@@ -28,7 +28,6 @@ public:
     return s_enabled_fps.find(std::string(name)) != s_enabled_fps.end();
   }
 
-public:
   static constexpr auto kSkipCheckpointAll = "skip_checkpoint_all";
 
 private:

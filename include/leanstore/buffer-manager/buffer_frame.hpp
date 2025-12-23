@@ -27,7 +27,6 @@ public:
   /// Represents the last updated slot id on the page.
   int32_t last_updated_slot_ = -1;
 
-public:
   void Update(bool encountered_contention, int32_t last_updated_slot) {
     num_contentions_ += encountered_contention;
     num_updates_++;
@@ -77,7 +76,7 @@ public:
 
   /// The flushed page version of the containing page. Initialized when the
   /// containing page is loaded from disk.
-  uint64_t flushed_page_version_ = 0;
+  lean_lid_t flushed_page_version_ = 0;
 
   /// Whether the containing page is being written back to disk.
   std::atomic<bool> is_being_written_back_ = false;
@@ -89,7 +88,6 @@ public:
   /// CRC checksum of the containing page.
   uint64_t crc_ = 0;
 
-public:
   // Prerequisite: the buffer frame is exclusively locked
   void Reset() {
     LEAN_DCHECK(!is_being_written_back_);
@@ -136,7 +134,7 @@ public:
 
   /// Short for "page version", increased when a page is modified by any user or system
   /// transaction. A page is "dirty" when page_.page_version_ > header_.flushed_page_version_.
-  uint64_t page_version_ = 0;
+  lean_lid_t page_version_ = 0;
 
   /// The btree ID it belongs to.
   lean_treeid_t btree_id_ = std::numeric_limits<lean_treeid_t>::max();
@@ -147,7 +145,6 @@ public:
   /// The data stored in this page. The btree node content is stored here.
   uint8_t payload_[];
 
-public:
   uint64_t CRC() {
     return utils::CRC(payload_, CoroEnv::CurStore().store_option_->page_size_ - sizeof(Page));
   }

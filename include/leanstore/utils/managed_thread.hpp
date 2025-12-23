@@ -50,7 +50,6 @@ public:
     Stop();
   }
 
-public:
   /// Start executing the thread.
   void Start() {
     if (thread_ == nullptr) {

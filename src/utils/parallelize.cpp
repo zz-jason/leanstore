@@ -1,8 +1,12 @@
 #include "leanstore/utils/parallelize.hpp"
 
 #include "coroutine/coro_env.hpp"
+#include "leanstore/cpp/base/likely.hpp"
 #include "leanstore/cpp/base/log.hpp"
+#include "leanstore/cpp/base/range_splits.hpp"
 
+#include <algorithm>
+#include <cstdint>
 #include <functional>
 #include <thread>
 #include <vector>
@@ -14,22 +18,16 @@ void Parallelize::Range(
     std::function<void(uint64_t thread_id, uint64_t job_begin, uint64_t job_end)> job_handler) {
   auto& store = CoroEnv::CurStore();
   std::vector<std::thread> threads;
-  const uint64_t jobs_per_thread = num_jobs / num_threads;
-  LEAN_DCHECK(jobs_per_thread > 0, "Jobs per thread must be > 0");
+  LEAN_DCHECK(num_threads <= num_threads, "Too many threads for the given number of jobs");
 
-  for (uint64_t thread_id = 0; thread_id < num_threads; thread_id++) {
-    uint64_t begin = (thread_id * jobs_per_thread);
-    uint64_t end = begin + (jobs_per_thread);
-    if (thread_id == num_threads - 1) {
-      end = num_jobs;
-    }
-
+  auto ranges = RangeSplits<uint64_t>(num_jobs, num_threads);
+  for (auto i = 0u; i < num_threads; ++i) {
     threads.emplace_back(
         [&](uint64_t begin, uint64_t end) {
           CoroEnv::SetCurStore(&store);
-          job_handler(thread_id, begin, end);
+          job_handler(i, begin, end);
         },
-        begin, end);
+        ranges[i].begin(), ranges[i].end());
   }
 
   // wait all threads to finish
@@ -39,37 +37,34 @@ void Parallelize::Range(
 }
 
 void Parallelize::ParallelRange(
-    uint64_t num_jobs, std::function<void(uint64_t job_begin, uint64_t job_end)>&& job_handler) {
-  auto& store = CoroEnv::CurStore();
-  std::vector<std::thread> threads;
-  uint64_t num_thread = std::thread::hardware_concurrency();
-  uint64_t jobs_per_thread = num_jobs / num_thread;
-  uint64_t num_remaining = num_jobs % num_thread;
-  uint64_t num_proceed_tasks = 0;
-  if (jobs_per_thread < num_thread) {
-    num_thread = num_remaining;
+    uint64_t num_jobs, std::function<void(uint64_t job_begin, uint64_t job_end)> job_handler) {
+  if (LEAN_UNLIKELY(num_jobs == 0)) {
+    return;
   }
 
-  // To balance the workload among all threads:
-  // - the first numRemaining threads process jobsPerThread+1 tasks
-  // - other threads process jobsPerThread tasks
-  for (uint64_t i = 0; i < num_thread; i++) {
-    uint64_t begin = num_proceed_tasks;
-    uint64_t end = begin + jobs_per_thread;
-    if (num_remaining > 0) {
-      end++;
-      num_remaining--;
-    }
-    num_proceed_tasks = end;
+  auto& store = CoroEnv::CurStore();
+  uint64_t num_thread = std::max(1U, std::thread::hardware_concurrency());
+  num_thread = std::min(num_thread, num_jobs);
+
+  std::vector<std::thread> threads;
+  threads.reserve(num_thread);
+
+  RangeSplits<uint64_t> ranges(num_jobs, num_thread);
+
+  for (auto i = 0u; i < num_thread; i++) {
+    auto range = ranges[i];
     threads.emplace_back(
         [&](uint64_t begin, uint64_t end) {
           CoroEnv::SetCurStore(&store);
           job_handler(begin, end);
         },
-        begin, end);
+        range.begin(), range.end());
   }
+
   for (auto& thread : threads) {
-    thread.join();
+    if (thread.joinable()) {
+      thread.join();
+    }
   }
 }
 

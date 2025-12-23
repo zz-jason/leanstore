@@ -38,7 +38,7 @@ public:
     return *this;
   }
 
-  inline void JumpIfModifiedByOthers() {
+  void JumpIfModifiedByOthers() {
     guard_.JumpIfModifiedByOthers();
   }
 };

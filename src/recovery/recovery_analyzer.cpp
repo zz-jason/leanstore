@@ -1,46 +1,36 @@
-#include "leanstore/cpp/wal/parallel_recovery.hpp"
+#include "leanstore/cpp/recovery/recovery_analyzer.hpp"
 
 #include "leanstore/common/wal_record.h"
-#include "leanstore/cpp/base/error.hpp"
 #include "leanstore/cpp/base/log.hpp"
-#include "leanstore/cpp/base/optional.hpp"
 #include "leanstore/cpp/base/result.hpp"
 #include "leanstore/cpp/wal/wal_cast.hpp"
 #include "leanstore/cpp/wal/wal_cursor.hpp"
 
 #include <memory>
-#include <optional>
-#include <string>
 #include <utility>
-#include <vector>
 
 namespace leanstore {
 
-Optional<Error> ParallelRecovery::Run() {
-  return std::nullopt;
-}
-
-Optional<Error> ParallelRecovery::Analysis() {
-  /// Create wal cursors for each wal file
-  auto cursors = CreateWalCursors(wal_file_paths_);
+Result<void> RecoveryAnalyzer::Run() {
+  auto cursors = WalCursor::NewWalCursors(recovery_ctx_.GetWalFilePaths());
   if (!cursors) {
     return std::move(cursors.error());
   }
 
-  // Process each wal file
-  auto analyze_record = [&](lean_wal_record& record) { return AnalyzeRecord(record); };
+  auto analyze_record = [&](lean_wal_record& record) -> Result<bool> {
+    return AnalyzeRecord(record);
+  };
   for (auto& cursor : cursors.value()) {
-    auto err = cursor->Foreach(analyze_record);
-    if (err) {
-      return err;
+    auto res = cursor->Foreach(analyze_record);
+    if (!res) {
+      return res;
     }
   }
 
-  return std::nullopt;
+  return {};
 }
 
-bool ParallelRecovery::AnalyzeRecord(lean_wal_record& record) {
-  LEAN_DLOG("WAL Record Type: {}", static_cast<int>(record.type_));
+bool RecoveryAnalyzer::AnalyzeRecord(lean_wal_record& record) {
   switch (record.type_) {
   case LEAN_WAL_TYPE_CARRIAGE_RETURN: {
     break; // Do nothing
@@ -114,19 +104,36 @@ bool ParallelRecovery::AnalyzeRecord(lean_wal_record& record) {
 
   return true;
 }
-
-Result<std::vector<std::unique_ptr<WalCursor>>> ParallelRecovery::CreateWalCursors(
-    const std::vector<std::string>& wal_file_paths) {
-  std::vector<std::unique_ptr<WalCursor>> wal_cursors;
-  for (const auto& wal_file_path : wal_file_paths) {
-    auto cursor = WalCursor::New(wal_file_path);
-    if (cursor) {
-      wal_cursors.push_back(std::move(cursor.value()));
-    } else {
-      return std::move(cursor.error());
-    }
+void RecoveryAnalyzer::UpdateDPT(lean_pid_t page_id, lean_lid_t page_version) {
+  // Skip wal records before or at the last checkpoint.
+  // TODO: reduce the overhead, avoid reading every record.
+  if (page_version <= recovery_ctx_.GetLastCheckpointGsn()) {
+    return;
   }
-  return wal_cursors;
+
+  max_observed_page_version_ = std::max(max_observed_page_version_, page_version);
+
+  auto it = dirty_page_table_.find(page_id);
+  if (it == dirty_page_table_.end() || page_version < it->second) {
+    dirty_page_table_[page_id] = page_version;
+  }
+}
+
+void RecoveryAnalyzer::UpdateATT(lean_txid_t tx_id, lean_lid_t lsn) {
+  auto it = active_tx_table_.find(tx_id);
+  if (it == active_tx_table_.end()) {
+    active_tx_table_.emplace(tx_id, lsn);
+  } else {
+    it->second = lsn;
+  }
+}
+
+void RecoveryAnalyzer::RemoveATT(lean_txid_t tx_id) {
+  auto it = active_tx_table_.find(tx_id);
+  LEAN_DCHECK(it != active_tx_table_.end());
+  if (it != active_tx_table_.end()) {
+    active_tx_table_.erase(it);
+  }
 }
 
 } // namespace leanstore
