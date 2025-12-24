@@ -108,7 +108,7 @@ int16_t BTreeNode::InsertDoNotCopyPayload(Slice key, uint16_t val_size, int32_t 
 }
 
 int32_t BTreeNode::Insert(Slice key, Slice val) {
-  DEBUG_BLOCK() {
+  LEAN_DEXEC() {
     assert(CanInsert(key.size(), val.size()));
     int32_t exact_pos = LowerBound<true>(key);
     static_cast<void>(exact_pos);
@@ -123,7 +123,7 @@ int32_t BTreeNode::Insert(Slice key, Slice val) {
   UpdateHint(slot_id);
   return slot_id;
 
-  DEBUG_BLOCK() {
+  LEAN_DEXEC() {
     int32_t exact_pos = LowerBound<true>(key);
     static_cast<void>(exact_pos);
     // assert for duplicates
@@ -133,10 +133,10 @@ int32_t BTreeNode::Insert(Slice key, Slice val) {
 
 void BTreeNode::Compact() {
   uint16_t space_after_compaction [[maybe_unused]] = 0;
-  DEBUG_BLOCK() {
+  LEAN_DEXEC() {
     space_after_compaction = FreeSpaceAfterCompaction();
   }
-  LEAN_DEFER(DEBUG_BLOCK() { LEAN_DCHECK(space_after_compaction == FreeSpace()); });
+  LEAN_DEFER(LEAN_DEXEC() { LEAN_DCHECK(space_after_compaction == FreeSpace()); });
 
   // generate a temp node to store the compacted data
   auto tmp_node_buf = utils::JumpScopedArray<uint8_t>(BTreeNode::Size());

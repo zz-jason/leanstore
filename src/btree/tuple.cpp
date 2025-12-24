@@ -310,7 +310,7 @@ void FatTuple::GarbageCollection() {
   std::memcpy(this, buffer->get(), buffer_size);
   LEAN_DCHECK(payload_capacity_ >= payload_size_);
 
-  DEBUG_BLOCK() {
+  LEAN_DEXEC() {
     uint32_t space_used [[maybe_unused]] = val_size_;
     for (uint32_t i = 0; i < num_deltas_; i++) {
       space_used += sizeof(uint16_t) + get_delta(i).TotalSize();

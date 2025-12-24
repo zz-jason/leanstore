@@ -2,7 +2,12 @@
 # Set build target and dependencies for the lib
 # ---------------------------------------------------------------------------
 
-file(GLOB_RECURSE YCSB_SRC **.cpp **/**.cpp **.cc **/**.cc **.hpp **/**.hpp **.h **/**.h)
+file(GLOB_RECURSE YCSB_SRC
+  **.cpp
+  **.cc
+  **.hpp
+  **.h
+)
 
 set(YCSB_DEPS
   leanstore
@@ -11,8 +16,7 @@ set(YCSB_DEPS
 find_package(RocksDB CONFIG REQUIRED)
 list(APPEND YCSB_DEPS RocksDB::rocksdb)
 
-option(ENABLE_WIRED_TIGER "Enable benchmarking wiredtiger" OFF)
-if(ENABLE_WIRED_TIGER)
+if(LEAN_ENABLE_WIRED_TIGER)
   #TODO(zz-jason): use pre-installed wiredtiger
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     link_directories("/root/code/wiredtiger/dist/debug/lib")
@@ -20,15 +24,15 @@ if(ENABLE_WIRED_TIGER)
     link_directories("/root/code/wiredtiger/dist/release/lib")
   endif()
   list(APPEND YCSB_DEPS wiredtiger)
-endif(ENABLE_WIRED_TIGER)
+endif(LEAN_ENABLE_WIRED_TIGER)
 
 add_executable(ycsb ${YCSB_SRC})
 target_link_libraries(ycsb PRIVATE ${YCSB_DEPS})
 
-if(ENABLE_WIRED_TIGER)
-  target_compile_definitions(ycsb PUBLIC ENABLE_WIRED_TIGER)
+if(LEAN_ENABLE_WIRED_TIGER)
+  target_compile_definitions(ycsb PUBLIC LEAN_ENABLE_WIRED_TIGER)
   target_include_directories(ycsb PUBLIC "/root/code/wiredtiger/dist/debug/include")
-endif(ENABLE_WIRED_TIGER)
+endif(LEAN_ENABLE_WIRED_TIGER)
 
 # include dirs
 target_include_directories(ycsb PUBLIC ${CMAKE_SOURCE_DIR})

@@ -76,7 +76,7 @@ uint8_t* Logging::ReserveWalBuffer(uint32_t bytes_required, bool check_space) {
       // 2. yield current coroutine to wait for log flush to reclaim space
       if (buffered + bytes_required + kCarriageReturnSize > wal_buffer_bytes_) {
         WriteWalCarriageReturn();
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
         CoroEnv::CurCoro()->Yield(CoroState::kWaitingIo);
 #endif
         continue;
@@ -88,7 +88,7 @@ uint8_t* Logging::ReserveWalBuffer(uint32_t bytes_required, bool check_space) {
     // Not enough space between wal_buffered_ and wal_flushed_:
     // yield current coroutine to wait for log flush to reclaim space
     if (buffered + bytes_required > flushed) {
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
       CoroEnv::CurCoro()->Yield(CoroState::kWaitingIo);
 #endif
       continue;

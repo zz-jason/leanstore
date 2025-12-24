@@ -4,13 +4,12 @@
         {
             "name": "base",
             "hidden": true,
+            "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
-                "CMAKE_C_COMPILER": "gcc",
-                "CMAKE_CXX_COMPILER": "g++",
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "BUILD_SHARED_LIBS": "OFF",
-                "ENABLE_PERF_COUNTERS": "ON"
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/${presetName}"
             }
         },
         {
@@ -30,58 +29,43 @@
             }
         },
         {
-            "name": "debug",
+            "name": "debug_tsan",
             "inherits": "base_debug",
-            "binaryDir": "${sourceDir}/build/debug",
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/debug",
-                "ENABLE_COROUTINE": "OFF",
-                "ENABLE_PROFILING": "ON"
+                "LEAN_ENABLE_CORO": "OFF",
+                "ENABLE_TSAN": "ON"
             }
         },
         {
-            "name": "debug_tsan",
+            "name": "debug_cov",
             "inherits": "base_debug",
-            "binaryDir": "${sourceDir}/build/debug_tsan",
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/debug_tsan",
-                "ENABLE_TSAN": "ON",
-                "ENABLE_COROUTINE": "OFF",
+                "LEAN_ENABLE_CORO": "OFF",
                 "ENABLE_COVERAGE": "ON"
             }
         },
         {
             "name": "debug_coro",
             "inherits": "base_debug",
-            "binaryDir": "${sourceDir}/build/debug_coro",
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/debug_coro",
-                "ENABLE_COROUTINE": "ON",
-                "BUILD_SHARED_LIBS": "ON",
+                "LEAN_ENABLE_CORO": "ON",
                 "ENABLE_COVERAGE": "ON"
             }
         },
         {
             "name": "release_coro",
             "inherits": "base_release",
-            "binaryDir": "${sourceDir}/build/release_coro",
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/release_coro",
-                "ENABLE_PROFILING": "ON",
-                "ENABLE_WIRED_TIGER": "OFF",
-                "BUILD_SHARED_LIBS": "ON",
-                "ENABLE_COROUTINE": "ON"
+                "LEAN_ENABLE_CORO": "ON",
+                "BUILD_SHARED_LIBS": "ON"
             }
         },
         {
             "name": "release_thread",
             "inherits": "base_release",
-            "binaryDir": "${sourceDir}/build/release_thread",
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/release_thread",
-                "ENABLE_PROFILING": "ON",
-                "ENABLE_WIRED_TIGER": "OFF",
-                "ENABLE_COROUTINE": "OFF"
+                "LEAN_ENABLE_CORO": "OFF",
+                "BUILD_SHARED_LIBS": "ON"
             }
         }
     ]

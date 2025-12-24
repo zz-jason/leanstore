@@ -83,7 +83,7 @@ void TxManager::StartTx(TxMode mode, IsolationLevel level, bool is_read_only) {
   // Cleanup commit log if necessary
   cc_.commit_tree_.CompactCommitLog();
 
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
   CoroEnv::CurCoroExec()->AutoCommitter()->RegisterTxMgr(this);
 #endif
 }
@@ -147,7 +147,7 @@ void TxManager::CommitTx() {
 
   WaitToCommit(active_tx_.commit_ts_);
 
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
   CoroEnv::CurCoroExec()->AutoCommitter()->UnregisterTxMgr(this);
 #endif
 }
@@ -205,7 +205,7 @@ void TxManager::AbortTx() {
     WalTxBuilder<lean_wal_tx_complete>(0, 0).BuildTxComplete().Submit();
   }
 
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
   CoroEnv::CurCoroExec()->AutoCommitter()->UnregisterTxMgr(this);
 #endif
 }

@@ -3,7 +3,7 @@
 #include "leanstore/cpp/base/log.hpp"
 #include "tools/ycsb/ycsb_leanstore.hpp"
 #include "tools/ycsb/ycsb_rocksdb.hpp"
-#ifdef ENABLE_WIRED_TIGER
+#ifdef LEAN_ENABLE_WIRED_TIGER
 #include "tools/ycsb/ycsb_wired_tiger.hpp"
 #endif
 #include "ycsb_args.hpp"
@@ -36,7 +36,7 @@ constexpr auto kCmdRun = "run";
 constexpr auto kTargetTransactionKv = "transactionkv";
 constexpr auto kTargetBasicKv = "basickv";
 constexpr auto kTargetRocksDb = "rocksdb";
-#ifdef ENABLE_WIRED_TIGER
+#ifdef LEAN_ENABLE_WIRED_TIGER
 constexpr auto kWiredTiger = "wiredtiger";
 #endif
 
@@ -96,7 +96,7 @@ std::unique_ptr<leanstore::ycsb::YcsbExecutor> GetExecutor(
   if (ycsb_target == kTargetRocksDb) {
     return std::make_unique<leanstore::ycsb::YcsbRocksDb>(ycsb_options);
   }
-#ifdef ENABLE_WIRED_TIGER
+#ifdef LEAN_ENABLE_WIRED_TIGER
   if (ycsb_target == kWiredTiger) {
     return std::make_unique<leanstore::ycsb::YcsbWiredTiger>(ycsb_options);
   }

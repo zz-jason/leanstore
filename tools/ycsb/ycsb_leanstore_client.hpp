@@ -43,7 +43,7 @@ public:
   }
 
   ~YcsbLeanStoreClient() override {
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
     store_->GetCoroScheduler().ReleaseCoroSession(coro_session_);
 #endif
   }
@@ -63,7 +63,7 @@ protected:
     update_desc_->update_slots_[0].offset_ = 0;
     update_desc_->update_slots_[0].size_ = options_.val_size_;
 
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
     coro_session_ = store_->GetCoroScheduler().TryReserveCoroSession(
         client_id_ % store_->store_option_->worker_threads_);
     assert(coro_session_ != nullptr && "Failed to reserve a CoroSession for coroutine execution");
@@ -93,7 +93,7 @@ protected:
   }
 
   void SubmitJobSync(std::function<void()>&& job) {
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
     store_->GetCoroScheduler().Submit(coro_session_, std::move(job))->Wait();
 #else
     store_->ExecSync(client_id_ % store_->store_option_->worker_threads_, std::move(job));

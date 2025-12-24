@@ -179,7 +179,7 @@ public:
         }
       };
 
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
       reserved_sessions.push_back(store_->GetCoroScheduler().TryReserveCoroSession(i));
       assert(reserved_sessions.back() != nullptr &&
              "Failed to reserve a CoroSession for parallel range execution");
@@ -191,7 +191,7 @@ public:
       i++, begin = end;
     }
 
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
     for (const auto& future : futures) {
       future->Wait();
     }
@@ -296,7 +296,7 @@ public:
         }
       };
 
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
       reserved_sessions.push_back(store_->GetCoroScheduler().TryReserveCoroSession(worker_id));
       assert(reserved_sessions.back() != nullptr &&
              "Failed to reserve a CoroSession for parallel range execution");
@@ -359,7 +359,7 @@ public:
     keep_running = false;
     perf_context_reporter.join();
 
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
     for (const auto& future : futures) {
       future->Wait();
     }
@@ -421,7 +421,7 @@ public:
   }
 
   void SubmitJobSync(std::function<void()>&& job, uint64_t worker_id) {
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
     auto* coro_session = store_->GetCoroScheduler().TryReserveCoroSession(worker_id);
     assert(coro_session != nullptr && "Failed to reserve a CoroSession for coroutine execution");
     store_->GetCoroScheduler().Submit(coro_session, std::move(job))->Wait();

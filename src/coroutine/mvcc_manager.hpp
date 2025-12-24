@@ -133,7 +133,7 @@ inline MvccManager::MvccManager(LeanStore* store) : store_(store) {
   for (auto i = 0U; i < store_option->worker_threads_; i++) {
     loggings_.emplace_back(std::make_unique<Logging>(store_option->wal_buffer_bytes_));
 
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
     if (!store_option->enable_wal_) {
       Log::Info("Skipping logging initialization, WAL is disabled");
       continue;
