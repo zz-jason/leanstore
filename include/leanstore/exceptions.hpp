@@ -48,23 +48,10 @@ Generic_Exception(TODO);
 #define TODOException()                                                                            \
   throw leanstore::ex::TODO(std::string(__FILE__) + ":" + std::string(std::to_string(__LINE__)));
 
-#ifdef MACRO_CHECK_DEBUG
-#define DEBUG_BLOCK() if (true)
-#define RELEASE_BLOCK() if (true)
-#define BENCHMARK_BLOCK() if (true)
+#ifdef LEAN_ENABLE_DEBUG_EXEC
+#define LEAN_DEXEC() if (true)
 #else
-#define DEBUG_BLOCK() if (false)
-#ifdef MACRO_CHECK_RELEASE
-#define RELEASE_BLOCK() if (true)
-#define BENCHMARK_BLOCK() if (true)
-#else
-#define RELEASE_BLOCK() if (false)
-#ifdef MACRO_CHECK_BENCHMARK
-#define BENCHMARK_BLOCK() if (true)
-#else
-#define BENCHMARK_BLOCK() if (false)
-#endif
-#endif
+#define LEAN_DEXEC() if (false)
 #endif
 
 template <typename T>

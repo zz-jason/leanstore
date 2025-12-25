@@ -76,7 +76,7 @@ void CommitTree::CompactCommitLog() {
     commit_log_.push_back(p);
   }
 
-  DEBUG_BLOCK() {
+  LEAN_DEXEC() {
     LEAN_DLOG("Commit log cleaned up, workerId={}, commit_log_.size()={}",
               CoroEnv::CurTxMgr().worker_id_, commit_log_.size());
   }

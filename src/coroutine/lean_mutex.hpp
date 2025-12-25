@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
 
 #include "coroutine/coro_lock_guard.hpp"
 #include "coroutine/coro_mutex.hpp"
@@ -14,7 +14,7 @@
 
 namespace leanstore {
 
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
 
 using LeanMutex = leanstore::CoroMutex;
 using LeanSharedMutex = leanstore::CoroSharedMutex;

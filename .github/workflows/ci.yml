@@ -10,31 +10,44 @@ permissions:
   pull-requests: write
 
 jobs:
-  thread-mode:
+  ut-with-tsan:
     runs-on: ubuntu-latest
     container:
       image: zzjason/leanstore-dev:latest
-    name: UT
+    name: UT-tsan
     steps:
     - name: Check out repository
       uses: actions/checkout@v3
 
-    - name: Config project
+    - name: Config, Build, and UT with tsan
       run: |
-        which vcpkg;
         cmake --preset debug_tsan
+        cmake --build build/debug_tsan -j `nproc`
+        TSAN_OPTIONS="suppressions=$(pwd)/tests/tsan.supp" ctest --test-dir build/debug_tsan --output-on-failure -j 2
+
+  ut-with-gcovr:
+    runs-on: ubuntu-latest
+    container:
+      image: zzjason/leanstore-dev:latest
+    name: UT-coverage
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v3
+
+    - name: Config
+      run: cmake --preset debug_cov
 
     - name: Cppcheck
-      run: cppcheck --project=build/debug_tsan/compile_commands.json -i tests --error-exitcode=1 --check-level=exhaustive
+      run: cppcheck --project=build/debug_cov/compile_commands.json -i tests --error-exitcode=1 --check-level=exhaustive
 
     - name: Clang-format
-      run: cmake --build build/debug_tsan --target=check-format
+      run: cmake --build build/debug_cov --target=check-format
 
     - name: Build
-      run: cmake --build build/debug_tsan -j `nproc`
+      run: cmake --build build/debug_cov -j `nproc`
 
-    - name: Unit test with tsan
-      run: TSAN_OPTIONS="suppressions=$(pwd)/tests/tsan.supp" ctest --test-dir build/debug_tsan --output-on-failure -j 2
+    - name: UT with coverage
+      run: TSAN_OPTIONS="suppressions=$(pwd)/tests/tsan.supp" ctest --test-dir build/debug_cov --output-on-failure -j 2
 
     - name: Generate coverage file
       run: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'tools/*' --verbose
@@ -52,14 +65,13 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: zzjason/leanstore-dev:latest
-    name: "[COROUTINE] UT"
+    name: "[CORO] UT-coverage"
     steps:
     - name: Check out repository
       uses: actions/checkout@v3
 
     - name: Config project
       run: |
-        which vcpkg;
         cmake --preset debug_coro
 
     - name: Cppcheck
@@ -96,7 +108,6 @@ jobs:
       uses: actions/checkout@v3
     - name: Config, build, install
       run: |
-        which vcpkg;
         cmake --preset release_thread
         cmake --build build/release_thread -j `nproc`
         cmake --install build/release_thread
@@ -123,17 +134,17 @@ jobs:
       - name: Unpack artifact
         run: |
           tar -xzf leanstore-thread-mode.tar.gz
-          ldd ./dist/release_thread/bin/ycsb
+          LD_LIBRARY_PATH=./dist/release_thread/lib ldd ./dist/release_thread/bin/ycsb
       - name: YCSB data load
         run: |
-          ./dist/release_thread/bin/ycsb --data_dir=/tmp/leanstore/thread \
+          LD_LIBRARY_PATH=./dist/release_thread/lib ./dist/release_thread/bin/ycsb --data_dir=/tmp/leanstore/thread \
             --key_size=16 --val_size=200 --record_count=10000 --mem_gb=1 \
             --target=basickv --workload=b \
             --threads=2 --clients=6 \
             --cmd=load
       - name: YCSB bench
         run: |
-          ./dist/release_thread/bin/ycsb --data_dir=/tmp/leanstore/thread \
+          LD_LIBRARY_PATH=./dist/release_thread/lib ./dist/release_thread/bin/ycsb --data_dir=/tmp/leanstore/thread \
             --key_size=16 --val_size=200 --record_count=10000 --mem_gb=1 \
             --target=basickv --workload=b \
             --threads=2 --clients=6 --run_for_seconds=30 \
@@ -161,17 +172,17 @@ jobs:
       - name: Unpack artifact
         run: |
           tar -xzf leanstore-thread-mode.tar.gz
-          ldd ./dist/release_thread/bin/ycsb
+          LD_LIBRARY_PATH=./dist/release_thread/lib ldd ./dist/release_thread/bin/ycsb
       - name: YCSB data load
         run: |
-          ./dist/release_thread/bin/ycsb --data_dir=/tmp/leanstore/thread \
+          LD_LIBRARY_PATH=./dist/release_thread/lib ./dist/release_thread/bin/ycsb --data_dir=/tmp/leanstore/thread \
             --key_size=16 --val_size=200 --record_count=10000 --mem_gb=1 \
             --target=transactionkv --workload=b \
             --threads=2 --clients=6 \
             --cmd=load
       - name: YCSB bench
         run: |
-          ./dist/release_thread/bin/ycsb --data_dir=/tmp/leanstore/thread \
+          LD_LIBRARY_PATH=./dist/release_thread/lib ./dist/release_thread/bin/ycsb --data_dir=/tmp/leanstore/thread \
             --key_size=16 --val_size=200 --record_count=10000 --mem_gb=1 \
             --target=transactionkv --workload=b \
             --threads=2 --clients=6 --run_for_seconds=30 \
@@ -189,13 +200,12 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: zzjason/leanstore-dev:latest
-    name: "[COROUTINE] Build Release"
+    name: "[CORO] Build Release"
     steps:
     - name: Check out repository
       uses: actions/checkout@v3
     - name: Config, build, install
       run: |
-        which vcpkg;
         cmake --preset release_coro
         cmake --build build/release_coro -j `nproc`
         cmake --install build/release_coro
@@ -213,7 +223,7 @@ jobs:
     needs: [build-release-coro-mode]
     container:
       image: zzjason/leanstore-dev:latest
-    name: "[COROUTINE] Bench YCSB B on BasicKV"
+    name: "[CORO] Bench YCSB B on BasicKV"
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -237,7 +247,7 @@ jobs:
             --target=basickv --workload=b \
             --threads=2 --clients=6 --run_for_seconds=30 \
             --cmd=run > ycsb_b_coro_basickv.out
-          sed -i '1i**[COROUTINE] Bench YCSB B on BasicKV**\n```txt' ycsb_b_coro_basickv.out
+          sed -i '1i**[CORO] Bench YCSB B on BasicKV**\n```txt' ycsb_b_coro_basickv.out
           echo '```' >> ycsb_b_coro_basickv.out
           cat ycsb_b_coro_basickv.out
       - name: Upload bench result
@@ -251,7 +261,7 @@ jobs:
     needs: [build-release-coro-mode]
     container:
       image: zzjason/leanstore-dev:latest
-    name: "[COROUTINE] Bench YCSB B on TransactionKV"
+    name: "[CORO] Bench YCSB B on TransactionKV"
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -275,7 +285,7 @@ jobs:
             --target=transactionkv --workload=b \
             --threads=2 --clients=6 --run_for_seconds=30 \
             --cmd=run > ycsb_b_coro_transactionkv.out
-          sed -i '1i**[COROUTINE] Bench YCSB B on TransactionKV**\n```txt' ycsb_b_coro_transactionkv.out
+          sed -i '1i**[CORO] Bench YCSB B on TransactionKV**\n```txt' ycsb_b_coro_transactionkv.out
           echo '```' >> ycsb_b_coro_transactionkv.out
           cat ycsb_b_coro_transactionkv.out
       - name: Upload bench result
@@ -324,7 +334,7 @@ jobs:
     needs: [build-release-coro-mode]
     container:
       image: zzjason/leanstore-dev:latest
-    name: "[COROUTINE] Example C"
+    name: "[CORO] Example C"
     steps:
       - name: Check out repository
         uses: actions/checkout@v3
@@ -348,17 +358,16 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: zzjason/leanstore-dev:latest
-    name: "Clang-tidy"
+    name: "Clang-Tidy"
     steps:
     - name: Check out repository
       uses: actions/checkout@v3
 
     - name: Config project
       run: |
-        which vcpkg;
         cmake --preset debug_tsan
 
-    - name: Clang-tidy on changed files
+    - name: Clang-Tidy on changed files
       run: |
         bash ".github/scripts/run-clang-tidy-pr.sh" \
           "${{ github.event.pull_request.number }}" \
@@ -370,17 +379,16 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: zzjason/leanstore-dev:latest
-    name: "[COROUTINE] Clang-tidy"
+    name: "[CORO] Clang-Tidy"
     steps:
     - name: Check out repository
       uses: actions/checkout@v3
 
     - name: Config project
       run: |
-        which vcpkg;
         cmake --preset debug_coro
 
-    - name: Clang-tidy on changed files
+    - name: Clang-Tidy on changed files
       run: |
         bash ".github/scripts/run-clang-tidy-pr.sh" \
           "${{ github.event.pull_request.number }}" \

@@ -152,7 +152,7 @@ private:
   Result<void> WritePageSync(lean_pid_t page_id, void* buffer) {
     utils::AsyncIo aio(1);
     const auto page_size = store_->store_option_->page_size_;
-    DEBUG_BLOCK() {
+    LEAN_DEXEC() {
       auto* page [[maybe_unused]] = reinterpret_cast<Page*>(buffer);
       LEAN_DLOG("page write, pageId={}, btreeId={}", page_id, page->btree_id_);
     }

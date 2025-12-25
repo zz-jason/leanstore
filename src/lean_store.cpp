@@ -17,7 +17,7 @@
 #include "leanstore/table/table_registry.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
-#ifndef ENABLE_COROUTINE
+#ifndef LEAN_ENABLE_CORO
 #include "leanstore/utils/parallelize.hpp"
 #endif
 #include "utils/json.hpp"
@@ -94,7 +94,7 @@ LeanStore::LeanStore(lean_store_option* option) : store_option_(option) {
 
 void LeanStore::InitDbFiles() {
   LEAN_DEFER({ LEAN_DCHECK(fcntl(page_fd_, F_GETFL) != -1); });
-#ifndef ENABLE_COROUTINE
+#ifndef LEAN_ENABLE_CORO
   LEAN_DEFER({ LEAN_DCHECK(fcntl(wal_fd_, F_GETFL) != -1); });
 #endif
   // Create a new instance on the specified DB file
@@ -108,7 +108,7 @@ void LeanStore::InitDbFiles() {
     }
     Log::Info("Init page fd succeed, pageFd={}, pageFile={}", page_fd_, db_file_path);
 
-#ifndef ENABLE_COROUTINE
+#ifndef LEAN_ENABLE_CORO
     {
       auto wal_file_path = StorePaths::WalFilePath(store_option_->store_dir_);
       wal_fd_ = open(wal_file_path.c_str(), flags, 0666);
@@ -133,7 +133,7 @@ void LeanStore::InitDbFiles() {
   }
   Log::Info("Init page fd succeed, pageFd={}, pageFile={}", page_fd_, db_file_path);
 
-#ifndef ENABLE_COROUTINE
+#ifndef LEAN_ENABLE_CORO
   {
     auto wal_file_path = StorePaths::WalFilePath(store_option_->store_dir_);
     wal_fd_ = open(wal_file_path.c_str(), flags, 0666);
@@ -174,7 +174,7 @@ LeanStore::~LeanStore() {
   // persist all the metadata and pages before exit
   bool all_pages_up_to_date = true;
 
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
   {
     CheckpointProcessor processor(*this, *store_option_);
     auto res = processor.CheckpointAll(buffer_manager_->buffer_pool_, buffer_manager_->num_bfs_);
@@ -207,7 +207,7 @@ LeanStore::~LeanStore() {
     Log::Info("Page file closed");
   }
 
-#ifndef ENABLE_COROUTINE
+#ifndef LEAN_ENABLE_CORO
   {
     auto wal_file_path = StorePaths::WalFilePath(store_option_->store_dir_);
     struct stat st;
@@ -225,7 +225,7 @@ LeanStore::~LeanStore() {
 }
 
 void LeanStore::StartBackgroundThreads() {
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
   {
     coro_scheduler_ = std::make_unique<CoroScheduler>(this, store_option_->worker_threads_);
     coro_scheduler_->Init();
@@ -251,7 +251,7 @@ void LeanStore::StartBackgroundThreads() {
 }
 
 void LeanStore::StopBackgroundThreads() {
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
   {
     // destroy coro scheduler
     if (coro_scheduler_ != nullptr) {
@@ -296,7 +296,7 @@ void LeanStore::WaitAll() {
 
 void LeanStore::ParallelRange(
     uint64_t num_jobs, std::function<void(uint64_t job_begin, uint64_t job_end)>&& job_handler) {
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
   coro_scheduler_->ParallelRange(num_jobs, std::move(job_handler));
 #else
   utils::Parallelize::ParallelRange(num_jobs, std::move(job_handler));
@@ -507,7 +507,7 @@ bool LeanStore::DeserializeMeta() {
         btree->graveyard_ = res.value();
       };
 
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
       auto* coro_session = GetCoroScheduler().TryReserveCoroSession(0);
       assert(coro_session != nullptr && "Failed to reserve a CoroSession for coroutine execution");
       GetCoroScheduler().Submit(coro_session, std::move(job))->Wait();

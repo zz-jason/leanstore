@@ -3,7 +3,7 @@
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/random_generator.hpp"
 
-#ifdef ENABLE_PROFILING
+#ifdef LEAN_ENABLE_PROFILING
 #include <gperftools/heap-profiler.h>
 #include <gperftools/profiler.h>
 #endif
@@ -51,7 +51,7 @@ protected:
 
 private:
   void HandleHeapRequest(const httplib::Request& req [[maybe_unused]], httplib::Response& res) {
-#ifdef ENABLE_PROFILING
+#ifdef LEAN_ENABLE_PROFILING
     // get the profiling time in seconds from the query
     auto seconds_str = req.get_param_value(kQuerySeconds);
     auto seconds = seconds_str.empty() ? kDefaultSeconds : std::stoi(seconds_str);
@@ -77,7 +77,7 @@ private:
   }
 
   void HandleProfileRequest(const httplib::Request& req [[maybe_unused]], httplib::Response& res) {
-#ifdef ENABLE_PROFILING
+#ifdef LEAN_ENABLE_PROFILING
     // get the profiling time in seconds from the query
     auto seconds_str = req.get_param_value(kQuerySeconds);
     auto seconds = seconds_str.empty() ? kDefaultSeconds : std::stoi(seconds_str);

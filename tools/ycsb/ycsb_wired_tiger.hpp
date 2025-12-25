@@ -17,7 +17,7 @@
 #include <string>
 #include <thread>
 
-#ifdef ENABLE_WIRED_TIGER
+#ifdef LEAN_ENABLE_WIRED_TIGER
 #include <wiredtiger.h>
 #endif
 
@@ -25,7 +25,7 @@ namespace leanstore::ycsb {
 
 class YcsbWiredTiger : public YcsbExecutor {
 
-#ifdef ENABLE_WIRED_TIGER
+#ifdef LEAN_ENABLE_WIRED_TIGER
 
 public:
   YcsbWiredTiger(const YcsbOptions& options) : YcsbExecutor(options), conn_(nullptr) {

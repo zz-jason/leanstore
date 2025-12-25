@@ -17,7 +17,7 @@
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/sync/scoped_hybrid_guard.hpp"
 #include "leanstore/utils/managed_thread.hpp"
-#ifndef ENABLE_COROUTINE
+#ifndef LEAN_ENABLE_CORO
 #include "leanstore/utils/parallelize.hpp"
 #endif
 #include "leanstore/cpp/base/small_vector.hpp"
@@ -79,7 +79,7 @@ void BufferManager::InitFreeBfLists() {
     }
   };
 
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
   store_->ParallelRange(num_bfs_, std::move(spread_free_bfs));
 #else
   utils::Parallelize::ParallelRange(num_bfs_, std::move(spread_free_bfs));
@@ -184,7 +184,7 @@ Result<void> BufferManager::CheckpointAllBufferFrames() {
     }
   };
 
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
   store_->ParallelRange(num_bfs_, std::move(checkpoint_func));
 #else
   StopPageEvictors();
@@ -523,7 +523,7 @@ void BufferManager::DoWithBufferFrameIf(std::function<bool(BufferFrame& bf)> con
     }
   };
 
-#ifdef ENABLE_COROUTINE
+#ifdef LEAN_ENABLE_CORO
   store_->ParallelRange(num_bfs_, std::move(work));
 #else
   utils::Parallelize::ParallelRange(num_bfs_, std::move(work));

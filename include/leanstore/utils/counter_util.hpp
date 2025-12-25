@@ -2,7 +2,7 @@
 
 #include "leanstore/common/perf_counters.h"
 
-#ifdef ENABLE_PERF_COUNTERS
+#ifdef LEAN_ENABLE_PERF_COUNTERS
 #include <chrono>
 #endif
 
@@ -15,7 +15,7 @@ namespace leanstore {
 /// ScopedCounterTimer for perf counters
 class ScopedCounterTimer {
 private:
-#ifdef ENABLE_PERF_COUNTERS
+#ifdef LEAN_ENABLE_PERF_COUNTERS
   /// Counter to cumulate the time elasped
   lean_counter_t* counter_to_cum_;
 
@@ -25,14 +25,14 @@ private:
 
 public:
   explicit ScopedCounterTimer(lean_counter_t* counter [[maybe_unused]]) {
-#ifdef ENABLE_PERF_COUNTERS
+#ifdef LEAN_ENABLE_PERF_COUNTERS
     counter_to_cum_ = counter;
     started_at_ = std::chrono::steady_clock::now();
 #endif
   }
 
   ~ScopedCounterTimer() {
-#ifdef ENABLE_PERF_COUNTERS
+#ifdef LEAN_ENABLE_PERF_COUNTERS
     auto stopped_at = std::chrono::steady_clock::now();
     auto elasped_ns =
         std::chrono::duration_cast<std::chrono::nanoseconds>(stopped_at - started_at_).count();
@@ -41,7 +41,7 @@ public:
   }
 };
 
-#ifdef ENABLE_PERF_COUNTERS
+#ifdef LEAN_ENABLE_PERF_COUNTERS
 
 //------------------------------------------------------------------------------
 // Macros when counters are enabled
