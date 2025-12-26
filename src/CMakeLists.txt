@@ -49,9 +49,6 @@ list(APPEND LEAN_DEPS concurrentqueue::concurrentqueue)
 find_package(httplib CONFIG REQUIRED)
 list(APPEND LEAN_DEPS httplib::httplib)
 
-pkg_check_modules(libunwind REQUIRED IMPORTED_TARGET GLOBAL libunwind)
-list(APPEND LEAN_DEPS PkgConfig::libunwind)
-
 if(LEAN_ENABLE_PROFILING)
   target_compile_definitions(leanstore PUBLIC LEAN_ENABLE_PROFILING)
 
