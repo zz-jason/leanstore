@@ -1,5 +1,6 @@
 #pragma once
 
+#include "leanstore/buffer-manager/buffer_frame.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/common/wal_record.h"
 #include "leanstore/cpp/base/result.hpp"
@@ -27,11 +28,12 @@ class RecoveryRedoer {
 public:
   RecoveryRedoer(std::string_view store_dir, const std::vector<std::string>& wal_file_paths,
                  const std::unordered_map<lean_pid_t, lean_lid_t>& dirty_page_table,
-                 size_t num_partiions)
+                 size_t num_partiions, BufferManager& buffer_manager)
       : store_dir_(store_dir),
         wal_file_paths_(wal_file_paths),
         dirty_page_table_(dirty_page_table),
-        num_partiions_(num_partiions) {
+        num_partiions_(num_partiions),
+        buffer_manager_(buffer_manager) {
   }
 
   ~RecoveryRedoer() = default;
@@ -54,19 +56,26 @@ private:
                                          std::vector<FileWriter>& log_writers);
 
   // Helpers for sorting partitioned WAL logs
-  static Result<std::vector<std::string>> SortPartitionedLogs(
+  Result<std::vector<std::string>> SortPartitionedLogs(
       const std::vector<std::string>& partitioned_logs);
-  static Result<std::string> SortOneLogFile(std::string_view partitioned_log);
+  Result<std::string> SortOneLogFile(std::string_view partitioned_log);
 
   // Helpers for redoing sorted WAL logs
-  static Result<void> RedoOnePartition(std::string_view partitioned_log);
-  static Result<void> RedoOneRecord(const lean_wal_record& record);
+  Result<void> RedoOnePartition(std::string_view partitioned_log);
+  Result<void> RedoOneRecord(const lean_wal_record& record);
+
+  BufferFrame& GetOrLoadPage(lean_pid_t page_id);
+  Result<void> CheckpointLoadedPages();
 
   // Inputs
   const std::string store_dir_;
   const std::vector<std::string>& wal_file_paths_;
   const std::unordered_map<lean_pid_t, lean_lid_t>& dirty_page_table_;
   const size_t num_partiions_;
+  BufferManager& buffer_manager_;
+
+  // intermediate data
+  std::unordered_map<lean_pid_t, BufferFrame*> loaded_pages_;
 };
 
 } // namespace leanstore

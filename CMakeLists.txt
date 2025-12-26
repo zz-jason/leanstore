@@ -37,11 +37,6 @@ else()
   target_compile_options(lean_project_options INTERFACE -march=native)
 endif()
 
-if (APPLE)
-  LIST(APPEND CMAKE_PREFIX_PATH /usr/local/opt/bison)
-  LIST(APPEND CMAKE_PREFIX_PATH /usr/local/opt/flex)
-endif (APPLE)
-
 if(CYGWIN)
   target_link_options(lean_project_options INTERFACE -static-libstdc++)
 endif()
