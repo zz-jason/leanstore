@@ -11,7 +11,6 @@
 
 #include <atomic>
 #include <cstdint>
-#include <expected>
 #include <memory>
 #include <string>
 #include <utility>

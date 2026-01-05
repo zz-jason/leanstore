@@ -133,7 +133,7 @@ public:
     auto crc_skip_size = type_field_size + crc_field_size;
     const auto* src = reinterpret_cast<const uint8_t*>(this) + crc_skip_size;
     auto src_size = size_ - crc_skip_size;
-    return utils::CRC(src, src_size);
+    return utils::Crc32(src, src_size);
   }
 
   void CheckCRC() const {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/common/types.h"
 
 #include <string>
@@ -35,6 +36,8 @@ public:
   lean_lid_t GetLastCheckpointGsn() const {
     return last_checkpoint_gsn_;
   }
+
+  BufferManager& GetBufferManager() const;
 
   size_t GetNumPartitions() const {
     return num_partitions_;

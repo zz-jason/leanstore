@@ -1,7 +1,6 @@
 #pragma once
 
 #include "coroutine/lean_mutex.hpp"
-#include "leanstore/common/portable.h"
 #include "leanstore/cpp/base/log.hpp"
 
 #include <atomic>
@@ -32,7 +31,7 @@ inline bool HasExclusiveMark(uint64_t version) {
 ///   mode, the version number is used to detech latch contention.
 /// - pessimistic shared: in shared mode, for high-contention scenarios.
 /// - pessimistic exclusive: in exclusive mode, for high-contention scenarios.
-class ALIGNAS(64) HybridMutex {
+class HybridMutex {
 private:
   /// The optimistic version.
   std::atomic<uint64_t> version_ = 0;
@@ -66,7 +65,5 @@ public:
     return HasExclusiveMark(version_.load());
   }
 };
-
-static_assert(sizeof(HybridMutex) == 64, "");
 
 } // namespace leanstore

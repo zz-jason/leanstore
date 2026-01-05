@@ -12,7 +12,6 @@
 #include "leanstore/cpp/base/result.hpp"
 #include "leanstore/kv_interface.hpp"
 
-#include <expected>
 #include <string>
 #include <tuple>
 

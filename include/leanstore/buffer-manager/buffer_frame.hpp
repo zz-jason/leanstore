@@ -53,15 +53,11 @@ public:
   static constexpr lean_wid_t kInvalidWorkerId = std::numeric_limits<lean_wid_t>::max();
   static constexpr lean_pid_t kInvalidPageId = std::numeric_limits<lean_pid_t>::max();
 
-  /// The state of the buffer frame.
-  State state_ = State::kFree;
+  BufferFrameHeader() = default;
 
   /// Latch of the buffer frame. The optimistic version in the latch is never
   /// decreased.
   HybridMutex latch_;
-
-  /// Used to make the buffer frame remain in memory.
-  bool keep_in_memory_ = false;
 
   /// The free buffer frame in the free list of each buffer partition.
   BufferFrame* next_free_bf_ = nullptr;
@@ -69,40 +65,45 @@ public:
   /// ID of page resides in this buffer frame.
   lean_pid_t page_id_ = kInvalidPageId;
 
+  /// The flushed page version of the containing page. Initialized when the
+  /// containing page is loaded from disk.
+  lean_lid_t flushed_page_version_ = 0;
+
   /// ID of the last worker who has modified the containing page. For remote flush avoidance (RFA),
   /// see "Rethinking Logging, Checkpoints, and Recovery for High-Performance Storage Engines,
   /// SIGMOD 2020" for details.
   lean_wid_t last_writer_worker_ = kInvalidWorkerId;
 
-  /// The flushed page version of the containing page. Initialized when the
-  /// containing page is loaded from disk.
-  lean_lid_t flushed_page_version_ = 0;
-
-  /// Whether the containing page is being written back to disk.
-  std::atomic<bool> is_being_written_back_ = false;
-
   /// Contention statistics about the BTreeNode in the containing page. Used for contention-based
   /// node split for BTrees.
   ContentionStats contention_stats_;
 
-  /// CRC checksum of the containing page.
-  uint64_t crc_ = 0;
+  /// Crc32 checksum of the containing page.
+  uint32_t crc32_ = 0;
+
+  /// Whether the containing page is being written back to disk.
+  std::atomic<bool> is_being_written_back_ = false;
+
+  /// The state of the buffer frame.
+  State state_ = State::kFree;
+
+  /// Used to make the buffer frame remain in memory.
+  bool keep_in_memory_ = false;
 
   // Prerequisite: the buffer frame is exclusively locked
   void Reset() {
-    LEAN_DCHECK(!is_being_written_back_);
     LEAN_DCHECK(latch_.IsLockedExclusively());
+    LEAN_DCHECK(!is_being_written_back_);
 
+    next_free_bf_ = nullptr;
+    page_id_ = kInvalidPageId;
+    flushed_page_version_ = 0;
+    last_writer_worker_ = kInvalidWorkerId;
+    contention_stats_.Reset();
+    crc32_ = 0;
+    is_being_written_back_.store(false, std::memory_order_release);
     state_ = State::kFree;
     keep_in_memory_ = false;
-    next_free_bf_ = nullptr;
-
-    page_id_ = kInvalidPageId;
-    last_writer_worker_ = kInvalidWorkerId;
-    flushed_page_version_ = 0;
-    is_being_written_back_.store(false, std::memory_order_release);
-    contention_stats_.Reset();
-    crc_ = 0;
   }
 
   std::string StateString() {
@@ -145,8 +146,8 @@ public:
   /// The data stored in this page. The btree node content is stored here.
   uint8_t payload_[];
 
-  uint64_t CRC() {
-    return utils::CRC(payload_, CoroEnv::CurStore().store_option_->page_size_ - sizeof(Page));
+  uint32_t Crc32() {
+    return utils::Crc32(payload_, CoroEnv::CurStore().store_option_->page_size_ - sizeof(Page));
   }
 };
 
