@@ -226,7 +226,7 @@ void PageEvictor::PrepareAsyncWriteBuffer(Partition& target_partition) {
 
       // performs crc check if necessary
       if (store_->store_option_->enable_buffer_crc_check_) {
-        cooled_bf->header_.crc_ = cooled_bf->page_.CRC();
+        cooled_bf->header_.crc32_ = cooled_bf->page_.Crc32();
       }
 
       // TODO: preEviction callback according to lean_treeid_t
@@ -281,7 +281,7 @@ void PageEvictor::FlushAndRecycleBufferFrames(Partition& target_partition) {
           written_bf.header_.is_being_written_back_ = false;
         }
         JUMPMU_CATCH() {
-          written_bf.header_.crc_ = 0;
+          written_bf.header_.crc32_ = 0;
           written_bf.header_.is_being_written_back_.store(false, std::memory_order_release);
         }
 
@@ -313,8 +313,8 @@ void PageEvictor::EvictFlushedBufferFrame(BufferFrame& cooled_bf,
   BMExclusiveUpgradeIfNeeded parent_write_guard(parent_handler.parent_guard_);
   optimistic_guard.guard_.ToExclusiveMayJump();
 
-  if (store_->store_option_->enable_buffer_crc_check_ && cooled_bf.header_.crc_) {
-    LEAN_DCHECK(cooled_bf.page_.CRC() == cooled_bf.header_.crc_);
+  if (store_->store_option_->enable_buffer_crc_check_ && cooled_bf.header_.crc32_) {
+    LEAN_DCHECK(cooled_bf.page_.Crc32() == cooled_bf.header_.crc32_);
   }
   LEAN_DCHECK(!cooled_bf.IsDirty());
   LEAN_DCHECK(!cooled_bf.header_.is_being_written_back_);

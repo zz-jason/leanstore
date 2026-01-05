@@ -1,10 +1,7 @@
 #include "leanstore/cpp/recovery/recovery_redoer.hpp"
 
-#include "leanstore/btree/basic_kv.hpp"
-#include "leanstore/btree/core/b_tree_node.hpp"
 #include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/buffer-manager/buffer_manager.hpp"
-#include "leanstore/buffer-manager/guarded_buffer_frame.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/common/wal_record.h"
 #include "leanstore/cpp/base/byte_buffer.hpp"
@@ -16,7 +13,6 @@
 #include "leanstore/cpp/io/file_writer.hpp"
 #include "leanstore/cpp/wal/wal_cast.hpp"
 #include "leanstore/cpp/wal/wal_cursor.hpp"
-#include "leanstore/sync/hybrid_guard.hpp"
 
 #include <cstdint>
 #include <filesystem>
