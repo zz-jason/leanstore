@@ -13,7 +13,6 @@ option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
 option(LEAN_ENABLE_PROFILING "Enable profiling" OFF)
 option(LEAN_ENABLE_PERF_COUNTERS "Whether to enable perf counters" ON)
 option(LEAN_ENABLE_CORO "Enable coroutine support" ON)
-option(LEAN_ENABLE_WIRED_TIGER "Enable benchmarking wiredtiger" OFF)
 option(LEAN_ENABLE_TESTS "Build tests" ON)
 option(LEAN_ENABLE_DEBUG_EXEC "Enable debug block in debug build" ON)
 

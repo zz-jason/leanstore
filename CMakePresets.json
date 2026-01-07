@@ -9,6 +9,7 @@
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "CMAKE_CXX_COMPILER": "g++",
+		"LEAN_ENABLE_PROFILING": "ON",
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/${presetName}"
             }
         },
@@ -56,8 +57,7 @@
             "name": "release_coro",
             "inherits": "base_release",
             "cacheVariables": {
-                "LEAN_ENABLE_CORO": "ON",
-                "BUILD_SHARED_LIBS": "ON"
+                "LEAN_ENABLE_CORO": "ON"
             }
         },
         {

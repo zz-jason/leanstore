@@ -3,7 +3,6 @@
 #include "coroutine/futex_waiter.hpp"
 
 #include <cassert>
-#include <cerrno>
 
 #include <linux/futex.h>
 #include <sys/syscall.h>
@@ -11,9 +10,6 @@
 #include <unistd.h>
 
 namespace leanstore {
-
-class Coroutine;
-class CoroScheduler;
 
 template <typename T>
 class CoroFuture {
@@ -37,18 +33,16 @@ public:
     return result_;
   }
 
-private:
-  static constexpr auto kNotReady = 0;
-  static constexpr auto kReady = 1;
-
-  friend class CoroScheduler;
-
   /// Set the result of the future, should be called by the Coroutine.
   void SetResult(T&& value) {
     result_ = std::move(value);
     waiter_.store(kReady);
     waiter_.notify_one();
   }
+
+private:
+  static constexpr auto kNotReady = 0;
+  static constexpr auto kReady = 1;
 
   T result_;
   FutexWaiter waiter_{kNotReady};
@@ -76,17 +70,15 @@ public:
   void GetResult() {
   }
 
-private:
-  static constexpr auto kNotReady = 0;
-  static constexpr auto kReady = 1;
-
-  friend class CoroScheduler;
-
   /// Set the result of the future, should be called by the Coroutine.
   void SetResult() {
     waiter_.store(kReady);
     waiter_.notify_one();
   }
+
+private:
+  static constexpr auto kNotReady = 0;
+  static constexpr auto kReady = 1;
 
   FutexWaiter waiter_{kNotReady};
 };

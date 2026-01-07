@@ -60,6 +60,8 @@ private:
 /// coroutine.
 class CoroSharedMutex {
 public:
+  // NOLINTBEGIN
+
   /// Tries to acquire an exclusive lock without blocking.
   /// Returns true if the exclusive lock was acquired successfully, false
   /// otherwise.

@@ -108,10 +108,13 @@ IncludeCategories:
 
   # Priority 4 (Major External Third-Party Libraries - Tier 1)
   # Includes Boost, Google Test, Spdlog, RocksDB, etc.
-  - Regex: '^("|<)(tanakh-cmdline|concurrentqueue|cpptrace|boost|gtest|gmock|spdlog|glog|rapidjson|rocksdb|gperftools|crc32c|prometheus)/'
+  - Regex: '^("|<)(tanakh-cmdline|concurrentqueue|cpptrace|boost|gtest|gmock|spdlog|glog|rapidjson|rocksdb|wiredtiger|gperftools|crc32c|prometheus)/'
     Priority: 4
   # Specific external library (httplib)
   - Regex: '^("|<)(httplib)'
+    Priority: 4
+  # Specific external library (wiredtiger)
+  - Regex: '^("|<)(wiredtiger)'
     Priority: 4
 
   # Priority 5 (Standard C++ Library Headers)
