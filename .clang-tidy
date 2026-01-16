@@ -2,6 +2,7 @@ Checks: >
   -*,
 
   clang-diagnostic-*,
+  -clang-diagnostic-unknown-warning-option,
 
   readability-identifier-naming,
   readability-braces-around-statements,

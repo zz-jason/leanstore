@@ -41,4 +41,5 @@ run-clang-tidy \
   -quiet \
   -extra-arg=-std=c++2b \
   -extra-arg=-Wno-unknown-warning-option \
+  -extra-arg=-Wno-error=clobbered \
   $CHANGED_FILES
