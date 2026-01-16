@@ -114,7 +114,7 @@ target_compile_options(lean_project_options INTERFACE
   -Wall
   -Wextra
   -Werror
-  $<$<CXX_COMPILER_ID:Clang>:-Wno-vla-cxx-extension>
+  $<$<CXX_COMPILER_ID:Clang>:-Wno-vla-cxx-extension -Wno-unknown-warning-option>
   $<$<CXX_COMPILER_ID:GNU>:-Wno-error=clobbered>
 )
 
