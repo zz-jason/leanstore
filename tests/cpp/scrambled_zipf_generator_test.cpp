@@ -1,4 +1,4 @@
-#include "lean_test_suite.hpp"  // NOLINTNEXTLINE(clang-diagnostic-error)
+#include "lean_test_suite.hpp" // NOLINTNEXTLINE(clang-diagnostic-error)
 #include "leanstore/utils/scrambled_zipf_generator.hpp"
 
 #include "gtest/gtest.h"
@@ -13,7 +13,7 @@ namespace leanstore::test {
 
 class ScrambledZipfGeneratorTest : public LeanTestSuite {};
 
-TEST_F(ScrambledZipfGeneratorTest, RangeCheck) {  // NOLINT
+TEST_F(ScrambledZipfGeneratorTest, RangeCheck) { // NOLINT
   constexpr uint64_t kMin = 100;
   constexpr uint64_t kMax = 200;
   constexpr double kTheta = 0.5;
@@ -27,7 +27,7 @@ TEST_F(ScrambledZipfGeneratorTest, RangeCheck) {  // NOLINT
   }
 }
 
-TEST_F(ScrambledZipfGeneratorTest, ThetaAffectsDistribution) {  // NOLINT
+TEST_F(ScrambledZipfGeneratorTest, ThetaAffectsDistribution) { // NOLINT
   // Test that different theta values produce statistically different distributions
   constexpr uint64_t kMin = 0;
   constexpr uint64_t kMax = 200;
@@ -65,16 +65,16 @@ TEST_F(ScrambledZipfGeneratorTest, ThetaAffectsDistribution) {  // NOLINT
       << "Distributions for theta=0 and theta=0.9 are not significantly different, chi2=" << chi2;
 }
 
-TEST_F(ScrambledZipfGeneratorTest, DifferentRanges) {  // NOLINT
+TEST_F(ScrambledZipfGeneratorTest, DifferentRanges) { // NOLINT
   struct Range {
     uint64_t min_;
     uint64_t max_;
     double theta_;
   };
   std::vector<Range> ranges = {
-      {.min_=0, .max_=10, .theta_=0.5},
-      {.min_=1000, .max_=2000, .theta_=0.2},
-      {.min_=500, .max_=1000, .theta_=0.8},
+      {.min_ = 0, .max_ = 10, .theta_ = 0.5},
+      {.min_ = 1000, .max_ = 2000, .theta_ = 0.2},
+      {.min_ = 500, .max_ = 1000, .theta_ = 0.8},
   };
 
   for (const auto& r : ranges) {
