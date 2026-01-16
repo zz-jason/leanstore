@@ -1,0 +1,125 @@
+#!/bin/bash
+# LeanStore pre-commit hook for AI-assisted development
+# Runs quick CI checks to ensure code quality before committing
+
+set -e
+
+# Color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo -e "${GREEN}=== LeanStore Pre-commit Checks ===${NC}"
+
+# Check if we should skip verification
+if [ -n "$LEANSTORE_SKIP_PRECOMMIT" ]; then
+    echo -e "${YELLOW}Skipping pre-commit checks (LEANSTORE_SKIP_PRECOMMIT set)${NC}"
+    exit 0
+fi
+
+# Check for --no-verify flag (handled by git, but we can still check args)
+for arg in "$@"; do
+    if [ "$arg" = "--no-verify" ]; then
+        echo -e "${YELLOW}Skipping pre-commit checks (--no-verify)${NC}"
+        exit 0
+    fi
+done
+
+# Function to check if file is C/C++ source
+is_cpp_file() {
+    local file="$1"
+    case "$file" in
+        *.cpp|*.cc|*.c|*.h|*.hpp|*.hh)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+# Get list of staged files
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+# Check if there are any C/C++ files in the staged changes
+HAS_CPP_FILES=0
+for file in $STAGED_FILES; do
+    if is_cpp_file "$file"; then
+        HAS_CPP_FILES=1
+        break
+    fi
+done
+
+# If no C/C++ files changed, skip most checks
+if [ $HAS_CPP_FILES -eq 0 ]; then
+    echo "No C/C++ files changed. Skipping code quality checks."
+    exit 0
+fi
+
+echo "Found C/C++ changes. Running pre-commit checks..."
+
+# Quick check: Ensure build directory exists for debug_coro preset
+if [ ! -d "build/debug_coro" ]; then
+    echo -e "${YELLOW}Warning: build/debug_coro directory not found.${NC}"
+    echo "You may need to run: cmake --preset debug_coro"
+    echo "Skipping detailed checks for now."
+    exit 0
+fi
+
+# Run quick clang-format check on staged C/C++ files
+echo -e "${YELLOW}▶ Checking code formatting...${NC}"
+if cmake --build build/debug_coro --target=check-format > /tmp/clang-format-check.log 2>&1; then
+    echo -e "${GREEN}  ✓ Code formatting OK${NC}"
+else
+    echo -e "${RED}  ✗ Code formatting issues found${NC}"
+    echo "  Run 'cmake --build build/debug_coro --target format' to fix"
+    
+    # Show which files have issues (extract from log)
+    if grep -q "clang-format" /tmp/clang-format-check.log; then
+        echo "  Problematic files:"
+        grep -E "^(.*\.(cpp|cc|c|h|hpp|hh))" /tmp/clang-format-check.log | head -10 | sed 's/^/    /'
+    fi
+    
+    # Auto-fix suggestion (non-interactive for AI assistants)
+    echo ""
+    echo -e "${YELLOW}To fix formatting issues:${NC}"
+    echo "  1. Run: cmake --build build/debug_coro --target format"
+    echo "  2. Review changes: git diff"
+    echo "  3. Stage fixes: git add -u"
+    echo "  4. Commit again"
+    echo ""
+    echo "Or skip check with: git commit --no-verify"
+    exit 1
+fi
+
+# Quick build check (compile only, no tests)
+echo -e "${YELLOW}▶ Checking compilation...${NC}"
+if cmake --build build/debug_coro --target leanstore -j $(nproc) > /tmp/build-check.log 2>&1; then
+    echo -e "${GREEN}  ✓ Compilation OK${NC}"
+else
+    echo -e "${RED}  ✗ Compilation failed${NC}"
+    echo "  Build errors:"
+    grep -E "error:|Error:|FAILED" /tmp/build-check.log | head -10 | sed 's/^/    /'
+    exit 1
+fi
+
+# If ci-local-check.sh exists, run it in quick mode (single preset)
+if [ -f "./scripts/ci-local-check.sh" ]; then
+    echo -e "${YELLOW}▶ Running quick CI validation...${NC}"
+    # Run in quick mode (just debug_coro preset)
+    if ./scripts/ci-local-check.sh debug_coro > /tmp/ci-check.log 2>&1; then
+        echo -e "${GREEN}  ✓ Quick CI validation passed${NC}"
+    else
+        echo -e "${RED}  ✗ Quick CI validation failed${NC}"
+        echo "  Check /tmp/ci-check.log for details"
+        echo "  Or run: ./scripts/ci-local-check.sh debug_coro"
+        exit 1
+    fi
+else
+    echo -e "${YELLOW}⚠ scripts/ci-local-check.sh not found. Skipping CI validation.${NC}"
+fi
+
+echo -e "${GREEN}✅ All pre-commit checks passed!${NC}"
+echo "You can now commit. For full CI validation before pushing, run: ./scripts/ci-local-check.sh"
+exit 0

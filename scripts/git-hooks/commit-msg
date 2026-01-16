@@ -1,0 +1,54 @@
+#!/bin/bash
+# LeanStore commit-msg hook for conventional commits validation
+
+COMMIT_MSG_FILE="$1"
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Skip for merge commits
+if echo "$COMMIT_MSG" | grep -q "^Merge "; then
+    exit 0
+fi
+
+# Skip for squash commits
+if echo "$COMMIT_MSG" | grep -q "^squash!"; then
+    exit 0
+fi
+
+# Allowed commit types (from conventional-commits.yml)
+ALLOWED_TYPES="feat|fix|perf|chore|revert|test|docs|style|refactor|build|ci"
+
+# Check if commit message matches conventional commits pattern
+if ! echo "$COMMIT_MSG" | grep -qE "^($ALLOWED_TYPES)(\([a-zA-Z0-9_-]+\))?: .+"; then
+    echo -e "${RED}❌ Commit message does not follow conventional commits format${NC}"
+    echo ""
+    echo "Conventional commits require: <type>[optional scope]: <description>"
+    echo ""
+    echo "Allowed types: $ALLOWED_TYPES"
+    echo ""
+    echo "Examples:"
+    echo "  feat: add new feature"
+    echo "  fix(btree): resolve memory leak"
+    echo "  chore: update dependencies"
+    echo ""
+    echo "Your commit message:"
+    echo "  $COMMIT_MSG"
+    echo ""
+    echo "To skip this check: git commit --no-verify"
+    exit 1
+fi
+
+# Check description length (first line)
+FIRST_LINE=$(echo "$COMMIT_MSG" | head -n1 | sed 's/^[^:]*:[[:space:]]*//')
+if [ ${#FIRST_LINE} -gt 72 ]; then
+    echo -e "${YELLOW}⚠ Commit description is longer than 72 characters (${#FIRST_LINE})${NC}"
+    echo "  Consider using a shorter summary line."
+fi
+
+echo -e "${GREEN}✓ Commit message follows conventional commits${NC}"
+exit 0
