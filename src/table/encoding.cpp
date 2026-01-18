@@ -44,6 +44,37 @@ uint64_t EncodeFloat64(double d) {
   return u;
 }
 
+uint32_t ReadBigEndian32(const uint8_t* ptr) {
+  return (static_cast<uint32_t>(ptr[0]) << 24) | (static_cast<uint32_t>(ptr[1]) << 16) |
+         (static_cast<uint32_t>(ptr[2]) << 8) | static_cast<uint32_t>(ptr[3]);
+}
+
+uint64_t ReadBigEndian64(const uint8_t* ptr) {
+  uint64_t value = 0;
+  for (int i = 0; i < 8; ++i) {
+    value = (value << 8) | static_cast<uint64_t>(ptr[i]);
+  }
+  return value;
+}
+
+uint32_t DecodeFloat32Key(uint32_t v) {
+  if (v & 0x80000000) {
+    v &= ~0x80000000;
+  } else {
+    v = ~v;
+  }
+  return v;
+}
+
+uint64_t DecodeFloat64Key(uint64_t v) {
+  if (v & 0x8000000000000000ULL) {
+    v &= ~0x8000000000000000ULL;
+  } else {
+    v = ~v;
+  }
+  return v;
+}
+
 } // namespace
 
 Result<void> TableCodec::EncodeFixedDatum(const Datum& datum, ColumnType type, std::string& dest,
@@ -116,6 +147,9 @@ Result<void> TableCodec::EncodeVarlenDatum(const Datum& datum, ColumnType type,
   }
   if (datum.str.size > std::numeric_limits<uint32_t>::max()) {
     return Error::General("varlen too large to encode");
+  }
+  if (datum.str.size > 0 && datum.str.data == nullptr) {
+    return Error::General("varlen data is null");
   }
   uint32_t offset = static_cast<uint32_t>(payload.size());
   uint32_t len = static_cast<uint32_t>(datum.str.size);
@@ -397,6 +431,116 @@ Result<void> TableCodec::DecodeValue(Slice value, lean_row* out_row) const {
       return Error::General("unsupported fixed datum decode");
     }
   }
+  return {};
+}
+
+Result<void> TableCodec::DecodeKey(Slice key, lean_row* out_row) const {
+  if (out_row == nullptr || out_row->columns == nullptr) {
+    return Error::General("output row null");
+  }
+  if (out_row->nulls == nullptr) {
+    return Error::General("output row null bitmap missing");
+  }
+  const auto& cols = def_.schema_.Columns();
+  if (out_row->num_columns < cols.size()) {
+    return Error::General("output row too small");
+  }
+
+  for (size_t i = 0; i < cols.size(); ++i) {
+    out_row->nulls[i] = true;
+  }
+  out_row->num_columns = cols.size();
+
+  const uint8_t* ptr = key.data();
+  size_t remaining = key.size();
+  for (auto pk_idx : def_.schema_.PrimaryKeyColumns()) {
+    const auto& col = cols[pk_idx];
+    auto* dest = &out_row->columns[pk_idx];
+    if (col.type_ == ColumnType::kBinary || col.type_ == ColumnType::kString) {
+      if (remaining < sizeof(uint32_t)) {
+        return Error::General("key too small for varlen length");
+      }
+      uint32_t len = ReadBigEndian32(ptr);
+      ptr += sizeof(uint32_t);
+      remaining -= sizeof(uint32_t);
+      if (remaining < len) {
+        return Error::General("key too small for varlen payload");
+      }
+      dest->str.data = reinterpret_cast<const char*>(ptr);
+      dest->str.size = len;
+      ptr += len;
+      remaining -= len;
+      out_row->nulls[pk_idx] = false;
+      continue;
+    }
+
+    switch (col.type_) {
+    case ColumnType::kBool: {
+      if (remaining < sizeof(uint8_t)) {
+        return Error::General("key too small for bool");
+      }
+      dest->b = (*ptr) != 0;
+      ptr += sizeof(uint8_t);
+      remaining -= sizeof(uint8_t);
+      break;
+    }
+    case ColumnType::kInt32: {
+      if (remaining < sizeof(uint32_t)) {
+        return Error::General("key too small for int32");
+      }
+      uint32_t enc = ReadBigEndian32(ptr);
+      ptr += sizeof(uint32_t);
+      remaining -= sizeof(uint32_t);
+      dest->i32 = static_cast<int32_t>(enc - (1u << 31));
+      break;
+    }
+    case ColumnType::kInt64: {
+      if (remaining < sizeof(uint64_t)) {
+        return Error::General("key too small for int64");
+      }
+      uint64_t enc = ReadBigEndian64(ptr);
+      ptr += sizeof(uint64_t);
+      remaining -= sizeof(uint64_t);
+      dest->i64 = static_cast<int64_t>(enc - (1ULL << 63));
+      break;
+    }
+    case ColumnType::kUInt64: {
+      if (remaining < sizeof(uint64_t)) {
+        return Error::General("key too small for uint64");
+      }
+      dest->u64 = ReadBigEndian64(ptr);
+      ptr += sizeof(uint64_t);
+      remaining -= sizeof(uint64_t);
+      break;
+    }
+    case ColumnType::kFloat32: {
+      if (remaining < sizeof(uint32_t)) {
+        return Error::General("key too small for float32");
+      }
+      uint32_t enc = ReadBigEndian32(ptr);
+      ptr += sizeof(uint32_t);
+      remaining -= sizeof(uint32_t);
+      uint32_t raw = DecodeFloat32Key(enc);
+      std::memcpy(&dest->f32, &raw, sizeof(float));
+      break;
+    }
+    case ColumnType::kFloat64: {
+      if (remaining < sizeof(uint64_t)) {
+        return Error::General("key too small for float64");
+      }
+      uint64_t enc = ReadBigEndian64(ptr);
+      ptr += sizeof(uint64_t);
+      remaining -= sizeof(uint64_t);
+      uint64_t raw = DecodeFloat64Key(enc);
+      std::memcpy(&dest->f64, &raw, sizeof(double));
+      break;
+    }
+    default:
+      return Error::General("unsupported key decode type");
+    }
+    out_row->nulls[pk_idx] = false;
+  }
+
   return {};
 }
 

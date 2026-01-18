@@ -37,6 +37,9 @@ public:
   /// Decode a value slice into datum vector.
   Result<void> DecodeValue(Slice value, lean_row* out_row) const;
 
+  /// Decode a key slice into the key columns of a row.
+  Result<void> DecodeKey(Slice key, lean_row* out_row) const;
+
 private:
   Result<void> EncodeFixedDatum(const Datum& datum, ColumnType type, std::string& dest,
                                 bool key_encoding) const;
