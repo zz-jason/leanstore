@@ -26,7 +26,7 @@ Result<std::unique_ptr<YcsbRocksDb>> YcsbRocksDb::Create(const YcsbOptions& opti
   rocksdb_options.error_if_exists = false;
 
   // Memory limit
-  size_t physical_limit = size_t(options.mem_gb_) << 30;
+  size_t physical_limit = size_t(options.dram_) << 30;
   size_t soft_limit = size_t(physical_limit * 0.9);
 
   auto shared_cache = rocksdb::NewLRUCache(soft_limit);
@@ -52,7 +52,7 @@ Result<std::unique_ptr<YcsbRocksDb>> YcsbRocksDb::Create(const YcsbOptions& opti
   rocksdb_options.enable_pipelined_write = true;
 
   // Background job options
-  rocksdb_options.max_background_jobs = options.threads_;
+  rocksdb_options.max_background_jobs = options.workers_;
 
   // Compaction options
   rocksdb_options.level0_file_num_compaction_trigger = 6;

@@ -16,12 +16,12 @@ public:
   explicit YcsbExecutor(const YcsbOptions& options);
 
   void Execute() {
-    if (options_.IsCmdLoad()) {
+    if (options_.IsActionLoad()) {
       HandleCmdLoad();
-    } else if (options_.IsCmdRun()) {
+    } else if (options_.IsActionRun()) {
       HandleCmdRun();
     } else {
-      ConsoleFatal("Unknown command: " + options_.cmd_);
+      ConsoleFatal("Unknown command: " + options_.action_);
     }
   }
 

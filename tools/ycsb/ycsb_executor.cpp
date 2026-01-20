@@ -88,7 +88,7 @@ void YcsbExecutor::HandleCmdLoad() {
   };
 
   // Launch all loader threads to load data
-  auto ranges = RangeSplits<uint64_t>(options_.record_count_, options_.clients_);
+  auto ranges = RangeSplits<uint64_t>(options_.rows_, options_.clients_);
   std::vector<std::thread> loader_threads;
   for (auto i = 0U; i < options_.clients_; i++) {
     auto range = ranges[i];
@@ -132,7 +132,7 @@ void YcsbExecutor::HandleCmdRun() {
     std::string value(options_.val_size_, '\0');
 
     auto& bench_stats = GetBenchStats(cid);
-    utils::ScrambledZipfianGenerator gen(0, options_.record_count_, options_.zipf_factor_);
+    utils::ScrambledZipfianGenerator gen(0, options_.rows_, options_.zipf_factor_);
 
     auto workload_type = options_.GetWorkloadType();
     auto workload_spec = options_.GetWorkloadSpec();
@@ -178,7 +178,7 @@ void YcsbExecutor::HandleCmdRun() {
   std::thread reporter_thread([this, &keep_running]() { ReportBenchStats(keep_running); });
 
   // Run for the specified duration
-  sleep(options_.run_for_seconds_);
+  sleep(options_.duration_);
 
   // Signal runner and reporter threads to stop
   keep_running.store(false);
@@ -239,16 +239,16 @@ void YcsbExecutor::ReportBenchStats(std::atomic<bool>& keep_running) {
           ? (total_aborted_overall) * 1.0 / (total_committed_overall + total_aborted_overall)
           : 0.0;
 
-  ConsoleInfo(std::format(
-      "Summary:\n"
-      "  -threads: {}\n" // This should probably be options_.clients_ or options_.threads_
-      "  -total_time_sec: {}\n"
-      "  -avg_tps: {}\n"
-      "  -total_committed: {}\n"
-      "  -total_aborted: {}\n"
-      "  -total_abort_rate: {:.2f}%", // Display abort rate as percentage
-      options_.clients_ > 0 ? options_.clients_ : options_.threads_, // Display clients or threads
-      elapsed_sec, (total_committed_overall + total_aborted_overall) / elapsed_sec,
-      total_committed_overall, total_aborted_overall, total_abort_rate_overall * 100));
+  ConsoleInfo(std::format("Summary:\n"
+                          "  -clients: {}\n"
+                          "  -total_time_sec: {}\n"
+                          "  -avg_tps: {}\n"
+                          "  -total_committed: {}\n"
+                          "  -total_aborted: {}\n"
+                          "  -total_abort_rate: {:.2f}%", // Display abort rate as percentage
+                          options_.clients_, elapsed_sec,
+                          (total_committed_overall + total_aborted_overall) / elapsed_sec,
+                          total_committed_overall, total_aborted_overall,
+                          total_abort_rate_overall * 100));
 }
 } // namespace leanstore::ycsb

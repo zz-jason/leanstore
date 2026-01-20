@@ -13,34 +13,34 @@ namespace leanstore::ycsb {
 
 namespace {
 
-constexpr auto kArgTarget = "target";
-constexpr auto kArgCmd = "cmd";
+constexpr auto kArgBackend = "backend";
+constexpr auto kArgAction = "action";
 constexpr auto kArgWorkload = "workload";
-constexpr auto kArgThreads = "threads";
+constexpr auto kArgWorkers = "workers";
 constexpr auto kArgClients = "clients";
-constexpr auto kArgMemGb = "mem_gb";
-constexpr auto kArgRunForSeconds = "run_for_seconds";
-constexpr auto kArgDataDir = "data_dir";
+constexpr auto kArgDram = "dram";
+constexpr auto kArgDuration = "duration";
+constexpr auto kArgDir = "dir";
 constexpr auto kArgKeySize = "key_size";
 constexpr auto kArgValSize = "val_size";
-constexpr auto kArgRecordCount = "record_count";
+constexpr auto kArgRows = "rows";
 constexpr auto kArgZipfFactor = "zipf_factor";
 
 } // namespace
 
 YcsbOptions YcsbOptions::FromCmdLine(int argc, char** argv) {
   cmdline::parser arg_parser;
-  arg_parser.add<std::string>(kArgTarget, 0, "YCSB target", true, "");
-  arg_parser.add<std::string>(kArgCmd, 0, "YCSB cmd, <load|run> ", false, "run");
+  arg_parser.add<std::string>(kArgBackend, 0, "Target backend", true, "");
+  arg_parser.add<std::string>(kArgAction, 0, "Action <load|run> ", false, "run");
   arg_parser.add<std::string>(kArgWorkload, 0, "YCSB workload, <a|b|c|d|e|f> ", false, "a");
-  arg_parser.add<uint64_t>(kArgThreads, 0, "Number of worker threads", false, 4);
-  arg_parser.add<uint64_t>(kArgClients, 0, "Number of clients", false, 4);
-  arg_parser.add<uint64_t>(kArgMemGb, 0, "Memory size in GB", false, 1);
-  arg_parser.add<uint64_t>(kArgRunForSeconds, 0, "Run for seconds", false, 300);
-  arg_parser.add<std::string>(kArgDataDir, 0, "Data directory", false, "/tmp/leanstore/ycsb");
+  arg_parser.add<uint64_t>(kArgWorkers, 0, "Number of backend worker threads", false, 4);
+  arg_parser.add<uint64_t>(kArgClients, 0, "Number of client threads", false, 8);
+  arg_parser.add<uint64_t>(kArgDram, 0, "DRAM size in GB", false, 1);
+  arg_parser.add<uint64_t>(kArgDuration, 0, "Run duration in seconds", false, 30);
+  arg_parser.add<std::string>(kArgDir, 0, "Database directory", false, "/tmp/leanstore/ycsb");
   arg_parser.add<uint64_t>(kArgKeySize, 0, "Key size in bytes", false, 16);
   arg_parser.add<uint64_t>(kArgValSize, 0, "Value size in bytes", false, 120);
-  arg_parser.add<uint64_t>(kArgRecordCount, 0, "Number of records to load", false, 10'000);
+  arg_parser.add<uint64_t>(kArgRows, 0, "Number of rows", false, 10'000);
   arg_parser.add<double>(kArgZipfFactor, 0, "Zipfian distribution factor", false, 0.99);
   arg_parser.parse_check(argc, argv);
 
@@ -56,17 +56,17 @@ YcsbOptions YcsbOptions::FromCmdLine(int argc, char** argv) {
   };
 
   return leanstore::ycsb::YcsbOptions{
-      .data_dir_ = arg_parser.get<std::string>(kArgDataDir),
-      .target_ = to_lower(arg_parser.get<std::string>(kArgTarget)),
+      .dir_ = arg_parser.get<std::string>(kArgDir),
+      .backend_ = to_lower(arg_parser.get<std::string>(kArgBackend)),
       .workload_ = to_lower(arg_parser.get<std::string>(kArgWorkload)),
-      .cmd_ = to_lower(arg_parser.get<std::string>(kArgCmd)),
+      .action_ = to_lower(arg_parser.get<std::string>(kArgAction)),
       .clients_ = arg_parser.get<uint64_t>(kArgClients),
-      .threads_ = arg_parser.get<uint64_t>(kArgThreads),
-      .mem_gb_ = arg_parser.get<uint64_t>(kArgMemGb),
-      .run_for_seconds_ = arg_parser.get<uint64_t>(kArgRunForSeconds),
+      .workers_ = arg_parser.get<uint64_t>(kArgWorkers),
+      .dram_ = arg_parser.get<uint64_t>(kArgDram),
+      .duration_ = arg_parser.get<uint64_t>(kArgDuration),
       .key_size_ = arg_parser.get<uint64_t>(kArgKeySize),
       .val_size_ = arg_parser.get<uint64_t>(kArgValSize),
-      .record_count_ = arg_parser.get<uint64_t>(kArgRecordCount),
+      .rows_ = arg_parser.get<uint64_t>(kArgRows),
       .zipf_factor_ = arg_parser.get<double>(kArgZipfFactor),
   };
 }

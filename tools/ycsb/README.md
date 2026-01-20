@@ -16,31 +16,31 @@ export LD_LIBRARY_PATH=$LEANSTORE_HOME/dist/release_coro/lib:$LD_LIBRARY_PATH
 
 # load data
 $LEANSTORE_HOME/dist/release_coro/bin/ycsb \
-    --data_dir=/tmp/leanstore/ycsb \
+    --dir=/tmp/leanstore/ycsb \
     --key_size=16 \
     --val_size=200 \
-    --record_count=1000000 \
-    --mem_gb=1 \
-    --run_for_seconds=360000 \
-    --target=basickv \
+    --rows=1000000 \
+    --dram=1 \
+    --duration=360000 \
+    --backend=basickv \
     --workload=c \
-    --threads=4 \
+    --workers=4 \
     --clients=4 \
-    --cmd=load
+    --action=load
 
 # run benchmark
 $LEANSTORE_HOME/dist/release_coro/bin/ycsb \
-    --data_dir=/tmp/leanstore/ycsb \
+    --dir=/tmp/leanstore/ycsb \
     --key_size=16 \
     --val_size=200 \
-    --record_count=1000000 \
-    --mem_gb=1 \
-    --run_for_seconds=360000 \
-    --target=basickv \
+    --rows=1000000 \
+    --dram=1 \
+    --duration=360000 \
+    --backend=basickv \
     --workload=c \
-    --threads=4 \
+    --workers=4 \
     --clients=4 \
-    --cmd=run
+    --action=run
 ```
 
 ## Profile

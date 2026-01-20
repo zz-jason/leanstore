@@ -13,11 +13,11 @@ namespace leanstore::ycsb {
 
 Result<std::unique_ptr<YcsbWtDb>> YcsbWtDb::Create(const YcsbOptions& options) {
   auto data_dir = options.DataDir();
-  std::string config_string(
-      "create, direct_io=[data, log, checkpoint], "
-      "log=(enabled=true,archive=true), statistics_log=(wait=1), "
-      "statistics=(all, clear), session_max=2000, eviction=(threads_max=4), cache_size=" +
-      std::to_string(options.mem_gb_ * 1024) + "M");
+  std::string config_string("create, direct_io=[data, log, checkpoint], "
+                            "log=(enabled=true,archive=true), statistics_log=(wait=1), "
+                            "statistics=(all, clear), session_max=2000, eviction=(threads_max=" +
+                            std::to_string(options.workers_) +
+                            "), cache_size=" + std::to_string(options.dram_ * 1024) + "M");
 
   WT_CONNECTION* conn;
   int ret = wiredtiger_open(data_dir.c_str(), nullptr, config_string.c_str(), &conn);

@@ -20,35 +20,35 @@ struct YcsbOptions {
   static constexpr std::string kWiredTiger = "wiredtiger";
 
   bool IsCreateFromScratch() const {
-    return IsCmdLoad();
+    return IsActionLoad();
   }
 
-  bool IsCmdLoad() const {
-    return cmd_ == kCmdLoad;
+  bool IsActionLoad() const {
+    return action_ == kCmdLoad;
   }
 
-  bool IsCmdRun() const {
-    return cmd_ == kCmdRun;
+  bool IsActionRun() const {
+    return action_ == kCmdRun;
   }
 
   std::string DataDir() const {
-    return std::format("{}/{}/{}", data_dir_, target_, workload_);
+    return std::format("{}/{}/{}", dir_, backend_, workload_);
   }
 
   bool IsBenchTransactionKv() const {
-    return target_ == kTargetTransactionKv;
+    return backend_ == kTargetTransactionKv;
   }
 
   bool IsBenchBasicKv() const {
-    return target_ == kTargetBasicKv;
+    return backend_ == kTargetBasicKv;
   }
 
   bool IsBenchRocksDb() const {
-    return target_ == kTargetRocksDb;
+    return backend_ == kTargetRocksDb;
   }
 
   bool IsBenchWiredTiger() const {
-    return target_ == kWiredTiger;
+    return backend_ == kWiredTiger;
   }
 
   YcsbWorkloadType GetWorkloadType() const {
@@ -65,19 +65,19 @@ struct YcsbOptions {
     return 1;
   }
 
-  std::string data_dir_;
-  std::string target_;
+  std::string dir_;
+  std::string backend_;
   std::string workload_;
-  std::string cmd_;
+  std::string action_;
 
   uint64_t clients_;
-  uint64_t threads_;
-  uint64_t mem_gb_;
-  uint64_t run_for_seconds_;
+  uint64_t workers_;
+  uint64_t dram_;
+  uint64_t duration_;
 
   uint64_t key_size_;
   uint64_t val_size_;
-  uint64_t record_count_;
+  uint64_t rows_;
   double zipf_factor_;
 };
 

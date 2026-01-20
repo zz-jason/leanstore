@@ -36,11 +36,11 @@ Result<std::unique_ptr<YcsbLeanDb>> YcsbLeanDb::Create(const YcsbOptions& option
   lean_option->create_from_scratch_ = options.IsCreateFromScratch();
   lean_option->enable_eager_gc_ = true;
   lean_option->enable_wal_ = true;
-  lean_option->worker_threads_ = options.threads_;
-  lean_option->buffer_pool_size_ = options.mem_gb_ << 30;
+  lean_option->worker_threads_ = options.workers_;
+  lean_option->buffer_pool_size_ = options.dram_ << 30;
   if (options.clients_ > 0) {
     lean_option->max_concurrent_transaction_per_worker_ =
-        (options.clients_ + options.threads_ - 1) / options.threads_;
+        (options.clients_ + options.workers_ - 1) / options.workers_;
   }
   auto res = LeanStore::Open(lean_option);
   if (!res) {

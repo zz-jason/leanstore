@@ -62,7 +62,7 @@ public:
       return std::make_unique<YcsbDb>(std::move(res.value()));
     }
 
-    return Error::General("Unknown storage engine option: " + options.target_);
+    return Error::General("Unknown storage engine option: " + options.backend_);
   }
 
   explicit YcsbDb(std::unique_ptr<YcsbLeanDb> db_impl) : db_impl_(std::move(db_impl)) {
