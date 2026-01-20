@@ -14,6 +14,7 @@ option(LEAN_ENABLE_PROFILING "Enable profiling" OFF)
 option(LEAN_ENABLE_PERF_COUNTERS "Whether to enable perf counters" ON)
 option(LEAN_ENABLE_CORO "Enable coroutine support" ON)
 option(LEAN_ENABLE_TESTS "Build tests" ON)
+option(LEAN_ENABLE_YCSB "Build YCSB benchmark tool (requires WiredTiger and RocksDB)" OFF)
 option(LEAN_ENABLE_DEBUG_EXEC "Enable debug block in debug build" ON)
 
 # ------------------------------------------------------------------------------
@@ -128,6 +129,11 @@ file(GLOB_RECURSE ALL_SOURCE_FILES
   "include/*.hpp"
   "tests/*.cpp" "tests/*.hpp"
   "tools/*.cpp" "tools/*.hpp")
+
+# Exclude ycsb files from checks if YCSB is disabled
+if(NOT LEAN_ENABLE_YCSB)
+  list(FILTER ALL_SOURCE_FILES EXCLUDE REGEX ".*/tools/ycsb/.*")
+endif()
 
 add_custom_target(check-format
   COMMAND clang-format --style=file --dry-run -Werror -i ${ALL_SOURCE_FILES}

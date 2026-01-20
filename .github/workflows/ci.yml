@@ -108,7 +108,7 @@ jobs:
       uses: actions/checkout@v3
     - name: Config, build, install
       run: |
-        cmake --preset release_coro
+        cmake --preset release_coro -DLEAN_ENABLE_YCSB=ON
         cmake --build build/release_coro -j `nproc`
         cmake --install build/release_coro
     - name: Package artifact

@@ -14,6 +14,14 @@ set(YCSB_DEPS leanstore)
 include(${CMAKE_SOURCE_DIR}/third_party/wiredtiger.cmake)
 list(APPEND YCSB_DEPS wiredtiger::wiredtiger)
 
+# Ensure check-tidy depends on wiredtiger_ext (if building from source)
+# so that wiredtiger.h is available during clang-tidy checks
+if(TARGET wiredtiger_ext)
+  if(TARGET check-tidy)
+    add_dependencies(check-tidy wiredtiger_ext)
+  endif()
+endif()
+
 find_package(RocksDB CONFIG REQUIRED)
 list(APPEND YCSB_DEPS RocksDB::rocksdb)
 

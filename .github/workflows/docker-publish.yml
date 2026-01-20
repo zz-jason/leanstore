@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'docker/**'
+      - 'scripts/build-wiredtiger.sh'
   workflow_dispatch:
 
 jobs:
@@ -28,7 +29,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: ./docker
+          context: .
           file: ./docker/Dockerfile
           push: true
           tags: zzjason/leanstore-dev:latest

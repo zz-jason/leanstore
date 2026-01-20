@@ -104,20 +104,20 @@ else
     exit 1
 fi
 
-# If ci-local-check.sh exists, run it in quick mode (single preset)
+# Run clang-tidy check on staged files only
 if [ -f "./scripts/ci-local-check.sh" ]; then
-    echo -e "${YELLOW}▶ Running quick CI validation...${NC}"
-    # Run in quick mode (just debug_coro preset)
-    if ./scripts/ci-local-check.sh debug_coro > /tmp/ci-check.log 2>&1; then
-        echo -e "${GREEN}  ✓ Quick CI validation passed${NC}"
+    echo -e "${YELLOW}▶ Running clang-tidy on staged files...${NC}"
+    # Run clang-tidy in staged mode (only check staged files, skip preset builds)
+    if ./scripts/ci-local-check.sh --mode staged --tidy-only > /tmp/ci-check.log 2>&1; then
+        echo -e "${GREEN}  ✓ Clang-tidy check passed${NC}"
     else
-        echo -e "${RED}  ✗ Quick CI validation failed${NC}"
+        echo -e "${RED}  ✗ Clang-tidy check failed${NC}"
         echo "  Check /tmp/ci-check.log for details"
-        echo "  Or run: ./scripts/ci-local-check.sh debug_coro"
+        echo "  Or run: ./scripts/ci-local-check.sh --mode staged --tidy-only"
         exit 1
     fi
 else
-    echo -e "${YELLOW}⚠ scripts/ci-local-check.sh not found. Skipping CI validation.${NC}"
+    echo -e "${YELLOW}⚠ scripts/ci-local-check.sh not found. Skipping clang-tidy check.${NC}"
 fi
 
 echo -e "${GREEN}✅ All pre-commit checks passed!${NC}"
