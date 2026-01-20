@@ -3,6 +3,11 @@ REPO="$2"
 TOKEN="$3"
 BUILD_PATH="$4"
 
+if [ -z "$PR_NUMBER" ]; then
+  echo "PR_NUMBER is empty. Skipping clang-tidy on push event (or use a different script for full scan)."
+  exit 0
+fi
+
 PAGE_URL="https://api.github.com/repos/$REPO/pulls/$PR_NUMBER/files?per_page=100"
 ALL_FILES=""
 while [[ -n "$PAGE_URL" ]]; do
