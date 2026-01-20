@@ -1,6 +1,6 @@
 #include "tools/ycsb/ycsb_options.hpp"
 
-#include "terminal_log.hpp"
+#include "console_logger.hpp"
 
 #include <tanakh-cmdline/cmdline.h>
 
@@ -45,7 +45,7 @@ YcsbOptions YcsbOptions::FromCmdLine(int argc, char** argv) {
   arg_parser.parse_check(argc, argv);
 
   if (arg_parser.get<uint64_t>(kArgKeySize) < 8) {
-    leanstore::ycsb::TerminalLogFatal("Key size must be >= 8");
+    leanstore::ycsb::ConsoleFatal("Key size must be >= 8");
   }
 
   auto to_lower = [](std::string_view str) {

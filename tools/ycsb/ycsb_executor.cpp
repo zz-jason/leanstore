@@ -1,13 +1,9 @@
 #include "tools/ycsb/ycsb_executor.hpp"
 
 #include "leanstore/cpp/base/range_splits.hpp"
-#include "leanstore/cpp/base/slice.hpp"
-#include "leanstore/cpp/base/small_vector.hpp"
 #include "leanstore/utils/random_generator.hpp"
 #include "leanstore/utils/zipfian_generator.hpp"
-#include "tools/ycsb/general_kv_space.hpp"
-#include "tools/ycsb/general_server.hpp"
-#include "tools/ycsb/terminal_log.hpp"
+#include "tools/ycsb/console_logger.hpp"
 #include "tools/ycsb/ycsb_options.hpp"
 #include "ycsb_workload_spec.hpp"
 
@@ -20,6 +16,7 @@
 #include <cstdint>
 #include <format>
 #include <memory>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -28,189 +25,172 @@
 
 namespace leanstore::ycsb {
 
+YcsbExecutor::YcsbExecutor(const YcsbOptions& options) : options_(options) {
+  // Init bench stats
+  bench_stats_.reserve(options_.clients_);
+  for (auto i = 0U; i < options_.clients_; i++) {
+    bench_stats_.emplace_back(std::make_unique<YcsbBenchStats>());
+  }
+
+  // Init backend
+  auto data_dir = options_.DataDir();
+  if (options_.IsCreateFromScratch()) {
+    RemoveDirIfExists(data_dir);
+    MakeDirIfNotExists(data_dir);
+  }
+  auto res = YcsbDb::Create(options);
+  if (!res) {
+    ConsoleFatal(std::format("Failed to create YCSB DB: {}", res.error().ToString()));
+  }
+  db_ = std::move(res.value());
+}
+
 void YcsbExecutor::HandleCmdLoad() {
   // Create KvSpace before loading data
-  server_->ExecOn(0, [&]() { server_->CreateKvSpace(); });
-
-  auto insert_func = [&](uint64_t wid, uint64_t rid_begin, uint64_t rid_end) {
-    auto kv_space = server_->GetKvSpace();
-
-    TerminalLogInfo(std::format("Server thread started, wid={}", wid));
-    SmallBuffer256 key_buffer(options_.key_size_);
-    SmallBuffer256 val_buffer(options_.val_size_);
-    auto& bench_stats = GetBenchStats(wid);
-
-    for (auto i = rid_begin; i < rid_end; i++) {
-      KeyAt(i, key_buffer.Data(), options_.key_size_);
-      RandValue(val_buffer.Data(), options_.val_size_);
-      auto res = kv_space->Insert(Slice(key_buffer.Data(), options_.key_size_),
-                                  Slice(val_buffer.Data(), options_.val_size_));
-      UpdateBenchStats(bench_stats, res);
-      if (!res) {
-        TerminalLogFatal(
-            std::format("Failed to insert key during loading: {}", res.error().ToString()));
-      }
-    }
-  };
-
-  auto ranges = RangeSplits<uint64_t>(options_.record_count_, options_.threads_);
-  for (auto i = 0U; i < options_.threads_; i++) {
-    auto range = ranges[i];
-    server_->AsyncExecOn(i, [wid = i, f = insert_func, rid_begin = range.begin(),
-                             rid_end = range.end()]() { f(wid, rid_begin, rid_end); });
+  auto res = db_->NewSession().CreateKvSpace(kKvSpaceName);
+  if (!res) {
+    ConsoleFatal(std::format("Failed to create KvSpace: {}", res.error().ToString()));
   }
 
-  std::atomic<bool> keep_running = true;
-  std::thread reporter_thread([this, &keep_running]() { ReportBenchStats(keep_running); });
-
-  server_->WaitAll();
-
-  keep_running.store(false);
-  reporter_thread.join();
-}
-
-void YcsbExecutor::RunInEmbeddedMode() {
-  std::atomic<bool> keep_running = true;
-  auto workload_func = [&](uint64_t wid) {
-    TerminalLogInfo(std::format("Server thread started, wid={}", wid));
-    auto workload_type = options_.GetWorkloadType();
-    auto workload_spec = options_.GetWorkloadSpec();
-    auto kv_space = server_->GetKvSpace();
-    utils::ScrambledZipfianGenerator gen(0, options_.record_count_, options_.zipf_factor_);
-    SmallBuffer256 key_buffer(options_.key_size_);
-    SmallBuffer256 val_buffer(options_.val_size_);
-    ByteBuffer value_out;
-    value_out.reserve(options_.val_size_);
-    auto& bench_stats = GetBenchStats(wid);
-
-    while (keep_running) {
-      switch (workload_type) {
-      case YcsbWorkloadType::kA:
-      case YcsbWorkloadType::kB:
-      case YcsbWorkloadType::kC: {
-        KeyAt(gen.Rand(), key_buffer.Data(), options_.key_size_);
-        auto read_probability = utils::RandomGenerator::Rand(0, 100);
-
-        // read
-        if (read_probability <= workload_spec.read_proportion_ * 100) {
-          auto res = kv_space->Lookup(Slice(key_buffer.Data(), options_.key_size_), value_out);
-          UpdateBenchStats(bench_stats, res);
-          break;
-        }
-
-        // update
-        RandValue(val_buffer.Data(), options_.val_size_);
-        auto res = kv_space->Update(Slice(key_buffer.Data(), options_.key_size_),
-                                    Slice(val_buffer.Data(), options_.val_size_));
-        UpdateBenchStats(bench_stats, res);
-        break;
-      }
-      default: {
-        TerminalLogFatal(
-            std::format("Unsupported workload type: {}", static_cast<uint8_t>(workload_type)));
-      }
-      }
-    }
-  };
-
-  // Dispatch workload to all server threads
-  for (uint64_t i = 0; i < options_.threads_; i++) {
-    server_->AsyncExecOn(i, [wid = i, f = workload_func]() mutable { f(wid); });
-  }
-
-  // Launch reporter
-  std::thread reporter_thread([this, &keep_running]() { ReportBenchStats(keep_running); });
-
-  // Run for the specified duration
-  sleep(options_.run_for_seconds_);
-
-  // Signal workers and reporter to stop
-  keep_running.store(false);
-
-  // Wait for all workers to finish
-  server_->WaitAll();
-  reporter_thread.join();
-}
-
-void YcsbExecutor::RunInClientServerMode() {
-  std::atomic<bool> keep_running = true;
-  auto client_func = [&](uint64_t cid) {
-    TerminalLogInfo(std::format("Client thread started, cid={}", cid));
-    std::string thread_name = std::format("ycsb_cli_{}", cid);
+  // Client function to load data
+  std::atomic<uint64_t> finished_clients = 0;
+  auto client_func = [&](uint64_t cid, uint64_t rid_begin, uint64_t rid_end) {
+    ConsoleInfo("YCSB loader thread started: " + std::to_string(cid));
+    std::string thread_name = std::format("ycsb_loader_{}", cid);
     pthread_setname_np(pthread_self(), thread_name.c_str());
 
-    auto wid = cid % options_.threads_;
-    auto workload_type = options_.GetWorkloadType();
-    auto workload_spec = options_.GetWorkloadSpec();
+    auto session = db_->NewSession();
+    auto kv_space_res = session.GetKvSpace(kKvSpaceName);
+    if (!kv_space_res) {
+      ConsoleFatal(std::format("Failed to get KvSpace: {}", kv_space_res.error().ToString()));
+    }
+    auto kv_space = std::move(kv_space_res.value());
+    std::string key(options_.key_size_, '\0');
+    std::string value(options_.val_size_, '\0');
 
-    // Get KvSpace reference from the server for benchmarking
-    std::unique_ptr<GeneralKvSpace> kv_space = nullptr;
-    server_->ExecOn(wid, [&kv_space, this]() { kv_space = server_->GetKvSpace(); });
-
-    utils::ScrambledZipfianGenerator gen(0, options_.record_count_, options_.zipf_factor_);
-    SmallBuffer256 key_buffer(options_.key_size_);
-    SmallBuffer256 val_buffer(options_.val_size_);
-    ByteBuffer value_out;
-    value_out.reserve(options_.val_size_);
     auto& bench_stats = GetBenchStats(cid);
 
-    while (keep_running) {
-      switch (workload_type) {
-      case YcsbWorkloadType::kA:
-      case YcsbWorkloadType::kB:
-      case YcsbWorkloadType::kC: {
-        KeyAt(gen.Rand(), key_buffer.Data(), options_.key_size_);
-        auto read_probability = utils::RandomGenerator::Rand(0, 100);
-
-        // read
-        if (read_probability <= workload_spec.read_proportion_ * 100) {
-          auto res = server_->ExecOn(wid, [&]() {
-            return kv_space->Lookup(Slice(key_buffer.Data(), options_.key_size_), value_out);
-          });
-          UpdateBenchStats(bench_stats, res);
-          break;
-        }
-
-        // update
-        RandValue(val_buffer.Data(), options_.val_size_);
-        auto res = server_->ExecOn(wid, [&]() {
-          return kv_space->Update(Slice(key_buffer.Data(), options_.key_size_),
-                                  Slice(val_buffer.Data(), options_.val_size_));
-        });
-        UpdateBenchStats(bench_stats, res);
-        break;
-      }
-      default: {
-        TerminalLogFatal(
-            std::format("Unsupported workload type: {}", static_cast<uint8_t>(workload_type)));
-      }
+    for (auto i = rid_begin; i < rid_end; i++) {
+      KeyAt(i, reinterpret_cast<uint8_t*>(key.data()), key.size());
+      RandValue(reinterpret_cast<uint8_t*>(value.data()), value.size());
+      auto res = kv_space.Put(key, value);
+      if (!res) {
+        ConsoleFatal(
+            std::format("Failed to insert key during loading: {}", res.error().ToString()));
+        bench_stats.IncAborted();
+      } else {
+        bench_stats.IncCommitted();
       }
     }
+
+    finished_clients.fetch_add(1);
+    ConsoleInfo("YCSB loader thread finished: " + std::to_string(cid));
   };
 
-  // Start all client threads
-  std::vector<std::thread> client_threads;
-  for (uint64_t i = 0; i < options_.clients_; i++) {
-    client_threads.emplace_back([&, cid = i]() { client_func(cid); });
+  // Launch all loader threads to load data
+  auto ranges = RangeSplits<uint64_t>(options_.record_count_, options_.clients_);
+  std::vector<std::thread> loader_threads;
+  for (auto i = 0U; i < options_.clients_; i++) {
+    auto range = ranges[i];
+    loader_threads.emplace_back([&, cid = i, rid_begin = range.begin(), rid_end = range.end()]() {
+      client_func(cid, rid_begin, rid_end);
+    });
   }
 
-  // Launch reporter
+  // Launch reporter thread
+  std::atomic<bool> keep_running = true;
   std::thread reporter_thread([this, &keep_running]() { ReportBenchStats(keep_running); });
 
-  // Run for the specified duration
-  sleep(options_.run_for_seconds_);
-
-  // Signal clients and reporter to stop
-  keep_running.store(false);
-
-  // Wait for all clients to finish
-  for (auto& thread : client_threads) {
+  // Wait for all loader threads to finish
+  for (auto& thread : loader_threads) {
     if (thread.joinable()) {
       thread.join();
     }
   }
 
-  // Wait for reporter to finish
+  // Stop reporter thread
+  keep_running.store(false);
+  reporter_thread.join();
+}
+
+void YcsbExecutor::HandleCmdRun() {
+  std::atomic<bool> keep_running = true;
+
+  // Client function to run workload
+  auto client_func = [&](uint64_t cid) {
+    ConsoleInfo("YCSB runner thread started: " + std::to_string(cid));
+    std::string thread_name = std::format("ycsb_runner_{}", cid);
+    pthread_setname_np(pthread_self(), thread_name.c_str());
+
+    auto session = db_->NewSession();
+    auto kv_space_res = session.GetKvSpace(kKvSpaceName);
+    if (!kv_space_res) {
+      ConsoleFatal(std::format("Failed to get KvSpace: {}", kv_space_res.error().ToString()));
+    }
+    auto kv_space = std::move(kv_space_res.value());
+    std::string key(options_.key_size_, '\0');
+    std::string value(options_.val_size_, '\0');
+
+    auto& bench_stats = GetBenchStats(cid);
+    utils::ScrambledZipfianGenerator gen(0, options_.record_count_, options_.zipf_factor_);
+
+    auto workload_type = options_.GetWorkloadType();
+    auto workload_spec = options_.GetWorkloadSpec();
+
+    while (keep_running) {
+      switch (workload_type) {
+      case YcsbWorkloadType::kA:
+      case YcsbWorkloadType::kB:
+      case YcsbWorkloadType::kC: {
+        KeyAt(gen.Rand(), reinterpret_cast<uint8_t*>(key.data()), key.size());
+        auto read_probability = utils::RandomGenerator::Rand(0, 100);
+
+        // read
+        if (read_probability <= workload_spec.read_proportion_ * 100) {
+          auto res = kv_space.Get(key, value);
+          UpdateBenchStats(bench_stats, res);
+          break;
+        }
+
+        // update
+        RandValue(reinterpret_cast<uint8_t*>(value.data()), value.size());
+        auto res = kv_space.Update(key, value);
+        UpdateBenchStats(bench_stats, res);
+        break;
+      }
+      default: {
+        ConsoleFatal(
+            std::format("Unsupported workload type: {}", static_cast<uint8_t>(workload_type)));
+      }
+      }
+    }
+
+    ConsoleInfo("YCSB runner thread finished: " + std::to_string(cid));
+  };
+
+  // Launch all runner threads to run workload
+  std::vector<std::thread> runner_threads;
+  for (uint64_t i = 0; i < options_.clients_; i++) {
+    runner_threads.emplace_back([&, cid = i]() { client_func(cid); });
+  }
+
+  // Launch reporter thread
+  std::thread reporter_thread([this, &keep_running]() { ReportBenchStats(keep_running); });
+
+  // Run for the specified duration
+  sleep(options_.run_for_seconds_);
+
+  // Signal runner and reporter threads to stop
+  keep_running.store(false);
+
+  // Wait for all runner threads to finish
+  for (auto& thread : runner_threads) {
+    if (thread.joinable()) {
+      thread.join();
+    }
+  }
+
+  // Wait for reporter thread to finish
   reporter_thread.join();
 }
 
@@ -236,10 +216,10 @@ void YcsbExecutor::ReportBenchStats(std::atomic<bool>& keep_running) {
     auto abort_rate = (current_committed + current_aborted > 0)
                           ? (current_aborted) * 1.0 / (current_committed + current_aborted)
                           : 0.0;
-    TerminalLogInfo(std::format("[{}s] [TPS={}] [COMMITTED={}] [ABORTED={}] [ABORT_RATE={:.2f}%]",
-                                elapsed_sec, (current_committed + current_aborted) / report_period,
-                                current_committed, current_aborted,
-                                abort_rate * 100)); // Display abort rate as percentage
+    ConsoleInfo(std::format("[{}s] [TPS={}] [COMMITTED={}] [ABORTED={}] [ABORT_RATE={:.2f}%]",
+                            elapsed_sec, (current_committed + current_aborted) / report_period,
+                            current_committed, current_aborted,
+                            abort_rate * 100)); // Display abort rate as percentage
 
     aggregated_metrics_per_report.emplace_back(
         current_committed, current_aborted); // Store committed and aborted for this period
@@ -259,7 +239,7 @@ void YcsbExecutor::ReportBenchStats(std::atomic<bool>& keep_running) {
           ? (total_aborted_overall) * 1.0 / (total_committed_overall + total_aborted_overall)
           : 0.0;
 
-  TerminalLogInfo(std::format(
+  ConsoleInfo(std::format(
       "Summary:\n"
       "  -threads: {}\n" // This should probably be options_.clients_ or options_.threads_
       "  -total_time_sec: {}\n"

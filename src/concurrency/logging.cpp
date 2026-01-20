@@ -12,7 +12,6 @@
 #include <atomic>
 #include <cassert>
 #include <cstdint>
-#include <cstring>
 #include <functional>
 
 namespace leanstore {
