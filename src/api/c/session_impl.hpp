@@ -1,13 +1,13 @@
 #pragma once
 
-#include "coroutine/coro_env.hpp"
-#include "coroutine/coro_session.hpp"
 #include "leanstore/btree/basic_kv.hpp"
-#include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/c/leanstore.h"
-#include "leanstore/concurrency/tx_manager.hpp"
+#include "leanstore/coro/coro_env.hpp"
+#include "leanstore/coro/coro_session.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/table/table.hpp"
+#include "leanstore/tx/transaction_kv.hpp"
+#include "leanstore/tx/tx_manager.hpp"
 
 #include <utility>
 

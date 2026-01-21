@@ -1,8 +1,8 @@
 #include "wal/wal_file_cursor.hpp"
 
-#include "leanstore/common/wal_record.h"
-#include "leanstore/cpp/base/error.hpp"
-#include "leanstore/cpp/base/log.hpp"
+#include "leanstore/base/error.hpp"
+#include "leanstore/base/log.hpp"
+#include "leanstore/c/wal_record.h"
 
 #include <cassert>
 #include <cerrno>

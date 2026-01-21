@@ -1,9 +1,9 @@
 #include "leanstore/btree/basic_kv.hpp"
-#include "leanstore/btree/transaction_kv.hpp"
-#include "leanstore/buffer-manager/buffer_manager.hpp"
-#include "leanstore/common/types.h"
-#include "leanstore/concurrency/cr_manager.hpp"
+#include "leanstore/buffer/buffer_manager.hpp"
+#include "leanstore/c/types.h"
 #include "leanstore/lean_store.hpp"
+#include "leanstore/tx/cr_manager.hpp"
+#include "leanstore/tx/transaction_kv.hpp"
 
 #include <gtest/gtest.h>
 

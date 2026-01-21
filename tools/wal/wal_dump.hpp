@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore/common/wal_record.h"
+#include "leanstore/c/wal_record.h"
 
 #include <tanakh-cmdline/cmdline.h>
 

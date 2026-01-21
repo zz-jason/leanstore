@@ -1,7 +1,7 @@
-#include <leanstore/LeanStore.hpp>
-#include <leanstore/btree/BasicKV.hpp>
-#include <leanstore/common/types.h>
-#include <leanstore/concurrency/TxManager.hpp>
+#include <leanstore/lean_store.hpp>
+#include <leanstore/btree/basic_kv.hpp>
+#include <leanstore/c/types.h>
+#include <leanstore/tx/tx_manager.hpp>
 
 #include <iostream>
 #include <memory>

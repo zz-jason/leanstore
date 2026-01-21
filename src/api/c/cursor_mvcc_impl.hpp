@@ -1,9 +1,9 @@
 #pragma once
 
 #include "api/c/session_impl.hpp"
-#include "leanstore/btree/core/btree_iter.hpp"
-#include "leanstore/btree/transaction_kv.hpp"
+#include "leanstore/btree/btree_iter.hpp"
 #include "leanstore/c/leanstore.h"
+#include "leanstore/tx/transaction_kv.hpp"
 
 namespace leanstore {
 

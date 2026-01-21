@@ -1,9 +1,9 @@
 #include "api/c/cursor_mvcc_impl.hpp"
 
-#include "coroutine/coro_env.hpp"
-#include "leanstore/btree/core/btree_iter.hpp"
-#include "leanstore/btree/transaction_kv.hpp"
+#include "leanstore/btree/btree_iter.hpp"
 #include "leanstore/c/leanstore.h"
+#include "leanstore/coro/coro_env.hpp"
+#include "leanstore/tx/transaction_kv.hpp"
 
 #include <cassert>
 

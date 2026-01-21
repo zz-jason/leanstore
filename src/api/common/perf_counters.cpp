@@ -1,4 +1,4 @@
-#include "leanstore/common/perf_counters.h"
+#include "leanstore/c/perf_counters.h"
 
 #include "leanstore/utils/counter_util.hpp"
 

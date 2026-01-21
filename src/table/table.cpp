@@ -1,9 +1,9 @@
 #include "leanstore/table/table.hpp"
 
+#include "leanstore/btree/b_tree_generic.hpp"
 #include "leanstore/btree/basic_kv.hpp"
-#include "leanstore/btree/core/b_tree_generic.hpp"
-#include "leanstore/btree/transaction_kv.hpp"
 #include "leanstore/lean_store.hpp"
+#include "leanstore/tx/transaction_kv.hpp"
 
 #include <cstring>
 #include <limits>

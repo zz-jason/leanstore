@@ -1,8 +1,8 @@
-#include "leanstore/cpp/recovery/parallel_recovery.hpp"
+#include "leanstore/recovery/parallel_recovery.hpp"
 
-#include "leanstore/cpp/recovery/recovery_analyzer.hpp"
-#include "leanstore/cpp/recovery/recovery_redoer.hpp"
-#include "leanstore/cpp/recovery/recovery_undoer.hpp"
+#include "leanstore/recovery/recovery_analyzer.hpp"
+#include "leanstore/recovery/recovery_redoer.hpp"
+#include "leanstore/recovery/recovery_undoer.hpp"
 
 namespace leanstore {
 

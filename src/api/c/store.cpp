@@ -2,7 +2,7 @@
 #include "api/c/store_impl.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/c/leanstore.h"
-#include "leanstore/common/types.h"
+#include "leanstore/c/types.h"
 #include "leanstore/lean_store.hpp"
 
 #include <cassert>

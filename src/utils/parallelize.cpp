@@ -1,9 +1,9 @@
 #include "leanstore/utils/parallelize.hpp"
 
-#include "coroutine/coro_env.hpp"
-#include "leanstore/cpp/base/likely.hpp"
-#include "leanstore/cpp/base/log.hpp"
-#include "leanstore/cpp/base/range_splits.hpp"
+#include "leanstore/base/likely.hpp"
+#include "leanstore/base/log.hpp"
+#include "leanstore/base/range_splits.hpp"
+#include "leanstore/coro/coro_env.hpp"
 
 #include <algorithm>
 #include <cstdint>

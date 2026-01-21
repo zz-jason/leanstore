@@ -1,8 +1,8 @@
 #ifndef LEANSTORE_C_LEANSTORE_H
 #define LEANSTORE_C_LEANSTORE_H
 
-#include "leanstore/common/status.h"
-#include "leanstore/common/types.h"
+#include "leanstore/c/status.h"
+#include "leanstore/c/types.h"
 
 #ifdef __cplusplus
 extern "C" {

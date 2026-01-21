@@ -1,10 +1,10 @@
 #pragma once
 
-#include "leanstore/common/types.h"
-#include "leanstore/common/wal_record.h"
-#include "leanstore/cpp/base/log.hpp"
-#include "leanstore/cpp/base/result.hpp"
-#include "leanstore/cpp/wal/wal_cursor.hpp"
+#include "leanstore/base/log.hpp"
+#include "leanstore/base/result.hpp"
+#include "leanstore/c/types.h"
+#include "leanstore/c/wal_record.h"
+#include "leanstore/wal/wal_cursor.hpp"
 
 #include <cassert>
 #include <cerrno>

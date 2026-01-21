@@ -1,4 +1,4 @@
-#include "leanstore/cpp/base/stacktrace.hpp"
+#include "leanstore/base/stacktrace.hpp"
 
 #include <cpptrace/basic.hpp>
 

@@ -1,11 +1,11 @@
 #pragma once
 
-#include "coroutine/coro_scheduler.hpp"
-#include "coroutine/coro_session.hpp"
+#include "leanstore/base/result.hpp"
 #include "leanstore/btree/basic_kv.hpp"
-#include "leanstore/btree/transaction_kv.hpp"
-#include "leanstore/cpp/base/result.hpp"
+#include "leanstore/coro/coro_scheduler.hpp"
+#include "leanstore/coro/coro_session.hpp"
 #include "leanstore/lean_store.hpp"
+#include "leanstore/tx/transaction_kv.hpp"
 #include "tools/ycsb/ycsb_options.hpp"
 
 #include <cassert>

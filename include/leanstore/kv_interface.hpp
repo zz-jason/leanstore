@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore/cpp/base/slice.hpp"
+#include "leanstore/base/slice.hpp"
 
 #include <cstdint>
 #include <functional>

@@ -1,10 +1,10 @@
-#include "leanstore/cpp/wal/wal_serde.hpp"
+#include "leanstore/wal/wal_serde.hpp"
 
-#include "leanstore/common/wal_record.h"
-#include "leanstore/cpp/wal/wal_cast.hpp"
-#include "leanstore/cpp/wal/wal_traits.hpp"
+#include "leanstore/c/wal_record.h"
 #include "leanstore/utils/misc.hpp"
-#include "utils/json.hpp"
+#include "leanstore/wal/wal_cast.hpp"
+#include "leanstore/wal/wal_traits.hpp"
+#include "leanstore/utils/json.hpp"
 
 #include <cassert>
 #include <string>

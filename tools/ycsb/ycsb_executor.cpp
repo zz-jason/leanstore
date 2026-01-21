@@ -1,6 +1,6 @@
 #include "tools/ycsb/ycsb_executor.hpp"
 
-#include "leanstore/cpp/base/range_splits.hpp"
+#include "leanstore/base/range_splits.hpp"
 #include "leanstore/utils/random_generator.hpp"
 #include "leanstore/utils/zipfian_generator.hpp"
 #include "tools/ycsb/console_logger.hpp"

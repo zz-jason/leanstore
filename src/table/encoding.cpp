@@ -1,6 +1,6 @@
 #include "leanstore/table/encoding.hpp"
 
-#include "leanstore/cpp/base/error.hpp"
+#include "leanstore/base/error.hpp"
 
 #include <cstring>
 #include <limits>

@@ -1,6 +1,6 @@
 #include "leanstore/table/table_registry.hpp"
 
-#include "leanstore/cpp/base/error.hpp"
+#include "leanstore/base/error.hpp"
 
 namespace leanstore {
 

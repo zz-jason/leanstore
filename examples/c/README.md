@@ -1,15 +1,15 @@
-# Examples
+# C Examples
 
 ## 1. Build the leanstore library
 
 ```sh
 cd $LEANSTORE_HOME
-cmake --preset=debug
-cmake --build build/debug -j `nproc`
-cmake --install build/debug
+cmake --preset=debug_coro
+cmake --build build/debug_coro -j `nproc`
+cmake --install build/debug_coro
 ```
 
-The leanstore library should be found in `$LEANSTORE/dist/debug` after the above commands.
+The leanstore library should be found in `$LEANSTORE_HOME/dist/debug_coro` after the above commands.
 
 ## 2. Build the example
 
@@ -17,9 +17,12 @@ The leanstore library should be found in `$LEANSTORE/dist/debug` after the above
 cd $LEANSTORE_HOME/examples/c
 
 # generate build files with leanstore library
+# Note: leanstore depends on several libraries (boost, spdlog, rapidjson, etc.)
+# It is recommended to use the same CMAKE_TOOLCHAIN_FILE used to build leanstore.
 cmake -B build -S . \
-      -DLEANSTORE_INCLUDE_DIR=$LEANSTORE_HOME/dist/debug/include \
-      -DLEANSTORE_LIBRARY_DIR=$LEANSTORE_HOME/dist/debug/lib
+      -DCMAKE_TOOLCHAIN_FILE=$LEANSTORE_HOME/vcpkg/scripts/buildsystems/vcpkg.cmake \
+      -DLEANSTORE_INCLUDE_DIR=$LEANSTORE_HOME/dist/debug_coro/include \
+      -DLEANSTORE_LIBRARY_DIR=$LEANSTORE_HOME/dist/debug_coro/lib
 
 # build the example
 cmake --build build -j `nproc`
@@ -28,16 +31,3 @@ cmake --build build -j `nproc`
 ./build/kv_basic_example
 ```
 
-Or you can directly build the example:
-
-```sh
-cd $LEANSTORE_HOME/examples/c
-
-# build with leanstore library
-gcc -o kv_basic_example kv_basic_example.c \
-    -L$LEANSTORE_HOME/dist/debug/lib -lleanstore -lstdc++ \
-    -I$LEANSTORE_HOME/dist/debug/include
-
-# run with LD_LIBRARY_PATH set to the leanstore library path
-LD_LIBRARY_PATH=$LEANSTORE_HOME/dist/debug/lib ./kv_basic_example
-```

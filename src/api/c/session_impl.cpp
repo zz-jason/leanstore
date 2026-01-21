@@ -3,15 +3,15 @@
 #include "api/c/btree_impl.hpp"
 #include "api/c/btree_mvcc_impl.hpp"
 #include "api/c/table_impl.hpp"
-#include "coroutine/coro_env.hpp"
+#include "leanstore/base/error.hpp"
+#include "leanstore/btree/b_tree_generic.hpp"
 #include "leanstore/btree/basic_kv.hpp"
-#include "leanstore/btree/core/b_tree_generic.hpp"
-#include "leanstore/btree/transaction_kv.hpp"
-#include "leanstore/buffer-manager/tree_registry.hpp"
+#include "leanstore/buffer/tree_registry.hpp"
 #include "leanstore/c/leanstore.h"
-#include "leanstore/concurrency/tx_manager.hpp"
-#include "leanstore/cpp/base/error.hpp"
+#include "leanstore/coro/coro_env.hpp"
 #include "leanstore/lean_store.hpp"
+#include "leanstore/tx/transaction_kv.hpp"
+#include "leanstore/tx/tx_manager.hpp"
 
 #include <iostream>
 #include <utility>

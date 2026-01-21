@@ -1,4 +1,4 @@
-#include "leanstore/common/utils.h"
+#include "leanstore/c/utils.h"
 
 #include "telemetry/metrics_http_exposer.hpp"
 

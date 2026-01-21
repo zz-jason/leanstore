@@ -19,9 +19,9 @@ building the project. It's highly recommended to develop the project inside a
 docker container, which can be built from this [Dockerfile][5]:
 
 ```sh
-cmake --preset debug
-cmake --build build/debug -j `nproc`
-ctest --test-dir build/debug
+cmake --preset debug_coro
+cmake --build build/debug_coro -j `nproc`
+ctest --test-dir build/debug_coro
 ```
 
 ## Contributing

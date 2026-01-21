@@ -1,8 +1,8 @@
 #include "api/c/cursor_impl.hpp"
 
-#include "leanstore/btree/core/btree_iter.hpp"
+#include "leanstore/base/slice.hpp"
+#include "leanstore/btree/btree_iter.hpp"
 #include "leanstore/c/leanstore.h"
-#include "leanstore/cpp/base/slice.hpp"
 
 #include <cassert>
 

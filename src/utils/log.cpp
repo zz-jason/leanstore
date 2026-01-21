@@ -1,7 +1,7 @@
-#include "leanstore/cpp/base/log.hpp"
+#include "leanstore/base/log.hpp"
 
-#include "coroutine/coro_env.hpp"
-#include "leanstore/cpp/config/store_paths.hpp"
+#include "leanstore/config/store_paths.hpp"
+#include "leanstore/coro/coro_env.hpp"
 
 #include <spdlog/common.h>
 #include <spdlog/sinks/basic_file_sink.h>

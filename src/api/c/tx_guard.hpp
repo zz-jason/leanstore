@@ -1,8 +1,8 @@
 #pragma once
 
-#include "coroutine/coro_env.hpp"
-#include "leanstore/common/status.h"
-#include "leanstore/concurrency/tx_manager.hpp"
+#include "leanstore/c/status.h"
+#include "leanstore/coro/coro_env.hpp"
+#include "leanstore/tx/tx_manager.hpp"
 
 namespace leanstore {
 

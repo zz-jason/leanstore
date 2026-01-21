@@ -1,4 +1,4 @@
-#include "leanstore/common/types.h"
+#include "leanstore/c/types.h"
 
 #include <string.h>
 

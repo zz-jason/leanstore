@@ -1,10 +1,10 @@
 #pragma once
 
-#include "coroutine/coro_future.hpp"
-#include "coroutine/coro_scheduler.hpp"
-#include "leanstore/common/types.h"
-#include "leanstore/cpp/base/log.hpp"
-#include "leanstore/cpp/base/result.hpp"
+#include "leanstore/base/log.hpp"
+#include "leanstore/base/result.hpp"
+#include "leanstore/c/types.h"
+#include "leanstore/coro/coro_future.hpp"
+#include "leanstore/coro/coro_scheduler.hpp"
 
 #include <cassert>
 #include <cstdint>

@@ -66,10 +66,10 @@ When modifying external dependency builds, update the shared script to maintain 
 ## Codebase Navigation
 
 **For transaction/MVCC analysis, read in this order:**
-1. `include/leanstore/concurrency/concurrency_control.hpp` - visibility checks
-2. `include/leanstore/concurrency/tx_manager.hpp` - transaction lifecycle
-3. `include/leanstore/concurrency/history_storage.hpp` - version storage
-4. `src/coroutine/mvcc_manager.hpp` - timestamp allocation
+1. `include/leanstore/tx/concurrency_control.hpp` - visibility checks
+2. `include/leanstore/tx/tx_manager.hpp` - transaction lifecycle
+3. `include/leanstore/tx/history_storage.hpp` - version storage
+4. `include/leanstore/coro/mvcc_manager.hpp` - timestamp allocation
 
 **Common search patterns:**
 | Component | Search Pattern |

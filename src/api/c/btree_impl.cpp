@@ -3,7 +3,7 @@
 #include "api/c/cursor_impl.hpp"
 #include "api/c/tx_guard.hpp"
 #include "leanstore/c/leanstore.h"
-#include "leanstore/common/status.h"
+#include "leanstore/c/status.h"
 
 namespace leanstore {
 

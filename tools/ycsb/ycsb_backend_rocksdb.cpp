@@ -1,6 +1,6 @@
 #include "tools/ycsb/ycsb_backend_rocksdb.hpp"
 
-#include "leanstore/cpp/base/result.hpp"
+#include "leanstore/base/result.hpp"
 #include "tools/ycsb/console_logger.hpp"
 #include "tools/ycsb/ycsb_backend.hpp"
 

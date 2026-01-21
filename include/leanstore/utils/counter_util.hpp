@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore/common/perf_counters.h"
+#include "leanstore/c/perf_counters.h"
 
 #ifdef LEAN_ENABLE_PERF_COUNTERS
 #include <chrono>

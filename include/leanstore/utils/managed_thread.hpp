@@ -1,8 +1,8 @@
 #pragma once
 
-#include "coroutine/coro_env.hpp"
-#include "leanstore/cpp/base/defer.hpp"
-#include "leanstore/cpp/base/log.hpp"
+#include "leanstore/base/defer.hpp"
+#include "leanstore/base/log.hpp"
+#include "leanstore/coro/coro_env.hpp"
 #include "leanstore/utils/misc.hpp"
 
 #include <atomic>

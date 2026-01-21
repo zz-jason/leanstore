@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore/btree/core/b_tree_generic.hpp"
+#include "leanstore/btree/b_tree_generic.hpp"
 #include "leanstore/kv_interface.hpp"
 
 namespace leanstore {

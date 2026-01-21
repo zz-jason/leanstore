@@ -1,8 +1,8 @@
-#include "utils/json.hpp"
+#include "leanstore/utils/json.hpp"
 
-#include "leanstore/cpp/base/error.hpp"
-#include "leanstore/cpp/base/optional.hpp"
-#include "leanstore/cpp/base/result.hpp"
+#include "leanstore/base/error.hpp"
+#include "leanstore/base/optional.hpp"
+#include "leanstore/base/result.hpp"
 
 #include <cassert>
 #include <functional>
