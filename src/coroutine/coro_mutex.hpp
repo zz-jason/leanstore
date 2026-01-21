@@ -65,26 +65,26 @@ public:
   /// Tries to acquire an exclusive lock without blocking.
   /// Returns true if the exclusive lock was acquired successfully, false
   /// otherwise.
-  bool try_lock() {
+  bool try_lock() { // NOLINT: mimic std::shared_mutex
     int64_t expected = kUnlocked;
     return state_.compare_exchange_strong(expected, kLockedExclusively, std::memory_order_acquire);
   }
 
   /// Locks the mutex exclusively, yielding the current coroutine if the
   /// mutex is already held by another coroutine.
-  void lock();
+  void lock(); // NOLINT: mimic std::shared_mutex
 
   /// Unlocks the mutex, allowing other coroutines to acquire it.
   ///
   /// Used together with try_lock(), lock().
-  void unlock() {
+  void unlock() { // NOLINT: mimic std::shared_mutex
     assert(state_ == kLockedExclusively && "Exclusive lock must be held to unlock");
     state_.store(kUnlocked, std::memory_order_release);
   }
 
   /// Tries to acquire a shared lock without blocking.
   /// Returns true if the shared lock was acquired successfully, false otherwise.
-  bool try_lock_shared() {
+  bool try_lock_shared() { // NOLINT: mimic std::shared_mutex
     int64_t expected = kUnlocked;
     while (!state_.compare_exchange_strong(expected, expected + 1, std::memory_order_acquire)) {
       if (expected == kLockedExclusively) {
@@ -97,13 +97,13 @@ public:
   /// Locks the mutex in shared mode, yielding the current coroutine if the
   /// mutex is already held exclusively by another coroutine. This allows
   /// multiple coroutines to hold a shared lock concurrently.
-  void lock_shared();
+  void lock_shared(); // NOLINT: mimic std::shared_mutex
 
   /// Unlocks the mutex from shared mode, allowing other coroutines to
   /// acquire it in shared mode or exclusively.
   ///
   /// Used together with try_lock_shared(), lock_shared().
-  void unlock_shared() {
+  void unlock_shared() { // NOLINT: mimic std::shared_mutex
     assert(state_ != kLockedExclusively && "Cannot unlock shared on exclusive lock");
     state_.fetch_add(-1, std::memory_order_release);
   }

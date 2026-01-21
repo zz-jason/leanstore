@@ -228,7 +228,7 @@ std::string WalSerde::ToJson(const lean_wal_record& record) {
 uint32_t WalSerde::Crc32Masked(const lean_wal_record& record) {
   auto* buffer = reinterpret_cast<const uint8_t*>(&record);
   auto header_size = sizeof(lean_wal_record);
-  return utils::Crc32()
+  return utils::Crc32Calculator()
       .Update(buffer, header_size - 4)
       .Update(buffer + header_size, record.size_ - header_size)
       .Mask();

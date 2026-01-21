@@ -334,7 +334,7 @@ BufferFrame* BufferManager::ResolveSwipMayJump(HybridGuard& node_guard, Swip& sw
     bf.header_.state_ = State::kLoaded;
     bf.header_.page_id_ = page_id;
     if (store_->store_option_->enable_buffer_crc_check_) {
-      bf.header_.crc_ = bf.page_.CRC();
+      bf.header_.crc32_ = bf.page_.Crc32();
     }
 
     // 5. Publish the buffer frame

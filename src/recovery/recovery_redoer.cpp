@@ -1,5 +1,7 @@
 #include "leanstore/cpp/recovery/recovery_redoer.hpp"
 
+#include "leanstore/btree/transaction_kv.hpp"
+#include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/common/types.h"
 #include "leanstore/common/wal_record.h"
 #include "leanstore/cpp/base/byte_buffer.hpp"
@@ -43,6 +45,10 @@ Result<void> RecoveryRedoer::Run() {
   // redo each sorted partitioned log
   for (auto& sorted_log : sorted_logs.value()) {
     if (auto res = RedoOnePartition(sorted_log); !res) {
+      return res;
+    }
+
+    if (auto res = CheckpointLoadedPages(); !res) {
       return res;
     }
   }
@@ -302,7 +308,7 @@ Result<void> RecoveryRedoer::RedoOnePartition(std::string_view partitioned_log) 
     return std::move(cursor.error());
   }
 
-  return cursor.value()->Foreach([](lean_wal_record& record) -> Result<bool> {
+  return cursor.value()->Foreach([&](lean_wal_record& record) -> Result<bool> {
     auto res = RedoOneRecord(record);
     if (!res) {
       return std::move(res.error());
@@ -329,6 +335,15 @@ Result<void> RecoveryRedoer::RedoOneRecord(const lean_wal_record& record) {
     return Error::NotImplemented("Not Implemented");
   }
   case LEAN_WAL_TYPE_INSERT: {
+    // auto& actual_record = CastTo<lean_wal_insert>(record);
+    // auto& bf = GetOrLoadPage(actual_record.page_id_);
+    // HybridGuard guard(&bf.header_.latch_);
+    // GuardedBufferFrame<BTreeNode> guarded_node(&buffer_manager_, std::move(guard), &bf);
+
+    // int32_t slot_id = -1;
+    // TransactionKV::InsertToNode(guarded_node,
+    //   // key, Slice val, lean_wid_t worker_id, lean_txid_t tx_start_ts, int32_t &slot_id)
+
     return Error::NotImplemented("Not Implemented");
   }
   case LEAN_WAL_TYPE_UPDATE: {
@@ -356,6 +371,29 @@ Result<void> RecoveryRedoer::RedoOneRecord(const lean_wal_record& record) {
     return Error::NotImplemented("Not Implemented");
   }
   }
+}
+
+BufferFrame& RecoveryRedoer::GetOrLoadPage(lean_pid_t page_id) {
+  auto it = loaded_pages_.find(page_id);
+  if (it != loaded_pages_.end()) {
+    return *it->second;
+  }
+
+  auto& bf = buffer_manager_.ReadPageSync(page_id);
+  bf.header_.keep_in_memory_ = true;
+  loaded_pages_.emplace(page_id, &bf);
+  return bf;
+}
+
+Result<void> RecoveryRedoer::CheckpointLoadedPages() {
+  for (auto& [_, bf] : loaded_pages_) {
+    auto res = buffer_manager_.WritePageSync(*bf);
+    if (!res) {
+      return res;
+    }
+  }
+  loaded_pages_.clear();
+  return {};
 }
 
 } // namespace leanstore

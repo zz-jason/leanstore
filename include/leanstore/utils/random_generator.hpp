@@ -74,6 +74,16 @@ public:
     return result;
   }
 
+  static void RandAlphString(uint8_t* dst, size_t len) {
+    static constexpr auto kChars = "0123456789"
+                                   "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                                   "abcdefghijklmnopqrstuvwxyz";
+    for (size_t i = 0; i < len; i++) {
+      auto idx = RandU64Std(0, std::strlen(kChars));
+      dst[i] = kChars[idx];
+    }
+  }
+
   static void RandAlphString(size_t len, std::string& result) {
     static constexpr auto kChars = "0123456789"
                                    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"

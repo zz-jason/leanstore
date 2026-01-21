@@ -19,7 +19,6 @@
 
 #include <algorithm>
 #include <cassert>
-#include <cstdlib>
 
 namespace leanstore {
 
@@ -182,12 +181,16 @@ void TxManager::AbortTx() {
   // TODO(jian.z): support reading from WAL file once
   LEAN_DCHECK(!active_tx_.wal_exceed_buffer_, "Aborting from WAL file is not supported yet");
   std::vector<const lean_wal_record*> entries;
+  auto collect_wal_entries = [&](const lean_wal_record* entry) {
+    if (IsMvccBTreeWalRecordType(entry->type_)) {
+      auto& tx_base = *reinterpret_cast<const lean_wal_tx_base*>(entry);
+      if (tx_base.txid_ == active_tx_.start_ts_) {
+        entries.push_back(entry);
+      }
+    }
+  };
   CoroEnv::CurLogging().ForeachWalOfCurrentTx(active_tx_.first_wal_,
-                                              [&](const lean_wal_record* entry) {
-                                                if (IsMvccBTreeWalRecordType(entry->type_)) {
-                                                  entries.push_back(entry);
-                                                }
-                                              });
+                                              std::move(collect_wal_entries));
   std::for_each(entries.rbegin(), entries.rend(), [&](const lean_wal_record* entry) {
     assert(IsMvccBTreeWalRecordType(entry->type_));
     store_->tree_registry_->Undo(entry->btree_id_, entry);

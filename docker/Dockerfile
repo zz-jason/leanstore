@@ -26,8 +26,8 @@ RUN git clone --depth 1 https://github.com/Microsoft/vcpkg.git /opt/vcpkg \
  && echo 'export VCPKG_FORCE_SYSTEM_BINARIES=1' >> /opt/env.sh \
  && echo 'export VCPKG_DEFAULT_BINARY_CACHE=/opt/vcpkg_cache' > /opt/env.sh
 
-COPY vcpkg-triplets/x64-linux.cmake /opt/vcpkg/triplets/x64-linux.cmake
-COPY vcpkg-triplets/arm64-linux.cmake /opt/vcpkg/triplets/arm64-linux.cmake
+COPY docker/vcpkg-triplets/x64-linux.cmake /opt/vcpkg/triplets/x64-linux.cmake
+COPY docker/vcpkg-triplets/arm64-linux.cmake /opt/vcpkg/triplets/arm64-linux.cmake
 
 ENV VCPKG_ROOT="/opt/vcpkg"
 ENV PATH="$VCPKG_ROOT:$PATH"
@@ -43,6 +43,27 @@ RUN ./opt/vcpkg/bootstrap-vcpkg.sh \
 
 # install gcov
 RUN pip3 install gcovr==6.0 --break-system-packages
+
+
+# pre-build WiredTiger for faster CI builds
+# Copy the build script first (this script is shared with wiredtiger.cmake for DRY)
+COPY scripts/build-wiredtiger.sh /tmp/build-wiredtiger.sh
+RUN chmod +x /tmp/build-wiredtiger.sh
+
+ARG WT_VERSION=11.3.1
+RUN /tmp/build-wiredtiger.sh \
+      --version ${WT_VERSION} \
+      --build-type Debug \
+      --source-dir /tmp/wiredtiger \
+      --install-prefix /opt/wiredtiger/${WT_VERSION}/Debug \
+ && /tmp/build-wiredtiger.sh \
+      --version ${WT_VERSION} \
+      --build-type Release \
+      --source-dir /tmp/wiredtiger \
+      --install-prefix /opt/wiredtiger/${WT_VERSION}/Release \
+ && rm -rf /tmp/wiredtiger /tmp/build-wiredtiger.sh
+
+ENV WT_PREBUILT_DIR=/opt/wiredtiger
 
 
 # other settings

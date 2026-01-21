@@ -59,11 +59,11 @@ void WalAnalysis::Run() {
     std::cout << std::format(" - Transaction ID: {}, Last LSN: {}\n", tx_id, lid);
   }
 
-  auto wal_redo_processor = RecoveryRedoer(store_dir, recovery_ctx.GetWalFilePaths(), dpt, 4);
-  if (auto res = wal_redo_processor.Run(); !res) {
-    std::cerr << std::format("WAL redo processing failed: {}\n", res.error().ToString());
-    return;
-  }
+  // auto wal_redo_processor = RecoveryRedoer(store_dir, recovery_ctx.GetWalFilePaths(), dpt, 4);
+  // if (auto res = wal_redo_processor.Run(); !res) {
+  //   std::cerr << std::format("WAL redo processing failed: {}\n", res.error().ToString());
+  //   return;
+  // }
 };
 
 std::vector<std::string> WalAnalysis::ListWalFiles(std::string_view wal_dir) {

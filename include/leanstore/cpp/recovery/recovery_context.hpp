@@ -1,5 +1,6 @@
 #pragma once
 
+#include "leanstore/buffer-manager/buffer_manager.hpp"
 #include "leanstore/common/types.h"
 
 #include <string>
@@ -36,6 +37,10 @@ public:
     return last_checkpoint_gsn_;
   }
 
+  BufferManager& GetBufferManager() const {
+    return *buffer_manager_;
+  }
+
   size_t GetNumPartitions() const {
     return num_partitions_;
   }
@@ -44,6 +49,7 @@ private:
   const std::string store_dir_;
   const std::vector<std::string> wal_file_paths_;
   const lean_lid_t last_checkpoint_gsn_;
+  BufferManager* buffer_manager_ = nullptr;
   const size_t num_partitions_;
 };
 

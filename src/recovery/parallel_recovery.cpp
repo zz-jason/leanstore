@@ -15,7 +15,8 @@ Result<void> ParallelRecovery::Run() {
 
   // redo phase
   RecoveryRedoer redoer(recovery_ctx_.GetStoreDir(), recovery_ctx_.GetWalFilePaths(),
-                        analyzer.GetDirtyPageTable(), recovery_ctx_.GetNumPartitions());
+                        analyzer.GetDirtyPageTable(), recovery_ctx_.GetNumPartitions(),
+                        recovery_ctx_.GetBufferManager());
   if (auto res = redoer.Run(); !res) {
     return res;
   }

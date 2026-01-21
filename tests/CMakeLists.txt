@@ -45,7 +45,6 @@ if(${LEAN_ENABLE_CORO})
   leanstore_add_test(recovery_test)
   leanstore_add_test_in_dir(coroutine)
   leanstore_add_test_in_dir(c)
-  leanstore_add_test_in_dir(cpp)
   leanstore_add_test_in_dir(table)
 else()
   # Add tests
@@ -63,3 +62,5 @@ else()
   leanstore_add_test_in_dir(sync)
   leanstore_add_test_in_dir(telemetry)
 endif()
+
+leanstore_add_test_in_dir(cpp)

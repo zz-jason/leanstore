@@ -33,11 +33,52 @@ if [ ! -f "./scripts/ci-local-check.sh" ]; then
     exit 0
 fi
 
-echo "Running full CI validation before pushing to $CURRENT_BRANCH..."
-echo "This may take a few minutes..."
+echo "Running CI validation before pushing to $CURRENT_BRANCH..."
+echo "Checking files changed in this branch vs main..."
 
-# Run full CI validation
-if ./scripts/ci-local-check.sh > /tmp/pre-push-ci.log 2>&1; then
+# Function to check if file is C/C++ source
+is_cpp_file() {
+    local file="$1"
+    case "$file" in
+        *.cpp|*.cc|*.c|*.h|*.hpp|*.hh)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+# Find base branch for comparison
+BASE_BRANCH=""
+for candidate in "main" "origin/main" "upstream/main" "leanstore/main"; do
+    if git rev-parse --verify "$candidate" >/dev/null 2>&1; then
+        BASE_BRANCH="$candidate"
+        break
+    fi
+done
+
+# Check if there are any C/C++ files changed in this branch
+HAS_CPP_FILES=0
+if [ -n "$BASE_BRANCH" ]; then
+    MERGE_BASE=$(git merge-base "$BASE_BRANCH" HEAD 2>/dev/null || echo "$BASE_BRANCH")
+    CHANGED_FILES=$(git diff --name-only --diff-filter=ACM "$MERGE_BASE" HEAD 2>/dev/null || true)
+    for file in $CHANGED_FILES; do
+        if is_cpp_file "$file"; then
+            HAS_CPP_FILES=1
+            break
+        fi
+    done
+fi
+
+# If no C/C++ files changed, skip code checks
+if [ $HAS_CPP_FILES -eq 0 ]; then
+    echo -e "${GREEN}No C/C++ files changed in this branch. Skipping code quality checks.${NC}"
+    exit 0
+fi
+
+# Run CI validation with branch mode (checks files changed vs main)
+if ./scripts/ci-local-check.sh --mode branch > /tmp/pre-push-ci.log 2>&1; then
     echo -e "${GREEN}✅ All CI checks passed!${NC}"
     echo "Your changes should pass GitHub Actions CI."
     echo ""

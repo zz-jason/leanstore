@@ -49,25 +49,37 @@ list(APPEND LEAN_DEPS concurrentqueue::concurrentqueue)
 find_package(httplib CONFIG REQUIRED)
 list(APPEND LEAN_DEPS httplib::httplib)
 
-pkg_check_modules(libunwind REQUIRED IMPORTED_TARGET GLOBAL libunwind)
-list(APPEND LEAN_DEPS PkgConfig::libunwind)
-
-if(LEAN_ENABLE_PROFILING)
-  target_compile_definitions(leanstore PUBLIC LEAN_ENABLE_PROFILING)
-
+# Profiling support using gperftools (heap profiler and CPU profiler).
+# Disabled for shared library builds due to gperftools compatibility issues:
+# 1. gperftools (libprofiler + libtcmalloc) are static libraries from vcpkg
+# 2. When building shared library, static symbols need --whole-archive to be included
+# 3. However, this causes heap-checker initialization to run twice (once in the
+#    shared library, once in executables linking libprofiler), resulting in:
+#    "Heap-check constructor called twice" runtime errors
+# Profiling is primarily for development/debugging, so disabling it for shared
+# library builds is acceptable. Use static builds for profiling support.
+if(LEAN_ENABLE_PROFILING AND NOT BUILD_SHARED_LIBS)
   pkg_check_modules(PKG_PROFILER IMPORTED_TARGET libprofiler)
-  if (PKG_PROFILER_FOUND)
-    message(STATUS "libprofiler found: ${PKG_PROFILER}")
-    list(APPEND LEAN_DEPS PkgConfig::PKG_PROFILER)
-  endif (PKG_PROFILER_FOUND)
-
   pkg_check_modules(PKG_TCMALLOC IMPORTED_TARGET libtcmalloc)
-  if (PKG_TCMALLOC_FOUND)
-    message(STATUS "libtcmalloc found: ${PKG_TCMALLOC}")
-    list(APPEND LEAN_DEPS PkgConfig::PKG_TCMALLOC)
-  endif (PKG_TCMALLOC_FOUND)
 
-endif(LEAN_ENABLE_PROFILING)
+  if(PKG_PROFILER_FOUND AND PKG_TCMALLOC_FOUND)
+    message(STATUS "Profiling enabled: libprofiler and libtcmalloc found")
+    target_compile_definitions(leanstore PUBLIC LEAN_ENABLE_PROFILING)
+    list(APPEND LEAN_DEPS PkgConfig::PKG_PROFILER)
+    list(APPEND LEAN_DEPS PkgConfig::PKG_TCMALLOC)
+  else()
+    message(WARNING "LEAN_ENABLE_PROFILING is ON but required libraries not found:")
+    if(NOT PKG_PROFILER_FOUND)
+      message(WARNING "  - libprofiler not found")
+    endif()
+    if(NOT PKG_TCMALLOC_FOUND)
+      message(WARNING "  - libtcmalloc not found")
+    endif()
+    message(WARNING "Profiling will be disabled. Install gperftools or check PKG_CONFIG_PATH.")
+  endif()
+elseif(LEAN_ENABLE_PROFILING AND BUILD_SHARED_LIBS)
+  message(STATUS "Profiling disabled: not supported with BUILD_SHARED_LIBS=ON (gperftools compatibility)")
+endif()
 
 target_link_libraries(leanstore PUBLIC ${LEAN_DEPS})
 
