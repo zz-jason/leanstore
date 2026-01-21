@@ -35,11 +35,10 @@ ACID transaction support.
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `LEAN_ENABLE_YCSB` | OFF | Build YCSB benchmark (requires WiredTiger, RocksDB) |
 | `LEAN_ENABLE_CORO` | ON | Enable coroutine support |
 | `LEAN_ENABLE_TESTS` | ON | Build tests |
 
-Example: `cmake --preset release_coro -DLEAN_ENABLE_YCSB=ON`
+
 
 ## CI Local Check Script
 
