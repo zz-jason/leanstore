@@ -119,6 +119,16 @@ target_compile_options(lean_project_options INTERFACE
 find_package(benchmark CONFIG REQUIRED)
 find_package(PkgConfig REQUIRED)
 
+# Set PKG_CONFIG_PATH to include vcpkg's pkgconfig directory so that
+# pkg_check_modules can find libraries installed by vcpkg (e.g., gperftools)
+if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
+  set(VCPKG_PKGCONFIG_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib/pkgconfig")
+  if(EXISTS "${VCPKG_PKGCONFIG_DIR}")
+    set(ENV{PKG_CONFIG_PATH} "${VCPKG_PKGCONFIG_DIR}:$ENV{PKG_CONFIG_PATH}")
+    message(STATUS "Added vcpkg pkgconfig path: ${VCPKG_PKGCONFIG_DIR}")
+  endif()
+endif()
+
 # ---------------------------------------------------------------------------
 # clang-format, clang-tidy
 # ---------------------------------------------------------------------------
