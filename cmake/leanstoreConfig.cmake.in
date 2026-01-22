@@ -1,0 +1,15 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Find dependencies required by public headers
+# Threads is part of the PUBLIC interface in src/CMakeLists.txt
+find_dependency(Threads)
+
+# Add other PUBLIC dependencies here if headers in include/leanstore/ expose them.
+# For example, if you expose json headers in your public API:
+# find_dependency(RapidJSON)
+
+include("${CMAKE_CURRENT_LIST_DIR}/leanstoreTargets.cmake")
+
+check_required_components(leanstore)
