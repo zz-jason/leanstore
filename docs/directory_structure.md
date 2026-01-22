@@ -36,7 +36,7 @@ All public C++ headers are located in `include/leanstore/`. The C API is located
 *   **`tx/`**: Layer 3: Transaction & Concurrency (TxManager, MVCC, Concurrency Control, Recovery).
 *   **`coro/`**: Layer 3: Coroutine Framework (Scheduler, Executor, Primitives).
 *   **`table/`**: Layer 4: Logical Table API (Table abstraction, Registry, Schema).
-*   **`utils/`**: Cross-cutting utilities (Random generators, JSON, Thread management, `update_info.hpp`).
+*   **`utils/`**: Cross-cutting utilities (Random generators, JSON, Thread management).
 
 ### Source Code (`src/`)
 

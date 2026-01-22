@@ -321,10 +321,18 @@ file="$1"
 preset="$2"
 tmp_dir="$3"
 out_file="$tmp_dir/$(echo "$file" | md5sum | cut -d' ' -f1).out"
+
+# Determine language standard based on extension
+if [[ "$file" == *.c ]]; then
+    STD_ARG="--extra-arg=-std=c11"
+else
+    STD_ARG="--extra-arg=-std=c++2b"
+fi
+
 clang-tidy \
     -p="build/$preset" \
     --config-file=".clang-tidy" \
-    --extra-arg=-std=c++2b \
+    $STD_ARG \
     --extra-arg=-Wno-unknown-warning-option \
     --extra-arg=-Wno-error=clobbered \
     "$file" 2>&1 > "$out_file"
