@@ -241,7 +241,7 @@ jobs:
         run: |
           cd examples/c
           cmake -B build -S . \
-            -DCMAKE_PREFIX_PATH=../../dist/release_coro
+            -DCMAKE_PREFIX_PATH="../../dist/release_coro;/opt/vcpkg/installed/x64-linux"
           cmake --build build -j `nproc`
           ./build/kv_basic_example
 

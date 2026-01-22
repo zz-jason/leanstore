@@ -1,33 +1,67 @@
 # C Examples
 
-## 1. Build the leanstore library
+This directory contains a C example that demonstrates how to use the LeanStore library via its C API.
 
-```sh
+## Prerequisites
+
+- LeanStore built with `release_coro` preset (recommended) or `debug_coro` (development)
+- Same vcpkg toolchain used to build LeanStore
+
+## 1. Build and Install LeanStore
+
+```bash
 cd $LEANSTORE_HOME
-cmake --preset=debug_coro
-cmake --build build/debug_coro -j `nproc`
-cmake --install build/debug_coro
+cmake --preset release_coro
+cmake --build build/release_coro -j $(nproc)
+cmake --install build/release_coro --prefix ./dist/release_coro
 ```
 
-The leanstore library should be found in `$LEANSTORE_HOME/dist/debug_coro` after the above commands.
+The library will be installed to `$LEANSTORE_HOME/dist/release_coro`.
 
-## 2. Build the example
+## 2. Build the C Example
 
-```sh
+```bash
 cd $LEANSTORE_HOME/examples/c
 
-# generate build files with leanstore library
-# Note: leanstore depends on several libraries (boost, spdlog, rapidjson, etc.)
-# It is recommended to use the same CMAKE_TOOLCHAIN_FILE used to build leanstore.
-cmake -B build -S . \
-      -DCMAKE_TOOLCHAIN_FILE=$LEANSTORE_HOME/vcpkg/scripts/buildsystems/vcpkg.cmake \
-      -DLEANSTORE_INCLUDE_DIR=$LEANSTORE_HOME/dist/debug_coro/include \
-      -DLEANSTORE_LIBRARY_DIR=$LEANSTORE_HOME/dist/debug_coro/lib
+# Clean previous build
+rm -rf build
 
-# build the example
-cmake --build build -j `nproc`
+# Configure with CMAKE_PREFIX_PATH pointing to LeanStore installation and vcpkg
+CMAKE_PREFIX_PATH="../../dist/release_coro:../../build/release_coro/vcpkg_installed/x64-linux" \
+cmake -B build -S .
 
-# run the example
+# Build the example
+cmake --build build
+
+# Run the example
 ./build/kv_basic_example
 ```
+
+### Using a Custom Installation Directory
+
+If LeanStore is installed to a different location (e.g., system directory or custom prefix):
+
+```bash
+cd $LEANSTORE_HOME/examples/c
+rm -rf build
+
+# Set CMAKE_PREFIX_PATH to include both LeanStore and vcpkg installation directories
+cmake -B build -S . \
+  -DCMAKE_PREFIX_PATH="/path/to/leanstore/install;/path/to/vcpkg/installed/x64-linux"
+
+cmake --build build
+```
+
+## How It Works
+
+- The `CMakeLists.txt` declares a pure C project (`project(leanstore-examples C)`) and enables C++ language support only for linking (`enable_language(CXX)`).
+- It uses `find_package(leanstore CONFIG REQUIRED)` to locate the installed LeanStore package.
+- The C example links to `leanstore::leanstore` and the C++ standard library (`stdc++`).
+- All transitive dependencies (Boost, spdlog, rapidjson, etc.) are resolved automatically through LeanStore's CMake package configuration.
+
+## Notes
+
+- For development builds, you can use the `debug_coro` preset, but note that it adds `--coverage` flags that may affect downstream linking.
+- The C example uses the C API defined in `include/leanstore/c/leanstore.h`.
+- Ensure your compiler supports C11 (for the example) and C++23 (for the LeanStore library).
 

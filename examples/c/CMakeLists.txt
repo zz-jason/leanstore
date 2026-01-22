@@ -3,9 +3,12 @@
 # ------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.25)
-project(leanstore-examples C CXX)
+project(leanstore-examples C)
 
 set(CMAKE_C_STANDARD 11)
+
+# Enable C++ language support for linking to the C++ library
+enable_language(CXX)
 set(CMAKE_CXX_STANDARD 23)
 
 # Find leanstore package

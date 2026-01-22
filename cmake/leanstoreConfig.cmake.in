@@ -5,6 +5,14 @@ include(CMakeFindDependencyMacro)
 # Public dependencies required by leanstore's public headers
 find_dependency(Threads)
 
+# Private dependencies needed for linking
+find_dependency(boost_context CONFIG)
+find_dependency(spdlog CONFIG)
+find_dependency(Crc32c CONFIG)
+find_dependency(RapidJSON CONFIG)
+find_dependency(cpptrace CONFIG)
+find_dependency(httplib CONFIG)
+
 # libaio is a public dependency (headers include <libaio.h>)
 # Try to find libaio via pkg-config first, then fall back to find_library
 find_package(PkgConfig QUIET)
