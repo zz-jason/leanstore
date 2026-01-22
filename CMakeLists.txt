@@ -33,9 +33,9 @@ endif ()
 
 if(NOT LEAN_PORTABLE)
   if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
-    target_compile_options(lean_project_options INTERFACE -mavx2 -mcx16 -m64)
+    target_compile_options(lean_project_options INTERFACE $<BUILD_INTERFACE:-mavx2 -mcx16 -m64>)
   else()
-    target_compile_options(lean_project_options INTERFACE -march=native)
+    target_compile_options(lean_project_options INTERFACE $<BUILD_INTERFACE:-march=native>)
   endif()
 endif()
 
@@ -57,10 +57,10 @@ set_target_properties(lean_project_options PROPERTIES
 # ------------------------------------------------------------------------------
 
 target_compile_options(lean_project_options INTERFACE
-  -fno-omit-frame-pointer
-  $<$<CONFIG:Debug>:-O0 -g3>
-  $<$<CONFIG:Release>:-O3>
-  $<$<AND:$<CXX_COMPILER_ID:Clang>,$<CONFIG:Debug>>:-fstandalone-debug>
+  $<BUILD_INTERFACE:-fno-omit-frame-pointer>
+  $<$<CONFIG:Debug>:$<BUILD_INTERFACE:-O0 -g3>>
+  $<$<CONFIG:Release>:$<BUILD_INTERFACE:-O3>>
+  $<$<AND:$<CXX_COMPILER_ID:Clang>,$<CONFIG:Debug>>:$<BUILD_INTERFACE:-fstandalone-debug>>
 )
 
 if(LEAN_ENABLE_PERF_COUNTERS)

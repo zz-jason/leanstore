@@ -241,8 +241,7 @@ jobs:
         run: |
           cd examples/c
           cmake -B build -S . \
-            -DLEANSTORE_INCLUDE_DIR=../../dist/release_coro/include \
-            -DLEANSTORE_LIBRARY_DIR=../../dist/release_coro/lib
+            -DCMAKE_PREFIX_PATH=../../dist/release_coro
           cmake --build build -j `nproc`
           ./build/kv_basic_example
 

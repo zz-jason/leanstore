@@ -9,7 +9,6 @@
     "crc32c",
     "libunwind",
     "cpptrace",
-    "concurrentqueue",
     "boost-context",
     "tanakh-cmdline",
     "rocksdb"

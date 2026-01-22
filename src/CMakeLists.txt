@@ -104,12 +104,40 @@ add_library(leanstore::leanstore ALIAS leanstore)
 # ------------------------------------------------------------------------------
 
 find_package(Threads REQUIRED)
+
+# libaio is a public dependency (headers include <libaio.h>)
+find_package(PkgConfig QUIET)
+if(PKG_CONFIG_FOUND)
+  pkg_check_modules(LIBAIO QUIET IMPORTED_TARGET libaio)
+endif()
+
+if(TARGET LIBAIO::LIBAIO)
+  # Use pkg-config imported target, but create an alias with consistent naming
+  if(NOT TARGET libaio::libaio)
+    add_library(libaio::libaio ALIAS LIBAIO::LIBAIO)
+  endif()
+  set(LIBAIO_TARGET libaio::libaio)
+else()
+  # Fall back to find_library
+  find_library(LIBAIO_LIBRARY aio)
+  find_path(LIBAIO_INCLUDE_DIR libaio.h)
+  if(LIBAIO_LIBRARY AND LIBAIO_INCLUDE_DIR)
+    add_library(libaio::libaio INTERFACE IMPORTED)
+    set_target_properties(libaio::libaio PROPERTIES
+      INTERFACE_LINK_LIBRARIES "${LIBAIO_LIBRARY}"
+      INTERFACE_INCLUDE_DIRECTORIES "${LIBAIO_INCLUDE_DIR}"
+    )
+    set(LIBAIO_TARGET libaio::libaio)
+  else()
+    message(FATAL_ERROR "libaio not found. Required for leanstore.")
+  endif()
+endif()
+
 find_package(spdlog CONFIG REQUIRED)
 find_package(Crc32c CONFIG REQUIRED)
 find_package(RapidJSON CONFIG REQUIRED)
 find_package(cpptrace CONFIG REQUIRED)
 find_package(boost_context CONFIG REQUIRED)
-find_package(concurrentqueue CONFIG)
 find_package(httplib CONFIG REQUIRED)
 
 # Profiling support using gperftools (heap profiler and CPU profiler).
@@ -129,10 +157,22 @@ elseif(LEAN_ENABLE_PROFILING AND BUILD_SHARED_LIBS)
   message(STATUS "Profiling disabled: not supported with BUILD_SHARED_LIBS=ON (gperftools compatibility)")
 endif()
 
+# Public compile definitions needed by consumers of the library
+if(LEAN_ENABLE_CORO)
+  target_compile_definitions(leanstore PUBLIC LEAN_ENABLE_CORO)
+endif()
+if(LEAN_ENABLE_PERF_COUNTERS)
+  target_compile_definitions(leanstore PUBLIC LEAN_ENABLE_PERF_COUNTERS)
+endif()
+# LEAN_ENABLE_DEBUG_EXEC is only relevant for debug builds
+if(LEAN_ENABLE_DEBUG_EXEC)
+  target_compile_definitions(leanstore PUBLIC $<$<CONFIG:Debug>:LEAN_ENABLE_DEBUG_EXEC>)
+endif()
+
 target_link_libraries(leanstore
   PUBLIC
     Threads::Threads      # System library, required by public API (std::thread)
-    aio                   # Public dependency (headers include <libaio.h>)
+    ${LIBAIO_TARGET}      # Public dependency (headers include <libaio.h>)
   PRIVATE
     lean_project_options
     Boost::context        # Hidden by Coroutine pimpl
@@ -140,7 +180,6 @@ target_link_libraries(leanstore
     Crc32c::crc32c
     rapidjson             # Moved to private API
     cpptrace::cpptrace
-    concurrentqueue::concurrentqueue
     httplib::httplib
     ${LEAN_PROFILING_DEPS}
 )
