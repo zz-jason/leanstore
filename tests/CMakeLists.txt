@@ -7,6 +7,7 @@ function(leanstore_add_test TARGET_NAME)
 
   target_link_libraries(
     ${TARGET_NAME}
+    lean_project_options
     GTest::gtest
     GTest::gtest_main
     leanstore
@@ -30,6 +31,7 @@ function(leanstore_add_test_in_dir TARGET_DIR)
 
     target_link_libraries(
       ${TEST_NAME}
+      lean_project_options
       GTest::gtest
       GTest::gtest_main
       leanstore

@@ -5,6 +5,7 @@ function(lean_add_wal_executable TARGET_NAME SOURCE_FILE)
   )
   target_link_libraries(
     ${TARGET_NAME}
+    lean_project_options
     leanstore
   )
   # include dirs
