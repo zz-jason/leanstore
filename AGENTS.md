@@ -63,6 +63,10 @@ The `scripts/ci-local-check.sh` script runs CI checks locally:
 
 When modifying external dependency builds, update the shared script to maintain consistency.
 
+## Project Structure
+
+- **Examples**: `examples/c` and `examples/cpp` are standalone projects showing how to use `leanstore`. They are not part of the main build.
+
 ## Codebase Navigation
 
 **For transaction/MVCC analysis, read in this order:**

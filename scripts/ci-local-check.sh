@@ -220,9 +220,12 @@ get_files_to_check() {
             ;;
     esac
 
-    # Filter to only existing files (in case of deleted files in diff)
+    # Filter to only existing files and exclude examples/
     local existing_files=""
     for f in $files; do
+        if [[ "$f" == examples/* ]]; then
+            continue
+        fi
         if [ -f "$f" ]; then
             existing_files="$existing_files $f"
         fi
