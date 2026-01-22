@@ -27,7 +27,7 @@ public:
 
   template <typename F>
   void ExecSync(F&& job) {
-    store_->GetCoroScheduler().Submit(session_, std::forward<F>(job))->Wait();
+    store_->SubmitAndWait(session_, std::forward<F>(job));
   }
 
 private:

@@ -1,19 +1,12 @@
 #pragma once
 
+#include "leanstore/base/jump_mu.hpp"
 #include "leanstore/coro/coro_env.hpp"
 
 #include <cassert>
 #include <cstdint>
+#include <cstring>
 #include <functional>
-
-#define BOOST_NAMESPACE leanstore::boost
-#include <boost/context/continuation.hpp>
-#include <boost/context/continuation_fcontext.hpp>
-#include <boost/context/fixedsize_stack.hpp>
-#include <boost/context/pooled_fixedsize_stack.hpp>
-#undef BOOST_NAMESPACE
-
-#include "leanstore/base/jump_mu.hpp"
 
 namespace leanstore {
 
@@ -35,16 +28,17 @@ public:
   using CoroFunc = std::function<void()>;
 
   /// Constructor initializing the coroutine with the given function.
-  explicit Coroutine(CoroFunc&& func) : func_(std::move(func)) {
-  }
-  /// Destructor
-  ~Coroutine() = default;
+  explicit Coroutine(CoroFunc&& func);
+
+  /// Destructor - must manually destruct in-place Impl
+  ~Coroutine();
 
   /// Disable copy and move semantics
+  /// Move is complex with in-place storage, so we disable it for safety
   Coroutine(const Coroutine&) = delete;
   Coroutine& operator=(const Coroutine&) = delete;
-  Coroutine(Coroutine&&) = default;
-  Coroutine& operator=(Coroutine&&) = default;
+  Coroutine(Coroutine&&) = delete;
+  Coroutine& operator=(Coroutine&&) = delete;
 
   /// Runs the coroutine. If not started, it starts the coroutine; otherwise,
   /// it resumes the coroutine from its last yielded state.
@@ -58,32 +52,14 @@ public:
 
   /// Starts the coroutine execution. Initializes the coroutine context and
   /// begins execution of the coroutine function.
-  void Start() {
-    assert(!IsStarted());
-    auto fn = [this](boost::context::continuation&& sink) {
-      sink_context_ = std::move(sink);
-      state_ = CoroState::kRunning;
-      func_();
-      state_ = CoroState::kDone;
-      return std::move(sink_context_);
-    };
-    context_ = boost::context::callcc(std::allocator_arg, s_pooled_salloc, std::move(fn));
-  }
+  void Start();
 
   /// Resumes the coroutine from its current state.
-  void Resume() {
-    assert(IsStarted());
-    state_ = CoroState::kRunning;
-    context_ = context_.resume();
-  }
+  void Resume();
 
   /// Yields the coroutine, allowing it to be resumed later.
   /// Resume the sink process context to yield control back to the scheduler.
-  void Yield(CoroState state) {
-    assert(IsStarted());
-    state_ = state;
-    sink_context_ = sink_context_.resume();
-  }
+  void Yield(CoroState state);
 
   CoroState GetState() const {
     return state_;
@@ -139,17 +115,25 @@ public:
     return &jump_context_;
   }
 
+  /// In-place storage size constants (public for static_assert in .cpp)
+  static constexpr size_t kImplSize = 160;
+  static constexpr size_t kImplAlign = 16;
+
 private:
-  inline static thread_local boost::context::pooled_fixedsize_stack s_pooled_salloc{
-      CoroEnv::kStackSize, CoroEnv::kMaxCoroutinesPerThread};
+  /// Forward declaration of implementation details (Pimpl idiom)
+  /// Contains boost::context types to hide the dependency from public headers
+  struct Impl;
 
-  /// Continuation for the coroutine's execution context.
-  boost::context::continuation context_;
+  alignas(kImplAlign) std::byte impl_storage_[kImplSize];
 
-  /// Continuation for the coroutine's sink(caller) context.
-  /// This is a pointer to the sink continuation that will be resumed when it's
-  /// ready to continue. Used to manage the coroutine's execution flow.
-  boost::context::continuation sink_context_;
+  /// Accessor for type-safe access to impl storage
+  Impl* GetImpl() {
+    return reinterpret_cast<Impl*>(impl_storage_);
+  }
+
+  const Impl* GetImpl() const {
+    return reinterpret_cast<const Impl*>(impl_storage_);
+  }
 
   /// Function to be executed by the coroutine.
   /// This is a callable object that contains the logic of the coroutine.

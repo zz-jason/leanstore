@@ -13,13 +13,6 @@ option(LEANSTORE_LIBRARY_DIR "Path to the leanstore library directory" "")
 option(ENABLE_COVERAGE "Enable coverage" OFF)
 
 find_package(Threads REQUIRED)
-find_package(boost_context CONFIG REQUIRED)
-find_package(spdlog CONFIG REQUIRED)
-find_package(Crc32c CONFIG REQUIRED)
-find_package(RapidJSON CONFIG REQUIRED)
-find_package(cpptrace CONFIG REQUIRED)
-find_package(concurrentqueue CONFIG REQUIRED)
-find_package(httplib CONFIG REQUIRED)
 
 # Rules to build basic_kv_example
 add_executable(basic_kv_example basic_kv_example.cpp)
@@ -34,13 +27,6 @@ endif()
 target_link_directories(basic_kv_example PRIVATE ${LEANSTORE_LIBRARY_DIR})
 target_link_libraries(basic_kv_example PRIVATE
     leanstore
-    aio
-    Threads::Threads
-    Boost::context
-    spdlog::spdlog_header_only
-    Crc32c::crc32c
-    rapidjson
-    cpptrace::cpptrace
-    concurrentqueue::concurrentqueue
-    httplib::httplib
+    aio           # Direct dependency for async I/O
+    Threads::Threads  # System library (PUBLIC from leanstore)
 )

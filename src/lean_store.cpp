@@ -10,6 +10,8 @@
 #include "leanstore/c/types.h"
 #include "leanstore/checkpoint/checkpoint_processor.hpp"
 #include "leanstore/config/store_paths.hpp"
+#include "leanstore/coro/coro_scheduler.hpp"
+#include "leanstore/coro/coro_session.hpp"
 #include "leanstore/coro/mvcc_manager.hpp"
 #include "leanstore/table/table.hpp"
 #include "leanstore/table/table_registry.hpp"
@@ -20,8 +22,8 @@
 #ifndef LEAN_ENABLE_CORO
 #include "leanstore/utils/parallelize.hpp"
 #endif
-#include "leanstore/utils/json.hpp"
 #include "leanstore/utils/scoped_timer.hpp"
+#include "utils/json.hpp"
 
 #include <cassert>
 #include <cstdint>
@@ -300,6 +302,41 @@ void LeanStore::ParallelRange(
   coro_scheduler_->ParallelRange(num_jobs, std::move(job_handler));
 #else
   utils::Parallelize::ParallelRange(num_jobs, std::move(job_handler));
+#endif
+}
+
+CoroSession* LeanStore::TryReserveSession(uint64_t worker_id) {
+#ifdef LEAN_ENABLE_CORO
+  return coro_scheduler_->TryReserveCoroSession(worker_id);
+#else
+  (void)worker_id;
+  return nullptr;
+#endif
+}
+
+CoroSession* LeanStore::ReserveSession(uint64_t worker_id) {
+#ifdef LEAN_ENABLE_CORO
+  return coro_scheduler_->ReserveCoroSession(worker_id);
+#else
+  (void)worker_id;
+  return nullptr;
+#endif
+}
+
+void LeanStore::ReleaseSession(CoroSession* session) {
+#ifdef LEAN_ENABLE_CORO
+  coro_scheduler_->ReleaseCoroSession(session);
+#else
+  (void)session;
+#endif
+}
+
+void LeanStore::SubmitAndWait(CoroSession* session, std::function<void()> task) {
+#ifdef LEAN_ENABLE_CORO
+  coro_scheduler_->Submit(session, std::move(task))->Wait();
+#else
+  (void)session;
+  (void)task;
 #endif
 }
 

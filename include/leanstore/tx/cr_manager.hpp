@@ -2,7 +2,6 @@
 
 #include "leanstore/tx/tx_manager.hpp"
 #include "leanstore/tx/worker_thread.hpp"
-#include "leanstore/utils/json.hpp"
 
 #include <memory>
 #include <vector>
@@ -13,6 +12,10 @@ namespace leanstore {
 class LeanStore;
 struct WatermarkInfo;
 class GroupCommitter;
+
+namespace utils {
+class JsonObj;
+} // namespace utils
 
 /// Manages a fixed number of worker threads and group committer threads.
 class CRManager {

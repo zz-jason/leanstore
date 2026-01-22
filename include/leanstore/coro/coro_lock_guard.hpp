@@ -1,7 +1,6 @@
 #pragma once
 
 #include "leanstore/coro/coro_mutex.hpp"
-#include "leanstore/coro/coro_mutex.hpp"
 
 #include <cassert>
 #include <cstdint>

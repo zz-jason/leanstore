@@ -3,6 +3,7 @@
 #include "leanstore/btree/btree_iter.hpp"
 #include "leanstore/c/leanstore.h"
 #include "leanstore/coro/coro_env.hpp"
+#include "leanstore/coro/coro_scheduler.hpp"
 #include "leanstore/tx/transaction_kv.hpp"
 
 #include <cassert>

@@ -3,7 +3,7 @@
 #include "leanstore/base/slice.hpp"
 #include "leanstore/btree/b_tree_node.hpp"
 #include "leanstore/buffer/buffer_frame.hpp"
-#include "leanstore/utils/json.hpp"
+#include "utils/json.hpp"
 
 namespace leanstore::utils {
 

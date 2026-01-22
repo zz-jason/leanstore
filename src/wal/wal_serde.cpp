@@ -4,7 +4,7 @@
 #include "leanstore/utils/misc.hpp"
 #include "leanstore/wal/wal_cast.hpp"
 #include "leanstore/wal/wal_traits.hpp"
-#include "leanstore/utils/json.hpp"
+#include "utils/json.hpp"
 
 #include <cassert>
 #include <string>

@@ -4,8 +4,8 @@
 #include "leanstore/coro/mvcc_manager.hpp"
 #include "leanstore/tx/tx_manager.hpp"
 #include "leanstore/utils/managed_thread.hpp"
-#include "leanstore/wal/logging.hpp"
 #include "leanstore/utils/scoped_timer.hpp"
+#include "leanstore/wal/logging.hpp"
 
 #include <algorithm>
 #include <cassert>

@@ -8,7 +8,6 @@
 #include "leanstore/c/types.h"
 #include "leanstore/exceptions.hpp"
 #include "leanstore/utils/random_generator.hpp"
-#include "leanstore/utils/json.hpp"
 
 #include <expected>
 
@@ -21,6 +20,10 @@ namespace leanstore {
 class LeanStore;
 template <typename T>
 class GuardedBufferFrame;
+
+namespace utils {
+class JsonObj;
+} // namespace utils
 
 /// Synchronization in Buffer Manager, terminology:
 ///  - PET: page evictor thread

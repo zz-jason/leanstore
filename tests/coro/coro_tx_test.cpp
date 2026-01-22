@@ -58,7 +58,7 @@ TEST_F(CoroTxTest, BasicCommit) {
   }
 
   // create btree for table records
-  auto* coro_session_0 = store->GetCoroScheduler().ReserveCoroSession(0);
+  auto* coro_session_0 = store->ReserveSession(0);
   TransactionKV* btree = nullptr;
   auto job_create_btree = [&]() {
     auto res = store->CreateTransactionKV(kBtreeName, kBtreeConfig);
@@ -66,7 +66,7 @@ TEST_F(CoroTxTest, BasicCommit) {
     EXPECT_NE(res.value(), nullptr);
     btree = res.value();
   };
-  store->GetCoroScheduler().Submit(coro_session_0, std::move(job_create_btree))->Wait();
+  store->SubmitAndWait(coro_session_0, std::move(job_create_btree));
 
   // insert key-value pairs in worker 0
   auto job_insert = [&]() {
@@ -76,9 +76,9 @@ TEST_F(CoroTxTest, BasicCommit) {
       CoroEnv::CurTxMgr().CommitTx();
     }
   };
-  store->GetCoroScheduler().Submit(coro_session_0, std::move(job_insert))->Wait();
+  store->SubmitAndWait(coro_session_0, std::move(job_insert));
 
-  store->GetCoroScheduler().ReleaseCoroSession(coro_session_0);
+  store->ReleaseSession(coro_session_0);
 }
 
 TEST_F(CoroTxTest, BasicSnapshotIsolation) {
@@ -91,8 +91,8 @@ TEST_F(CoroTxTest, BasicSnapshotIsolation) {
   auto store = std::move(res.value());
   ASSERT_NE(store, nullptr);
 
-  auto* coro_session_0 = store->GetCoroScheduler().ReserveCoroSession(0);
-  auto* coro_session_1 = store->GetCoroScheduler().ReserveCoroSession(1);
+  auto* coro_session_0 = store->ReserveSession(0);
+  auto* coro_session_1 = store->ReserveSession(1);
 
   // create btree for table records
   TransactionKV* btree = nullptr;
@@ -102,7 +102,7 @@ TEST_F(CoroTxTest, BasicSnapshotIsolation) {
     EXPECT_NE(res.value(), nullptr);
     btree = res.value();
   };
-  store->GetCoroScheduler().Submit(coro_session_0, std::move(job_create_btree))->Wait();
+  store->SubmitAndWait(coro_session_0, std::move(job_create_btree));
 
   // insert initial values
   auto job_insert = [&]() {
@@ -111,7 +111,7 @@ TEST_F(CoroTxTest, BasicSnapshotIsolation) {
     EXPECT_EQ(btree->Insert("k2", "v2"), OpCode::kOK);
     CoroEnv::CurTxMgr().CommitTx();
   };
-  store->GetCoroScheduler().Submit(coro_session_0, std::move(job_insert))->Wait();
+  store->SubmitAndWait(coro_session_0, std::move(job_insert));
 
   std::string copied_value{""};
   auto copy_value_out = [&](Slice val) {
@@ -119,48 +119,39 @@ TEST_F(CoroTxTest, BasicSnapshotIsolation) {
   };
 
   // start two sessions
-  store->GetCoroScheduler()
-      .Submit(coro_session_0,
-              [&]() {
-                CoroEnv::CurTxMgr().StartTx();
-                EXPECT_EQ(btree->Lookup("k1", copy_value_out), OpCode::kOK);
-                EXPECT_EQ(copied_value, "v1");
-                EXPECT_EQ(btree->Lookup("k2", copy_value_out), OpCode::kOK);
-                EXPECT_EQ(copied_value, "v2");
-              })
-      ->Wait();
+  store->SubmitAndWait(coro_session_0, [&]() {
+    CoroEnv::CurTxMgr().StartTx();
+    EXPECT_EQ(btree->Lookup("k1", copy_value_out), OpCode::kOK);
+    EXPECT_EQ(copied_value, "v1");
+    EXPECT_EQ(btree->Lookup("k2", copy_value_out), OpCode::kOK);
+    EXPECT_EQ(copied_value, "v2");
+  });
 
-  store->GetCoroScheduler()
-      .Submit(coro_session_1,
-              [&]() {
-                CoroEnv::CurTxMgr().StartTx();
-                EXPECT_EQ(btree->Insert("k3", "v3"), OpCode::kOK);
-                EXPECT_EQ(btree->Lookup("k3", copy_value_out), OpCode::kOK);
-                EXPECT_EQ(copied_value, "v3");
-                CoroEnv::CurTxMgr().CommitTx();
+  store->SubmitAndWait(coro_session_1, [&]() {
+    CoroEnv::CurTxMgr().StartTx();
+    EXPECT_EQ(btree->Insert("k3", "v3"), OpCode::kOK);
+    EXPECT_EQ(btree->Lookup("k3", copy_value_out), OpCode::kOK);
+    EXPECT_EQ(copied_value, "v3");
+    CoroEnv::CurTxMgr().CommitTx();
 
-                CoroEnv::CurTxMgr().StartTx();
-                EXPECT_EQ(btree->Lookup("k3", copy_value_out), OpCode::kOK);
-                EXPECT_EQ(copied_value, "v3");
-                CoroEnv::CurTxMgr().CommitTx();
-              })
-      ->Wait();
+    CoroEnv::CurTxMgr().StartTx();
+    EXPECT_EQ(btree->Lookup("k3", copy_value_out), OpCode::kOK);
+    EXPECT_EQ(copied_value, "v3");
+    CoroEnv::CurTxMgr().CommitTx();
+  });
 
-  store->GetCoroScheduler()
-      .Submit(coro_session_0,
-              [&]() {
-                EXPECT_EQ(btree->Lookup("k3", copy_value_out), OpCode::kNotFound);
-                CoroEnv::CurTxMgr().CommitTx();
+  store->SubmitAndWait(coro_session_0, [&]() {
+    EXPECT_EQ(btree->Lookup("k3", copy_value_out), OpCode::kNotFound);
+    CoroEnv::CurTxMgr().CommitTx();
 
-                CoroEnv::CurTxMgr().StartTx();
-                EXPECT_EQ(btree->Lookup("k3", copy_value_out), OpCode::kOK);
-                EXPECT_EQ(copied_value, "v3");
-                CoroEnv::CurTxMgr().CommitTx();
-              })
-      ->Wait();
+    CoroEnv::CurTxMgr().StartTx();
+    EXPECT_EQ(btree->Lookup("k3", copy_value_out), OpCode::kOK);
+    EXPECT_EQ(copied_value, "v3");
+    CoroEnv::CurTxMgr().CommitTx();
+  });
 
-  store->GetCoroScheduler().ReleaseCoroSession(coro_session_0);
-  store->GetCoroScheduler().ReleaseCoroSession(coro_session_1);
+  store->ReleaseSession(coro_session_0);
+  store->ReleaseSession(coro_session_1);
 }
 
 } // namespace leanstore::test

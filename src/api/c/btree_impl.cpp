@@ -4,6 +4,7 @@
 #include "api/c/tx_guard.hpp"
 #include "leanstore/c/leanstore.h"
 #include "leanstore/c/status.h"
+#include "leanstore/coro/coro_scheduler.hpp"
 
 namespace leanstore {
 

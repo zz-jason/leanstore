@@ -9,7 +9,7 @@
 #include "leanstore/tx/group_committer.hpp"
 #include "leanstore/tx/tx_manager.hpp"
 #include "leanstore/tx/worker_thread.hpp"
-#include "leanstore/utils/json.hpp"
+#include "utils/json.hpp"
 
 #include <cassert>
 #include <memory>

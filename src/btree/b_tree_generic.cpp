@@ -16,7 +16,7 @@
 #include "leanstore/lean_store.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
-#include "leanstore/utils/to_json.hpp"
+#include "utils/to_json.hpp"
 #include "wal/wal_builder.hpp"
 
 #include <cstdint>

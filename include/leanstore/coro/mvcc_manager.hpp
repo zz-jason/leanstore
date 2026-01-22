@@ -7,7 +7,6 @@
 #include "leanstore/tx/concurrency_control.hpp"
 #include "leanstore/tx/tx_manager.hpp"
 #include "leanstore/wal/logging.hpp"
-#include "leanstore/utils/json.hpp"
 
 #include <cstdint>
 #include <filesystem>
@@ -18,6 +17,10 @@ namespace leanstore {
 
 class LeanStore;
 
+namespace utils {
+class JsonObj;
+} // namespace utils
+
 class MvccManager {
 public:
   static constexpr auto kKeyGlobalUsrTso = "global_user_tso";
@@ -25,25 +28,8 @@ public:
 
   explicit MvccManager(LeanStore* store);
 
-  utils::JsonObj Serialize() const {
-    utils::JsonObj json_obj;
-    json_obj.AddUint64(kKeyGlobalUsrTso, GetUsrTxTs());
-    json_obj.AddUint64(kKeyGlobalSysTso, GetSysTxTs());
-    return json_obj;
-  }
-
-  void Deserialize(const utils::JsonObj& json_obj) {
-    auto usr_tx = *json_obj.GetUint64(kKeyGlobalUsrTso);
-    auto sys_tx = *json_obj.GetUint64(kKeyGlobalSysTso);
-    usr_tso_.store(usr_tx);
-    sys_tso_.store(sys_tx);
-    global_wmk_info_.wmk_of_all_tx_ = usr_tx;
-
-    for (auto& logging : loggings_) {
-      logging->SetLastHardenedUsrTx(usr_tx);
-      logging->SetLastHardenedSysTx(sys_tx);
-    }
-  }
+  utils::JsonObj Serialize() const;
+  void Deserialize(const utils::JsonObj& json_obj);
 
   void InitHistoryStorage();
 

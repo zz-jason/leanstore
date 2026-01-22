@@ -78,7 +78,7 @@ Result<void> YcsbLeanSession::CreateKvSpace(std::string_view name) {
       }
     }
   };
-  store_.GetCoroScheduler().Submit(coro_session_, std::move(task))->Wait();
+  store_.SubmitAndWait(coro_session_, std::move(task));
   return result;
 }
 
@@ -90,20 +90,18 @@ Result<YcsbKvSpace> YcsbLeanSession::GetKvSpace(std::string_view name) {
       TransactionKV* btree;
       store_.GetTransactionKV(std::string(name), &btree);
       if (btree != nullptr) {
-        mvcc_kv_space = std::make_unique<YcsbLeanMvccKvSpace>(store_.GetCoroScheduler(),
-                                                              *coro_session_, *btree);
+        mvcc_kv_space = std::make_unique<YcsbLeanMvccKvSpace>(store_, *coro_session_, *btree);
       }
       return;
     }
     BasicKV* btree;
     store_.GetBasicKV(std::string(name), &btree);
     if (btree != nullptr) {
-      atomic_kv_space = std::make_unique<YcsbLeanAtomicKvSpace>(store_.GetCoroScheduler(),
-                                                                *coro_session_, *btree);
+      atomic_kv_space = std::make_unique<YcsbLeanAtomicKvSpace>(store_, *coro_session_, *btree);
     }
     return;
   };
-  store_.GetCoroScheduler().Submit(coro_session_, std::move(task))->Wait();
+  store_.SubmitAndWait(coro_session_, std::move(task));
 
   if (bench_transaction_kv_) {
     if (mvcc_kv_space == nullptr) {
@@ -123,7 +121,7 @@ Result<YcsbKvSpace> YcsbLeanSession::GetKvSpace(std::string_view name) {
 
 Result<void> YcsbLeanAtomicKvSpace::Put(std::string_view key, std::string_view value) {
   OpCode opcode = OpCode::kOther;
-  scheduler_.Submit(&session_, [&]() { opcode = kv_space_.Insert(key, value); })->Wait();
+  store_.SubmitAndWait(&session_, [&]() { opcode = kv_space_.Insert(key, value); });
   if (opcode != OpCode::kOK) {
     return Error::General(std::format("Put failed, key={}, error={}", key, ToString(opcode)));
   }
@@ -146,10 +144,8 @@ Result<void> YcsbLeanAtomicKvSpace::Update(std::string_view key, std::string_vie
   };
 
   OpCode opcode = OpCode::kOther;
-  scheduler_
-      .Submit(&session_,
-              [&]() { opcode = kv_space_.UpdatePartial(key, update_callback, *update_desc); })
-      ->Wait();
+  store_.SubmitAndWait(
+      &session_, [&]() { opcode = kv_space_.UpdatePartial(key, update_callback, *update_desc); });
   if (opcode != OpCode::kOK) {
     return Error::General(std::format("Update failed, key={}, error={}", key, ToString(opcode)));
   }
@@ -162,7 +158,7 @@ Result<void> YcsbLeanAtomicKvSpace::Get(std::string_view key, std::string& value
   };
 
   OpCode opcode = OpCode::kOther;
-  scheduler_.Submit(&session_, [&]() { opcode = kv_space_.Lookup(key, copy_value); })->Wait();
+  store_.SubmitAndWait(&session_, [&]() { opcode = kv_space_.Lookup(key, copy_value); });
   if (opcode != OpCode::kOK) {
     return Error::General(std::format("Get failed, key={}, error={}", key, ToString(opcode)));
   }
@@ -185,7 +181,7 @@ Result<void> YcsbLeanMvccKvSpace::Put(std::string_view key, std::string_view val
     CoroEnv::CurTxMgr().CommitTx();
   };
 
-  scheduler_.Submit(&session_, std::move(task))->Wait();
+  store_.SubmitAndWait(&session_, std::move(task));
   if (opcode != OpCode::kOK) {
     return Error::General(std::format("Put failed, key={}, error={}", key, ToString(opcode)));
   }
@@ -218,7 +214,7 @@ Result<void> YcsbLeanMvccKvSpace::Update(std::string_view key, std::string_view 
     CoroEnv::CurTxMgr().CommitTx();
   };
 
-  scheduler_.Submit(&session_, std::move(task))->Wait();
+  store_.SubmitAndWait(&session_, std::move(task));
   if (opcode != OpCode::kOK) {
     return Error::General(std::format("Put failed, key={}, error={}", key, ToString(opcode)));
   }
@@ -241,7 +237,7 @@ Result<void> YcsbLeanMvccKvSpace::Get(std::string_view key, std::string& value_o
     CoroEnv::CurTxMgr().CommitTx();
   };
 
-  scheduler_.Submit(&session_, std::move(task))->Wait();
+  store_.SubmitAndWait(&session_, std::move(task));
   if (opcode != OpCode::kOK) {
     return Error::General(std::format("Get failed, key={}, error={}", key, ToString(opcode)));
   }

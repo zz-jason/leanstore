@@ -9,7 +9,6 @@
 #include "leanstore/c/wal_record.h"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
-#include "leanstore/utils/json.hpp"
 
 #include <atomic>
 #include <cassert>
@@ -17,6 +16,10 @@
 #include <unordered_map>
 
 namespace leanstore {
+
+namespace utils {
+class JsonObj;
+} // namespace utils
 
 enum class BTreeType : uint8_t {
   kGeneric = 0,

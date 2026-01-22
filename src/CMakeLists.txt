@@ -20,34 +20,14 @@ add_library(leanstore::leanstore ALIAS leanstore)
 # Dependencies
 # ------------------------------------------------------------------------------
 
-set(LEAN_DEPS
-  lean_project_options
-  aio
-)
-
 find_package(Threads REQUIRED)
-list(APPEND LEAN_DEPS Threads::Threads)
-
 find_package(spdlog CONFIG REQUIRED)
-list(APPEND LEAN_DEPS spdlog::spdlog_header_only)
-
 find_package(Crc32c CONFIG REQUIRED)
-list(APPEND LEAN_DEPS Crc32c::crc32c)
-
 find_package(RapidJSON CONFIG REQUIRED)
-list(APPEND LEAN_DEPS rapidjson)
-
 find_package(cpptrace CONFIG REQUIRED)
-list(APPEND LEAN_DEPS cpptrace::cpptrace)
-
 find_package(boost_context CONFIG REQUIRED)
-list(APPEND LEAN_DEPS Boost::context)
-
 find_package(concurrentqueue CONFIG)
-list(APPEND LEAN_DEPS concurrentqueue::concurrentqueue)
-
 find_package(httplib CONFIG REQUIRED)
-list(APPEND LEAN_DEPS httplib::httplib)
 
 # Profiling support using gperftools (heap profiler and CPU profiler).
 # Disabled for shared library builds due to gperftools compatibility issues:
@@ -58,6 +38,7 @@ list(APPEND LEAN_DEPS httplib::httplib)
 #    "Heap-check constructor called twice" runtime errors
 # Profiling is primarily for development/debugging, so disabling it for shared
 # library builds is acceptable. Use static builds for profiling support.
+set(LEAN_PROFILING_DEPS "")
 if(LEAN_ENABLE_PROFILING AND NOT BUILD_SHARED_LIBS)
   pkg_check_modules(PKG_PROFILER IMPORTED_TARGET libprofiler)
   pkg_check_modules(PKG_TCMALLOC IMPORTED_TARGET libtcmalloc)
@@ -65,8 +46,8 @@ if(LEAN_ENABLE_PROFILING AND NOT BUILD_SHARED_LIBS)
   if(PKG_PROFILER_FOUND AND PKG_TCMALLOC_FOUND)
     message(STATUS "Profiling enabled: libprofiler and libtcmalloc found")
     target_compile_definitions(leanstore PUBLIC LEAN_ENABLE_PROFILING)
-    list(APPEND LEAN_DEPS PkgConfig::PKG_PROFILER)
-    list(APPEND LEAN_DEPS PkgConfig::PKG_TCMALLOC)
+    list(APPEND LEAN_PROFILING_DEPS PkgConfig::PKG_PROFILER)
+    list(APPEND LEAN_PROFILING_DEPS PkgConfig::PKG_TCMALLOC)
   else()
     message(WARNING "LEAN_ENABLE_PROFILING is ON but required libraries not found:")
     if(NOT PKG_PROFILER_FOUND)
@@ -81,12 +62,41 @@ elseif(LEAN_ENABLE_PROFILING AND BUILD_SHARED_LIBS)
   message(STATUS "Profiling disabled: not supported with BUILD_SHARED_LIBS=ON (gperftools compatibility)")
 endif()
 
-target_link_libraries(leanstore PUBLIC ${LEAN_DEPS})
+target_link_libraries(leanstore
+  PUBLIC
+    Threads::Threads      # System library, required by public API (std::thread)
+  PRIVATE
+    lean_project_options
+    aio
+    Boost::context        # Hidden by Coroutine pimpl
+    spdlog::spdlog_header_only
+    Crc32c::crc32c
+    rapidjson             # Moved to private API
+    cpptrace::cpptrace
+    concurrentqueue::concurrentqueue
+    httplib::httplib
+    ${LEAN_PROFILING_DEPS}
+)
 
-message(STATUS "leanstore dependencies:")
-foreach(dep IN LISTS LEAN_DEPS)
+message(STATUS "leanstore PUBLIC dependencies: Threads::Threads")
+message(STATUS "leanstore PRIVATE dependencies:")
+set(LEAN_PRIVATE_DEPS
+  lean_project_options
+  aio
+  Boost::context
+  spdlog::spdlog_header_only
+  Crc32c::crc32c
+  rapidjson
+  cpptrace::cpptrace
+  concurrentqueue::concurrentqueue
+  httplib::httplib
+)
+foreach(dep IN LISTS LEAN_PRIVATE_DEPS)
   message(STATUS "  - ${dep}")
 endforeach()
+if(LEAN_PROFILING_DEPS)
+  message(STATUS "  - ${LEAN_PROFILING_DEPS}")
+endif()
 
 # ------------------------------------------------------------------------------
 # Include directories

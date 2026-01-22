@@ -17,6 +17,7 @@
 #include "leanstore/tx/group_committer.hpp"
 #include "leanstore/tx/recovery.hpp"
 #include "leanstore/utils/managed_thread.hpp"
+#include "utils/json.hpp"
 #ifndef LEAN_ENABLE_CORO
 #include "leanstore/utils/parallelize.hpp"
 #endif
