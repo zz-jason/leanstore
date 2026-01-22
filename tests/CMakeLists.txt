@@ -13,6 +13,9 @@ function(leanstore_add_test TARGET_NAME)
     leanstore
   )
 
+  # Allow tests to access internal headers
+  target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
   gtest_discover_tests(${TARGET_NAME})
 endfunction(leanstore_add_test)
 
@@ -37,7 +40,8 @@ function(leanstore_add_test_in_dir TARGET_DIR)
       leanstore
     )
 
-    target_include_directories(${TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    # Allow tests to access internal headers and test-local headers
+    target_include_directories(${TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)
     gtest_discover_tests(${TEST_NAME})
   endforeach()
 endfunction(leanstore_add_test_in_dir)

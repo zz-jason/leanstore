@@ -2,17 +2,100 @@
 # Add library
 # ------------------------------------------------------------------------------
 
-file(GLOB_RECURSE LEAN_SRCS
-  **.cpp
-  **.cc
-  **.hpp
-  **.h
+set(LEAN_SOURCES
+  lean_store.cpp
+  # api
+  api/c/btree_impl.cpp
+  api/c/btree_impl.hpp
+  api/c/btree_mvcc_impl.cpp
+  api/c/btree_mvcc_impl.hpp
+  api/c/cursor_impl.cpp
+  api/c/cursor_impl.hpp
+  api/c/cursor_mvcc_impl.cpp
+  api/c/cursor_mvcc_impl.hpp
+  api/c/lean_str.cpp
+  api/c/session_impl.cpp
+  api/c/session_impl.hpp
+  api/c/store.cpp
+  api/c/store_impl.hpp
+  api/c/table_impl.cpp
+  api/c/table_impl.hpp
+  api/c/tx_guard.hpp
+  api/common/perf_counters.cpp
+  api/common/store_option.cpp
+  api/common/utils.cpp
+  api/cpp/stacktrace.cpp
+  # btree
+  btree/b_tree_generic.cpp
+  btree/b_tree_node.cpp
+  btree/b_tree_wal_payload.hpp
+  btree/basic_kv.cpp
+  btree/btree_iter.cpp
+  btree/btree_iter_mut.cpp
+  # buffer
+  buffer/async_write_buffer.cpp
+  buffer/buffer_manager.cpp
+  buffer/page_evictor.cpp
+  buffer/partition.cpp
+  # checkpoint
+  checkpoint/checkpoint_processor.cpp
+  # coro
+  coro/auto_commit_protocol.cpp
+  coro/coro_env.cpp
+  coro/coro_executor.cpp
+  coro/coro_io.cpp
+  coro/coro_mutex.cpp
+  coro/coro_scheduler.cpp
+  coro/coroutine.cpp
+  coro/mvcc_manager.cpp
+  # failpoint
+  failpoint/failpoint.hpp
+  # recovery
+  recovery/parallel_recovery.cpp
+  recovery/recovery_analyzer.cpp
+  recovery/recovery_redoer.cpp
+  recovery/recovery_undoer.cpp
+  # table
+  table/encoding.cpp
+  table/table.cpp
+  table/table_registry.cpp
+  table/table_schema.cpp
+  # telemetry
+  telemetry/metrics_http_exposer.cpp
+  telemetry/metrics_http_exposer.hpp
+  # tx
+  tx/chained_tuple.cpp
+  tx/concurrency_control.cpp
+  tx/cr_manager.cpp
+  tx/group_committer.cpp
+  tx/history_storage.cpp
+  tx/logging.cpp
+  tx/recovery.cpp
+  tx/transaction_kv.cpp
+  tx/tuple.cpp
+  tx/tx_manager.cpp
+  # utils
+  utils/json.cpp
+  utils/json.hpp
+  utils/jump_mu.cpp
+  utils/log.cpp
+  utils/misc.cpp
+  utils/parallelize.cpp
+  utils/random_generator.cpp
+  utils/to_json.hpp
+  utils/zipfian_generator.cpp
+  # wal
+  wal/wal_builder.hpp
+  wal/wal_cursor.cpp
+  wal/wal_file_cursor.cpp
+  wal/wal_file_cursor.hpp
+  wal/wal_serde.cpp
 )
 
 if(BUILD_SHARED_LIBS)
-  add_library(leanstore SHARED ${LEAN_SRCS})
+  add_library(leanstore SHARED ${LEAN_SOURCES})
 else()
-  add_library(leanstore STATIC ${LEAN_SRCS})
+  add_library(leanstore STATIC ${LEAN_SOURCES})
 endif()
 add_library(leanstore::leanstore ALIAS leanstore)
 
@@ -30,14 +113,6 @@ find_package(concurrentqueue CONFIG)
 find_package(httplib CONFIG REQUIRED)
 
 # Profiling support using gperftools (heap profiler and CPU profiler).
-# Disabled for shared library builds due to gperftools compatibility issues:
-# 1. gperftools (libprofiler + libtcmalloc) are static libraries from vcpkg
-# 2. When building shared library, static symbols need --whole-archive to be included
-# 3. However, this causes heap-checker initialization to run twice (once in the
-#    shared library, once in executables linking libprofiler), resulting in:
-#    "Heap-check constructor called twice" runtime errors
-# Profiling is primarily for development/debugging, so disabling it for shared
-# library builds is acceptable. Use static builds for profiling support.
 set(LEAN_PROFILING_DEPS "")
 if(LEAN_ENABLE_PROFILING AND NOT BUILD_SHARED_LIBS)
   pkg_check_modules(PKG_PROFILER IMPORTED_TARGET libprofiler)
@@ -46,17 +121,9 @@ if(LEAN_ENABLE_PROFILING AND NOT BUILD_SHARED_LIBS)
   if(PKG_PROFILER_FOUND AND PKG_TCMALLOC_FOUND)
     message(STATUS "Profiling enabled: libprofiler and libtcmalloc found")
     target_compile_definitions(leanstore PUBLIC LEAN_ENABLE_PROFILING)
-    list(APPEND LEAN_PROFILING_DEPS PkgConfig::PKG_PROFILER)
-    list(APPEND LEAN_PROFILING_DEPS PkgConfig::PKG_TCMALLOC)
+    list(APPEND LEAN_PROFILING_DEPS PkgConfig::PKG_PROFILER PkgConfig::PKG_TCMALLOC)
   else()
-    message(WARNING "LEAN_ENABLE_PROFILING is ON but required libraries not found:")
-    if(NOT PKG_PROFILER_FOUND)
-      message(WARNING "  - libprofiler not found")
-    endif()
-    if(NOT PKG_TCMALLOC_FOUND)
-      message(WARNING "  - libtcmalloc not found")
-    endif()
-    message(WARNING "Profiling will be disabled. Install gperftools or check PKG_CONFIG_PATH.")
+    message(WARNING "LEAN_ENABLE_PROFILING is ON but required libraries not found. Profiling disabled.")
   endif()
 elseif(LEAN_ENABLE_PROFILING AND BUILD_SHARED_LIBS)
   message(STATUS "Profiling disabled: not supported with BUILD_SHARED_LIBS=ON (gperftools compatibility)")
@@ -65,9 +132,9 @@ endif()
 target_link_libraries(leanstore
   PUBLIC
     Threads::Threads      # System library, required by public API (std::thread)
+    aio                   # Public dependency (headers include <libaio.h>)
   PRIVATE
     lean_project_options
-    aio
     Boost::context        # Hidden by Coroutine pimpl
     spdlog::spdlog_header_only
     Crc32c::crc32c
@@ -78,26 +145,6 @@ target_link_libraries(leanstore
     ${LEAN_PROFILING_DEPS}
 )
 
-message(STATUS "leanstore PUBLIC dependencies: Threads::Threads")
-message(STATUS "leanstore PRIVATE dependencies:")
-set(LEAN_PRIVATE_DEPS
-  lean_project_options
-  aio
-  Boost::context
-  spdlog::spdlog_header_only
-  Crc32c::crc32c
-  rapidjson
-  cpptrace::cpptrace
-  concurrentqueue::concurrentqueue
-  httplib::httplib
-)
-foreach(dep IN LISTS LEAN_PRIVATE_DEPS)
-  message(STATUS "  - ${dep}")
-endforeach()
-if(LEAN_PROFILING_DEPS)
-  message(STATUS "  - ${LEAN_PROFILING_DEPS}")
-endif()
-
 # ------------------------------------------------------------------------------
 # Include directories
 # ------------------------------------------------------------------------------
@@ -107,37 +154,60 @@ target_include_directories(leanstore
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
   PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-get_target_property(LIBA_INCLUDES leanstore INCLUDE_DIRECTORIES)
-message(STATUS "leanstore include directories:")
-foreach(dir ${LIBA_INCLUDES})
-  message(STATUS "  - ${dir}")
-endforeach()
-
 # ------------------------------------------------------------------------------
-# export header files for lib consumers
-# ------------------------------------------------------------------------------
-
-set(LEANSTORE_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR})
-set_property(TARGET leanstore APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${LEANSTORE_INCLUDE_DIR})
-
-# ------------------------------------------------------------------------------
-# Install
+# Exporting and Installation
 # ------------------------------------------------------------------------------
 
 include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
-install(
-  TARGETS leanstore
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+# Generate version file
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/leanstoreConfigVersion.cmake"
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY SameMajorVersion
 )
 
+# Generate config file from template
+configure_package_config_file(
+  "${CMAKE_SOURCE_DIR}/cmake/leanstoreConfig.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/leanstoreConfig.cmake"
+  INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/leanstore
+)
+
+# Install targets and export them
+# Added lean_project_options to the export set to satisfy dependency requirements
+install(
+  TARGETS leanstore lean_project_options
+  EXPORT leanstoreTargets
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+# Install the export set
+install(
+  EXPORT leanstoreTargets
+  FILE leanstoreTargets.cmake
+  NAMESPACE leanstore::
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/leanstore
+)
+
+# Install config files
+install(
+  FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/leanstoreConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/leanstoreConfigVersion.cmake"
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/leanstore
+)
+
+# Install public headers
 install(
   DIRECTORY ${CMAKE_SOURCE_DIR}/include/leanstore
-  DESTINATION include
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
 # ------------------------------------------------------------------------------
@@ -152,5 +222,5 @@ configure_file(
 
 install(
   FILES ${CMAKE_CURRENT_BINARY_DIR}/leanstore.pc
-  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/pkgconfig
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
 )

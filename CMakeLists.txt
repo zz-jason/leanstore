@@ -3,7 +3,7 @@
 # ------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.25)
-project(leanstoredb CXX)
+project(leanstore VERSION 1.0.0 LANGUAGES CXX)
 
 # ------------------------------------------------------------------------------
 # CMake build options
@@ -15,6 +15,7 @@ option(LEAN_ENABLE_PERF_COUNTERS "Whether to enable perf counters" ON)
 option(LEAN_ENABLE_CORO "Enable coroutine support" ON)
 option(LEAN_ENABLE_TESTS "Build tests" ON)
 option(LEAN_ENABLE_DEBUG_EXEC "Enable debug block in debug build" ON)
+option(LEAN_PORTABLE "Build portable binaries (disable -march=native)" OFF)
 
 # ------------------------------------------------------------------------------
 # Interface library for compile options, definitions, warnings, and link options
@@ -30,10 +31,12 @@ if (NOT UNIX)
   message(SEND_ERROR "unsupported platform")
 endif ()
 
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
-  target_compile_options(lean_project_options INTERFACE -mavx2 -mcx16 -m64)
-else()
-  target_compile_options(lean_project_options INTERFACE -march=native)
+if(NOT LEAN_PORTABLE)
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
+    target_compile_options(lean_project_options INTERFACE -mavx2 -mcx16 -m64)
+  else()
+    target_compile_options(lean_project_options INTERFACE -march=native)
+  endif()
 endif()
 
 if(CYGWIN)
@@ -77,19 +80,20 @@ endif()
 # Coverage
 if(ENABLE_COVERAGE)
   set(BUILD_SHARED_LIBS OFF)  # Coverage does not work with shared libs
-  target_compile_options(lean_project_options INTERFACE --coverage -fprofile-update=atomic)
-  target_link_options(lean_project_options INTERFACE --coverage)
+  # Only apply coverage flags during build, not to consumers
+  target_compile_options(lean_project_options INTERFACE $<BUILD_INTERFACE:--coverage -fprofile-update=atomic>)
+  target_link_options(lean_project_options INTERFACE $<BUILD_INTERFACE:--coverage>)
 endif()
 
 # Sanitizers
 if(ENABLE_ASAN)
-  target_compile_options(lean_project_options INTERFACE -fsanitize=address)
-  target_link_options(lean_project_options INTERFACE -fsanitize=address)
+  target_compile_options(lean_project_options INTERFACE $<BUILD_INTERFACE:-fsanitize=address>)
+  target_link_options(lean_project_options INTERFACE $<BUILD_INTERFACE:-fsanitize=address>)
 endif()
 
 if(ENABLE_TSAN)
-  target_compile_options(lean_project_options INTERFACE -fsanitize=thread)
-  target_link_options(lean_project_options INTERFACE -fsanitize=thread)
+  target_compile_options(lean_project_options INTERFACE $<BUILD_INTERFACE:-fsanitize=thread>)
+  target_link_options(lean_project_options INTERFACE $<BUILD_INTERFACE:-fsanitize=thread>)
 endif()
 
 # ------------------------------------------------------------------------------
@@ -104,18 +108,20 @@ target_compile_definitions(lean_project_options INTERFACE
 # Compile warnings
 # ------------------------------------------------------------------------------
 
+# Use BUILD_INTERFACE to ensure strict flags don't propagate to consumers
 target_compile_options(lean_project_options INTERFACE
-  -Wall
-  -Wextra
-  -Werror
-  $<$<CXX_COMPILER_ID:Clang>:-Wno-vla-cxx-extension -Wno-unknown-warning-option>
-  $<$<CXX_COMPILER_ID:GNU>:-Wno-error=clobbered>
+  $<BUILD_INTERFACE:-Wall>
+  $<BUILD_INTERFACE:-Wextra>
+  $<BUILD_INTERFACE:-Werror>
+  $<$<CXX_COMPILER_ID:Clang>:$<BUILD_INTERFACE:-Wno-vla-cxx-extension -Wno-unknown-warning-option>>
+  $<$<CXX_COMPILER_ID:GNU>:$<BUILD_INTERFACE:-Wno-error=clobbered>>
 )
 
 # ------------------------------------------------------------------------------
 # Base dependencies
 # ------------------------------------------------------------------------------
 
+# Only find packages needed for the build itself or targets defined in this scope
 find_package(benchmark CONFIG REQUIRED)
 find_package(PkgConfig REQUIRED)
 
