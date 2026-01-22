@@ -71,3 +71,70 @@ Ensure the library is exported as `leanstore::leanstore` to prevent target name 
 ## Unresolved Questions
 
 *   **Profiling Tools**: The current build disables profiling for shared libraries due to `gperftools` issues. The refactoring will preserve this logic but clarify the warning messages.
+
+## Review Comments
+
+<!--
+Review by Crush AI Assistant (2025-01-22)
+
+### Overall Assessment
+The design document correctly identifies key CMake best‑practice violations in the current leanstore build system. The proposed refactoring aligns with Modern CMake principles and will significantly improve the library’s usability as a dependency. Below are specific observations and additional considerations.
+
+### 1. Project Versioning (√)
+Adding a `VERSION` field to `project()` is essential for package‑manager compatibility and semantic versioning. Should be implemented as described.
+
+### 2. Build‑Interface Isolation (√)
+The use of `$<BUILD_INTERFACE:...>` for compiler warnings, sanitizers, and coverage flags is mandatory. Currently `lean_project_options` leaks `-Werror`, `-Wall`, `-Wextra`, and sanitizer flags to consumers, causing unnecessary build failures. Recommend wrapping all warning/error flags and sanitizer options with `$<BUILD_INTERFACE:...>`.
+
+### 3. Portable Hardware Optimization (√)
+Introducing `LEAN_PORTABLE` (default OFF) is a pragmatic choice. The current unconditional `-march=native` breaks portability of distributed binaries. Consider also adding a CMake check for AVX2/CX16 support when `LEAN_PORTABLE=OFF` to avoid runtime crashes on older CPUs.
+
+### 4. Explicit Source Lists (√)
+Replacing `file(GLOB_RECURSE)` with explicit source lists improves determinism and ensures CMake tracks file additions/deletions automatically. If maintainability is a concern, `CONFIGURE_DEPENDS` (CMake ≥3.12) could be a middle ground, but explicit listing is the community‑preferred standard.
+
+### 5. Package Configuration Generation (⚠)
+The existing `cmake/leanstoreConfig.cmake.in` only finds `Threads`. However, public headers (`include/leanstore/...`) include `<libaio.h>`, making `libaio` a **public dependency**. The current `src/CMakeLists.txt` links `aio` as PRIVATE, which will cause downstream linking errors. Two options:
+   - Move `aio` to `PUBLIC` in `target_link_libraries` and add `find_dependency(libaio)` in the config file.
+   - Keep `aio` PRIVATE but ensure the exported target automatically propagates the `-laio` link flag (requires `INTERFACE_LINK_LIBRARIES`).
+
+Also verify that no other private dependencies (e.g., `spdlog`, `crc32c`, `rapidjson`) are exposed through public headers; if they are, they must be moved to PUBLIC or hidden via pimpl.
+
+### 6. Namespace Safety (√)
+`add_library(leanstore::leanstore ALIAS leanstore)` already exists – good.
+
+### 7. Missing Export Logic
+The design mentions `install(EXPORT ...)` but the current `src/CMakeLists.txt` lacks it. Ensure the export set includes the `leanstore` target and its public dependencies (`Threads::Threads` and possibly `aio`). Use `install(TARGETS ... EXPORT)` and `install(EXPORT ...)`.
+
+### 8. Additional Recommendations
+- **Compiler Feature Detection**: Consider using `target_compile_features(leanstore PUBLIC cxx_std_23)` instead of relying solely on `lean_project_options`.
+- **Separate Development Flags**: Create a `leanstore_dev_options` interface library for developer‑only flags (e.g., `-Werror`, sanitizers) that is never exported.
+- **Test the Package**: After implementing the config file, test with `examples/cpp` using `find_package(leanstore)` instead of manual include/library paths.
+- **vcpkg Integration**: Since the project already uses vcpkg, ensure the generated config file works both with and without vcpkg (i.e., handle `find_dependency` gracefully).
+
+### 9. Implementation Order
+1. Add `VERSION` and `LEAN_PORTABLE`.
+2. Wrap warning/sanitizer flags with `BUILD_INTERFACE`.
+3. Replace `GLOB_RECURSE` with explicit source lists.
+4. Fix public dependency handling (`aio`).
+5. Add `install(EXPORT ...)` and complete the package‑config generation.
+6. Test locally and with the examples.
+
+The refactoring is well‑scoped and should be undertaken as a single cohesive effort to avoid leaving the build in a partially‑exported state.
+-->
+
+## Response to Review Comments
+
+I agree with the review assessment. Specifically:
+
+1.  **Project Versioning**: Will be implemented as planned.
+2.  **Build-Interface Isolation**: Will wrap all strict flags in `$<BUILD_INTERFACE:...>`.
+3.  **Portable Hardware Optimization**: Will implement `LEAN_PORTABLE`.
+4.  **Explicit Source Lists**: Will replace `GLOB_RECURSE` with explicit listing.
+5.  **Package Configuration & Dependencies**: 
+    *   **Ack**: `libaio` is indeed a public dependency. 
+    *   **Action**: I will move `aio` from `PRIVATE` to `PUBLIC` in `src/CMakeLists.txt`. This ensures downstream targets inherit the link dependency.
+    *   **Config**: I will add a check for `libaio` in `leanstoreConfig.cmake.in` (likely via PkgConfig or simple check) to ensure it is present on the consumer's system.
+6.  **Missing Export Logic**: Will add `install(EXPORT leanstoreTargets ...)` to `src/CMakeLists.txt` and include it in the package config.
+7.  **Implementation Order**: Will follow the suggested order.
+
+The implementation will now proceed with these refinements.
