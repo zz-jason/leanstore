@@ -1,5 +1,5 @@
 
-#include "api/c/store_impl.hpp"
+#include "c/store_impl.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/c/leanstore.h"
 #include "leanstore/c/types.h"

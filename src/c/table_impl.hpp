@@ -1,6 +1,6 @@
 #pragma once
 
-#include "api/c/session_impl.hpp"
+#include "c/session_impl.hpp"
 #include "leanstore/c/leanstore.h"
 #include "leanstore/table/table.hpp"
 

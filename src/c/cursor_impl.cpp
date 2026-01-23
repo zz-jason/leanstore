@@ -1,4 +1,4 @@
-#include "api/c/cursor_impl.hpp"
+#include "c/cursor_impl.hpp"
 
 #include "leanstore/base/slice.hpp"
 #include "leanstore/btree/btree_iter.hpp"

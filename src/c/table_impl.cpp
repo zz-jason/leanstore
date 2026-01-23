@@ -1,6 +1,6 @@
-#include "api/c/table_impl.hpp"
+#include "c/table_impl.hpp"
 
-#include "api/c/tx_guard.hpp"
+#include "c/tx_guard.hpp"
 #include "leanstore/c/leanstore.h"
 
 namespace {

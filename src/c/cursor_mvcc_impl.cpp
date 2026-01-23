@@ -1,4 +1,4 @@
-#include "api/c/cursor_mvcc_impl.hpp"
+#include "c/cursor_mvcc_impl.hpp"
 
 #include "leanstore/btree/btree_iter.hpp"
 #include "leanstore/c/leanstore.h"

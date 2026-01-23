@@ -4,27 +4,27 @@
 
 set(LEAN_SOURCES
   lean_store.cpp
-  # api
-  api/c/btree_impl.cpp
-  api/c/btree_impl.hpp
-  api/c/btree_mvcc_impl.cpp
-  api/c/btree_mvcc_impl.hpp
-  api/c/cursor_impl.cpp
-  api/c/cursor_impl.hpp
-  api/c/cursor_mvcc_impl.cpp
-  api/c/cursor_mvcc_impl.hpp
-  api/c/lean_str.cpp
-  api/c/session_impl.cpp
-  api/c/session_impl.hpp
-  api/c/store.cpp
-  api/c/store_impl.hpp
-  api/c/table_impl.cpp
-  api/c/table_impl.hpp
-  api/c/tx_guard.hpp
-  api/common/perf_counters.cpp
-  api/common/store_option.cpp
-  api/common/utils.cpp
-  api/cpp/stacktrace.cpp
+  # c
+  c/btree_impl.cpp
+  c/btree_impl.hpp
+  c/btree_mvcc_impl.cpp
+  c/btree_mvcc_impl.hpp
+  c/cursor_impl.cpp
+  c/cursor_impl.hpp
+  c/cursor_mvcc_impl.cpp
+  c/cursor_mvcc_impl.hpp
+  c/lean_str.cpp
+  c/session_impl.cpp
+  c/session_impl.hpp
+  c/store.cpp
+  c/store_impl.hpp
+  c/table_impl.cpp
+  c/table_impl.hpp
+  c/tx_guard.hpp
+  c/perf_counters.cpp
+  c/store_option.cpp
+  c/utils.cpp
+  base/stacktrace.cpp
   # btree
   btree/b_tree_generic.cpp
   btree/b_tree_node.cpp

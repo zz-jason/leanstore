@@ -1,8 +1,8 @@
-#include "api/c/session_impl.hpp"
+#include "c/session_impl.hpp"
 
-#include "api/c/btree_impl.hpp"
-#include "api/c/btree_mvcc_impl.hpp"
-#include "api/c/table_impl.hpp"
+#include "c/btree_impl.hpp"
+#include "c/btree_mvcc_impl.hpp"
+#include "c/table_impl.hpp"
 #include "leanstore/base/error.hpp"
 #include "leanstore/btree/b_tree_generic.hpp"
 #include "leanstore/btree/basic_kv.hpp"
