@@ -1,9 +1,9 @@
 #include "wal_dump.hpp"
 
-#include "leanstore/common/wal_record.h"
-#include "leanstore/cpp/base/result.hpp"
-#include "leanstore/cpp/wal/wal_cursor.hpp"
-#include "leanstore/cpp/wal/wal_serde.hpp"
+#include "leanstore/base/result.hpp"
+#include "leanstore/c/wal_record.h"
+#include "leanstore/wal/wal_cursor.hpp"
+#include "leanstore/wal/wal_serde.hpp"
 
 #include <tanakh-cmdline/cmdline.h>
 

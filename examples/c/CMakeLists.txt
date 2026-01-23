@@ -2,22 +2,24 @@
 # Example for using the library
 # ------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.25)
 project(leanstore-examples C)
 
-# Set gcc standard to c11
 set(CMAKE_C_STANDARD 11)
 
-# Set the leanstore include directory
-option(LEANSTORE_INCLUDE_DIR "Path to the leanstore include directory" "")
-message(STATUS "LEANSTORE_INCLUDE_DIR: ${LEANSTORE_INCLUDE_DIR}")
+# Enable C++ language support for linking to the C++ library
+enable_language(CXX)
+set(CMAKE_CXX_STANDARD 23)
 
-# Set the leanstore library directory, add it to the linker search path
-option(LEANSTORE_LIBRARY_DIR "Path to the leanstore library directory" "")
-message(STATUS "LEANSTORE_LIBRARY_DIR: ${LEANSTORE_LIBRARY_DIR}")
-link_directories(${LEANSTORE_LIBRARY_DIR})
+# Find leanstore package
+# This requires CMAKE_PREFIX_PATH to include the leanstore installation directory
+find_package(leanstore CONFIG REQUIRED)
 
 # Rules to build kv_basic_example
 add_executable(kv_basic_example kv_basic_example.c)
-target_link_libraries(kv_basic_example leanstore)
-target_include_directories(kv_basic_example PUBLIC ${LEANSTORE_INCLUDE_DIR})
+
+target_link_libraries(kv_basic_example PRIVATE
+    leanstore::leanstore
+    stdc++        # C++ standard library (required for C examples linking to C++ lib)
+    m             # Math library
+)

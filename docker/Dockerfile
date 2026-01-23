@@ -38,7 +38,7 @@ ENV VCPKG_DEFAULT_BINARY_CACHE=/opt/vcpkg_cache
 # install vcpkg packages
 RUN ./opt/vcpkg/bootstrap-vcpkg.sh \
  && vcpkg install benchmark tanakh-cmdline spdlog gtest rapidjson gperftools \
-          cpp-httplib crc32c libunwind cpptrace concurrentqueue boost-context rocksdb
+          cpp-httplib crc32c libunwind cpptrace boost-context rocksdb
 
 
 # install gcov

@@ -93,7 +93,7 @@ Checks: >
   -misc-include-cleaner,
 
 WarningsAsErrors: "*"
-HeaderFilterRegex: '.*'
+HeaderFilterRegex: '^(src|include|tests|tools)/.*'
 
 CheckOptions:
 

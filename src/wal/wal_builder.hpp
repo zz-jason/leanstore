@@ -1,15 +1,15 @@
 #pragma once
 
-#include "coroutine/coro_env.hpp"
-#include "leanstore/btree/core/b_tree_node.hpp"
-#include "leanstore/buffer-manager/buffer_frame.hpp"
-#include "leanstore/common/types.h"
-#include "leanstore/common/wal_record.h"
-#include "leanstore/concurrency/tx_manager.hpp"
-#include "leanstore/cpp/base/slice.hpp"
-#include "leanstore/cpp/wal/logging.hpp"
-#include "leanstore/cpp/wal/wal_serde.hpp"
-#include "leanstore/cpp/wal/wal_traits.hpp"
+#include "leanstore/base/slice.hpp"
+#include "leanstore/btree/b_tree_node.hpp"
+#include "leanstore/buffer/buffer_frame.hpp"
+#include "leanstore/c/types.h"
+#include "leanstore/c/wal_record.h"
+#include "leanstore/coro/coro_env.hpp"
+#include "leanstore/tx/tx_manager.hpp"
+#include "leanstore/wal/logging.hpp"
+#include "leanstore/wal/wal_serde.hpp"
+#include "leanstore/wal/wal_traits.hpp"
 
 #include <cstdint>
 

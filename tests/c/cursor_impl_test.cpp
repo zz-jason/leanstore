@@ -1,7 +1,7 @@
-#include "lean_test_suite.hpp"
+#include "common/lean_test_suite.hpp"
 #include "leanstore/c/leanstore.h"
-#include "leanstore/common/status.h"
-#include "leanstore/common/types.h"
+#include "leanstore/c/status.h"
+#include "leanstore/c/types.h"
 
 #include "gtest/gtest.h"
 #include <gtest/gtest.h>

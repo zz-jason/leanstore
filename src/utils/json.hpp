@@ -1,10 +1,19 @@
 #pragma once
 
-#include "leanstore/cpp/base/optional.hpp"
-#include "leanstore/cpp/base/result.hpp"
+#include "leanstore/base/optional.hpp"
+#include "leanstore/base/result.hpp"
 
 #include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <utility>
 
+// Include rapidjson for JsonValue (used in Foreach callback)
+// Note: JsonValue must be a complete type because it's used in public API callbacks
 #define RAPIDJSON_NAMESPACE leanstore::rapidjson
 #define RAPIDJSON_NAMESPACE_BEGIN namespace leanstore::rapidjson {
 #define RAPIDJSON_NAMESPACE_END }
@@ -15,13 +24,6 @@
 #undef RAPIDJSON_NAMESPACE_BEGIN
 #undef RAPIDJSON_NAMESPACE
 
-#include <cstddef>
-#include <cstdint>
-#include <functional>
-#include <string>
-#include <string_view>
-#include <utility>
-
 namespace leanstore::utils {
 
 using JsonValue = rapidjson::Value;
@@ -30,23 +32,15 @@ class JsonArray;
 
 class JsonObj {
 public:
-  JsonObj() {
-    doc_.SetObject();
-  }
+  JsonObj();
+  ~JsonObj();
 
-  ~JsonObj() = default;
-
-  // Not copyable or movable
+  // Not copyable
   JsonObj(const JsonObj&) = delete;
   JsonObj& operator=(const JsonObj&) = delete;
 
-  /// Move constructor
-  JsonObj(JsonObj&& other) noexcept {
-    // call move assignment
-    *this = std::move(other);
-  }
-
-  /// Move assignment
+  /// Move constructor and assignment (defined in .cpp due to Pimpl)
+  JsonObj(JsonObj&& other) noexcept;
   JsonObj& operator=(JsonObj&& other) noexcept;
 
   std::string Serialize() const;
@@ -77,161 +71,51 @@ public:
   bool HasMember(std::string_view key) const;
 
 private:
-  const rapidjson::Value* GetJsonValue(std::string_view key) const {
-    assert(doc_.IsObject() && "JsonObj must be an object");
-    const auto& obj = doc_.GetObject();
-    if (!obj.HasMember(key.data())) {
-      return nullptr;
-    }
-    return &obj[key.data()];
-  }
+  const rapidjson::Value* GetJsonValue(std::string_view key) const;
 
-  rapidjson::Document doc_;
+  // Pimpl idiom to hide rapidjson::Document from public header
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 
   friend class JsonArray;
 };
 
 class JsonArray {
 public:
-  JsonArray() {
-    doc_.SetArray();
-  }
+  JsonArray();
+  ~JsonArray();
 
-  ~JsonArray() = default;
-
-  // Not copyable or movable
+  // Not copyable
   JsonArray(const JsonArray&) = delete;
   JsonArray& operator=(const JsonArray&) = delete;
 
-  /// Move constructor
-  JsonArray(JsonArray&& other) noexcept {
-    // call move assignment
-    *this = std::move(other);
-  }
-
-  /// Move assignment
-  JsonArray& operator=(JsonArray&& other) noexcept {
-    if (this != &other) {
-      doc_.SetArray();
-      doc_.Swap(other.doc_);
-    }
-    return *this;
-  }
+  /// Move constructor and assignment (defined in .cpp due to Pimpl)
+  JsonArray(JsonArray&& other) noexcept;
+  JsonArray& operator=(JsonArray&& other) noexcept;
 
   //----------------------------------------------------------------------------
   // Utils to add element to a JSON array
   //----------------------------------------------------------------------------
 
-  void AppendInt64(int64_t value) {
-    auto value_copy = rapidjson::Value(value);
-    doc_.PushBack(value_copy, doc_.GetAllocator());
-  }
-
-  void AppendString(std::string_view value) {
-    auto value_copy = rapidjson::Value(value.data(), value.size(), doc_.GetAllocator());
-    doc_.PushBack(value_copy, doc_.GetAllocator());
-  }
-
-  void AppendJsonObj(const JsonObj& value) {
-    auto value_copy = rapidjson::Value(value.doc_, doc_.GetAllocator());
-    doc_.PushBack(value_copy, doc_.GetAllocator());
-  }
-
-  void AppendJsonArray(const JsonArray& value) {
-    auto value_copy = rapidjson::Value(value.doc_, doc_.GetAllocator());
-    doc_.PushBack(value_copy, doc_.GetAllocator());
-  }
+  void AppendInt64(int64_t value);
+  void AppendString(std::string_view value);
+  void AppendJsonObj(const JsonObj& value);
+  void AppendJsonArray(const JsonArray& value);
 
   //----------------------------------------------------------------------------
   // Utils to access element in a JSON array
   //----------------------------------------------------------------------------
 
-  Optional<int64_t> GetInt64(size_t index) const {
-    if (!doc_.IsArray()) {
-      return std::nullopt;
-    }
-
-    const auto& array = doc_.GetArray();
-    if (index >= array.Size()) {
-      return std::nullopt;
-    }
-
-    const auto& value = array[index];
-    if (!value.IsInt64()) {
-      return std::nullopt;
-    }
-
-    return value.GetInt64();
-  }
-
-  Optional<std::string_view> GetString(size_t index) const {
-    if (!doc_.IsArray()) {
-      return std::nullopt;
-    }
-
-    const auto& array = doc_.GetArray();
-    if (index >= array.Size()) {
-      return std::nullopt;
-    }
-
-    const auto& value = array[index];
-    if (!value.IsString()) {
-      return std::nullopt;
-    }
-
-    return std::string_view(value.GetString(), value.GetStringLength());
-  }
-
-  Optional<JsonObj> GetJsonObj(size_t index) const {
-    if (!doc_.IsArray()) {
-      return std::nullopt;
-    }
-
-    const auto& array = doc_.GetArray();
-    if (index >= array.Size()) {
-      return std::nullopt;
-    }
-
-    const auto& value = array[index];
-    if (!value.IsObject()) {
-      return std::nullopt;
-    }
-
-    JsonObj json_obj;
-    json_obj.doc_.CopyFrom(value, json_obj.doc_.GetAllocator());
-    return json_obj;
-  }
-
-  Optional<JsonArray> GetJsonArray(size_t index) const {
-    if (!doc_.IsArray()) {
-      return std::nullopt;
-    }
-
-    const auto& array = doc_.GetArray();
-    if (index >= array.Size()) {
-      return std::nullopt;
-    }
-
-    const auto& value = array[index];
-    if (!value.IsArray()) {
-      return std::nullopt;
-    }
-
-    JsonArray json_array;
-    json_array.doc_.CopyFrom(value, json_array.doc_.GetAllocator());
-    return json_array;
-  }
-
-  uint64_t Size() const {
-    if (!doc_.IsArray()) {
-      return 0;
-    }
-
-    return doc_.GetArray().Size();
-  }
+  Optional<int64_t> GetInt64(size_t index) const;
+  Optional<std::string_view> GetString(size_t index) const;
+  Optional<JsonObj> GetJsonObj(size_t index) const;
+  Optional<JsonArray> GetJsonArray(size_t index) const;
+  uint64_t Size() const;
 
 private:
-  rapidjson::Document doc_;
+  // Pimpl idiom to hide rapidjson::Document from public header
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 
   friend class JsonObj;
 };

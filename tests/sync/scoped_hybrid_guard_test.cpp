@@ -1,10 +1,10 @@
-#include "leanstore/buffer-manager/buffer_manager.hpp"
-#include "leanstore/common/types.h"
-#include "leanstore/concurrency/cr_manager.hpp"
-#include "leanstore/cpp/base/jump_mu.hpp"
+#include "leanstore/base/jump_mu.hpp"
+#include "leanstore/buffer/buffer_manager.hpp"
+#include "leanstore/c/types.h"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/sync/scoped_hybrid_guard.hpp"
+#include "leanstore/tx/cr_manager.hpp"
 #include "leanstore/utils/random_generator.hpp"
 
 #include <gtest/gtest.h>

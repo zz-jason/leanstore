@@ -1,7 +1,7 @@
 #pragma once
 
-#include "coroutine/lean_mutex.hpp"
-#include "leanstore/cpp/base/log.hpp"
+#include "leanstore/base/log.hpp"
+#include "leanstore/coro/lean_mutex.hpp"
 
 #include <string>
 #include <string_view>

@@ -19,15 +19,66 @@ building the project. It's highly recommended to develop the project inside a
 docker container, which can be built from this [Dockerfile][5]:
 
 ```sh
-cmake --preset debug
-cmake --build build/debug -j `nproc`
-ctest --test-dir build/debug
+cmake --preset debug_coro
+cmake --build build/debug_coro -j `nproc`
+ctest --test-dir build/debug_coro -j 4
 ```
+
+## Integration Guide
+
+LeanStore is built as a **static library** by default and requires **C++23**. The library provides full CMake package support via `find_package(leanstore)`.
+
+### Quick Start
+
+1. **Build and install LeanStore**:
+   ```bash
+   cmake --preset release_coro
+   cmake --build build/release_coro -j $(nproc)
+   cmake --install build/release_coro --prefix ./dist
+   ```
+
+2. **In your CMake project**:
+   ```cmake
+   cmake_minimum_required(VERSION 3.25)
+   project(my_project CXX)
+   set(CMAKE_CXX_STANDARD 23)
+   
+   list(APPEND CMAKE_PREFIX_PATH "/path/to/leanstore/dist")
+   find_package(leanstore CONFIG REQUIRED)
+   
+   add_executable(my_target main.cpp)
+   target_link_libraries(my_target PRIVATE leanstore::leanstore)
+   ```
+
+3. **Configure with vcpkg** (if using the same environment):
+   ```bash
+   cmake -B build -DCMAKE_PREFIX_PATH="/path/to/leanstore/dist;/path/to/vcpkg/installed/x64-linux"
+   ```
+
+### Alternative Integration Methods
+
+- **FetchContent**: For direct source integration without installation (see examples).
+- **pkg-config**: Legacy support for non-CMake projects.
+
+### Build Presets
+
+| Preset | Description |
+|--------|-------------|
+| `debug_coro` | Debug build with coroutine support |
+| `release_coro` | Release build with coroutine support |
+| `debug_tsan` | Debug build with thread sanitizer |
+| `release_thread` | Release build without coroutines |
+
+All presets build **static libraries** by default. Set `BUILD_SHARED_LIBS=ON` for shared libraries.
+
+### Examples
+
+Complete C and C++ examples are available in [`examples/c`](examples/c) and [`examples/cpp`](examples/cpp). For detailed dependency management and advanced usage, see [docs/cmake_integration_guide.md](docs/cmake_integration_guide.md).
 
 ## Contributing
 
-Contributions are welcomed and greatly appreciated! See [CONTRIBUTING.md][6] for
-setting up development environment and contributing.
+Contributions are welcomed and greatly appreciated! See [docs/development.md](docs/development.md) for
+comprehensive development guidelines, environment setup, and contribution workflow.
 
 You can also join the [slack workspace][12] to discuss any questions or ideas.
 

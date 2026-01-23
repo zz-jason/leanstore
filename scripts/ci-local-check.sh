@@ -5,6 +5,7 @@
 #   OPTIONS:
 #     --mode staged   Check only staged files (for pre-commit)
 #     --mode branch   Check files changed in current branch vs main (for pre-push, default)
+#     --mode all      Check all source files in the project
 #     --tidy-only     Run only clang-tidy check, skip preset builds/tests
 #     --no-cache      Disable clang-tidy cache
 #   If PRESET is not specified, runs checks for all relevant presets
@@ -214,15 +215,22 @@ get_files_to_check() {
                 files=$(git diff --name-only --diff-filter=ACM "$merge_base" HEAD 2>/dev/null | grep -E '\.(cpp|cc|c|h|hpp|hh)$' || true)
             fi
             ;;
+        all)
+            # Get all source files in the project (excluding examples/)
+            files=$(find . -name "*.cpp" -o -name "*.cc" -o -name "*.c" -o -name "*.h" -o -name "*.hpp" -o -name "*.hh" | grep -v "./build" | grep -v "./.git" | grep -v "^./examples/" | sort)
+            ;;
         *)
             echo -e "${RED}Unknown clang-tidy mode: $mode${NC}" >&2
             return 1
             ;;
     esac
 
-    # Filter to only existing files (in case of deleted files in diff)
+    # Filter to only existing files and exclude examples/
     local existing_files=""
     for f in $files; do
+        if [[ "$f" == examples/* ]]; then
+            continue
+        fi
         if [ -f "$f" ]; then
             existing_files="$existing_files $f"
         fi
@@ -321,10 +329,18 @@ file="$1"
 preset="$2"
 tmp_dir="$3"
 out_file="$tmp_dir/$(echo "$file" | md5sum | cut -d' ' -f1).out"
+
+# Determine language standard based on extension
+if [[ "$file" == *.c ]]; then
+    STD_ARG="--extra-arg=-std=c11"
+else
+    STD_ARG="--extra-arg=-std=c++2b"
+fi
+
 clang-tidy \
     -p="build/$preset" \
     --config-file=".clang-tidy" \
-    --extra-arg=-std=c++2b \
+    $STD_ARG \
     --extra-arg=-Wno-unknown-warning-option \
     --extra-arg=-Wno-error=clobbered \
     "$file" 2>&1 > "$out_file"

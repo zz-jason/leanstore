@@ -1,10 +1,10 @@
-#include "leanstore/cpp/recovery/recovery_analyzer.hpp"
+#include "leanstore/recovery/recovery_analyzer.hpp"
 
-#include "leanstore/common/wal_record.h"
-#include "leanstore/cpp/base/log.hpp"
-#include "leanstore/cpp/base/result.hpp"
-#include "leanstore/cpp/wal/wal_cast.hpp"
-#include "leanstore/cpp/wal/wal_cursor.hpp"
+#include "leanstore/base/log.hpp"
+#include "leanstore/base/result.hpp"
+#include "leanstore/c/wal_record.h"
+#include "leanstore/wal/wal_cast.hpp"
+#include "leanstore/wal/wal_cursor.hpp"
 
 #include <memory>
 #include <utility>

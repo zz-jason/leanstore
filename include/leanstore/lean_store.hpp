@@ -1,10 +1,10 @@
 #pragma once
 
-#include "coroutine/coro_future.hpp"
-#include "coroutine/coro_scheduler.hpp"
-#include "leanstore/common/types.h"
-#include "leanstore/cpp/base/log.hpp"
-#include "leanstore/cpp/base/result.hpp"
+#include "leanstore/base/log.hpp"
+#include "leanstore/base/result.hpp"
+#include "leanstore/c/types.h"
+#include "leanstore/coro/coro_scheduler.hpp"
+#include "leanstore/coro/coro_session.hpp"
 
 #include <cassert>
 #include <cstdint>
@@ -33,8 +33,12 @@ class MvccManager;
 class Table;
 class TableRegistry;
 struct TableDefinition;
+class CheckpointProcessor;
 
 class LeanStore {
+  // Allow internal implementation to access private GetCoroScheduler()
+  friend class CheckpointProcessor;
+
 public:
   /// Opens a LeanStore instance with the provided options.
   /// NOTE: The option is created by LeanStore user, its ownership is transferred to the LeanStore
@@ -64,9 +68,6 @@ public:
 
   /// The concurrent resource manager
   std::unique_ptr<CRManager> crmanager_;
-
-  /// The coroutine scheduler
-  std::unique_ptr<CoroScheduler> coro_scheduler_ = nullptr;
 
   /// The LeanStore constructor
   /// NOTE: The option is created by LeanStore user, its ownership is transferred to the LeanStore
@@ -118,12 +119,7 @@ public:
 
   lean_lid_t AllocWalGsn();
 
-  CoroScheduler& GetCoroScheduler() {
-    LEAN_DCHECK(coro_scheduler_ != nullptr, "Coroutine scheduler is not initialized");
-    return *coro_scheduler_;
-  }
-
-  /// Execute a custom user function on a worker thread.
+  /// Execute a custom user function on a worker thread synchronously.
   void ExecSync(uint64_t worker_id, std::function<void()> fn);
 
   /// Execute a custom user function on a worker thread asynchronously.
@@ -138,6 +134,23 @@ public:
   void ParallelRange(uint64_t num_jobs,
                      std::function<void(uint64_t job_begin, uint64_t job_end)>&& job_handler);
 
+  /// Reserve a worker session for submitting multiple tasks.
+  /// Returns nullptr if no session is available.
+  /// Must be released with ReleaseSession() when done.
+  /// This is a high-performance alternative to ExecSync for coroutine-enabled builds.
+  CoroSession* TryReserveSession(uint64_t worker_id);
+
+  /// Reserve a worker session, blocking until one is available.
+  /// Must be released with ReleaseSession() when done.
+  CoroSession* ReserveSession(uint64_t worker_id);
+
+  /// Release a previously reserved session back to the pool.
+  void ReleaseSession(CoroSession* session);
+
+  /// Submit a task on a reserved session and wait for completion.
+  /// This is the high-performance alternative to ExecSync for coroutine-enabled builds.
+  void SubmitAndWait(CoroSession* session, std::function<void()> task);
+
 private:
   void StartBackgroundThreads();
   void StopBackgroundThreads();
@@ -151,6 +164,15 @@ private:
 
   /// Init database files, i.e. page and wal file descriptors.
   void InitDbFiles();
+
+  /// Internal accessor for coroutine scheduler (not exposed in public API)
+  CoroScheduler& GetCoroScheduler() {
+    LEAN_DCHECK(coro_scheduler_ != nullptr, "Coroutine scheduler is not initialized");
+    return *coro_scheduler_;
+  }
+
+  /// The coroutine scheduler (implementation detail, hidden from public API)
+  std::unique_ptr<CoroScheduler> coro_scheduler_ = nullptr;
 };
 
 } // namespace leanstore

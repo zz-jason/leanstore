@@ -1,6 +1,6 @@
-#include "lean_test_suite.hpp"
+#include "common/lean_test_suite.hpp"
 #include "leanstore/c/leanstore.h"
-#include "leanstore/common/status.h"
+#include "leanstore/c/status.h"
 #include "leanstore/utils/random_generator.hpp"
 
 #include <gtest/gtest.h>

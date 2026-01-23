@@ -1,6 +1,6 @@
 #pragma once
 
-#include "leanstore/cpp/base/result.hpp"
+#include "leanstore/base/result.hpp"
 #include "tools/ycsb/ycsb_backend_leanstore.hpp"
 #include "tools/ycsb/ycsb_backend_rocksdb.hpp"
 #include "tools/ycsb/ycsb_backend_wiredtiger.hpp"

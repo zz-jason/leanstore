@@ -10,7 +10,7 @@ ACID transaction support.
 |--------|---------|
 | Configure | `cmake --preset debug_coro` |
 | Build | `cmake --build build/debug_coro -j $(nproc)` |
-| Test | `ctest --test-dir build/debug_coro --output-on-failure -j $(nproc)` |
+| Test | `ctest --test-dir build/debug_coro --output-on-failure -j 4` |
 | Format | `cmake --build build/debug_coro --target format` |
 | Tidy | `cmake --build build/debug_coro --target check-tidy` |
 
@@ -63,13 +63,17 @@ The `scripts/ci-local-check.sh` script runs CI checks locally:
 
 When modifying external dependency builds, update the shared script to maintain consistency.
 
+## Project Structure
+
+- **Examples**: `examples/c` and `examples/cpp` are standalone projects showing how to use `leanstore`. They are not part of the main build.
+
 ## Codebase Navigation
 
 **For transaction/MVCC analysis, read in this order:**
-1. `include/leanstore/concurrency/concurrency_control.hpp` - visibility checks
-2. `include/leanstore/concurrency/tx_manager.hpp` - transaction lifecycle
-3. `include/leanstore/concurrency/history_storage.hpp` - version storage
-4. `src/coroutine/mvcc_manager.hpp` - timestamp allocation
+1. `include/leanstore/tx/concurrency_control.hpp` - visibility checks
+2. `include/leanstore/tx/tx_manager.hpp` - transaction lifecycle
+3. `include/leanstore/tx/history_storage.hpp` - version storage
+4. `include/leanstore/coro/mvcc_manager.hpp` - timestamp allocation
 
 **Common search patterns:**
 | Component | Search Pattern |

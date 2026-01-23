@@ -1,8 +1,8 @@
 #include "wal_analysis.hpp"
 
-#include "leanstore/cpp/recovery/recovery_analyzer.hpp"
-#include "leanstore/cpp/recovery/recovery_context.hpp"
-#include "leanstore/cpp/recovery/recovery_redoer.hpp"
+#include "leanstore/recovery/recovery_analyzer.hpp"
+#include "leanstore/recovery/recovery_context.hpp"
+#include "leanstore/recovery/recovery_redoer.hpp"
 
 #include <tanakh-cmdline/cmdline.h>
 

@@ -21,30 +21,30 @@ You can choose one of these cmake presets when open the project in VS Code. To
 compile LeanStore in debug mode:
 
 ```sh
-cmake --preset debug
-cmake --build build/debug
+cmake --preset debug_coro
+cmake --build build/debug_coro
 ```
 
 To run unittests in the debug mode:
 
 ```sh
-ctest --test-dir build/debug
+ctest --test-dir build/debug_coro
 ```
 
 To check and fix code formatting with `clang-format-18`:
 
 ```sh
 # check format
-cmake --build build/debug --target=check-format
+cmake --build build/debug_coro --target=check-format
 
 # fix format
-cmake --build build/debug --target=format
+cmake --build build/debug_coro --target=format
 ```
 
 To run simple ycsb tools:
 
 ```sh
-./build/debug/tools/ycsb/ycsb \
+./build/debug_coro/tools/ycsb/ycsb \
   --ycsb_threads=8 \
   --ycsb_record_count=100000 \
   --ycsb_workload=c \

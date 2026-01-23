@@ -1,0 +1,48 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Public dependencies required by leanstore's public headers
+find_dependency(Threads)
+
+# Private dependencies needed for linking
+find_dependency(boost_context CONFIG)
+find_dependency(spdlog CONFIG)
+find_dependency(Crc32c CONFIG)
+find_dependency(RapidJSON CONFIG)
+find_dependency(cpptrace CONFIG)
+find_dependency(httplib CONFIG)
+
+# libaio is a public dependency (headers include <libaio.h>)
+# Try to find libaio via pkg-config first, then fall back to find_library
+find_package(PkgConfig QUIET)
+if(PKG_CONFIG_FOUND)
+  pkg_check_modules(LIBAIO QUIET IMPORTED_TARGET libaio)
+  if(TARGET LIBAIO::LIBAIO AND NOT TARGET libaio::libaio)
+    # pkg-config provides an imported target, create an alias for consistent naming
+    add_library(libaio::libaio ALIAS LIBAIO::LIBAIO)
+  endif()
+endif()
+
+if(NOT TARGET libaio::libaio)
+  # Fall back to find_library
+  find_library(LIBAIO_LIBRARY aio)
+  find_path(LIBAIO_INCLUDE_DIR libaio.h)
+  if(LIBAIO_LIBRARY AND LIBAIO_INCLUDE_DIR)
+    add_library(libaio::libaio INTERFACE IMPORTED)
+    set_target_properties(libaio::libaio PROPERTIES
+      INTERFACE_LINK_LIBRARIES "${LIBAIO_LIBRARY}"
+      INTERFACE_INCLUDE_DIRECTORIES "${LIBAIO_INCLUDE_DIR}"
+    )
+  else()
+    # If libaio is not found, emit a warning but continue.
+    # The linking may still succeed if the library is in default linker paths.
+    message(WARNING "libaio not found. Linking may fail.")
+  endif()
+endif()
+
+
+
+include("${CMAKE_CURRENT_LIST_DIR}/leanstoreTargets.cmake")
+
+check_required_components(leanstore)

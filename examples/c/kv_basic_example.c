@@ -1,5 +1,5 @@
 #include "leanstore/c/leanstore.h"
-#include "leanstore/common/types.h"
+#include "leanstore/c/types.h"
 
 #include <assert.h>
 #include <stddef.h>

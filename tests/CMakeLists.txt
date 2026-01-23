@@ -7,10 +7,14 @@ function(leanstore_add_test TARGET_NAME)
 
   target_link_libraries(
     ${TARGET_NAME}
+    lean_project_options
     GTest::gtest
     GTest::gtest_main
     leanstore
   )
+
+  # Allow tests to access internal headers
+  target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
   gtest_discover_tests(${TARGET_NAME})
 endfunction(leanstore_add_test)
@@ -30,37 +34,33 @@ function(leanstore_add_test_in_dir TARGET_DIR)
 
     target_link_libraries(
       ${TEST_NAME}
+      lean_project_options
       GTest::gtest
       GTest::gtest_main
       leanstore
     )
 
-    target_include_directories(${TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    # Allow tests to access internal headers and test-local headers
+    target_include_directories(${TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)
     gtest_discover_tests(${TEST_NAME})
   endforeach()
 endfunction(leanstore_add_test_in_dir)
 
 
 if(${LEAN_ENABLE_CORO})
-  leanstore_add_test(recovery_test)
-  leanstore_add_test_in_dir(coroutine)
+  leanstore_add_test_in_dir(recovery)
+  leanstore_add_test_in_dir(coro)
   leanstore_add_test_in_dir(c)
   leanstore_add_test_in_dir(table)
 else()
   # Add tests
-  leanstore_add_test(optimistic_guarded_test)
-  leanstore_add_test(transaction_kv_test)
-  leanstore_add_test(mvcc_test)
-  leanstore_add_test(anomalies_test)
-  leanstore_add_test(abort_test)
-  leanstore_add_test(long_running_tx_test)
+  leanstore_add_test_in_dir(tx)
 
   # tests in sub-directories
   leanstore_add_test_in_dir(btree)
-  leanstore_add_test_in_dir(buffer-manager)
-  leanstore_add_test_in_dir(concurrency)
+  leanstore_add_test_in_dir(buffer)
   leanstore_add_test_in_dir(sync)
   leanstore_add_test_in_dir(telemetry)
 endif()
 
-leanstore_add_test_in_dir(cpp)
+leanstore_add_test_in_dir(base)

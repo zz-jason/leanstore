@@ -1,4 +1,4 @@
-#include "leanstore/cpp/recovery/recovery_undoer.hpp"
+#include "leanstore/recovery/recovery_undoer.hpp"
 
 namespace leanstore {
 

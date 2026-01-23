@@ -1,8 +1,8 @@
 #pragma once
 
-#include "leanstore/btree/core/b_tree_node.hpp"
-#include "leanstore/buffer-manager/buffer_frame.hpp"
-#include "leanstore/cpp/base/slice.hpp"
+#include "leanstore/base/slice.hpp"
+#include "leanstore/btree/b_tree_node.hpp"
+#include "leanstore/buffer/buffer_frame.hpp"
 #include "utils/json.hpp"
 
 namespace leanstore::utils {

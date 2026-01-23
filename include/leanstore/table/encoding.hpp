@@ -1,7 +1,7 @@
 #pragma once
 
+#include "leanstore/base/slice.hpp"
 #include "leanstore/c/leanstore.h"
-#include "leanstore/cpp/base/slice.hpp"
 #include "leanstore/table/table_schema.hpp"
 
 #include <cstdint>

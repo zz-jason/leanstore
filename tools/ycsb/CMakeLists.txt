@@ -9,7 +9,7 @@ file(GLOB_RECURSE YCSB_SRC
 
 add_executable(ycsb ${YCSB_SRC})
 
-set(YCSB_DEPS leanstore)
+set(YCSB_DEPS lean_project_options leanstore)
 
 include(${CMAKE_SOURCE_DIR}/third_party/wiredtiger.cmake)
 list(APPEND YCSB_DEPS wiredtiger::wiredtiger)

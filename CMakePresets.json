@@ -9,7 +9,7 @@
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "CMAKE_CXX_COMPILER": "g++",
-                "LEAN_ENABLE_PROFILING": "ON",
+                "LEAN_ENABLE_PROFILING": "OFF",
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist/${presetName}"
             }
         },
@@ -27,7 +27,7 @@
             "hidden": true,
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "BUILD_SHARED_LIBS": "ON"
+                "BUILD_SHARED_LIBS": "OFF"
             }
         },
         {
@@ -66,7 +66,7 @@
             "inherits": "base_release",
             "cacheVariables": {
                 "LEAN_ENABLE_CORO": "OFF",
-                "BUILD_SHARED_LIBS": "ON"
+                "BUILD_SHARED_LIBS": "OFF"
             }
         }
     ]

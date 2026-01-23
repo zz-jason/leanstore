@@ -1,6 +1,6 @@
-#include "leanstore/cpp/wal/wal_cursor.hpp"
+#include "leanstore/wal/wal_cursor.hpp"
 
-#include "leanstore/cpp/base/error.hpp"
+#include "leanstore/base/error.hpp"
 #include "wal/wal_file_cursor.hpp"
 
 #include <cassert>
