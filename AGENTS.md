@@ -10,7 +10,7 @@ ACID transaction support.
 |--------|---------|
 | Configure | `cmake --preset debug_coro` |
 | Build | `cmake --build build/debug_coro -j $(nproc)` |
-| Test | `ctest --test-dir build/debug_coro --output-on-failure -j $(nproc)` |
+| Test | `ctest --test-dir build/debug_coro --output-on-failure -j 4` |
 | Format | `cmake --build build/debug_coro --target format` |
 | Tidy | `cmake --build build/debug_coro --target check-tidy` |
 

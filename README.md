@@ -21,7 +21,7 @@ docker container, which can be built from this [Dockerfile][5]:
 ```sh
 cmake --preset debug_coro
 cmake --build build/debug_coro -j `nproc`
-ctest --test-dir build/debug_coro
+ctest --test-dir build/debug_coro -j 4
 ```
 
 ## Integration Guide

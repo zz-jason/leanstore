@@ -54,7 +54,7 @@ cmake --preset debug_coro
 cmake --build build/debug_coro -j $(nproc)
 
 # Run unit tests
-ctest --test-dir build/debug_coro --output-on-failure
+ctest --test-dir build/debug_coro --output-on-failure -j 4
 
 # Install locally (for testing downstream integration)
 cmake --install build/debug_coro --prefix ./dist
