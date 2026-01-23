@@ -1,10 +1,26 @@
 # CMake Refactoring for Library Best Practices
 
 - Co-Authored-By: Gemini
+- Co-Authored-By: Crush
 
 ## Summary
 
-This proposal outlines the refactoring of the `leanstore` CMake build system to align with Modern CMake best practices. The primary goal is to transform `leanstore` from a "build-from-source" local project into a proper library that can be easily integrated by downstream users via `find_package(leanstore)` or `FetchContent`.
+This document describes the refactoring of the `leanstore` CMake build system to align with Modern CMake best practices. The primary goal is to transform `leanstore` from a "build-from-source" local project into a proper library that can be easily integrated by downstream users via `find_package(leanstore)` or `FetchContent`.
+
+## Implementation Status
+
+**Completed** (as of 2026-01-22)
+
+All design goals have been implemented and are part of the current codebase. The refactored CMake system provides:
+
+1. **Full CMake package support** – `find_package(leanstore CONFIG)` works for downstream integration.
+2. **Clean interface separation** – Compiler warnings, sanitizers, and hardware‑specific flags are confined to `$<BUILD_INTERFACE:...>`.
+3. **Portable binaries** – The `LEAN_PORTABLE` option controls `-march=native` usage.
+4. **Explicit source management** – Source files are listed explicitly, replacing `file(GLOB_RECURSE)`.
+5. **Proper dependency scoping** – Public dependencies (`Threads`, `libaio`) are exported, private dependencies are handled transparently.
+6. **Complete package configuration** – Generated `leanstoreConfig.cmake`, version files, and target exports.
+
+See [`docs/cmake_integration_guide.md`](../cmake_integration_guide.md) for usage guidelines and [`src/CMakeLists.txt`](../../src/CMakeLists.txt) for implementation details.
 
 ## Background
 

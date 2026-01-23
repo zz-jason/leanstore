@@ -5,6 +5,7 @@
 #   OPTIONS:
 #     --mode staged   Check only staged files (for pre-commit)
 #     --mode branch   Check files changed in current branch vs main (for pre-push, default)
+#     --mode all      Check all source files in the project
 #     --tidy-only     Run only clang-tidy check, skip preset builds/tests
 #     --no-cache      Disable clang-tidy cache
 #   If PRESET is not specified, runs checks for all relevant presets
@@ -213,6 +214,10 @@ get_files_to_check() {
                 local merge_base=$(git merge-base "$base_branch" HEAD 2>/dev/null || echo "$base_branch")
                 files=$(git diff --name-only --diff-filter=ACM "$merge_base" HEAD 2>/dev/null | grep -E '\.(cpp|cc|c|h|hpp|hh)$' || true)
             fi
+            ;;
+        all)
+            # Get all source files in the project (excluding examples/)
+            files=$(find . -name "*.cpp" -o -name "*.cc" -o -name "*.c" -o -name "*.h" -o -name "*.hpp" -o -name "*.hh" | grep -v "./build" | grep -v "./.git" | grep -v "^./examples/" | sort)
             ;;
         *)
             echo -e "${RED}Unknown clang-tidy mode: $mode${NC}" >&2
