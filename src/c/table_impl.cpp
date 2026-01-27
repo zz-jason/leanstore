@@ -51,6 +51,32 @@ lean_status TableImpl::Lookup(const struct lean_row* key_row, struct lean_row* o
   return status;
 }
 
+lean_status TableImpl::BuildColumnStore(const struct lean_column_store_options* options,
+                                        struct lean_column_store_stats* out_stats) {
+  lean_status status = lean_status::LEAN_STATUS_OK;
+  session_impl_->ExecSync([&]() {
+    TxGuard tx_guard(status);
+    column_store::ColumnStoreOptions opts;
+    if (options != nullptr) {
+      opts.max_rows_per_block_ = options->max_rows_per_block;
+      opts.max_block_bytes_ = options->max_block_bytes;
+      opts.target_height_ = options->target_height;
+    }
+    auto res = table_->BuildColumnStore(opts);
+    if (!res) {
+      status = lean_status::LEAN_ERR_UNSUPPORTED;
+      return;
+    }
+    if (out_stats != nullptr) {
+      out_stats->row_count = res.value().row_count_;
+      out_stats->block_count = res.value().block_count_;
+      out_stats->column_pages = res.value().column_pages_;
+      out_stats->column_bytes = res.value().column_bytes_;
+    }
+  });
+  return status;
+}
+
 struct lean_table_cursor* TableImpl::OpenCursor() {
   return TableCursorImpl::Create(table_, session_impl_);
 }

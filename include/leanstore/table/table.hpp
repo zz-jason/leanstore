@@ -1,5 +1,6 @@
 #pragma once
 
+#include "leanstore/btree/column_store/column_store.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/table/encoding.hpp"
 #include "leanstore/table/table_schema.hpp"
@@ -51,6 +52,9 @@ public:
   OpCode Insert(const lean_row* row);
   OpCode Remove(const lean_row* key_row);
   OpCode Lookup(const lean_row* key_row, lean_row* out_row, std::string& value_buf);
+  // Convert row-store leaf groups into column leaves in place.
+  Result<column_store::ColumnStoreStats> BuildColumnStore(
+      const column_store::ColumnStoreOptions& options);
 
   std::unique_ptr<TableCursor> NewCursor();
 
