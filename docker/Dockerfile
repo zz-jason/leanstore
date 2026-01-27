@@ -7,8 +7,9 @@ RUN apt update \
         build-essential g++-aarch64-linux-gnu gcc-aarch64-linux-gnu \
         git cmake make gcc g++ clangd clang-format clang-tidy ninja-build \
         libaio-dev python3-pip cppcheck \
-        curl zip unzip tar pkg-config \
-        autoconf libtool golang graphviz sysstat jq \
+        ca-certificates curl zip unzip tar pkg-config \
+        libssl-dev bison libtirpc-dev bash \
+        autoconf libtool golang graphviz sysstat jq htop vim \
  && rm -rf /var/lib/apt/lists/*
 
 
