@@ -14,6 +14,7 @@ option(LEAN_ENABLE_PROFILING "Enable profiling" OFF)
 option(LEAN_ENABLE_PERF_COUNTERS "Whether to enable perf counters" ON)
 option(LEAN_ENABLE_CORO "Enable coroutine support" ON)
 option(LEAN_ENABLE_TESTS "Build tests" ON)
+option(LEAN_ENABLE_TOOLS "Build tools" ON)
 option(LEAN_ENABLE_DEBUG_EXEC "Enable debug block in debug build" ON)
 option(LEAN_PORTABLE "Build portable binaries (disable -march=native)" OFF)
 
@@ -173,7 +174,10 @@ add_custom_target(check-tidy
 # ------------------------------------------------------------------------------
 
 add_subdirectory(src)
-add_subdirectory(tools)
+
+if(LEAN_ENABLE_TOOLS)
+  add_subdirectory(tools)
+endif()
 
 if(LEAN_ENABLE_TESTS)
   include(CTest)
