@@ -39,6 +39,11 @@ set(LEAN_SOURCES
   buffer/partition.cpp
   # checkpoint
   checkpoint/checkpoint_processor.cpp
+  # column_store
+  btree/column_store/column_block_builder.cpp
+  btree/column_store/column_block_reader.cpp
+  btree/column_store/column_block_writer.cpp
+  btree/column_store/column_leaf_ops.cpp
   # coro
   coro/auto_commit_protocol.cpp
   coro/coro_env.cpp
@@ -58,6 +63,7 @@ set(LEAN_SOURCES
   # table
   table/encoding.cpp
   table/table.cpp
+  table/table_column_store.cpp
   table/table_registry.cpp
   table/table_schema.cpp
   # telemetry

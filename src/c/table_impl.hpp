@@ -30,6 +30,9 @@ private:
               .remove = &Thunk<&TableImpl::Remove, lean_status, const struct lean_row*>,
               .lookup =
                   &Thunk<&TableImpl::Lookup, lean_status, const struct lean_row*, struct lean_row*>,
+              .build_column_store =
+                  &Thunk<&TableImpl::BuildColumnStore, lean_status,
+                         const struct lean_column_store_options*, struct lean_column_store_stats*>,
               .open_cursor = &Thunk<&TableImpl::OpenCursor, struct lean_table_cursor*>,
               .close = &Destroy},
         table_(table),
@@ -41,6 +44,8 @@ private:
   lean_status Insert(const struct lean_row* row);
   lean_status Remove(const struct lean_row* row);
   lean_status Lookup(const struct lean_row* key_row, struct lean_row* out_row);
+  lean_status BuildColumnStore(const struct lean_column_store_options* options,
+                               struct lean_column_store_stats* out_stats);
   struct lean_table_cursor* OpenCursor();
 
   template <auto Method, typename Ret, typename... Args>

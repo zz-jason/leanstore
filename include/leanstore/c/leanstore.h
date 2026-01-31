@@ -93,6 +93,28 @@ typedef struct lean_table_def {
   struct lean_btree_config primary_index_config;
 } lean_table_def;
 
+/// Options for building column store blocks.
+typedef struct lean_column_store_options {
+  /// Max rows per block. Zero disables the limit.
+  uint32_t max_rows_per_block;
+  /// Max bytes per block. Zero disables the limit.
+  uint64_t max_block_bytes;
+  /// Target subtree height to convert. Zero keeps the current tree height.
+  uint64_t target_height;
+} lean_column_store_options;
+
+/// Stats about the generated column store blocks.
+typedef struct lean_column_store_stats {
+  /// Rows encoded into column blocks.
+  uint64_t row_count;
+  /// Number of column blocks produced.
+  uint64_t block_count;
+  /// Column pages allocated to persist the blocks.
+  uint64_t column_pages;
+  /// Total bytes of column block payloads.
+  uint64_t column_bytes;
+} lean_column_store_stats;
+
 /// Datum representation for a single column. The type is defined by the table schema.
 typedef union lean_datum {
   bool b;
@@ -189,6 +211,11 @@ typedef struct lean_table {
   /// Lookup a row by primary key columns in the row, decoding into out_row.
   lean_status (*lookup)(struct lean_table* table, const struct lean_row* row,
                         struct lean_row* out_row);
+
+  /// Build column store blocks in-place for the table.
+  lean_status (*build_column_store)(struct lean_table* table,
+                                    const struct lean_column_store_options* options,
+                                    struct lean_column_store_stats* out_stats);
 
   /// Open iterator over table rows
   struct lean_table_cursor* (*open_cursor)(struct lean_table* table);
