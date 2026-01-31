@@ -190,6 +190,10 @@ target_link_libraries(leanstore
     ${LEAN_PROFILING_DEPS}
 )
 
+set_target_properties(leanstore PROPERTIES
+  POSITION_INDEPENDENT_CODE ON
+)
+
 # ------------------------------------------------------------------------------
 # Include directories
 # ------------------------------------------------------------------------------
