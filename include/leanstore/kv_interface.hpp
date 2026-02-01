@@ -141,30 +141,4 @@ using MutValCallback = std::function<void(MutableSlice val)>;
 using ScanCallback = std::function<bool(Slice key, Slice val)>;
 using PrefixLookupCallback = std::function<void(Slice key, Slice val)>;
 
-class KVInterface {
-public:
-  virtual OpCode Insert(Slice key, Slice val) = 0;
-
-  /// Update old value with a same sized new value.
-  /// NOTE: The value is updated via user provided callback.
-  virtual OpCode UpdatePartial(Slice key, MutValCallback update_call_back,
-                               UpdateDesc& update_desc) = 0;
-
-  virtual OpCode Remove(Slice key) = 0;
-
-  virtual OpCode RangeRemove(Slice start_key, Slice end_key, bool page_wise) = 0;
-
-  virtual OpCode ScanAsc(Slice start_key, ScanCallback callback) = 0;
-
-  virtual OpCode ScanDesc(Slice start_key, ScanCallback callback) = 0;
-
-  virtual OpCode Lookup(Slice key, ValCallback val_callback) = 0;
-
-  virtual OpCode PrefixLookup(Slice, PrefixLookupCallback) = 0;
-
-  virtual OpCode PrefixLookupForPrev(Slice, PrefixLookupCallback) = 0;
-
-  virtual uint64_t CountEntries() = 0;
-};
-
 } // namespace leanstore
