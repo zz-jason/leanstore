@@ -7,7 +7,6 @@
 #include "leanstore/table/encoding.hpp"
 
 #include <cstdint>
-#include <memory>
 #include <vector>
 
 namespace leanstore {
@@ -113,7 +112,7 @@ inline bool IsColumnPage(const Page& page) {
 
 class ColumnBlockReader {
 public:
-  // Builds a self-contained reader by reconstructing a temporary table definition.
+  // Builds a self-contained reader from serialized column block bytes.
   static Result<ColumnBlockReader> FromBlockBytes(std::vector<uint8_t> bytes);
 
   ColumnBlockReader(ColumnBlockReader&& other) noexcept;
@@ -124,11 +123,21 @@ public:
   Result<void> DecodeKey(Slice key_bytes, std::vector<Datum>& key_datums) const;
   // Compares a row's key columns against the given key datums.
   Result<int> CompareRowKey(uint32_t row_idx, const std::vector<Datum>& key_datums) const;
+  // Encodes only value bytes in row-store layout.
+  Result<std::string> EncodeValue(uint32_t row_idx) const;
+  Result<void> EncodeValue(uint32_t row_idx, Datum* datums, bool* nulls, uint32_t column_capacity,
+                           std::string* out_value) const;
   // Re-encodes a row back to the row-store key/value layout.
   Result<EncodedRow> EncodeRow(uint32_t row_idx) const;
+  Result<void> EncodeRow(uint32_t row_idx, Datum* datums, bool* nulls, uint32_t column_capacity,
+                         EncodedRow* out_row) const;
 
   uint32_t RowCount() const {
     return header_.row_count_;
+  }
+
+  uint32_t ColumnCount() const {
+    return static_cast<uint32_t>(metas_.size());
   }
 
   const std::vector<uint16_t>& KeyColumns() const {
@@ -138,14 +147,15 @@ public:
 private:
   ColumnBlockReader(ColumnBlockHeader header, std::vector<ColumnMeta> metas,
                     std::vector<uint16_t> key_columns, std::vector<uint8_t> storage,
-                    TableDefinition definition);
+                    RowEncodingLayout layout);
+  Result<void> DecodeRow(uint32_t row_idx, Datum* datums, bool* nulls,
+                         uint32_t column_capacity) const;
 
   ColumnBlockHeader header_{};
   std::vector<ColumnMeta> metas_;
   std::vector<uint16_t> key_columns_;
   std::vector<uint8_t> storage_;
-  TableDefinition definition_;
-  std::unique_ptr<TableCodec> codec_;
+  RowEncodingLayout layout_;
 };
 
 // Reads a linked column page chain into a single in-memory block.

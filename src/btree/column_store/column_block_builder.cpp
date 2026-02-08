@@ -5,7 +5,9 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
-#include <map>
+#include <numeric>
+#include <string_view>
+#include <unordered_map>
 #include <utility>
 
 namespace leanstore::column_store {
@@ -43,6 +45,7 @@ ColumnBlockBuilder::ColumnBlockBuilder(const TableDefinition& def,
     : def_(def),
       options_(options) {
   // Initialize per-column buffers based on the schema.
+  const uint32_t reserve_rows = options_.max_rows_per_block_;
   const auto& cols = def.schema_.Columns();
   columns_.reserve(cols.size());
   for (const auto& col : cols) {
@@ -50,13 +53,37 @@ ColumnBlockBuilder::ColumnBlockBuilder(const TableDefinition& def,
     values.type_ = col.type_;
     values.nullable_ = col.nullable_;
     values.fixed_length_ = col.fixed_length_;
+    if (reserve_rows > 0) {
+      values.nulls_.reserve(reserve_rows);
+      switch (col.type_) {
+      case ColumnType::kBool:
+      case ColumnType::kInt32:
+      case ColumnType::kInt64:
+        values.ints_.reserve(reserve_rows);
+        break;
+      case ColumnType::kUInt64:
+        values.uints_.reserve(reserve_rows);
+        break;
+      case ColumnType::kFloat32:
+      case ColumnType::kFloat64:
+        values.doubles_.reserve(reserve_rows);
+        break;
+      case ColumnType::kBinary:
+      case ColumnType::kString:
+        values.string_offsets_.reserve(reserve_rows);
+        values.string_lengths_.reserve(reserve_rows);
+        values.string_data_.reserve(static_cast<size_t>(reserve_rows) *
+                                    (col.fixed_length_ > 0 ? col.fixed_length_ : 32));
+        break;
+      default:
+        break;
+      }
+    }
     columns_.push_back(std::move(values));
   }
 }
 
-void ColumnBlockBuilder::AddRow(const std::string& key_bytes, const lean_row& row) {
-  // Rows are assumed to be appended in key order.
-  max_key_ = key_bytes;
+void ColumnBlockBuilder::AddRow(const lean_row& row) {
   const auto& cols = def_.schema_.Columns();
   for (size_t i = 0; i < cols.size(); ++i) {
     auto& col = columns_[i];
@@ -94,12 +121,16 @@ void ColumnBlockBuilder::AddRow(const std::string& key_bytes, const lean_row& ro
       break;
     case ColumnType::kBinary:
     case ColumnType::kString: {
-      std::string value;
+      const uint32_t offset = static_cast<uint32_t>(col.string_data_.size());
+      uint32_t len = 0;
       if (datum.str.size > 0 && datum.str.data != nullptr) {
-        value.assign(datum.str.data, datum.str.data + datum.str.size);
+        len = static_cast<uint32_t>(datum.str.size);
+        const auto* src = reinterpret_cast<const uint8_t*>(datum.str.data);
+        col.string_data_.insert(col.string_data_.end(), src, src + len);
       }
-      approx_bytes_ += value.size();
-      col.strings_.push_back(std::move(value));
+      approx_bytes_ += len;
+      col.string_offsets_.push_back(offset);
+      col.string_lengths_.push_back(len);
       break;
     }
     default:
@@ -125,7 +156,7 @@ bool ColumnBlockBuilder::ShouldFlush() const {
   return false;
 }
 
-Result<ColumnBlockPayload> ColumnBlockBuilder::Finalize() {
+Result<ColumnBlockPayload> ColumnBlockBuilder::Finalize(Slice max_key) {
   if (row_count_ == 0) {
     return Error::General("empty column block");
   }
@@ -133,6 +164,7 @@ Result<ColumnBlockPayload> ColumnBlockBuilder::Finalize() {
   // Encode per-column data and assemble the column block payload.
   std::vector<ColumnMeta> metas(columns_.size());
   std::vector<uint8_t> storage;
+  storage.reserve(static_cast<size_t>(approx_bytes_) + columns_.size() * sizeof(ColumnMeta));
 
   for (size_t i = 0; i < columns_.size(); ++i) {
     if (auto res = EncodeColumn(i, metas[i], storage); !res) {
@@ -149,6 +181,8 @@ Result<ColumnBlockPayload> ColumnBlockBuilder::Finalize() {
 
   // Layout: header | column metas | key column indices | storage bytes.
   std::vector<uint8_t> block_bytes;
+  block_bytes.reserve(sizeof(ColumnBlockHeader) + metas.size() * sizeof(ColumnMeta) +
+                      def_.schema_.PrimaryKeyColumns().size() * sizeof(uint16_t) + storage.size());
   AppendPod(block_bytes, header);
   AppendBytes(block_bytes, metas.data(), metas.size() * sizeof(ColumnMeta));
   for (auto idx : def_.schema_.PrimaryKeyColumns()) {
@@ -159,7 +193,7 @@ Result<ColumnBlockPayload> ColumnBlockBuilder::Finalize() {
 
   ColumnBlockPayload payload;
   payload.bytes_ = std::move(block_bytes);
-  payload.max_key_ = std::move(max_key_);
+  payload.max_key_.assign(reinterpret_cast<const char*>(max_key.data()), max_key.size());
   payload.row_count_ = row_count_;
   Reset();
   return payload;
@@ -168,13 +202,14 @@ Result<ColumnBlockPayload> ColumnBlockBuilder::Finalize() {
 void ColumnBlockBuilder::Reset() {
   row_count_ = 0;
   approx_bytes_ = 0;
-  max_key_.clear();
   for (auto& col : columns_) {
     col.nulls_.clear();
     col.ints_.clear();
     col.uints_.clear();
     col.doubles_.clear();
-    col.strings_.clear();
+    col.string_offsets_.clear();
+    col.string_lengths_.clear();
+    col.string_data_.clear();
   }
 }
 
@@ -194,7 +229,8 @@ void ColumnBlockBuilder::AddDefaultValue(ColumnValues& col) {
     break;
   case ColumnType::kBinary:
   case ColumnType::kString:
-    col.strings_.emplace_back();
+    col.string_offsets_.push_back(static_cast<uint32_t>(col.string_data_.size()));
+    col.string_lengths_.push_back(0);
     break;
   default:
     break;
@@ -215,13 +251,13 @@ Result<void> ColumnBlockBuilder::EncodeColumn(size_t index, ColumnMeta& meta,
     // Pack nulls into a bitmap.
     meta.nulls_offset_ = static_cast<uint32_t>(storage.size());
     meta.nulls_bytes_ = static_cast<uint32_t>((row_count_ + 7) / 8);
-    std::vector<uint8_t> null_bytes(meta.nulls_bytes_, 0);
+    storage.resize(storage.size() + meta.nulls_bytes_, 0);
+    auto* null_bytes = storage.data() + meta.nulls_offset_;
     for (uint32_t row = 0; row < row_count_; ++row) {
       if (col.nulls_[row] != 0) {
         null_bytes[row / 8] |= static_cast<uint8_t>(1u << (row % 8));
       }
     }
-    AppendBytes(storage, null_bytes.data(), null_bytes.size());
   } else {
     meta.nulls_offset_ = 0;
     meta.nulls_bytes_ = 0;
@@ -446,30 +482,42 @@ void ColumnBlockBuilder::EncodeFloatColumn(ColumnValues& col, ColumnMeta& meta,
 
 void ColumnBlockBuilder::EncodeStringColumn(ColumnValues& col, ColumnMeta& meta,
                                             std::vector<uint8_t>& storage) {
+  const auto get_string = [&](uint32_t row_idx) -> std::string_view {
+    const uint32_t len = col.string_lengths_[row_idx];
+    if (len == 0) {
+      return {};
+    }
+    const uint32_t offset = col.string_offsets_[row_idx];
+    return {reinterpret_cast<const char*>(col.string_data_.data() + offset), len};
+  };
+
   bool has_value = false;
   bool all_equal = true;
-  std::string first_value;
+  uint32_t first_length = 0;
+  std::string_view first_value;
   for (uint32_t i = 0; i < row_count_; ++i) {
     if (col.nulls_[i] != 0) {
       continue;
     }
-    const auto& v = col.strings_[i];
+    const std::string_view v = get_string(i);
     if (!has_value) {
       first_value = v;
+      first_length = static_cast<uint32_t>(v.size());
       has_value = true;
-    } else if (v != first_value) {
-      all_equal = false;
+    } else {
+      if (v != first_value) {
+        all_equal = false;
+      }
     }
   }
 
   meta.data_offset_ = static_cast<uint32_t>(storage.size());
   if (!has_value || all_equal) {
     meta.compression_ = static_cast<uint8_t>(CompressionType::kSingleValue);
-    const std::string* value = has_value ? &first_value : nullptr;
-    const uint32_t len = value ? static_cast<uint32_t>(value->size()) : 0;
+    const uint32_t len = has_value ? first_length : 0;
     AppendBytes(storage, &len, sizeof(uint32_t));
     if (len > 0) {
-      AppendBytes(storage, value->data(), value->size());
+      AppendBytes(storage, first_value.data(), first_value.size());
     }
     meta.data_bytes_ = sizeof(uint32_t) + len;
     meta.value_width_ = 0;
@@ -477,43 +525,66 @@ void ColumnBlockBuilder::EncodeStringColumn(ColumnValues& col, ColumnMeta& meta,
   }
 
   meta.compression_ = static_cast<uint8_t>(CompressionType::kOrderedDictionary);
-  std::vector<std::string> dict;
-  dict.reserve(col.strings_.size());
+  std::vector<uint32_t> row_dict_idx(row_count_, 0);
+  std::vector<std::string_view> unique_values;
+  unique_values.reserve(row_count_);
+  std::unordered_map<std::string_view, uint32_t> value_to_unsorted_idx;
+  value_to_unsorted_idx.reserve(static_cast<size_t>(row_count_) * 2);
   for (uint32_t i = 0; i < row_count_; ++i) {
-    if (col.nulls_[i] == 0) {
-      dict.push_back(col.strings_[i]);
+    if (col.nulls_[i] != 0) {
+      continue;
     }
+    const std::string_view value = get_string(i);
+    auto [it, inserted] =
+        value_to_unsorted_idx.try_emplace(value, static_cast<uint32_t>(unique_values.size()));
+    if (inserted) {
+      unique_values.push_back(value);
+    }
+    row_dict_idx[i] = it->second;
   }
-  std::sort(dict.begin(), dict.end());
-  dict.erase(std::unique(dict.begin(), dict.end()), dict.end());
 
-  const uint32_t dict_size = static_cast<uint32_t>(dict.size());
+  const uint32_t dict_size = static_cast<uint32_t>(unique_values.size());
+  std::vector<uint32_t> sorted_unique(dict_size);
+  std::iota(sorted_unique.begin(), sorted_unique.end(), 0);
+  std::sort(sorted_unique.begin(), sorted_unique.end(),
+            [&](uint32_t lhs, uint32_t rhs) { return unique_values[lhs] < unique_values[rhs]; });
+
+  std::vector<uint32_t> unsorted_to_sorted(dict_size);
+  for (uint32_t sorted_idx = 0; sorted_idx < dict_size; ++sorted_idx) {
+    unsorted_to_sorted[sorted_unique[sorted_idx]] = sorted_idx;
+  }
+
   const uint8_t width = dict_size <= 0x100 ? 1 : (dict_size <= 0x10000 ? 2 : 4);
   meta.value_width_ = width;
-
-  std::map<std::string, uint32_t> value_to_index;
-  for (uint32_t i = 0; i < dict_size; ++i) {
-    value_to_index[dict[i]] = i;
-  }
 
   meta.dict_offset_ = static_cast<uint32_t>(storage.size());
   meta.dict_entries_ = static_cast<uint32_t>(dict_size);
   std::vector<uint32_t> offsets(dict_size);
   std::vector<uint32_t> lengths(dict_size);
-  std::vector<uint8_t> string_bytes;
   uint32_t string_offset = 0;
+  size_t dict_string_bytes = 0;
   for (uint32_t i = 0; i < dict_size; ++i) {
+    const auto entry = unique_values[sorted_unique[i]];
     offsets[i] = string_offset;
-    lengths[i] = static_cast<uint32_t>(dict[i].size());
-    AppendBytes(string_bytes, dict[i].data(), dict[i].size());
+    lengths[i] = static_cast<uint32_t>(entry.size());
     string_offset += lengths[i];
+    dict_string_bytes += entry.size();
   }
 
   AppendBytes(storage, offsets.data(), offsets.size() * sizeof(uint32_t));
   AppendBytes(storage, lengths.data(), lengths.size() * sizeof(uint32_t));
   meta.string_offset_ = static_cast<uint32_t>(storage.size());
-  if (!string_bytes.empty()) {
-    AppendBytes(storage, string_bytes.data(), string_bytes.size());
+  if (dict_string_bytes > 0) {
+    const size_t string_base = storage.size();
+    storage.resize(storage.size() + dict_string_bytes);
+    size_t write_offset = 0;
+    for (uint32_t i = 0; i < dict_size; ++i) {
+      const auto entry = unique_values[sorted_unique[i]];
+      if (!entry.empty()) {
+        std::memcpy(storage.data() + string_base + write_offset, entry.data(), entry.size());
+        write_offset += entry.size();
+      }
+    }
   }
 
   meta.data_offset_ = static_cast<uint32_t>(storage.size());
@@ -522,7 +593,7 @@ void ColumnBlockBuilder::EncodeStringColumn(ColumnValues& col, ColumnMeta& meta,
   for (uint32_t i = 0; i < row_count_; ++i) {
     uint32_t idx = 0;
     if (col.nulls_[i] == 0) {
-      idx = value_to_index[col.strings_[i]];
+      idx = unsorted_to_sorted[row_dict_idx[i]];
     }
     std::memcpy(storage.data() + meta.data_offset_ + i * width, &idx, width);
   }

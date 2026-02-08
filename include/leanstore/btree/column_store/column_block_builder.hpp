@@ -17,10 +17,10 @@ class ColumnBlockBuilder {
 public:
   ColumnBlockBuilder(const TableDefinition& def, const ColumnStoreOptions& options);
 
-  void AddRow(const std::string& key_bytes, const lean_row& row);
+  void AddRow(const lean_row& row);
   bool Empty() const;
   bool ShouldFlush() const;
-  Result<ColumnBlockPayload> Finalize();
+  Result<ColumnBlockPayload> Finalize(Slice max_key);
 
 private:
   struct ColumnValues {
@@ -31,7 +31,9 @@ private:
     std::vector<int64_t> ints_;
     std::vector<uint64_t> uints_;
     std::vector<double> doubles_;
-    std::vector<std::string> strings_;
+    std::vector<uint32_t> string_offsets_;
+    std::vector<uint32_t> string_lengths_;
+    std::vector<uint8_t> string_data_;
   };
 
   void Reset();
@@ -47,7 +49,6 @@ private:
   std::vector<ColumnValues> columns_;
   uint32_t row_count_ = 0;
   uint64_t approx_bytes_ = 0;
-  std::string max_key_;
 };
 
 } // namespace leanstore::column_store

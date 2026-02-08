@@ -2,6 +2,8 @@
 
 #include "leanstore/base/error.hpp"
 
+#include <memory>
+
 namespace leanstore::column_store {
 
 namespace {
@@ -81,9 +83,9 @@ Result<int32_t> ResolveStartRowDesc(ColumnBlockReader& reader, Slice start_key,
 } // namespace
 
 Result<bool> LookupColumnBlock(LeanStore* store, const ColumnBlockRef& ref, Slice key,
-                               EncodedRow* out_row) {
-  if (out_row == nullptr) {
-    return Error::General("null column block output row");
+                               std::string* out_value) {
+  if (out_value == nullptr) {
+    return Error::General("null column block output value");
   }
   auto reader_res = ReadColumnBlock(store, ref);
   if (!reader_res) {
@@ -110,11 +112,13 @@ Result<bool> LookupColumnBlock(LeanStore* store, const ColumnBlockRef& ref, Slic
     return false;
   }
 
-  auto encoded = reader.EncodeRow(static_cast<uint32_t>(row_lb.value()));
-  if (!encoded) {
-    return std::move(encoded.error());
+  std::vector<Datum> datums(reader.ColumnCount());
+  auto nulls = std::make_unique<bool[]>(reader.ColumnCount());
+  if (auto res = reader.EncodeValue(static_cast<uint32_t>(row_lb.value()), datums.data(),
+                                    nulls.get(), reader.ColumnCount(), out_value);
+      !res) {
+    return std::move(res.error());
   }
-  *out_row = std::move(encoded.value());
   return true;
 }
 
@@ -143,12 +147,14 @@ Result<ColumnBlockScanResult> ScanColumnBlockAsc(LeanStore* store, const ColumnB
     row_start = row_lb.value();
     state->need_start_row_ = false;
   }
+  std::vector<Datum> datums(reader.ColumnCount());
+  auto nulls = std::make_unique<bool[]>(reader.ColumnCount());
+  EncodedRow out;
   for (uint32_t row = static_cast<uint32_t>(row_start); row < reader.RowCount(); ++row) {
-    auto encoded = reader.EncodeRow(row);
-    if (!encoded) {
-      return std::move(encoded.error());
+    if (auto res = reader.EncodeRow(row, datums.data(), nulls.get(), reader.ColumnCount(), &out);
+        !res) {
+      return std::move(res.error());
     }
-    auto& out = encoded.value();
     result.emitted_ = true;
     if (!callback(Slice(out.key_), Slice(out.value_))) {
       result.stop_ = true;
@@ -183,12 +189,15 @@ Result<ColumnBlockScanResult> ScanColumnBlockDesc(LeanStore* store, const Column
     row_start = row_le.value();
     state->need_start_row_ = false;
   }
+  std::vector<Datum> datums(reader.ColumnCount());
+  auto nulls = std::make_unique<bool[]>(reader.ColumnCount());
+  EncodedRow out;
   for (int32_t row = row_start; row >= 0; --row) {
-    auto encoded = reader.EncodeRow(static_cast<uint32_t>(row));
-    if (!encoded) {
-      return std::move(encoded.error());
+    if (auto res = reader.EncodeRow(static_cast<uint32_t>(row), datums.data(), nulls.get(),
+                                    reader.ColumnCount(), &out);
+        !res) {
+      return std::move(res.error());
     }
-    auto& out = encoded.value();
     result.emitted_ = true;
     if (!callback(Slice(out.key_), Slice(out.value_))) {
       result.stop_ = true;
