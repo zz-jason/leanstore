@@ -4,52 +4,15 @@
 #include "leanstore/btree/column_store/column_store.hpp"
 #include "leanstore/buffer/buffer_manager.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/table/table_schema.hpp"
 
 #include <algorithm>
 #include <cstring>
 #include <format>
 #include <limits>
-#include <map>
-#include <memory>
 
 namespace leanstore::column_store {
 
 namespace {
-
-Result<TableDefinition> BuildDefinitionFromMeta(const std::vector<ColumnMeta>& metas,
-                                                const std::vector<uint16_t>& key_columns) {
-  // Reconstruct a minimal schema so TableCodec can decode and re-encode rows.
-  std::vector<ColumnDefinition> columns;
-  columns.reserve(metas.size());
-  for (size_t i = 0; i < metas.size(); ++i) {
-    ColumnDefinition col;
-    col.name_ = std::format("c{}", i);
-    col.type_ = static_cast<ColumnType>(metas[i].type_);
-    col.nullable_ = metas[i].nullable_ != 0;
-    col.fixed_length_ = metas[i].fixed_length_;
-    columns.emplace_back(std::move(col));
-  }
-
-  std::vector<uint32_t> key_cols;
-  key_cols.reserve(key_columns.size());
-  for (auto idx : key_columns) {
-    key_cols.emplace_back(static_cast<uint32_t>(idx));
-  }
-
-  auto schema_res = TableSchema::Create(std::move(columns), std::move(key_cols));
-  if (!schema_res) {
-    return std::move(schema_res.error());
-  }
-
-  auto def_res = TableDefinition::Create(
-      "column_block", std::move(schema_res.value()), lean_btree_type::LEAN_BTREE_TYPE_ATOMIC,
-      lean_btree_config{.enable_wal_ = false, .use_bulk_insert_ = false});
-  if (!def_res) {
-    return std::move(def_res.error());
-  }
-  return def_res;
-}
 
 bool RangeWithinStorage(uint32_t offset, uint32_t bytes, size_t storage_size) {
   if (offset > storage_size) {
@@ -143,6 +106,22 @@ Result<void> ValidateColumnMeta(const ColumnBlockHeader& header, const ColumnMet
   }
 
   return {};
+}
+
+RowEncodingLayout BuildLayoutFromMeta(const std::vector<ColumnMeta>& metas,
+                                      const std::vector<uint16_t>& key_columns) {
+  std::vector<CodecColumnDesc> columns;
+  columns.reserve(metas.size());
+  for (const auto& meta : metas) {
+    columns.push_back(
+        {.type_ = static_cast<ColumnType>(meta.type_), .nullable_ = meta.nullable_ != 0});
+  }
+  std::vector<uint32_t> layout_key_columns;
+  layout_key_columns.reserve(key_columns.size());
+  for (const auto key_col : key_columns) {
+    layout_key_columns.push_back(static_cast<uint32_t>(key_col));
+  }
+  return RowEncodingLayout(std::move(columns), std::move(layout_key_columns));
 }
 
 int CompareBytesByLength(const char* lhs, size_t lhs_len, const char* rhs, size_t rhs_len) {
@@ -527,13 +506,9 @@ Result<int> CompareValue(const ColumnMeta& meta, const std::vector<uint8_t>& sto
   return CompareRawValue(meta, storage, row_idx, target, type);
 }
 
-Result<void> DecodeValueAt(const ColumnMeta& meta, const std::vector<uint8_t>& storage,
-                           uint32_t row_idx, Datum& out, ColumnType type) {
-  // Decode a single column value for row_idx.
-  if (IsNullAt(meta, storage, row_idx)) {
-    return {};
-  }
-
+Result<void> DecodeNonNullValueAt(const ColumnMeta& meta, const std::vector<uint8_t>& storage,
+                                  uint32_t row_idx, Datum& out, ColumnType type) {
+  // Decode a non-null column value for row_idx.
   const auto compression = static_cast<CompressionType>(meta.compression_);
   if (compression == CompressionType::kSingleValue) {
     return DecodeSingleValue(meta, storage, out, type);
@@ -548,13 +523,12 @@ Result<void> DecodeValueAt(const ColumnMeta& meta, const std::vector<uint8_t>& s
 
 ColumnBlockReader::ColumnBlockReader(ColumnBlockHeader header, std::vector<ColumnMeta> metas,
                                      std::vector<uint16_t> key_columns,
-                                     std::vector<uint8_t> storage, TableDefinition definition)
+                                     std::vector<uint8_t> storage, RowEncodingLayout layout)
     : header_(header),
       metas_(std::move(metas)),
       key_columns_(std::move(key_columns)),
       storage_(std::move(storage)),
-      definition_(std::move(definition)) {
-  codec_ = std::make_unique<TableCodec>(definition_);
+      layout_(std::move(layout)) {
 }
 
 ColumnBlockReader::ColumnBlockReader(ColumnBlockReader&& other) noexcept
@@ -562,8 +536,7 @@ ColumnBlockReader::ColumnBlockReader(ColumnBlockReader&& other) noexcept
       metas_(std::move(other.metas_)),
       key_columns_(std::move(other.key_columns_)),
       storage_(std::move(other.storage_)),
-      definition_(std::move(other.definition_)) {
-  codec_ = std::make_unique<TableCodec>(definition_);
+      layout_(std::move(other.layout_)) {
 }
 
 ColumnBlockReader& ColumnBlockReader::operator=(ColumnBlockReader&& other) noexcept {
@@ -574,8 +547,7 @@ ColumnBlockReader& ColumnBlockReader::operator=(ColumnBlockReader&& other) noexc
   metas_ = std::move(other.metas_);
   key_columns_ = std::move(other.key_columns_);
   storage_ = std::move(other.storage_);
-  definition_ = std::move(other.definition_);
-  codec_ = std::make_unique<TableCodec>(definition_);
+  layout_ = std::move(other.layout_);
   return *this;
 }
 
@@ -636,36 +608,20 @@ Result<ColumnBlockReader> ColumnBlockReader::FromBlockBytes(std::vector<uint8_t>
     }
   }
 
-  auto def_res = BuildDefinitionFromMeta(metas, key_columns);
-  if (!def_res) {
-    return std::move(def_res.error());
-  }
-  TableDefinition definition = std::move(def_res.value());
+  auto layout = BuildLayoutFromMeta(metas, key_columns);
   return ColumnBlockReader(header, std::move(metas), std::move(key_columns), std::move(storage),
-                           std::move(definition));
+                           std::move(layout));
 }
 
 Result<void> ColumnBlockReader::DecodeKey(Slice key_bytes, std::vector<Datum>& key_datums) const {
-  key_datums.clear();
-  key_datums.resize(key_columns_.size());
-  const auto col_count = definition_.schema_.Columns().size();
-  std::vector<Datum> cols(col_count);
-  auto nulls = std::make_unique<bool[]>(col_count);
-  std::fill_n(nulls.get(), col_count, true);
-  lean_row key_row{.columns = cols.data(),
-                   .nulls = nulls.get(),
-                   .num_columns = static_cast<uint32_t>(cols.size())};
-  if (auto res = codec_->DecodeKey(key_bytes, &key_row); !res) {
-    return std::move(res.error());
-  }
-  for (size_t i = 0; i < key_columns_.size(); ++i) {
-    key_datums[i] = cols[key_columns_[i]];
-  }
-  return {};
+  return DecodeKeyDatumsWithLayout(layout_, key_bytes, key_datums);
 }
 
 Result<int> ColumnBlockReader::CompareRowKey(uint32_t row_idx,
                                              const std::vector<Datum>& key_datums) const {
+  if (row_idx >= RowCount()) {
+    return Error::General("row index out of range");
+  }
   if (key_datums.size() != key_columns_.size()) {
     return Error::General("key datum size mismatch");
   }
@@ -684,31 +640,82 @@ Result<int> ColumnBlockReader::CompareRowKey(uint32_t row_idx,
   return 0;
 }
 
-Result<EncodedRow> ColumnBlockReader::EncodeRow(uint32_t row_idx) const {
-  const auto& cols = definition_.schema_.Columns();
-  std::vector<Datum> datums(cols.size());
-  auto nulls = std::make_unique<bool[]>(cols.size());
-  std::fill_n(nulls.get(), cols.size(), false);
-  for (size_t i = 0; i < cols.size(); ++i) {
+Result<void> ColumnBlockReader::DecodeRow(uint32_t row_idx, Datum* datums, bool* nulls,
+                                          uint32_t column_capacity) const {
+  if (datums == nullptr || nulls == nullptr) {
+    return Error::General("null row scratch buffers");
+  }
+  if (row_idx >= RowCount()) {
+    return Error::General("row index out of range");
+  }
+  if (column_capacity < metas_.size()) {
+    return Error::General("row scratch capacity too small");
+  }
+  for (size_t i = 0; i < metas_.size(); ++i) {
     const auto& meta = metas_[i];
     const auto type = static_cast<ColumnType>(meta.type_);
     if (IsNullAt(meta, storage_, row_idx)) {
       nulls[i] = true;
       continue;
     }
-    if (auto res = DecodeValueAt(meta, storage_, row_idx, datums[i], type); !res) {
+    nulls[i] = false;
+    if (auto res = DecodeNonNullValueAt(meta, storage_, row_idx, datums[i], type); !res) {
       return std::move(res.error());
     }
   }
+  return {};
+}
 
-  lean_row row{.columns = datums.data(),
-               .nulls = nulls.get(),
-               .num_columns = static_cast<uint32_t>(datums.size())};
-  auto encoded = codec_->Encode(&row);
-  if (!encoded) {
-    return std::move(encoded.error());
+Result<std::string> ColumnBlockReader::EncodeValue(uint32_t row_idx) const {
+  const uint32_t column_count = static_cast<uint32_t>(layout_.Columns().size());
+  std::vector<Datum> datums(column_count);
+  auto nulls = std::make_unique<bool[]>(column_count);
+  std::string encoded;
+  if (auto res = EncodeValue(row_idx, datums.data(), nulls.get(), column_count, &encoded); !res) {
+    return std::move(res.error());
   }
-  return encoded.value();
+  return encoded;
+}
+
+Result<void> ColumnBlockReader::EncodeValue(uint32_t row_idx, Datum* datums, bool* nulls,
+                                            uint32_t column_capacity,
+                                            std::string* out_value) const {
+  if (out_value == nullptr) {
+    return Error::General("null encoded value output");
+  }
+  if (auto res = DecodeRow(row_idx, datums, nulls, column_capacity); !res) {
+    return std::move(res.error());
+  }
+  lean_row row{
+      .columns = datums, .nulls = nulls, .num_columns = static_cast<uint32_t>(metas_.size())};
+  return EncodeValueWithLayout(layout_, &row, *out_value);
+}
+
+Result<EncodedRow> ColumnBlockReader::EncodeRow(uint32_t row_idx) const {
+  const uint32_t column_count = static_cast<uint32_t>(layout_.Columns().size());
+  std::vector<Datum> datums(column_count);
+  auto nulls = std::make_unique<bool[]>(column_count);
+  EncodedRow encoded;
+  if (auto res = EncodeRow(row_idx, datums.data(), nulls.get(), column_count, &encoded); !res) {
+    return std::move(res.error());
+  }
+  return encoded;
+}
+
+Result<void> ColumnBlockReader::EncodeRow(uint32_t row_idx, Datum* datums, bool* nulls,
+                                          uint32_t column_capacity, EncodedRow* out_row) const {
+  if (out_row == nullptr) {
+    return Error::General("null encoded row output");
+  }
+  if (auto res = DecodeRow(row_idx, datums, nulls, column_capacity); !res) {
+    return std::move(res.error());
+  }
+  lean_row row{
+      .columns = datums, .nulls = nulls, .num_columns = static_cast<uint32_t>(metas_.size())};
+  if (auto res = EncodeKeyWithLayout(layout_, &row, out_row->key_); !res) {
+    return std::move(res.error());
+  }
+  return EncodeValueWithLayout(layout_, &row, out_row->value_);
 }
 
 Result<ColumnBlockReader> ReadColumnBlock(LeanStore* store, const ColumnBlockRef& ref) {

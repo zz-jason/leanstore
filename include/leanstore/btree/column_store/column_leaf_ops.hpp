@@ -21,7 +21,7 @@ struct ColumnBlockScanResult {
 using ColumnBlockScanCallback = std::function<bool(Slice key, Slice val)>;
 
 Result<bool> LookupColumnBlock(LeanStore* store, const ColumnBlockRef& ref, Slice key,
-                               EncodedRow* out_row);
+                               std::string* out_value);
 
 Result<ColumnBlockScanResult> ScanColumnBlockAsc(LeanStore* store, const ColumnBlockRef& ref,
                                                  Slice start_key, ColumnBlockScanState* state,

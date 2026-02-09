@@ -85,8 +85,7 @@ FenceKeyBytes ExtractFence(BTreeNode& node, bool lower) {
 }
 
 bool CanFitRefs(const FenceKeyBytes& lower_fence, const FenceKeyBytes& upper_fence,
-                const std::vector<BlockRefEntry>& refs) {
-  std::vector<uint8_t> buffer(BTreeNode::Size());
+                const std::vector<BlockRefEntry>& refs, std::vector<uint8_t>& buffer) {
   auto* node =
       BTreeNode::New(buffer.data(), true, FenceSlice(lower_fence), FenceSlice(upper_fence));
   node->has_garbage_ = false;
@@ -103,11 +102,10 @@ bool CanFitRefs(const FenceKeyBytes& lower_fence, const FenceKeyBytes& upper_fen
 }
 
 bool CanFitInner(const FenceKeyBytes& lower_fence, const FenceKeyBytes& upper_fence,
-                 const std::vector<NodeRef>& children) {
+                 const std::vector<NodeRef>& children, std::vector<uint8_t>& buffer) {
   if (children.empty()) {
     return false;
   }
-  std::vector<uint8_t> buffer(BTreeNode::Size());
   auto* node =
       BTreeNode::New(buffer.data(), false, FenceSlice(lower_fence), FenceSlice(upper_fence));
   node->has_garbage_ = false;
@@ -192,33 +190,44 @@ Result<void> AppendLeafRows(const TableDefinition& def, TableCodec& codec,
                             column_store::ColumnBlockBuilder& builder,
                             GuardedBufferFrame<BTreeNode>& leaf,
                             column_store::ColumnStoreStats& stats,
-                            std::vector<column_store::ColumnBlockPayload>& payloads) {
+                            std::vector<column_store::ColumnBlockPayload>& payloads,
+                            std::string* out_last_key) {
+  if (out_last_key == nullptr) {
+    return Error::General("null last key output");
+  }
+  const auto col_count = def.schema_.Columns().size();
+  std::vector<Datum> datums(col_count);
+  auto nulls = std::make_unique<bool[]>(col_count);
+  lean_row row{.columns = datums.data(),
+               .nulls = nulls.get(),
+               .num_columns = static_cast<uint32_t>(datums.size())};
+  std::string key_bytes;
+
   for (uint16_t slot = 0; slot < leaf->num_slots_; ++slot) {
-    const auto key_len = leaf->GetFullKeyLen(slot);
-    std::string key_bytes(key_len, 0);
-    leaf->CopyFullKey(slot, reinterpret_cast<uint8_t*>(key_bytes.data()));
     auto value = leaf->Value(slot);
 
-    const auto col_count = def.schema_.Columns().size();
-    std::vector<Datum> datums(col_count);
-    auto nulls = std::make_unique<bool[]>(col_count);
-    std::fill_n(nulls.get(), col_count, false);
-    lean_row row{.columns = datums.data(),
-                 .nulls = nulls.get(),
-                 .num_columns = static_cast<uint32_t>(datums.size())};
     if (auto res = codec.DecodeValue(value, &row); !res) {
       return std::move(res.error());
     }
 
-    builder.AddRow(key_bytes, row);
+    builder.AddRow(row);
     stats.row_count_++;
     if (builder.ShouldFlush()) {
-      auto block_res = builder.Finalize();
+      const auto key_len = leaf->GetFullKeyLen(slot);
+      key_bytes.resize(key_len);
+      leaf->CopyFullKey(slot, reinterpret_cast<uint8_t*>(key_bytes.data()));
+      auto block_res = builder.Finalize(Slice(key_bytes));
       if (!block_res) {
         return std::move(block_res.error());
       }
       payloads.push_back(std::move(block_res.value()));
     }
+  }
+  if (leaf->num_slots_ > 0) {
+    const uint16_t last_slot = static_cast<uint16_t>(leaf->num_slots_ - 1);
+    const auto key_len = leaf->GetFullKeyLen(last_slot);
+    out_last_key->resize(key_len);
+    leaf->CopyFullKey(last_slot, reinterpret_cast<uint8_t*>(out_last_key->data()));
   }
   return {};
 }
@@ -256,38 +265,39 @@ Result<std::vector<LeafGroup>> BuildLeafGroups(const std::vector<BlockRefEntry>&
   FenceKeyBytes lower_fence = parent_lower;
   std::vector<BlockRefEntry> current;
   current.reserve(refs.size());
+  std::vector<uint8_t> fit_buffer(BTreeNode::Size());
 
   for (const auto& entry : refs) {
-    std::vector<BlockRefEntry> candidate = current;
-    candidate.push_back(entry);
+    current.push_back(entry);
     FenceKeyBytes upper_candidate{.is_infinity_ = false, .key_ = entry.max_key_};
-    if (CanFitRefs(lower_fence, upper_candidate, candidate)) {
-      current = std::move(candidate);
+    if (CanFitRefs(lower_fence, upper_candidate, current, fit_buffer)) {
       continue;
     }
 
-    if (current.empty()) {
+    if (current.size() == 1) {
       return Error::General("block ref too large for leaf");
     }
+    BlockRefEntry overflow_entry = std::move(current.back());
+    current.pop_back();
     const std::string current_upper = current.back().max_key_;
     groups.push_back({.refs_ = std::move(current),
                       .upper_fence_ = FenceKeyBytes{.is_infinity_ = false, .key_ = current_upper}});
     lower_fence = groups.back().upper_fence_;
     current.clear();
-    current.push_back(entry);
+    current.push_back(std::move(overflow_entry));
   }
 
   if (!current.empty()) {
     const FenceKeyBytes& upper_fence = parent_upper;
-    if (!CanFitRefs(lower_fence, upper_fence, current)) {
+    if (!CanFitRefs(lower_fence, upper_fence, current, fit_buffer)) {
       std::vector<BlockRefEntry> remaining = std::move(current);
-      while (!remaining.empty() && !CanFitRefs(lower_fence, upper_fence, remaining)) {
+      while (!remaining.empty() && !CanFitRefs(lower_fence, upper_fence, remaining, fit_buffer)) {
         std::vector<BlockRefEntry> prefix;
         prefix.reserve(remaining.size());
         for (size_t i = 0; i < remaining.size(); ++i) {
           prefix.push_back(remaining[i]);
           FenceKeyBytes candidate_upper{.is_infinity_ = false, .key_ = remaining[i].max_key_};
-          if (!CanFitRefs(lower_fence, candidate_upper, prefix)) {
+          if (!CanFitRefs(lower_fence, candidate_upper, prefix, fit_buffer)) {
             prefix.pop_back();
             break;
           }
@@ -357,39 +367,40 @@ Result<std::vector<NodeRef>> BuildInnerLevel(BasicKV* btree, const std::vector<N
   FenceKeyBytes lower_fence = parent_lower;
   std::vector<NodeRef> current;
   current.reserve(children.size());
+  std::vector<uint8_t> fit_buffer(BTreeNode::Size());
 
   for (const auto& child : children) {
-    std::vector<NodeRef> candidate = current;
-    candidate.push_back(child);
+    current.push_back(child);
     FenceKeyBytes upper_candidate{.is_infinity_ = false, .key_ = child.max_key_};
-    if (CanFitInner(lower_fence, upper_candidate, candidate)) {
-      current = std::move(candidate);
+    if (CanFitInner(lower_fence, upper_candidate, current, fit_buffer)) {
       continue;
     }
 
-    if (current.empty()) {
+    if (current.size() == 1) {
       return Error::General("child ref too large for inner node");
     }
+    NodeRef overflow_child = std::move(current.back());
+    current.pop_back();
     FenceKeyBytes current_upper{.is_infinity_ = false, .key_ = current.back().max_key_};
     if (auto res = emit_group(current, lower_fence, current_upper); !res) {
       return std::move(res.error());
     }
     lower_fence = next_level.back().upper_fence_;
     current.clear();
-    current.push_back(child);
+    current.push_back(std::move(overflow_child));
   }
 
   if (!current.empty()) {
     const FenceKeyBytes& upper_fence = parent_upper;
-    if (!CanFitInner(lower_fence, upper_fence, current)) {
+    if (!CanFitInner(lower_fence, upper_fence, current, fit_buffer)) {
       std::vector<NodeRef> remaining = std::move(current);
-      while (!remaining.empty() && !CanFitInner(lower_fence, upper_fence, remaining)) {
+      while (!remaining.empty() && !CanFitInner(lower_fence, upper_fence, remaining, fit_buffer)) {
         std::vector<NodeRef> prefix;
         prefix.reserve(remaining.size());
         for (size_t i = 0; i < remaining.size(); ++i) {
           prefix.push_back(remaining[i]);
           FenceKeyBytes candidate_upper{.is_infinity_ = false, .key_ = remaining[i].max_key_};
-          if (!CanFitInner(lower_fence, candidate_upper, prefix)) {
+          if (!CanFitInner(lower_fence, candidate_upper, prefix, fit_buffer)) {
             prefix.pop_back();
             break;
           }
@@ -483,16 +494,22 @@ Result<ColumnSubtreePlan> PrepareColumnSubtreePlan(BasicKV& btree,
 
   TableCodec codec(def);
   column_store::ColumnBlockBuilder builder(def, options);
+  std::string last_key_bytes;
   for (auto* leaf_bf : plan.collect_.row_leaf_frames_) {
     GuardedBufferFrame<BTreeNode> guarded_leaf(btree.store_->buffer_manager_.get(), leaf_bf);
     guarded_leaf.ToExclusiveMayJump();
-    if (auto res = AppendLeafRows(def, codec, builder, guarded_leaf, stats, plan.payloads_); !res) {
+    if (auto res = AppendLeafRows(def, codec, builder, guarded_leaf, stats, plan.payloads_,
+                                  &last_key_bytes);
+        !res) {
       return std::move(res.error());
     }
   }
 
   if (!builder.Empty()) {
-    auto block_res = builder.Finalize();
+    if (last_key_bytes.empty()) {
+      return Error::General("missing last key for final column block");
+    }
+    auto block_res = builder.Finalize(Slice(last_key_bytes));
     if (!block_res) {
       return std::move(block_res.error());
     }

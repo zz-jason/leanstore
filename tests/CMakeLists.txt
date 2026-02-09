@@ -46,12 +46,30 @@ function(leanstore_add_test_in_dir TARGET_DIR)
   endforeach()
 endfunction(leanstore_add_test_in_dir)
 
+function(leanstore_add_benchmark TARGET_NAME TARGET_FILE)
+  add_executable(
+    ${TARGET_NAME}
+    ${TARGET_FILE}
+  )
+
+  target_link_libraries(
+    ${TARGET_NAME}
+    lean_project_options
+    benchmark::benchmark
+    benchmark::benchmark_main
+    leanstore
+  )
+
+  target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)
+endfunction(leanstore_add_benchmark)
+
 
 if(${LEAN_ENABLE_CORO})
   leanstore_add_test_in_dir(recovery)
   leanstore_add_test_in_dir(coro)
   leanstore_add_test_in_dir(c)
   leanstore_add_test_in_dir(table)
+  leanstore_add_benchmark(table_interface_benchmark benchmark/table_interface_benchmark.cpp)
 else()
   # Add tests
   leanstore_add_test_in_dir(tx)

@@ -57,15 +57,15 @@ OpCode LookupColumnLeaf(BasicKV* tree, GuardedBufferFrame<BTreeNode>& guarded_le
   }
   std::memcpy(&ref, guarded_leaf->ValData(slot_id), sizeof(ref));
 
-  EncodedRow encoded;
-  auto lookup_res = column_store::LookupColumnBlock(tree->store_, ref, key, &encoded);
+  std::string value_buf;
+  auto lookup_res = column_store::LookupColumnBlock(tree->store_, ref, key, &value_buf);
   if (!lookup_res) {
     return ColumnLeafError("LookupColumnBlock", lookup_res.error());
   }
   if (!lookup_res.value()) {
     return OpCode::kNotFound;
   }
-  val_callback(Slice(encoded.value_));
+  val_callback(Slice(value_buf));
   return OpCode::kOK;
 }
 
