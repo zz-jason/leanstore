@@ -663,7 +663,13 @@ Result<BasicKV*> LeanStore::CreateBasicKv(const std::string& name, lean_btree_co
 }
 
 void LeanStore::GetBasicKV(const std::string& name, BasicKV** btree) {
-  *btree = dynamic_cast<BasicKV*>(tree_registry_->GetTree(name));
+  auto* tree = tree_registry_->GetTree(name);
+  auto* generic = dynamic_cast<BTreeGeneric*>(tree);
+  if (generic == nullptr || generic->tree_type_ != BTreeType::kBasicKV) {
+    *btree = nullptr;
+    return;
+  }
+  *btree = static_cast<BasicKV*>(generic);
 }
 
 void LeanStore::DropBasicKV(const std::string& name) {
