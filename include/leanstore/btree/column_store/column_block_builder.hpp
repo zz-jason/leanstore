@@ -39,10 +39,6 @@ private:
   void Reset();
   void AddDefaultValue(ColumnValues& col);
   Result<void> EncodeColumn(size_t index, ColumnMeta& meta, std::vector<uint8_t>& storage);
-  void EncodeIntegerColumn(ColumnValues& col, ColumnMeta& meta, std::vector<uint8_t>& storage);
-  void EncodeUnsignedColumn(ColumnValues& col, ColumnMeta& meta, std::vector<uint8_t>& storage);
-  void EncodeFloatColumn(ColumnValues& col, ColumnMeta& meta, std::vector<uint8_t>& storage);
-  void EncodeStringColumn(ColumnValues& col, ColumnMeta& meta, std::vector<uint8_t>& storage);
 
   const TableDefinition& def_;
   const ColumnStoreOptions& options_;

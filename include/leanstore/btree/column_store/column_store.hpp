@@ -15,6 +15,8 @@ class LeanStore;
 
 namespace column_store {
 
+class ColumnCompressionAlgorithm;
+
 constexpr uint64_t kColumnLeafMagic = 0x434F4C4C45414631ULL; // "COLLEAF1"
 constexpr uint64_t kColumnPageMagic = 0x434F4C5041474531ULL; // "COLPAGE1"
 constexpr uint32_t kColumnPageHeaderMagic = 0x434F4C50;      // "COLP"
@@ -147,6 +149,7 @@ public:
 private:
   ColumnBlockReader(ColumnBlockHeader header, std::vector<ColumnMeta> metas,
                     std::vector<uint16_t> key_columns, std::vector<uint8_t> storage,
+                    std::vector<const ColumnCompressionAlgorithm*> compression_algorithms,
                     RowEncodingLayout layout);
   Result<void> DecodeRow(uint32_t row_idx, Datum* datums, bool* nulls,
                          uint32_t column_capacity) const;
@@ -155,6 +158,7 @@ private:
   std::vector<ColumnMeta> metas_;
   std::vector<uint16_t> key_columns_;
   std::vector<uint8_t> storage_;
+  std::vector<const ColumnCompressionAlgorithm*> compression_algorithms_;
   RowEncodingLayout layout_;
 };
 
