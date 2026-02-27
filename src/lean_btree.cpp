@@ -19,15 +19,17 @@ Result<void> LeanBTree::Insert(Slice key, Slice value) {
     OpCode result = std::visit([&](auto* btree) { return btree->Insert(key, value); }, btree_);
     if (result == OpCode::kOK) {
       return {};
-    } else if (result == OpCode::kDuplicated) {
-      return Error::General("Duplicate key");
-    } else if (result == OpCode::kAbortTx) {
-      return Error::General("Transaction aborted");
-    } else if (result == OpCode::kSpaceNotEnough) {
-      return Error::General("Insufficient space");
-    } else {
-      return Error::General("Insert failed");
     }
+    if (result == OpCode::kDuplicated) {
+      return Error::General("Duplicate key");
+    }
+    if (result == OpCode::kAbortTx) {
+      return Error::General("Transaction aborted");
+    }
+    if (result == OpCode::kSpaceNotEnough) {
+      return Error::General("Insufficient space");
+    }
+    return Error::General("Insert failed");
   });
 }
 
@@ -36,15 +38,17 @@ Result<void> LeanBTree::Remove(Slice key) {
     OpCode result = std::visit([&](auto* btree) { return btree->Remove(key); }, btree_);
     if (result == OpCode::kOK) {
       return {};
-    } else if (result == OpCode::kNotFound) {
-      return Error::General("Key not found");
-    } else if (result == OpCode::kAbortTx) {
-      return Error::General("Transaction aborted");
-    } else if (result == OpCode::kSpaceNotEnough) {
-      return Error::General("Insufficient space");
-    } else {
-      return Error::General("Remove failed");
     }
+    if (result == OpCode::kNotFound) {
+      return Error::General("Key not found");
+    }
+    if (result == OpCode::kAbortTx) {
+      return Error::General("Transaction aborted");
+    }
+    if (result == OpCode::kSpaceNotEnough) {
+      return Error::General("Insufficient space");
+    }
+    return Error::General("Remove failed");
   });
 }
 
@@ -90,15 +94,17 @@ Result<std::vector<uint8_t>> LeanBTree::Lookup(Slice key) {
         btree_);
     if (result == OpCode::kOK) {
       return value;
-    } else if (result == OpCode::kNotFound) {
-      return Error::General("Key not found");
-    } else if (result == OpCode::kAbortTx) {
-      return Error::General("Transaction aborted");
-    } else if (result == OpCode::kSpaceNotEnough) {
-      return Error::General("Insufficient space");
-    } else {
-      return Error::General("Lookup failed");
     }
+    if (result == OpCode::kNotFound) {
+      return Error::General("Key not found");
+    }
+    if (result == OpCode::kAbortTx) {
+      return Error::General("Transaction aborted");
+    }
+    if (result == OpCode::kSpaceNotEnough) {
+      return Error::General("Insufficient space");
+    }
+    return Error::General("Lookup failed");
   });
 }
 
