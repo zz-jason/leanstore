@@ -1,188 +1,104 @@
-#include "leanstore/base/defer.hpp"
-#include "leanstore/btree/basic_kv.hpp"
-#include "leanstore/buffer/buffer_manager.hpp"
+#include "common/lean_test_suite.hpp"
 #include "leanstore/c/types.h"
+#include "leanstore/lean_btree.hpp"
+#include "leanstore/lean_session.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/tx/cr_manager.hpp"
-#include "leanstore/tx/transaction_kv.hpp"
-#include "leanstore/utils/random_generator.hpp"
 
 #include <gtest/gtest.h>
 
 #include <memory>
+#include <optional>
+#include <string>
+
+#ifdef LEAN_ENABLE_CORO
 
 namespace leanstore::test {
 
-class MvccTest : public ::testing::Test {
+namespace {
+auto ReadString(LeanBTree& tree, const std::string& key) -> std::optional<std::string> {
+  auto res = tree.Lookup(key);
+  if (!res) {
+    return std::nullopt;
+  }
+  return std::string(reinterpret_cast<const char*>(res.value().data()), res.value().size());
+}
+} // namespace
+
+class MvccTest : public LeanTestSuite {
 protected:
   std::unique_ptr<LeanStore> store_;
-  std::string tree_name_;
-  TransactionKV* btree_;
-
-protected:
-  // create a leanstore instance for current test case
-  MvccTest() {
-    auto* cur_test = ::testing::UnitTest::GetInstance()->current_test_info();
-    auto cur_test_name =
-        std::string(cur_test->test_suite_name()) + "_" + std::string(cur_test->name());
-    auto store_dir_str = "/tmp/leanstore/" + cur_test_name;
-    lean_store_option* option = lean_store_option_create(store_dir_str.c_str());
-    option->create_from_scratch_ = true;
-    option->worker_threads_ = 3;
-    auto res = LeanStore::Open(option);
-    store_ = std::move(res.value());
-  }
-
-  ~MvccTest() override = default;
+  std::optional<LeanSession> writer_;
+  std::optional<LeanSession> reader_;
+  std::optional<LeanBTree> tw_;
+  std::optional<LeanBTree> tr_;
 
   void SetUp() override {
-    // create a btree name for test
-    tree_name_ = utils::RandomGenerator::RandAlphString(10);
-    store_->ExecSync(0, [&]() {
-      auto res = store_->CreateTransactionKV(tree_name_);
-      ASSERT_TRUE(res);
-      btree_ = res.value();
-      ASSERT_NE(btree_, nullptr);
-    });
-  }
+    auto* option = lean_store_option_create(TestCaseStoreDir().c_str());
+    option->create_from_scratch_ = true;
+    option->worker_threads_ = 2;
+    auto opened = LeanStore::Open(option);
+    ASSERT_TRUE(opened);
+    store_ = std::move(opened.value());
 
-  void TearDown() override {
-    store_->ExecSync(1, [&]() {
-      CoroEnv::CurTxMgr().StartTx();
-      LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
-      store_->DropTransactionKV(tree_name_);
-    });
+    writer_.emplace(store_->Connect(0));
+    reader_.emplace(store_->Connect(1));
+    auto created = writer_->CreateBTree("mvcc", LEAN_BTREE_TYPE_MVCC);
+    ASSERT_TRUE(created);
+    tw_.emplace(std::move(created.value()));
+    auto fetched = reader_->GetBTree("mvcc");
+    ASSERT_TRUE(fetched);
+    tr_.emplace(std::move(fetched.value()));
   }
 };
 
 TEST_F(MvccTest, LookupWhileInsert) {
-  // insert a base record
-  auto key0 = utils::RandomGenerator::RandAlphString(42);
-  auto val0 = utils::RandomGenerator::RandAlphString(151);
-  store_->ExecSync(0, [&]() {
-    CoroEnv::CurTxMgr().StartTx();
-    auto res = btree_->Insert(Slice((const uint8_t*)key0.data(), key0.size()),
-                              Slice((const uint8_t*)val0.data(), val0.size()));
-    CoroEnv::CurTxMgr().CommitTx();
-    EXPECT_EQ(res, OpCode::kOK);
-  });
+  writer_->StartTx();
+  ASSERT_TRUE(tw_->Insert("k0", "v0"));
+  writer_->CommitTx();
 
-  // start a transaction to insert another record, don't commit
-  auto key1 = utils::RandomGenerator::RandAlphString(17);
-  auto val1 = utils::RandomGenerator::RandAlphString(131);
-  store_->ExecSync(1, [&]() {
-    CoroEnv::CurTxMgr().StartTx();
-    auto res = btree_->Insert(Slice((const uint8_t*)key1.data(), key1.size()),
-                              Slice((const uint8_t*)val1.data(), val1.size()));
-    EXPECT_EQ(res, OpCode::kOK);
-  });
+  writer_->StartTx();
+  ASSERT_TRUE(tw_->Insert("k1", "v1"));
 
-  // start a transaction to lookup the base record
-  // the lookup should not be blocked
-  store_->ExecSync(2, [&]() {
-    std::string copied_value;
-    auto copy_value_out = [&](Slice val) {
-      copied_value = std::string((const char*)val.data(), val.size());
-    };
-    CoroEnv::CurTxMgr().StartTx();
-    EXPECT_EQ(btree_->Lookup(Slice((const uint8_t*)key0.data(), key0.size()), copy_value_out),
-              OpCode::kOK);
-    EXPECT_EQ(copied_value, val0);
-    CoroEnv::CurTxMgr().CommitTx();
-  });
+  reader_->StartTx();
+  ASSERT_EQ(ReadString(*tr_, "k0"), std::optional<std::string>("v0"));
+  ASSERT_FALSE(ReadString(*tr_, "k1").has_value());
+  reader_->CommitTx();
 
-  // commit the transaction
-  store_->ExecSync(1, [&]() {
-    std::string copied_value;
-    auto copy_value_out = [&](Slice val) {
-      copied_value = std::string((const char*)val.data(), val.size());
-    };
+  writer_->CommitTx();
 
-    EXPECT_EQ(btree_->Lookup(Slice((const uint8_t*)key1.data(), key1.size()), copy_value_out),
-              OpCode::kOK);
-    EXPECT_EQ(copied_value, val1);
-    CoroEnv::CurTxMgr().CommitTx();
-  });
-
-  // now we can see the latest record
-  store_->ExecSync(2, [&]() {
-    std::string copied_value;
-    auto copy_value_out = [&](Slice val) {
-      copied_value = std::string((const char*)val.data(), val.size());
-    };
-    CoroEnv::CurTxMgr().StartTx();
-    EXPECT_EQ(btree_->Lookup(Slice((const uint8_t*)key1.data(), key1.size()), copy_value_out),
-              OpCode::kOK);
-    EXPECT_EQ(copied_value, val1);
-    CoroEnv::CurTxMgr().CommitTx();
-  });
+  reader_->StartTx();
+  ASSERT_EQ(ReadString(*tr_, "k1"), std::optional<std::string>("v1"));
+  reader_->CommitTx();
 }
 
 TEST_F(MvccTest, InsertConflict) {
-  // insert a base record
-  auto key0 = utils::RandomGenerator::RandAlphString(42);
-  auto val0 = utils::RandomGenerator::RandAlphString(151);
-  store_->ExecSync(0, [&]() {
-    CoroEnv::CurTxMgr().StartTx();
-    auto res = btree_->Insert(Slice((const uint8_t*)key0.data(), key0.size()),
-                              Slice((const uint8_t*)val0.data(), val0.size()));
-    CoroEnv::CurTxMgr().CommitTx();
-    EXPECT_EQ(res, OpCode::kOK);
-  });
+  writer_->StartTx();
+  ASSERT_TRUE(tw_->Insert("k0", "v0"));
+  writer_->CommitTx();
 
-  // start a transaction to insert a bigger key, don't commit
-  auto key1 = key0 + "a";
-  auto val1 = val0;
-  store_->ExecSync(1, [&]() {
-    CoroEnv::CurTxMgr().StartTx();
-    auto res = btree_->Insert(Slice((const uint8_t*)key1.data(), key1.size()),
-                              Slice((const uint8_t*)val1.data(), val1.size()));
-    EXPECT_EQ(res, OpCode::kOK);
-  });
+  writer_->StartTx();
+  ASSERT_TRUE(tw_->Insert("k1", "v1"));
 
-  // start another transaction to insert the same key
-  store_->ExecSync(2, [&]() {
-    CoroEnv::CurTxMgr().StartTx();
-    auto res = btree_->Insert(Slice((const uint8_t*)key1.data(), key1.size()),
-                              Slice((const uint8_t*)val1.data(), val1.size()));
-    EXPECT_EQ(res, OpCode::kAbortTx);
-    CoroEnv::CurTxMgr().AbortTx();
-  });
+  reader_->StartTx();
+  auto conflict = tr_->Insert("k1", "v1");
+  ASSERT_FALSE(conflict);
+  reader_->AbortTx();
 
-  // start another transaction to insert a smaller key
-  store_->ExecSync(2, [&]() {
-    CoroEnv::CurTxMgr().StartTx();
-    auto res = btree_->Insert(Slice((const uint8_t*)key1.data(), key1.size()),
-                              Slice((const uint8_t*)val1.data(), val1.size()));
-    EXPECT_EQ(res, OpCode::kAbortTx);
-    CoroEnv::CurTxMgr().AbortTx();
-  });
+  writer_->CommitTx();
 
-  // commit the transaction
-  store_->ExecSync(1, [&]() {
-    std::string copied_value;
-    auto copy_value_out = [&](Slice val) {
-      copied_value = std::string((const char*)val.data(), val.size());
-    };
-
-    EXPECT_EQ(btree_->Lookup(Slice((const uint8_t*)key1.data(), key1.size()), copy_value_out),
-              OpCode::kOK);
-    EXPECT_EQ(copied_value, val1);
-    CoroEnv::CurTxMgr().CommitTx();
-  });
-
-  // now we can see the latest record
-  store_->ExecSync(2, [&]() {
-    std::string copied_value;
-    auto copy_value_out = [&](Slice val) {
-      copied_value = std::string((const char*)val.data(), val.size());
-    };
-    CoroEnv::CurTxMgr().StartTx();
-    EXPECT_EQ(btree_->Lookup(Slice((const uint8_t*)key1.data(), key1.size()), copy_value_out),
-              OpCode::kOK);
-    EXPECT_EQ(copied_value, val1);
-    CoroEnv::CurTxMgr().CommitTx();
-  });
+  reader_->StartTx();
+  ASSERT_EQ(ReadString(*tr_, "k1"), std::optional<std::string>("v1"));
+  reader_->CommitTx();
 }
 
 } // namespace leanstore::test
+
+#else
+
+namespace leanstore::test {
+TEST(MvccTestCoroOnly, DisabledWhenNoCoro) {
+  GTEST_SKIP() << "LEAN_ENABLE_CORO is disabled";
+}
+} // namespace leanstore::test
+
+#endif
