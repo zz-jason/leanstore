@@ -40,6 +40,12 @@ set(LEAN_SOURCES
   # checkpoint
   checkpoint/checkpoint_processor.cpp
   # column_store
+  btree/column_store/column_compression_common.cpp
+  btree/column_store/column_compression_ordered_dictionary.cpp
+  btree/column_store/column_compression_raw.cpp
+  btree/column_store/column_compression_single_value.cpp
+  btree/column_store/column_compression_truncation.cpp
+  btree/column_store/column_compression.cpp
   btree/column_store/column_block_builder.cpp
   btree/column_store/column_block_reader.cpp
   btree/column_store/column_block_writer.cpp

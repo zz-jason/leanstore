@@ -1,6 +1,7 @@
 #include "leanstore/base/error.hpp"
 #include "leanstore/base/log.hpp"
 #include "leanstore/base/small_vector.hpp"
+#include "leanstore/btree/column_store/column_compression.hpp"
 #include "leanstore/btree/column_store/column_store.hpp"
 #include "leanstore/buffer/buffer_manager.hpp"
 #include "leanstore/lean_store.hpp"
@@ -45,7 +46,8 @@ bool MulOverflow(size_t lhs, size_t rhs, size_t* out) {
 }
 
 Result<void> ValidateColumnMeta(const ColumnBlockHeader& header, const ColumnMeta& meta,
-                                const std::vector<uint8_t>& storage, uint32_t col_idx) {
+                                const std::vector<uint8_t>& storage, uint32_t col_idx,
+                                const ColumnCompressionAlgorithm** out_algorithm) {
   const size_t storage_size = storage.size();
   if (meta.nulls_bytes_ > 0 &&
       !RangeWithinStorage(meta.nulls_offset_, meta.nulls_bytes_, storage_size)) {
@@ -57,55 +59,22 @@ Result<void> ValidateColumnMeta(const ColumnBlockHeader& header, const ColumnMet
   }
 
   const auto compression = static_cast<CompressionType>(meta.compression_);
-  if (compression == CompressionType::kRaw || compression == CompressionType::kTruncation ||
-      compression == CompressionType::kOrderedDictionary) {
-    if (meta.value_width_ == 0) {
-      return Error::General(std::format("value width is zero for column {}", col_idx));
-    }
+  const auto* algorithm = FindCompressionAlgorithm(compression);
+  if (algorithm == nullptr) {
+    return Error::General(
+        std::format("unknown compression {} for column {}", meta.compression_, col_idx));
   }
 
-  if ((compression == CompressionType::kRaw || compression == CompressionType::kTruncation) &&
-      header.row_count_ > 0) {
-    const uint64_t expected = static_cast<uint64_t>(header.row_count_) * meta.value_width_;
-    if (meta.data_bytes_ != expected) {
-      return Error::General(std::format("data bytes mismatch for column {}", col_idx));
-    }
+  const auto type = static_cast<ColumnType>(meta.type_);
+  if (!algorithm->SupportsType(type)) {
+    return Error::General(std::format("compression/type mismatch for column {}", col_idx));
   }
 
-  if (compression == CompressionType::kOrderedDictionary) {
-    if (meta.dict_entries_ == 0) {
-      return Error::General(std::format("empty dictionary for column {}", col_idx));
-    }
-    const uint64_t dict_bytes = static_cast<uint64_t>(meta.dict_entries_) * sizeof(uint32_t) * 2;
-    if (meta.dict_offset_ > storage_size || dict_bytes > storage_size - meta.dict_offset_) {
-      return Error::General(std::format("dictionary out of range for column {}", col_idx));
-    }
-    if (meta.string_offset_ > storage_size) {
-      return Error::General(std::format("string offset out of range for column {}", col_idx));
-    }
-
-    const auto* dict_base = storage.data() + meta.dict_offset_;
-    const auto* offsets = reinterpret_cast<const uint32_t*>(dict_base);
-    const auto* lengths =
-        reinterpret_cast<const uint32_t*>(dict_base + meta.dict_entries_ * sizeof(uint32_t));
-    const uint64_t string_bytes = storage_size - meta.string_offset_;
-    for (uint32_t i = 0; i < meta.dict_entries_; ++i) {
-      const uint64_t off = offsets[i];
-      const uint64_t len = lengths[i];
-      if (off + len > string_bytes) {
-        return Error::General(std::format("dictionary string out of range for column {}", col_idx));
-      }
-    }
-
-    if (header.row_count_ > 0) {
-      const uint64_t expected = static_cast<uint64_t>(header.row_count_) * meta.value_width_;
-      if (meta.data_bytes_ != expected) {
-        return Error::General(std::format("dictionary data bytes mismatch for column {}", col_idx));
-      }
-    }
+  if (out_algorithm != nullptr) {
+    // Resolve once at load time so row-wise compare/decode avoids repeated registry lookups.
+    *out_algorithm = algorithm;
   }
-
-  return {};
+  return algorithm->Validate(header, meta, storage, col_idx);
 }
 
 RowEncodingLayout BuildLayoutFromMeta(const std::vector<ColumnMeta>& metas,
@@ -124,17 +93,6 @@ RowEncodingLayout BuildLayoutFromMeta(const std::vector<ColumnMeta>& metas,
   return RowEncodingLayout(std::move(columns), std::move(layout_key_columns));
 }
 
-int CompareBytesByLength(const char* lhs, size_t lhs_len, const char* rhs, size_t rhs_len) {
-  // Match TableCodec key ordering: length prefix first, then byte comparison.
-  if (lhs_len != rhs_len) {
-    return lhs_len < rhs_len ? -1 : 1;
-  }
-  if (lhs_len == 0) {
-    return 0;
-  }
-  return std::memcmp(lhs, rhs, lhs_len);
-}
-
 bool IsNullAt(const ColumnMeta& meta, const std::vector<uint8_t>& storage, uint32_t row_idx) {
   // Nulls are stored as a packed bitmap.
   if (meta.nulls_bytes_ == 0) {
@@ -149,385 +107,40 @@ bool IsNullAt(const ColumnMeta& meta, const std::vector<uint8_t>& storage, uint3
   return ((nulls[byte_idx] >> bit_idx) & 0x1u) != 0;
 }
 
-int64_t LoadSigned(const uint8_t* ptr, uint8_t width) {
-  int64_t value = 0;
-  std::memcpy(&value, ptr, width);
-  return value;
-}
-
-uint64_t LoadUnsigned(const uint8_t* ptr, uint8_t width) {
-  uint64_t value = 0;
-  std::memcpy(&value, ptr, width);
-  return value;
-}
-
-Result<int> CompareSingleValue(const ColumnMeta& meta, const std::vector<uint8_t>& storage,
-                               const Datum& target, ColumnType type) {
-  const uint8_t* data_base = storage.data() + meta.data_offset_;
-  switch (type) {
-  case ColumnType::kBool: {
-    const uint8_t v = *data_base;
-    const uint8_t t = target.b ? 1 : 0;
-    return v < t ? -1 : (v > t ? 1 : 0);
-  }
-  case ColumnType::kInt32: {
-    const int32_t v = static_cast<int32_t>(LoadSigned(data_base, meta.value_width_));
-    if (v < target.i32) {
-      return -1;
-    }
-    if (v > target.i32) {
-      return 1;
-    }
-    return 0;
-  }
-  case ColumnType::kInt64: {
-    const int64_t v = LoadSigned(data_base, meta.value_width_);
-    if (v < target.i64) {
-      return -1;
-    }
-    if (v > target.i64) {
-      return 1;
-    }
-    return 0;
-  }
-  case ColumnType::kUInt64: {
-    const uint64_t v = LoadUnsigned(data_base, meta.value_width_);
-    if (v < target.u64) {
-      return -1;
-    }
-    if (v > target.u64) {
-      return 1;
-    }
-    return 0;
-  }
-  case ColumnType::kFloat32: {
-    float v = 0;
-    std::memcpy(&v, data_base, sizeof(float));
-    if (v < target.f32) {
-      return -1;
-    }
-    if (v > target.f32) {
-      return 1;
-    }
-    return 0;
-  }
-  case ColumnType::kFloat64: {
-    double v = 0;
-    std::memcpy(&v, data_base, sizeof(double));
-    if (v < target.f64) {
-      return -1;
-    }
-    if (v > target.f64) {
-      return 1;
-    }
-    return 0;
-  }
-  case ColumnType::kBinary:
-  case ColumnType::kString: {
-    uint32_t len = 0;
-    std::memcpy(&len, data_base, sizeof(uint32_t));
-    const char* ptr = reinterpret_cast<const char*>(data_base + sizeof(uint32_t));
-    return CompareBytesByLength(ptr, len, target.str.data, target.str.size);
-  }
-  default:
-    return Error::General("unsupported type compare");
-  }
-}
-
-Result<int> CompareTruncationValue(const ColumnMeta& meta, const std::vector<uint8_t>& storage,
-                                   uint32_t row_idx, const Datum& target, ColumnType type) {
-  const uint8_t* data_base = storage.data() + meta.data_offset_;
-  const auto* delta_ptr = data_base + row_idx * meta.value_width_;
-  switch (type) {
-  case ColumnType::kBool:
-  case ColumnType::kInt32:
-  case ColumnType::kInt64: {
-    const uint64_t delta_u = LoadUnsigned(delta_ptr, meta.value_width_);
-    const int64_t value = meta.base_.i64_ + static_cast<int64_t>(delta_u);
-    const int64_t target_val = (type == ColumnType::kInt32)
-                                   ? target.i32
-                                   : (type == ColumnType::kBool ? target.b : target.i64);
-    if (value < target_val) {
-      return -1;
-    }
-    if (value > target_val) {
-      return 1;
-    }
-    return 0;
-  }
-  case ColumnType::kUInt64: {
-    const uint64_t delta = LoadUnsigned(delta_ptr, meta.value_width_);
-    const uint64_t value = meta.base_.u64_ + delta;
-    if (value < target.u64) {
-      return -1;
-    }
-    if (value > target.u64) {
-      return 1;
-    }
-    return 0;
-  }
-  default:
-    return Error::General("unsupported truncation type compare");
-  }
-}
-
-Result<int> CompareRawValue(const ColumnMeta& meta, const std::vector<uint8_t>& storage,
-                            uint32_t row_idx, const Datum& target, ColumnType type) {
-  const uint8_t* data_base = storage.data() + meta.data_offset_;
-  switch (type) {
-  case ColumnType::kBool: {
-    const uint8_t v = *(data_base + row_idx * meta.value_width_);
-    const uint8_t t = target.b ? 1 : 0;
-    return v < t ? -1 : (v > t ? 1 : 0);
-  }
-  case ColumnType::kInt32: {
-    const int32_t v = static_cast<int32_t>(
-        LoadSigned(data_base + row_idx * meta.value_width_, meta.value_width_));
-    if (v < target.i32) {
-      return -1;
-    }
-    if (v > target.i32) {
-      return 1;
-    }
-    return 0;
-  }
-  case ColumnType::kInt64: {
-    const int64_t v = LoadSigned(data_base + row_idx * meta.value_width_, meta.value_width_);
-    if (v < target.i64) {
-      return -1;
-    }
-    if (v > target.i64) {
-      return 1;
-    }
-    return 0;
-  }
-  case ColumnType::kUInt64: {
-    const uint64_t v = LoadUnsigned(data_base + row_idx * meta.value_width_, meta.value_width_);
-    if (v < target.u64) {
-      return -1;
-    }
-    if (v > target.u64) {
-      return 1;
-    }
-    return 0;
-  }
-  case ColumnType::kFloat32: {
-    float v = 0;
-    std::memcpy(&v, data_base + row_idx * meta.value_width_, sizeof(float));
-    if (v < target.f32) {
-      return -1;
-    }
-    if (v > target.f32) {
-      return 1;
-    }
-    return 0;
-  }
-  case ColumnType::kFloat64: {
-    double v = 0;
-    std::memcpy(&v, data_base + row_idx * meta.value_width_, sizeof(double));
-    if (v < target.f64) {
-      return -1;
-    }
-    if (v > target.f64) {
-      return 1;
-    }
-    return 0;
-  }
-  case ColumnType::kBinary:
-  case ColumnType::kString: {
-    if (meta.compression_ == static_cast<uint8_t>(CompressionType::kSingleValue)) {
-      uint32_t len = 0;
-      std::memcpy(&len, data_base, sizeof(uint32_t));
-      const char* ptr = reinterpret_cast<const char*>(data_base + sizeof(uint32_t));
-      return CompareBytesByLength(ptr, len, target.str.data, target.str.size);
-    }
-    const uint32_t idx = static_cast<uint32_t>(
-        LoadUnsigned(data_base + row_idx * meta.value_width_, meta.value_width_));
-    const uint8_t* dict_base = storage.data() + meta.dict_offset_;
-    const uint32_t* offsets = reinterpret_cast<const uint32_t*>(dict_base);
-    const uint32_t* lengths =
-        reinterpret_cast<const uint32_t*>(dict_base + meta.dict_entries_ * sizeof(uint32_t));
-    if (idx >= meta.dict_entries_) {
-      return Error::General("dictionary index out of range");
-    }
-    const uint32_t off = offsets[idx];
-    const uint32_t len = lengths[idx];
-    const char* ptr = reinterpret_cast<const char*>(storage.data() + meta.string_offset_ + off);
-    return CompareBytesByLength(ptr, len, target.str.data, target.str.size);
-  }
-  default:
-    break;
-  }
-  return Error::General("unsupported type compare");
-}
-
-Result<void> DecodeSingleValue(const ColumnMeta& meta, const std::vector<uint8_t>& storage,
-                               Datum& out, ColumnType type) {
-  const uint8_t* data_base = storage.data() + meta.data_offset_;
-  switch (type) {
-  case ColumnType::kBool:
-    out.b = (*data_base) != 0;
-    return {};
-  case ColumnType::kInt32:
-    out.i32 = static_cast<int32_t>(LoadSigned(data_base, meta.value_width_));
-    return {};
-  case ColumnType::kInt64:
-    out.i64 = LoadSigned(data_base, meta.value_width_);
-    return {};
-  case ColumnType::kUInt64:
-    out.u64 = LoadUnsigned(data_base, meta.value_width_);
-    return {};
-  case ColumnType::kFloat32: {
-    float v = 0;
-    std::memcpy(&v, data_base, sizeof(float));
-    out.f32 = v;
-    return {};
-  }
-  case ColumnType::kFloat64: {
-    double v = 0;
-    std::memcpy(&v, data_base, sizeof(double));
-    out.f64 = v;
-    return {};
-  }
-  case ColumnType::kBinary:
-  case ColumnType::kString: {
-    uint32_t len = 0;
-    std::memcpy(&len, data_base, sizeof(uint32_t));
-    out.str.data = reinterpret_cast<const char*>(data_base + sizeof(uint32_t));
-    out.str.size = len;
-    return {};
-  }
-  default:
-    return Error::General("unsupported single value decode");
-  }
-}
-
-Result<void> DecodeTruncationValue(const ColumnMeta& meta, const std::vector<uint8_t>& storage,
-                                   uint32_t row_idx, Datum& out, ColumnType type) {
-  const uint8_t* data_base = storage.data() + meta.data_offset_;
-  const auto* delta_ptr = data_base + row_idx * meta.value_width_;
-  const uint64_t delta_u = LoadUnsigned(delta_ptr, meta.value_width_);
-  const int64_t value = meta.base_.i64_ + static_cast<int64_t>(delta_u);
-  switch (type) {
-  case ColumnType::kBool:
-    out.b = value != 0;
-    return {};
-  case ColumnType::kInt32:
-    out.i32 = static_cast<int32_t>(value);
-    return {};
-  case ColumnType::kInt64:
-    out.i64 = value;
-    return {};
-  case ColumnType::kUInt64: {
-    out.u64 = meta.base_.u64_ + delta_u;
-    return {};
-  }
-  default:
-    return Error::General("invalid truncation type");
-  }
-}
-
-Result<void> DecodeRawValue(const ColumnMeta& meta, const std::vector<uint8_t>& storage,
-                            uint32_t row_idx, Datum& out, ColumnType type) {
-  const uint8_t* data_base = storage.data() + meta.data_offset_;
-  switch (type) {
-  case ColumnType::kBool: {
-    const uint8_t v = *(data_base + row_idx * meta.value_width_);
-    out.b = v != 0;
-    return {};
-  }
-  case ColumnType::kInt32: {
-    const int32_t v = static_cast<int32_t>(
-        LoadSigned(data_base + row_idx * meta.value_width_, meta.value_width_));
-    out.i32 = v;
-    return {};
-  }
-  case ColumnType::kInt64:
-    out.i64 = LoadSigned(data_base + row_idx * meta.value_width_, meta.value_width_);
-    return {};
-  case ColumnType::kUInt64:
-    out.u64 = LoadUnsigned(data_base + row_idx * meta.value_width_, meta.value_width_);
-    return {};
-  case ColumnType::kFloat32: {
-    float v = 0;
-    std::memcpy(&v, data_base + row_idx * meta.value_width_, sizeof(float));
-    out.f32 = v;
-    return {};
-  }
-  case ColumnType::kFloat64: {
-    double v = 0;
-    std::memcpy(&v, data_base + row_idx * meta.value_width_, sizeof(double));
-    out.f64 = v;
-    return {};
-  }
-  case ColumnType::kBinary:
-  case ColumnType::kString: {
-    if (meta.compression_ == static_cast<uint8_t>(CompressionType::kSingleValue)) {
-      uint32_t len = 0;
-      std::memcpy(&len, data_base, sizeof(uint32_t));
-      out.str.data = reinterpret_cast<const char*>(data_base + sizeof(uint32_t));
-      out.str.size = len;
-      return {};
-    }
-    const uint32_t idx = static_cast<uint32_t>(
-        LoadUnsigned(data_base + row_idx * meta.value_width_, meta.value_width_));
-    const uint8_t* dict_base = storage.data() + meta.dict_offset_;
-    const uint32_t* offsets = reinterpret_cast<const uint32_t*>(dict_base);
-    const uint32_t* lengths =
-        reinterpret_cast<const uint32_t*>(dict_base + meta.dict_entries_ * sizeof(uint32_t));
-    if (idx >= meta.dict_entries_) {
-      return Error::General("dictionary index out of range");
-    }
-    const uint32_t off = offsets[idx];
-    const uint32_t len = lengths[idx];
-    out.str.data = reinterpret_cast<const char*>(storage.data() + meta.string_offset_ + off);
-    out.str.size = len;
-    return {};
-  }
-  default:
-    return Error::General("unsupported type decode");
-  }
-}
-
-Result<int> CompareValue(const ColumnMeta& meta, const std::vector<uint8_t>& storage,
-                         uint32_t row_idx, const Datum& target, ColumnType type) {
+Result<int> CompareValue(const ColumnMeta& meta, const ColumnCompressionAlgorithm* algorithm,
+                         const std::vector<uint8_t>& storage, uint32_t row_idx, const Datum& target,
+                         ColumnType type) {
   // Nulls sort after non-null values for now.
   if (IsNullAt(meta, storage, row_idx)) {
     return 1;
   }
-
-  const auto compression = static_cast<CompressionType>(meta.compression_);
-  if (compression == CompressionType::kSingleValue) {
-    return CompareSingleValue(meta, storage, target, type);
+  if (algorithm == nullptr) {
+    return Error::General("unknown compression for compare");
   }
-  if (compression == CompressionType::kTruncation) {
-    return CompareTruncationValue(meta, storage, row_idx, target, type);
-  }
-  return CompareRawValue(meta, storage, row_idx, target, type);
+  return algorithm->Compare(meta, storage, row_idx, target, type);
 }
 
-Result<void> DecodeNonNullValueAt(const ColumnMeta& meta, const std::vector<uint8_t>& storage,
-                                  uint32_t row_idx, Datum& out, ColumnType type) {
-  // Decode a non-null column value for row_idx.
-  const auto compression = static_cast<CompressionType>(meta.compression_);
-  if (compression == CompressionType::kSingleValue) {
-    return DecodeSingleValue(meta, storage, out, type);
+Result<void> DecodeNonNullValueAt(const ColumnMeta& meta,
+                                  const ColumnCompressionAlgorithm* algorithm,
+                                  const std::vector<uint8_t>& storage, uint32_t row_idx, Datum& out,
+                                  ColumnType type) {
+  if (algorithm == nullptr) {
+    return Error::General("unknown compression for decode");
   }
-  if (compression == CompressionType::kTruncation) {
-    return DecodeTruncationValue(meta, storage, row_idx, out, type);
-  }
-  return DecodeRawValue(meta, storage, row_idx, out, type);
+  return algorithm->Decode(meta, storage, row_idx, out, type);
 }
 
 } // namespace
 
-ColumnBlockReader::ColumnBlockReader(ColumnBlockHeader header, std::vector<ColumnMeta> metas,
-                                     std::vector<uint16_t> key_columns,
-                                     std::vector<uint8_t> storage, RowEncodingLayout layout)
+ColumnBlockReader::ColumnBlockReader(
+    ColumnBlockHeader header, std::vector<ColumnMeta> metas, std::vector<uint16_t> key_columns,
+    std::vector<uint8_t> storage,
+    std::vector<const ColumnCompressionAlgorithm*> compression_algorithms, RowEncodingLayout layout)
     : header_(header),
       metas_(std::move(metas)),
       key_columns_(std::move(key_columns)),
       storage_(std::move(storage)),
+      compression_algorithms_(std::move(compression_algorithms)),
       layout_(std::move(layout)) {
 }
 
@@ -536,6 +149,7 @@ ColumnBlockReader::ColumnBlockReader(ColumnBlockReader&& other) noexcept
       metas_(std::move(other.metas_)),
       key_columns_(std::move(other.key_columns_)),
       storage_(std::move(other.storage_)),
+      compression_algorithms_(std::move(other.compression_algorithms_)),
       layout_(std::move(other.layout_)) {
 }
 
@@ -547,6 +161,7 @@ ColumnBlockReader& ColumnBlockReader::operator=(ColumnBlockReader&& other) noexc
   metas_ = std::move(other.metas_);
   key_columns_ = std::move(other.key_columns_);
   storage_ = std::move(other.storage_);
+  compression_algorithms_ = std::move(other.compression_algorithms_);
   layout_ = std::move(other.layout_);
   return *this;
 }
@@ -602,15 +217,19 @@ Result<ColumnBlockReader> ColumnBlockReader::FromBlockBytes(std::vector<uint8_t>
   }
 
   std::vector<uint8_t> storage(bytes.begin() + static_cast<size_t>(storage_offset), bytes.end());
+  // Cache the resolved algorithm per column for hot read paths (binary search + scan loops).
+  std::vector<const ColumnCompressionAlgorithm*> compression_algorithms(header.column_count_,
+                                                                        nullptr);
   for (uint32_t i = 0; i < header.column_count_; ++i) {
-    if (auto res = ValidateColumnMeta(header, metas[i], storage, i); !res) {
+    if (auto res = ValidateColumnMeta(header, metas[i], storage, i, &compression_algorithms[i]);
+        !res) {
       return std::move(res.error());
     }
   }
 
   auto layout = BuildLayoutFromMeta(metas, key_columns);
   return ColumnBlockReader(header, std::move(metas), std::move(key_columns), std::move(storage),
-                           std::move(layout));
+                           std::move(compression_algorithms), std::move(layout));
 }
 
 Result<void> ColumnBlockReader::DecodeKey(Slice key_bytes, std::vector<Datum>& key_datums) const {
@@ -629,7 +248,8 @@ Result<int> ColumnBlockReader::CompareRowKey(uint32_t row_idx,
     const uint16_t col_idx = key_columns_[i];
     const auto& meta = metas_[col_idx];
     const auto type = static_cast<ColumnType>(meta.type_);
-    auto cmp = CompareValue(meta, storage_, row_idx, key_datums[i], type);
+    auto cmp = CompareValue(meta, compression_algorithms_[col_idx], storage_, row_idx,
+                            key_datums[i], type);
     if (!cmp) {
       return std::move(cmp.error());
     }
@@ -659,7 +279,9 @@ Result<void> ColumnBlockReader::DecodeRow(uint32_t row_idx, Datum* datums, bool*
       continue;
     }
     nulls[i] = false;
-    if (auto res = DecodeNonNullValueAt(meta, storage_, row_idx, datums[i], type); !res) {
+    if (auto res = DecodeNonNullValueAt(meta, compression_algorithms_[i], storage_, row_idx,
+                                        datums[i], type);
+        !res) {
       return std::move(res.error());
     }
   }
