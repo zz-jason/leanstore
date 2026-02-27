@@ -48,6 +48,37 @@ Result<void> LeanBTree::Remove(Slice key) {
   });
 }
 
+Result<void> LeanBTree::Update(Slice key, Slice value) {
+  return session_->ExecSync([&]() -> Result<void> {
+    OpCode remove_result = std::visit([&](auto* btree) { return btree->Remove(key); }, btree_);
+    if (remove_result != OpCode::kOK && remove_result != OpCode::kNotFound) {
+      if (remove_result == OpCode::kAbortTx) {
+        return Error::General("Transaction aborted");
+      }
+      if (remove_result == OpCode::kSpaceNotEnough) {
+        return Error::General("Insufficient space");
+      }
+      return Error::General("Update failed during remove");
+    }
+
+    OpCode insert_result =
+        std::visit([&](auto* btree) { return btree->Insert(key, value); }, btree_);
+    if (insert_result == OpCode::kOK) {
+      return {};
+    }
+    if (insert_result == OpCode::kDuplicated) {
+      return Error::General("Duplicate key");
+    }
+    if (insert_result == OpCode::kAbortTx) {
+      return Error::General("Transaction aborted");
+    }
+    if (insert_result == OpCode::kSpaceNotEnough) {
+      return Error::General("Insufficient space");
+    }
+    return Error::General("Update failed during insert");
+  });
+}
+
 Result<std::vector<uint8_t>> LeanBTree::Lookup(Slice key) {
   return session_->ExecSync([&]() -> Result<std::vector<uint8_t>> {
     std::vector<uint8_t> value;

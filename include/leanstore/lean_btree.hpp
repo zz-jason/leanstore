@@ -36,6 +36,13 @@ public:
   /// @return Result indicating success or failure.
   Result<void> Remove(Slice key);
 
+  /// Update a key to a new value.
+  /// If the key does not exist, it is inserted.
+  /// @param key The key to update.
+  /// @param value The new value.
+  /// @return Result indicating success or failure.
+  Result<void> Update(Slice key, Slice value);
+
   /// Lookup a key in the B-tree.
   /// @param key The key to look up.
   /// @return Result containing the value if found, or an error.

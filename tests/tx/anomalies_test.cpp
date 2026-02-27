@@ -23,14 +23,6 @@ auto ReadString(LeanBTree& tree, const std::string& key) -> std::optional<std::s
   return std::string(reinterpret_cast<const char*>(res.value().data()), res.value().size());
 }
 
-void Rewrite(LeanBTree& tree, const std::string& key, const std::string& value) {
-  auto old = tree.Remove(key);
-  if (!old) {
-    (void)tree.Insert(key, value);
-    return;
-  }
-  ASSERT_TRUE(tree.Insert(key, value));
-}
 } // namespace
 
 class AnomaliesTest : public LeanTestSuite {
@@ -76,16 +68,16 @@ protected:
 TEST_F(AnomaliesTest, NoG0) {
   s1_->StartTx();
   s2_->StartTx();
-  Rewrite(*t1_, "1", "11");
+  ASSERT_TRUE(t1_->Update("1", "11"));
   ASSERT_EQ(ReadString(*t2_, "1"), std::optional<std::string>("10"));
-  Rewrite(*t1_, "2", "21");
+  ASSERT_TRUE(t1_->Update("2", "21"));
   s1_->CommitTx();
   s2_->CommitTx();
 }
 
 TEST_F(AnomaliesTest, NoG1a) {
   s1_->StartTx();
-  Rewrite(*t1_, "1", "11");
+  ASSERT_TRUE(t1_->Update("1", "11"));
   s2_->StartTx();
   ASSERT_EQ(ReadString(*t2_, "1"), std::optional<std::string>("10"));
   s1_->AbortTx();
@@ -95,7 +87,7 @@ TEST_F(AnomaliesTest, NoG1a) {
 
 TEST_F(AnomaliesTest, NoG1b) {
   s1_->StartTx();
-  Rewrite(*t1_, "1", "11");
+  ASSERT_TRUE(t1_->Update("1", "11"));
   s2_->StartTx();
   ASSERT_EQ(ReadString(*t2_, "1"), std::optional<std::string>("10"));
   s1_->CommitTx();
@@ -106,8 +98,8 @@ TEST_F(AnomaliesTest, NoG1b) {
 TEST_F(AnomaliesTest, NoG1c) {
   s1_->StartTx();
   s2_->StartTx();
-  Rewrite(*t1_, "1", "11");
-  Rewrite(*t2_, "2", "22");
+  ASSERT_TRUE(t1_->Update("1", "11"));
+  ASSERT_TRUE(t2_->Update("2", "22"));
   ASSERT_EQ(ReadString(*t1_, "2"), std::optional<std::string>("20"));
   ASSERT_EQ(ReadString(*t2_, "1"), std::optional<std::string>("10"));
   s1_->CommitTx();
@@ -116,8 +108,8 @@ TEST_F(AnomaliesTest, NoG1c) {
 
 TEST_F(AnomaliesTest, NoOTV) {
   s1_->StartTx();
-  Rewrite(*t1_, "1", "11");
-  Rewrite(*t1_, "2", "21");
+  ASSERT_TRUE(t1_->Update("1", "11"));
+  ASSERT_TRUE(t1_->Update("2", "21"));
   s2_->StartTx();
   s3_->StartTx();
   ASSERT_EQ(ReadString(*t3_, "1"), std::optional<std::string>("10"));
@@ -142,7 +134,7 @@ TEST_F(AnomaliesTest, NoP4) {
   s2_->StartTx();
   ASSERT_EQ(ReadString(*t1_, "1"), std::optional<std::string>("10"));
   ASSERT_EQ(ReadString(*t2_, "1"), std::optional<std::string>("10"));
-  Rewrite(*t1_, "1", "11");
+  ASSERT_TRUE(t1_->Update("1", "11"));
   auto second = t2_->Insert("1", "12");
   ASSERT_FALSE(second);
   s1_->CommitTx();
@@ -154,8 +146,8 @@ TEST_F(AnomaliesTest, NoGSingle) {
   s2_->StartTx();
   ASSERT_EQ(ReadString(*t1_, "1"), std::optional<std::string>("10"));
   ASSERT_EQ(ReadString(*t2_, "2"), std::optional<std::string>("20"));
-  Rewrite(*t2_, "1", "11");
-  Rewrite(*t2_, "2", "21");
+  ASSERT_TRUE(t2_->Update("1", "11"));
+  ASSERT_TRUE(t2_->Update("2", "21"));
   s2_->CommitTx();
   ASSERT_EQ(ReadString(*t1_, "2"), std::optional<std::string>("20"));
   s1_->CommitTx();
@@ -166,8 +158,8 @@ TEST_F(AnomaliesTest, G2Item) {
   s2_->StartTx();
   ASSERT_EQ(ReadString(*t1_, "1"), std::optional<std::string>("10"));
   ASSERT_EQ(ReadString(*t2_, "2"), std::optional<std::string>("20"));
-  Rewrite(*t1_, "1", "11");
-  Rewrite(*t2_, "2", "21");
+  ASSERT_TRUE(t1_->Update("1", "11"));
+  ASSERT_TRUE(t2_->Update("2", "21"));
   s1_->CommitTx();
   s2_->CommitTx();
 }

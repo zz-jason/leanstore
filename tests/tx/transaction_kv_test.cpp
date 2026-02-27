@@ -31,14 +31,6 @@ auto ReadString(LeanBTree& tree, const std::string& key) -> std::optional<std::s
   return std::string(reinterpret_cast<const char*>(res.value().data()), res.value().size());
 }
 
-void Rewrite(LeanBTree& tree, const std::string& key, const std::string& value) {
-  auto removed = tree.Remove(key);
-  if (!removed) {
-    (void)tree.Insert(key, value);
-    return;
-  }
-  ASSERT_TRUE(tree.Insert(key, value));
-}
 } // namespace
 
 class TransactionKVTest : public LeanTestSuite {
@@ -240,7 +232,7 @@ TEST_F(TransactionKVTest, Update) {
 
   s0_->StartTx();
   for (const auto& k : keys) {
-    Rewrite(t0, k, "new");
+    ASSERT_TRUE(t0.Update(k, "new"));
   }
   s0_->CommitTx();
 
