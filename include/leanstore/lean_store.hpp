@@ -8,9 +8,9 @@
 
 #include <cassert>
 #include <cstdint>
-#include <expected>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace leanstore::utils {
@@ -34,6 +34,9 @@ class Table;
 class TableRegistry;
 struct TableDefinition;
 class CheckpointProcessor;
+class LeanSession;
+class LeanBTree;
+class LeanCursor;
 
 class LeanStore {
   // Allow internal implementation to access private GetCoroScheduler()
@@ -150,6 +153,16 @@ public:
   /// Submit a task on a reserved session and wait for completion.
   /// This is the high-performance alternative to ExecSync for coroutine-enabled builds.
   void SubmitAndWait(CoroSession* session, std::function<void()> task);
+
+#ifdef LEAN_ENABLE_CORO
+  /// Connect to the database and return a session for coroutine operations.
+  /// This is a convenience wrapper around ReserveSession that returns a LeanSession object.
+  auto Connect(uint64_t worker_id = 0) -> LeanSession;
+
+  /// Try to connect to the database, returning an empty optional if no session is available.
+  /// This is a convenience wrapper around TryReserveSession.
+  auto TryConnect(uint64_t worker_id = 0) -> std::optional<LeanSession>;
+#endif
 
 private:
   void StartBackgroundThreads();

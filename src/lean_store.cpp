@@ -13,6 +13,9 @@
 #include "leanstore/coro/coro_scheduler.hpp"
 #include "leanstore/coro/coro_session.hpp"
 #include "leanstore/coro/mvcc_manager.hpp"
+#ifdef LEAN_ENABLE_CORO
+#include "leanstore/lean_session.hpp"
+#endif
 #include "leanstore/table/table.hpp"
 #include "leanstore/table/table_registry.hpp"
 #include "leanstore/tx/cr_manager.hpp"
@@ -339,6 +342,21 @@ void LeanStore::SubmitAndWait(CoroSession* session, std::function<void()> task) 
   (void)task;
 #endif
 }
+
+#ifdef LEAN_ENABLE_CORO
+auto LeanStore::Connect(uint64_t worker_id) -> LeanSession {
+  CoroSession* session = ReserveSession(worker_id);
+  return LeanSession(this, session);
+}
+
+auto LeanStore::TryConnect(uint64_t worker_id) -> std::optional<LeanSession> {
+  CoroSession* session = TryReserveSession(worker_id);
+  if (session == nullptr) {
+    return std::nullopt;
+  }
+  return std::optional<LeanSession>(std::in_place, this, session);
+}
+#endif
 
 constexpr char kMetaKeyCrManager[] = "cr_manager";
 constexpr char kMetaKeyMvcc[] = "mvcc";

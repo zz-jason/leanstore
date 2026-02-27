@@ -134,23 +134,23 @@ private:
   JumpReason jump_reason_ = JumpReason::kNormal;
 };
 
-#define JUMPMU_TRY() if (setjmp(leanstore::JumpContext::Current()->AllocJumpEnv()) == 0) {
+#define JUMPMU_TRY() if (setjmp(::leanstore::JumpContext::Current()->AllocJumpEnv()) == 0) {
 
 #define JUMPMU_CATCH()                                                                             \
-  leanstore::JumpContext::Current()->DeallocLastJumpEnv();                                         \
+  ::leanstore::JumpContext::Current()->DeallocLastJumpEnv();                                       \
   }                                                                                                \
   else
 
 #define JUMPMU_RETURN                                                                              \
-  leanstore::JumpContext::Current()->DeallocLastJumpEnv();                                         \
+  ::leanstore::JumpContext::Current()->DeallocLastJumpEnv();                                       \
   return
 
 #define JUMPMU_BREAK                                                                               \
-  leanstore::JumpContext::Current()->DeallocLastJumpEnv();                                         \
+  ::leanstore::JumpContext::Current()->DeallocLastJumpEnv();                                       \
   break
 
 #define JUMPMU_CONTINUE                                                                            \
-  leanstore::JumpContext::Current()->DeallocLastJumpEnv();                                         \
+  ::leanstore::JumpContext::Current()->DeallocLastJumpEnv();                                       \
   continue
 
 #define JUMPMU_DEFINE_DESTRUCTOR(T)                                                                \
@@ -159,10 +159,10 @@ private:
   }
 
 #define JUMPMU_REGISTER_STACK_OBJECT(obj_ptr)                                                      \
-  leanstore::JumpContext::Current()->RegisterObject(obj_ptr, &DestructBeforeJump);
+  ::leanstore::JumpContext::Current()->RegisterObject(obj_ptr, &DestructBeforeJump);
 
 #define JUMPMU_UNREGISTER_STACK_OBJECT(obj_ptr)                                                    \
-  leanstore::JumpContext::Current()->UnregisterObject(obj_ptr);
+  ::leanstore::JumpContext::Current()->UnregisterObject(obj_ptr);
 
 template <typename T>
 class JumpScoped {
@@ -171,7 +171,7 @@ public:
 
   template <typename... Args>
   explicit JumpScoped(Args&&... args) : obj_(std::forward<Args>(args)...) {
-    JUMPMU_REGISTER_STACK_OBJECT(&obj_);
+    JUMPMU_REGISTER_STACK_OBJECT(this);
   }
 
   ~JumpScoped() {

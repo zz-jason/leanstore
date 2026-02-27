@@ -104,6 +104,14 @@ set(LEAN_SOURCES
   wal/wal_serde.cpp
 )
 
+if(LEAN_ENABLE_CORO)
+  list(APPEND LEAN_SOURCES
+    lean_session.cpp
+    lean_btree.cpp
+    lean_cursor.cpp
+  )
+endif()
+
 if(BUILD_SHARED_LIBS)
   add_library(leanstore SHARED ${LEAN_SOURCES})
 else()
