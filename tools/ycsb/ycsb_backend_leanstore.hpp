@@ -1,11 +1,9 @@
 #pragma once
 
 #include "leanstore/base/result.hpp"
-#include "leanstore/btree/basic_kv.hpp"
-#include "leanstore/coro/coro_scheduler.hpp"
-#include "leanstore/coro/coro_session.hpp"
+#include "leanstore/lean_btree.hpp"
+#include "leanstore/lean_session.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/tx/transaction_kv.hpp"
 #include "tools/ycsb/ycsb_options.hpp"
 
 #include <cassert>
@@ -40,31 +38,23 @@ private:
 class YcsbLeanSession {
 public:
   YcsbLeanSession(LeanStore& store, uint64_t runs_on, bool bench_transaction_kv)
-      : store_(store),
-        coro_session_(store_.TryReserveSession(runs_on)),
+      : session_(store.Connect(runs_on)),
         bench_transaction_kv_(bench_transaction_kv) {
-    assert(coro_session_ != nullptr && "Failed to reserve CoroSession for YCSB session");
   }
 
-  ~YcsbLeanSession() {
-    store_.ReleaseSession(coro_session_);
-  }
+  ~YcsbLeanSession() = default;
 
   Result<void> CreateKvSpace(std::string_view name);
   Result<YcsbKvSpace> GetKvSpace(std::string_view name);
 
 private:
-  LeanStore& store_;
-  CoroSession* coro_session_;
+  LeanSession session_;
   bool bench_transaction_kv_;
 };
 
 class YcsbLeanAtomicKvSpace {
 public:
-  YcsbLeanAtomicKvSpace(LeanStore& store, CoroSession& session, BasicKV& kv_space)
-      : store_(store),
-        session_(session),
-        kv_space_(kv_space) {
+  explicit YcsbLeanAtomicKvSpace(LeanBTree kv_space) : kv_space_(std::move(kv_space)) {
   }
 
   Result<void> Put(std::string_view key, std::string_view value);
@@ -72,18 +62,14 @@ public:
   Result<void> Get(std::string_view key, std::string& value_out);
 
 private:
-  LeanStore& store_;
-  CoroSession& session_;
-  BasicKV& kv_space_;
-  std::vector<uint8_t> temp_buffer_;
+  LeanBTree kv_space_;
 };
 
 class YcsbLeanMvccKvSpace {
 public:
-  YcsbLeanMvccKvSpace(LeanStore& store, CoroSession& session, TransactionKV& kv_space)
-      : store_(store),
-        session_(session),
-        kv_space_(kv_space) {
+  YcsbLeanMvccKvSpace(LeanSession& session, LeanBTree kv_space)
+      : session_(session),
+        kv_space_(std::move(kv_space)) {
   }
 
   Result<void> Put(std::string_view key, std::string_view value);
@@ -91,10 +77,8 @@ public:
   Result<void> Get(std::string_view key, std::string& value_out);
 
 private:
-  LeanStore& store_;
-  CoroSession& session_;
-  TransactionKV& kv_space_;
-  std::vector<uint8_t> temp_buffer_;
+  LeanSession& session_;
+  LeanBTree kv_space_;
 };
 
 } // namespace leanstore::ycsb
