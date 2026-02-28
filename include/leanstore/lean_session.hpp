@@ -1,6 +1,7 @@
 #pragma once
 
 #include "leanstore/base/log.hpp"
+#include "leanstore/base/optional.hpp"
 #include "leanstore/base/result.hpp"
 #include "leanstore/base/slice.hpp"
 #include "leanstore/c/types.h"
@@ -9,7 +10,6 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <optional>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -74,7 +74,7 @@ private:
     if constexpr (std::is_void_v<ResultType>) {
       ExecSyncVoid([&]() { fn(); });
     } else {
-      std::optional<ResultType> result;
+      Optional<ResultType> result;
       ExecSyncVoid([&]() { result = fn(); });
       LEAN_DCHECK(result.has_value(), "ExecSync result should be set");
       return std::move(result.value());

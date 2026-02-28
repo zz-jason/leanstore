@@ -1,6 +1,7 @@
 #pragma once
 
 #include "leanstore/base/log.hpp"
+#include "leanstore/base/optional.hpp"
 #include "leanstore/base/result.hpp"
 #include "leanstore/c/types.h"
 #include "leanstore/coro/coro_scheduler.hpp"
@@ -10,7 +11,6 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <optional>
 #include <string>
 
 namespace leanstore::utils {
@@ -147,7 +147,7 @@ public:
 
   /// Try to connect to the database, returning an empty optional if no session is available.
   /// This is a convenience wrapper around TryReserveSession.
-  auto TryConnect(uint64_t worker_id = 0) -> std::optional<LeanSession>;
+  auto TryConnect(uint64_t worker_id = 0) -> Optional<LeanSession>;
 
 private:
   void StartBackgroundThreads();

@@ -223,12 +223,12 @@ auto LeanStore::Connect(uint64_t worker_id) -> LeanSession {
   return LeanSession(this, session);
 }
 
-auto LeanStore::TryConnect(uint64_t worker_id) -> std::optional<LeanSession> {
+auto LeanStore::TryConnect(uint64_t worker_id) -> Optional<LeanSession> {
   CoroSession* session = TryReserveSession(worker_id);
   if (session == nullptr) {
     return std::nullopt;
   }
-  return std::optional<LeanSession>(std::in_place, this, session);
+  return LeanSession(this, session);
 }
 
 constexpr char kMetaKeyMvcc[] = "mvcc";

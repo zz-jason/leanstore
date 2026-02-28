@@ -16,7 +16,7 @@
 namespace leanstore::test {
 
 namespace {
-auto ReadString(LeanBTree& tree, const std::string& key) -> std::optional<std::string> {
+auto ReadString(LeanBTree& tree, const std::string& key) -> Optional<std::string> {
   auto res = tree.Lookup(key);
   if (!res) {
     return std::nullopt;
@@ -28,8 +28,8 @@ auto ReadString(LeanBTree& tree, const std::string& key) -> std::optional<std::s
 class BasicKVTest : public LeanTestSuite {
 protected:
   std::unique_ptr<LeanStore> store_;
-  std::optional<LeanSession> s0_;
-  std::optional<LeanSession> s1_;
+  Optional<LeanSession> s0_;
+  Optional<LeanSession> s1_;
 
   void SetUp() override {
     auto* option = lean_store_option_create(TestCaseStoreDir().c_str());
@@ -38,8 +38,8 @@ protected:
     auto opened = LeanStore::Open(option);
     ASSERT_TRUE(opened);
     store_ = std::move(opened.value());
-    s0_.emplace(store_->Connect(0));
-    s1_.emplace(store_->Connect(1));
+    s0_ = store_->Connect(0);
+    s1_ = store_->Connect(1);
   }
 };
 
@@ -71,8 +71,8 @@ TEST_F(BasicKVTest, BasicKVInsertAndLookup) {
     ASSERT_TRUE(t0.Insert(k, v));
   }
   for (const auto& [k, v] : kv) {
-    ASSERT_EQ(ReadString(t0, k), std::optional<std::string>(v));
-    ASSERT_EQ(ReadString(t1, k), std::optional<std::string>(v));
+    ASSERT_EQ(*ReadString(t0, k), v);
+    ASSERT_EQ(*ReadString(t1, k), v);
   }
 }
 

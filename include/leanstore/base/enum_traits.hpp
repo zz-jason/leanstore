@@ -2,7 +2,6 @@
 
 #include "leanstore/base/optional.hpp"
 
-#include <optional>
 #include <string_view>
 
 namespace leanstore {

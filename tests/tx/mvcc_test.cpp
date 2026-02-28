@@ -13,7 +13,7 @@
 namespace leanstore::test {
 
 namespace {
-auto ReadString(LeanBTree& tree, const std::string& key) -> std::optional<std::string> {
+auto ReadString(LeanBTree& tree, const std::string& key) -> Optional<std::string> {
   auto res = tree.Lookup(key);
   if (!res) {
     return std::nullopt;
@@ -25,10 +25,10 @@ auto ReadString(LeanBTree& tree, const std::string& key) -> std::optional<std::s
 class MvccTest : public LeanTestSuite {
 protected:
   std::unique_ptr<LeanStore> store_;
-  std::optional<LeanSession> writer_;
-  std::optional<LeanSession> reader_;
-  std::optional<LeanBTree> tw_;
-  std::optional<LeanBTree> tr_;
+  Optional<LeanSession> writer_;
+  Optional<LeanSession> reader_;
+  Optional<LeanBTree> tw_;
+  Optional<LeanBTree> tr_;
 
   void SetUp() override {
     auto* option = lean_store_option_create(TestCaseStoreDir().c_str());
@@ -38,14 +38,14 @@ protected:
     ASSERT_TRUE(opened);
     store_ = std::move(opened.value());
 
-    writer_.emplace(store_->Connect(0));
-    reader_.emplace(store_->Connect(1));
+    writer_ = store_->Connect(0);
+    reader_ = store_->Connect(1);
     auto created = writer_->CreateBTree("mvcc", LEAN_BTREE_TYPE_MVCC);
     ASSERT_TRUE(created);
-    tw_.emplace(std::move(created.value()));
+    tw_ = std::move(created.value());
     auto fetched = reader_->GetBTree("mvcc");
     ASSERT_TRUE(fetched);
-    tr_.emplace(std::move(fetched.value()));
+    tr_ = std::move(fetched.value());
   }
 };
 
@@ -58,14 +58,14 @@ TEST_F(MvccTest, LookupWhileInsert) {
   ASSERT_TRUE(tw_->Insert("k1", "v1"));
 
   reader_->StartTx();
-  ASSERT_EQ(ReadString(*tr_, "k0"), std::optional<std::string>("v0"));
+  ASSERT_EQ(ReadString(*tr_, "k0"), Optional<std::string>("v0"));
   ASSERT_FALSE(ReadString(*tr_, "k1").has_value());
   reader_->CommitTx();
 
   writer_->CommitTx();
 
   reader_->StartTx();
-  ASSERT_EQ(ReadString(*tr_, "k1"), std::optional<std::string>("v1"));
+  ASSERT_EQ(ReadString(*tr_, "k1"), Optional<std::string>("v1"));
   reader_->CommitTx();
 }
 
@@ -85,7 +85,7 @@ TEST_F(MvccTest, InsertConflict) {
   writer_->CommitTx();
 
   reader_->StartTx();
-  ASSERT_EQ(ReadString(*tr_, "k1"), std::optional<std::string>("v1"));
+  ASSERT_EQ(ReadString(*tr_, "k1"), Optional<std::string>("v1"));
   reader_->CommitTx();
 }
 

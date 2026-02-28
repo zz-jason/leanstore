@@ -14,7 +14,7 @@
 namespace leanstore::test {
 
 namespace {
-auto ReadString(LeanBTree& tree, const std::string& key) -> std::optional<std::string> {
+auto ReadString(LeanBTree& tree, const std::string& key) -> Optional<std::string> {
   auto res = tree.Lookup(key);
   if (!res) {
     return std::nullopt;
@@ -26,12 +26,12 @@ auto ReadString(LeanBTree& tree, const std::string& key) -> std::optional<std::s
 class LongRunningTxTest : public LeanTestSuite {
 protected:
   std::unique_ptr<LeanStore> store_;
-  std::optional<LeanSession> s0_;
-  std::optional<LeanSession> s1_;
-  std::optional<LeanSession> s2_;
-  std::optional<LeanBTree> t0_;
-  std::optional<LeanBTree> t1_;
-  std::optional<LeanBTree> t2_;
+  Optional<LeanSession> s0_;
+  Optional<LeanSession> s1_;
+  Optional<LeanSession> s2_;
+  Optional<LeanBTree> t0_;
+  Optional<LeanBTree> t1_;
+  Optional<LeanBTree> t2_;
 
   void SetUp() override {
     auto* option = lean_store_option_create(TestCaseStoreDir().c_str());
@@ -42,19 +42,19 @@ protected:
     ASSERT_TRUE(opened);
     store_ = std::move(opened.value());
 
-    s0_.emplace(store_->Connect(0));
-    s1_.emplace(store_->Connect(1));
-    s2_.emplace(store_->Connect(2));
+    s0_ = store_->Connect(0);
+    s1_ = store_->Connect(1);
+    s2_ = store_->Connect(2);
 
     auto created = s0_->CreateBTree("long_tx", LEAN_BTREE_TYPE_MVCC);
     ASSERT_TRUE(created);
-    t0_.emplace(std::move(created.value()));
+    t0_ = std::move(created.value());
     auto g1 = s1_->GetBTree("long_tx");
     auto g2 = s2_->GetBTree("long_tx");
     ASSERT_TRUE(g1);
     ASSERT_TRUE(g2);
-    t1_.emplace(std::move(g1.value()));
-    t2_.emplace(std::move(g2.value()));
+    t1_ = std::move(g1.value());
+    t2_ = std::move(g2.value());
   }
 };
 
@@ -65,16 +65,16 @@ TEST_F(LongRunningTxTest, LookupFromGraveyard) {
   s1_->CommitTx();
 
   s2_->StartTx();
-  ASSERT_EQ(ReadString(*t2_, "1"), std::optional<std::string>("10"));
-  ASSERT_EQ(ReadString(*t2_, "2"), std::optional<std::string>("20"));
+  ASSERT_EQ(ReadString(*t2_, "1"), Optional<std::string>("10"));
+  ASSERT_EQ(ReadString(*t2_, "2"), Optional<std::string>("20"));
 
   s1_->StartTx();
   ASSERT_TRUE(t1_->Remove("1"));
   ASSERT_TRUE(t1_->Remove("2"));
   s1_->CommitTx();
 
-  ASSERT_EQ(ReadString(*t2_, "1"), std::optional<std::string>("10"));
-  ASSERT_EQ(ReadString(*t2_, "2"), std::optional<std::string>("20"));
+  ASSERT_EQ(ReadString(*t2_, "1"), Optional<std::string>("10"));
+  ASSERT_EQ(ReadString(*t2_, "2"), Optional<std::string>("20"));
   s2_->CommitTx();
 }
 
@@ -85,7 +85,7 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
   s1_->CommitTx();
 
   s2_->StartTx();
-  ASSERT_EQ(ReadString(*t2_, "1"), std::optional<std::string>("10"));
+  ASSERT_EQ(ReadString(*t2_, "1"), Optional<std::string>("10"));
 
   s1_->StartTx();
   for (size_t i = 0; i < 100; ++i) {
@@ -94,11 +94,11 @@ TEST_F(LongRunningTxTest, LookupAfterUpdate100Times) {
   }
   s1_->CommitTx();
 
-  ASSERT_EQ(ReadString(*t2_, "1"), std::optional<std::string>("10"));
+  ASSERT_EQ(ReadString(*t2_, "1"), Optional<std::string>("10"));
   s2_->CommitTx();
 
   s2_->StartTx();
-  ASSERT_EQ(ReadString(*t2_, "1"), std::optional<std::string>("99"));
+  ASSERT_EQ(ReadString(*t2_, "1"), Optional<std::string>("99"));
   s2_->CommitTx();
 }
 

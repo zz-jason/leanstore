@@ -21,7 +21,7 @@
 namespace leanstore::test {
 
 namespace {
-auto ReadString(LeanBTree& tree, const std::string& key) -> std::optional<std::string> {
+auto ReadString(LeanBTree& tree, const std::string& key) -> Optional<std::string> {
   auto res = tree.Lookup(key);
   if (!res) {
     return std::nullopt;
@@ -34,9 +34,9 @@ auto ReadString(LeanBTree& tree, const std::string& key) -> std::optional<std::s
 class TransactionKVTest : public LeanTestSuite {
 protected:
   std::unique_ptr<LeanStore> store_;
-  std::optional<LeanSession> s0_;
-  std::optional<LeanSession> s1_;
-  std::optional<LeanSession> s2_;
+  Optional<LeanSession> s0_;
+  Optional<LeanSession> s1_;
+  Optional<LeanSession> s2_;
 
   void SetUp() override {
     auto* option = lean_store_option_create(TestCaseStoreDir().c_str());
@@ -47,9 +47,9 @@ protected:
     ASSERT_TRUE(opened);
     store_ = std::move(opened.value());
 
-    s0_.emplace(store_->Connect(0));
-    s1_.emplace(store_->Connect(1));
-    s2_.emplace(store_->Connect(2));
+    s0_ = store_->Connect(0);
+    s1_ = store_->Connect(1);
+    s2_ = store_->Connect(2);
   }
 };
 
@@ -88,13 +88,13 @@ TEST_F(TransactionKVTest, InsertAndLookup) {
 
   s0_->StartTx();
   for (const auto& [k, v] : kv) {
-    ASSERT_EQ(ReadString(t0, k), std::optional<std::string>(v));
+    ASSERT_EQ(ReadString(t0, k), Optional<std::string>(v));
   }
   s0_->CommitTx();
 
   s1_->StartTx();
   for (const auto& [k, v] : kv) {
-    ASSERT_EQ(ReadString(t1, k), std::optional<std::string>(v));
+    ASSERT_EQ(ReadString(t1, k), Optional<std::string>(v));
   }
   s1_->CommitTx();
 }
@@ -236,7 +236,7 @@ TEST_F(TransactionKVTest, Update) {
 
   s0_->StartTx();
   for (const auto& k : keys) {
-    ASSERT_EQ(ReadString(t0, k), std::optional<std::string>("new"));
+    ASSERT_EQ(ReadString(t0, k), Optional<std::string>("new"));
   }
   s0_->CommitTx();
 }
@@ -255,7 +255,7 @@ TEST_F(TransactionKVTest, ScanAsc) {
   s0_->StartTx();
   for (int expected = 0; expected < 100; ++expected) {
     ASSERT_EQ(ReadString(t0, std::format("k{:03d}", expected)),
-              std::optional<std::string>(std::format("v{:03d}", expected)));
+              Optional<std::string>(std::format("v{:03d}", expected)));
   }
   s0_->CommitTx();
 }
@@ -274,7 +274,7 @@ TEST_F(TransactionKVTest, ScanDesc) {
   s0_->StartTx();
   for (int expected = 99; expected >= 0; --expected) {
     ASSERT_EQ(ReadString(t0, std::format("k{:03d}", expected)),
-              std::optional<std::string>(std::format("v{:03d}", expected)));
+              Optional<std::string>(std::format("v{:03d}", expected)));
   }
   s0_->CommitTx();
 }
@@ -293,7 +293,7 @@ TEST_F(TransactionKVTest, InsertAfterRemove) {
   ASSERT_FALSE(t0.Remove("k"));
   ASSERT_FALSE(t0.Lookup("k"));
   ASSERT_TRUE(t0.Insert("k", "new"));
-  ASSERT_EQ(ReadString(t0, "k"), std::optional<std::string>("new"));
+  ASSERT_EQ(ReadString(t0, "k"), Optional<std::string>("new"));
   s0_->CommitTx();
 }
 
@@ -313,7 +313,7 @@ TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
   s1_->StartTx();
   ASSERT_FALSE(t1.Remove("k"));
   ASSERT_TRUE(t1.Insert("k", "new"));
-  ASSERT_EQ(ReadString(t1, "k"), std::optional<std::string>("new"));
+  ASSERT_EQ(ReadString(t1, "k"), Optional<std::string>("new"));
   s1_->CommitTx();
 }
 

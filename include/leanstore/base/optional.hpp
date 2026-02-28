@@ -45,10 +45,6 @@ public:
     return *this;
   }
 
-  /// Construct from std::optional
-  Optional(optional_t&& opt) : opt_(std::move(opt)) { // NOLINT (google-explicit-constructor)
-  }
-
   /// Construct an empty Optional
   Optional() : opt_(std::nullopt) {
   }
@@ -63,6 +59,21 @@ public:
 
   /// Construct a value Optional from const reference
   Optional(const T& v) : opt_(v) { // NOLINT (google-explicit-constructor)
+  }
+
+  Optional& operator=(std::nullopt_t) {
+    opt_ = std::nullopt;
+    return *this;
+  }
+
+  Optional& operator=(T&& v) {
+    opt_ = std::move(v);
+    return *this;
+  }
+
+  Optional& operator=(const T& v) {
+    opt_ = v;
+    return *this;
   }
 
   /// Checks if the Optional contains a value
@@ -98,6 +109,19 @@ public:
   constexpr const T* operator->() const& {
     LEAN_DCHECK_HAS_VALUE;
     return &opt_.value();
+  }
+
+  constexpr T* operator->() & {
+    LEAN_DCHECK_HAS_VALUE;
+    return &opt_.value();
+  }
+
+  constexpr bool operator==(const Optional& rhs) const {
+    return opt_ == rhs.opt_;
+  }
+
+  constexpr bool operator!=(const Optional& rhs) const {
+    return !(*this == rhs);
   }
 
 private:

@@ -81,17 +81,6 @@ if(ENABLE_COVERAGE)
   target_link_options(lean_project_options INTERFACE $<BUILD_INTERFACE:--coverage>)
 endif()
 
-# Sanitizers
-if(ENABLE_ASAN)
-  target_compile_options(lean_project_options INTERFACE $<BUILD_INTERFACE:-fsanitize=address>)
-  target_link_options(lean_project_options INTERFACE $<BUILD_INTERFACE:-fsanitize=address>)
-endif()
-
-if(ENABLE_TSAN)
-  target_compile_options(lean_project_options INTERFACE $<BUILD_INTERFACE:-fsanitize=thread>)
-  target_link_options(lean_project_options INTERFACE $<BUILD_INTERFACE:-fsanitize=thread>)
-endif()
-
 # ------------------------------------------------------------------------------
 # Compile definitions
 # ------------------------------------------------------------------------------

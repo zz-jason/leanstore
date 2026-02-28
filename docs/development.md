@@ -41,7 +41,6 @@ LeanStore provides CMake presets for common configurations:
 |--------|-------------|----------|
 | `debug_coro` | Debug build with coroutine support | **Default for development** |
 | `release_coro` | Release build with coroutine support | Performance testing, distribution |
-| `debug_cov` | Debug build with coverage instrumentation | Coverage-enabled local validation |
 
 ### Basic Build Commands
 

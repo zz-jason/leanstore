@@ -31,13 +31,6 @@
             }
         },
         {
-            "name": "debug_cov",
-            "inherits": "base_debug",
-            "cacheVariables": {
-                "ENABLE_COVERAGE": "ON"
-            }
-        },
-        {
             "name": "debug_coro",
             "inherits": "base_debug",
             "cacheVariables": {

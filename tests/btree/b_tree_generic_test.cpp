@@ -16,8 +16,8 @@ namespace leanstore::test {
 class BTreeGenericTest : public LeanTestSuite {
 protected:
   std::unique_ptr<LeanStore> store_;
-  std::optional<LeanSession> session_;
-  std::optional<LeanBTree> tree_;
+  Optional<LeanSession> session_;
+  Optional<LeanBTree> tree_;
 
   void SetUp() override {
     auto* option = lean_store_option_create(TestCaseStoreDir().c_str());
@@ -26,10 +26,10 @@ protected:
     auto opened = LeanStore::Open(option);
     ASSERT_TRUE(opened);
     store_ = std::move(opened.value());
-    session_.emplace(store_->Connect(0));
+    session_ = store_->Connect(0);
     auto created = session_->CreateBTree("summary", LEAN_BTREE_TYPE_MVCC);
     ASSERT_TRUE(created);
-    tree_.emplace(std::move(created.value()));
+    tree_ = std::move(created.value());
   }
 };
 

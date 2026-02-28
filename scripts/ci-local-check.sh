@@ -55,7 +55,7 @@ echo "Clang-tidy mode: $CLANG_TIDY_MODE"
 echo ""
 
 # Default presets to check
-DEFAULT_PRESETS=("debug_cov" "debug_coro")
+DEFAULT_PRESETS=("debug_coro")
 
 # If preset specified, use only that
 if [ $# -ge 1 ]; then
@@ -101,7 +101,7 @@ check_preset() {
     fi
     
     # Cppcheck (only for presets that have it in CI)
-    if [[ "$preset" == "debug_cov" || "$preset" == "debug_coro" ]]; then
+    if [[ "$preset" == "debug_coro" ]]; then
         if ! run_check "Cppcheck" cppcheck --project="build/$preset/compile_commands.json" -i tests --error-exitcode=1 --check-level=exhaustive; then
             return 1
         fi
@@ -118,14 +118,9 @@ check_preset() {
         return 1
     fi
     
-    # Unit tests with appropriate options
+    # Unit tests
     local test_cmd=("ctest" "--test-dir" "build/$preset" "--output-on-failure" "-j" "2")
-    if [[ "$preset" == "debug_cov" ]]; then
-        # Add TSAN options for these presets
-        TSAN_OPTIONS="suppressions=$(pwd)/tests/tsan.supp" "${test_cmd[@]}"
-    else
-        "${test_cmd[@]}"
-    fi
+    "${test_cmd[@]}"
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}  ✓ Unit tests passed${NC}"

@@ -13,7 +13,7 @@
 namespace leanstore::test {
 
 namespace {
-auto ReadString(LeanBTree& tree, const std::string& key) -> std::optional<std::string> {
+auto ReadString(LeanBTree& tree, const std::string& key) -> Optional<std::string> {
   auto res = tree.Lookup(key);
   if (!res) {
     return std::nullopt;
@@ -25,10 +25,10 @@ auto ReadString(LeanBTree& tree, const std::string& key) -> std::optional<std::s
 class AbortTest : public LeanTestSuite {
 protected:
   std::unique_ptr<LeanStore> store_;
-  std::optional<LeanSession> s0_;
-  std::optional<LeanSession> s1_;
-  std::optional<LeanBTree> t0_;
-  std::optional<LeanBTree> t1_;
+  Optional<LeanSession> s0_;
+  Optional<LeanSession> s1_;
+  Optional<LeanBTree> t0_;
+  Optional<LeanBTree> t1_;
 
   void SetUp() override {
     auto* option = lean_store_option_create(TestCaseStoreDir().c_str());
@@ -38,16 +38,16 @@ protected:
     ASSERT_TRUE(opened);
     store_ = std::move(opened.value());
 
-    s0_.emplace(store_->Connect(0));
-    s1_.emplace(store_->Connect(1));
+    s0_ = store_->Connect(0);
+    s1_ = store_->Connect(1);
 
     auto created = s0_->CreateBTree("abort_tx", LEAN_BTREE_TYPE_MVCC);
     ASSERT_TRUE(created);
-    t0_.emplace(std::move(created.value()));
+    t0_ = std::move(created.value());
 
     auto fetched = s1_->GetBTree("abort_tx");
     ASSERT_TRUE(fetched);
-    t1_.emplace(std::move(fetched.value()));
+    t1_ = std::move(fetched.value());
   }
 };
 
@@ -56,7 +56,7 @@ TEST_F(AbortTest, AfterInsert) {
   s1_->StartTx();
   ASSERT_TRUE(t0_->Insert("1", "10"));
 
-  ASSERT_EQ(ReadString(*t0_, "1"), std::optional<std::string>("10"));
+  ASSERT_EQ(ReadString(*t0_, "1"), Optional<std::string>("10"));
   ASSERT_FALSE(ReadString(*t1_, "1").has_value());
 
   s0_->AbortTx();
@@ -77,14 +77,14 @@ TEST_F(AbortTest, AfterUpdate) {
   ASSERT_TRUE(t0_->Remove("1"));
   ASSERT_TRUE(t0_->Insert("1", "11"));
 
-  ASSERT_EQ(ReadString(*t0_, "1"), std::optional<std::string>("11"));
-  ASSERT_EQ(ReadString(*t1_, "1"), std::optional<std::string>("10"));
+  ASSERT_EQ(ReadString(*t0_, "1"), Optional<std::string>("11"));
+  ASSERT_EQ(ReadString(*t1_, "1"), Optional<std::string>("10"));
 
   s0_->AbortTx();
   s1_->CommitTx();
 
   s1_->StartTx();
-  ASSERT_EQ(ReadString(*t1_, "1"), std::optional<std::string>("10"));
+  ASSERT_EQ(ReadString(*t1_, "1"), Optional<std::string>("10"));
   s1_->CommitTx();
 }
 
@@ -98,13 +98,13 @@ TEST_F(AbortTest, AfterRemove) {
   ASSERT_TRUE(t0_->Remove("1"));
 
   ASSERT_FALSE(ReadString(*t0_, "1").has_value());
-  ASSERT_EQ(ReadString(*t1_, "1"), std::optional<std::string>("10"));
+  ASSERT_EQ(ReadString(*t1_, "1"), Optional<std::string>("10"));
 
   s0_->AbortTx();
   s1_->CommitTx();
 
   s1_->StartTx();
-  ASSERT_EQ(ReadString(*t1_, "1"), std::optional<std::string>("10"));
+  ASSERT_EQ(ReadString(*t1_, "1"), Optional<std::string>("10"));
   s1_->CommitTx();
 }
 
@@ -118,14 +118,14 @@ TEST_F(AbortTest, AfterInsertOnRemove) {
   ASSERT_TRUE(t0_->Remove("1"));
   ASSERT_TRUE(t0_->Insert("1", "11"));
 
-  ASSERT_EQ(ReadString(*t0_, "1"), std::optional<std::string>("11"));
-  ASSERT_EQ(ReadString(*t1_, "1"), std::optional<std::string>("10"));
+  ASSERT_EQ(ReadString(*t0_, "1"), Optional<std::string>("11"));
+  ASSERT_EQ(ReadString(*t1_, "1"), Optional<std::string>("10"));
 
   s0_->AbortTx();
   s1_->CommitTx();
 
   s1_->StartTx();
-  ASSERT_EQ(ReadString(*t1_, "1"), std::optional<std::string>("10"));
+  ASSERT_EQ(ReadString(*t1_, "1"), Optional<std::string>("10"));
   s1_->CommitTx();
 }
 
