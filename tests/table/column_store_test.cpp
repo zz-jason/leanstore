@@ -3,6 +3,8 @@
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/c/leanstore.h"
 #include "leanstore/c/types.h"
+#include "leanstore/lean_btree.hpp"
+#include "leanstore/lean_session.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/table/table.hpp"
 
@@ -129,17 +131,20 @@ protected:
 
 TEST_F(ColumnStoreBtreeTest, BuildColumnStoreMultiLeafGroup) {
   const std::string table_name = "column_store_multi_leaf_group";
-  auto* coro_session = store_->TryReserveSession(0);
-  ASSERT_NE(coro_session, nullptr);
-  store_->SubmitAndWait(coro_session, [&]() {
-    auto def_res = BuildBinaryTableDefinition(table_name);
-    ASSERT_TRUE(def_res);
+  auto session = store_->Connect(0);
+  auto def_res = BuildBinaryTableDefinition(table_name);
+  ASSERT_TRUE(def_res);
+  auto definition = std::move(def_res.value());
 
-    auto btree_res = store_->CreateBasicKv(table_name, def_res.value().primary_index_config_);
-    ASSERT_TRUE(btree_res);
-    auto* btree = btree_res.value();
+  auto btree_res = session.CreateBTree(table_name, lean_btree_type::LEAN_BTREE_TYPE_ATOMIC,
+                                       definition.primary_index_config_);
+  ASSERT_TRUE(btree_res);
 
-    auto table_res = store_->RegisterTableWithExisting(def_res.value());
+  session.ExecSync([&]() {
+    auto* btree = dynamic_cast<BasicKV*>(store_->tree_registry_->GetTree(table_name));
+    ASSERT_NE(btree, nullptr);
+
+    auto table_res = store_->RegisterTableWithExisting(definition);
     ASSERT_TRUE(table_res);
     auto* table = table_res.value();
 
@@ -166,22 +171,24 @@ TEST_F(ColumnStoreBtreeTest, BuildColumnStoreMultiLeafGroup) {
     auto drop_res = store_->DropTable(table_name);
     ASSERT_TRUE(drop_res);
   });
-  store_->ReleaseSession(coro_session);
 }
 
 TEST_F(ColumnStoreBtreeTest, BuildColumnStoreHeightGreaterThanTwo) {
   const std::string table_name = "column_store_height_gt2";
-  auto* coro_session = store_->TryReserveSession(0);
-  ASSERT_NE(coro_session, nullptr);
-  store_->SubmitAndWait(coro_session, [&]() {
-    auto def_res = BuildBinaryTableDefinition(table_name);
-    ASSERT_TRUE(def_res);
+  auto session = store_->Connect(0);
+  auto def_res = BuildBinaryTableDefinition(table_name);
+  ASSERT_TRUE(def_res);
+  auto definition = std::move(def_res.value());
 
-    auto btree_res = store_->CreateBasicKv(table_name, def_res.value().primary_index_config_);
-    ASSERT_TRUE(btree_res);
-    auto* btree = btree_res.value();
+  auto btree_res = session.CreateBTree(table_name, lean_btree_type::LEAN_BTREE_TYPE_ATOMIC,
+                                       definition.primary_index_config_);
+  ASSERT_TRUE(btree_res);
 
-    auto table_res = store_->RegisterTableWithExisting(def_res.value());
+  session.ExecSync([&]() {
+    auto* btree = dynamic_cast<BasicKV*>(store_->tree_registry_->GetTree(table_name));
+    ASSERT_NE(btree, nullptr);
+
+    auto table_res = store_->RegisterTableWithExisting(definition);
     ASSERT_TRUE(table_res);
     auto* table = table_res.value();
 
@@ -214,22 +221,24 @@ TEST_F(ColumnStoreBtreeTest, BuildColumnStoreHeightGreaterThanTwo) {
     auto drop_res = store_->DropTable(table_name);
     ASSERT_TRUE(drop_res);
   });
-  store_->ReleaseSession(coro_session);
 }
 
 TEST_F(ColumnStoreBtreeTest, BuildColumnStoreParentUpperFenceSplit) { // NOLINT
   const std::string table_name = "column_store_parent_upper_fence_split";
-  auto* coro_session = store_->TryReserveSession(0);
-  ASSERT_NE(coro_session, nullptr);
-  store_->SubmitAndWait(coro_session, [&]() {
-    auto def_res = BuildBinaryTableDefinition(table_name);
-    ASSERT_TRUE(def_res);
+  auto session = store_->Connect(0);
+  auto def_res = BuildBinaryTableDefinition(table_name);
+  ASSERT_TRUE(def_res);
+  auto definition = std::move(def_res.value());
 
-    auto btree_res = store_->CreateBasicKv(table_name, def_res.value().primary_index_config_);
-    ASSERT_TRUE(btree_res);
-    auto* btree = btree_res.value();
+  auto btree_res = session.CreateBTree(table_name, lean_btree_type::LEAN_BTREE_TYPE_ATOMIC,
+                                       definition.primary_index_config_);
+  ASSERT_TRUE(btree_res);
 
-    auto table_res = store_->RegisterTableWithExisting(def_res.value());
+  session.ExecSync([&]() {
+    auto* btree = dynamic_cast<BasicKV*>(store_->tree_registry_->GetTree(table_name));
+    ASSERT_NE(btree, nullptr);
+
+    auto table_res = store_->RegisterTableWithExisting(definition);
     ASSERT_TRUE(table_res);
     auto* table = table_res.value();
 
@@ -265,7 +274,6 @@ TEST_F(ColumnStoreBtreeTest, BuildColumnStoreParentUpperFenceSplit) { // NOLINT
     auto drop_res = store_->DropTable(table_name);
     ASSERT_TRUE(drop_res);
   });
-  store_->ReleaseSession(coro_session);
 }
 
 } // namespace leanstore::test
