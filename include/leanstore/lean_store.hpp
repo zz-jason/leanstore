@@ -40,6 +40,7 @@ class LeanCursor;
 class LeanStore {
   // Allow internal implementation to access private GetCoroScheduler()
   friend class CheckpointProcessor;
+  friend class LeanSession;
 
 public:
   /// Opens a LeanStore instance with the provided options.
@@ -76,28 +77,6 @@ public:
   /// The LeanStore destructor
   ~LeanStore();
 
-  /// Create a BasicKV
-  Result<BasicKV*> CreateBasicKv(const std::string& name,
-                                 lean_btree_config config = lean_btree_config{
-                                     .enable_wal_ = true, .use_bulk_insert_ = false});
-
-  /// Get a registered BasicKV
-  void GetBasicKV(const std::string& name, BasicKV** btree);
-
-  /// Unregister a BasicKV
-  void DropBasicKV(const std::string& name);
-
-  /// Register a TransactionKV
-  Result<TransactionKV*> CreateTransactionKV(const std::string& name,
-                                             lean_btree_config config = lean_btree_config{
-                                                 .enable_wal_ = true, .use_bulk_insert_ = false});
-
-  /// Get a registered TransactionKV
-  void GetTransactionKV(const std::string& name, TransactionKV** btree);
-
-  /// Unregister a TransactionKV
-  void DropTransactionKV(const std::string& name);
-
   /// Get the MVCC manager
   MvccManager& GetMvccManager() {
     LEAN_DCHECK(mvcc_mgr_ != nullptr, "MVCC manager is not initialized");
@@ -118,28 +97,8 @@ public:
 
   lean_lid_t AllocWalGsn();
 
-  /// Execute a custom user function on a worker thread synchronously.
-  void ExecSync(uint64_t worker_id, std::function<void()> fn);
-
   void ParallelRange(uint64_t num_jobs,
                      std::function<void(uint64_t job_begin, uint64_t job_end)>&& job_handler);
-
-  /// Reserve a worker session for submitting multiple tasks.
-  /// Returns nullptr if no session is available.
-  /// Must be released with ReleaseSession() when done.
-  /// This is a high-performance alternative to ExecSync for coroutine-enabled builds.
-  CoroSession* TryReserveSession(uint64_t worker_id);
-
-  /// Reserve a worker session, blocking until one is available.
-  /// Must be released with ReleaseSession() when done.
-  CoroSession* ReserveSession(uint64_t worker_id);
-
-  /// Release a previously reserved session back to the pool.
-  void ReleaseSession(CoroSession* session);
-
-  /// Submit a task on a reserved session and wait for completion.
-  /// This is the high-performance alternative to ExecSync for coroutine-enabled builds.
-  void SubmitAndWait(CoroSession* session, std::function<void()> task);
 
   /// Connect to the database and return a session for coroutine operations.
   /// This is a convenience wrapper around ReserveSession that returns a LeanSession object.
@@ -167,6 +126,10 @@ private:
   CoroScheduler& GetCoroScheduler() {
     LEAN_DCHECK(coro_scheduler_ != nullptr, "Coroutine scheduler is not initialized");
     return *coro_scheduler_;
+  }
+
+  bool HasCoroScheduler() const {
+    return coro_scheduler_ != nullptr;
   }
 
   /// The coroutine scheduler (implementation detail, hidden from public API)

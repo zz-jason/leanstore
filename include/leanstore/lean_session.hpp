@@ -63,9 +63,9 @@ public:
   /// Close the session and release resources.
   void Close();
 
-private:
-  friend class LeanBTree;
-  friend class LeanCursor;
+  bool InTransaction() const {
+    return in_transaction_;
+  }
 
   template <typename F>
   auto ExecSync(F&& fn) -> std::invoke_result_t<F> {
@@ -80,6 +80,10 @@ private:
       return std::move(result.value());
     }
   }
+
+private:
+  friend class LeanBTree;
+  friend class LeanCursor;
 
   void ExecSyncVoid(std::function<void()> fn);
 

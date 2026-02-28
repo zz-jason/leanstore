@@ -49,6 +49,7 @@ bool LeanCursor::IsValid() const {
 }
 
 Slice LeanCursor::CurrentKey() const {
+  cursor_->AssembleKey();
   return cursor_->Key();
 }
 
