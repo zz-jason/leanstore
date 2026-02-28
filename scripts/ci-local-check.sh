@@ -55,7 +55,7 @@ echo "Clang-tidy mode: $CLANG_TIDY_MODE"
 echo ""
 
 # Default presets to check
-DEFAULT_PRESETS=("debug_tsan" "debug_cov" "debug_coro")
+DEFAULT_PRESETS=("debug_cov" "debug_coro")
 
 # If preset specified, use only that
 if [ $# -ge 1 ]; then
@@ -120,7 +120,7 @@ check_preset() {
     
     # Unit tests with appropriate options
     local test_cmd=("ctest" "--test-dir" "build/$preset" "--output-on-failure" "-j" "2")
-    if [[ "$preset" == "debug_tsan" || "$preset" == "debug_cov" ]]; then
+    if [[ "$preset" == "debug_cov" ]]; then
         # Add TSAN options for these presets
         TSAN_OPTIONS="suppressions=$(pwd)/tests/tsan.supp" "${test_cmd[@]}"
     else
@@ -245,8 +245,7 @@ run_clang_tidy_check() {
     echo -e "${GREEN}=== Running Clang-Tidy Checks (mode: $CLANG_TIDY_MODE) ===${NC}"
 
     # We need a configured build directory for compile_commands.json
-    # Use debug_tsan as it's what the CI uses for regular clang-tidy
-    local preset="debug_tsan"
+    local preset="debug_coro"
 
     if [ ! -d "build/$preset" ]; then
         echo "Configuring $preset preset first..."

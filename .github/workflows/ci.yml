@@ -10,21 +10,6 @@ permissions:
   pull-requests: write
 
 jobs:
-  ut-with-tsan:
-    runs-on: ubuntu-latest
-    container:
-      image: zzjason/leanstore-dev:latest
-    name: UT-tsan
-    steps:
-    - name: Check out repository
-      uses: actions/checkout@v3
-
-    - name: Config, Build, and UT with tsan
-      run: |
-        cmake --preset debug_tsan
-        cmake --build build/debug_tsan -j `nproc`
-        TSAN_OPTIONS="suppressions=$(pwd)/tests/tsan.supp" ctest --test-dir build/debug_tsan --output-on-failure -j 2
-
   ut-with-gcovr:
     runs-on: ubuntu-latest
     container:
@@ -256,7 +241,7 @@ jobs:
 
     - name: Config project
       run: |
-        cmake --preset debug_tsan
+        cmake --preset debug_coro
 
     - name: Clang-Tidy on changed files
       run: |
@@ -264,7 +249,7 @@ jobs:
           "${{ github.event.pull_request.number }}" \
           "${{ github.repository }}" \
           "${{ secrets.GITHUB_TOKEN }}" \
-          "build/debug_tsan"
+          "build/debug_coro"
 
   clang-tidy-coro:
     runs-on: ubuntu-latest

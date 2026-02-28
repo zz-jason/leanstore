@@ -41,7 +41,6 @@ LeanStore provides CMake presets for common configurations:
 |--------|-------------|----------|
 | `debug_coro` | Debug build with coroutine support | **Default for development** |
 | `release_coro` | Release build with coroutine support | Performance testing, distribution |
-| `debug_tsan` | Debug build with thread sanitizer | Concurrency debugging |
 | `debug_cov` | Debug build with coverage instrumentation | Coverage-enabled local validation |
 
 ### Basic Build Commands
@@ -327,11 +326,11 @@ LeanStore uses vcpkg for dependency management. The `vcpkg.json` manifest specif
    leanstore::Log::Info("Debug message: {}", value);
    ```
 
-2. **Use sanitizers** (debug_tsan preset):
+2. **Run debug validation quickly** (debug_coro preset):
    ```bash
-   cmake --preset debug_tsan
-   cmake --build build/debug_tsan
-   ctest --test-dir build/debug_tsan
+   cmake --preset debug_coro
+   cmake --build build/debug_coro
+   ctest --test-dir build/debug_coro
    ```
 
 3. **Generate compile_commands.json**:
