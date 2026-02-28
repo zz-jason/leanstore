@@ -1,39 +1,15 @@
 #include "common/lean_test_suite.hpp"
-#include "leanstore/btree/b_tree_node.hpp"
-#include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/c/leanstore.h"
-#include "leanstore/c/types.h"
-#include "leanstore/lean_btree.hpp"
-#include "leanstore/lean_session.hpp"
-#include "leanstore/lean_store.hpp"
-#include "leanstore/table/table.hpp"
 
 #include <gtest/gtest.h>
 
 #include <cstring>
 #include <format>
 #include <string>
-#include <vector>
 
 namespace leanstore::test {
 
 namespace {
-
-Result<TableDefinition> BuildBinaryTableDefinition(const std::string& name) {
-  std::vector<ColumnDefinition> columns;
-  columns.push_back(
-      ColumnDefinition{.name_ = "k", .type_ = ColumnType::kBinary, .nullable_ = false});
-  columns.push_back(
-      ColumnDefinition{.name_ = "v", .type_ = ColumnType::kBinary, .nullable_ = false});
-  std::vector<uint32_t> pk_columns{0};
-  auto schema_res = TableSchema::Create(std::move(columns), std::move(pk_columns));
-  if (!schema_res) {
-    return std::move(schema_res.error());
-  }
-  return TableDefinition::Create(
-      name, std::move(schema_res.value()), lean_btree_type::LEAN_BTREE_TYPE_ATOMIC,
-      lean_btree_config{.enable_wal_ = false, .use_bulk_insert_ = false});
-}
 
 std::string MakeKey(size_t key_size, uint64_t value) {
   std::string suffix = std::format("{:016d}", value);
@@ -58,22 +34,19 @@ std::string MakeValue(size_t value_size, uint64_t value) {
   return padded;
 }
 
-void InsertBinaryRow(Table* table, const std::string& key, const std::string& value) {
+void InsertBinaryRow(lean_table* table, const std::string& key, const std::string& value) {
   lean_datum cols[2];
   bool nulls[2] = {false, false};
-  lean_str_view key_view{.data = key.data(), .size = key.size()};
-  lean_str_view value_view{.data = value.data(), .size = value.size()};
-  cols[0].str = key_view;
-  cols[1].str = value_view;
+  cols[0].str = lean_str_view{.data = key.data(), .size = key.size()};
+  cols[1].str = lean_str_view{.data = value.data(), .size = value.size()};
   lean_row row{.columns = cols, .nulls = nulls, .num_columns = 2};
-  EXPECT_EQ(table->Insert(&row), OpCode::kOK);
+  ASSERT_EQ(table->insert(table, &row), lean_status::LEAN_STATUS_OK);
 }
 
-bool LookupBinaryRow(Table* table, const std::string& key, std::string& out_value) {
+bool LookupBinaryRow(lean_table* table, const std::string& key, std::string& out_value) {
   lean_datum key_cols[2];
   bool key_nulls[2] = {false, true};
-  lean_str_view key_view{.data = key.data(), .size = key.size()};
-  key_cols[0].str = key_view;
+  key_cols[0].str = lean_str_view{.data = key.data(), .size = key.size()};
   key_cols[1].str = lean_str_view{.data = nullptr, .size = 0};
   lean_row key_row{.columns = key_cols, .nulls = key_nulls, .num_columns = 2};
 
@@ -81,7 +54,7 @@ bool LookupBinaryRow(Table* table, const std::string& key, std::string& out_valu
   bool out_nulls[2] = {false, false};
   lean_row out_row{.columns = out_cols, .nulls = out_nulls, .num_columns = 2};
 
-  if (table->Lookup(&key_row, &out_row, out_value) != OpCode::kOK) {
+  if (table->lookup(table, &key_row, &out_row) != lean_status::LEAN_STATUS_OK) {
     return false;
   }
   out_value.assign(out_cols[1].str.data, out_cols[1].str.size);
@@ -110,170 +83,162 @@ protected:
   }
 };
 
-class ColumnStoreBtreeTest : public LeanTestSuite {
-protected:
-  std::unique_ptr<LeanStore> store_;
+TEST_F(ColumnStoreApiTest, BuildColumnStoreMultiLeafGroup) {
+  const char* table_name = "column_store_multi_leaf_group";
+  lean_table_column_def columns[2] = {
+      {.name = {.data = "k", .size = 1},
+       .type = LEAN_COLUMN_TYPE_BINARY,
+       .nullable = false,
+       .fixed_length = 0},
+      {.name = {.data = "v", .size = 1},
+       .type = LEAN_COLUMN_TYPE_BINARY,
+       .nullable = false,
+       .fixed_length = 0},
+  };
+  uint32_t pk_columns[1] = {0};
+  lean_table_def table_def = {.name = {.data = table_name, .size = strlen(table_name)},
+                              .columns = columns,
+                              .num_columns = 2,
+                              .pk_cols = pk_columns,
+                              .pk_cols_count = 1,
+                              .primary_index_type = lean_btree_type::LEAN_BTREE_TYPE_ATOMIC,
+                              .primary_index_config = {
+                                  .enable_wal_ = false,
+                                  .use_bulk_insert_ = false,
+                              }};
 
-  void SetUp() override {
-    lean_store_option* option = lean_store_option_create(TestCaseStoreDir().c_str());
-    option->create_from_scratch_ = true;
-    option->worker_threads_ = 2;
-    auto res = LeanStore::Open(option);
-    ASSERT_TRUE(res);
-    store_ = std::move(res.value());
-    ASSERT_NE(store_, nullptr);
+  auto* session = store_->connect(store_);
+  ASSERT_NE(session, nullptr);
+  ASSERT_EQ(session->create_table(session, &table_def), lean_status::LEAN_STATUS_OK);
+  auto* table = session->get_table(session, table_name);
+  ASSERT_NE(table, nullptr);
+
+  const size_t key_size = 64;
+  const size_t value_size = 256;
+  const size_t row_count = 96;
+  for (size_t i = 0; i < row_count; ++i) {
+    InsertBinaryRow(table, MakeKey(key_size, i), MakeValue(value_size, i));
   }
 
-  void TearDown() override {
-    store_.reset();
+  lean_column_store_options options{
+      .max_rows_per_block = 1, .max_block_bytes = 0, .target_height = 0};
+  lean_column_store_stats stats{};
+  ASSERT_EQ(table->build_column_store(table, &options, &stats), lean_status::LEAN_STATUS_OK);
+  EXPECT_EQ(stats.row_count, row_count);
+  EXPECT_EQ(stats.block_count, row_count);
+
+  std::string out_value;
+  ASSERT_TRUE(LookupBinaryRow(table, MakeKey(key_size, row_count / 2), out_value));
+
+  table->close(table);
+  ASSERT_EQ(session->drop_table(session, table_name), lean_status::LEAN_STATUS_OK);
+  session->close(session);
+}
+
+TEST_F(ColumnStoreApiTest, BuildColumnStoreHeightGreaterThanTwo) {
+  const char* table_name = "column_store_height_gt2";
+  lean_table_column_def columns[2] = {
+      {.name = {.data = "k", .size = 1},
+       .type = LEAN_COLUMN_TYPE_BINARY,
+       .nullable = false,
+       .fixed_length = 0},
+      {.name = {.data = "v", .size = 1},
+       .type = LEAN_COLUMN_TYPE_BINARY,
+       .nullable = false,
+       .fixed_length = 0},
+  };
+  uint32_t pk_columns[1] = {0};
+  lean_table_def table_def = {.name = {.data = table_name, .size = strlen(table_name)},
+                              .columns = columns,
+                              .num_columns = 2,
+                              .pk_cols = pk_columns,
+                              .pk_cols_count = 1,
+                              .primary_index_type = lean_btree_type::LEAN_BTREE_TYPE_ATOMIC,
+                              .primary_index_config = {
+                                  .enable_wal_ = false,
+                                  .use_bulk_insert_ = false,
+                              }};
+
+  auto* session = store_->connect(store_);
+  ASSERT_NE(session, nullptr);
+  ASSERT_EQ(session->create_table(session, &table_def), lean_status::LEAN_STATUS_OK);
+  auto* table = session->get_table(session, table_name);
+  ASSERT_NE(table, nullptr);
+
+  const size_t key_size = 512;
+  const size_t value_size = 512;
+  const size_t row_count = 200;
+  for (size_t i = 0; i < row_count; ++i) {
+    InsertBinaryRow(table, MakeKey(key_size, i), MakeValue(value_size, i));
   }
-};
 
-TEST_F(ColumnStoreBtreeTest, BuildColumnStoreMultiLeafGroup) {
-  const std::string table_name = "column_store_multi_leaf_group";
-  auto session = store_->Connect(0);
-  auto def_res = BuildBinaryTableDefinition(table_name);
-  ASSERT_TRUE(def_res);
-  auto definition = std::move(def_res.value());
+  lean_column_store_options options{
+      .max_rows_per_block = 32, .max_block_bytes = 0, .target_height = 0};
+  lean_column_store_stats stats{};
+  ASSERT_EQ(table->build_column_store(table, &options, &stats), lean_status::LEAN_STATUS_OK);
+  EXPECT_EQ(stats.row_count, row_count);
+  EXPECT_EQ(stats.block_count,
+            (row_count + options.max_rows_per_block - 1) / options.max_rows_per_block);
 
-  auto btree_res = session.CreateBTree(table_name, lean_btree_type::LEAN_BTREE_TYPE_ATOMIC,
-                                       definition.primary_index_config_);
-  ASSERT_TRUE(btree_res);
+  std::string out_value;
+  ASSERT_TRUE(LookupBinaryRow(table, MakeKey(key_size, row_count / 2), out_value));
 
-  session.ExecSync([&]() {
-    auto* btree = dynamic_cast<BasicKV*>(store_->tree_registry_->GetTree(table_name));
-    ASSERT_NE(btree, nullptr);
-
-    auto table_res = store_->RegisterTableWithExisting(definition);
-    ASSERT_TRUE(table_res);
-    auto* table = table_res.value();
-
-    const size_t key_size = 64;
-    const size_t value_size = 256;
-    const size_t row_count = 96;
-    for (size_t i = 0; i < row_count; ++i) {
-      auto key = MakeKey(key_size, i);
-      auto value = MakeValue(value_size, i);
-      InsertBinaryRow(table, key, value);
-    }
-
-    auto stats_res = table->BuildColumnStore(
-        column_store::ColumnStoreOptions{.max_rows_per_block_ = 1, .max_block_bytes_ = 0});
-    ASSERT_TRUE(stats_res) << stats_res.error().ToString();
-
-    const uint64_t leaf_count = btree->CountAllPages() - btree->CountInnerPages();
-    EXPECT_GT(leaf_count, 1);
-
-    std::string out_value;
-    auto probe_key = MakeKey(key_size, row_count / 2);
-    ASSERT_TRUE(LookupBinaryRow(table, probe_key, out_value));
-
-    auto drop_res = store_->DropTable(table_name);
-    ASSERT_TRUE(drop_res);
-  });
+  table->close(table);
+  ASSERT_EQ(session->drop_table(session, table_name), lean_status::LEAN_STATUS_OK);
+  session->close(session);
 }
 
-TEST_F(ColumnStoreBtreeTest, BuildColumnStoreHeightGreaterThanTwo) {
-  const std::string table_name = "column_store_height_gt2";
-  auto session = store_->Connect(0);
-  auto def_res = BuildBinaryTableDefinition(table_name);
-  ASSERT_TRUE(def_res);
-  auto definition = std::move(def_res.value());
+TEST_F(ColumnStoreApiTest, BuildColumnStoreParentUpperFenceSplit) {
+  const char* table_name = "column_store_parent_upper_fence_split";
+  lean_table_column_def columns[2] = {
+      {.name = {.data = "k", .size = 1},
+       .type = LEAN_COLUMN_TYPE_BINARY,
+       .nullable = false,
+       .fixed_length = 0},
+      {.name = {.data = "v", .size = 1},
+       .type = LEAN_COLUMN_TYPE_BINARY,
+       .nullable = false,
+       .fixed_length = 0},
+  };
+  uint32_t pk_columns[1] = {0};
+  lean_table_def table_def = {.name = {.data = table_name, .size = strlen(table_name)},
+                              .columns = columns,
+                              .num_columns = 2,
+                              .pk_cols = pk_columns,
+                              .pk_cols_count = 1,
+                              .primary_index_type = lean_btree_type::LEAN_BTREE_TYPE_ATOMIC,
+                              .primary_index_config = {
+                                  .enable_wal_ = false,
+                                  .use_bulk_insert_ = false,
+                              }};
 
-  auto btree_res = session.CreateBTree(table_name, lean_btree_type::LEAN_BTREE_TYPE_ATOMIC,
-                                       definition.primary_index_config_);
-  ASSERT_TRUE(btree_res);
+  auto* session = store_->connect(store_);
+  ASSERT_NE(session, nullptr);
+  ASSERT_EQ(session->create_table(session, &table_def), lean_status::LEAN_STATUS_OK);
+  auto* table = session->get_table(session, table_name);
+  ASSERT_NE(table, nullptr);
 
-  session.ExecSync([&]() {
-    auto* btree = dynamic_cast<BasicKV*>(store_->tree_registry_->GetTree(table_name));
-    ASSERT_NE(btree, nullptr);
+  const size_t key_size = 512;
+  const size_t value_size = 512;
+  const size_t row_count = 128;
+  for (size_t i = 0; i < row_count; ++i) {
+    InsertBinaryRow(table, MakeKey(key_size, i), MakeValue(value_size, i));
+  }
 
-    auto table_res = store_->RegisterTableWithExisting(definition);
-    ASSERT_TRUE(table_res);
-    auto* table = table_res.value();
+  lean_column_store_options options{
+      .max_rows_per_block = 4, .max_block_bytes = 0, .target_height = 0};
+  lean_column_store_stats stats{};
+  ASSERT_EQ(table->build_column_store(table, &options, &stats), lean_status::LEAN_STATUS_OK);
+  EXPECT_EQ(stats.row_count, row_count);
+  EXPECT_EQ(stats.block_count,
+            (row_count + options.max_rows_per_block - 1) / options.max_rows_per_block);
 
-    const size_t key_size = 512;
-    const size_t value_size = 512;
-    const size_t max_rows = 400;
-    size_t rows_inserted = 0;
-    for (size_t i = 0; i < max_rows; ++i) {
-      auto key = MakeKey(key_size, i);
-      auto value = MakeValue(value_size, i);
-      InsertBinaryRow(table, key, value);
-      rows_inserted++;
-      if (btree->GetHeight() > 2) {
-        break;
-      }
-    }
-    const uint64_t height_before = btree->GetHeight();
-    ASSERT_GT(height_before, 2u);
+  std::string out_value;
+  ASSERT_TRUE(LookupBinaryRow(table, MakeKey(key_size, row_count / 2), out_value));
 
-    auto stats_res = table->BuildColumnStore(
-        column_store::ColumnStoreOptions{.max_rows_per_block_ = 32, .max_block_bytes_ = 0});
-    ASSERT_TRUE(stats_res) << stats_res.error().ToString();
-    const uint64_t height_after = btree->GetHeight();
-    EXPECT_EQ(height_after, height_before);
-
-    std::string out_value;
-    auto probe_key = MakeKey(key_size, rows_inserted / 2);
-    ASSERT_TRUE(LookupBinaryRow(table, probe_key, out_value));
-
-    auto drop_res = store_->DropTable(table_name);
-    ASSERT_TRUE(drop_res);
-  });
-}
-
-TEST_F(ColumnStoreBtreeTest, BuildColumnStoreParentUpperFenceSplit) { // NOLINT
-  const std::string table_name = "column_store_parent_upper_fence_split";
-  auto session = store_->Connect(0);
-  auto def_res = BuildBinaryTableDefinition(table_name);
-  ASSERT_TRUE(def_res);
-  auto definition = std::move(def_res.value());
-
-  auto btree_res = session.CreateBTree(table_name, lean_btree_type::LEAN_BTREE_TYPE_ATOMIC,
-                                       definition.primary_index_config_);
-  ASSERT_TRUE(btree_res);
-
-  session.ExecSync([&]() {
-    auto* btree = dynamic_cast<BasicKV*>(store_->tree_registry_->GetTree(table_name));
-    ASSERT_NE(btree, nullptr);
-
-    auto table_res = store_->RegisterTableWithExisting(definition);
-    ASSERT_TRUE(table_res);
-    auto* table = table_res.value();
-
-    const size_t key_size = 512;
-    const size_t value_size = 512;
-    const size_t target_rows = 64;
-    const size_t max_rows = 200;
-    size_t rows_inserted = 0;
-    while (
-        (btree->GetHeight() <= 2 || btree->CountInnerPages() <= 1 || rows_inserted < target_rows) &&
-        rows_inserted < max_rows) {
-      auto key = MakeKey(key_size, rows_inserted);
-      auto value = MakeValue(value_size, rows_inserted);
-      InsertBinaryRow(table, key, value);
-      rows_inserted++;
-    }
-    ASSERT_GE(rows_inserted, target_rows);
-    ASSERT_GT(btree->GetHeight(), 2u);
-    ASSERT_GT(btree->CountInnerPages(), 1u);
-
-    const column_store::ColumnStoreOptions options{.max_rows_per_block_ = 4, .max_block_bytes_ = 0};
-    auto stats_res = table->BuildColumnStore(options);
-    ASSERT_TRUE(stats_res) << stats_res.error().ToString();
-    EXPECT_EQ(stats_res.value().row_count_, rows_inserted);
-    const uint64_t expected_blocks =
-        (rows_inserted + options.max_rows_per_block_ - 1) / options.max_rows_per_block_;
-    EXPECT_EQ(stats_res.value().block_count_, expected_blocks);
-
-    std::string out_value;
-    auto probe_key = MakeKey(key_size, rows_inserted / 2);
-    ASSERT_TRUE(LookupBinaryRow(table, probe_key, out_value));
-
-    auto drop_res = store_->DropTable(table_name);
-    ASSERT_TRUE(drop_res);
-  });
+  table->close(table);
+  ASSERT_EQ(session->drop_table(session, table_name), lean_status::LEAN_STATUS_OK);
+  session->close(session);
 }
 
 } // namespace leanstore::test

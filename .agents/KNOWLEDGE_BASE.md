@@ -39,6 +39,7 @@ Use this file for factual, project-specific knowledge that improves coding-agent
 | 2026-02-28 | Keep C API cursor bridges on iterator wrappers (`CursorImpl`/`CursorMvccImpl`) for now | Directly wrapping `LeanCursor` in C bridge regressed JumpContext/iterator lifecycle behavior in C cursor tests | C bridge uses existing per-call iterator wrapper logic while C store/session paths still use `LeanStore::TryConnect` + `LeanSession` |
 | 2026-02-28 | `LeanSession::Close()` must tolerate store shutdown order | Recovery tests may close store before deferred session handle destruction | `Close()` releases CoroSession only when scheduler is still alive |
 | 2026-02-28 | Avoid nested `LeanSession::ExecSync` in tests | Calling `session.CreateBTree()` inside an outer `session.ExecSync()` deadlocks because both wait on the same session future | `tests/table/column_store_test.cpp` now performs `CreateBTree` outside the `ExecSync` block and keeps only in-worker table operations inside |
+| 2026-02-28 | Prefer C table/session API in column-store tests to avoid direct scheduler plumbing | `LeanSession::ExecSync` is an internal execution primitive; test logic should use stable public table/session interfaces | `tests/table/column_store_test.cpp` now uses `lean_open_store`/`lean_session`/`lean_table` APIs only |
 
 ## Pitfalls and Failure Modes
 
