@@ -11,8 +11,6 @@
 #include <optional>
 #include <string>
 
-#ifdef LEAN_ENABLE_CORO
-
 namespace leanstore::test {
 
 class AsyncWriteBufferTest : public LeanTestSuite {
@@ -51,13 +49,3 @@ TEST_F(AsyncWriteBufferTest, Basic) {
 }
 
 } // namespace leanstore::test
-
-#else
-
-namespace leanstore::test {
-TEST(AsyncWriteBufferTestCoroOnly, DisabledWhenNoCoro) {
-  GTEST_SKIP() << "LEAN_ENABLE_CORO is disabled";
-}
-} // namespace leanstore::test
-
-#endif

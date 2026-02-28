@@ -1,5 +1,3 @@
-#ifdef LEAN_ENABLE_CORO
-
 #include "leanstore/lean_cursor.hpp"
 
 #include "leanstore/btree/btree_iter.hpp"
@@ -77,5 +75,3 @@ void LeanCursor::Close() {
 }
 
 } // namespace leanstore
-
-#endif // LEAN_ENABLE_CORO

@@ -28,7 +28,6 @@ class BasicKV;
 class TransactionKV;
 class TreeRegistry;
 class BufferManager;
-class CRManager;
 class MvccManager;
 class Table;
 class TableRegistry;
@@ -68,9 +67,6 @@ public:
 
   /// The concurrency control protocol used by the store.
   std::unique_ptr<MvccManager> mvcc_mgr_;
-
-  /// The concurrent resource manager
-  std::unique_ptr<CRManager> crmanager_;
 
   /// The LeanStore constructor
   /// NOTE: The option is created by LeanStore user, its ownership is transferred to the LeanStore
@@ -125,15 +121,6 @@ public:
   /// Execute a custom user function on a worker thread synchronously.
   void ExecSync(uint64_t worker_id, std::function<void()> fn);
 
-  /// Execute a custom user function on a worker thread asynchronously.
-  void ExecAsync(uint64_t worker_id, std::function<void()> fn);
-
-  /// Waits for the worker to complete.
-  void Wait(lean_wid_t worker_id);
-
-  /// Waits for all Workers to complete.
-  void WaitAll();
-
   void ParallelRange(uint64_t num_jobs,
                      std::function<void(uint64_t job_begin, uint64_t job_end)>&& job_handler);
 
@@ -154,7 +141,6 @@ public:
   /// This is the high-performance alternative to ExecSync for coroutine-enabled builds.
   void SubmitAndWait(CoroSession* session, std::function<void()> task);
 
-#ifdef LEAN_ENABLE_CORO
   /// Connect to the database and return a session for coroutine operations.
   /// This is a convenience wrapper around ReserveSession that returns a LeanSession object.
   auto Connect(uint64_t worker_id = 0) -> LeanSession;
@@ -162,7 +148,6 @@ public:
   /// Try to connect to the database, returning an empty optional if no session is available.
   /// This is a convenience wrapper around TryReserveSession.
   auto TryConnect(uint64_t worker_id = 0) -> std::optional<LeanSession>;
-#endif
 
 private:
   void StartBackgroundThreads();

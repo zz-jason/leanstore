@@ -4,25 +4,22 @@
 #include "leanstore/base/error.hpp"
 #include "leanstore/base/jump_mu.hpp"
 #include "leanstore/base/log.hpp"
+#include "leanstore/base/small_vector.hpp"
 #include "leanstore/buffer/buffer_frame.hpp"
 #include "leanstore/buffer/tree_registry.hpp"
 #include "leanstore/config/store_paths.hpp"
 #include "leanstore/coro/coro_executor.hpp"
 #include "leanstore/coro/lean_mutex.hpp"
+#include "leanstore/coro/mvcc_manager.hpp"
 #include "leanstore/io/async_io.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/sync/scoped_hybrid_guard.hpp"
-#include "leanstore/tx/cr_manager.hpp"
 #include "leanstore/tx/group_committer.hpp"
 #include "leanstore/tx/recovery.hpp"
 #include "leanstore/utils/managed_thread.hpp"
-#include "utils/json.hpp"
-#ifndef LEAN_ENABLE_CORO
-#include "leanstore/utils/parallelize.hpp"
-#endif
-#include "leanstore/base/small_vector.hpp"
 #include "leanstore/utils/scoped_timer.hpp"
+#include "utils/json.hpp"
 
 #include <cerrno>
 #include <cstdint>
@@ -80,11 +77,7 @@ void BufferManager::InitFreeBfLists() {
     }
   };
 
-#ifdef LEAN_ENABLE_CORO
   store_->ParallelRange(num_bfs_, std::move(spread_free_bfs));
-#else
-  utils::Parallelize::ParallelRange(num_bfs_, std::move(spread_free_bfs));
-#endif
 }
 
 void BufferManager::StartPageEvictors() {
@@ -185,12 +178,7 @@ Result<void> BufferManager::CheckpointAllBufferFrames() {
     }
   };
 
-#ifdef LEAN_ENABLE_CORO
   store_->ParallelRange(num_bfs_, std::move(checkpoint_func));
-#else
-  StopPageEvictors();
-  utils::Parallelize::ParallelRange(num_bfs_, std::move(checkpoint_func));
-#endif
 
   return {};
 }
@@ -213,8 +201,9 @@ Result<void> BufferManager::CheckpointBufferFrame(BufferFrame& bf) {
 }
 
 void BufferManager::RecoverFromDisk() {
-  auto recovery =
-      std::make_unique<Recovery>(store_, 0, store_->crmanager_->group_committer_->wal_size_);
+  auto& loggings = store_->GetMvccManager().Loggings();
+  auto wal_size = loggings.empty() ? 0 : loggings.front()->wal_size_;
+  auto recovery = std::make_unique<Recovery>(store_, 0, wal_size);
   recovery->Run();
 }
 
@@ -524,11 +513,7 @@ void BufferManager::DoWithBufferFrameIf(std::function<bool(BufferFrame& bf)> con
     }
   };
 
-#ifdef LEAN_ENABLE_CORO
   store_->ParallelRange(num_bfs_, std::move(work));
-#else
-  utils::Parallelize::ParallelRange(num_bfs_, std::move(work));
-#endif
 }
 
 } // namespace leanstore

@@ -4,6 +4,9 @@
 
 set(LEAN_SOURCES
   lean_store.cpp
+  lean_session.cpp
+  lean_btree.cpp
+  lean_cursor.cpp
   # c
   c/btree_impl.cpp
   c/btree_impl.hpp
@@ -78,7 +81,6 @@ set(LEAN_SOURCES
   # tx
   tx/chained_tuple.cpp
   tx/concurrency_control.cpp
-  tx/cr_manager.cpp
   tx/group_committer.cpp
   tx/history_storage.cpp
   tx/logging.cpp
@@ -103,14 +105,6 @@ set(LEAN_SOURCES
   wal/wal_file_cursor.hpp
   wal/wal_serde.cpp
 )
-
-if(LEAN_ENABLE_CORO)
-  list(APPEND LEAN_SOURCES
-    lean_session.cpp
-    lean_btree.cpp
-    lean_cursor.cpp
-  )
-endif()
 
 if(BUILD_SHARED_LIBS)
   add_library(leanstore SHARED ${LEAN_SOURCES})
@@ -178,9 +172,6 @@ elseif(LEAN_ENABLE_PROFILING AND BUILD_SHARED_LIBS)
 endif()
 
 # Public compile definitions needed by consumers of the library
-if(LEAN_ENABLE_CORO)
-  target_compile_definitions(leanstore PUBLIC LEAN_ENABLE_CORO)
-endif()
 if(LEAN_ENABLE_PERF_COUNTERS)
   target_compile_definitions(leanstore PUBLIC LEAN_ENABLE_PERF_COUNTERS)
 endif()

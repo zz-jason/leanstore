@@ -11,8 +11,6 @@
 #include <optional>
 #include <string>
 
-#ifdef LEAN_ENABLE_CORO
-
 namespace leanstore::test {
 
 namespace {
@@ -137,13 +135,3 @@ TEST_F(LongRunningTxTest, ScanAscFromGraveyard) {
 }
 
 } // namespace leanstore::test
-
-#else
-
-namespace leanstore::test {
-TEST(LongRunningTxTestCoroOnly, DisabledWhenNoCoro) {
-  GTEST_SKIP() << "LEAN_ENABLE_CORO is disabled";
-}
-} // namespace leanstore::test
-
-#endif

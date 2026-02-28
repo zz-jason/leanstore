@@ -13,8 +13,6 @@
 #include <string>
 #include <vector>
 
-#ifdef LEAN_ENABLE_CORO
-
 namespace leanstore::test {
 
 namespace {
@@ -160,13 +158,3 @@ TEST_F(BasicKVTest, PrefixLookup) {
 }
 
 } // namespace leanstore::test
-
-#else
-
-namespace leanstore::test {
-TEST(BasicKVTestCoroOnly, DisabledWhenNoCoro) {
-  GTEST_SKIP() << "LEAN_ENABLE_CORO is disabled";
-}
-} // namespace leanstore::test
-
-#endif

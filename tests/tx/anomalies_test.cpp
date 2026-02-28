@@ -10,8 +10,6 @@
 #include <optional>
 #include <string>
 
-#ifdef LEAN_ENABLE_CORO
-
 namespace leanstore::test {
 
 namespace {
@@ -165,13 +163,3 @@ TEST_F(AnomaliesTest, G2Item) {
 }
 
 } // namespace leanstore::test
-
-#else
-
-namespace leanstore::test {
-TEST(AnomaliesTestCoroOnly, DisabledWhenNoCoro) {
-  GTEST_SKIP() << "LEAN_ENABLE_CORO is disabled";
-}
-} // namespace leanstore::test
-
-#endif

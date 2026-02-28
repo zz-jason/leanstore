@@ -198,9 +198,7 @@ public:
   BufferFrame* GetFreeBfMayJump() {
     auto* free_bf = free_bf_list_.TryPopFront();
     if (free_bf == nullptr) {
-#ifdef LEAN_ENABLE_CORO
       CoroExecutor::CurrentThread()->AddEvictionPendingPartition(partition_id_);
-#endif
       JumpContext::Jump(JumpContext::JumpReason::kWaitingBufferframe);
     }
     return free_bf;

@@ -13,18 +13,12 @@
 #include "leanstore/coro/coro_scheduler.hpp"
 #include "leanstore/coro/coro_session.hpp"
 #include "leanstore/coro/mvcc_manager.hpp"
-#ifdef LEAN_ENABLE_CORO
 #include "leanstore/lean_session.hpp"
-#endif
 #include "leanstore/table/table.hpp"
 #include "leanstore/table/table_registry.hpp"
-#include "leanstore/tx/cr_manager.hpp"
 #include "leanstore/tx/transaction_kv.hpp"
 #include "leanstore/utils/managed_thread.hpp"
 #include "leanstore/utils/misc.hpp"
-#ifndef LEAN_ENABLE_CORO
-#include "leanstore/utils/parallelize.hpp"
-#endif
 #include "leanstore/utils/scoped_timer.hpp"
 #include "utils/json.hpp"
 
@@ -99,9 +93,6 @@ LeanStore::LeanStore(lean_store_option* option) : store_option_(option) {
 
 void LeanStore::InitDbFiles() {
   LEAN_DEFER({ LEAN_DCHECK(fcntl(page_fd_, F_GETFL) != -1); });
-#ifndef LEAN_ENABLE_CORO
-  LEAN_DEFER({ LEAN_DCHECK(fcntl(wal_fd_, F_GETFL) != -1); });
-#endif
   // Create a new instance on the specified DB file
   if (store_option_->create_from_scratch_) {
     Log::Info("Create new page and wal files");
@@ -113,16 +104,6 @@ void LeanStore::InitDbFiles() {
     }
     Log::Info("Init page fd succeed, pageFd={}, pageFile={}", page_fd_, db_file_path);
 
-#ifndef LEAN_ENABLE_CORO
-    {
-      auto wal_file_path = StorePaths::WalFilePath(store_option_->store_dir_);
-      wal_fd_ = open(wal_file_path.c_str(), flags, 0666);
-      if (wal_fd_ == -1) {
-        Log::Fatal("Could not open file at: {}", wal_file_path);
-      }
-      Log::Info("Init wal fd succeed, walFd={}, walFile={}", wal_fd_, wal_file_path);
-    }
-#endif
     return;
   }
 
@@ -137,19 +118,6 @@ void LeanStore::InitDbFiles() {
                db_file_path);
   }
   Log::Info("Init page fd succeed, pageFd={}, pageFile={}", page_fd_, db_file_path);
-
-#ifndef LEAN_ENABLE_CORO
-  {
-    auto wal_file_path = StorePaths::WalFilePath(store_option_->store_dir_);
-    wal_fd_ = open(wal_file_path.c_str(), flags, 0666);
-    if (wal_fd_ == -1) {
-      Log::Fatal("Recover failed, could not open file at: {}. The data is lost, "
-                 "please create a new WAL file and start a new instance from it",
-                 wal_file_path);
-    }
-    Log::Info("Init wal fd succeed, walFd={}, walFile={}", wal_fd_, wal_file_path);
-  }
-#endif
 }
 
 LeanStore::~LeanStore() {
@@ -171,15 +139,8 @@ LeanStore::~LeanStore() {
     }
   });
 
-  // Stop transaction workers and group committer
-  if (crmanager_) {
-    crmanager_->Stop();
-  }
-
   // persist all the metadata and pages before exit
   bool all_pages_up_to_date = true;
-
-#ifdef LEAN_ENABLE_CORO
   {
     CheckpointProcessor processor(*this, *store_option_);
     auto res = processor.CheckpointAll(buffer_manager_->buffer_pool_, buffer_manager_->num_bfs_);
@@ -188,11 +149,6 @@ LeanStore::~LeanStore() {
       all_pages_up_to_date = false;
     }
   }
-#else
-  if (auto res = buffer_manager_->CheckpointAllBufferFrames(); !res) {
-    all_pages_up_to_date = false;
-  }
-#endif
 
   SerializeMeta(all_pages_up_to_date);
 
@@ -211,69 +167,24 @@ LeanStore::~LeanStore() {
   } else {
     Log::Info("Page file closed");
   }
-
-#ifndef LEAN_ENABLE_CORO
-  {
-    auto wal_file_path = StorePaths::WalFilePath(store_option_->store_dir_);
-    struct stat st;
-    if (stat(wal_file_path.c_str(), &st) == 0) {
-      LEAN_DLOG("The size of {} is {} bytes", wal_file_path, st.st_size);
-    }
-
-    if (close(wal_fd_) == -1) {
-      perror("Failed to close WAL file: ");
-    } else {
-      Log::Info("WAL file closed");
-    }
-  }
-#endif
 }
 
 void LeanStore::StartBackgroundThreads() {
-#ifdef LEAN_ENABLE_CORO
-  {
-    coro_scheduler_ = std::make_unique<CoroScheduler>(this, store_option_->worker_threads_);
-    coro_scheduler_->Init();
-    buffer_manager_->InitFreeBfLists();
+  coro_scheduler_ = std::make_unique<CoroScheduler>(this, store_option_->worker_threads_);
+  coro_scheduler_->Init();
+  buffer_manager_->InitFreeBfLists();
 
-    crmanager_ = nullptr;
-
-    auto* coro_session = coro_scheduler_->TryReserveCoroSession(0);
-    assert(coro_session != nullptr && "Failed to reserve a CoroSession for coroutine execution");
-    coro_scheduler_->Submit(coro_session, [&]() { mvcc_mgr_->InitHistoryStorage(); })->Wait();
-    coro_scheduler_->ReleaseCoroSession(coro_session);
-  }
-#else
-  {
-    buffer_manager_->InitFreeBfLists();
-    buffer_manager_->StartPageEvictors();
-
-    crmanager_ = std::make_unique<CRManager>(this);
-    crmanager_->worker_threads_[0]->SetJob([&]() { mvcc_mgr_->InitHistoryStorage(); });
-    crmanager_->worker_threads_[0]->Wait();
-  }
-#endif
+  auto* coro_session = coro_scheduler_->TryReserveCoroSession(0);
+  assert(coro_session != nullptr && "Failed to reserve a CoroSession for coroutine execution");
+  coro_scheduler_->Submit(coro_session, [&]() { mvcc_mgr_->InitHistoryStorage(); })->Wait();
+  coro_scheduler_->ReleaseCoroSession(coro_session);
 }
 
 void LeanStore::StopBackgroundThreads() {
-#ifdef LEAN_ENABLE_CORO
-  {
-    // destroy coro scheduler
-    if (coro_scheduler_ != nullptr) {
-      coro_scheduler_->Deinit();
-      coro_scheduler_ = nullptr;
-    }
+  if (coro_scheduler_ != nullptr) {
+    coro_scheduler_->Deinit();
+    coro_scheduler_ = nullptr;
   }
-#else
-  {
-    // destroy and Stop all foreground workers
-    if (crmanager_ != nullptr) {
-      crmanager_ = nullptr;
-    }
-    // destroy buffer manager (buffer frame providers)
-    buffer_manager_->StopPageEvictors();
-  }
-#endif
 }
 
 lean_lid_t LeanStore::AllocWalGsn() {
@@ -281,69 +192,32 @@ lean_lid_t LeanStore::AllocWalGsn() {
 }
 
 void LeanStore::ExecSync(uint64_t worker_id, std::function<void()> job) {
-  crmanager_->worker_threads_[worker_id]->SetJob(std::move(job));
-  crmanager_->worker_threads_[worker_id]->Wait();
-}
-
-void LeanStore::ExecAsync(uint64_t worker_id, std::function<void()> job) {
-  crmanager_->worker_threads_[worker_id]->SetJob(std::move(job));
-}
-
-void LeanStore::Wait(lean_wid_t worker_id) {
-  crmanager_->worker_threads_[worker_id]->Wait();
-}
-
-void LeanStore::WaitAll() {
-  for (auto i = 0U; i < store_option_->worker_threads_; i++) {
-    crmanager_->worker_threads_[i]->Wait();
-  }
+  auto* session = ReserveSession(worker_id);
+  SubmitAndWait(session, std::move(job));
+  ReleaseSession(session);
 }
 
 void LeanStore::ParallelRange(
     uint64_t num_jobs, std::function<void(uint64_t job_begin, uint64_t job_end)>&& job_handler) {
-#ifdef LEAN_ENABLE_CORO
   coro_scheduler_->ParallelRange(num_jobs, std::move(job_handler));
-#else
-  utils::Parallelize::ParallelRange(num_jobs, std::move(job_handler));
-#endif
 }
 
 CoroSession* LeanStore::TryReserveSession(uint64_t worker_id) {
-#ifdef LEAN_ENABLE_CORO
   return coro_scheduler_->TryReserveCoroSession(worker_id);
-#else
-  (void)worker_id;
-  return nullptr;
-#endif
 }
 
 CoroSession* LeanStore::ReserveSession(uint64_t worker_id) {
-#ifdef LEAN_ENABLE_CORO
   return coro_scheduler_->ReserveCoroSession(worker_id);
-#else
-  (void)worker_id;
-  return nullptr;
-#endif
 }
 
 void LeanStore::ReleaseSession(CoroSession* session) {
-#ifdef LEAN_ENABLE_CORO
   coro_scheduler_->ReleaseCoroSession(session);
-#else
-  (void)session;
-#endif
 }
 
 void LeanStore::SubmitAndWait(CoroSession* session, std::function<void()> task) {
-#ifdef LEAN_ENABLE_CORO
   coro_scheduler_->Submit(session, std::move(task))->Wait();
-#else
-  (void)session;
-  (void)task;
-#endif
 }
 
-#ifdef LEAN_ENABLE_CORO
 auto LeanStore::Connect(uint64_t worker_id) -> LeanSession {
   CoroSession* session = ReserveSession(worker_id);
   return LeanSession(this, session);
@@ -356,9 +230,7 @@ auto LeanStore::TryConnect(uint64_t worker_id) -> std::optional<LeanSession> {
   }
   return std::optional<LeanSession>(std::in_place, this, session);
 }
-#endif
 
-constexpr char kMetaKeyCrManager[] = "cr_manager";
 constexpr char kMetaKeyMvcc[] = "mvcc";
 constexpr char kMetaKeyBufferManager[] = "buffer_manager";
 constexpr char kMetaKeyBTrees[] = "leanstore/btrees";
@@ -385,11 +257,6 @@ void LeanStore::SerializeMeta(bool all_pages_up_to_date) {
   utils::JsonObj meta_json_obj;
   std::ofstream meta_file;
   meta_file.open(StorePaths::MetaFilePath(store_option_->store_dir_), std::ios::trunc);
-
-  // cr_manager
-  if (crmanager_) {
-    meta_json_obj.AddJsonObj(kMetaKeyCrManager, crmanager_->Serialize());
-  }
 
   meta_json_obj.AddJsonObj(kMetaKeyMvcc, mvcc_mgr_->Serialize());
 
@@ -487,13 +354,6 @@ bool LeanStore::DeserializeMeta() {
     return false;
   }
 
-  // Deserialize concurrent resource manager
-  if (crmanager_ && meta_json_obj.HasMember(kMetaKeyCrManager)) {
-    assert(meta_json_obj.HasMember(kMetaKeyCrManager));
-    auto cr_manager_obj = meta_json_obj.GetJsonObj(kMetaKeyCrManager);
-    crmanager_->Deserialize(*cr_manager_obj);
-  }
-
   auto mvcc_mgr_obj = meta_json_obj.GetJsonObj(kMetaKeyMvcc);
   mvcc_mgr_->Deserialize(*mvcc_mgr_obj);
 
@@ -562,14 +422,10 @@ bool LeanStore::DeserializeMeta() {
         btree->graveyard_ = res.value();
       };
 
-#ifdef LEAN_ENABLE_CORO
       auto* coro_session = GetCoroScheduler().TryReserveCoroSession(0);
       assert(coro_session != nullptr && "Failed to reserve a CoroSession for coroutine execution");
       GetCoroScheduler().Submit(coro_session, std::move(job))->Wait();
       GetCoroScheduler().ReleaseCoroSession(coro_session);
-#else
-      ExecSync(0, std::move(job));
-#endif
 
       tree_registry_->RegisterTree(btree_id, std::move(btree), btree_name);
       break;

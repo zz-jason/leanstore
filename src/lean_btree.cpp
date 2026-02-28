@@ -1,5 +1,3 @@
-#ifdef LEAN_ENABLE_CORO
-
 #include "leanstore/lean_btree.hpp"
 
 #include "leanstore/btree/b_tree_generic.hpp"
@@ -119,5 +117,3 @@ void LeanBTree::Close() {
 }
 
 } // namespace leanstore
-
-#endif // LEAN_ENABLE_CORO

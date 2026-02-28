@@ -1,5 +1,3 @@
-#ifdef LEAN_ENABLE_CORO
-
 #include "leanstore/lean_session.hpp"
 
 #include "leanstore/btree/b_tree_generic.hpp"
@@ -145,5 +143,3 @@ void LeanSession::Close() {
 }
 
 } // namespace leanstore
-
-#endif // LEAN_ENABLE_CORO

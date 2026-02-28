@@ -1,7 +1,5 @@
 #pragma once
 
-#ifdef LEAN_ENABLE_CORO
-
 #include "leanstore/base/result.hpp"
 #include "leanstore/base/slice.hpp"
 #include "leanstore/btree/basic_kv.hpp"
@@ -63,5 +61,3 @@ private:
 };
 
 } // namespace leanstore
-
-#endif // LEAN_ENABLE_CORO

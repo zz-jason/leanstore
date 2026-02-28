@@ -11,8 +11,6 @@
 #include <memory>
 #include <optional>
 
-#ifdef LEAN_ENABLE_CORO
-
 namespace leanstore::test {
 
 class BTreeGenericTest : public LeanTestSuite {
@@ -55,13 +53,3 @@ TEST_F(BTreeGenericTest, GetSummary) {
 }
 
 } // namespace leanstore::test
-
-#else
-
-namespace leanstore::test {
-TEST(BTreeGenericTestCoroOnly, DisabledWhenNoCoro) {
-  GTEST_SKIP() << "LEAN_ENABLE_CORO is disabled";
-}
-} // namespace leanstore::test
-
-#endif

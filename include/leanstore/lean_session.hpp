@@ -1,7 +1,5 @@
 #pragma once
 
-#ifdef LEAN_ENABLE_CORO
-
 #include "leanstore/base/log.hpp"
 #include "leanstore/base/result.hpp"
 #include "leanstore/base/slice.hpp"
@@ -91,5 +89,3 @@ private:
 };
 
 } // namespace leanstore
-
-#endif // LEAN_ENABLE_CORO

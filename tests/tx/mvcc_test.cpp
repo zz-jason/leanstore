@@ -10,8 +10,6 @@
 #include <optional>
 #include <string>
 
-#ifdef LEAN_ENABLE_CORO
-
 namespace leanstore::test {
 
 namespace {
@@ -92,13 +90,3 @@ TEST_F(MvccTest, InsertConflict) {
 }
 
 } // namespace leanstore::test
-
-#else
-
-namespace leanstore::test {
-TEST(MvccTestCoroOnly, DisabledWhenNoCoro) {
-  GTEST_SKIP() << "LEAN_ENABLE_CORO is disabled";
-}
-} // namespace leanstore::test
-
-#endif

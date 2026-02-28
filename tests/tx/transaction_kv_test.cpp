@@ -18,8 +18,6 @@
 #include <unordered_map>
 #include <vector>
 
-#ifdef LEAN_ENABLE_CORO
-
 namespace leanstore::test {
 
 namespace {
@@ -364,13 +362,3 @@ TEST_F(TransactionKVTest, ConcurrentInsertWithSplit) {
 }
 
 } // namespace leanstore::test
-
-#else
-
-namespace leanstore::test {
-TEST(TransactionKVTestCoroOnly, DisabledWhenNoCoro) {
-  GTEST_SKIP() << "LEAN_ENABLE_CORO is disabled";
-}
-} // namespace leanstore::test
-
-#endif

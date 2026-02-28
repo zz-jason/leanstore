@@ -82,9 +82,7 @@ void TxManager::StartTx(TxMode mode, IsolationLevel level, bool is_read_only) {
   // Cleanup commit log if necessary
   cc_.commit_tree_.CompactCommitLog();
 
-#ifdef LEAN_ENABLE_CORO
   CoroEnv::CurCoroExec()->AutoCommitter()->RegisterTxMgr(this);
-#endif
 }
 
 void TxManager::CommitTx() {
@@ -146,9 +144,7 @@ void TxManager::CommitTx() {
 
   WaitToCommit(active_tx_.commit_ts_);
 
-#ifdef LEAN_ENABLE_CORO
   CoroEnv::CurCoroExec()->AutoCommitter()->UnregisterTxMgr(this);
-#endif
 }
 
 /// TODO(jian.z): revert changes made in-place on the btree process of a transaction abort:
@@ -208,9 +204,7 @@ void TxManager::AbortTx() {
     WalTxBuilder<lean_wal_tx_complete>(0, 0).BuildTxComplete().Submit();
   }
 
-#ifdef LEAN_ENABLE_CORO
   CoroEnv::CurCoroExec()->AutoCommitter()->UnregisterTxMgr(this);
-#endif
 }
 
 lean_perf_counters* TxManager::GetPerfCounters() {

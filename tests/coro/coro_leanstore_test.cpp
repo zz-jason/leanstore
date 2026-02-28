@@ -21,8 +21,6 @@ namespace leanstore::test {
 
 class CoroLeanStoreTest : public LeanTestSuite {};
 
-#ifdef LEAN_ENABLE_CORO
-
 TEST_F(CoroLeanStoreTest, BasicKv) {
   static constexpr auto kBtreeName = "test_btree";
   static constexpr auto kNumKeys = 100;
@@ -82,13 +80,5 @@ TEST_F(CoroLeanStoreTest, BasicKv) {
   }
   EXPECT_EQ(visited, kv_to_test.size());
 }
-
-#else
-
-TEST_F(CoroLeanStoreTest, BasicKv) {
-  GTEST_SKIP() << "LEAN_ENABLE_CORO is disabled";
-}
-
-#endif
 
 } // namespace leanstore::test
