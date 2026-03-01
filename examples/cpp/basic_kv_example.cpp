@@ -1,4 +1,6 @@
 #include <leanstore/c/types.h>
+#include <leanstore/lean_btree.hpp>
+#include <leanstore/lean_session.hpp>
 #include <leanstore/lean_store.hpp>
 
 #include <iostream>
@@ -41,7 +43,8 @@ int main() {
     std::cerr << "lookup value failed: " << lookup_res.error().ToString() << std::endl;
     return 1;
   }
-  std::string copied_value(reinterpret_cast<const char*>(lookup_res->data()), lookup_res->size());
+  const auto& value = lookup_res.value();
+  std::string copied_value(reinterpret_cast<const char*>(value.data()), value.size());
   std::cout << "hello, " << copied_value << std::endl;
 
   return 0;

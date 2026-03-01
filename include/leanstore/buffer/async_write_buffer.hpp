@@ -14,6 +14,10 @@
 
 namespace leanstore {
 
+// Forward declarations
+class BufferFrame;
+class Page;
+
 /// A batched asynchronous writer for buffer frames. It batches writes to the
 /// disk to reduce the number of syscalls.
 /// Typical usage:
@@ -33,9 +37,9 @@ class AsyncWriteBuffer {
 private:
   struct WriteCommand {
     const BufferFrame* bf_;
-    lean_pid_t page_id_;
+    uint64_t page_id_;
 
-    void Reset(const BufferFrame* bf, lean_pid_t page_id) {
+    void Reset(const BufferFrame* bf, ::lean_pid_t page_id) {
       bf_ = bf;
       page_id_ = page_id;
     }
@@ -43,9 +47,9 @@ private:
 
   int fd_;
   uint64_t page_size_;
-  utils::AsyncIo aio_;
+  ::leanstore::utils::AsyncIo aio_;
 
-  utils::AlignedBuffer<512> write_buffer_;
+  ::leanstore::utils::AlignedBuffer<512> write_buffer_;
   std::vector<WriteCommand> write_commands_;
 
 public:
