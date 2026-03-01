@@ -167,6 +167,9 @@ public:
     return kv_;
   }
 
+  BasicKV* GetBasicKV();
+  TransactionKV* GetTransactionKV();
+
   OpCode Insert(Slice key, Slice val);
   OpCode UpdatePartial(Slice key, MutValCallback update_call_back, UpdateDesc& update_desc);
   OpCode Remove(Slice key);

@@ -56,4 +56,14 @@ uint64_t KVInterface::CountEntries() {
   return VisitKV(kv_, [&](auto& tree) { return tree.CountEntries(); });
 }
 
+BasicKV* KVInterface::GetBasicKV() {
+  auto* basic_kv = std::get_if<std::reference_wrapper<BasicKV>>(&kv_);
+  return basic_kv == nullptr ? nullptr : &basic_kv->get();
+}
+
+TransactionKV* KVInterface::GetTransactionKV() {
+  auto* tx_kv = std::get_if<std::reference_wrapper<TransactionKV>>(&kv_);
+  return tx_kv == nullptr ? nullptr : &tx_kv->get();
+}
+
 } // namespace leanstore
