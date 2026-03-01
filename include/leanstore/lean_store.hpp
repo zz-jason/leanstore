@@ -128,10 +128,6 @@ private:
     return *coro_scheduler_;
   }
 
-  bool HasCoroScheduler() const {
-    return coro_scheduler_ != nullptr;
-  }
-
   /// The coroutine scheduler (implementation detail, hidden from public API)
   std::unique_ptr<CoroScheduler> coro_scheduler_ = nullptr;
 };

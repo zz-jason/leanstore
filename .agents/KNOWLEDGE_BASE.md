@@ -41,6 +41,7 @@ Use this file for factual, project-specific knowledge that improves coding-agent
 | 2026-02-28 | Avoid nested `LeanSession::ExecSync` in tests | Calling `session.CreateBTree()` inside an outer `session.ExecSync()` deadlocks because both wait on the same session future | `tests/table/column_store_test.cpp` now performs `CreateBTree` outside the `ExecSync` block and keeps only in-worker table operations inside |
 | 2026-02-28 | Prefer C table/session API in column-store tests to avoid direct scheduler plumbing | `LeanSession::ExecSync` is an internal execution primitive; test logic should use stable public table/session interfaces | `tests/table/column_store_test.cpp` now uses `lean_open_store`/`lean_session`/`lean_table` APIs only |
 | 2026-02-28 | Remove redundant C-bridge `SessionImpl::ExecSync` helper | Forwarding wrappers duplicate `LeanSession` execution primitive and obscure migration progress to direct high-level APIs | C bridge B-tree/cursor paths now call `Session().ExecSync(...)` directly and `SessionImpl::ExecSync` is deleted |
+| 2026-02-28 | Remove single-use `LeanStore::HasCoroScheduler()` helper | The helper had one call site and duplicated a direct null check on the owned scheduler pointer | `LeanSession::Close()` now checks `store_->coro_scheduler_ != nullptr` (friend access) before releasing the session |
 
 ## Pitfalls and Failure Modes
 

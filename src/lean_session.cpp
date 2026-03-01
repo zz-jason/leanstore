@@ -170,7 +170,7 @@ Result<LeanBTree> LeanSession::GetBTree(const std::string& name) {
 
 void LeanSession::Close() {
   if (session_ != nullptr) {
-    if (store_ != nullptr && store_->HasCoroScheduler()) {
+    if (store_ != nullptr && store_->coro_scheduler_ != nullptr) {
       store_->GetCoroScheduler().ReleaseCoroSession(session_);
     }
     session_ = nullptr;
