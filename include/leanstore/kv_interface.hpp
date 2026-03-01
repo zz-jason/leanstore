@@ -145,7 +145,8 @@ using MutValCallback = std::function<void(MutableSlice val)>;
 using ScanCallback = std::function<bool(Slice key, Slice val)>;
 using PrefixLookupCallback = std::function<void(Slice key, Slice val)>;
 
-using KVVariant = std::variant<BasicKV*, TransactionKV*>;
+using KVVariant =
+    std::variant<std::reference_wrapper<BasicKV>, std::reference_wrapper<TransactionKV>>;
 
 class KVInterface {
 public:

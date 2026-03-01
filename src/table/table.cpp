@@ -184,16 +184,13 @@ bool TableCursor::Assign(Slice key, Slice val) {
 }
 
 Result<std::unique_ptr<Table>> Table::Create(LeanStore* store, TableDefinition definition) {
-  KVVariant kv;
   switch (definition.primary_index_type_) {
   case lean_btree_type::LEAN_BTREE_TYPE_ATOMIC: {
     auto res = BasicKV::Create(store, definition.name_, definition.primary_index_config_);
     if (!res) {
       return std::move(res.error());
     }
-    auto* kv_tree = res.value();
-    kv = kv_tree;
-    break;
+    return std::make_unique<Table>(std::move(definition), KVInterface(std::ref(*res.value())));
   }
   case lean_btree_type::LEAN_BTREE_TYPE_MVCC: {
     static constexpr auto kGraveyardConfig =
@@ -214,15 +211,11 @@ Result<std::unique_ptr<Table>> Table::Create(LeanStore* store, TableDefinition d
       }
       return std::move(res.error());
     }
-    auto* kv_tree = res.value();
-    kv = kv_tree;
-    break;
+    return std::make_unique<Table>(std::move(definition), KVInterface(std::ref(*res.value())));
   }
   default:
     return Error::General("unsupported primary index type");
   }
-
-  return std::make_unique<Table>(std::move(definition), KVInterface(std::move(kv)));
 }
 
 Result<std::unique_ptr<Table>> Table::WrapExisting(LeanStore* store, TableDefinition definition) {
@@ -234,28 +227,24 @@ Result<std::unique_ptr<Table>> Table::WrapExisting(LeanStore* store, TableDefini
   if (generic == nullptr) {
     return Error::General("backing tree type mismatch");
   }
-  KVVariant kv;
   switch (generic->tree_type_) {
   case BTreeType::kBasicKV: {
     auto* kv_tree = dynamic_cast<BasicKV*>(generic);
     if (kv_tree == nullptr) {
       return Error::General("backing tree not BasicKV");
     }
-    kv = kv_tree;
-    break;
+    return std::make_unique<Table>(std::move(definition), KVInterface(std::ref(*kv_tree)));
   }
   case BTreeType::kTransactionKV: {
     auto* kv_tree = dynamic_cast<TransactionKV*>(generic);
     if (kv_tree == nullptr) {
       return Error::General("backing tree not TransactionKV");
     }
-    kv = kv_tree;
-    break;
+    return std::make_unique<Table>(std::move(definition), KVInterface(std::ref(*kv_tree)));
   }
   default:
     return Error::General("unsupported backing tree type");
   }
-  return std::make_unique<Table>(std::move(definition), KVInterface(std::move(kv)));
 }
 
 OpCode Table::Insert(const lean_row* row) {

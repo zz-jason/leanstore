@@ -747,11 +747,11 @@ Result<column_store::ColumnStoreStats> Table::BuildColumnStore(
   if (definition_.primary_index_config_.enable_wal_) {
     return Error::General("column store build requires WAL disabled");
   }
-  auto* btree = std::get_if<BasicKV*>(&kv_interface_.AsVariant());
-  if (btree == nullptr || *btree == nullptr) {
+  auto* btree = std::get_if<std::reference_wrapper<BasicKV>>(&kv_interface_.AsVariant());
+  if (btree == nullptr) {
     return Error::General("column store build requires BasicKV");
   }
-  return BuildColumnStoreInternal(**btree, definition_, options);
+  return BuildColumnStoreInternal(btree->get(), definition_, options);
 }
 
 } // namespace leanstore

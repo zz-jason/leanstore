@@ -9,7 +9,7 @@ namespace {
 
 template <typename Fn>
 decltype(auto) VisitKV(const KVVariant& kv, Fn&& fn) {
-  return std::visit([&](auto* tree) { return fn(*tree); }, kv);
+  return std::visit([&](auto tree) { return fn(tree.get()); }, kv);
 }
 
 } // namespace
