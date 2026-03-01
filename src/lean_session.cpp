@@ -18,11 +18,9 @@ LeanSession::LeanSession(LeanStore* store, CoroSession* session)
 
 LeanSession::LeanSession(LeanSession&& other) noexcept
     : store_(other.store_),
-      session_(other.session_),
-      in_transaction_(other.in_transaction_) {
+      session_(other.session_) {
   other.store_ = nullptr;
   other.session_ = nullptr;
-  other.in_transaction_ = false;
 }
 
 auto LeanSession::operator=(LeanSession&& other) noexcept -> LeanSession& {
@@ -32,10 +30,8 @@ auto LeanSession::operator=(LeanSession&& other) noexcept -> LeanSession& {
   Close();
   store_ = other.store_;
   session_ = other.session_;
-  in_transaction_ = other.in_transaction_;
   other.store_ = nullptr;
   other.session_ = nullptr;
-  other.in_transaction_ = false;
   return *this;
 }
 
@@ -49,7 +45,6 @@ void LeanSession::ExecSyncVoid(std::function<void()> fn) {
 
 void LeanSession::StartTx() {
   if (session_ != nullptr) {
-    in_transaction_ = true;
     ExecSync([this]() { session_->GetTxMgr()->StartTx(); });
   }
 }
@@ -57,14 +52,12 @@ void LeanSession::StartTx() {
 void LeanSession::CommitTx() {
   if (session_ != nullptr) {
     ExecSync([this]() { session_->GetTxMgr()->CommitTx(); });
-    in_transaction_ = false;
   }
 }
 
 void LeanSession::AbortTx() {
   if (session_ != nullptr) {
     ExecSync([this]() { session_->GetTxMgr()->AbortTx(); });
-    in_transaction_ = false;
   }
 }
 

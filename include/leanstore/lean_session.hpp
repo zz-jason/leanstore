@@ -63,10 +63,6 @@ public:
   /// Close the session and release resources.
   void Close();
 
-  bool InTransaction() const {
-    return in_transaction_;
-  }
-
   template <typename F>
   auto ExecSync(F&& fn) -> std::invoke_result_t<F> {
     using ResultType = std::invoke_result_t<F>;
@@ -89,7 +85,6 @@ private:
 
   LeanStore* store_;
   CoroSession* session_;
-  bool in_transaction_ = false;
 };
 
 } // namespace leanstore
