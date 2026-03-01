@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <utility>
+#include <variant>
 
 namespace leanstore {
 
@@ -135,10 +137,48 @@ public:
 };
 
 class MutableSlice;
+class BasicKV;
+class TransactionKV;
 using StringU = std::basic_string<uint8_t>;
 using ValCallback = std::function<void(Slice val)>;
 using MutValCallback = std::function<void(MutableSlice val)>;
 using ScanCallback = std::function<bool(Slice key, Slice val)>;
 using PrefixLookupCallback = std::function<void(Slice key, Slice val)>;
+
+using KVVariant = std::variant<BasicKV*, TransactionKV*>;
+
+class KVInterface {
+public:
+  explicit KVInterface(KVVariant kv) : kv_(std::move(kv)) {
+  }
+
+  KVInterface(const KVInterface&) = delete;
+  auto operator=(const KVInterface&) -> KVInterface& = delete;
+  KVInterface(KVInterface&&) noexcept = default;
+  auto operator=(KVInterface&&) noexcept -> KVInterface& = default;
+  ~KVInterface() = default;
+
+  KVInterface Fork() const {
+    return KVInterface(kv_);
+  }
+
+  const KVVariant& AsVariant() const {
+    return kv_;
+  }
+
+  OpCode Insert(Slice key, Slice val);
+  OpCode UpdatePartial(Slice key, MutValCallback update_call_back, UpdateDesc& update_desc);
+  OpCode Remove(Slice key);
+  OpCode RangeRemove(Slice start_key, Slice end_key, bool page_wise);
+  OpCode ScanAsc(Slice start_key, ScanCallback callback);
+  OpCode ScanDesc(Slice start_key, ScanCallback callback);
+  OpCode Lookup(Slice key, ValCallback val_callback);
+  OpCode PrefixLookup(Slice key, PrefixLookupCallback callback);
+  OpCode PrefixLookupForPrev(Slice key, PrefixLookupCallback callback);
+  uint64_t CountEntries();
+
+private:
+  KVVariant kv_;
+};
 
 } // namespace leanstore

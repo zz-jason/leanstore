@@ -7,6 +7,7 @@ set(LEAN_SOURCES
   lean_session.cpp
   lean_btree.cpp
   lean_cursor.cpp
+  kv_interface.cpp
   # c
   c/btree_impl.cpp
   c/btree_impl.hpp

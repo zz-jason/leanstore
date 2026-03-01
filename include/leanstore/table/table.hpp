@@ -7,20 +7,15 @@
 
 #include <memory>
 #include <string>
-#include <variant>
 
 namespace leanstore {
 
 class LeanStore;
 class BTreeGeneric;
-class BasicKV;
-class TransactionKV;
-
-using KVVariant = std::variant<BasicKV*, TransactionKV*>;
 
 class TableCursor {
 public:
-  TableCursor(KVVariant kv, const TableDefinition& def);
+  TableCursor(KVInterface&& kv_interface, const TableDefinition& def);
   ~TableCursor();
 
   bool SeekToFirst();
@@ -37,7 +32,7 @@ public:
 private:
   bool Assign(Slice key, Slice val);
 
-  KVVariant kv_;
+  KVInterface kv_interface_;
   std::string current_key_;
   std::string current_value_;
   bool is_valid_ = false;
@@ -63,15 +58,15 @@ public:
 
   std::unique_ptr<TableCursor> NewCursor();
 
-  Table(TableDefinition definition, KVVariant kv)
+  Table(TableDefinition definition, KVInterface&& kv_interface)
       : definition_(std::move(definition)),
-        kv_(kv),
+        kv_interface_(std::move(kv_interface)),
         codec_(definition_) {
   }
 
 private:
   TableDefinition definition_;
-  KVVariant kv_;
+  KVInterface kv_interface_;
   TableCodec codec_;
 };
 

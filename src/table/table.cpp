@@ -14,16 +14,9 @@
 
 namespace leanstore {
 
-namespace {
-
-template <typename Fn>
-decltype(auto) VisitKV(const KVVariant& kv, Fn&& fn) {
-  return std::visit([&](auto* tree) { return fn(*tree); }, kv);
-}
-
-} // namespace
-
-TableCursor::TableCursor(KVVariant kv, const TableDefinition& def) : kv_(kv), codec_(def) {
+TableCursor::TableCursor(KVInterface&& kv_interface, const TableDefinition& def)
+    : kv_interface_(std::move(kv_interface)),
+      codec_(def) {
 }
 
 TableCursor::~TableCursor() = default;
@@ -31,9 +24,7 @@ TableCursor::~TableCursor() = default;
 bool TableCursor::SeekToFirst() {
   is_valid_ = false;
   current_key_.clear();
-  auto rc = VisitKV(kv_, [&](auto& tree) {
-    return tree.ScanAsc(Slice(), [&](Slice key, Slice val) { return Assign(key, val); });
-  });
+  auto rc = kv_interface_.ScanAsc(Slice(), [&](Slice key, Slice val) { return Assign(key, val); });
   return rc == OpCode::kOK && is_valid_;
 }
 
@@ -44,17 +35,13 @@ bool TableCursor::SeekToFirstGreaterEqual(const lean_row* key_row) {
     return false;
   }
   const auto& key = key_res.value();
-  auto rc = VisitKV(kv_, [&](auto& tree) {
-    return tree.ScanAsc(key, [&](Slice k, Slice v) { return Assign(k, v); });
-  });
+  auto rc = kv_interface_.ScanAsc(key, [&](Slice k, Slice v) { return Assign(k, v); });
   return rc == OpCode::kOK && is_valid_;
 }
 
 bool TableCursor::SeekToLast() {
   is_valid_ = false;
-  auto rc = VisitKV(kv_, [&](auto& tree) {
-    return tree.ScanDesc(Slice(), [&](Slice key, Slice val) { return Assign(key, val); });
-  });
+  auto rc = kv_interface_.ScanDesc(Slice(), [&](Slice key, Slice val) { return Assign(key, val); });
   return rc == OpCode::kOK && is_valid_;
 }
 
@@ -65,9 +52,7 @@ bool TableCursor::SeekToLastLessEqual(const lean_row* key_row) {
     return false;
   }
   const auto& key = key_res.value();
-  auto rc = VisitKV(kv_, [&](auto& tree) {
-    return tree.ScanDesc(key, [&](Slice k, Slice v) { return Assign(k, v); });
-  });
+  auto rc = kv_interface_.ScanDesc(key, [&](Slice k, Slice v) { return Assign(k, v); });
   return rc == OpCode::kOK && is_valid_;
 }
 
@@ -78,17 +63,14 @@ bool TableCursor::Next() {
   auto start = current_key_;
   bool skipped = false;
   is_valid_ = false;
-  auto rc = VisitKV(kv_, [&](auto& tree) {
-    return tree.ScanAsc(start, [&](Slice key, Slice val) {
-      if (!skipped) {
-        skipped = true;
-        if (key.size() == start.size() &&
-            std::memcmp(key.data(), start.data(), start.size()) == 0) {
-          return true;
-        }
+  auto rc = kv_interface_.ScanAsc(start, [&](Slice key, Slice val) {
+    if (!skipped) {
+      skipped = true;
+      if (key.size() == start.size() && std::memcmp(key.data(), start.data(), start.size()) == 0) {
+        return true;
       }
-      return Assign(key, val);
-    });
+    }
+    return Assign(key, val);
   });
   return rc == OpCode::kOK && is_valid_;
 }
@@ -100,17 +82,14 @@ bool TableCursor::Prev() {
   auto start = current_key_;
   bool skipped = false;
   is_valid_ = false;
-  auto rc = VisitKV(kv_, [&](auto& tree) {
-    return tree.ScanDesc(start, [&](Slice key, Slice val) {
-      if (!skipped) {
-        skipped = true;
-        if (key.size() == start.size() &&
-            std::memcmp(key.data(), start.data(), start.size()) == 0) {
-          return true;
-        }
+  auto rc = kv_interface_.ScanDesc(start, [&](Slice key, Slice val) {
+    if (!skipped) {
+      skipped = true;
+      if (key.size() == start.size() && std::memcmp(key.data(), start.data(), start.size()) == 0) {
+        return true;
       }
-      return Assign(key, val);
-    });
+    }
+    return Assign(key, val);
   });
   return rc == OpCode::kOK && is_valid_;
 }
@@ -133,7 +112,7 @@ OpCode TableCursor::RemoveCurrent() {
   if (!is_valid_) {
     return OpCode::kNotFound;
   }
-  auto res = VisitKV(kv_, [&](auto& tree) { return tree.Remove(current_key_); });
+  auto res = kv_interface_.Remove(current_key_);
   if (res == OpCode::kOK) {
     is_valid_ = false;
     current_value_.clear();
@@ -168,23 +147,21 @@ OpCode TableCursor::UpdateCurrent(const lean_row* row) {
     update_desc->update_slots_[0].offset_ = 0;
     update_desc->update_slots_[0].size_ = static_cast<uint16_t>(encoded.value_.size());
 
-    rc = VisitKV(kv_, [&](auto& tree) {
-      return tree.UpdatePartial(
-          key_slice,
-          [&](MutableSlice val) {
-            std::memcpy(val.data(), new_value_slice.data(), new_value_slice.size());
-          },
-          *update_desc);
-    });
+    rc = kv_interface_.UpdatePartial(
+        key_slice,
+        [&](MutableSlice val) {
+          std::memcpy(val.data(), new_value_slice.data(), new_value_slice.size());
+        },
+        *update_desc);
   } else {
     auto original_value = current_value_;
-    rc = VisitKV(kv_, [&](auto& tree) { return tree.Remove(key_slice); });
+    rc = kv_interface_.Remove(key_slice);
     if (rc != OpCode::kOK) {
       return rc;
     }
-    rc = VisitKV(kv_, [&](auto& tree) { return tree.Insert(key_slice, new_value_slice); });
+    rc = kv_interface_.Insert(key_slice, new_value_slice);
     if (rc != OpCode::kOK) {
-      VisitKV(kv_, [&](auto& tree) { return tree.Insert(key_slice, original_value); });
+      kv_interface_.Insert(key_slice, original_value);
       is_valid_ = false;
       current_value_.clear();
       return rc;
@@ -245,7 +222,7 @@ Result<std::unique_ptr<Table>> Table::Create(LeanStore* store, TableDefinition d
     return Error::General("unsupported primary index type");
   }
 
-  return std::make_unique<Table>(std::move(definition), kv);
+  return std::make_unique<Table>(std::move(definition), KVInterface(std::move(kv)));
 }
 
 Result<std::unique_ptr<Table>> Table::WrapExisting(LeanStore* store, TableDefinition definition) {
@@ -278,7 +255,7 @@ Result<std::unique_ptr<Table>> Table::WrapExisting(LeanStore* store, TableDefini
   default:
     return Error::General("unsupported backing tree type");
   }
-  return std::make_unique<Table>(std::move(definition), kv);
+  return std::make_unique<Table>(std::move(definition), KVInterface(std::move(kv)));
 }
 
 OpCode Table::Insert(const lean_row* row) {
@@ -287,7 +264,7 @@ OpCode Table::Insert(const lean_row* row) {
     return OpCode::kOther;
   }
   const auto& enc = encoded_res.value();
-  return VisitKV(kv_, [&](auto& tree) { return tree.Insert(enc.key_, enc.value_); });
+  return kv_interface_.Insert(enc.key_, enc.value_);
 }
 
 OpCode Table::Remove(const lean_row* key_row) {
@@ -296,7 +273,7 @@ OpCode Table::Remove(const lean_row* key_row) {
     return OpCode::kOther;
   }
   auto& key = key_res.value();
-  return VisitKV(kv_, [&](auto& tree) { return tree.Remove(key); });
+  return kv_interface_.Remove(key);
 }
 
 OpCode Table::Lookup(const lean_row* key_row, lean_row* out_row, std::string& value_buf) {
@@ -310,11 +287,9 @@ OpCode Table::Lookup(const lean_row* key_row, lean_row* out_row, std::string& va
   }
 
   auto& key = key_res.value();
-  auto rc = VisitKV(kv_, [&](auto& tree) {
-    return tree.Lookup(key, [&](Slice val) {
-      value_buf.clear();
-      val.CopyTo(value_buf);
-    });
+  auto rc = kv_interface_.Lookup(key, [&](Slice val) {
+    value_buf.clear();
+    val.CopyTo(value_buf);
   });
   if (rc != OpCode::kOK) {
     return rc;
@@ -327,7 +302,7 @@ OpCode Table::Lookup(const lean_row* key_row, lean_row* out_row, std::string& va
 }
 
 std::unique_ptr<TableCursor> Table::NewCursor() {
-  return std::make_unique<TableCursor>(kv_, definition_);
+  return std::make_unique<TableCursor>(kv_interface_.Fork(), definition_);
 }
 
 } // namespace leanstore
