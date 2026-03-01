@@ -1,11 +1,13 @@
 #include "leanstore/table/table.hpp"
 
+#include "leanstore/base/log.hpp"
 #include "leanstore/btree/b_tree_generic.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/tx/transaction_kv.hpp"
 
 #include <cstring>
+#include <format>
 #include <limits>
 #include <utility>
 #include <vector>
@@ -208,7 +210,7 @@ Result<std::unique_ptr<Table>> Table::Create(LeanStore* store, TableDefinition d
   KVVariant kv;
   switch (definition.primary_index_type_) {
   case lean_btree_type::LEAN_BTREE_TYPE_ATOMIC: {
-    auto res = store->CreateBasicKv(definition.name_, definition.primary_index_config_);
+    auto res = BasicKV::Create(store, definition.name_, definition.primary_index_config_);
     if (!res) {
       return std::move(res.error());
     }
@@ -217,8 +219,22 @@ Result<std::unique_ptr<Table>> Table::Create(LeanStore* store, TableDefinition d
     break;
   }
   case lean_btree_type::LEAN_BTREE_TYPE_MVCC: {
-    auto res = store->CreateTransactionKV(definition.name_, definition.primary_index_config_);
+    static constexpr auto kGraveyardConfig =
+        lean_btree_config{.enable_wal_ = false, .use_bulk_insert_ = false};
+    auto graveyard_name = std::format("_{}_graveyard", definition.name_);
+    auto graveyard = BasicKV::Create(store, graveyard_name, kGraveyardConfig);
+    if (!graveyard) {
+      return std::move(graveyard.error());
+    }
+    auto res = TransactionKV::Create(store, definition.name_, definition.primary_index_config_,
+                                     graveyard.value());
     if (!res) {
+      BTreeGeneric::FreeAndReclaim(*static_cast<BTreeGeneric*>(graveyard.value()));
+      auto unregister_res = store->tree_registry_->UnRegisterTree(graveyard.value()->tree_id_);
+      if (!unregister_res) {
+        Log::Error("Unregister graveyard failed for table {}: {}", definition.name_,
+                   unregister_res.error().ToString());
+      }
       return std::move(res.error());
     }
     auto* kv_tree = res.value();
