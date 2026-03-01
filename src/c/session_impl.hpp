@@ -3,20 +3,23 @@
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/c/leanstore.h"
 #include "leanstore/coro/coro_env.hpp"
-#include "leanstore/coro/coro_session.hpp"
+#include "leanstore/lean_btree.hpp"
+#include "leanstore/lean_cursor.hpp"
+#include "leanstore/lean_session.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/table/table.hpp"
 #include "leanstore/tx/transaction_kv.hpp"
 #include "leanstore/tx/tx_manager.hpp"
 
+#include <cassert>
 #include <utility>
 
 namespace leanstore {
 
 class SessionImpl {
 public:
-  static struct lean_session* Create(LeanStore* store, CoroSession* session) {
-    auto* impl = new SessionImpl(store, session);
+  static struct lean_session* Create(LeanStore* store, LeanSession&& session) {
+    auto* impl = new SessionImpl(store, std::move(session));
     assert(static_cast<void*>(impl) == static_cast<void*>(&impl->base_));
     return &impl->base_;
   }
@@ -25,13 +28,14 @@ public:
     delete reinterpret_cast<SessionImpl*>(session);
   }
 
-  template <typename F>
-  void ExecSync(F&& job) {
-    store_->SubmitAndWait(session_, std::forward<F>(job));
+  auto Session() -> LeanSession& {
+    return session_;
   }
 
 private:
-  SessionImpl(LeanStore* store, CoroSession* session) : store_(store), session_(session) {
+  SessionImpl(LeanStore* store, LeanSession&& session)
+      : store_(store),
+        session_(std::move(session)) {
     base_ = {
         .start_tx = &Thunk<&SessionImpl::StartTx>,
         .commit_tx = &Thunk<&SessionImpl::CommitTx>,
@@ -51,15 +55,15 @@ private:
   ~SessionImpl() = default;
 
   void StartTx() {
-    ExecSync([]() { CoroEnv::CurTxMgr().StartTx(); });
+    session_.StartTx();
   }
 
   void CommitTx() {
-    ExecSync([]() { CoroEnv::CurTxMgr().CommitTx(); });
+    session_.CommitTx();
   }
 
   void AbortTx() {
-    ExecSync([]() { CoroEnv::CurTxMgr().AbortTx(); });
+    session_.AbortTx();
   }
 
   lean_status CreateBTree(const char* btree_name, lean_btree_type btree_type);
@@ -77,7 +81,7 @@ private:
 
   lean_session base_;
   LeanStore* store_;
-  CoroSession* session_;
+  LeanSession session_;
 };
 
 } // namespace leanstore

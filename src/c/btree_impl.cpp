@@ -10,7 +10,7 @@ namespace leanstore {
 
 lean_status BTreeImpl::Insert(lean_str_view key, lean_str_view value) {
   lean_status status = lean_status::LEAN_STATUS_OK;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     TxGuard tx_guard(status);
     status = (lean_status)btree_->Insert({key.data, key.size}, {value.data, value.size});
   });
@@ -19,7 +19,7 @@ lean_status BTreeImpl::Insert(lean_str_view key, lean_str_view value) {
 
 lean_status BTreeImpl::Remove(lean_str_view key) {
   lean_status status = lean_status::LEAN_STATUS_OK;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     TxGuard tx_guard(status);
     status = (lean_status)btree_->Remove({key.data, key.size});
   });
@@ -28,7 +28,7 @@ lean_status BTreeImpl::Remove(lean_str_view key) {
 
 lean_status BTreeImpl::Lookup(lean_str_view key, lean_str* value) {
   lean_status status = lean_status::LEAN_STATUS_OK;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     TxGuard tx_guard(status);
     status = (lean_status)btree_->Lookup({key.data, key.size}, [&](Slice val) {
       lean_str_assign(value, (const char*)val.data(), val.size());

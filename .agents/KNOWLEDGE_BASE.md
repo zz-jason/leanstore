@@ -40,6 +40,7 @@ Use this file for factual, project-specific knowledge that improves coding-agent
 | 2026-02-28 | `LeanSession::Close()` must tolerate store shutdown order | Recovery tests may close store before deferred session handle destruction | `Close()` releases CoroSession only when scheduler is still alive |
 | 2026-02-28 | Avoid nested `LeanSession::ExecSync` in tests | Calling `session.CreateBTree()` inside an outer `session.ExecSync()` deadlocks because both wait on the same session future | `tests/table/column_store_test.cpp` now performs `CreateBTree` outside the `ExecSync` block and keeps only in-worker table operations inside |
 | 2026-02-28 | Prefer C table/session API in column-store tests to avoid direct scheduler plumbing | `LeanSession::ExecSync` is an internal execution primitive; test logic should use stable public table/session interfaces | `tests/table/column_store_test.cpp` now uses `lean_open_store`/`lean_session`/`lean_table` APIs only |
+| 2026-02-28 | Remove redundant C-bridge `SessionImpl::ExecSync` helper | Forwarding wrappers duplicate `LeanSession` execution primitive and obscure migration progress to direct high-level APIs | C bridge B-tree/cursor paths now call `Session().ExecSync(...)` directly and `SessionImpl::ExecSync` is deleted |
 
 ## Pitfalls and Failure Modes
 
