@@ -50,9 +50,7 @@ protected:
 };
 
 TEST_F(MvccTest, LookupWhileInsert) {
-  writer_->StartTx();
   ASSERT_TRUE(tw_->Insert("k0", "v0"));
-  writer_->CommitTx();
 
   writer_->StartTx();
   ASSERT_TRUE(tw_->Insert("k1", "v1"));
@@ -70,9 +68,7 @@ TEST_F(MvccTest, LookupWhileInsert) {
 }
 
 TEST_F(MvccTest, InsertConflict) {
-  writer_->StartTx();
   ASSERT_TRUE(tw_->Insert("k0", "v0"));
-  writer_->CommitTx();
 
   writer_->StartTx();
   ASSERT_TRUE(tw_->Insert("k1", "v1"));

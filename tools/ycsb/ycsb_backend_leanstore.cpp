@@ -118,40 +118,31 @@ Result<void> YcsbLeanAtomicKvSpace::Get(std::string_view key, std::string& value
 //------------------------------------------------------------------------------
 
 Result<void> YcsbLeanMvccKvSpace::Put(std::string_view key, std::string_view value) {
-  session_.StartTx();
   auto put_res = kv_space_.Insert(key, value);
   if (!put_res) {
-    session_.AbortTx();
     return Error::General(
         std::format("Put failed, key={}, error={}", key, put_res.error().ToString()));
   }
-  session_.CommitTx();
   return {};
 }
 
 Result<void> YcsbLeanMvccKvSpace::Update(std::string_view key, std::string_view value) {
-  session_.StartTx();
   auto update_res = kv_space_.Update(key, value);
   if (!update_res) {
-    session_.AbortTx();
     return Error::General(
         std::format("Update failed, key={}, error={}", key, update_res.error().ToString()));
   }
-  session_.CommitTx();
   return {};
 }
 
 Result<void> YcsbLeanMvccKvSpace::Get(std::string_view key, std::string& value_out) {
-  session_.StartTx();
   auto get_res = kv_space_.Lookup(key);
   if (!get_res) {
-    session_.AbortTx();
     return Error::General(
         std::format("Get failed, key={}, error={}", key, get_res.error().ToString()));
   }
   auto& value = get_res.value();
   value_out.assign(reinterpret_cast<const char*>(value.data()), value.size());
-  session_.CommitTx();
   return {};
 }
 

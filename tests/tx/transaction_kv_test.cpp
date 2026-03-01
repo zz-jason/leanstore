@@ -331,9 +331,7 @@ TEST_F(TransactionKVTest, ConcurrentInsertWithSplit) {
     auto tree = std::move(tree_res.value());
     int i = 0;
     while (!stop.load()) {
-      session.StartTx();
       (void)tree.Insert(std::format("{}_{}", i, 0), "v");
-      session.CommitTx();
       inserted.fetch_add(1);
       i++;
     }
@@ -346,9 +344,7 @@ TEST_F(TransactionKVTest, ConcurrentInsertWithSplit) {
     auto tree = std::move(tree_res.value());
     int i = 0;
     while (!stop.load()) {
-      session.StartTx();
       (void)tree.Insert(std::format("{}_{}", i, 1), "v");
-      session.CommitTx();
       inserted.fetch_add(1);
       i++;
     }

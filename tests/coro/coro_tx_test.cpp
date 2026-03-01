@@ -63,9 +63,7 @@ TEST_F(CoroTxTest, BasicCommit) {
 
   {
     for (const auto& [key, val] : kv_to_test) {
-      s0.StartTx();
       EXPECT_TRUE(btree.Insert(key, val));
-      s0.CommitTx();
     }
   }
 }
