@@ -25,7 +25,7 @@ int main() {
   }
   std::unique_ptr<LeanStore> store = std::move(res.value());
 
-  auto session = store->Connect(0);
+  auto session = store->Connect();
   auto create_res = session.CreateBTree("testTree1", lean_btree_type::LEAN_BTREE_TYPE_ATOMIC);
   if (!create_res) {
     std::cerr << "create btree failed: " << create_res.error().ToString() << std::endl;

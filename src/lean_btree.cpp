@@ -1,5 +1,6 @@
 #include "leanstore/lean_btree.hpp"
 
+#include "common/tx_guard.hpp"
 #include "leanstore/btree/b_tree_generic.hpp"
 #include "leanstore/kv_interface.hpp"
 #include "leanstore/lean_cursor.hpp"
@@ -14,10 +15,13 @@ LeanBTree::LeanBTree(LeanSession* session, std::variant<BasicKV*, TransactionKV*
 
 Result<void> LeanBTree::Insert(Slice key, Slice value) {
   return session_->ExecSync([&]() -> Result<void> {
+    lean_status tx_status = lean_status::LEAN_STATUS_OK;
+    TxGuard tx_guard(tx_status);
     OpCode result = std::visit([&](auto* btree) { return btree->Insert(key, value); }, btree_);
     if (result == OpCode::kOK) {
       return {};
     }
+    tx_status = lean_status::LEAN_ERR_CONFLICT;
     if (result == OpCode::kDuplicated) {
       return Error::General("Duplicate key");
     }
@@ -33,10 +37,13 @@ Result<void> LeanBTree::Insert(Slice key, Slice value) {
 
 Result<void> LeanBTree::Remove(Slice key) {
   return session_->ExecSync([&]() -> Result<void> {
+    lean_status tx_status = lean_status::LEAN_STATUS_OK;
+    TxGuard tx_guard(tx_status);
     OpCode result = std::visit([&](auto* btree) { return btree->Remove(key); }, btree_);
     if (result == OpCode::kOK) {
       return {};
     }
+    tx_status = lean_status::LEAN_ERR_CONFLICT;
     if (result == OpCode::kNotFound) {
       return Error::General("Key not found");
     }
@@ -52,8 +59,11 @@ Result<void> LeanBTree::Remove(Slice key) {
 
 Result<void> LeanBTree::Update(Slice key, Slice value) {
   return session_->ExecSync([&]() -> Result<void> {
+    lean_status tx_status = lean_status::LEAN_STATUS_OK;
+    TxGuard tx_guard(tx_status);
     OpCode remove_result = std::visit([&](auto* btree) { return btree->Remove(key); }, btree_);
     if (remove_result != OpCode::kOK && remove_result != OpCode::kNotFound) {
+      tx_status = lean_status::LEAN_ERR_CONFLICT;
       if (remove_result == OpCode::kAbortTx) {
         return Error::General("Transaction aborted");
       }
@@ -68,6 +78,7 @@ Result<void> LeanBTree::Update(Slice key, Slice value) {
     if (insert_result == OpCode::kOK) {
       return {};
     }
+    tx_status = lean_status::LEAN_ERR_CONFLICT;
     if (insert_result == OpCode::kDuplicated) {
       return Error::General("Duplicate key");
     }
@@ -83,6 +94,8 @@ Result<void> LeanBTree::Update(Slice key, Slice value) {
 
 Result<std::vector<uint8_t>> LeanBTree::Lookup(Slice key) {
   return session_->ExecSync([&]() -> Result<std::vector<uint8_t>> {
+    lean_status tx_status = lean_status::LEAN_STATUS_OK;
+    TxGuard tx_guard(tx_status);
     std::vector<uint8_t> value;
     OpCode result = std::visit(
         [&](auto* btree) {
@@ -93,6 +106,7 @@ Result<std::vector<uint8_t>> LeanBTree::Lookup(Slice key) {
     if (result == OpCode::kOK) {
       return value;
     }
+    tx_status = lean_status::LEAN_ERR_CONFLICT;
     if (result == OpCode::kNotFound) {
       return Error::General("Key not found");
     }
@@ -107,9 +121,7 @@ Result<std::vector<uint8_t>> LeanBTree::Lookup(Slice key) {
 }
 
 LeanCursor LeanBTree::OpenCursor() {
-  std::unique_ptr<BTreeIter> cursor =
-      std::visit([&](auto* btree) { return btree->NewBTreeIter(); }, btree_);
-  return LeanCursor(this, std::move(cursor));
+  return LeanCursor(this);
 }
 
 void LeanBTree::Close() {

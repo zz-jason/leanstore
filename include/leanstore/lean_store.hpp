@@ -102,11 +102,11 @@ public:
 
   /// Connect to the database and return a session for coroutine operations.
   /// This is a convenience wrapper around ReserveSession that returns a LeanSession object.
-  auto Connect(uint64_t worker_id = 0) -> LeanSession;
+  auto Connect() -> LeanSession;
 
   /// Try to connect to the database, returning an empty optional if no session is available.
   /// This is a convenience wrapper around TryReserveSession.
-  auto TryConnect(uint64_t worker_id = 0) -> Optional<LeanSession>;
+  auto TryConnect() -> Optional<LeanSession>;
 
 private:
   void StartBackgroundThreads();

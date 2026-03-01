@@ -38,8 +38,8 @@ protected:
     ASSERT_TRUE(opened);
     store_ = std::move(opened.value());
 
-    writer_ = store_->Connect(0);
-    reader_ = store_->Connect(1);
+    writer_ = store_->Connect();
+    reader_ = store_->Connect();
     auto created = writer_->CreateBTree("mvcc", LEAN_BTREE_TYPE_MVCC);
     ASSERT_TRUE(created);
     tw_ = std::move(created.value());

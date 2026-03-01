@@ -47,9 +47,9 @@ protected:
     ASSERT_TRUE(opened);
     store_ = std::move(opened.value());
 
-    s0_ = store_->Connect(0);
-    s1_ = store_->Connect(1);
-    s2_ = store_->Connect(2);
+    s0_ = store_->Connect();
+    s1_ = store_->Connect();
+    s2_ = store_->Connect();
   }
 };
 
@@ -325,7 +325,7 @@ TEST_F(TransactionKVTest, ConcurrentInsertWithSplit) {
   std::atomic<int> inserted = 0;
 
   std::thread th0([&]() {
-    auto session = store_->Connect(0);
+    auto session = store_->Connect();
     auto tree_res = session.GetBTree("ConcurrentInsertWithSplit");
     ASSERT_TRUE(tree_res);
     auto tree = std::move(tree_res.value());
@@ -340,7 +340,7 @@ TEST_F(TransactionKVTest, ConcurrentInsertWithSplit) {
   });
 
   std::thread th1([&]() {
-    auto session = store_->Connect(1);
+    auto session = store_->Connect();
     auto tree_res = session.GetBTree("ConcurrentInsertWithSplit");
     ASSERT_TRUE(tree_res);
     auto tree = std::move(tree_res.value());

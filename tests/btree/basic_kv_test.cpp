@@ -38,8 +38,8 @@ protected:
     auto opened = LeanStore::Open(option);
     ASSERT_TRUE(opened);
     store_ = std::move(opened.value());
-    s0_ = store_->Connect(0);
-    s1_ = store_->Connect(1);
+    s0_ = store_->Connect();
+    s1_ = store_->Connect();
   }
 };
 

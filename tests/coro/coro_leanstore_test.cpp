@@ -50,7 +50,7 @@ TEST_F(CoroLeanStoreTest, BasicKv) {
     kv_to_test.emplace_back(key, val);
   }
 
-  auto session_opt = store->TryConnect(0);
+  auto session_opt = store->TryConnect();
   ASSERT_TRUE(session_opt.has_value());
   auto session = std::move(session_opt.value());
 

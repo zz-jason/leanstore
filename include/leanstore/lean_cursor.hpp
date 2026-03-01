@@ -5,7 +5,7 @@
 #include "leanstore/btree/btree_iter.hpp"
 
 #include <cstdint>
-#include <memory>
+#include <string>
 
 namespace leanstore {
 
@@ -17,7 +17,7 @@ class LeanBTree;
 class LeanCursor {
 public:
   /// Constructor: internal use only.
-  LeanCursor(LeanBTree* btree, std::unique_ptr<BTreeIter> cursor);
+  explicit LeanCursor(LeanBTree* btree);
 
   LeanCursor(const LeanCursor&) = delete;
   auto operator=(const LeanCursor&) -> LeanCursor& = delete;
@@ -78,8 +78,15 @@ public:
   void Close();
 
 private:
+  void RecordCurrent(BTreeIter* iter);
+  auto SeekToVisibleAsc(BTreeIter* iter) -> bool;
+  auto SeekToVisibleDesc(BTreeIter* iter) -> bool;
+
   LeanBTree* btree_;
-  std::unique_ptr<BTreeIter> cursor_;
+  bool is_valid_ = false;
+  bool is_removed_ = false;
+  std::string current_key_;
+  std::string current_value_;
 };
 
 } // namespace leanstore

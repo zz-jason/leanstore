@@ -51,8 +51,7 @@ Result<std::unique_ptr<YcsbLeanDb>> YcsbLeanDb::Create(const YcsbOptions& option
 }
 
 YcsbSession YcsbLeanDb::NewSession() {
-  auto runs_on = round_robin_counter_++ % store_->store_option_->worker_threads_;
-  return YcsbSession(std::make_unique<YcsbLeanSession>(*store_, runs_on, bench_transaction_kv_));
+  return YcsbSession(std::make_unique<YcsbLeanSession>(*store_, bench_transaction_kv_));
 }
 
 //------------------------------------------------------------------------------

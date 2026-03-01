@@ -1,7 +1,7 @@
 #include "c/btree_impl.hpp"
 
 #include "c/cursor_impl.hpp"
-#include "c/tx_guard.hpp"
+#include "common/tx_guard.hpp"
 #include "leanstore/c/leanstore.h"
 #include "leanstore/c/status.h"
 #include "leanstore/coro/coro_scheduler.hpp"

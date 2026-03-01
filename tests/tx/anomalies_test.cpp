@@ -41,9 +41,9 @@ protected:
     ASSERT_TRUE(opened);
     store_ = std::move(opened.value());
 
-    s1_ = store_->Connect(0);
-    s2_ = store_->Connect(1);
-    s3_ = store_->Connect(2);
+    s1_ = store_->Connect();
+    s2_ = store_->Connect();
+    s3_ = store_->Connect();
 
     auto created = s1_->CreateBTree("anomalies", LEAN_BTREE_TYPE_MVCC);
     ASSERT_TRUE(created);

@@ -56,7 +56,7 @@ TEST_F(CoroTxTest, BasicCommit) {
   }
 
   // create btree for table records
-  auto s0 = store->Connect(0);
+  auto s0 = store->Connect();
   auto create_res = s0.CreateBTree(kBtreeName, lean_btree_type::LEAN_BTREE_TYPE_MVCC, kBtreeConfig);
   ASSERT_TRUE(create_res);
   auto btree = std::move(create_res.value());
@@ -80,8 +80,8 @@ TEST_F(CoroTxTest, BasicSnapshotIsolation) {
   auto store = std::move(res.value());
   ASSERT_NE(store, nullptr);
 
-  auto s0 = store->Connect(0);
-  auto s1 = store->Connect(1);
+  auto s0 = store->Connect();
+  auto s1 = store->Connect();
 
   auto create_res = s0.CreateBTree(kBtreeName, lean_btree_type::LEAN_BTREE_TYPE_MVCC, kBtreeConfig);
   ASSERT_TRUE(create_res);

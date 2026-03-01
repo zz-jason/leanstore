@@ -26,7 +26,7 @@ protected:
     auto opened = LeanStore::Open(option);
     ASSERT_TRUE(opened);
     store_ = std::move(opened.value());
-    session_ = store_->Connect(0);
+    session_ = store_->Connect();
     auto created = session_->CreateBTree("summary", LEAN_BTREE_TYPE_MVCC);
     ASSERT_TRUE(created);
     tree_ = std::move(created.value());

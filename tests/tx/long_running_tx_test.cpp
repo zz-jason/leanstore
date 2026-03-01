@@ -42,9 +42,9 @@ protected:
     ASSERT_TRUE(opened);
     store_ = std::move(opened.value());
 
-    s0_ = store_->Connect(0);
-    s1_ = store_->Connect(1);
-    s2_ = store_->Connect(2);
+    s0_ = store_->Connect();
+    s1_ = store_->Connect();
+    s2_ = store_->Connect();
 
     auto created = s0_->CreateBTree("long_tx", LEAN_BTREE_TYPE_MVCC);
     ASSERT_TRUE(created);

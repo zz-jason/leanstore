@@ -40,9 +40,7 @@ private:
   }
 
   lean_session* TryConnect() {
-    static std::atomic<uint64_t> runs_on_counter{0};
-    auto runs_on = runs_on_counter++ % store_->store_option_->worker_threads_;
-    auto session = store_->TryConnect(runs_on);
+    auto session = store_->TryConnect();
     if (!session) {
       return nullptr;
     }

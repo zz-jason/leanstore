@@ -24,7 +24,7 @@ set(LEAN_SOURCES
   c/store_impl.hpp
   c/table_impl.cpp
   c/table_impl.hpp
-  c/tx_guard.hpp
+  common/tx_guard.hpp
   c/perf_counters.cpp
   c/store_option.cpp
   c/utils.cpp

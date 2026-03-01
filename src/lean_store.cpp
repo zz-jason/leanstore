@@ -22,6 +22,7 @@
 #include "leanstore/utils/scoped_timer.hpp"
 #include "utils/json.hpp"
 
+#include <atomic>
 #include <cassert>
 #include <cstdint>
 #include <filesystem>
@@ -47,6 +48,7 @@ namespace leanstore {
 namespace {
 
 constexpr auto kGraveyardNameFormat = "_{}_graveyard";
+std::atomic<uint64_t> g_connect_runs_on_counter{0};
 
 void DropBasicKvInternal(LeanStore* store, const std::string& name) {
   auto* btree = dynamic_cast<BTreeGeneric*>(store->tree_registry_->GetTree(name));
@@ -229,13 +231,15 @@ void LeanStore::ParallelRange(
   coro_scheduler_->ParallelRange(num_jobs, std::move(job_handler));
 }
 
-auto LeanStore::Connect(uint64_t worker_id) -> LeanSession {
-  CoroSession* session = coro_scheduler_->ReserveCoroSession(worker_id);
+auto LeanStore::Connect() -> LeanSession {
+  auto runs_on = g_connect_runs_on_counter++ % store_option_->worker_threads_;
+  CoroSession* session = coro_scheduler_->ReserveCoroSession(runs_on);
   return LeanSession(this, session);
 }
 
-auto LeanStore::TryConnect(uint64_t worker_id) -> Optional<LeanSession> {
-  CoroSession* session = coro_scheduler_->TryReserveCoroSession(worker_id);
+auto LeanStore::TryConnect() -> Optional<LeanSession> {
+  auto runs_on = g_connect_runs_on_counter++ % store_option_->worker_threads_;
+  CoroSession* session = coro_scheduler_->TryReserveCoroSession(runs_on);
   if (session == nullptr) {
     return std::nullopt;
   }

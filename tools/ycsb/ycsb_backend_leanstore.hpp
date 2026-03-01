@@ -32,13 +32,12 @@ public:
 private:
   std::unique_ptr<LeanStore> store_;
   bool bench_transaction_kv_;
-  uint64_t round_robin_counter_ = 0;
 };
 
 class YcsbLeanSession {
 public:
-  YcsbLeanSession(LeanStore& store, uint64_t runs_on, bool bench_transaction_kv)
-      : session_(store.Connect(runs_on)),
+  YcsbLeanSession(LeanStore& store, bool bench_transaction_kv)
+      : session_(store.Connect()),
         bench_transaction_kv_(bench_transaction_kv) {
   }
 
