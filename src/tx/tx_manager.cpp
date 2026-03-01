@@ -9,7 +9,6 @@
 #include "leanstore/coro/lean_mutex.hpp"
 #include "leanstore/coro/mvcc_manager.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/tx/cr_manager.hpp"
 #include "leanstore/tx/group_committer.hpp"
 #include "leanstore/tx/transaction.hpp"
 #include "leanstore/utils/counter_util.hpp"
