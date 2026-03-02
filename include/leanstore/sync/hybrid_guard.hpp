@@ -114,10 +114,8 @@ public:
   void ToOptimisticSpin() {
     LEAN_DCHECK(state_ == GuardState::kUninitialized && latch_ != nullptr);
     while (!TryLockOptimistic()) {
-#ifdef LEAN_ENABLE_CORO
       CoroEnv::CurCoro()->SetTryLockFunc([this]() { return TryLockOptimistic(); });
       CoroEnv::CurCoro()->Yield(CoroState::kWaitingMutex);
-#endif
     }
     state_ = GuardState::kSharedOptimistic;
   }

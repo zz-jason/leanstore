@@ -747,7 +747,7 @@ Result<column_store::ColumnStoreStats> Table::BuildColumnStore(
   if (definition_.primary_index_config_.enable_wal_) {
     return Error::General("column store build requires WAL disabled");
   }
-  auto* btree = dynamic_cast<BasicKV*>(kv_interface_);
+  auto* btree = kv_interface_.GetBasicKV();
   if (btree == nullptr) {
     return Error::General("column store build requires BasicKV");
   }

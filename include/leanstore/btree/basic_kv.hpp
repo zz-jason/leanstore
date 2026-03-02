@@ -11,32 +11,31 @@ class LeanStore;
 
 namespace leanstore {
 
-class BasicKV : public KVInterface, public BTreeGeneric {
+class BasicKV : public BTreeGeneric {
 public:
   BasicKV() {
     tree_type_ = BTreeType::kBasicKV;
   }
 
-  OpCode Lookup(Slice key, ValCallback val_callback) override;
+  OpCode Lookup(Slice key, ValCallback val_callback);
 
-  OpCode Insert(Slice key, Slice val) override;
+  OpCode Insert(Slice key, Slice val);
 
-  OpCode UpdatePartial(Slice key, MutValCallback update_call_back,
-                       UpdateDesc& update_desc) override;
+  OpCode UpdatePartial(Slice key, MutValCallback update_call_back, UpdateDesc& update_desc);
 
-  OpCode Remove(Slice key) override;
+  OpCode Remove(Slice key);
 
-  OpCode ScanAsc(Slice start_key, ScanCallback callback) override;
+  OpCode ScanAsc(Slice start_key, ScanCallback callback);
 
-  OpCode ScanDesc(Slice start_key, ScanCallback callback) override;
+  OpCode ScanDesc(Slice start_key, ScanCallback callback);
 
-  OpCode PrefixLookup(Slice, PrefixLookupCallback callback) override;
+  OpCode PrefixLookup(Slice, PrefixLookupCallback callback);
 
-  OpCode PrefixLookupForPrev(Slice key, PrefixLookupCallback callback) override;
+  OpCode PrefixLookupForPrev(Slice key, PrefixLookupCallback callback);
 
-  OpCode RangeRemove(Slice start_key, Slice end_key, bool page_used) override;
+  OpCode RangeRemove(Slice start_key, Slice end_key, bool page_used);
 
-  uint64_t CountEntries() override;
+  uint64_t CountEntries();
 
   bool IsRangeEmpty(Slice start_key, Slice end_key);
 

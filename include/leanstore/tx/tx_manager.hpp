@@ -103,9 +103,7 @@ public:
 private:
   void WaitToCommit(const lean_txid_t commit_ts) {
     while (!(commit_ts <= GetLastCommittedUsrTx())) {
-#ifdef LEAN_ENABLE_CORO
       CoroEnv::CurCoro()->Yield(CoroState::kRunning);
-#endif
     }
   }
 };

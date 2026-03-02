@@ -1,19 +1,21 @@
 #include "leanstore/table/table.hpp"
 
+#include "leanstore/base/log.hpp"
 #include "leanstore/btree/b_tree_generic.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/tx/transaction_kv.hpp"
 
 #include <cstring>
+#include <format>
 #include <limits>
 #include <utility>
 #include <vector>
 
 namespace leanstore {
 
-TableCursor::TableCursor(KVInterface* kv_interface, const TableDefinition& def)
-    : kv_interface_(kv_interface),
+TableCursor::TableCursor(KVInterface&& kv_interface, const TableDefinition& def)
+    : kv_interface_(std::move(kv_interface)),
       codec_(def) {
 }
 
@@ -22,7 +24,7 @@ TableCursor::~TableCursor() = default;
 bool TableCursor::SeekToFirst() {
   is_valid_ = false;
   current_key_.clear();
-  auto rc = kv_interface_->ScanAsc(Slice(), [&](Slice key, Slice val) { return Assign(key, val); });
+  auto rc = kv_interface_.ScanAsc(Slice(), [&](Slice key, Slice val) { return Assign(key, val); });
   return rc == OpCode::kOK && is_valid_;
 }
 
@@ -33,14 +35,13 @@ bool TableCursor::SeekToFirstGreaterEqual(const lean_row* key_row) {
     return false;
   }
   const auto& key = key_res.value();
-  auto rc = kv_interface_->ScanAsc(key, [&](Slice k, Slice v) { return Assign(k, v); });
+  auto rc = kv_interface_.ScanAsc(key, [&](Slice k, Slice v) { return Assign(k, v); });
   return rc == OpCode::kOK && is_valid_;
 }
 
 bool TableCursor::SeekToLast() {
   is_valid_ = false;
-  auto rc =
-      kv_interface_->ScanDesc(Slice(), [&](Slice key, Slice val) { return Assign(key, val); });
+  auto rc = kv_interface_.ScanDesc(Slice(), [&](Slice key, Slice val) { return Assign(key, val); });
   return rc == OpCode::kOK && is_valid_;
 }
 
@@ -51,7 +52,7 @@ bool TableCursor::SeekToLastLessEqual(const lean_row* key_row) {
     return false;
   }
   const auto& key = key_res.value();
-  auto rc = kv_interface_->ScanDesc(key, [&](Slice k, Slice v) { return Assign(k, v); });
+  auto rc = kv_interface_.ScanDesc(key, [&](Slice k, Slice v) { return Assign(k, v); });
   return rc == OpCode::kOK && is_valid_;
 }
 
@@ -62,7 +63,7 @@ bool TableCursor::Next() {
   auto start = current_key_;
   bool skipped = false;
   is_valid_ = false;
-  auto rc = kv_interface_->ScanAsc(start, [&](Slice key, Slice val) {
+  auto rc = kv_interface_.ScanAsc(start, [&](Slice key, Slice val) {
     if (!skipped) {
       skipped = true;
       if (key.size() == start.size() && std::memcmp(key.data(), start.data(), start.size()) == 0) {
@@ -81,7 +82,7 @@ bool TableCursor::Prev() {
   auto start = current_key_;
   bool skipped = false;
   is_valid_ = false;
-  auto rc = kv_interface_->ScanDesc(start, [&](Slice key, Slice val) {
+  auto rc = kv_interface_.ScanDesc(start, [&](Slice key, Slice val) {
     if (!skipped) {
       skipped = true;
       if (key.size() == start.size() && std::memcmp(key.data(), start.data(), start.size()) == 0) {
@@ -111,7 +112,7 @@ OpCode TableCursor::RemoveCurrent() {
   if (!is_valid_) {
     return OpCode::kNotFound;
   }
-  auto res = kv_interface_->Remove(current_key_);
+  auto res = kv_interface_.Remove(current_key_);
   if (res == OpCode::kOK) {
     is_valid_ = false;
     current_value_.clear();
@@ -146,7 +147,7 @@ OpCode TableCursor::UpdateCurrent(const lean_row* row) {
     update_desc->update_slots_[0].offset_ = 0;
     update_desc->update_slots_[0].size_ = static_cast<uint16_t>(encoded.value_.size());
 
-    rc = kv_interface_->UpdatePartial(
+    rc = kv_interface_.UpdatePartial(
         key_slice,
         [&](MutableSlice val) {
           std::memcpy(val.data(), new_value_slice.data(), new_value_slice.size());
@@ -154,13 +155,13 @@ OpCode TableCursor::UpdateCurrent(const lean_row* row) {
         *update_desc);
   } else {
     auto original_value = current_value_;
-    rc = kv_interface_->Remove(key_slice);
+    rc = kv_interface_.Remove(key_slice);
     if (rc != OpCode::kOK) {
       return rc;
     }
-    rc = kv_interface_->Insert(key_slice, new_value_slice);
+    rc = kv_interface_.Insert(key_slice, new_value_slice);
     if (rc != OpCode::kOK) {
-      kv_interface_->Insert(key_slice, original_value);
+      kv_interface_.Insert(key_slice, original_value);
       is_valid_ = false;
       current_value_.clear();
       return rc;
@@ -183,31 +184,38 @@ bool TableCursor::Assign(Slice key, Slice val) {
 }
 
 Result<std::unique_ptr<Table>> Table::Create(LeanStore* store, TableDefinition definition) {
-  KVInterface* kv_interface = nullptr;
   switch (definition.primary_index_type_) {
   case lean_btree_type::LEAN_BTREE_TYPE_ATOMIC: {
-    auto res = store->CreateBasicKv(definition.name_, definition.primary_index_config_);
+    auto res = BasicKV::Create(store, definition.name_, definition.primary_index_config_);
     if (!res) {
       return std::move(res.error());
     }
-    auto* kv = res.value();
-    kv_interface = kv;
-    break;
+    return std::make_unique<Table>(std::move(definition), KVInterface(std::ref(*res.value())));
   }
   case lean_btree_type::LEAN_BTREE_TYPE_MVCC: {
-    auto res = store->CreateTransactionKV(definition.name_, definition.primary_index_config_);
+    static constexpr auto kGraveyardConfig =
+        lean_btree_config{.enable_wal_ = false, .use_bulk_insert_ = false};
+    auto graveyard_name = std::format("_{}_graveyard", definition.name_);
+    auto graveyard = BasicKV::Create(store, graveyard_name, kGraveyardConfig);
+    if (!graveyard) {
+      return std::move(graveyard.error());
+    }
+    auto res = TransactionKV::Create(store, definition.name_, definition.primary_index_config_,
+                                     graveyard.value());
     if (!res) {
+      BTreeGeneric::FreeAndReclaim(*static_cast<BTreeGeneric*>(graveyard.value()));
+      auto unregister_res = store->tree_registry_->UnRegisterTree(graveyard.value()->tree_id_);
+      if (!unregister_res) {
+        Log::Error("Unregister graveyard failed for table {}: {}", definition.name_,
+                   unregister_res.error().ToString());
+      }
       return std::move(res.error());
     }
-    auto* kv = res.value();
-    kv_interface = kv;
-    break;
+    return std::make_unique<Table>(std::move(definition), KVInterface(std::ref(*res.value())));
   }
   default:
     return Error::General("unsupported primary index type");
   }
-
-  return std::make_unique<Table>(std::move(definition), kv_interface);
 }
 
 Result<std::unique_ptr<Table>> Table::WrapExisting(LeanStore* store, TableDefinition definition) {
@@ -219,11 +227,24 @@ Result<std::unique_ptr<Table>> Table::WrapExisting(LeanStore* store, TableDefini
   if (generic == nullptr) {
     return Error::General("backing tree type mismatch");
   }
-  KVInterface* kv_interface = dynamic_cast<KVInterface*>(generic);
-  if (kv_interface == nullptr) {
-    return Error::General("backing tree not KVInterface");
+  switch (generic->tree_type_) {
+  case BTreeType::kBasicKV: {
+    auto* kv_tree = dynamic_cast<BasicKV*>(generic);
+    if (kv_tree == nullptr) {
+      return Error::General("backing tree not BasicKV");
+    }
+    return std::make_unique<Table>(std::move(definition), KVInterface(std::ref(*kv_tree)));
   }
-  return std::make_unique<Table>(std::move(definition), kv_interface);
+  case BTreeType::kTransactionKV: {
+    auto* kv_tree = dynamic_cast<TransactionKV*>(generic);
+    if (kv_tree == nullptr) {
+      return Error::General("backing tree not TransactionKV");
+    }
+    return std::make_unique<Table>(std::move(definition), KVInterface(std::ref(*kv_tree)));
+  }
+  default:
+    return Error::General("unsupported backing tree type");
+  }
 }
 
 OpCode Table::Insert(const lean_row* row) {
@@ -232,7 +253,7 @@ OpCode Table::Insert(const lean_row* row) {
     return OpCode::kOther;
   }
   const auto& enc = encoded_res.value();
-  return kv_interface_->Insert(enc.key_, enc.value_);
+  return kv_interface_.Insert(enc.key_, enc.value_);
 }
 
 OpCode Table::Remove(const lean_row* key_row) {
@@ -241,7 +262,7 @@ OpCode Table::Remove(const lean_row* key_row) {
     return OpCode::kOther;
   }
   auto& key = key_res.value();
-  return kv_interface_->Remove(key);
+  return kv_interface_.Remove(key);
 }
 
 OpCode Table::Lookup(const lean_row* key_row, lean_row* out_row, std::string& value_buf) {
@@ -255,7 +276,7 @@ OpCode Table::Lookup(const lean_row* key_row, lean_row* out_row, std::string& va
   }
 
   auto& key = key_res.value();
-  auto rc = kv_interface_->Lookup(key, [&](Slice val) {
+  auto rc = kv_interface_.Lookup(key, [&](Slice val) {
     value_buf.clear();
     val.CopyTo(value_buf);
   });
@@ -270,7 +291,7 @@ OpCode Table::Lookup(const lean_row* key_row, lean_row* out_row, std::string& va
 }
 
 std::unique_ptr<TableCursor> Table::NewCursor() {
-  return std::make_unique<TableCursor>(kv_interface_, definition_);
+  return std::make_unique<TableCursor>(kv_interface_.Fork(), definition_);
 }
 
 } // namespace leanstore

@@ -1,7 +1,7 @@
-#include <leanstore/lean_store.hpp>
-#include <leanstore/btree/basic_kv.hpp>
 #include <leanstore/c/types.h>
-#include <leanstore/tx/tx_manager.hpp>
+#include <leanstore/lean_btree.hpp>
+#include <leanstore/lean_session.hpp>
+#include <leanstore/lean_store.hpp>
 
 #include <iostream>
 #include <memory>
@@ -25,37 +25,27 @@ int main() {
   }
   std::unique_ptr<LeanStore> store = std::move(res.value());
 
-  // create btree
-  std::string btree_name = "testTree1";
-  leanstore::BasicKV* btree = nullptr;
-  store->ExecSync(0, [&]() {
-    auto res = store->CreateBasicKv(btree_name);
-    if (!res) {
-      std::cerr << "create btree failed: " << res.error().ToString() << std::endl;
-    }
-    btree = res.value();
-  });
+  auto session = store->Connect();
+  auto create_res = session.CreateBTree("testTree1", lean_btree_type::LEAN_BTREE_TYPE_ATOMIC);
+  if (!create_res) {
+    std::cerr << "create btree failed: " << create_res.error().ToString() << std::endl;
+    return 1;
+  }
+  auto btree = std::move(create_res.value());
 
-  // insert value
-  store->ExecSync(0, [&]() {
-    std::string key("hello"), val("world");
-    auto ret = btree->Insert(key, val);
-    if (ret != leanstore::OpCode::kOK) {
-      std::cerr << "insert value failed: " << leanstore::ToString(ret) << std::endl;
-    }
-  });
+  if (auto insert_res = btree.Insert("hello", "world"); !insert_res) {
+    std::cerr << "insert value failed: " << insert_res.error().ToString() << std::endl;
+    return 1;
+  }
 
-  // lookup value
-  store->ExecSync(0, [&]() {
-    std::string copied_value;
-    std::string key("hello");
-    auto copy_value_out = [&](leanstore::Slice val) { copied_value = val.ToString(); };
-    auto ret = btree->Lookup(key, copy_value_out);
-    if (ret != leanstore::OpCode::kOK) {
-      std::cerr << "lookup value failed: " << leanstore::ToString(ret) << std::endl;
-    }
-    std::cout << key << ", " << copied_value << std::endl;
-  });
+  auto lookup_res = btree.Lookup("hello");
+  if (!lookup_res) {
+    std::cerr << "lookup value failed: " << lookup_res.error().ToString() << std::endl;
+    return 1;
+  }
+  const auto& value = lookup_res.value();
+  std::string copied_value(reinterpret_cast<const char*>(value.data()), value.size());
+  std::cout << "hello, " << copied_value << std::endl;
 
   return 0;
 }

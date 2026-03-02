@@ -10,21 +10,6 @@ permissions:
   pull-requests: write
 
 jobs:
-  ut-with-tsan:
-    runs-on: ubuntu-latest
-    container:
-      image: zzjason/leanstore-dev:latest
-    name: UT-tsan
-    steps:
-    - name: Check out repository
-      uses: actions/checkout@v3
-
-    - name: Config, Build, and UT with tsan
-      run: |
-        cmake --preset debug_tsan
-        cmake --build build/debug_tsan -j `nproc`
-        TSAN_OPTIONS="suppressions=$(pwd)/tests/tsan.supp" ctest --test-dir build/debug_tsan --output-on-failure -j 2
-
   ut-with-gcovr:
     runs-on: ubuntu-latest
     container:
@@ -35,44 +20,7 @@ jobs:
       uses: actions/checkout@v3
 
     - name: Config
-      run: cmake --preset debug_cov
-
-    - name: Cppcheck
-      run: cppcheck --project=build/debug_cov/compile_commands.json -i tests --error-exitcode=1 --check-level=exhaustive
-
-    - name: Clang-format
-      run: cmake --build build/debug_cov --target=check-format
-
-    - name: Build
-      run: cmake --build build/debug_cov -j `nproc`
-
-    - name: UT with coverage
-      run: TSAN_OPTIONS="suppressions=$(pwd)/tests/tsan.supp" ctest --test-dir build/debug_cov --output-on-failure -j 2
-
-    - name: Generate coverage file
-      run: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'tools/*' --verbose
-
-    - name: Upload coverage reports to Codecov
-      uses: codecov/codecov-action@v4
-      with:
-        fail_ci_if_error: true
-        files: coverage.xml
-        verbose: true
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  coro-mode:
-    runs-on: ubuntu-latest
-    container:
-      image: zzjason/leanstore-dev:latest
-    name: "[CORO] UT-coverage"
-    steps:
-    - name: Check out repository
-      uses: actions/checkout@v3
-
-    - name: Config project
-      run: |
-        cmake --preset debug_coro
+      run: cmake --preset debug_coro
 
     - name: Cppcheck
       run: cppcheck --project=build/debug_coro/compile_commands.json -i tests --error-exitcode=1 --check-level=exhaustive
@@ -83,17 +31,17 @@ jobs:
     - name: Build
       run: cmake --build build/debug_coro -j `nproc`
 
-    - name: Unit test with coroutine enabled
+    - name: UT with coverage
       run: ctest --test-dir build/debug_coro --output-on-failure -j 2
 
     - name: Generate coverage file
-      run: gcovr -v -r . --xml-pretty --xml=coverage_coro.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'tools/*' --verbose
+      run: gcovr -v -r . --xml-pretty --xml=coverage.xml --exclude 'build/*' --exclude 'tests/*' --exclude 'tools/*' --verbose
 
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v4
       with:
         fail_ci_if_error: true
-        files: coverage_coro.xml
+        files: coverage.xml
         verbose: true
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
@@ -256,7 +204,7 @@ jobs:
 
     - name: Config project
       run: |
-        cmake --preset debug_tsan
+        cmake --preset debug_coro
 
     - name: Clang-Tidy on changed files
       run: |
@@ -264,7 +212,7 @@ jobs:
           "${{ github.event.pull_request.number }}" \
           "${{ github.repository }}" \
           "${{ secrets.GITHUB_TOKEN }}" \
-          "build/debug_tsan"
+          "build/debug_coro"
 
   clang-tidy-coro:
     runs-on: ubuntu-latest

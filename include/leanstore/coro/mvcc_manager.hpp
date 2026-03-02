@@ -119,7 +119,6 @@ inline MvccManager::MvccManager(LeanStore* store) : store_(store) {
   for (auto i = 0U; i < store_option->worker_threads_; i++) {
     loggings_.emplace_back(std::make_unique<Logging>(store_option->wal_buffer_bytes_));
 
-#ifdef LEAN_ENABLE_CORO
     if (!store_option->enable_wal_) {
       Log::Info("Skipping logging initialization, WAL is disabled");
       continue;
@@ -134,7 +133,6 @@ inline MvccManager::MvccManager(LeanStore* store) : store_(store) {
     std::string file_name = std::format(CoroExecutor::kCoroExecNamePattern, i);
     std::string file_path = std::format("{}/{}.wal", wal_dir, file_name);
     loggings_.back()->InitWalFd(file_path);
-#endif
   }
 
   // init transaction managers

@@ -3,7 +3,6 @@
 #include "leanstore/base/log.hpp"
 #include "leanstore/coro/lean_mutex.hpp"
 #include "leanstore/coro/mvcc_manager.hpp"
-#include "leanstore/tx/cr_manager.hpp"
 #include "leanstore/tx/tx_manager.hpp"
 #include "leanstore/wal/logging.hpp"
 

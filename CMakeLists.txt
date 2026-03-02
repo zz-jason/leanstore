@@ -12,7 +12,6 @@ project(leanstore VERSION 1.0.0 LANGUAGES CXX)
 option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
 option(LEAN_ENABLE_PROFILING "Enable profiling" OFF)
 option(LEAN_ENABLE_PERF_COUNTERS "Whether to enable perf counters" ON)
-option(LEAN_ENABLE_CORO "Enable coroutine support" ON)
 option(LEAN_ENABLE_TESTS "Build tests" ON)
 option(LEAN_ENABLE_TOOLS "Build tools" ON)
 option(LEAN_ENABLE_DEBUG_EXEC "Enable debug block in debug build" ON)
@@ -74,27 +73,12 @@ if(LEAN_ENABLE_DEBUG_EXEC)
   )
 endif()
 
-if(LEAN_ENABLE_CORO)
-  target_compile_definitions(lean_project_options INTERFACE LEAN_ENABLE_CORO)
-endif()
-
 # Coverage
 if(ENABLE_COVERAGE)
   set(BUILD_SHARED_LIBS OFF)  # Coverage does not work with shared libs
   # Only apply coverage flags during build, not to consumers
   target_compile_options(lean_project_options INTERFACE $<BUILD_INTERFACE:--coverage -fprofile-update=atomic>)
   target_link_options(lean_project_options INTERFACE $<BUILD_INTERFACE:--coverage>)
-endif()
-
-# Sanitizers
-if(ENABLE_ASAN)
-  target_compile_options(lean_project_options INTERFACE $<BUILD_INTERFACE:-fsanitize=address>)
-  target_link_options(lean_project_options INTERFACE $<BUILD_INTERFACE:-fsanitize=address>)
-endif()
-
-if(ENABLE_TSAN)
-  target_compile_options(lean_project_options INTERFACE $<BUILD_INTERFACE:-fsanitize=thread>)
-  target_link_options(lean_project_options INTERFACE $<BUILD_INTERFACE:-fsanitize=thread>)
 endif()
 
 # ------------------------------------------------------------------------------

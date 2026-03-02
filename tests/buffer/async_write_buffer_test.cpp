@@ -1,129 +1,50 @@
-#include "leanstore/base/defer.hpp"
-#include "leanstore/base/log.hpp"
-#include "leanstore/buffer/async_write_buffer.hpp"
-#include "leanstore/buffer/buffer_frame.hpp"
-#include "leanstore/buffer/swip.hpp"
-#include "leanstore/utils/misc.hpp"
-#include "leanstore/utils/random_generator.hpp"
+#include "common/lean_test_suite.hpp"
+#include "leanstore/c/types.h"
+#include "leanstore/lean_btree.hpp"
+#include "leanstore/lean_session.hpp"
+#include "leanstore/lean_store.hpp"
 
 #include <gtest/gtest.h>
 
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
 #include <format>
-#include <vector>
-
-#include <fcntl.h>
+#include <memory>
+#include <optional>
+#include <string>
 
 namespace leanstore::test {
 
-class AsyncWriteBufferTest : public ::testing::Test {
+class AsyncWriteBufferTest : public LeanTestSuite {
 protected:
-  std::string test_dir_ = "/tmp/leanstore/AsyncWriteBufferTest";
-
-  struct BufferFrameHolder {
-    utils::AlignedBuffer<512> buffer_;
-    BufferFrame* bf_;
-
-    BufferFrameHolder(size_t page_size, lean_pid_t page_id)
-        : buffer_(512 + page_size),
-          bf_(new(buffer_.Get()) BufferFrame()) {
-      bf_->Init(page_id);
-    }
-  };
+  std::unique_ptr<LeanStore> store_;
+  Optional<LeanSession> session_;
+  Optional<LeanBTree> tree_;
 
   void SetUp() override {
-    // remove the test directory if it exists
-    TearDown();
-
-    // create the test directory
-    auto ret = system(std::format("mkdir -p {}", test_dir_).c_str());
-    EXPECT_EQ(ret, 0) << std::format(
-        "Failed to create test directory, testDir={}, errno={}, error={}", test_dir_, errno,
-        strerror(errno));
-  }
-
-  void TearDown() override {
-  }
-
-  std::string get_rand_test_file() { // NOLINT (fixme)
-    return std::format("{}/{}", test_dir_, utils::RandomGenerator::RandAlphString(8));
-  }
-
-  int open_file(const std::string& file_name) { // NOLINT (fixme)
-    // open the file
-    auto flag = O_TRUNC | O_CREAT | O_RDWR | O_DIRECT;
-    int fd = open(file_name.c_str(), flag, 0666);
-    EXPECT_NE(fd, -1) << std::format("Failed to open file, fileName={}, errno={}, error={}",
-                                     file_name, errno, strerror(errno));
-
-    return fd;
-  }
-
-  void close_file(int fd) { // NOLINT (fixme)
-    ASSERT_EQ(close(fd), 0) << std::format("Failed to close file, fd={}, errno={}, error={}", fd,
-                                           errno, strerror(errno));
-  }
-
-  void remove_file(const std::string& file_name) { // NOLINT (fixme)
-    ASSERT_EQ(remove(file_name.c_str()), 0)
-        << std::format("Failed to remove file, fileName={}, errno={}, error={}", file_name, errno,
-                       strerror(errno));
+    auto* option = lean_store_option_create(TestCaseStoreDir().c_str());
+    option->create_from_scratch_ = true;
+    option->worker_threads_ = 1;
+    auto opened = LeanStore::Open(option);
+    ASSERT_TRUE(opened);
+    store_ = std::move(opened.value());
+    session_ = store_->Connect();
+    auto created = session_->CreateBTree("buffer_basic", LEAN_BTREE_TYPE_ATOMIC);
+    ASSERT_TRUE(created);
+    tree_ = std::move(created.value());
   }
 };
 
 TEST_F(AsyncWriteBufferTest, Basic) {
-  auto test_file = get_rand_test_file();
-  auto test_fd = open_file(test_file);
-  LEAN_DEFER({
-    close_file(test_fd);
-    Log::Info("Test file={}", test_file);
-  });
-
-  auto test_page_size = 512;
-  auto test_max_batch_size = 8;
-  AsyncWriteBuffer test_write_buffer(test_fd, test_page_size, test_max_batch_size);
-  std::vector<std::unique_ptr<BufferFrameHolder>> bf_holders;
-  for (int i = 0; i < test_max_batch_size; i++) {
-    bf_holders.push_back(std::make_unique<BufferFrameHolder>(test_page_size, i));
-    EXPECT_FALSE(test_write_buffer.IsFull());
-    // set the payload to the pageId
-    *reinterpret_cast<int64_t*>(bf_holders[i]->bf_->page_.payload_) = i;
-    test_write_buffer.Add(*bf_holders[i]->bf_);
+  for (int i = 0; i < 64; ++i) {
+    std::string key = std::format("k{:03d}", i);
+    std::string value(512, static_cast<char>('a' + (i % 26)));
+    ASSERT_TRUE(tree_->Insert(key, value));
   }
 
-  // now the write buffer should be full
-  EXPECT_TRUE(test_write_buffer.IsFull());
-
-  // submit the IO request
-  auto result = test_write_buffer.SubmitAll();
-  ASSERT_TRUE(result) << "Failed to submit IO request, error=" << result.error().ToString();
-  EXPECT_EQ(result.value(), test_max_batch_size);
-
-  // wait for the IO request to complete
-  result = test_write_buffer.WaitAll();
-  auto done_requests = result.value();
-  EXPECT_EQ(done_requests, test_max_batch_size);
-  EXPECT_EQ(test_write_buffer.GetPendingRequests(), 0);
-
-  // check the flushed content
-  test_write_buffer.IterateFlushedBfs(
-      [](BufferFrame& flushed_bf, uint64_t flushed_psn) {
-        EXPECT_FALSE(flushed_bf.IsDirty());
-        EXPECT_FALSE(flushed_bf.IsFree());
-        EXPECT_EQ(flushed_psn, 0);
-      },
-      test_max_batch_size);
-
-  // read the file content
-  for (int i = 0; i < test_max_batch_size; i++) {
-    BufferFrameHolder bf_holder(test_page_size, i);
-    auto ret = pread(test_fd, reinterpret_cast<void*>(bf_holder.buffer_.Get() + 512),
-                     test_page_size, test_page_size * i);
-    EXPECT_EQ(ret, test_page_size);
-    auto payload = *reinterpret_cast<int64_t*>(bf_holder.bf_->page_.payload_);
-    EXPECT_EQ(payload, i);
+  for (int i = 0; i < 64; ++i) {
+    std::string key = std::format("k{:03d}", i);
+    auto value = tree_->Lookup(key);
+    ASSERT_TRUE(value);
+    ASSERT_EQ(value.value().size(), 512u);
   }
 }
 

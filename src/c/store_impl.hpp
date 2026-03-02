@@ -2,6 +2,7 @@
 
 #include "c/session_impl.hpp"
 #include "leanstore/c/leanstore.h"
+#include "leanstore/lean_session.hpp"
 #include "leanstore/lean_store.hpp"
 
 #include <memory>
@@ -39,13 +40,11 @@ private:
   }
 
   lean_session* TryConnect() {
-    static std::atomic<uint64_t> runs_on_counter{0};
-    auto runs_on = runs_on_counter++ % store_->store_option_->worker_threads_;
-    auto* session = store_->TryReserveSession(runs_on);
-    if (session == nullptr) {
+    auto session = store_->TryConnect();
+    if (!session) {
       return nullptr;
     }
-    return SessionImpl::Create(store_.get(), session);
+    return SessionImpl::Create(store_.get(), std::move(*session));
   }
 
   template <auto Method, typename Ret, typename... Args>

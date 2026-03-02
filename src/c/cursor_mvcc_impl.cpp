@@ -12,7 +12,7 @@ namespace leanstore {
 
 bool CursorMvccImpl::SeekToFirst() {
   is_valid_ = false;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     assert(CoroEnv::CurTxMgr().IsTxStarted() && "lean_cursor operation should be in a transaction");
     auto iter = btree_->NewBTreeIter();
     iter->SeekToFirst();
@@ -23,7 +23,7 @@ bool CursorMvccImpl::SeekToFirst() {
 
 bool CursorMvccImpl::SeekToFirstGe(lean_str_view key) {
   is_valid_ = false;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     assert(CoroEnv::CurTxMgr().IsTxStarted() && "lean_cursor operation should be in a transaction");
     auto iter = btree_->NewBTreeIter();
     iter->SeekToFirstGreaterEqual({key.data, key.size});
@@ -34,7 +34,7 @@ bool CursorMvccImpl::SeekToFirstGe(lean_str_view key) {
 
 bool CursorMvccImpl::Next() {
   is_valid_ = false;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     assert(CoroEnv::CurTxMgr().IsTxStarted() && "lean_cursor operation should be in a transaction");
     auto iter = btree_->NewBTreeIter();
     if (is_removed_) {
@@ -50,7 +50,7 @@ bool CursorMvccImpl::Next() {
 
 bool CursorMvccImpl::SeekToLast() {
   is_valid_ = false;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     assert(CoroEnv::CurTxMgr().IsTxStarted() && "lean_cursor operation should be in a transaction");
     auto iter = btree_->NewBTreeIter();
     iter->SeekToLast();
@@ -61,7 +61,7 @@ bool CursorMvccImpl::SeekToLast() {
 
 bool CursorMvccImpl::SeekToLastLe(lean_str_view key) {
   is_valid_ = false;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     assert(CoroEnv::CurTxMgr().IsTxStarted() && "lean_cursor operation should be in a transaction");
     auto iter = btree_->NewBTreeIter();
     iter->SeekToLastLessEqual({key.data, key.size});
@@ -72,7 +72,7 @@ bool CursorMvccImpl::SeekToLastLe(lean_str_view key) {
 
 bool CursorMvccImpl::Prev() {
   is_valid_ = false;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     assert(CoroEnv::CurTxMgr().IsTxStarted() && "lean_cursor operation should be in a transaction");
     auto iter = btree_->NewBTreeIter();
     if (is_removed_) {
@@ -105,7 +105,7 @@ void CursorMvccImpl::CurrentValue(lean_str* value) {
 lean_status CursorMvccImpl::RemoveCurrent() {
   lean_status status = lean_status::LEAN_STATUS_OK;
   if (is_valid_) {
-    session_impl_->ExecSync([&]() {
+    session_impl_->Session().ExecSync([&]() {
       assert(CoroEnv::CurTxMgr().IsTxStarted() &&
              "lean_cursor operation should be in a transaction");
       status = (lean_status)btree_->Remove({current_key_.data(), current_key_.size()});

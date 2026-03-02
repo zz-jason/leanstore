@@ -11,7 +11,6 @@
 #include "leanstore/exceptions.hpp"
 #include "leanstore/sync/hybrid_mutex.hpp"
 #include "leanstore/sync/scoped_hybrid_guard.hpp"
-#include "leanstore/tx/cr_manager.hpp"
 #include "leanstore/tx/tx_manager.hpp"
 #include "leanstore/utils/counter_util.hpp"
 #include "leanstore/utils/random_generator.hpp"

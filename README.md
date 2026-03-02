@@ -66,8 +66,6 @@ LeanStore is built as a **static library** by default and requires **C++23**. Th
 |--------|-------------|
 | `debug_coro` | Debug build with coroutine support |
 | `release_coro` | Release build with coroutine support |
-| `debug_tsan` | Debug build with thread sanitizer |
-| `release_thread` | Release build without coroutines |
 
 All presets build **static libraries** by default. Set `BUILD_SHARED_LIBS=ON` for shared libraries.
 

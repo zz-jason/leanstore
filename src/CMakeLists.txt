@@ -4,6 +4,10 @@
 
 set(LEAN_SOURCES
   lean_store.cpp
+  lean_session.cpp
+  lean_btree.cpp
+  lean_cursor.cpp
+  kv_interface.cpp
   # c
   c/btree_impl.cpp
   c/btree_impl.hpp
@@ -20,7 +24,7 @@ set(LEAN_SOURCES
   c/store_impl.hpp
   c/table_impl.cpp
   c/table_impl.hpp
-  c/tx_guard.hpp
+  common/tx_guard.hpp
   c/perf_counters.cpp
   c/store_option.cpp
   c/utils.cpp
@@ -78,7 +82,6 @@ set(LEAN_SOURCES
   # tx
   tx/chained_tuple.cpp
   tx/concurrency_control.cpp
-  tx/cr_manager.cpp
   tx/group_committer.cpp
   tx/history_storage.cpp
   tx/logging.cpp
@@ -170,9 +173,6 @@ elseif(LEAN_ENABLE_PROFILING AND BUILD_SHARED_LIBS)
 endif()
 
 # Public compile definitions needed by consumers of the library
-if(LEAN_ENABLE_CORO)
-  target_compile_definitions(leanstore PUBLIC LEAN_ENABLE_CORO)
-endif()
 if(LEAN_ENABLE_PERF_COUNTERS)
   target_compile_definitions(leanstore PUBLIC LEAN_ENABLE_PERF_COUNTERS)
 endif()

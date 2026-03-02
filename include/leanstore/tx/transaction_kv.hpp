@@ -7,7 +7,6 @@
 #include "leanstore/buffer/guarded_buffer_frame.hpp"
 #include "leanstore/c/types.h"
 #include "leanstore/c/wal_record.h"
-#include "leanstore/kv_interface.hpp"
 #include "leanstore/tx/chained_tuple.hpp"
 #include "leanstore/tx/tuple.hpp"
 #include "leanstore/tx/tx_manager.hpp"
@@ -40,18 +39,17 @@ public:
     tree_type_ = BTreeType::kTransactionKV;
   }
 
-  OpCode Lookup(Slice key, ValCallback val_callback) override;
+  OpCode Lookup(Slice key, ValCallback val_callback);
 
-  OpCode ScanAsc(Slice start_key, ScanCallback) override;
+  OpCode ScanAsc(Slice start_key, ScanCallback);
 
-  OpCode ScanDesc(Slice start_key, ScanCallback) override;
+  OpCode ScanDesc(Slice start_key, ScanCallback);
 
-  OpCode Insert(Slice key, Slice val) override;
+  OpCode Insert(Slice key, Slice val);
 
-  OpCode UpdatePartial(Slice key, MutValCallback update_call_back,
-                       UpdateDesc& update_desc) override;
+  OpCode UpdatePartial(Slice key, MutValCallback update_call_back, UpdateDesc& update_desc);
 
-  OpCode Remove(Slice key) override;
+  OpCode Remove(Slice key);
 
   void Init(LeanStore* store, lean_treeid_t tree_id, lean_btree_config config, BasicKV* graveyard);
 
