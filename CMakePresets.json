@@ -31,43 +31,16 @@
             }
         },
         {
-            "name": "debug_tsan",
-            "inherits": "base_debug",
-            "cacheVariables": {
-                "LEAN_ENABLE_CORO": "OFF",
-                "ENABLE_TSAN": "ON"
-            }
-        },
-        {
-            "name": "debug_cov",
-            "inherits": "base_debug",
-            "cacheVariables": {
-                "LEAN_ENABLE_CORO": "OFF",
-                "ENABLE_COVERAGE": "ON"
-            }
-        },
-        {
             "name": "debug_coro",
             "inherits": "base_debug",
             "cacheVariables": {
-                "LEAN_ENABLE_CORO": "ON",
                 "ENABLE_COVERAGE": "ON"
             }
         },
         {
             "name": "release_coro",
             "inherits": "base_release",
-            "cacheVariables": {
-                "LEAN_ENABLE_CORO": "ON"
-            }
-        },
-        {
-            "name": "release_thread",
-            "inherits": "base_release",
-            "cacheVariables": {
-                "LEAN_ENABLE_CORO": "OFF",
-                "BUILD_SHARED_LIBS": "OFF"
-            }
+            "cacheVariables": {}
         }
     ]
 }

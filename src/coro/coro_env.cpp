@@ -12,10 +12,6 @@ namespace leanstore {
 namespace {
 thread_local LeanStore* tls_store = nullptr;
 thread_local Logging* tls_logging = nullptr;
-
-#ifndef LEAN_ENABLE_CORO
-thread_local TxManager* tls_tx_mgr = nullptr;
-#endif
 } // namespace
 
 void CoroEnv::SetCurStore(LeanStore* store) {
@@ -48,27 +44,15 @@ Logging& CoroEnv::CurLogging() {
 }
 
 void CoroEnv::SetCurTxMgr(TxManager* tx_mgr) {
-#if LEAN_ENABLE_CORO
   CoroEnv::CurCoro()->SetTxMgr(tx_mgr);
-#else
-  tls_tx_mgr = tx_mgr;
-#endif
 }
 
 TxManager& CoroEnv::CurTxMgr() {
-#if LEAN_ENABLE_CORO
   return *CurCoro()->GetTxMgr();
-#else
-  return *tls_tx_mgr;
-#endif
 }
 
 bool CoroEnv::HasTxMgr() {
-#if LEAN_ENABLE_CORO
   return CurCoroExec() != nullptr && CurCoro() != nullptr && CurCoro()->GetTxMgr() != nullptr;
-#else
-  return tls_tx_mgr != nullptr;
-#endif
 }
 
 } // namespace leanstore

@@ -94,90 +94,37 @@ Result<TableDefinition> BuildTableDefinition(const lean_table_def* table_def) {
 } // namespace
 
 lean_status SessionImpl::CreateBTree(const char* btree_name, lean_btree_type btree_type) {
-  lean_status status = lean_status::LEAN_STATUS_OK;
-  ExecSync([&]() {
-    switch (btree_type) {
-    case lean_btree_type::LEAN_BTREE_TYPE_ATOMIC: {
-      // BasicKV* btree;
-      auto res = store_->CreateBasicKv(btree_name);
-      if (!res) {
-        std::cerr << "CreateBTree failed: " << res.error().ToString() << std::endl;
-        status = lean_status::LEAN_ERR_CTEATE_BTREE;
-      }
-      return;
-    }
-    case lean_btree_type::LEAN_BTREE_TYPE_MVCC: {
-      auto res = store_->CreateTransactionKV(btree_name);
-      if (!res) {
-        std::cerr << "CreateBTree failed: " << res.error().ToString() << std::endl;
-        status = lean_status::LEAN_ERR_CTEATE_BTREE;
-      }
-      return;
-    }
-    default: {
-      std::cerr << "CreateBTree failed: type unsupported " << (int)(btree_type) << std::endl;
-      status = lean_status::LEAN_ERR_CTEATE_BTREE;
-      return;
-    }
-    }
-  });
-  return status;
+  auto res = session_.CreateBTree(btree_name, btree_type);
+  if (!res) {
+    std::cerr << "CreateBTree failed: " << res.error().ToString() << std::endl;
+    return lean_status::LEAN_ERR_CTEATE_BTREE;
+  }
+  return lean_status::LEAN_STATUS_OK;
 }
 
 void SessionImpl::DropBTree(const char* btree_name) {
-  ExecSync([&]() {
-    auto* tree = store_->tree_registry_->GetTree(btree_name);
-    auto* generic_btree = dynamic_cast<BTreeGeneric*>(tree);
-    if (generic_btree == nullptr) {
-      return;
-    }
-
-    switch (generic_btree->tree_type_) {
-    case BTreeType::kGeneric: {
-    case BTreeType::kBasicKV:
-      store_->DropBasicKV(btree_name);
-      return;
-    }
-    case BTreeType::kTransactionKV: {
-      store_->DropTransactionKV(btree_name);
-      return;
-    }
-    default: {
-      return;
-    }
-    }
-  });
+  session_.DropBTree(btree_name);
 }
 
 struct lean_btree* SessionImpl::GetBTree(const char* btree_name) {
-  struct lean_btree* btree_result = nullptr;
-  ExecSync([&]() {
-    auto* tree = store_->tree_registry_->GetTree(btree_name);
-    auto* generic_btree = dynamic_cast<BTreeGeneric*>(tree);
-    if (generic_btree == nullptr) {
-      btree_result = nullptr;
-      return;
-    }
+  auto exists_res = session_.GetBTree(btree_name);
+  if (!exists_res) {
+    return nullptr;
+  }
 
-    switch (generic_btree->tree_type_) {
-    case BTreeType::kBasicKV: {
-      auto* btree = dynamic_cast<BasicKV*>(generic_btree);
-      btree_result = BTreeImpl::Create(btree, this);
-      return;
-    }
-    case BTreeType::kTransactionKV: {
-      auto* btree_mvcc = dynamic_cast<TransactionKV*>(generic_btree);
-      btree_result = BTreeMvccImpl::Create(btree_mvcc, this);
-      return;
-    }
-    default: {
-      btree_result = nullptr;
-      return;
-    }
-    }
-  });
-
-  return btree_result;
+  auto* tree = store_->tree_registry_->GetTree(btree_name);
+  auto* generic_btree = dynamic_cast<BTreeGeneric*>(tree);
+  if (generic_btree == nullptr) {
+    return nullptr;
+  }
+  switch (generic_btree->tree_type_) {
+  case BTreeType::kBasicKV:
+    return BTreeImpl::Create(dynamic_cast<BasicKV*>(generic_btree), this);
+  case BTreeType::kTransactionKV:
+    return BTreeMvccImpl::Create(dynamic_cast<TransactionKV*>(generic_btree), this);
+  default:
+    return nullptr;
+  }
 }
 
 lean_status SessionImpl::CreateTable(const struct lean_table_def* table_def) {
@@ -189,7 +136,7 @@ lean_status SessionImpl::CreateTable(const struct lean_table_def* table_def) {
 
   lean_status status = lean_status::LEAN_STATUS_OK;
   auto definition = std::move(def_res.value());
-  ExecSync([&]() {
+  session_.ExecSync([&]() {
     auto res = store_->CreateTable(definition);
     if (!res) {
       std::cerr << "CreateTable failed: " << res.error().ToString() << std::endl;
@@ -204,7 +151,7 @@ lean_status SessionImpl::DropTable(const char* table_name) {
     return lean_status::LEAN_ERR_TABLE_NOT_FOUND;
   }
   lean_status status = lean_status::LEAN_STATUS_OK;
-  ExecSync([&]() {
+  session_.ExecSync([&]() {
     auto res = store_->DropTable(table_name);
     if (!res) {
       std::cerr << "DropTable failed: " << res.error().ToString() << std::endl;
@@ -216,7 +163,7 @@ lean_status SessionImpl::DropTable(const char* table_name) {
 
 struct lean_table* SessionImpl::GetTable(const char* table_name) {
   struct lean_table* table_handle = nullptr;
-  ExecSync([&]() {
+  session_.ExecSync([&]() {
     auto* table = store_->GetTable(table_name);
     if (table == nullptr) {
       table_handle = nullptr;

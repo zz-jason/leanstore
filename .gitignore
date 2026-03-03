@@ -6,4 +6,6 @@ dist
 vcpkg_installed
 third_party/cache
 .AGENTS
+.agents/
+AGENTS.md
 deploy/

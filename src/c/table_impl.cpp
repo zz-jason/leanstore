@@ -1,6 +1,6 @@
 #include "c/table_impl.hpp"
 
-#include "c/tx_guard.hpp"
+#include "common/tx_guard.hpp"
 #include "leanstore/c/leanstore.h"
 
 namespace {
@@ -26,7 +26,7 @@ lean_status ToStatus(leanstore::OpCode code) {
 namespace leanstore {
 lean_status TableImpl::Insert(const struct lean_row* row) {
   lean_status status = lean_status::LEAN_STATUS_OK;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     TxGuard tx_guard(status);
     status = ToStatus(table_->Insert(row));
   });
@@ -35,7 +35,7 @@ lean_status TableImpl::Insert(const struct lean_row* row) {
 
 lean_status TableImpl::Remove(const struct lean_row* row) {
   lean_status status = lean_status::LEAN_STATUS_OK;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     TxGuard tx_guard(status);
     status = ToStatus(table_->Remove(row));
   });
@@ -44,7 +44,7 @@ lean_status TableImpl::Remove(const struct lean_row* row) {
 
 lean_status TableImpl::Lookup(const struct lean_row* key_row, struct lean_row* out_row) {
   lean_status status = lean_status::LEAN_STATUS_OK;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     TxGuard tx_guard(status);
     status = ToStatus(table_->Lookup(key_row, out_row, lookup_buffer_));
   });
@@ -54,7 +54,7 @@ lean_status TableImpl::Lookup(const struct lean_row* key_row, struct lean_row* o
 lean_status TableImpl::BuildColumnStore(const struct lean_column_store_options* options,
                                         struct lean_column_store_stats* out_stats) {
   lean_status status = lean_status::LEAN_STATUS_OK;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     TxGuard tx_guard(status);
     column_store::ColumnStoreOptions opts;
     if (options != nullptr) {
@@ -95,7 +95,7 @@ TableCursorImpl::~TableCursorImpl() {
 bool TableCursorImpl::SeekToFirst() {
   bool result = false;
   lean_status status = lean_status::LEAN_STATUS_OK;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     TxGuard tx_guard(status);
     result = cursor_->SeekToFirst();
   });
@@ -105,7 +105,7 @@ bool TableCursorImpl::SeekToFirst() {
 bool TableCursorImpl::SeekToFirstGe(const lean_row* key_row) {
   bool result = false;
   lean_status status = lean_status::LEAN_STATUS_OK;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     TxGuard tx_guard(status);
     result = cursor_->SeekToFirstGreaterEqual(key_row);
   });
@@ -115,7 +115,7 @@ bool TableCursorImpl::SeekToFirstGe(const lean_row* key_row) {
 bool TableCursorImpl::Next() {
   bool result = false;
   lean_status status = lean_status::LEAN_STATUS_OK;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     TxGuard tx_guard(status);
     result = cursor_->Next();
   });
@@ -125,7 +125,7 @@ bool TableCursorImpl::Next() {
 bool TableCursorImpl::SeekToLast() {
   bool result = false;
   lean_status status = lean_status::LEAN_STATUS_OK;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     TxGuard tx_guard(status);
     result = cursor_->SeekToLast();
   });
@@ -135,7 +135,7 @@ bool TableCursorImpl::SeekToLast() {
 bool TableCursorImpl::SeekToLastLe(const lean_row* key_row) {
   bool result = false;
   lean_status status = lean_status::LEAN_STATUS_OK;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     TxGuard tx_guard(status);
     result = cursor_->SeekToLastLessEqual(key_row);
   });
@@ -145,7 +145,7 @@ bool TableCursorImpl::SeekToLastLe(const lean_row* key_row) {
 bool TableCursorImpl::Prev() {
   bool result = false;
   lean_status status = lean_status::LEAN_STATUS_OK;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     TxGuard tx_guard(status);
     result = cursor_->Prev();
   });
@@ -168,7 +168,7 @@ void TableCursorImpl::CurrentRow(lean_row* row) {
 
 lean_status TableCursorImpl::RemoveCurrent() {
   lean_status status = lean_status::LEAN_STATUS_OK;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     TxGuard tx_guard(status);
     status = ToStatus(cursor_->RemoveCurrent());
   });
@@ -177,7 +177,7 @@ lean_status TableCursorImpl::RemoveCurrent() {
 
 lean_status TableCursorImpl::UpdateCurrent(const lean_row* row) {
   lean_status status = lean_status::LEAN_STATUS_OK;
-  session_impl_->ExecSync([&]() {
+  session_impl_->Session().ExecSync([&]() {
     TxGuard tx_guard(status);
     status = ToStatus(cursor_->UpdateCurrent(row));
   });

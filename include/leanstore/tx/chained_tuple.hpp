@@ -7,7 +7,6 @@
 #include "leanstore/c/types.h"
 #include "leanstore/coro/coro_env.hpp"
 #include "leanstore/coro/mvcc_manager.hpp"
-#include "leanstore/tx/cr_manager.hpp"
 #include "leanstore/tx/tuple.hpp"
 #include "leanstore/tx/tx_manager.hpp"
 

@@ -1,863 +1,360 @@
-#include "leanstore/base/defer.hpp"
-#include "leanstore/base/log.hpp"
-#include "leanstore/base/small_vector.hpp"
-#include "leanstore/buffer/buffer_manager.hpp"
+#include "common/lean_test_suite.hpp"
 #include "leanstore/c/types.h"
-#include "leanstore/kv_interface.hpp"
+#include "leanstore/lean_btree.hpp"
+#include "leanstore/lean_session.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/tx/cr_manager.hpp"
-#include "leanstore/tx/transaction_kv.hpp"
 #include "leanstore/utils/random_generator.hpp"
 
 #include <gtest/gtest.h>
 
 #include <atomic>
-#include <cstddef>
+#include <chrono>
+#include <format>
 #include <memory>
+#include <optional>
+#include <set>
 #include <string>
+#include <thread>
 #include <unordered_map>
-#include <utility>
+#include <vector>
 
 namespace leanstore::test {
 
-class TransactionKVTest : public ::testing::Test {
+namespace {
+auto ReadString(LeanBTree& tree, const std::string& key) -> Optional<std::string> {
+  auto res = tree.Lookup(key);
+  if (!res) {
+    return std::nullopt;
+  }
+  return std::string(reinterpret_cast<const char*>(res.value().data()), res.value().size());
+}
+
+} // namespace
+
+class TransactionKVTest : public LeanTestSuite {
 protected:
   std::unique_ptr<LeanStore> store_;
+  Optional<LeanSession> s0_;
+  Optional<LeanSession> s1_;
+  Optional<LeanSession> s2_;
 
-  /// Create a leanstore instance for each test case
-  TransactionKVTest() {
-    auto* cur_test = ::testing::UnitTest::GetInstance()->current_test_info();
-    auto cur_test_name =
-        std::string(cur_test->test_suite_name()) + "_" + std::string(cur_test->name());
-    auto* option = lean_store_option_create(("/tmp/leanstore/" + cur_test_name).c_str());
+  void SetUp() override {
+    auto* option = lean_store_option_create(TestCaseStoreDir().c_str());
     option->create_from_scratch_ = true;
     option->worker_threads_ = 3;
     option->enable_eager_gc_ = true;
-    auto res = LeanStore::Open(option);
-    store_ = std::move(res.value());
-  }
+    auto opened = LeanStore::Open(option);
+    ASSERT_TRUE(opened);
+    store_ = std::move(opened.value());
 
-  ~TransactionKVTest() override = default;
+    s0_ = store_->Connect();
+    s1_ = store_->Connect();
+    s2_ = store_->Connect();
+  }
 };
 
 TEST_F(TransactionKVTest, Create) {
-  // create leanstore btree for table records
-  const auto* btree_name = "testTree1";
+  auto c1 = s0_->CreateBTree("testTree1", LEAN_BTREE_TYPE_MVCC);
+  ASSERT_TRUE(c1);
 
-  store_->ExecSync(0, [&]() {
-    auto res = store_->CreateTransactionKV(btree_name);
-    EXPECT_TRUE(res);
-    EXPECT_NE(res.value(), nullptr);
-  });
+  auto c2 = s0_->CreateBTree("testTree1", LEAN_BTREE_TYPE_MVCC);
+  ASSERT_FALSE(c2);
 
-  // create btree with same should fail in the same worker
-  store_->ExecSync(0, [&]() {
-    auto res = store_->CreateTransactionKV(btree_name);
-    EXPECT_FALSE(res);
-  });
+  auto c3 = s1_->CreateBTree("testTree1", LEAN_BTREE_TYPE_MVCC);
+  ASSERT_FALSE(c3);
 
-  // create btree with same should also fail in other workers
-  store_->ExecSync(1, [&]() {
-    auto res = store_->CreateTransactionKV(btree_name);
-    EXPECT_FALSE(res);
-  });
-
-  // create btree with another different name should success
-  const auto* btree_name2 = "testTree2";
-  store_->ExecSync(0, [&]() {
-    auto res = store_->CreateTransactionKV(btree_name2);
-    EXPECT_TRUE(res);
-    EXPECT_NE(res.value(), nullptr);
-  });
-
-  store_->ExecSync(1, [&]() {
-    CoroEnv::CurTxMgr().StartTx();
-    LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
-    store_->DropTransactionKV(btree_name);
-    store_->DropTransactionKV(btree_name2);
-  });
+  auto c4 = s0_->CreateBTree("testTree2", LEAN_BTREE_TYPE_MVCC);
+  ASSERT_TRUE(c4);
 }
 
 TEST_F(TransactionKVTest, InsertAndLookup) {
-  TransactionKV* btree;
+  auto created = s0_->CreateBTree("testTree1", LEAN_BTREE_TYPE_MVCC);
+  ASSERT_TRUE(created);
+  auto t0 = std::move(created.value());
+  auto t1res = s1_->GetBTree("testTree1");
+  ASSERT_TRUE(t1res);
+  auto t1 = std::move(t1res.value());
 
-  // prepare key-value pairs to insert
-  size_t num_keys(10);
-  std::vector<std::tuple<std::string, std::string>> kv_to_test;
-  for (size_t i = 0; i < num_keys; ++i) {
-    std::string key("key_btree_VI_xxxxxxxxxxxx_" + std::to_string(i));
-    std::string val("VAL_BTREE_VI_YYYYYYYYYYYY_" + std::to_string(i));
-    kv_to_test.emplace_back(key, val);
+  std::vector<std::pair<std::string, std::string>> kv;
+  for (size_t i = 0; i < 10; ++i) {
+    kv.emplace_back("key_" + std::to_string(i), "val_" + std::to_string(i));
   }
 
-  // create leanstore btree for table records
-  const auto* btree_name = "testTree1";
-  store_->ExecSync(0, [&]() {
-    auto res = store_->CreateTransactionKV(btree_name);
-    btree = res.value();
-    EXPECT_NE(btree, nullptr);
+  s0_->StartTx();
+  for (const auto& [k, v] : kv) {
+    ASSERT_TRUE(t0.Insert(k, v));
+  }
+  s0_->CommitTx();
 
-    // insert some values
-    CoroEnv::CurTxMgr().StartTx();
-    for (size_t i = 0; i < num_keys; ++i) {
-      const auto& [key, val] = kv_to_test[i];
-      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
-                              Slice((const uint8_t*)val.data(), val.size())),
-                OpCode::kOK);
-    }
-    CoroEnv::CurTxMgr().CommitTx();
-  });
+  s0_->StartTx();
+  for (const auto& [k, v] : kv) {
+    ASSERT_EQ(ReadString(t0, k), Optional<std::string>(v));
+  }
+  s0_->CommitTx();
 
-  // query on the created btree in the same worker
-  store_->ExecSync(0, [&]() {
-    CoroEnv::CurTxMgr().StartTx();
-    LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
-    std::string copied_value;
-    auto copy_value_out = [&](Slice val) {
-      copied_value = std::string((const char*)val.data(), val.size());
-    };
-    for (size_t i = 0; i < num_keys; ++i) {
-      const auto& [key, expected_val] = kv_to_test[i];
-      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copy_value_out),
-                OpCode::kOK);
-      EXPECT_EQ(copied_value, expected_val);
-    }
-  });
-
-  // query on the created btree in another worker
-  store_->ExecSync(1, [&]() {
-    CoroEnv::CurTxMgr().StartTx();
-    LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
-    std::string copied_value;
-    auto copy_value_out = [&](Slice val) {
-      copied_value = std::string((const char*)val.data(), val.size());
-    };
-    for (size_t i = 0; i < num_keys; ++i) {
-      const auto& [key, expected_val] = kv_to_test[i];
-      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copy_value_out),
-                OpCode::kOK);
-      EXPECT_EQ(copied_value, expected_val);
-    }
-  });
-
-  store_->ExecSync(1, [&]() {
-    CoroEnv::CurTxMgr().StartTx();
-    LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
-    store_->DropTransactionKV(btree_name);
-  });
+  s1_->StartTx();
+  for (const auto& [k, v] : kv) {
+    ASSERT_EQ(ReadString(t1, k), Optional<std::string>(v));
+  }
+  s1_->CommitTx();
 }
 
 TEST_F(TransactionKVTest, Insert1000KVs) {
-  store_->ExecSync(0, [&]() {
-    TransactionKV* btree;
+  auto created = s0_->CreateBTree("testTree1", LEAN_BTREE_TYPE_MVCC);
+  ASSERT_TRUE(created);
+  auto t0 = std::move(created.value());
 
-    // create leanstore btree for table records
-    const auto* btree_name = "testTree1";
-
-    auto res = store_->CreateTransactionKV(btree_name);
-    btree = res.value();
-    EXPECT_NE(btree, nullptr);
-
-    // insert numKVs tuples
-    std::set<std::string> unique_keys;
-    ssize_t num_keys(1000);
-    CoroEnv::CurTxMgr().StartTx();
-    for (ssize_t i = 0; i < num_keys; ++i) {
-      auto key = utils::RandomGenerator::RandAlphString(24);
-      if (unique_keys.find(key) != unique_keys.end()) {
-        i--;
-        continue;
-      }
-      unique_keys.insert(key);
-      auto val = utils::RandomGenerator::RandAlphString(128);
-      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
-                              Slice((const uint8_t*)val.data(), val.size())),
-                OpCode::kOK);
+  std::set<std::string> unique_keys;
+  s0_->StartTx();
+  while (unique_keys.size() < 1000) {
+    auto key = utils::RandomGenerator::RandAlphString(24);
+    if (!unique_keys.insert(key).second) {
+      continue;
     }
-    CoroEnv::CurTxMgr().CommitTx();
-
-    CoroEnv::CurTxMgr().StartTx();
-    store_->DropTransactionKV(btree_name);
-    CoroEnv::CurTxMgr().CommitTx();
-  });
+    ASSERT_TRUE(t0.Insert(key, utils::RandomGenerator::RandAlphString(64)));
+  }
+  s0_->CommitTx();
 }
 
 TEST_F(TransactionKVTest, InsertDuplicates) {
-  store_->ExecSync(0, [&]() {
-    TransactionKV* btree;
+  auto created = s0_->CreateBTree("testTree1", LEAN_BTREE_TYPE_MVCC);
+  ASSERT_TRUE(created);
+  auto t0 = std::move(created.value());
 
-    // create leanstore btree for table records
-    const auto* btree_name = "testTree1";
+  std::set<std::string> keys;
+  while (keys.size() < 100) {
+    keys.insert(utils::RandomGenerator::RandAlphString(24));
+  }
 
-    auto res = store_->CreateTransactionKV(btree_name);
-    btree = res.value();
-    EXPECT_NE(btree, nullptr);
+  s0_->StartTx();
+  for (const auto& k : keys) {
+    ASSERT_TRUE(t0.Insert(k, "v"));
+  }
+  s0_->CommitTx();
 
-    // insert numKVs tuples
-    std::set<std::string> unique_keys;
-    ssize_t num_keys(100);
-    for (ssize_t i = 0; i < num_keys; ++i) {
-      auto key = utils::RandomGenerator::RandAlphString(24);
-      if (unique_keys.find(key) != unique_keys.end()) {
-        i--;
-        continue;
-      }
-      unique_keys.insert(key);
-      auto val = utils::RandomGenerator::RandAlphString(128);
-      CoroEnv::CurTxMgr().StartTx();
-      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
-                              Slice((const uint8_t*)val.data(), val.size())),
-                OpCode::kOK);
-      CoroEnv::CurTxMgr().CommitTx();
-    }
-
-    // insert duplicated keys
-    for (auto& key : unique_keys) {
-      auto val = utils::RandomGenerator::RandAlphString(128);
-      CoroEnv::CurTxMgr().StartTx();
-      EXPECT_EQ(btree->Insert(Slice(key), Slice(val)), OpCode::kDuplicated);
-      CoroEnv::CurTxMgr().CommitTx();
-    }
-
-    CoroEnv::CurTxMgr().StartTx();
-    store_->DropTransactionKV(btree_name);
-    CoroEnv::CurTxMgr().CommitTx();
-  });
+  s0_->StartTx();
+  for (const auto& k : keys) {
+    ASSERT_FALSE(t0.Insert(k, "v2"));
+  }
+  s0_->CommitTx();
 }
 
 TEST_F(TransactionKVTest, Remove) {
-  store_->ExecSync(0, [&]() {
-    TransactionKV* btree;
+  auto created = s0_->CreateBTree("testTree1", LEAN_BTREE_TYPE_MVCC);
+  ASSERT_TRUE(created);
+  auto t0 = std::move(created.value());
 
-    // create leanstore btree for table records
-    const auto* btree_name = "testTree1";
+  std::set<std::string> keys;
+  while (keys.size() < 100) {
+    keys.insert(utils::RandomGenerator::RandAlphString(24));
+  }
 
-    auto res = store_->CreateTransactionKV(btree_name);
-    btree = res.value();
-    EXPECT_NE(btree, nullptr);
+  s0_->StartTx();
+  for (const auto& k : keys) {
+    ASSERT_TRUE(t0.Insert(k, "v"));
+  }
+  s0_->CommitTx();
 
-    // insert numKVs tuples
-    std::set<std::string> unique_keys;
-    ssize_t num_keys(100);
-    for (ssize_t i = 0; i < num_keys; ++i) {
-      auto key = utils::RandomGenerator::RandAlphString(24);
-      if (unique_keys.find(key) != unique_keys.end()) {
-        i--;
-        continue;
-      }
-      unique_keys.insert(key);
-      auto val = utils::RandomGenerator::RandAlphString(128);
+  s0_->StartTx();
+  for (const auto& k : keys) {
+    ASSERT_TRUE(t0.Remove(k));
+  }
+  s0_->CommitTx();
 
-      CoroEnv::CurTxMgr().StartTx();
-      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
-                              Slice((const uint8_t*)val.data(), val.size())),
-                OpCode::kOK);
-      CoroEnv::CurTxMgr().CommitTx();
-    }
-
-    for (auto& key : unique_keys) {
-      CoroEnv::CurTxMgr().StartTx();
-      EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())), OpCode::kOK);
-      CoroEnv::CurTxMgr().CommitTx();
-    }
-
-    for (auto& key : unique_keys) {
-      CoroEnv::CurTxMgr().StartTx();
-      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), [](Slice) {}),
-                OpCode::kNotFound);
-      CoroEnv::CurTxMgr().CommitTx();
-    }
-
-    CoroEnv::CurTxMgr().StartTx();
-    store_->DropTransactionKV(btree_name);
-    CoroEnv::CurTxMgr().CommitTx();
-  });
+  s0_->StartTx();
+  for (const auto& k : keys) {
+    ASSERT_FALSE(t0.Lookup(k));
+  }
+  s0_->CommitTx();
 }
 
 TEST_F(TransactionKVTest, RemoveNotExisted) {
-  store_->ExecSync(0, [&]() {
-    TransactionKV* btree;
+  auto created = s0_->CreateBTree("testTree1", LEAN_BTREE_TYPE_MVCC);
+  ASSERT_TRUE(created);
+  auto t0 = std::move(created.value());
 
-    // create leanstore btree for table records
-    const auto* btree_name = "testTree1";
-
-    auto res = store_->CreateTransactionKV(btree_name);
-    btree = res.value();
-    EXPECT_NE(btree, nullptr);
-
-    // insert numKVs tuples
-    std::set<std::string> unique_keys;
-    ssize_t num_keys(100);
-    for (ssize_t i = 0; i < num_keys; ++i) {
-      auto key = utils::RandomGenerator::RandAlphString(24);
-      if (unique_keys.find(key) != unique_keys.end()) {
-        i--;
-        continue;
-      }
-      unique_keys.insert(key);
-      auto val = utils::RandomGenerator::RandAlphString(128);
-
-      CoroEnv::CurTxMgr().StartTx();
-      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
-                              Slice((const uint8_t*)val.data(), val.size())),
-                OpCode::kOK);
-      CoroEnv::CurTxMgr().CommitTx();
-    }
-
-    // remove keys not existed
-    for (ssize_t i = 0; i < num_keys; ++i) {
-      auto key = utils::RandomGenerator::RandAlphString(24);
-      if (unique_keys.find(key) != unique_keys.end()) {
-        i--;
-        continue;
-      }
-      unique_keys.insert(key);
-
-      CoroEnv::CurTxMgr().StartTx();
-      EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())), OpCode::kNotFound);
-      CoroEnv::CurTxMgr().CommitTx();
-    }
-
-    CoroEnv::CurTxMgr().StartTx();
-    store_->DropTransactionKV(btree_name);
-    CoroEnv::CurTxMgr().CommitTx();
-  });
+  s0_->StartTx();
+  for (int i = 0; i < 100; ++i) {
+    ASSERT_FALSE(t0.Remove("k" + std::to_string(i)));
+  }
+  s0_->CommitTx();
 }
 
 TEST_F(TransactionKVTest, RemoveFromOthers) {
-  const auto* btree_name = "testTree1";
-  std::set<std::string> unique_keys;
-  TransactionKV* btree;
+  auto created = s0_->CreateBTree("testTree1", LEAN_BTREE_TYPE_MVCC);
+  ASSERT_TRUE(created);
+  auto t0 = std::move(created.value());
+  auto t1res = s1_->GetBTree("testTree1");
+  ASSERT_TRUE(t1res);
+  auto t1 = std::move(t1res.value());
 
-  store_->ExecSync(0, [&]() {
-    // create leanstore btree for table records
+  std::set<std::string> keys;
+  while (keys.size() < 100) {
+    keys.insert(utils::RandomGenerator::RandAlphString(24));
+  }
 
-    auto res = store_->CreateTransactionKV(btree_name);
-    btree = res.value();
-    EXPECT_NE(btree, nullptr);
+  s0_->StartTx();
+  for (const auto& k : keys) {
+    ASSERT_TRUE(t0.Insert(k, "v"));
+  }
+  s0_->CommitTx();
 
-    // insert numKVs tuples
-    ssize_t num_keys(100);
-    for (ssize_t i = 0; i < num_keys; ++i) {
-      auto key = utils::RandomGenerator::RandAlphString(24);
-      if (unique_keys.find(key) != unique_keys.end()) {
-        i--;
-        continue;
-      }
-      unique_keys.insert(key);
-      auto val = utils::RandomGenerator::RandAlphString(128);
+  s1_->StartTx();
+  for (const auto& k : keys) {
+    ASSERT_TRUE(t1.Remove(k));
+  }
+  s1_->CommitTx();
 
-      CoroEnv::CurTxMgr().StartTx();
-      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
-                              Slice((const uint8_t*)val.data(), val.size())),
-                OpCode::kOK);
-      CoroEnv::CurTxMgr().CommitTx();
-    }
-  });
-
-  store_->ExecSync(1, [&]() {
-    // remove from another worker
-    for (auto& key : unique_keys) {
-      CoroEnv::CurTxMgr().StartTx();
-      EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())), OpCode::kOK);
-      CoroEnv::CurTxMgr().CommitTx();
-    }
-
-    // should not found any keys
-    for (auto& key : unique_keys) {
-      CoroEnv::CurTxMgr().StartTx();
-      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), [](Slice) {}),
-                OpCode::kNotFound);
-      CoroEnv::CurTxMgr().CommitTx();
-    }
-  });
-
-  store_->ExecSync(0, [&]() {
-    // lookup from another worker, should not found any keys
-    for (auto& key : unique_keys) {
-      CoroEnv::CurTxMgr().StartTx();
-      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), [](Slice) {}),
-                OpCode::kNotFound);
-      CoroEnv::CurTxMgr().CommitTx();
-    }
-  });
-
-  store_->ExecSync(1, [&]() {
-    // unregister the tree from another worker
-    CoroEnv::CurTxMgr().StartTx();
-    store_->DropTransactionKV(btree_name);
-    CoroEnv::CurTxMgr().CommitTx();
-  });
+  s0_->StartTx();
+  for (const auto& k : keys) {
+    ASSERT_FALSE(t0.Lookup(k));
+  }
+  s0_->CommitTx();
 }
 
 TEST_F(TransactionKVTest, Update) {
-  TransactionKV* btree;
+  auto created = s0_->CreateBTree("testTree1", LEAN_BTREE_TYPE_MVCC);
+  ASSERT_TRUE(created);
+  auto t0 = std::move(created.value());
 
-  // prepare key-value pairs to insert
-  const size_t num_keys(100);
-  const size_t val_size = 120;
-  std::vector<std::tuple<std::string, std::string>> kv_to_test;
-  for (size_t i = 0; i < num_keys; ++i) {
-    auto key = utils::RandomGenerator::RandAlphString(24);
-    auto val = utils::RandomGenerator::RandAlphString(val_size);
-    kv_to_test.emplace_back(key, val);
+  std::vector<std::string> keys;
+  for (size_t i = 0; i < 100; ++i) {
+    keys.emplace_back(utils::RandomGenerator::RandAlphString(24));
   }
 
-  const auto* btree_name = "testTree1";
+  s0_->StartTx();
+  for (const auto& k : keys) {
+    ASSERT_TRUE(t0.Insert(k, "old"));
+  }
+  s0_->CommitTx();
 
-  store_->ExecSync(0, [&]() {
-    // create btree
-    auto res = store_->CreateTransactionKV(btree_name);
-    btree = res.value();
-    EXPECT_NE(btree, nullptr);
+  s0_->StartTx();
+  for (const auto& k : keys) {
+    ASSERT_TRUE(t0.Update(k, "new"));
+  }
+  s0_->CommitTx();
 
-    // insert values
-    for (size_t i = 0; i < num_keys; ++i) {
-      const auto& [key, val] = kv_to_test[i];
-      CoroEnv::CurTxMgr().StartTx();
-      auto res = btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
-                               Slice((const uint8_t*)val.data(), val.size()));
-      CoroEnv::CurTxMgr().CommitTx();
-      EXPECT_EQ(res, OpCode::kOK);
-    }
-
-    // update all the values to this newVal
-    auto new_val = utils::RandomGenerator::RandAlphString(val_size);
-    auto update_call_back = [&](MutableSlice mut_raw_val) {
-      std::memcpy(mut_raw_val.data(), new_val.data(), mut_raw_val.size());
-    };
-
-    // update in the same worker
-    const uint64_t update_desc_buf_size = UpdateDesc::Size(1);
-    SmallBuffer256 update_desc_buf(update_desc_buf_size);
-    auto* update_desc = UpdateDesc::CreateFrom(update_desc_buf.Data());
-    update_desc->num_slots_ = 1;
-    update_desc->update_slots_[0].offset_ = 0;
-    update_desc->update_slots_[0].size_ = val_size;
-    for (size_t i = 0; i < num_keys; ++i) {
-      const auto& [key, val] = kv_to_test[i];
-      CoroEnv::CurTxMgr().StartTx();
-      auto res = btree->UpdatePartial(Slice((const uint8_t*)key.data(), key.size()),
-                                      update_call_back, *update_desc);
-      CoroEnv::CurTxMgr().CommitTx();
-      EXPECT_EQ(res, OpCode::kOK);
-    }
-
-    // verify updated values
-    std::string copied_value;
-    auto copy_value_out = [&](Slice val) {
-      copied_value = std::string((const char*)val.data(), val.size());
-    };
-    for (size_t i = 0; i < num_keys; ++i) {
-      const auto& [key, val] = kv_to_test[i];
-      CoroEnv::CurTxMgr().StartTx();
-      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copy_value_out),
-                OpCode::kOK);
-      CoroEnv::CurTxMgr().CommitTx();
-      EXPECT_EQ(copied_value, new_val);
-    }
-
-    CoroEnv::CurTxMgr().StartTx();
-    store_->DropTransactionKV(btree_name);
-    CoroEnv::CurTxMgr().CommitTx();
-  });
+  s0_->StartTx();
+  for (const auto& k : keys) {
+    ASSERT_EQ(ReadString(t0, k), Optional<std::string>("new"));
+  }
+  s0_->CommitTx();
 }
 
 TEST_F(TransactionKVTest, ScanAsc) {
-  TransactionKV* btree;
+  auto created = s0_->CreateBTree("testTree1", LEAN_BTREE_TYPE_MVCC);
+  ASSERT_TRUE(created);
+  auto t0 = std::move(created.value());
 
-  // prepare key-value pairs to insert
-  const size_t num_keys(100);
-  const size_t val_size = 120;
-  std::unordered_map<std::string, std::string> kv_to_test;
-  std::string smallest;
-  std::string bigest;
-  for (size_t i = 0; i < num_keys; ++i) {
-    auto key = utils::RandomGenerator::RandAlphString(24);
-    auto val = utils::RandomGenerator::RandAlphString(val_size);
-    if (kv_to_test.find(key) != kv_to_test.end()) {
-      i--;
-      continue;
-    }
-    kv_to_test.emplace(key, val);
-    if (smallest.size() == 0 || smallest > key) {
-      smallest = key;
-    }
-    if (bigest.size() == 0 || bigest < key) {
-      bigest = key;
-    }
+  s0_->StartTx();
+  for (int i = 0; i < 100; ++i) {
+    ASSERT_TRUE(t0.Insert(std::format("k{:03d}", i), std::format("v{:03d}", i)));
   }
+  s0_->CommitTx();
 
-  const auto* btree_name = "testTree1";
-
-  store_->ExecSync(0, [&]() {
-    // create btree
-    auto res = store_->CreateTransactionKV(btree_name);
-    btree = res.value();
-    EXPECT_NE(btree, nullptr);
-
-    // insert values
-    for (const auto& [key, val] : kv_to_test) {
-      CoroEnv::CurTxMgr().StartTx();
-      auto res = btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
-                               Slice((const uint8_t*)val.data(), val.size()));
-      CoroEnv::CurTxMgr().CommitTx();
-      EXPECT_EQ(res, OpCode::kOK);
-    }
-
-    // scan in ascending order
-    std::unordered_map<std::string, std::string> copied_k_vs;
-    auto scan_call_back = [&](Slice key, Slice val) {
-      copied_k_vs.emplace(std::string((const char*)key.data(), key.size()),
-                          std::string((const char*)val.data(), val.size()));
-      return true;
-    };
-
-    // scan from the smallest key
-    copied_k_vs.clear();
-    CoroEnv::CurTxMgr().StartTx();
-    EXPECT_EQ(
-        btree->ScanAsc(Slice((const uint8_t*)smallest.data(), smallest.size()), scan_call_back),
-        OpCode::kOK);
-    CoroEnv::CurTxMgr().CommitTx();
-    EXPECT_EQ(copied_k_vs.size(), num_keys);
-    for (const auto& [key, val] : copied_k_vs) {
-      EXPECT_EQ(val, kv_to_test[key]);
-    }
-
-    // scan from the bigest key
-    copied_k_vs.clear();
-    CoroEnv::CurTxMgr().StartTx();
-    EXPECT_EQ(btree->ScanAsc(Slice((const uint8_t*)bigest.data(), bigest.size()), scan_call_back),
-              OpCode::kOK);
-    CoroEnv::CurTxMgr().CommitTx();
-    EXPECT_EQ(copied_k_vs.size(), 1u);
-    EXPECT_EQ(copied_k_vs[bigest], kv_to_test[bigest]);
-
-    // destroy the tree
-    CoroEnv::CurTxMgr().StartTx();
-    store_->DropTransactionKV(btree_name);
-    CoroEnv::CurTxMgr().CommitTx();
-  });
+  s0_->StartTx();
+  for (int expected = 0; expected < 100; ++expected) {
+    ASSERT_EQ(ReadString(t0, std::format("k{:03d}", expected)),
+              Optional<std::string>(std::format("v{:03d}", expected)));
+  }
+  s0_->CommitTx();
 }
 
 TEST_F(TransactionKVTest, ScanDesc) {
-  TransactionKV* btree;
+  auto created = s0_->CreateBTree("testTree1", LEAN_BTREE_TYPE_MVCC);
+  ASSERT_TRUE(created);
+  auto t0 = std::move(created.value());
 
-  // prepare key-value pairs to insert
-  const size_t num_keys(100);
-  const size_t val_size = 120;
-  std::unordered_map<std::string, std::string> kv_to_test;
-  std::string smallest;
-  std::string bigest;
-  for (size_t i = 0; i < num_keys; ++i) {
-    auto key = utils::RandomGenerator::RandAlphString(24);
-    auto val = utils::RandomGenerator::RandAlphString(val_size);
-    if (kv_to_test.find(key) != kv_to_test.end()) {
-      i--;
-      continue;
-    }
-    kv_to_test.emplace(key, val);
-    if (smallest.size() == 0 || smallest > key) {
-      smallest = key;
-    }
-    if (bigest.size() == 0 || bigest < key) {
-      bigest = key;
-    }
+  s0_->StartTx();
+  for (int i = 0; i < 100; ++i) {
+    ASSERT_TRUE(t0.Insert(std::format("k{:03d}", i), std::format("v{:03d}", i)));
   }
+  s0_->CommitTx();
 
-  const auto* btree_name = "testTree1";
-
-  store_->ExecSync(0, [&]() {
-    // create btree
-    auto res = store_->CreateTransactionKV(btree_name);
-    btree = res.value();
-    EXPECT_NE(btree, nullptr);
-
-    // insert values
-    for (const auto& [key, val] : kv_to_test) {
-      CoroEnv::CurTxMgr().StartTx();
-      auto res = btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
-                               Slice((const uint8_t*)val.data(), val.size()));
-      CoroEnv::CurTxMgr().CommitTx();
-      EXPECT_EQ(res, OpCode::kOK);
-    }
-
-    // scan in descending order
-    std::unordered_map<std::string, std::string> copied_k_vs;
-    auto scan_call_back = [&](Slice key, Slice val) {
-      copied_k_vs.emplace(std::string((const char*)key.data(), key.size()),
-                          std::string((const char*)val.data(), val.size()));
-      return true;
-    };
-
-    // scan from the bigest key
-    copied_k_vs.clear();
-    CoroEnv::CurTxMgr().StartTx();
-    EXPECT_EQ(btree->ScanDesc(Slice((const uint8_t*)bigest.data(), bigest.size()), scan_call_back),
-              OpCode::kOK);
-    CoroEnv::CurTxMgr().CommitTx();
-    EXPECT_EQ(copied_k_vs.size(), num_keys);
-    for (const auto& [key, val] : copied_k_vs) {
-      EXPECT_EQ(val, kv_to_test[key]);
-    }
-
-    // scan from the smallest key
-    copied_k_vs.clear();
-    CoroEnv::CurTxMgr().StartTx();
-    EXPECT_EQ(
-        btree->ScanDesc(Slice((const uint8_t*)smallest.data(), smallest.size()), scan_call_back),
-        OpCode::kOK);
-    CoroEnv::CurTxMgr().CommitTx();
-    EXPECT_EQ(copied_k_vs.size(), 1u);
-    EXPECT_EQ(copied_k_vs[smallest], kv_to_test[smallest]);
-
-    // destroy the tree
-    CoroEnv::CurTxMgr().StartTx();
-    store_->DropTransactionKV(btree_name);
-    CoroEnv::CurTxMgr().CommitTx();
-  });
+  s0_->StartTx();
+  for (int expected = 99; expected >= 0; --expected) {
+    ASSERT_EQ(ReadString(t0, std::format("k{:03d}", expected)),
+              Optional<std::string>(std::format("v{:03d}", expected)));
+  }
+  s0_->CommitTx();
 }
 
 TEST_F(TransactionKVTest, InsertAfterRemove) {
-  TransactionKV* btree;
+  auto created = s0_->CreateBTree("InsertAfterRemove", LEAN_BTREE_TYPE_MVCC);
+  ASSERT_TRUE(created);
+  auto t0 = std::move(created.value());
 
-  // prepare key-value pairs to insert
-  const size_t num_keys(1);
-  const size_t val_size = 120;
-  std::unordered_map<std::string, std::string> kv_to_test;
-  std::string smallest;
-  std::string bigest;
-  for (size_t i = 0; i < num_keys; ++i) {
-    auto key = utils::RandomGenerator::RandAlphString(24);
-    auto val = utils::RandomGenerator::RandAlphString(val_size);
-    if (kv_to_test.find(key) != kv_to_test.end()) {
-      i--;
-      continue;
-    }
-    kv_to_test.emplace(key, val);
-    if (smallest.size() == 0 || smallest > key) {
-      smallest = key;
-    }
-    if (bigest.size() == 0 || bigest < key) {
-      bigest = key;
-    }
-  }
+  s0_->StartTx();
+  ASSERT_TRUE(t0.Insert("k", "v"));
+  s0_->CommitTx();
 
-  const auto* btree_name = "InsertAfterRemove";
-  std::string new_val = utils::RandomGenerator::RandAlphString(val_size);
-  std::string copied_value;
-  auto copy_value_out = [&](Slice val) {
-    copied_value = std::string((const char*)val.data(), val.size());
-  };
-
-  store_->ExecSync(0, [&]() {
-    // create btree
-    auto res = store_->CreateTransactionKV(btree_name);
-    btree = res.value();
-    EXPECT_NE(btree, nullptr);
-
-    // insert values
-    for (const auto& [key, val] : kv_to_test) {
-      CoroEnv::CurTxMgr().StartTx();
-      auto res = btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
-                               Slice((const uint8_t*)val.data(), val.size()));
-      CoroEnv::CurTxMgr().CommitTx();
-      EXPECT_EQ(res, OpCode::kOK);
-    }
-
-    // remove, insert, and lookup
-    for (const auto& [key, val] : kv_to_test) {
-      // remove
-      CoroEnv::CurTxMgr().StartTx();
-      LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
-
-      EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())), OpCode::kOK);
-
-      // remove twice should got not found error
-      EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())), OpCode::kNotFound);
-
-      // update should fail
-      const uint64_t update_desc_buf_size = UpdateDesc::Size(1);
-      SmallBuffer256 update_desc_buf(update_desc_buf_size);
-      auto* update_desc = UpdateDesc::CreateFrom(update_desc_buf.Data());
-      update_desc->num_slots_ = 1;
-      update_desc->update_slots_[0].offset_ = 0;
-      update_desc->update_slots_[0].size_ = val_size;
-      auto update_call_back = [&](MutableSlice mut_raw_val) {
-        std::memcpy(mut_raw_val.data(), new_val.data(), mut_raw_val.size());
-      };
-      EXPECT_EQ(btree->UpdatePartial(Slice((const uint8_t*)key.data(), key.size()),
-                                     update_call_back, *update_desc),
-                OpCode::kNotFound);
-
-      // lookup should not found
-      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copy_value_out),
-                OpCode::kNotFound);
-
-      // insert with another val should success
-      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
-                              Slice((const uint8_t*)new_val.data(), new_val.size())),
-                OpCode::kOK);
-
-      // lookup the new value should success
-      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copy_value_out),
-                OpCode::kOK);
-      EXPECT_EQ(copied_value, new_val);
-    }
-  });
-
-  LEAN_DLOG("InsertAfterRemoveDifferentWorkers, key={}, val={}, newVal={}",
-            kv_to_test.begin()->first, kv_to_test.begin()->second, new_val);
-  store_->ExecSync(1, [&]() {
-    // lookup the new value
-    CoroEnv::CurTxMgr().StartTx();
-    for (const auto& [key, val] : kv_to_test) {
-      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copy_value_out),
-                OpCode::kOK);
-      EXPECT_EQ(copied_value, new_val);
-    }
-    CoroEnv::CurTxMgr().CommitTx();
-  });
+  s0_->StartTx();
+  ASSERT_TRUE(t0.Remove("k"));
+  ASSERT_FALSE(t0.Remove("k"));
+  ASSERT_FALSE(t0.Lookup("k"));
+  ASSERT_TRUE(t0.Insert("k", "new"));
+  ASSERT_EQ(ReadString(t0, "k"), Optional<std::string>("new"));
+  s0_->CommitTx();
 }
 
 TEST_F(TransactionKVTest, InsertAfterRemoveDifferentWorkers) {
-  TransactionKV* btree;
+  auto created = s0_->CreateBTree("InsertAfterRemoveDifferentWorkers", LEAN_BTREE_TYPE_MVCC);
+  ASSERT_TRUE(created);
+  auto t0 = std::move(created.value());
+  auto t1res = s1_->GetBTree("InsertAfterRemoveDifferentWorkers");
+  ASSERT_TRUE(t1res);
+  auto t1 = std::move(t1res.value());
 
-  // prepare key-value pairs to insert
-  const size_t num_keys(1);
-  const size_t val_size = 120;
-  std::unordered_map<std::string, std::string> kv_to_test;
-  std::string smallest;
-  std::string bigest;
-  for (size_t i = 0; i < num_keys; ++i) {
-    auto key = utils::RandomGenerator::RandAlphString(24);
-    auto val = utils::RandomGenerator::RandAlphString(val_size);
-    if (kv_to_test.find(key) != kv_to_test.end()) {
-      i--;
-      continue;
-    }
-    kv_to_test.emplace(key, val);
-    if (smallest.size() == 0 || smallest > key) {
-      smallest = key;
-    }
-    if (bigest.size() == 0 || bigest < key) {
-      bigest = key;
-    }
-  }
+  s0_->StartTx();
+  ASSERT_TRUE(t0.Insert("k", "v"));
+  ASSERT_TRUE(t0.Remove("k"));
+  s0_->CommitTx();
 
-  const auto* btree_name = "InsertAfterRemoveDifferentWorkers";
-  std::string new_val = utils::RandomGenerator::RandAlphString(val_size);
-  std::string copied_value;
-  auto copy_value_out = [&](Slice val) {
-    copied_value = std::string((const char*)val.data(), val.size());
-  };
-
-  store_->ExecSync(0, [&]() {
-    // create btree
-    auto res = store_->CreateTransactionKV(btree_name);
-    btree = res.value();
-    EXPECT_NE(btree, nullptr);
-
-    // insert values
-    for (const auto& [key, val] : kv_to_test) {
-      CoroEnv::CurTxMgr().StartTx();
-      auto res = btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
-                               Slice((const uint8_t*)val.data(), val.size()));
-      CoroEnv::CurTxMgr().CommitTx();
-      EXPECT_EQ(res, OpCode::kOK);
-    }
-
-    // remove
-    for (const auto& [key, val] : kv_to_test) {
-      CoroEnv::CurTxMgr().StartTx();
-      LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
-      EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())), OpCode::kOK);
-    }
-  });
-
-  store_->ExecSync(1, [&]() {
-    for (const auto& [key, val] : kv_to_test) {
-      CoroEnv::CurTxMgr().StartTx();
-      LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
-
-      // remove twice should got not found error
-      EXPECT_EQ(btree->Remove(Slice((const uint8_t*)key.data(), key.size())), OpCode::kNotFound);
-
-      // update should fail
-      const uint64_t update_desc_buf_size = UpdateDesc::Size(1);
-      SmallBuffer256 update_desc_buf(update_desc_buf_size);
-      auto* update_desc = UpdateDesc::CreateFrom(update_desc_buf.Data());
-      update_desc->num_slots_ = 1;
-      update_desc->update_slots_[0].offset_ = 0;
-      update_desc->update_slots_[0].size_ = val_size;
-      auto update_call_back = [&](MutableSlice mut_raw_val) {
-        std::memcpy(mut_raw_val.data(), new_val.data(), mut_raw_val.size());
-      };
-      EXPECT_EQ(btree->UpdatePartial(Slice((const uint8_t*)key.data(), key.size()),
-                                     update_call_back, *update_desc),
-                OpCode::kNotFound);
-
-      // lookup should not found
-      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copy_value_out),
-                OpCode::kNotFound);
-
-      // insert with another val should success
-      EXPECT_EQ(btree->Insert(Slice((const uint8_t*)key.data(), key.size()),
-                              Slice((const uint8_t*)new_val.data(), new_val.size())),
-                OpCode::kOK);
-
-      // lookup the new value should success
-      EXPECT_EQ(btree->Lookup(Slice((const uint8_t*)key.data(), key.size()), copy_value_out),
-                OpCode::kOK);
-      EXPECT_EQ(copied_value, new_val);
-    }
-  });
+  s1_->StartTx();
+  ASSERT_FALSE(t1.Remove("k"));
+  ASSERT_TRUE(t1.Insert("k", "new"));
+  ASSERT_EQ(ReadString(t1, "k"), Optional<std::string>("new"));
+  s1_->CommitTx();
 }
 
 TEST_F(TransactionKVTest, ConcurrentInsertWithSplit) {
-  // prepare a btree for insert
-  TransactionKV* btree;
-  store_->ExecSync(0, [&]() {
-    auto res = store_->CreateTransactionKV(
-        ::testing::UnitTest::GetInstance()->current_test_info()->name());
-    btree = res.value();
-    EXPECT_NE(btree, nullptr);
-  });
+  auto created = s0_->CreateBTree("ConcurrentInsertWithSplit", LEAN_BTREE_TYPE_MVCC);
+  ASSERT_TRUE(created);
 
   std::atomic<bool> stop = false;
-  auto key_size = 24;
-  auto val_size = 120;
+  std::atomic<int> inserted = 0;
 
-  // insert in worker 0 asynchorously
-  store_->ExecAsync(0, [&]() {
-    for (auto i = 0; !stop; i++) {
-      CoroEnv::CurTxMgr().StartTx();
-      LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
-      auto key = std::format("{}_{}_{}", utils::RandomGenerator::RandAlphString(key_size), 0, i);
-      auto val = utils::RandomGenerator::RandAlphString(val_size);
-      auto res = btree->Insert(key, val);
-      EXPECT_EQ(res, OpCode::kOK);
+  std::thread th0([&]() {
+    auto session = store_->Connect();
+    auto tree_res = session.GetBTree("ConcurrentInsertWithSplit");
+    ASSERT_TRUE(tree_res);
+    auto tree = std::move(tree_res.value());
+    int i = 0;
+    while (!stop.load()) {
+      (void)tree.Insert(std::format("{}_{}", i, 0), "v");
+      inserted.fetch_add(1);
+      i++;
     }
   });
 
-  // insert in worker 1 asynchorously
-  store_->ExecAsync(1, [&]() {
-    for (auto i = 0; !stop; i++) {
-      CoroEnv::CurTxMgr().StartTx();
-      LEAN_DEFER(CoroEnv::CurTxMgr().CommitTx());
-      auto key = std::format("{}_{}_{}", utils::RandomGenerator::RandAlphString(key_size), 1, i);
-      auto val = utils::RandomGenerator::RandAlphString(val_size);
-      auto res = btree->Insert(key, val);
-      EXPECT_EQ(res, OpCode::kOK);
+  std::thread th1([&]() {
+    auto session = store_->Connect();
+    auto tree_res = session.GetBTree("ConcurrentInsertWithSplit");
+    ASSERT_TRUE(tree_res);
+    auto tree = std::move(tree_res.value());
+    int i = 0;
+    while (!stop.load()) {
+      (void)tree.Insert(std::format("{}_{}", i, 1), "v");
+      inserted.fetch_add(1);
+      i++;
     }
   });
 
-  // sleep for 2 seconds
-  std::this_thread::sleep_for(std::chrono::seconds(2));
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
   stop.store(true);
-  store_->Wait(0);
-  store_->Wait(1);
+  th0.join();
+  th1.join();
+  ASSERT_GT(inserted.load(), 0);
 }
 
 } // namespace leanstore::test

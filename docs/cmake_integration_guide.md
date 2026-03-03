@@ -9,6 +9,7 @@ This document summarizes the CMake refactoring work done for LeanStore, detailin
 - [Key Changes and Rationale](#key-changes-and-rationale)
 - [Library Type and Dependencies](#library-type-and-dependencies)
 - [C++ Version Requirements](#c-version-requirements)
+- [Integration Strategies by C++ Standard](#integration-strategies-by-c-standard)
 - [Static Library Dependency Exposure](#static-library-dependency-exposure)
 - [Downstream Dependency Management Strategies](#downstream-dependency-management-strategies)
 - [Common Issues and Solutions](#common-issues-and-solutions)
@@ -180,6 +181,108 @@ These are handled automatically during LeanStore build:
   - C++23 provides better coroutine support and performance optimizations.
 - **Consumer Requirements**: Downstream projects must use at least C++23 when linking with LeanStore.
 
+
+## Integration Strategies by C++ Standard
+
+| C++ Standard | Recommended Integration Strategy | Key Considerations | Section |
+|--------------|----------------------------------|---------------------|---------|
+| C++11/C++17  | Use C API with C++23 library linkage | Stable C interface, no direct C++ dependency, requires C++ standard library for linking | [Older C++ Standards](#older-c-standards-c11c17) |
+| C++23        | Use C++ API directly | Full feature access, but API may evolve, better performance and integration | [Newer C++ Standards](#newer-c-standards-c23) |
+
+### Older C++ Standards (C++11/C++17)
+
+#### When to Use This Strategy
+
+Choose this approach if your project:
+- Uses C++11 or C++17 due to legacy constraints
+- Requires stable API guarantees (C interface is stable)
+- Needs to avoid direct dependency on evolving C++ API
+- Can accept the overhead of C wrapper calls
+
+#### Step-by-Step Integration
+
+1. **Install LeanStore** following the [Using LeanStore in Downstream Projects](#using-leanstore-in-downstream-projects) guide.
+
+2. **Configure Your CMakeLists.txt**:
+   ```cmake
+   cmake_minimum_required(VERSION 3.25)
+   project(my_project C)
+   
+   # Set C standard (optional)
+   set(CMAKE_C_STANDARD 11)
+   
+   # Enable C++ language support for linking to LeanStore's C++23 library
+   enable_language(CXX)
+   set(CMAKE_CXX_STANDARD 23)
+   
+   # Find leanstore package
+   find_package(leanstore CONFIG REQUIRED)
+   
+   add_executable(my_target main.c)
+   target_link_libraries(my_target PRIVATE
+       leanstore::leanstore
+       stdc++        # C++ standard library
+       m             # Math library (if needed)
+   )
+   ```
+
+3. **Use C Headers** in your code:
+   ```c
+   #include "leanstore/c/leanstore.h"
+   #include "leanstore/c/types.h"
+   ```
+
+4. **Link with C++ Standard Library**: Since LeanStore is built with C++23, your executable must link against the C++ standard library (`stdc++` on GCC/Clang, `c++` on macOS).
+
+#### Key Considerations
+
+- **ABI Compatibility**: While the C interface is stable, linking against a C++23 library requires compiler ABI compatibility. Use the same compiler family (GCC, Clang) and similar versions.
+- **Dependency Management**: All LeanStore dependencies (Boost, spdlog, etc.) are handled automatically through `find_package`.
+- **Performance**: C API calls have minimal overhead compared to direct C++ usage.
+- **Example**: See `examples/c/kv_basic_example.c` for a complete working example.
+
+### Newer C++ Standards (C++23)
+
+#### When to Use This Strategy
+
+Choose this approach if your project:
+- Already uses C++23 or can upgrade to it
+- Needs access to the full C++ API (subject to evolution)
+- Wants optimal performance with direct method calls
+- Can tolerate API changes in future LeanStore versions
+
+#### Step-by-Step Integration
+
+1. **Install LeanStore** following the [Using LeanStore in Downstream Projects](#using-leanstore-in-downstream-projects) guide.
+
+2. **Configure Your CMakeLists.txt**:
+   ```cmake
+   cmake_minimum_required(VERSION 3.25)
+   project(my_project CXX)
+   
+   set(CMAKE_CXX_STANDARD 23)
+   
+   # Find leanstore package
+   find_package(leanstore CONFIG REQUIRED)
+   
+   add_executable(my_target main.cpp)
+   target_link_libraries(my_target PRIVATE leanstore::leanstore)
+   ```
+
+3. **Use C++ Headers** in your code:
+   ```cpp
+   #include <leanstore/leanstore.hpp>
+   // Or specific headers as needed
+   ```
+
+4. **Link Dependencies**: The `leanstore::leanstore` target automatically propagates all necessary dependencies.
+
+#### Key Considerations
+
+- **API Stability**: The C++ API is still evolving. Expect breaking changes between major versions.
+- **Feature Access**: Full access to LeanStore's C++ features including coroutines, ranges, and advanced configuration.
+- **Compiler Requirements**: Requires C++23 compatible compiler (GCC ≥13, Clang ≥16, MSVC ≥19.34).
+- **Example**: See `examples/cpp` directory for C++ examples.
 
 ## Static Library Dependency Exposure
 

@@ -15,7 +15,7 @@ class BTreeGeneric;
 
 class TableCursor {
 public:
-  TableCursor(KVInterface* kv_interface, const TableDefinition& def);
+  TableCursor(KVInterface&& kv_interface, const TableDefinition& def);
   ~TableCursor();
 
   bool SeekToFirst();
@@ -32,7 +32,7 @@ public:
 private:
   bool Assign(Slice key, Slice val);
 
-  KVInterface* kv_interface_;
+  KVInterface kv_interface_;
   std::string current_key_;
   std::string current_value_;
   bool is_valid_ = false;
@@ -58,15 +58,15 @@ public:
 
   std::unique_ptr<TableCursor> NewCursor();
 
-  Table(TableDefinition definition, KVInterface* kv_interface)
+  Table(TableDefinition definition, KVInterface&& kv_interface)
       : definition_(std::move(definition)),
-        kv_interface_(kv_interface),
+        kv_interface_(std::move(kv_interface)),
         codec_(definition_) {
   }
 
 private:
   TableDefinition definition_;
-  KVInterface* kv_interface_;
+  KVInterface kv_interface_;
   TableCodec codec_;
 };
 

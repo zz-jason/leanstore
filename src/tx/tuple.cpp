@@ -4,7 +4,6 @@
 #include "leanstore/btree/b_tree_node.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/tx/chained_tuple.hpp"
-#include "leanstore/tx/cr_manager.hpp"
 #include "leanstore/tx/transaction_kv.hpp"
 #include "leanstore/tx/tx_manager.hpp"
 #include "leanstore/utils/misc.hpp"

@@ -1,21 +1,18 @@
 #include "common/lean_test_suite.hpp"
-#include "leanstore/btree/basic_kv.hpp"
-#include "leanstore/buffer/buffer_manager.hpp"
 #include "leanstore/c/types.h"
-#include "leanstore/coro/coro_executor.hpp"
+#include "leanstore/lean_btree.hpp"
+#include "leanstore/lean_cursor.hpp"
+#include "leanstore/lean_session.hpp"
 #include "leanstore/lean_store.hpp"
-#include "leanstore/tx/cr_manager.hpp"
-#include "leanstore/tx/transaction_kv.hpp"
 
 #include <gtest/gtest.h>
 
-#include <cassert>
 #include <cstddef>
 #include <cstring>
 #include <format>
 #include <memory>
 #include <string>
-#include <utility>
+#include <tuple>
 #include <vector>
 
 #include <sys/types.h>
@@ -53,41 +50,35 @@ TEST_F(CoroLeanStoreTest, BasicKv) {
     kv_to_test.emplace_back(key, val);
   }
 
-  // create leanstore btree for table records
-  BasicKV* btree;
-  auto* coro_session_0 = store->TryReserveSession(0);
-  assert(coro_session_0 != nullptr && "Failed to reserve a CoroSession for coroutine execution");
-  auto job_init_btree = [&]() {
-    // create btree
-    auto res = store->CreateBasicKv(kBtreeName, kBtreeConfig);
-    EXPECT_TRUE(res);
-    EXPECT_NE(res.value(), nullptr);
+  auto session_opt = store->TryConnect();
+  ASSERT_TRUE(session_opt.has_value());
+  auto session = std::move(session_opt.value());
 
-    // insert some values
-    btree = res.value();
-    for (const auto& [key, val] : kv_to_test) {
-      EXPECT_EQ(btree->Insert(key, val), OpCode::kOK);
-    }
-  };
-  store->SubmitAndWait(coro_session_0, std::move(job_init_btree));
+  auto btree_res = session.CreateBTree(kBtreeName, LEAN_BTREE_TYPE_ATOMIC, kBtreeConfig);
+  ASSERT_TRUE(btree_res);
+  auto btree = std::move(btree_res.value());
 
-  // read back the values
-  auto* coro_session_1 = store->TryReserveSession(1);
-  assert(coro_session_1 != nullptr && "Failed to reserve a CoroSession for coroutine execution");
-  auto job_lookup = [&]() {
-    std::string copied_value;
-    auto copy_value_out = [&](Slice val) {
-      copied_value = std::string((const char*)val.data(), val.size());
-    };
-    for (const auto& [key, expected_val] : kv_to_test) {
-      EXPECT_EQ(btree->Lookup(key, copy_value_out), OpCode::kOK);
-      EXPECT_EQ(copied_value, expected_val);
-    }
-  };
-  store->SubmitAndWait(coro_session_1, std::move(job_lookup));
+  for (const auto& [key, val] : kv_to_test) {
+    auto insert_res = btree.Insert(key, val);
+    ASSERT_TRUE(insert_res) << insert_res.error().ToString();
+  }
 
-  store->ReleaseSession(coro_session_0);
-  store->ReleaseSession(coro_session_1);
+  for (const auto& [key, expected_val] : kv_to_test) {
+    auto lookup_res = btree.Lookup(key);
+    ASSERT_TRUE(lookup_res) << lookup_res.error().ToString();
+    std::string value(reinterpret_cast<const char*>(lookup_res.value().data()),
+                      lookup_res.value().size());
+    EXPECT_EQ(value, expected_val);
+  }
+
+  auto cursor = btree.OpenCursor();
+  size_t visited = 0;
+  if (cursor.SeekToFirst()) {
+    do {
+      ++visited;
+    } while (cursor.Next());
+  }
+  EXPECT_EQ(visited, kv_to_test.size());
 }
 
 } // namespace leanstore::test
