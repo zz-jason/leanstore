@@ -10,6 +10,8 @@
 #include "leanstore/btree/b_tree_generic.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/btree_iter.hpp"
+#include "leanstore/btree/column_store/column_leaf_ops.hpp"
+#include "leanstore/btree/column_store/column_store.hpp"
 #include "leanstore/c/types.h"
 #include "leanstore/c/wal_record.h"
 #include "leanstore/coro/mvcc_manager.hpp"
@@ -55,6 +57,11 @@ OpCode TransactionKV::LookupOptimistic(Slice key, ValCallback val_callback) {
   JUMPMU_TRY() {
     GuardedBufferFrame<BTreeNode> guarded_leaf;
     FindLeafCanJump(key, guarded_leaf, LatchMode::kOptimisticOrJump);
+    if (column_store::IsColumnLeaf(*guarded_leaf.bf_)) {
+      auto rc = column_store::LookupColumnLeaf(store_, guarded_leaf, key, val_callback);
+      guarded_leaf.JumpIfModifiedByOthers();
+      JUMPMU_RETURN rc;
+    }
     auto slot_id = guarded_leaf->LowerBound<true>(key);
     if (slot_id != -1) {
       auto [ret, versions_read] = GetVisibleTuple(guarded_leaf->Value(slot_id), val_callback);
@@ -97,18 +104,38 @@ OpCode TransactionKV::Lookup(Slice key, ValCallback val_callback) {
   }
 
   // lookup pessimistically
-  auto iter = NewBTreeIter();
-  if (iter->SeekToEqual(key); !iter->Valid()) {
-    // In a lookup-after-remove(other worker) scenario, the tuple may be garbage
-    // collected and moved to the graveyard, check the graveyard for the key.
-    return CoroEnv::CurTxMgr().ActiveTx().IsLongRunning() ? lookup_in_graveyard()
-                                                          : OpCode::kNotFound;
+  OpCode ret = OpCode::kOther;
+  while (true) {
+    JUMPMU_TRY() {
+      GuardedBufferFrame<BTreeNode> guarded_leaf;
+      FindLeafCanJump(key, guarded_leaf, LatchMode::kSharedPessimistic);
+      if (column_store::IsColumnLeaf(*guarded_leaf.bf_)) {
+        ret = column_store::LookupColumnLeaf(store_, guarded_leaf, key, val_callback);
+        if (CoroEnv::CurTxMgr().ActiveTx().IsLongRunning() && ret == OpCode::kNotFound) {
+          ret = lookup_in_graveyard();
+        }
+        JUMPMU_RETURN ret;
+      }
+      auto slot_id = guarded_leaf->LowerBound<true>(key);
+      if (slot_id == -1) {
+        ret = OpCode::kNotFound;
+        if (CoroEnv::CurTxMgr().ActiveTx().IsLongRunning() && ret == OpCode::kNotFound) {
+          ret = lookup_in_graveyard();
+        }
+        JUMPMU_RETURN ret;
+      }
+      auto [visible_ret, versions_read] =
+          GetVisibleTuple(guarded_leaf->Value(slot_id), val_callback);
+      ret = visible_ret;
+      if (CoroEnv::CurTxMgr().ActiveTx().IsLongRunning() && ret == OpCode::kNotFound) {
+        ret = lookup_in_graveyard();
+      }
+      JUMPMU_RETURN ret;
+    }
+    JUMPMU_CATCH() {
+    }
   }
 
-  auto [ret, versions_read] = GetVisibleTuple(iter->Val(), val_callback);
-  if (CoroEnv::CurTxMgr().ActiveTx().IsLongRunning() && ret == OpCode::kNotFound) {
-    ret = lookup_in_graveyard();
-  }
   return ret;
 }
 
@@ -127,6 +154,10 @@ OpCode TransactionKV::UpdatePartial(Slice key, MutValCallback update_call_back,
       Log::Error("Update failed, key not found, key={}, txMode={}", key.ToString(),
                  ToString(CoroEnv::CurTxMgr().ActiveTx().tx_mode_));
       JUMPMU_RETURN OpCode::kNotFound;
+    }
+    if (column_store::IsColumnLeaf(*x_iter->guarded_leaf_.bf_)) {
+      Log::Error("Update failed, column store tree is read-only, key={}", key.ToString());
+      JUMPMU_RETURN OpCode::kOther;
     }
 
     // Record is found
@@ -200,6 +231,10 @@ OpCode TransactionKV::Insert(Slice key, Slice val) {
   while (true) {
     auto x_iter = NewBTreeIterMut();
     auto ret = x_iter->SeekToInsert(key);
+    if (column_store::IsColumnLeaf(*x_iter->guarded_leaf_.bf_)) {
+      Log::Error("Insert failed, column store tree is read-only, key={}", key.ToString());
+      return OpCode::kOther;
+    }
 
     if (ret == OpCode::kDuplicated) {
       auto mut_raw_val = x_iter->MutableVal();
@@ -365,6 +400,10 @@ OpCode TransactionKV::Remove(Slice key) {
         JUMPMU_RETURN OpCode::kAbortTx;
       }
       JUMPMU_RETURN OpCode::kNotFound;
+    }
+    if (column_store::IsColumnLeaf(*x_iter->guarded_leaf_.bf_)) {
+      Log::Error("Remove failed, column store tree is read-only, key={}", key.ToString());
+      JUMPMU_RETURN OpCode::kOther;
     }
 
     auto mut_raw_val = x_iter->MutableVal();
@@ -908,6 +947,10 @@ OpCode TransactionKV::Scan4ShortRunningTx(Slice key, ScanCallback callback) {
     } else {
       iter->SeekToLastLessEqual(key);
     }
+    if (iter->Valid() && column_store::IsColumnLeaf(*iter->guarded_leaf_.bf_)) {
+      JUMPMU_RETURN asc ? column_store::ScanColumnLeafAsc(store_, iter.get(), key, callback)
+                        : column_store::ScanColumnLeafDesc(store_, iter.get(), key, callback);
+    }
 
     while (iter->Valid()) {
       iter->AssembleKey();
@@ -949,6 +992,9 @@ OpCode TransactionKV::Scan4LongRunningTx(Slice key, ScanCallback callback) {
 
     if (iter->SeekToFirstGreaterEqual(key); !iter->Valid()) {
       JUMPMU_RETURN OpCode::kOK;
+    }
+    if (column_store::IsColumnLeaf(*iter->guarded_leaf_.bf_)) {
+      JUMPMU_RETURN column_store::ScanColumnLeafAsc(store_, iter.get(), key, callback);
     }
     o_ret = OpCode::kOK;
     iter->AssembleKey();

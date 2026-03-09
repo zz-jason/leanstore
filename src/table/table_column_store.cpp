@@ -1,6 +1,7 @@
 #include "leanstore/btree/b_tree_generic.hpp"
 #include "leanstore/btree/basic_kv.hpp"
 #include "leanstore/btree/column_store/column_block_builder.hpp"
+#include "leanstore/coro/coro_env.hpp"
 #include "leanstore/lean_store.hpp"
 #include "leanstore/table/table.hpp"
 #include "leanstore/tx/transaction_kv.hpp"
@@ -186,7 +187,49 @@ Result<uint64_t> CollectSubtree(BasicKV& btree, GuardedBufferFrame<BTreeNode>& g
   return child_height + 1;
 }
 
-Result<void> AppendLeafRows(const TableDefinition& def, TableCodec& codec,
+Result<void> ExtractRowValueForColumnStore(const BasicKV& btree, Slice raw_value, Slice* out_value,
+                                           bool* skip_row) {
+  if (out_value == nullptr || skip_row == nullptr) {
+    return Error::General("null column store row value output");
+  }
+  *skip_row = false;
+  if (btree.tree_type_ != BTreeType::kTransactionKV) {
+    *out_value = raw_value;
+    return {};
+  }
+  if (raw_value.size() < sizeof(Tuple)) {
+    return Error::General("transaction kv value too small for tuple header");
+  }
+  const auto* tuple = Tuple::From(raw_value.data());
+  switch (tuple->format_) {
+  case TupleFormat::kChained: {
+    if (raw_value.size() < sizeof(ChainedTuple)) {
+      return Error::General("transaction kv value too small for chained tuple");
+    }
+    const auto* chained = ChainedTuple::From(raw_value.data());
+    if (chained->is_tombstone_) {
+      *skip_row = true;
+      return {};
+    }
+    const auto val_size = raw_value.size() - sizeof(ChainedTuple);
+    *out_value = Slice(chained->payload_, val_size);
+    return {};
+  }
+  case TupleFormat::kFat: {
+    if (raw_value.size() < sizeof(FatTuple)) {
+      return Error::General("transaction kv value too small for fat tuple");
+    }
+    const auto* fat = FatTuple::From(raw_value.data());
+    *out_value = fat->GetValue();
+    return {};
+  }
+  default:
+    break;
+  }
+  return Error::General("unsupported transaction kv tuple format for column store");
+}
+
+Result<void> AppendLeafRows(BasicKV& btree, const TableDefinition& def, TableCodec& codec,
                             column_store::ColumnBlockBuilder& builder,
                             GuardedBufferFrame<BTreeNode>& leaf,
                             column_store::ColumnStoreStats& stats,
@@ -201,33 +244,35 @@ Result<void> AppendLeafRows(const TableDefinition& def, TableCodec& codec,
   lean_row row{.columns = datums.data(),
                .nulls = nulls.get(),
                .num_columns = static_cast<uint32_t>(datums.size())};
-  std::string key_bytes;
 
   for (uint16_t slot = 0; slot < leaf->num_slots_; ++slot) {
-    auto value = leaf->Value(slot);
+    const auto raw_value = leaf->Value(slot);
+    Slice row_value;
+    bool skip_row = false;
+    if (auto res = ExtractRowValueForColumnStore(btree, raw_value, &row_value, &skip_row); !res) {
+      return std::move(res.error());
+    }
+    if (skip_row) {
+      continue;
+    }
 
-    if (auto res = codec.DecodeValue(value, &row); !res) {
+    if (auto res = codec.DecodeValue(row_value, &row); !res) {
       return std::move(res.error());
     }
 
     builder.AddRow(row);
     stats.row_count_++;
+    const auto key_len = leaf->GetFullKeyLen(slot);
+    out_last_key->resize(key_len);
+    leaf->CopyFullKey(slot, reinterpret_cast<uint8_t*>(out_last_key->data()));
     if (builder.ShouldFlush()) {
-      const auto key_len = leaf->GetFullKeyLen(slot);
-      key_bytes.resize(key_len);
-      leaf->CopyFullKey(slot, reinterpret_cast<uint8_t*>(key_bytes.data()));
-      auto block_res = builder.Finalize(Slice(key_bytes));
+      auto block_res = builder.Finalize(
+          Slice(reinterpret_cast<const uint8_t*>(out_last_key->data()), out_last_key->size()));
       if (!block_res) {
         return std::move(block_res.error());
       }
       payloads.push_back(std::move(block_res.value()));
     }
-  }
-  if (leaf->num_slots_ > 0) {
-    const uint16_t last_slot = static_cast<uint16_t>(leaf->num_slots_ - 1);
-    const auto key_len = leaf->GetFullKeyLen(last_slot);
-    out_last_key->resize(key_len);
-    leaf->CopyFullKey(last_slot, reinterpret_cast<uint8_t*>(out_last_key->data()));
   }
   return {};
 }
@@ -498,7 +543,7 @@ Result<ColumnSubtreePlan> PrepareColumnSubtreePlan(BasicKV& btree,
   for (auto* leaf_bf : plan.collect_.row_leaf_frames_) {
     GuardedBufferFrame<BTreeNode> guarded_leaf(btree.store_->buffer_manager_.get(), leaf_bf);
     guarded_leaf.ToExclusiveMayJump();
-    if (auto res = AppendLeafRows(def, codec, builder, guarded_leaf, stats, plan.payloads_,
+    if (auto res = AppendLeafRows(btree, def, codec, builder, guarded_leaf, stats, plan.payloads_,
                                   &last_key_bytes);
         !res) {
       return std::move(res.error());
@@ -721,6 +766,14 @@ Result<column_store::ColumnStoreStats> BuildColumnStoreInternal(
   if (height <= 1) {
     return Error::General("tree height should at least 2");
   }
+  if (btree.tree_type_ == BTreeType::kTransactionKV) {
+    auto& tx_mgrs = btree.store_->GetMvccManager().TxMgrs();
+    for (const auto& tx_mgr : tx_mgrs) {
+      if (tx_mgr->active_tx_id_.load(std::memory_order_acquire) != 0) {
+        return Error::General("column store build requires no active transactions");
+      }
+    }
+  }
   const uint64_t target_height = options.target_height_ == 0 ? height : options.target_height_;
   if (target_height < 2 || target_height > height) {
     return Error::General("invalid column store target height");
@@ -749,7 +802,10 @@ Result<column_store::ColumnStoreStats> Table::BuildColumnStore(
   }
   auto* btree = kv_interface_.GetBasicKV();
   if (btree == nullptr) {
-    return Error::General("column store build requires BasicKV");
+    btree = kv_interface_.GetTransactionKV();
+  }
+  if (btree == nullptr) {
+    return Error::General("column store build requires BasicKV or TransactionKV");
   }
   return BuildColumnStoreInternal(*btree, definition_, options);
 }

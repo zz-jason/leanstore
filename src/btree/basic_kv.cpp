@@ -23,54 +23,6 @@
 
 namespace leanstore {
 
-namespace {
-
-int32_t FindCandidateBlockSlot(BTreeNode& leaf, Slice key) {
-  // Choose the first block with max_key >= key.
-  if (leaf.num_slots_ == 0) {
-    return -1;
-  }
-  int32_t slot = leaf.LowerBound<false>(key);
-  if (slot < 0 || slot == leaf.num_slots_) {
-    return -1;
-  }
-  return slot;
-}
-
-OpCode ColumnLeafError(const char* context, const Error& error) {
-  Log::Error("Column leaf {} failed: {}", context, error.ToString());
-  return OpCode::kOther;
-}
-
-OpCode LookupColumnLeaf(BasicKV* tree, GuardedBufferFrame<BTreeNode>& guarded_leaf, Slice key,
-                        ValCallback val_callback) {
-  auto slot_id = FindCandidateBlockSlot(guarded_leaf.ref(), key);
-  if (slot_id < 0) {
-    return OpCode::kNotFound;
-  }
-
-  column_store::ColumnBlockRef ref{};
-  if (guarded_leaf->ValSize(slot_id) != sizeof(ref)) {
-    Log::Error("Column leaf entry size mismatch: expected {}, got {}", sizeof(ref),
-               guarded_leaf->ValSize(slot_id));
-    return OpCode::kOther;
-  }
-  std::memcpy(&ref, guarded_leaf->ValData(slot_id), sizeof(ref));
-
-  std::string value_buf;
-  auto lookup_res = column_store::LookupColumnBlock(tree->store_, ref, key, &value_buf);
-  if (!lookup_res) {
-    return ColumnLeafError("LookupColumnBlock", lookup_res.error());
-  }
-  if (!lookup_res.value()) {
-    return OpCode::kNotFound;
-  }
-  val_callback(Slice(value_buf));
-  return OpCode::kOK;
-}
-
-} // namespace
-
 Result<BasicKV*> BasicKV::Create(leanstore::LeanStore* store, const std::string& tree_name,
                                  lean_btree_config config) {
   auto [tree_ptr, tree_id] = store->tree_registry_->CreateTree(tree_name, [&]() {
@@ -90,7 +42,7 @@ OpCode BasicKV::LookupOptimistic(Slice key, ValCallback val_callback) {
     FindLeafCanJump(key, guarded_leaf, LatchMode::kOptimisticOrJump);
     if (column_store::IsColumnLeaf(*guarded_leaf.bf_)) {
       // Column leaves store block references; lookups decode and binary-search rows.
-      auto rc = LookupColumnLeaf(this, guarded_leaf, key, val_callback);
+      auto rc = column_store::LookupColumnLeaf(store_, guarded_leaf, key, val_callback);
       guarded_leaf.JumpIfModifiedByOthers();
       JUMPMU_RETURN rc;
     }
@@ -115,7 +67,7 @@ OpCode BasicKV::LookupPessimistic(Slice key, ValCallback val_callback) {
       GuardedBufferFrame<BTreeNode> guarded_leaf;
       FindLeafCanJump(key, guarded_leaf, LatchMode::kSharedPessimistic);
       if (column_store::IsColumnLeaf(*guarded_leaf.bf_)) {
-        JUMPMU_RETURN LookupColumnLeaf(this, guarded_leaf, key, val_callback);
+        JUMPMU_RETURN column_store::LookupColumnLeaf(store_, guarded_leaf, key, val_callback);
       }
       auto slot_id = guarded_leaf->LowerBound<true>(key);
       if (slot_id != -1) {
@@ -176,33 +128,7 @@ OpCode BasicKV::ScanAsc(Slice start_key, ScanCallback callback) {
     }
     if (column_store::IsColumnLeaf(*iter->guarded_leaf_.bf_)) {
       // Scan the column blocks in order and re-encode rows for callbacks.
-      column_store::ColumnBlockScanState scan_state{
-          .need_start_row_ = start_key.size() > 0,
-          .key_decoded_ = false,
-          .key_datums_ = {},
-      };
-      bool emitted = false;
-      for (; iter->Valid(); iter->Next()) {
-        column_store::ColumnBlockRef ref{};
-        auto val = iter->Val();
-        if (val.size() != sizeof(ref)) {
-          Log::Error("Column leaf entry size mismatch: expected {}, got {}", sizeof(ref),
-                     val.size());
-          JUMPMU_RETURN OpCode::kOther;
-        }
-        std::memcpy(&ref, val.data(), sizeof(ref));
-        auto scan_res =
-            column_store::ScanColumnBlockAsc(store_, ref, start_key, &scan_state, callback);
-        if (!scan_res) {
-          JUMPMU_RETURN ColumnLeafError("ScanColumnBlockAsc", scan_res.error());
-        }
-        const auto& scan = scan_res.value();
-        emitted = emitted || scan.emitted_;
-        if (scan.stop_) {
-          JUMPMU_RETURN OpCode::kOK;
-        }
-      }
-      JUMPMU_RETURN emitted ? OpCode::kOK : OpCode::kNotFound;
+      JUMPMU_RETURN column_store::ScanColumnLeafAsc(store_, iter.get(), start_key, callback);
     }
 
     for (; iter->Valid(); iter->Next()) {
@@ -230,33 +156,7 @@ OpCode BasicKV::ScanDesc(Slice scan_key, ScanCallback callback) {
     }
     if (column_store::IsColumnLeaf(*iter->guarded_leaf_.bf_)) {
       // Desc scan starts from the last row in the candidate block.
-      column_store::ColumnBlockScanState scan_state{
-          .need_start_row_ = scan_key.size() > 0,
-          .key_decoded_ = false,
-          .key_datums_ = {},
-      };
-      bool emitted = false;
-      for (; iter->Valid(); iter->Prev()) {
-        column_store::ColumnBlockRef ref{};
-        auto val = iter->Val();
-        if (val.size() != sizeof(ref)) {
-          Log::Error("Column leaf entry size mismatch: expected {}, got {}", sizeof(ref),
-                     val.size());
-          JUMPMU_RETURN OpCode::kOther;
-        }
-        std::memcpy(&ref, val.data(), sizeof(ref));
-        auto scan_res =
-            column_store::ScanColumnBlockDesc(store_, ref, scan_key, &scan_state, callback);
-        if (!scan_res) {
-          JUMPMU_RETURN ColumnLeafError("ScanColumnBlockDesc", scan_res.error());
-        }
-        const auto& scan = scan_res.value();
-        emitted = emitted || scan.emitted_;
-        if (scan.stop_) {
-          JUMPMU_RETURN OpCode::kOK;
-        }
-      }
-      JUMPMU_RETURN emitted ? OpCode::kOK : OpCode::kNotFound;
+      JUMPMU_RETURN column_store::ScanColumnLeafDesc(store_, iter.get(), scan_key, callback);
     }
 
     for (; iter->Valid(); iter->Prev()) {
