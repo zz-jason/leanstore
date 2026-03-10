@@ -241,4 +241,57 @@ TEST_F(ColumnStoreApiTest, BuildColumnStoreParentUpperFenceSplit) {
   session->close(session);
 }
 
+TEST_F(ColumnStoreApiTest, BuildTxnKvColumnStore) {
+  const char* table_name = "txn_kv_column_store";
+  lean_table_column_def columns[2] = {
+      {.name = {.data = "k", .size = 1},
+       .type = LEAN_COLUMN_TYPE_BINARY,
+       .nullable = false,
+       .fixed_length = 0},
+      {.name = {.data = "v", .size = 1},
+       .type = LEAN_COLUMN_TYPE_BINARY,
+       .nullable = false,
+       .fixed_length = 0},
+  };
+  uint32_t pk_columns[1] = {0};
+  lean_table_def table_def = {.name = {.data = table_name, .size = strlen(table_name)},
+                              .columns = columns,
+                              .num_columns = 2,
+                              .pk_cols = pk_columns,
+                              .pk_cols_count = 1,
+                              .primary_index_type = lean_btree_type::LEAN_BTREE_TYPE_MVCC,
+                              .primary_index_config = {
+                                  .enable_wal_ = false,
+                                  .use_bulk_insert_ = false,
+                              }};
+
+  auto* session = store_->connect(store_);
+  ASSERT_NE(session, nullptr);
+  ASSERT_EQ(session->create_table(session, &table_def), lean_status::LEAN_STATUS_OK);
+  auto* table = session->get_table(session, table_name);
+  ASSERT_NE(table, nullptr);
+
+  const size_t key_size = 64;
+  const size_t value_size = 256;
+  const size_t row_count = 96;
+  for (size_t i = 0; i < row_count; ++i) {
+    InsertBinaryRow(table, MakeKey(key_size, i), MakeValue(value_size, i));
+  }
+
+  lean_column_store_options options{
+      .max_rows_per_block = 8, .max_block_bytes = 0, .target_height = 0};
+  lean_column_store_stats stats{};
+  ASSERT_EQ(table->build_column_store(table, &options, &stats), lean_status::LEAN_STATUS_OK);
+  EXPECT_EQ(stats.row_count, row_count);
+  EXPECT_GT(stats.block_count, 0U);
+
+  std::string out_value;
+  ASSERT_TRUE(LookupBinaryRow(table, MakeKey(key_size, row_count / 2), out_value));
+  EXPECT_EQ(out_value, MakeValue(value_size, row_count / 2));
+
+  table->close(table);
+  ASSERT_EQ(session->drop_table(session, table_name), lean_status::LEAN_STATUS_OK);
+  session->close(session);
+}
+
 } // namespace leanstore::test

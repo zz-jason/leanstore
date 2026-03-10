@@ -55,7 +55,6 @@ lean_status TableImpl::BuildColumnStore(const struct lean_column_store_options* 
                                         struct lean_column_store_stats* out_stats) {
   lean_status status = lean_status::LEAN_STATUS_OK;
   session_impl_->Session().ExecSync([&]() {
-    TxGuard tx_guard(status);
     column_store::ColumnStoreOptions opts;
     if (options != nullptr) {
       opts.max_rows_per_block_ = options->max_rows_per_block;

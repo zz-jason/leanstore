@@ -1,12 +1,35 @@
 #include "leanstore/btree/column_store/column_leaf_ops.hpp"
 
 #include "leanstore/base/error.hpp"
+#include "leanstore/base/log.hpp"
+#include "leanstore/btree/b_tree_node.hpp"
+#include "leanstore/btree/btree_iter.hpp"
+#include "leanstore/buffer/guarded_buffer_frame.hpp"
+#include "leanstore/kv_interface.hpp"
 
+#include <cstring>
 #include <memory>
 
 namespace leanstore::column_store {
 
 namespace {
+
+int32_t FindCandidateBlockSlot(BTreeNode& leaf, Slice key) {
+  // Choose the first block with max_key >= key.
+  if (leaf.num_slots_ == 0) {
+    return -1;
+  }
+  int32_t slot = leaf.LowerBound<false>(key);
+  if (slot < 0 || slot == leaf.num_slots_) {
+    return -1;
+  }
+  return slot;
+}
+
+OpCode ColumnLeafError(const char* context, const Error& error) {
+  Log::Error("Column leaf {} failed: {}", context, error.ToString());
+  return OpCode::kOther;
+}
 
 Result<int32_t> FindFirstRowGE(ColumnBlockReader& reader, const std::vector<Datum>& key_datums) {
   // Binary search inside a column block by key columns.
@@ -81,6 +104,91 @@ Result<int32_t> ResolveStartRowDesc(ColumnBlockReader& reader, Slice start_key,
 }
 
 } // namespace
+
+OpCode LookupColumnLeaf(LeanStore* store, GuardedBufferFrame<BTreeNode>& guarded_leaf, Slice key,
+                        ValCallback val_callback) {
+  auto slot_id = FindCandidateBlockSlot(guarded_leaf.ref(), key);
+  if (slot_id < 0) {
+    return OpCode::kNotFound;
+  }
+
+  column_store::ColumnBlockRef ref{};
+  if (guarded_leaf->ValSize(slot_id) != sizeof(ref)) {
+    Log::Error("Column leaf entry size mismatch: expected {}, got {}", sizeof(ref),
+               guarded_leaf->ValSize(slot_id));
+    return OpCode::kOther;
+  }
+  std::memcpy(&ref, guarded_leaf->ValData(slot_id), sizeof(ref));
+
+  std::string value_buf;
+  auto lookup_res = column_store::LookupColumnBlock(store, ref, key, &value_buf);
+  if (!lookup_res) {
+    return ColumnLeafError("LookupColumnBlock", lookup_res.error());
+  }
+  if (!lookup_res.value()) {
+    return OpCode::kNotFound;
+  }
+  val_callback(Slice(value_buf));
+  return OpCode::kOK;
+}
+
+OpCode ScanColumnLeafAsc(LeanStore* store, BTreeIter* iter, Slice start_key,
+                         ScanCallback callback) {
+  column_store::ColumnBlockScanState scan_state{
+      .need_start_row_ = start_key.size() > 0,
+      .key_decoded_ = false,
+      .key_datums_ = {},
+  };
+  bool emitted = false;
+  for (; iter->Valid(); iter->Next()) {
+    column_store::ColumnBlockRef ref{};
+    auto val = iter->Val();
+    if (val.size() != sizeof(ref)) {
+      Log::Error("Column leaf entry size mismatch: expected {}, got {}", sizeof(ref), val.size());
+      return OpCode::kOther;
+    }
+    std::memcpy(&ref, val.data(), sizeof(ref));
+    auto scan_res = column_store::ScanColumnBlockAsc(store, ref, start_key, &scan_state, callback);
+    if (!scan_res) {
+      return ColumnLeafError("ScanColumnBlockAsc", scan_res.error());
+    }
+    const auto& scan = scan_res.value();
+    emitted = emitted || scan.emitted_;
+    if (scan.stop_) {
+      return OpCode::kOK;
+    }
+  }
+  return emitted ? OpCode::kOK : OpCode::kNotFound;
+}
+
+OpCode ScanColumnLeafDesc(LeanStore* store, BTreeIter* iter, Slice start_key,
+                          ScanCallback callback) {
+  column_store::ColumnBlockScanState scan_state{
+      .need_start_row_ = start_key.size() > 0,
+      .key_decoded_ = false,
+      .key_datums_ = {},
+  };
+  bool emitted = false;
+  for (; iter->Valid(); iter->Prev()) {
+    column_store::ColumnBlockRef ref{};
+    auto val = iter->Val();
+    if (val.size() != sizeof(ref)) {
+      Log::Error("Column leaf entry size mismatch: expected {}, got {}", sizeof(ref), val.size());
+      return OpCode::kOther;
+    }
+    std::memcpy(&ref, val.data(), sizeof(ref));
+    auto scan_res = column_store::ScanColumnBlockDesc(store, ref, start_key, &scan_state, callback);
+    if (!scan_res) {
+      return ColumnLeafError("ScanColumnBlockDesc", scan_res.error());
+    }
+    const auto& scan = scan_res.value();
+    emitted = emitted || scan.emitted_;
+    if (scan.stop_) {
+      return OpCode::kOK;
+    }
+  }
+  return emitted ? OpCode::kOK : OpCode::kNotFound;
+}
 
 Result<bool> LookupColumnBlock(LeanStore* store, const ColumnBlockRef& ref, Slice key,
                                std::string* out_value) {
